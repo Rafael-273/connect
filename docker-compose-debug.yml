@@ -1,0 +1,47 @@
+version: '3'
+
+services:
+  connect-database : 
+    image: postgres:latest 
+    container_name: connect-database  
+    ports:
+      - "5432:${DB_PORT}"
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    restart: always
+    networks:
+      - connect-network
+
+  web-project:
+    hostname: "${HOSTNAME}"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /usr/src/platform
+    command: [
+        "sh",
+        "-c", 
+        "pip install debugpy -t /tmp && 
+        python /tmp/debugpy --wait-for-client --listen 0.0.0.0:3000
+        ./manage.py runserver ${HOSTNAME}:${PORT}"
+    ]
+    volumes:
+      - ./platform/:/usr/src/platform
+    ports:
+      - "${PORT}:${PORT}"
+      - "3000:3000"
+    environment:
+      - PYTHONUNBUFFERED=True
+      - OAUTHLIB_INSECURE_TRANSPORT=False
+    env_file:
+      .env
+    depends_on:
+      - connect-database 
+    networks:
+      - connect-network
+
+networks:
+    connect-network:
+        external: true

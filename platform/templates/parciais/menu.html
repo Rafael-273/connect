@@ -1,0 +1,110 @@
+{% load static %}
+<header class="bg-transparent w-full transition duration-800 ease-in-out fixed left-0 z-50" id="navbar" style="top: -2px;">
+    <nav class="container mx-auto flex justify-between items-center px-8 md:px-4 py-20 h-24">
+        <button id="menu-toggle" class="flex items-center md:hidden focus:outline-none ml-2">
+            <span class="material-symbols-outlined text-white text-4xl">
+                menu
+            </span>
+        </button>
+
+        <a href="{% url 'home' %}" class="md:flex-grow-0 mx-auto md:mx-0 md:ml-4 min-w-[150px] flex justify-center items-center">
+            <img class="hidden md:flex w-8 md:w-20 mx-auto md:mx-0" src="{% static 'assets/logo.png' %}" alt="logo">
+            <img class="flex md:hidden w-16 md:w-8 mr-6 md:mx-0" src="{% static 'assets/logo.png' %}" alt="logo">
+        </a>
+
+        <a href="https://www.instagram.com/pine.creativestudio/" target="_blank" class="md:hidden text-3xl mr-2 flex justify-center">
+            <ion-icon name="logo-instagram" style="color: var(--secondary-color-light);"></ion-icon>
+        </a>
+
+        <div class="hidden md:flex md:flex-grow md:items-center justify-end gap-8">
+            <ul class="flex space-x-12">
+                <li><a href="{% url 'home' %}" class="text-[1.1rem] hover:font-semibold transition duration-800 hover:font-semibold" style="color: var(--secondary-color-light);">Home</a></li>
+                <li>
+                    <button id="areas-toggle-desktop" class="text-[1.1rem] hover:font-semibold transition duration-800 hover:font-semibold" style="color: var(--secondary-color-light);">
+                        Engage
+                    </button>
+                    <ul id="areas-submenu-desktop" class="absolute hidden group-hover:block bg-[var(--primary-color)] rounded-md w-64 mt-4">
+                        <li><a href="" class="block px-6 py-4 text-[0.9rem] hover:bg-[#2E9DD0] text-white">Church Planter Pathway</a></li>
+                        <li><a href="" class="block px-6 py-4 text-[0.9rem] hover:bg-[#2E9DD0] text-white">Existing Church Pathway</a></li>
+                        <li><a href="" class="block px-6 py-4 text-[0.9rem] hover:bg-[#2E9DD0] text-white">Marketplace Leader Pathway</a></li>
+                        <li><a href="{% url 'coaching' %}" class="block px-6 py-4 text-[0.9rem] hover:bg-[#2E9DD0] text-white">Coaching</a></li>
+                        <li><a href="" class="block px-6 py-4 text-[0.9rem] hover:bg-[#2E9DD0] text-white">Consulting</a></li>
+                        <li><a href="" class="block px-6 py-4 text-[0.9rem] hover:bg-[#2E9DD0] text-white">Conferences</a></li>
+                        <li><a href="" class="block px-6 py-4 text-[0.9rem] hover:bg-[#2E9DD0] text-white">Care</a></li>
+                    </ul>
+                </li>
+                <li><a href="" class="text-[1.1rem] hover:font-semibold transition duration-800 hover:font-semibold" style="color: var(--secondary-color-light);">About</a></li>
+                <li><a href="" class="text-[1.1rem] hover:font-semibold transition duration-800 hover:font-semibold" style="color: var(--secondary-color-light);">Connect</a></li>
+            </ul>
+            <a href="">
+                <div class="hidden md:flex space-x-4">
+                    <div class=" rounded-full cursor-pointer px-8 py-4" style="background-color: var(--secondary-color-light); color: var(--tertiary-color-dark);">
+                        <h1>
+                            New Here?
+                        </h1>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </nav>
+
+    <ul id="mobile-menu" class="md:hidden flex flex-col items-center space-y-6 mt-12 py-4 absolute w-full top-20 hidden" style="z-index: 1; background-color: var(--primary-color);">
+        <li class="p-2"><a href="{% url 'home' %}" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--secondary-color-light);">Home</a></li>
+        <li class="flex flex-col">
+            <button id="areas-toggle" class="text-[0.9rem] hover:font-semibold text-center" style="color: var(--secondary-color-light);">
+                Engage ▾
+            </button>
+            <ul id="areas-submenu" class="hidden flex flex-col items-center w-full py-8 gap-6 space-y-2 mt-2" style="background-color: var(--primary-color);">
+                <li><a href="" class="block py-4 w-full text-[0.9rem] text-white">Church Planter Pathway</a></li>
+                <li><a href="" class="block py-4 w-full text-[0.9rem] text-white">Existing Church Pathway</a></li>
+                <li><a href="" class="block py-4 w-full text-[0.9rem] text-white">Marketplace Leader Pathway</a></li>
+                <li><a href="{% url 'coaching' %}" class="block py-4 w-full text-[0.9rem] text-white">Coaching</a></li>
+                <li><a href="" class="block py-4 w-full text-[0.9rem] text-white">Consulting</a></li>
+                <li><a href="" class="block py-4 w-full text-[0.9rem] text-white">Conferences</a></li>
+                <li><a href="" class="block py-4 w-full text-[0.9rem] text-white">Care</a></li>
+            </ul>
+        </li>
+        <li class="p-2"><a href="" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--secondary-color-light);">About</a></li>
+        <li class="p-2"><a href="" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--secondary-color-light);">Connect</a></li>
+    </ul>
+</header>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    function updateNavbarColor() {
+        if (!$('#mobile-menu').hasClass('hidden') || $(window).scrollTop() > 50) {
+            $('#navbar').css('background', 'var(--primary-color)');
+        } else {
+            $('#navbar').css('background', 'transparent');
+        }
+    }
+
+    $('#menu-toggle').on('click', function() {
+        $('#mobile-menu').toggleClass('hidden');
+        updateNavbarColor();
+    });
+
+    $(document).on('click', function(event) {
+        if (!$(event.target).closest('#mobile-menu, #menu-toggle').length) {
+            $('#mobile-menu').addClass('hidden');
+            updateNavbarColor();
+        }
+    });
+
+    $("#areas-toggle").on("click", function() {
+        $("#areas-submenu").toggleClass("hidden");
+    });
+
+    $("#areas-toggle-desktop").on("click", function() {
+        $("#areas-submenu-desktop").toggleClass("hidden");
+    });
+
+    $(window).on('scroll', function() {
+        updateNavbarColor();
+    });
+
+    $(document).ready(function() {
+        updateNavbarColor();
+    });
+
+</script>

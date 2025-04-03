@@ -1,0 +1,41 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    {% block head %}{% endblock %}
+    {% include 'parciais/head.html' %}
+    <title>{% block title %}{% endblock %}</title>
+    <style>
+        @font-face {
+            font-family: "Neustadt";
+            src: url("{% static 'fonts/Neustadt Regular.ttf' %}") format("truetype");
+            font-style: normal;
+        }
+    </style>
+</head>
+
+<body class="flex flex-col min-h-screen" style="background-color: var(--secondary-color-light);">  
+{% include 'parciais/menu.html' %}
+
+{% block content %}
+
+{% endblock %}
+
+{% include 'parciais/footer.html' %}
+
+<script>
+    $(document).ready(function() {
+        $(window).scroll(function() {
+            const navbar = $('#navbar');
+            
+            if ($(this).scrollTop() > 0) {
+                navbar.addClass('menu-scroll');
+            } else {
+                navbar.removeClass('menu-scroll');
+            }
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+/* General Settings */
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap');
+
+body {
+    margin: 0;
+    box-sizing: border-box;
+    overflow-x: hidden;
+    font-family: "Neustadt", sans-serif;
+    font-weight: 400; /* Regular */
+}
+
+h1, li {
+    font-family: "Montserrat", sans-serif;
+}
+
+:root {
+    --primary-color: #3CC4FC;
+    --secondary-color-light: #FFFFFF;
+    --secondary-color-dark: #656B6F;
+    --accent-color: #93D5AF;
+    --tertiary-color-dark: #3a3c3d;
+}
+
+::-webkit-scrollbar {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgb(224, 224, 224);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-corner {
+    background: rgb(224, 224, 224);
+    border-radius: 10px;
+}
+
+input {
+    outline: none;
+}
+
+/* Select */
+
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    -ms-appearance: none;
+    appearance: none;
+    outline: 0;
+    width: 100%;
+    padding: 0.5rem 1rem !important;
+    border-radius: 0.5rem !important;
+    box-shadow: none;
+    border: 0 !important;
+    background-image: none;
+    flex: 1;
+    background-image: url('data:image/svg+xml;utf8,<svg fill="black" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>');
+    background-repeat: no-repeat;
+    background-size: 1.4rem;
+    background-position: right 1em top 50%;
+    cursor:pointer;
+    font-size: 0.9em;
+}
+
+select::-ms-expand {
+    display: none;
+    cursor: pointer;
+}
+
+select::after {
+    content: '\25BC';
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 0 1em;
+    cursor: pointer;
+    pointer-events: none;
+    transition: .25s all ease;
+}
+
+.select2-container--default .select2-selection--multiple {
+    padding: 0 0.5rem;
+    border: 0.1rem solid rgba(197, 197, 197, 0.644) !important;
+}
