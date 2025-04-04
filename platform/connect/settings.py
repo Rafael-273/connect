@@ -141,6 +141,8 @@ STORAGES = {
     },
 }
 
+AUTH_USER_MODEL = 'website.User'
+
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
 ]

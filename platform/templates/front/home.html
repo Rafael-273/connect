@@ -3,7 +3,7 @@
 
 {% block title %}
 
-    Reproducing Churches
+    Connect
 
 {% endblock %}
 
@@ -13,107 +13,7 @@
 
 {% block content %}
 <div class="flex flex-col items-center">
-    <div class="flex flex-col items-start justify-center w-full min-h-[100vh] md:min-h-[90vh] bg-cover bg-center px-4 sm:px-8 lg:px-16" style="background-image: url({% static 'assets/home_background_01.jpg' %});">
-        <div class="flex flex-col md:ml-12 md:gap-2 text-center sm:text-left fade-in-up">
-            <div class="flex flex-col">
-                <h1 class="text-white font-bold text-5xl sm:text-6xl lg:text-[6.25rem] w-full sm:w-4/5 lg:w-2/3 tracking-tight">
-                    Reproducing
-                </h1>
-                <h1 class="font-bold text-[4rem] sm:text-6xl lg:text-[8.5rem] w-full sm:w-4/5 lg:w-2/3 tracking-tight mt-[-1.3rem]" style="color: var(--secondary-color-dark);">
-                    Churches
-                </h1>
-            </div>
-            <div class="flex flex-col gap-2 md:gap-3 max-w-lg px-4 sm:max-w-xl lg:max-w-2xl md:mt-0 mt-[-0.5rem]">
-                <p class="text-white text-sm sm:text-lg lg:text-xl leading-relaxed">
-                    We are more than a platform; we are a community, a catalyst for collaboration among churches that share a deep passion for togetherness and a commitment to living sent every day.
-                </p>
-                <p class="text-sm sm:text-lg lg:text-xl font-semibold" style="color: var(--secondary-color-dark);">
-                    Consulting | Coaching | Engage
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <div class="flex gap-6 justify-center items-center w-full h-[60vh] bg-cover bg-center">
-        <div class="flex flex-col w-1/2 gap-6 md:gap-8">
-            <h1 class="text-2sm sm:text-lg lg:text-xl w-full sm:w-3/4 lg:w-full" style="color: var(--secondary-color-dark);">WELCOME TO <b>THE REPRODUCING CHURCH</b></h1>
-            <h4 class="text-2sm sm:text-lg lg:text-3xl w-full sm:w-3/4 lg:w-full" style="color: var(--secondary-color-dark);">
-                We're a collaborative movement of leaders <b>praying, encouraging, developing and mobilizing</b> others to live sent so new disciples, missional communities and churches can be established and multiplied
-            </h4>
-        </div>
-    </div>
-
-    <div class="flex flex-col lg:flex-row gap-6 justify-center items-center w-full min-h-[80vh] bg-cover bg-center px-4 sm:px-8 lg:px-16" style="background-image: url({% static 'assets/home_background_02.jpg' %});">
-        <div class="flex flex-col md:ml-12 gap-4 w-full lg:w-1/2 text-center lg:text-left fade-in-up">
-            <div class="flex flex-col">
-                <h1 class="text-white font-bold text-[3.4rem] sm:text-6xl lg:text-[7rem] tracking-tight">
-                    Specialized
-                </h1>
-                <h1 class="font-bold md:mt-[-1rem] mt-[-1.8rem] text-[2.8rem] sm:text-6xl lg:text-[5.75rem] tracking-tight z-10" style="color: var(--secondary-color-dark);">
-                    coaching and
-                </h1>
-                <h1 class="text-white md:mt-[-1.5rem] mt-[-2.2rem] font-bold text-[3.6rem] sm:text-6xl lg:text-[7.4rem] tracking-tight z-0">
-                    consulting
-                </h1>
-            </div>
-            <p class="text-white text-sm sm:text-lg px-4 lg:text-xl leading-relaxed max-w-lg sm:max-w-xl lg:max-w-2xl md:mt-0 mt-[-1rem]" style="color: var(--secondary-color-dark);">
-                If you're looking for personalized attention to your leadership development, strategic planning for your ministry, or marketplace work, we can help. We provide specialized coaching and consulting.
-            </p>
-        </div>
-        <div class="flex flex-col gap-6 w-full lg:w-1/2 mt-6 md:mr-6 lg:mt-0 px-4">
-            <a href="{% url 'coaching' %}">
-                <div class="flex gap-4 border-b pb-4 items-center" style="border-color: #79797969;">
-                    <h1 class="text-lg sm:text-lg lg:text-3xl font-semibold flex-1" style="color: var(--secondary-color-dark);">
-                        Learn more <b class="text-white font-bold">about coaching</b>
-                    </h1>
-                    <span class="material-symbols-outlined text-4xl sm:text-5xl font-light" style="color: var(--secondary-color-dark);">
-                        expand_circle_down
-                    </span>
-                </div>
-            </a>
-            <div class="flex gap-4 border-b pb-4 items-center" style="border-color: #79797969;">
-                <h1 class="text-[1.1rem] sm:text-lg lg:text-3xl font-semibold flex-1" style="color: var(--secondary-color-dark);">
-                    Learn more <b class="text-white font-bold">about consulting</b>
-                </h1>
-                <span class="material-symbols-outlined text-4xl sm:text-5xl font-light" style="color: var(--secondary-color-dark);">
-                    expand_circle_down
-                </span>
-            </div>
-        </div>
-    </div>
-
-    <div class="flex flex-col gap-6 justify-center items-center w-full min-h-[100vh] md:h-[110vh] bg-cover bg-center text-center py-12 px-4 sm:px-8 lg:px-16">
-        <div class="flex flex-col w-full max-w-4xl gap-4">
-            <h1 class="text-lg sm:text-xl lg:text-2xl" style="color: var(--secondary-color-dark);">
-                <b>CONNECT</b> WITH US
-            </h1>
-            <p class="text-sm sm:text-lg lg:text-2xl leading-relaxed md:px-0 px-4" style="color: var(--secondary-color-dark);">
-                We are a family of believers, passionate about seeing the church flourish in unity and purpose. Whether you are a church looking to connect with like-minded communities, a leader seeking growth and support, or someone passionate about the mission of the Gospel, you have a place here.
-            </p>
-        </div>
-        <div class="flex flex-col sm:flex-row gap-6 p-4 sm:p-8 justify-center items-center w-full max-w-5xl">
-            <div class="w-full sm:w-1/2 lg:w-2/3 h-auto md:h-[35rem] py-16 px-8 flex flex-col items-center justify-around rounded-2xl overflow-hidden gap-4 text-white" style="background-color: var(--secondary-color-dark);">
-                <h1 class="font-bold text-3xl md:text-6xl sm:text-4xl text-center">Collaborate</h1>
-                <p class="text-sm sm:text-lg lg:text-xl text-center">
-                    We believe that churches, leaders, and organizations achieve greater impact when they work together. Through strategic partnerships, shared resources, and mutual encouragement, we foster a network that supports the multiplication of disciples, leaders, and churches.
-                </p>
-                <button class="px-6 py-3 text-lg font-semibold text-gray-700 bg-white rounded-md flex items-center gap-2 w-full justify-center">
-                    <h1>LEARN MORE</h1>
-                    <span class="material-symbols-outlined text-2xl font-light">arrow_right_alt</span>
-                </button>
-            </div>
-            <div class="w-full sm:w-1/2 lg:w-2/3 h-auto md:h-[35rem] py-16 px-8 flex flex-col items-center justify-around rounded-2xl overflow-hidden gap-4 text-white" style="background-color: var(--primary-color);">
-                <h1 class="font-bold text-3xl md:text-6xl sm:text-4xl text-center">Donate</h1>
-                <p class="text-sm sm:text-lg lg:text-xl text-center">
-                    Your generous gift fuels our mission. By donating to Reproducing Churches, you directly contribute to the training, development, and support of leaders, church planters, and marketplace influencers dedicated to spreading the Gospel.
-                </p>
-                <button class="px-6 py-3 text-lg font-semibold text-gray-700 bg-white rounded-md flex items-center gap-2 w-full justify-center">
-                    <h1>LEARN MORE</h1>
-                    <span class="material-symbols-outlined text-2xl font-light">arrow_right_alt</span>
-                </button>
-            </div>
-        </div>
-    </div>
+   
     
 </div>
 
