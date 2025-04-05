@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Connect{% endblock %}
+
+{% block content %}
+<section class="m-0 h-screen text-black bg-white box-border grid grid-rows-[1fr_2fr_1fr] justify-items-center py-6 md:py-0 w-full">
+    <div></div>
+    <div class="flex flex-col gap-2 justify-center items-center px-6 md:px-0 w-full md:w-1/2">
+        <div class="sticky text-center py-2 flex flex-col gap-2">
+            <h1 class="text-5xl md:text-7xl flex flex-col">
+              <span class="block md:inline">Seja</span>
+              <span class="block md:inline font-bold text-[var(--color-primary)]">Bem Vindo</span>
+            </h1>
+            <p class="text-sm md:text-base break-words">
+              Estamos muito felizes com sua visita, <b>por isso queremos te conhecer melhor!</b>
+            </p>
+        </div>
+          
+
+        <form method="POST" class="space-y-4 w-full">
+            {% csrf_token %}
+        
+            <div>
+                <label for="{{ form.name.id_for_label }}" class="block text-sm font-medium text-gray-700">Nome completo</label>
+                {{ form.name }}
+                {% if form.name.errors %}
+                    <p class="text-sm text-red-600 mt-1">{{ form.name.errors.0 }}</p>
+                {% endif %}
+            </div>
+        
+            <div>
+                <label for="{{ form.gender.id_for_label }}" class="block text-sm font-medium text-gray-700">Gênero</label>
+                {{ form.gender }}
+                {% if form.gender.errors %}
+                    <p class="text-sm text-red-600 mt-1">{{ form.gender.errors.0 }}</p>
+                {% endif %}
+            </div>
+        
+            <div>
+                <label for="{{ form.phone.id_for_label }}" class="block text-sm font-medium text-gray-700">Telefone</label>
+                {{ form.phone }}
+                {% if form.phone.errors %}
+                    <p class="text-sm text-red-600 mt-1">{{ form.phone.errors.0 }}</p>
+                {% endif %}
+            </div>
+        
+            <div>
+                <label for="{{ form.address.id_for_label }}" class="block text-sm font-medium text-gray-700">Endereço</label>
+                {{ form.address }}
+                {% if form.address.errors %}
+                    <p class="text-sm text-red-600 mt-1">{{ form.address.errors.0 }}</p>
+                {% endif %}
+            </div>
+        
+            <div>
+                <label for="{{ form.neighborhood.id_for_label }}" class="block text-sm font-medium text-gray-700">Bairro</label>
+                {{ form.neighborhood }}
+                {% if form.neighborhood.errors %}
+                    <p class="text-sm text-red-600 mt-1">{{ form.neighborhood.errors.0 }}</p>
+                {% endif %}
+            </div>
+        
+            <div>
+                <label for="{{ form.prayer_request.id_for_label }}" class="block text-sm font-medium text-gray-700">Pedido de oração</label>
+                {{ form.prayer_request }}
+                {% if form.prayer_request.errors %}
+                    <p class="text-sm text-red-600 mt-1">{{ form.prayer_request.errors.0 }}</p>
+                {% endif %}
+            </div>
+        
+            <div class="">
+                <button type="submit" class="w-full bg-[var(--color-primary)] hover:bg-opacity-90 text-white font-semibold py-2 px-4 rounded-xl shadow-sm transition-all">
+                    Enviar
+                </button>
+            </div>
+        </form>
+    </div>
+    <div></div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+    $(document).ready(function(){
+        $('#id_telephone').mask('(00) 00000-0000');
+    });
+</script>
+{% endblock %}

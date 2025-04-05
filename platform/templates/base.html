@@ -8,9 +8,27 @@
     <title>{% block title %}{% endblock %}</title>
     <style>
         @font-face {
-            font-family: "Neustadt";
-            src: url("{% static 'fonts/Neustadt Regular.ttf' %}") format("truetype");
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansRegular.otf' %}") format("truetype");
             font-style: normal;
+        }
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansMedium.otf' %}") format("truetype");
+            font-style: medium;
+        }
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansLight.otf' %}") format("truetype");
+            font-style: light;
+        }
+        @font-face {
+            font-family: "Tusker";
+            src: url("{% static 'fonts/TuskerGrotesk.ttf' %}") format("truetype");
+        }
+        @font-face {
+            font-family: "Integral";
+            src: url("{% static 'fonts/Integral.otf' %}") format("truetype");
         }
     </style>
 </head>

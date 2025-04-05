@@ -12,10 +12,36 @@
 {% endblock %}
 
 {% block content %}
-<div class="flex flex-col items-center">
-   
+<div class="flex items-center justify-center min-h-[100vh] px-4 bg-[var(--color-accent)]">
+    <div class="flex flex-col items-center text-center animate-fade-in md:gap-2">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-light leading-tight tracking-tight">
+        <span class="block">Obrigado</span>
+        <span class="block font-bold text-[var(--color-primary)] mt-[-0.7rem] md:mt-[-0.3rem]">pela sua visita!</span>
+        </h1>
+        <p class="text-sm sm:text-base md:text-lg text-gray-600 max-w-2xl px-2">
+        Ficamos muito felizes em te receber e <b>esperamos que tenha se sentido acolhido.</b>
+        </p>
+    </div>
+    </div>
     
-</div>
+    <style>
+    @keyframes fade-in {
+        from {
+        opacity: 0;
+        transform: translateY(10px);
+        }
+        to {
+        opacity: 1;
+        transform: translateY(0);
+        }
+    }
+    
+    .animate-fade-in {
+        animation: fade-in 0.6s ease-out both;
+    }
+    </style>
+    
+
 
 
 {% endblock %}

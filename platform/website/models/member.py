@@ -1,4 +1,7 @@
 from django.db import models
+from PIL import Image
+from io import BytesIO
+from django.core.files.base import ContentFile
 from ._base import BaseModel
 from .ministry import Ministry
 from .neighborhood import Neighborhood
@@ -31,6 +34,11 @@ class Member(BaseModel):
 
     user = models.OneToOneField('User', on_delete=models.CASCADE, null=True, blank=True)
     name = models.CharField(max_length=150)
+    profile_picture = models.ImageField(
+        upload_to='profile_pictures/',
+        blank=True,
+        null=True
+    )
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -65,7 +73,33 @@ class Member(BaseModel):
     @property
     def is_admin(self):
         return self.user.is_staff if self.user else False
+    
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
 
+        if self.profile_picture:
+            try:
+                img = Image.open(self.profile_picture)
+
+                max_size = (500, 500)
+                img.thumbnail(max_size, Image.ANTIALIAS)
+
+                if img.mode in ("RGBA", "P"):
+                    img = img.convert("RGB")
+
+                buffer = BytesIO()
+                img.save(buffer, format='JPEG', quality=85)
+
+                self.profile_picture.save(
+                    f'{self.pk}_profile.jpg',
+                    ContentFile(buffer.getvalue()),
+                    save=False
+                )
+
+                buffer.close()
+                super().save(update_fields=['profile_picture'])
+            except Exception as e:
+                print(f"Erro ao processar imagem do membro {self.name}: {e}")
 
     def __str__(self):
         return self.name
