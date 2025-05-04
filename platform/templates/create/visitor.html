@@ -30,14 +30,6 @@
             </div>
         
             <div>
-                <label for="{{ form.gender.id_for_label }}" class="block text-sm font-medium text-gray-700">Gênero</label>
-                {{ form.gender }}
-                {% if form.gender.errors %}
-                    <p class="text-sm text-red-600 mt-1">{{ form.gender.errors.0 }}</p>
-                {% endif %}
-            </div>
-        
-            <div>
                 <label for="{{ form.phone.id_for_label }}" class="block text-sm font-medium text-gray-700">Telefone</label>
                 {{ form.phone }}
                 {% if form.phone.errors %}
