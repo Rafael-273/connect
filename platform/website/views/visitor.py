@@ -1,3 +1,4 @@
+from django.views.generic import ListView
 from django.views.generic.edit import CreateView
 from django.urls import reverse_lazy
 from django.utils import timezone
@@ -14,3 +15,9 @@ class VisitorCreateView(CreateView):
     def form_valid(self, form):
         form.instance.visit_date = timezone.now()
         return super().form_valid(form)
+
+
+class VisitorListView(ListView):
+    model = Visitor
+    template_name = 'list/visitor.html'
+    context_object_name = 'visitors'

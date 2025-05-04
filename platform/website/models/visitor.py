@@ -9,6 +9,7 @@ class Visitor(BaseModel):
     GENDER_CHOICES = Member.GENDER_CHOICES
 
     name = models.CharField(max_length=150)
+    email = models.EmailField(unique=True, blank=True, null=True)
     gender = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True)
     phone = models.CharField(max_length=20, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
