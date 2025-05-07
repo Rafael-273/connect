@@ -16,7 +16,7 @@ class Visitor(BaseModel):
     neighborhood = models.ForeignKey(Neighborhood, on_delete=models.SET_NULL, blank=True, null=True)
     visit_date = models.DateField(auto_now_add=True)
     decision_for_jesus = models.BooleanField(default=False)
-    conversion = models.CharField(max_length=20, choices=CONVERSION_CHOICES)
+    conversion = models.CharField(max_length=20, choices=CONVERSION_CHOICES, null=True, blank=True)
     prayer_request = models.TextField(blank=True, null=True)
     profile_notes = models.TextField(blank=True, null=True)
 

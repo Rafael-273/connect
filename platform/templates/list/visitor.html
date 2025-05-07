@@ -6,10 +6,57 @@
 {% block content %}
 <section class="min-h-screen bg-white text-black py-10 px-4 md:px-0 flex flex-col items-center">
   <div class="w-full px-4 md:px-12">
+
     <div class="text-center mb-8">
       <h1 class="text-4xl md:text-6xl font-bold text-[var(--color-primary)] mb-2">Visitantes</h1>
       <p class="text-base md:text-lg text-gray-700">Lista de todos os visitantes que já passaram por aqui 🙌</p>
     </div>
+
+    <div class="mb-4 flex md:hidden px-2 md:px-0 w-full">
+      <button class="w-full text-white px-4 py-2 rounded transition duration-300" style="background-color: var(--color-primary);" onclick="toggleModal()">
+        Filtros
+      </button>
+    </div>
+
+    <div id="filterModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex justify-center items-center z-50 cursor-pointer" onclick="closeModal(event)">
+      <div class="filterModal p-6 rounded-lg w-11/12 sm:w-3/4 md:w-1/2 lg:w-1/3 xl:w-1/4 flex flex-col items-center bg-white">
+        <h2 class="text-3xl mb-4">Filtrar <b>Visitantes</b></h2>
+        <form method="get" action="{% url 'visitor_list' %}" class="w-full">
+    
+          <div class="mb-4 w-full">
+            <label for="visit_data" class="block text-gray-700 font-medium">Data de visita</label>
+            <input type="date" name="visit_data" id="visit_data" value="{{ request.GET.start_date }}" class="w-full text-gray-800 px-4 py-2 rounded-md border border-gray-300 focus:outline-none" />
+          </div>
+    
+          <div class="flex flex-col sm:flex-row gap-2 sm:gap-4">
+            <button type="reset" class="w-full sm:w-1/2 text-white px-4 py-2 rounded-md transition duration-300" style="background-color: var(--color-primary);">
+              Limpar
+            </button>
+            <button type="submit" class="w-full sm:w-1/2 text-white px-4 py-2 rounded-md transition duration-300" style="background-color: var(--color-primary);">
+              Buscar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <form method="get" action="{% url 'visitor_list' %}" class="w-full mb-6">
+      <div class="search flex flex-col md:flex-row gap-2 px-2 md:px-0">
+        <input 
+          type="text" 
+          name="q" 
+          placeholder="Buscar visitantes" 
+          value="{{ query }}" 
+          class="p-2 border border-gray-300 rounded-md w-full"
+        >
+        <button type="submit" class="hidden md:block px-4 py-2 rounded-md text-white" style="background-color: var(--color-primary);">
+          Buscar
+        </button>
+        <button type="button" class="text-white px-4 py-2 hidden md:flex rounded-md transition duration-300" style="background-color: var(--color-primary);" onclick="toggleModal()">
+          Filtros
+        </button>
+      </div>
+    </form>
 
     <div class="hidden md:block overflow-x-auto rounded-xl shadow-lg">
       <table class="min-w-full divide-y divide-gray-200 bg-white">
@@ -20,99 +67,105 @@
             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Telefone</th>
             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Endereço</th>
             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Bairro</th>
-            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Data da Visita</th>
             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Decisão por Jesus</th>
             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Tipo de Conversão</th>
             <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Pedido de Oração</th>
-            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Notas do Perfil</th>
-            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Data de Cadastro</th>
+            <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Data de Visita</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
           {% for visitor in visitors %}
-            <tr class="hover:bg-gray-50 transition-all">
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.name }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.user.email }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.phone }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.address }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.neighborhood.name }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.visit_date|date:"d/m/Y" }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">
-                {% if visitor.decision_for_jesus %}
-                  Sim
-                {% else %}
-                  Não
-                {% endif %}
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.conversion }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.prayer_request }}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ visitor.created_at|date:"d/m/Y H:i" }}
-              </td>
-            </tr>
+          <tr class="hover:bg-gray-50 transition-all">
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.name }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.email }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.phone }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.address }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.neighborhood }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.accepted_jesus }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.conversion_type }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.prayer_request }}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm">{{ visitor.visit_date|date:"d/m/Y" }}</td>
+          </tr>
           {% empty %}
-            <tr>
-              <td colspan="11" class="px-6 py-4 text-center text-gray-500">Nenhum visitante encontrado.</td>
-            </tr>
+          <tr>
+            <td colspan="9" class="text-center px-6 py-4 text-gray-500">Nenhum visitante encontrado.</td>
+          </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-
     <div class="md:hidden grid grid-cols-1 gap-6">
-        {% for visitor in visitors %}
-          <div class="bg-white shadow-lg rounded-xl p-6 flex flex-col space-y-6">
-            <div class="flex items-center justify-between">
-              <div class="font-semibold text-xl text-[var(--color-primary)]">{{ visitor.name }}</div>
-              <span class="text-sm text-gray-500">{{ visitor.visit_date|date:"d/m/Y" }}</span>
-            </div>
-      
-            <div class="flex items-center space-x-2">
-              <i class="fas fa-envelope text-[var(--color-primary)]"></i>
-              <div><strong>Email:</strong> {{ visitor.user.email }}</div>
-            </div>
-      
-            <div class="flex items-center space-x-2">
-              <i class="fas fa-phone-alt text-[var(--color-primary)]"></i>
-              <div><strong>Telefone:</strong> {{ visitor.phone }}</div>
-            </div>
-      
-            <div class="flex items-center space-x-2">
-              <i class="fas fa-map-marker-alt text-[var(--color-primary)]"></i>
-              <div><strong>Endereço:</strong> {{ visitor.address }}</div>
-            </div>
-      
-            <div class="flex items-center space-x-2">
-              <i class="fas fa-home text-[var(--color-primary)]"></i>
-              <div><strong>Bairro:</strong> {{ visitor.neighborhood.name }}</div>
-            </div>
-      
-            <div class="flex items-center space-x-2">
-              <i class="fas fa-heart text-[var(--color-primary)]"></i>
-              <div><strong>Decisão por Jesus:</strong>
-                {% if visitor.decision_for_jesus %}
-                  <span class="text-green-500">Sim</span>
-                {% else %}
-                  <span class="text-red-500">Não</span>
-                {% endif %}
-              </div>
-            </div>
-      
-            <div class="flex items-center space-x-2">
-              <i class="fas fa-cross text-[var(--color-primary)]"></i>
-              <div><strong>Tipo de Conversão:</strong> {{ visitor.conversion }}</div>
-            </div>
-      
-            <div class="flex items-center space-x-2">
-              <i class="fas fa-praying-hands text-[var(--color-primary)]"></i>
-              <div><strong>Pedido de Oração:</strong> {{ visitor.prayer_request }}</div>
+      {% for visitor in visitors %}
+        <div class="bg-white shadow-lg rounded-xl p-6 flex flex-col space-y-6">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold text-xl text-[var(--color-primary)]">{{ visitor.name }}</div>
+            <span class="text-sm text-gray-500">{{ visitor.visit_date|date:"d/m/Y" }}</span>
+          </div>
+    
+          <div class="flex items-center space-x-2">
+            <i class="fas fa-envelope text-[var(--color-primary)]"></i>
+            <div><strong>Email:</strong> {{ visitor.user.email }}</div>
+          </div>
+    
+          <div class="flex items-center space-x-2">
+            <i class="fas fa-phone-alt text-[var(--color-primary)]"></i>
+            <div><strong>Telefone:</strong> {{ visitor.phone }}</div>
+          </div>
+    
+          <div class="flex items-center space-x-2">
+            <i class="fas fa-map-marker-alt text-[var(--color-primary)]"></i>
+            <div><strong>Endereço:</strong> {{ visitor.address }}</div>
+          </div>
+    
+          <div class="flex items-center space-x-2">
+            <i class="fas fa-home text-[var(--color-primary)]"></i>
+            <div><strong>Bairro:</strong> {{ visitor.neighborhood.name }}</div>
+          </div>
+    
+          <div class="flex items-center space-x-2">
+            <i class="fas fa-heart text-[var(--color-primary)]"></i>
+            <div><strong>Decisão por Jesus:</strong>
+              {% if visitor.decision_for_jesus %}
+                <span class="text-green-500">Sim</span>
+              {% else %}
+                <span class="text-red-500">-</span>
+              {% endif %}
             </div>
           </div>
-        {% empty %}
-          <p class="text-center text-gray-500">Nenhum visitante encontrado.</p>
-        {% endfor %}
-      </div>
-      
+    
+          <div class="flex items-center space-x-2">
+            <i class="fas fa-cross text-[var(--color-primary)]"></i>
+            <div><strong>Tipo de Conversão:</strong> {{ visitor.conversion }}</div>
+          </div>
+    
+          <div class="flex items-center space-x-2">
+            <i class="fas fa-praying-hands text-[var(--color-primary)]"></i>
+            <div><strong>Pedido de Oração:</strong> {{ visitor.prayer_request }}</div>
+          </div>
+        </div>
+      {% empty %}
+        <p class="text-center text-gray-500">Nenhum visitante encontrado.</p>
+      {% endfor %}
+    </div>
   </div>
 </section>
+
+<script>
+  function toggleModal() {
+    const modal = document.getElementById('filterModal');
+    modal.classList.toggle('hidden');
+  }
+
+  function resetFilters() {
+    document.getElementById('q').value = '';
+    document.querySelector('#filterModal form').submit();
+  }
+
+  function closeModal(event) {
+    const modalContent = event.target.closest('.filterModal');
+    if (!modalContent) {
+      toggleModal();
+    }
+  }
+</script>
 {% endblock %}
