@@ -23,9 +23,8 @@ services:
     command: [
         "sh",
         "-c", 
-        "pip install debugpy -t /tmp && 
-        python /tmp/debugpy --wait-for-client --listen 0.0.0.0:3000
-        ./manage.py runserver ${HOSTNAME}:${PORT}"
+        "pip install debugpy &&
+         python -m debugpy --listen 0.0.0.0:3000 --wait-for-client -m daphne -b 0.0.0.0 -p ${PORT} connect.asgi:application"
     ]
     volumes:
       - ./platform/:/usr/src/platform
