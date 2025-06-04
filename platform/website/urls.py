@@ -3,6 +3,7 @@ from .views.home import HomeView
 from .views.visitor import VisitorCreateView, VisitorListView
 from .views.member import MemberCreateView
 from .views.translator import AudioRecorderView
+from .views.event import EventDetailView, EventListView
 
 urlpatterns = [
     path('', HomeView.as_view(), name='home'),
@@ -10,4 +11,6 @@ urlpatterns = [
     path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
     path('member/register/', MemberCreateView.as_view(), name='member_register'),
     path('translator/recorder/', AudioRecorderView.as_view(), name='audio_recorder'),
+    path('event/list', EventListView.as_view(), name='event_list'),
+    path('event/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
 ]

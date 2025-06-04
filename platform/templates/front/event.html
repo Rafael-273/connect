@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+{{ event.name }}
+{% endblock %}
+
+{% block content %}
+<div class="flex-grow content container mx-auto mb-8 mt-28 flex flex-col justify-center items-center px-4">
+
+    <div class="messages-container">
+        {% if messages %}
+            <div class="flex justify-center items-center mb-6 w-full">
+                {% for message in messages %}
+                    <div class="message text-center p-4 mb-4 w-full text-white rounded-md
+                        {% if message.tags == 'error' %} bg-red-500 {% endif %}"
+                        style="{% if message.tags == 'success' %} background-color: var(--event-secondary-color);{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="flex flex-col mb-12 gap-4">
+        <div class="flex flex-wrap md:flex-nowrap">
+            <div class="flex-shrink-0 w-full md:w-1/2 mb-4 md:mb-0 md:mr-6">
+                <div class="relative h-full w-full pt-[56.25%] rounded-md shadow-md overflow-hidden">
+                    <img src="{{ event.cover.url }}" alt="{{ event.name }}" class="absolute inset-0 w-full h-full object-cover" />
+                </div>
+            </div>
+            <div class="flex flex-col gap-4 w-full md:w-1/2 justify-center p-4">
+                <div class="flex flex-col gap-4 md:gap-0 md:flex-row justify-between items-center md:items-end">
+                    <h1 class="text-5xl text-center md:text-left text-gray-900" style="color: var(--event-primary-color); font-family: 'Piepie W01 Regular', sans-serif;">
+                        {{ event.name }}
+                    </h1>
+                    <h2 class="text-xl text-center md:text-right md:text-3xl text-gray-900 w-1/3"
+                        style="color: var(--event-accent-color); font-family: 'Montserrat', sans-serif;">
+                        {{ event.date|date:"d/m/Y" }}
+                    </h2>
+                </div>
+                <p class="text-base md:text-lg text-white">{{ event.description }}</p>
+                <div>
+                    <h3 class="text-lg md:text-xl mb-2" style="color: var(--event-accent-color);">Local:</h3>
+                    <p class="text-white">{{ event.location }}</p>
+                </div>
+            </div>
+        </div>
+
+        {% if event.registration_link %}
+            <a href="{{ event.registration_link }}" target="_blank">
+                <div class="rounded-lg text-center cursor-pointer py-4" 
+                    style="background-color: var(--event-accent-color); color: white;">
+                    Inscreva-se <b>agora</b>
+                </div>
+            </a>
+        {% else %}
+            <div class="rounded-lg text-center py-4 text-white bg-gray-400">
+                Inscrições encerradas
+            </div>
+        {% endif %}
+    </div>
+
+    {% if event.images.all %}
+        <div class="w-full">
+            <h2 class="text-2xl mb-4 text-center" style="color: var(--event-accent-color);">Galeria do Evento</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                {% for image in event.images.all %}
+                    <div class="aspect-w-1 aspect-h-1 rounded-md shadow-lg overflow-hidden">
+                        <img src="{{ image.url }}" class="w-full h-full object-cover cursor-pointer open-modal" />
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
