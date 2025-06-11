@@ -7,7 +7,7 @@ class Event(BaseModel):
     title = models.CharField(max_length=255)
     description = models.TextField()
     banner = models.ImageField(upload_to='event_banners/')
-    
+
     event_date = models.DateField()
     event_time = models.TimeField(null=True, blank=True)
 
