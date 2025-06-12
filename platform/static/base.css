@@ -9,8 +9,12 @@ body {
     font-weight: 400;
 }
 
-h1, li {
+h1 {
     font-family: "Integral", sans-serif;
+}
+
+h2, li {
+    font-family: "Tusker", sans-serif;
 }
 
 :root {
