@@ -28,6 +28,8 @@ class VisitorListView(ListView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.order_by('-visit_date')
+
         query = self.request.GET.get('q', '')
         visit_data = self.request.GET.get('visit_data', '')
 
