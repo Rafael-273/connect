@@ -117,7 +117,7 @@
 
           {% if visitor.phone %}
             <a 
-              href="https://wa.me/55{{ visitor.cleaned_phone }}?text=Olá {{ visitor.name.split ' '|first|urlencode }}, tudo bem? Eu sou da Igreja Filadélfia! Nós ficamos muito felizes em receber você na nossa Igreja!"
+              href="https://wa.me/55{{ visitor.cleaned_phone }}?text=Olá {{ visitor.first_name|urlencode }}, tudo bem? Eu sou da Igreja Filadélfia! Nós ficamos muito felizes em receber você na nossa Igreja!"
               target="_blank"
               class="mt-4 inline-block w-full text-center bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-light)] text-white font-bold py-2 rounded-lg shadow-md hover:shadow-lg transition duration-300"
             >

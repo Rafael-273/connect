@@ -71,6 +71,9 @@ class VisitorListView(ListView):
             visitor.cleaned_phone = self.normalize_phone_number(visitor.phone)
             if visitor.name:
                 visitor.name = visitor.name.title()
+                visitor.first_name = visitor.name.split()[0]
+            else:
+                visitor.first_name = ''
         return visitors
 
     def get_context_data(self, **kwargs):
