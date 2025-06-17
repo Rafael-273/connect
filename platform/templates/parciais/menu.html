@@ -1,5 +1,6 @@
 {% load static %}
-<header class="bg-[var(--color-primary)] w-full transition duration-800 ease-in-out fixed left-0 z-50" id="navbar" style="top: -2px;">
+
+<header class="w-full transition duration-800 ease-in-out fixed left-0 z-50 {% if navbar_transparent %}bg-transparent{% else %}bg-[var(--color-primary)]{% endif %}" id="navbar" style="top: -2px;">
     <nav class="container mx-auto flex justify-between items-center p-4 h-24">
         <button id="menu-toggle" class="flex items-center text-4xl md:hidden focus:outline-none ml-2">
             <ion-icon name="menu-outline" style="color: var(--text-color-on-primary);"></ion-icon>
@@ -18,7 +19,7 @@
             <ul class="flex space-x-12">
                 <li><a href="" class="font-semibold text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">|</a></li>
                 <li><a href="" class="font-semibold text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Início</a></li>
-                <li><a href="" class="font-semibold text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Eventos</a></li>
+                <li><a href="{% url 'event_list' %}" class="font-semibold text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Eventos</a></li>
             </ul>
         </div>
 
@@ -37,6 +38,14 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
     function updateNavbarColor() {
+        const navbarShouldBeTransparent = "{{ navbar_transparent|yesno:"true,false" }}" === "true";
+        console.log(navbarShouldBeTransparent)
+
+        if (!navbarShouldBeTransparent) {
+            $('#navbar').css('background', 'var(--color-primary)');
+            return;
+        }
+
         if (!$('#mobile-menu').hasClass('hidden') || $(window).scrollTop() > 50) {
             $('#navbar').css('background', 'var(--color-primary)');
         } else {
