@@ -3,7 +3,8 @@ from django.views.generic import ListView
 from django.views.generic.edit import CreateView
 from django.db.models import Q
 from django.utils.dateparse import parse_date
-from datetime import timedelta
+from django.utils.timezone import make_aware
+from datetime import timedelta, datetime
 from django.urls import reverse_lazy
 from django.utils import timezone
 from ..models.visitor import Visitor
@@ -31,7 +32,7 @@ class VisitorListView(ListView):
         queryset = queryset.order_by('-visit_date')
 
         query = self.request.GET.get('q', '')
-        visit_data = self.request.GET.get('visit_data', '')
+        visit_period = self.request.GET.get('visit_period', 'all')
 
         if query:
             queryset = queryset.filter(
@@ -40,12 +41,16 @@ class VisitorListView(ListView):
                 Q(phone__icontains=query)
             )
 
-        if visit_data:
-            visit_data_parsed = parse_date(visit_data)
-            if visit_data_parsed:
-                start_of_day = visit_data_parsed
-                end_of_day = visit_data_parsed + timedelta(days=1)
-                queryset = queryset.filter(visit_date__gte=start_of_day, visit_date__lt=end_of_day)
+        now = make_aware(datetime.now())
+
+        if visit_period == '7_days':
+            start_date = now - timedelta(days=7)
+            queryset = queryset.filter(visit_date__gte=start_date)
+        elif visit_period == '30_days':
+            start_date = now - timedelta(days=30)
+            queryset = queryset.filter(visit_date__gte=start_date)
+        elif visit_period == 'all':
+            pass  # sem filtro por data
 
         return queryset
     
@@ -60,6 +65,13 @@ class VisitorListView(ListView):
             return raw_phone[2:]
         else:
             return raw_phone
+        
+    def clean_visitors(self, visitors):
+        for visitor in visitors:
+            visitor.cleaned_phone = self.normalize_phone_number(visitor.phone)
+            if visitor.name:
+                visitor.name = visitor.name.title()
+        return visitors
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -68,7 +80,7 @@ class VisitorListView(ListView):
         for visitor in visitors:
             visitor.cleaned_phone = self.normalize_phone_number(visitor.phone)
 
-        context['visitors'] = visitors
+        context['visitors'] = self.clean_visitors(visitors)
         context['query'] = self.request.GET.get('q', '')
         context['visit_data'] = self.request.GET.get('visit_data', '')
         return context
