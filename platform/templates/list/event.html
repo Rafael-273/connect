@@ -7,6 +7,27 @@ Eventos
 
 {% block head %}
 
+<style>
+    body {
+        background-color: #070707 !important;
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(50px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .fade-in-up {
+        animation: fadeInUp 1s ease-out;
+    }
+</style>
+
 {% endblock %}
 
 {% block content %}
@@ -38,61 +59,100 @@ Eventos
     </div>
 </div>
 
-<div class="flex-grow content mx-auto mb-8 mt-8 flex container flex-col justify-center items-center">
-    <div class="articles flex flex-col gap-6 w-full min-h-[18.9vh] p-2 md:p-0 justify-center">
-        {% for event in events %}
-        <div class="event p-4 rounded-lg flex flex-col gap-2 md:gap-4 h-auto md:h-[25rem] cursor-pointer">
-            <div class="cover-event w-full md:w-1/2 flex-shrink-0">
-                <a href="{% url 'event_detail' slug=event.slug %}">
-                    <img src="{{ event.banner.url }}" alt="{{ event.title }}" class="w-full h-[250px] md:h-[25rem] object-cover rounded-lg" />
-                </a>
-            </div>
-        
-            <div class="event-content flex flex-col justify-between w-full md:w-1/2 p-2 md:p-4 gap-4">
-                <div>
-                    <div class="flex flex-col gap-2 md:gap-0 md:flex-row justify-between items-center md:items-end">
-                        <a href="{% url 'event_detail' slug=event.slug %}">
-                            <h1 class="text-white text-center md:text-left text-3xl md:text-4xl" style="color: var(--color-accent);">
-                                {{ event.title }}
-                            </h1>
-                        </a>
-                        <h1 class="text-xl mr-4 md:text-md text-right text-white font-medium" style="color: var(--color-accent);">
-                            {{ event.event_date|date:"d/m" }} às 
-                            {% if event.event_time|time:"i" == "00" %}
-                                {{ event.event_time|time:"H" }}H
-                            {% else %}
-                                {{ event.event_time|time:"H:i" }}H
-                            {% endif %}
-                        </h1>
 
-                    </div>
-                    <p class="mt-4 text-white text-center md:text-left text-sm md:text-base">
-                        {{ event.description|truncatewords:40 }}
-                    </p>
+<div class="articles flex flex-col w-full px-6 py-2 mt-12 justify-center">
+    <div class="mb-2 flex md:hidden px-2 md:px-0 w-full">
+        <button class="w-full text-white px-4 py-2 rounded transition duration-300" style="background-color: var(--subcolor-dark);" onclick="toggleModal()">
+            Filtros
+        </button>
+    </div>
+
+    <div id="filterModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex justify-center items-center z-50 cursor-pointer" onclick="closeModal(event)">
+        <div class="filterModal p-6 rounded-lg w-11/12 sm:w-3/4 md:w-1/2 lg:w-1/3 xl:w-1/4 flex flex-col items-center" style="background-color: var(--primary-color);">
+            <h2 class="text-3xl text-white mb-2">Filtrar <b>Packs</b></h2>
+
+            <form method="get" action="" class="w-full">
+                <div class="mb-4 w-full">
+                    <label for="category" class="block text-white mb-2 font-medium">Categoria</label>
+                    <select name="is_free" id="is_free" class="w-full text-gray-800 px-4 py-2 rounded-md focus:outline-none">
+                        <option value="">Selecione</option>
+                        <option value="true" {% if request.GET.is_free == "true" %}selected{% endif %}>Gratuito</option>
+                        <option value="false" {% if request.GET.is_free == "false" %}selected{% endif %}>Pago</option>
+                    </select>
                 </div>
-                <a href="{% url 'event_detail' slug=event.slug %}" class="mt-4 md:mt-0 w-full md:w-1/3 flex justify-center items-center gap-2 px-4 py-4 md:px-4 md:py-2 rounded-full text-white transition-colors duration-300 hover:bg-primary" style="background-color: var(--color-light);">
-                    <h3 class="text-sm md:text-base">Saiba Mais</h3>
-                    <ion-icon name="arrow-forward" class="text-lg md:text-xl"></ion-icon>
-                </a>
-            </div>
+    
+                <div class="flex flex-col sm:flex-row gap-2 sm:gap-4">
+                    <button type="reset" class="w-full sm:w-1/2 text-white px-4 py-2 rounded-md transition duration-300" onclick="resetFilters()" style="background-color: var(--secondary-color-dark);">
+                        Limpar Filtros
+                    </button>
+    
+                    <button type="submit" class="w-full sm:w-1/2 text-white px-4 py-2 rounded-md transition duration-300" style="background-color: var(--subcolor-dark);">
+                        Filtrar
+                    </button>
+                </div>
+            </form>    
         </div>
-        {% empty %}
-        <p class="text-center text-gray-500 col-span-full">Nenhum evento encontrado.</p>
-        {% endfor %}
     </div>
+    
+    <form method="GET" action="" class="w-full">
+        <div class="search flex flex-col md:flex-row gap-2 md:mb-4 px-2 md:px-0">
+            <input 
+                type="text" 
+                name="q" 
+                placeholder="Buscar Eventos" 
+                value="{{ query }}" 
+                class="p-2 px-4 border border-gray-300 rounded-md w-full text-white"
+                style="background-color: #181818; border: none;"
+            >
 
-    {% if is_paginated %}
-    <div class="flex justify-center mt-8">
-        {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}" class="px-4 py-2 mx-1 rounded bg-gray-200 hover:bg-gray-300">Anterior</a>
-        {% endif %}
+            <button type="submit" class="hidden md:block px-4 py-2 rounded-md" style="background-color: #181818; color: white;">
+                Buscar
+            </button>
 
-        <span class="px-4 py-2 mx-1 bg-gray-300 rounded">{{ page_obj.number }}</span>
-
-        {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}" class="px-4 py-2 mx-1 rounded bg-gray-200 hover:bg-gray-300">Próximo</a>
-        {% endif %}
-    </div>
-    {% endif %}
+            <button type="button" class="text-white px-4 py-2 hidden md:flex rounded-md transition duration-300" style="background-color: var(--subcolor-dark);" onclick="toggleModal()">
+                Filtros
+            </button>
+        </div>
+    </form>
 </div>
+<div class="articles flex flex-col gap-6 w-full p-6 justify-center">
+    {% for event in events %}
+    <div class="event p-4 rounded-lg shadow-md flex flex-col md:flex-row gap-2 md:gap-4 h-auto md:h-[25rem] cursor-pointer" style="background-color: #060000;">
+        <div class="cover-event w-full md:w-1/2 flex-shrink-0">
+            <a href="{% url 'event_detail' slug=event.slug %}">
+                <img src="{{ event.banner.url }}" alt="{{ event.title }}" class="w-full h-[250px] md:h-full object-cover rounded-lg" />
+            </a>
+        </div>
+
+        <div class="event-content flex flex-col justify-between w-full md:w-1/2 p-2 md:p-4 gap-4">
+            <div>
+                <div class="flex flex-col gap-2 md:gap-0 md:flex-row justify-between items-center md:items-end">
+                    <a href="{% url 'event_detail' slug=event.slug %}">
+                        <h2 class="text-white text-center md:text-left text-3xl md:text-4xl">
+                            {{ event.title }}
+                        </h2>
+                    </a>
+                    <h1 class="text-xl md:text-2xl text-center md:text-right text-gray-900 w-32 md:mr-2"
+                        style="color: var(--tertiary-color-light); font-family: 'Montserrat', sans-serif; font-size: 1.375rem !important;">
+                        {{ event.event_date|date:"d/m" }} às 
+                        {% if event.event_time|time:"i" == "00" %}
+                            {{ event.event_time|time:"H" }}H
+                        {% else %}
+                            {{ event.event_time|time:"H:i" }}H
+                        {% endif %}
+                    </h1>
+                </div>
+                <p class="mt-2 text-white text-center md:text-left text-sm md:text-base">{{ event.description|truncatewords:40 }}</p>
+            </div>
+            <a href="{% url 'event_detail' slug=event.slug %}" class="mt-4 md:mt-0 w-full md:w-1/3 flex justify-center items-center gap-2 px-4 py-4 md:px-4 md:py-2 rounded-full bg-secondary text-white transition-colors duration-300 hover:bg-primary" style="background-color: var(--subcolor-dark); color: white;">
+                <h3 class="text-sm md:text-base">Saiba Mais</h3>
+                <ion-icon name="arrow-forward" class="text-lg md:text-xl"></ion-icon>
+            </a>
+        </div>
+    </div>
+    {% empty %}
+    <p class="text-center text-gray-500 col-span-full">Nenhum evento encontrado.</p>
+    {% endfor %}
+</div>
+
 {% endblock %}
