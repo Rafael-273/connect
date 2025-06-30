@@ -20,7 +20,7 @@ services:
       context: .
       dockerfile: Dockerfile
     working_dir: /usr/src/platform
-    command: sh -c "echo 'http://localhost:${PORT}' && python manage.py runserver 0.0.0.0:${PORT}"
+    command: daphne -b 0.0.0.0 -p ${PORT} connect.asgi:application
     volumes:
       - ./platform/:/usr/src/platform
     ports:

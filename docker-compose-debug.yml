@@ -21,10 +21,9 @@ services:
       dockerfile: Dockerfile
     working_dir: /usr/src/platform
     command: [
-        "sh",
-        "-c", 
-        "pip install debugpy &&
-         python -m debugpy --listen 0.0.0.0:3000 --wait-for-client -m daphne -b 0.0.0.0 -p ${PORT} connect.asgi:application"
+      "sh",
+      "-c",
+      "pip install debugpy && python -m debugpy --listen 0.0.0.0:3000 --wait-for-client -m daphne -b 0.0.0.0 -p ${PORT} connect.asgi:application"
     ]
     volumes:
       - ./platform/:/usr/src/platform

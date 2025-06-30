@@ -7,3 +7,10 @@ class AudioRecorderView(View):
 
     def get(self, request):
         return render(request, self.template_name)
+
+
+class TranscriptionDisplayView(View):
+    template_name = 'admin/front/transcritor.html'
+
+    def get(self, request):
+        return render(request, self.template_name)

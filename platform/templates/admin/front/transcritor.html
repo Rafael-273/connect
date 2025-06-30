@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Live Transcription{% endblock %}
+
+{% block content %}
+<section class="min-h-screen text-black bg-white flex flex-col items-center justify-center px-4 md:px-0 py-8">
+  <div class="text-center mb-2 md:mb-6 px-4">
+    <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-[var(--color-primary)]">Live Transcription</h1>
+    <p class="text-gray-600 mt-2 text-sm sm:text-base">The translated speech appears below in real time.</p>
+  </div>
+
+  <div class="flex flex-col sm:flex-row gap-4 items-center justify-center mb-6 w-full max-w-2xl">
+    <div class="flex flex-col sm:flex-row gap-2 items-center w-full sm:w-auto">
+      <label for="language-select" class="font-medium text-gray-700 text-sm sm:text-base hidden md:flex">Translate to:</label>
+      <select id="language-select" class="border rounded px-3 py-2 shadow w-full sm:w-auto">
+        <option value="en" selected>English 🇺🇸</option>
+        <option value="nl">Dutch 🇳🇱</option>
+      </select>
+    </div>
+
+    <button id="toggle-tts" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded shadow w-full sm:w-auto">
+      🔊 Play
+    </button>
+  </div>
+
+  <div class="w-full max-w-2xl bg-gray-100 rounded-lg shadow-md overflow-hidden min-h-[20rem]">
+    <div class="flex border-b text-sm sm:text-base">
+      <button id="tab-translated" class="tab-btn w-1/3 py-2 text-center font-medium text-sm sm:text-base">Translate</button>
+      <button id="tab-original" class="tab-btn w-1/3 py-2 text-center font-medium text-sm sm:text-base">Original</button>
+      <button id="tab-both" class="tab-btn w-1/3 py-2 text-center font-medium text-sm sm:text-base">Both</button>
+    </div>
+
+    <div id="translated-content" class="tab-content p-4 max-h-[18rem] overflow-auto">
+      <div id="translated-text" class="text-base sm:text-lg text-gray-900 break-words whitespace-pre-wrap"></div>
+    </div>
+
+    <div id="original-content" class="tab-content p-4 hidden max-h-[18rem] overflow-auto">
+      <div id="pt-text" class="text-base sm:text-lg text-gray-800 break-words whitespace-pre-wrap"></div>
+    </div>
+
+    <div id="both-content" class="tab-content p-4 hidden flex gap-4 max-h-[18rem] overflow-auto flex-row">
+      <div id="both-original" class="w-full sm:w-1/2 text-base sm:text-lg text-gray-800 break-words whitespace-pre-wrap border-r sm:pr-4 pb-4 sm:pb-0">
+      </div>
+      <div id="both-translated" class="w-full sm:w-1/2 text-base sm:text-lg text-gray-900 break-words whitespace-pre-wrap sm:pl-4">
+      </div>
+    </div>
+  </div>
+
+</section>
+
+<style>
+  .tab-btn {
+    transition: all 0.2s ease;
+    border-bottom: 2px solid transparent;
+    color: #555;
+  }
+
+  .tab-btn.active {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    font-weight: 600;
+    background-color: #f9fafb;
+  }
+</style>
+
+<script>
+  const ptTextEl = document.getElementById('pt-text');
+  const translatedTextEl = document.getElementById('translated-text');
+  const langSelect = document.getElementById('language-select');
+  const ttsButton = document.getElementById('toggle-tts');
+
+  const tabTranslated = document.getElementById('tab-translated');
+  const tabOriginal = document.getElementById('tab-original');
+  const tabBoth = document.getElementById('tab-both');
+
+  const translatedContent = document.getElementById('translated-content');
+  const originalContent = document.getElementById('original-content');
+  const bothContent = document.getElementById('both-content');
+  const bothOriginal = document.getElementById('both-original');
+  const bothTranslated = document.getElementById('both-translated');
+
+  let targetLang = langSelect.value;
+  let isSpeaking = false;
+  let utterance;
+  let speakTimeout;
+  const SPEAK_DELAY = 800;
+
+  const LANG_CODE_MAP = {
+    'en': 'en-US',
+    'nl': 'nl-NL'
+  };
+
+  const FLAG_MAP = {
+    'pt': '🇧🇷',
+    'en': '🇺🇸',
+    'nl': '🇳🇱',
+  };
+
+  let translatedHistory = [];
+  let originalHistory = [];
+
+  function addToHistory(list, text, minLength = 20) {
+    const timestamp = Date.now();
+
+    if (text.length < minLength) {
+      if (list.length > 0) {
+        list[list.length - 1].text += ' ' + text;
+        list[list.length - 1].timestamp = timestamp;
+      } else {
+        list.push({ text, timestamp });
+      }
+    } else {
+      list.push({ text, timestamp });
+    }
+
+    const threshold = timestamp - 180000;
+    return list.filter(item => item.timestamp > threshold);
+  }
+
+
+  function formatHistoryWithFlags(list, langCode) {
+    const flag = FLAG_MAP[langCode] || '🏳️';
+    return list
+      .map(item => `${flag} ${item.text}`)
+      .join('\n\n');
+  }
+
+  function updateHistoryUI(list, container, langCode) {
+    const formatted = formatHistoryWithFlags(list, langCode);
+    container.innerText = formatted;
+
+    if (langCode === 'pt') {
+      bothOriginal.innerText = formatted;
+    }
+    if (langCode === targetLang) {
+      bothTranslated.innerText = formatted;
+    }
+  }
+
+  function updateTabs(active) {
+    [tabTranslated, tabOriginal, tabBoth].forEach(btn => btn.classList.remove('active'));
+    tabTranslated.classList.toggle('active', active === 'translated');
+    tabOriginal.classList.toggle('active', active === 'original');
+    tabBoth.classList.toggle('active', active === 'both');
+
+    translatedContent.classList.add('hidden');
+    originalContent.classList.add('hidden');
+    bothContent.classList.add('hidden');
+
+    if (active === 'translated') translatedContent.classList.remove('hidden');
+    if (active === 'original') originalContent.classList.remove('hidden');
+    if (active === 'both') bothContent.classList.remove('hidden');
+  }
+
+  tabTranslated.addEventListener('click', () => updateTabs('translated'));
+  tabOriginal.addEventListener('click', () => updateTabs('original'));
+  tabBoth.addEventListener('click', () => updateTabs('both'));
+
+  langSelect.addEventListener('change', () => {
+    targetLang = langSelect.value;
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      isSpeaking = false;
+      ttsButton.innerText = '🔊 Play';
+    }
+  });
+
+  ttsButton.addEventListener('click', () => {
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      isSpeaking = false;
+      ttsButton.innerText = '🔊 Play';
+      if (speakTimeout) clearTimeout(speakTimeout);
+    } else {
+      const lastTranslated = translatedHistory.at(-1)?.text;
+      speakText(lastTranslated);
+    }
+  });
+
+  function speakText(text) {
+    if (!text || text === "🔄 Translating..." || text.startsWith("⚠️")) return;
+
+    if ('speechSynthesis' in window) {
+      utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = LANG_CODE_MAP[targetLang] || 'en-US';
+      utterance.onstart = () => {
+        isSpeaking = true;
+        ttsButton.innerText = '⏹️ Stop';
+      };
+      utterance.onend = () => {
+        isSpeaking = false;
+        ttsButton.innerText = '🔊 Play';
+      };
+      window.speechSynthesis.speak(utterance);
+    }
+  }
+
+  const socket = new WebSocket('ws://' + window.location.host + '/ws/transcript/');
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    const ptText = (data.pt || '').trim();
+    const translations = data.translations || {};
+    const translatedText = translations[targetLang]?.trim() || '';
+    const messageType = data.message_type || '';
+
+    const flagPT = FLAG_MAP['pt'] || '🇧🇷';
+    const flagTarget = FLAG_MAP[targetLang] || '🏳️';
+
+    if (messageType === 'partial') {
+      const partialOriginal = `⏳ ${flagPT} ${ptText}`;
+      const partialTranslated = translatedText ? `⏳ ${flagTarget} ${translatedText}` : '';
+
+      ptTextEl.innerText = partialOriginal;
+      translatedTextEl.innerText = partialTranslated;
+
+      if (bothOriginal && bothTranslated) {
+        bothOriginal.innerText = partialOriginal;
+        bothTranslated.innerText = partialTranslated;
+      } else {
+        console.warn('⚠️ Elementos bothOriginal ou bothTranslated não encontrados');
+      }
+
+      return;
+    }
+
+    if (messageType === 'final') {
+      if (ptText) {
+        originalHistory = addToHistory(originalHistory, ptText);
+        updateHistoryUI(originalHistory, ptTextEl, 'pt');
+      }
+
+      if (translatedText) {
+        translatedHistory = addToHistory(translatedHistory, translatedText);
+        updateHistoryUI(translatedHistory, translatedTextEl, targetLang);
+
+        if (isSpeaking) {
+          if (speakTimeout) clearTimeout(speakTimeout);
+          speakTimeout = setTimeout(() => {
+            speakText(translatedText);
+          }, SPEAK_DELAY);
+        }
+      }
+
+      return;
+    }
+
+    ptTextEl.innerText = ptText ? `${flagPT} ${ptText}` : "⚠️ Sem mensagem.";
+    translatedTextEl.innerText = translatedText ? `${flagTarget} ${translatedText}` : '';
+    if (bothOriginal && bothTranslated) {
+      bothOriginal.innerText = ptText ? `${flagPT} ${ptText}` : '';
+      bothTranslated.innerText = translatedText ? `${flagTarget} ${translatedText}` : '';
+    }
+  };
+
+  updateTabs('translated');
+</script>
+
+{% endblock %}
