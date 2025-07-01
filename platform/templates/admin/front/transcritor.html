@@ -196,7 +196,8 @@
     }
   }
 
-  const socket = new WebSocket('wss://' + window.location.host + '/ws/audio/');
+  const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const socket = new WebSocket(protocol + window.location.host + '/ws/transcript/');
   socket.onmessage = (event) => {
     const data = JSON.parse(event.data);
     const ptText = (data.pt || '').trim();
