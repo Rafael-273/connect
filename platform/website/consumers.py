@@ -98,12 +98,16 @@ class AudioConsumer(AsyncWebsocketConsumer):
         if audio_b64:
             header, encoded = audio_b64.split(",", 1)
             audio_bytes = base64.b64decode(encoded)
-            print(f"📥 Received audio: {len(audio_bytes)} bytes")
+
+            try:
+                with open("audio_debug.raw", "ab") as f:
+                    f.write(audio_bytes)
+            except Exception as e:
+                print("❌ Erro ao salvar áudio para debug:", e)
 
             self.audio_buffer += audio_bytes
 
             if len(self.audio_buffer) >= self.buffer_size:
-                print(f"📤 Sending buffer (manual flush): {len(self.audio_buffer)} bytes")
                 self.audio_stream.write(self.audio_buffer)
                 self.audio_buffer = b""
 
