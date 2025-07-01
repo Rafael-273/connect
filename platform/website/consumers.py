@@ -8,7 +8,6 @@ from .azure_keyvault import get_speech_key
 from asgiref.sync import async_to_sync, sync_to_async
 import asyncio
 
-# Configuração do logger para este módulo
 logger = logging.getLogger(__name__)
 
 translator = Translator()
@@ -63,7 +62,12 @@ class AudioConsumer(AsyncWebsocketConsumer):
                 logger.debug(f"Azure (parcial): '{pt_text}'")
                 async_to_sync(self.channel_layer.group_send)(
                     'transcription_group',
-                    {'type': 'send_transcription', 'message_pt': pt_text}
+                    {
+                        'type': 'send_transcription',
+                        'message_pt': pt_text,
+                        'translations': {},
+                        'message_type': 'partial'  # GARANTA QUE ESTA LINHA EXISTA
+                    }
                 )
 
             def recognized_handler(evt):
