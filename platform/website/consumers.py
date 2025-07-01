@@ -18,7 +18,8 @@ class AudioConsumer(AsyncWebsocketConsumer):
         self.service_region = "brazilsouth"
 
         speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
-        self.audio_stream = speechsdk.audio.PushAudioInputStream()
+        stream_format = speechsdk.audio.AudioStreamFormat(samples_per_second=16000, bits_per_sample=16, channels=1)
+        self.audio_stream = speechsdk.audio.PushAudioInputStream(stream_format)
         audio_config = speechsdk.audio.AudioConfig(stream=self.audio_stream)
         auto_detect_source_language_config = speechsdk.AutoDetectSourceLanguageConfig(
             languages=["pt-BR"]
@@ -72,7 +73,6 @@ class AudioConsumer(AsyncWebsocketConsumer):
             await sync_to_async(self.speech_recognizer.stop_continuous_recognition)()
 
     async def receive(self, text_data=None, bytes_data=None):
-        print("➡️ AudioConsumer: Pacote de áudio recebido do frontend.")
         data = json.loads(text_data)
         audio_b64 = data.get("audio")
         if audio_b64:
