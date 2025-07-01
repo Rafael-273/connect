@@ -47,8 +47,7 @@
     console.log("Botão iniciar clicado");
 
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-      socket = new WebSocket(protocol + window.location.host + '/ws/audio/');
+      const socket = new WebSocket('wss://' + window.location.host + '/ws/audio/');
 
       socket.onopen = () => {
         console.log("✅ WebSocket aberto");
