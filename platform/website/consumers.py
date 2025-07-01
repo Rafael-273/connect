@@ -29,10 +29,19 @@ class AudioConsumer(AsyncWebsocketConsumer):
         self.service_region = "brazilsouth"
 
         speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
-        speech_config.speech_recognition_language = "pt-BR"
+
         self.audio_stream = speechsdk.audio.PushAudioInputStream()
         audio_config = speechsdk.audio.AudioConfig(stream=self.audio_stream)
-        self.speech_recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
+
+        auto_detect_source_language_config = speechsdk.AutoDetectSourceLanguageConfig(
+            languages=["pt-BR"]
+        )
+
+        self.speech_recognizer = speechsdk.SpeechRecognizer(
+            speech_config=speech_config,
+            audio_config=audio_config,
+            auto_detect_source_language_config=auto_detect_source_language_config
+        )
 
         def recognizing_handler(evt):
             pt_text = evt.result.text
@@ -65,8 +74,8 @@ class AudioConsumer(AsyncWebsocketConsumer):
         self.speech_recognizer.start_continuous_recognition()
 
         self.audio_buffer = b""
-        self.buffer_size = 8000  # envia a cada 8KB acumulados
-        self.send_interval = 0.3  # envia a cada 300ms no máximo
+        self.buffer_size = 15000
+        self.send_interval = 0.5
 
         # Cria tarefa para enviar buffer periodicamente
         self._sending_task = asyncio.create_task(self._send_buffer_periodically())
