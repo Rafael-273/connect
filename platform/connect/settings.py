@@ -158,13 +158,22 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379") 
+REDIS_URL = os.getenv('REDIS_URL')
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL],
+if REDIS_URL:
+    print("✅ CONFIGURANDO CHANNEL LAYER COM REDIS...")
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [REDIS_URL],
+            },
         },
-    },
-}
+    }
+else:
+    print("⚠️ ATENÇÃO: REDIS_URL não encontrada. Usando InMemoryChannelLayer para desenvolvimento.")
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        },
+    }
