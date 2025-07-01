@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-  connect-database : 
+  connect-database: 
     image: postgres:latest 
     container_name: connect-database  
     ports:
@@ -10,6 +10,12 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+    restart: always
+    networks:
+      - connect-network
+
+  redis:
+    image: "redis:alpine"
     restart: always
     networks:
       - connect-network
@@ -33,10 +39,12 @@ services:
     environment:
       - PYTHONUNBUFFERED=True
       - OAUTHLIB_INSECURE_TRANSPORT=False
+      - REDIS_URL=redis://redis:6379
     env_file:
       .env
     depends_on:
       - connect-database 
+      - redis
     networks:
       - connect-network
 

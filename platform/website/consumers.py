@@ -3,6 +3,7 @@ import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 import azure.cognitiveservices.speech as speechsdk
 from googletrans import Translator
+from .azure_keyvault import get_speech_key
 from asgiref.sync import async_to_sync, sync_to_async
 import asyncio
 
@@ -16,7 +17,6 @@ def translate_text(text):
         try:
             results[lang] = translator.translate(text, src='pt', dest=lang).text
         except Exception as e:
-            print(f"Translation to {lang} failed:", e)
             results[lang] = "⚠️ Error"
     return results
 
@@ -25,7 +25,8 @@ class AudioConsumer(AsyncWebsocketConsumer):
         print("🔌 WebSocket conectado")
         await self.accept()
 
-        self.speech_key = "4b2W4Yk4J0eVg1niTlo7jxDcp2oTypGTbzA2qV41G5mfnfkJXGsXJQQJ99BFACZoyfiXJ3w3AAAYACOGnoS2"
+        self.speech_key = get_speech_key()
+        print(self.speech_key)
         self.service_region = "brazilsouth"
 
         speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
@@ -44,7 +45,6 @@ class AudioConsumer(AsyncWebsocketConsumer):
         )
 
         def recognizing_handler(evt):
-            print("🟡 Recognizing event:", evt.result.text)
             pt_text = evt.result.text
             async_to_sync(self.channel_layer.group_send)(
                 'transcription_group',
@@ -57,7 +57,6 @@ class AudioConsumer(AsyncWebsocketConsumer):
             )
 
         def recognized_handler(evt):
-            print("🟢 Recognized event:", evt.result.text)
             pt_text = evt.result.text
             translations = translate_text(pt_text)
             async_to_sync(self.channel_layer.group_send)(
@@ -139,7 +138,6 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
         pass
 
     async def send_transcription(self, event):
-        print("📝 Enviando transcrição:", event.get('message_pt'))
         await self.send(text_data=json.dumps({
             'pt': event.get('message_pt', ''),
             'translations': event.get('translations', {})
