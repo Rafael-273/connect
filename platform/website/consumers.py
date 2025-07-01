@@ -7,138 +7,111 @@ from .azure_keyvault import get_speech_key
 from asgiref.sync import async_to_sync, sync_to_async
 import asyncio
 
-translator = Translator()
-
-def translate_text(text):
-    translator = Translator()
-    targets = ['en', 'nl']
-    results = {}
-    for lang in targets:
-        try:
-            results[lang] = translator.translate(text, src='pt', dest=lang).text
-        except Exception as e:
-            results[lang] = "⚠️ Error"
-    return results
-
+# --- Classe do Consumer de Áudio ---
 class AudioConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        print("🔌 WebSocket conectado")
+        print("\n--- AudioConsumer ---")
+        print("🔌 WebSocket de ÁUDIO conectado.")
         await self.accept()
 
         self.speech_key = get_speech_key()
-        print(self.speech_key)
         self.service_region = "brazilsouth"
 
         speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
-
         self.audio_stream = speechsdk.audio.PushAudioInputStream()
         audio_config = speechsdk.audio.AudioConfig(stream=self.audio_stream)
-
         auto_detect_source_language_config = speechsdk.AutoDetectSourceLanguageConfig(
             languages=["pt-BR"]
         )
-
         self.speech_recognizer = speechsdk.SpeechRecognizer(
             speech_config=speech_config,
             audio_config=audio_config,
             auto_detect_source_language_config=auto_detect_source_language_config
         )
 
+        # Handler para resultados parciais (enquanto você fala)
         def recognizing_handler(evt):
             pt_text = evt.result.text
+            print(f"👀 Azure (parcial): '{pt_text}'")
             async_to_sync(self.channel_layer.group_send)(
                 'transcription_group',
                 {
                     'type': 'send_transcription',
                     'message_pt': pt_text,
                     'translations': {},
-                    'message_type': 'partial'
                 }
             )
 
+        # Handler para resultados finais (quando você para de falar)
         def recognized_handler(evt):
             pt_text = evt.result.text
+            # PONTO CRÍTICO 1: Azure retornou a transcrição final?
+            print(f"✅ Azure (FINAL): '{pt_text}'")
+            
             translations = translate_text(pt_text)
+            
+            # PONTO CRÍTICO 2: A mensagem está sendo enviada para o grupo?
+            print(f"📤 AudioConsumer: Enviando para o grupo 'transcription_group'")
             async_to_sync(self.channel_layer.group_send)(
                 'transcription_group',
                 {
                     'type': 'send_transcription',
                     'message_pt': pt_text,
                     'translations': translations,
-                    'message_type': 'final'
                 }
             )
 
         self.speech_recognizer.recognizing.connect(recognizing_handler)
         self.speech_recognizer.recognized.connect(recognized_handler)
         self.speech_recognizer.start_continuous_recognition()
-
-        self.audio_buffer = b""
-        self.buffer_size = 15000
-        self.send_interval = 0.5
-
-        self._sending_task = asyncio.create_task(self._send_buffer_periodically())
+        print("🎤 AudioConsumer: Reconhecimento da Azure iniciado.")
 
     async def disconnect(self, close_code):
-        print("❌ WebSocket desconectado:", close_code)
+        print(f"❌ AudioConsumer: WebSocket de ÁUDIO desconectado: {close_code}")
         if self.speech_recognizer:
             await sync_to_async(self.speech_recognizer.stop_continuous_recognition)()
-            self.speech_recognizer = None
-        self._sending_task.cancel()
-        try:
-            await self._sending_task
-        except asyncio.CancelledError:
-            pass
 
     async def receive(self, text_data=None, bytes_data=None):
+        print("➡️ AudioConsumer: Pacote de áudio recebido do frontend.")
         data = json.loads(text_data)
         audio_b64 = data.get("audio")
-
         if audio_b64:
             header, encoded = audio_b64.split(",", 1)
             audio_bytes = base64.b64decode(encoded)
-
-            self.audio_buffer += audio_bytes
-
-            if len(self.audio_buffer) >= self.buffer_size:
-                self.audio_stream.write(self.audio_buffer)
-                self.audio_buffer = b""
-
-    async def _send_buffer_periodically(self):
-        try:
-            while True:
-                await asyncio.sleep(self.send_interval)
-                if self.audio_buffer:
-                    self.audio_stream.write(self.audio_buffer)
-                    self.audio_buffer = b""
-        except asyncio.CancelledError:
-            pass
-
-    async def send_json(self, content):
-        await self.send(text_data=json.dumps(content))
+            self.audio_stream.write(audio_bytes)
 
 
+# --- Classe do Consumer da Tela de Leitura ---
 class TranscriptConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        print("\n--- TranscriptConsumer ---")
         self.room_group_name = 'transcription_group'
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
         )
         await self.accept()
-        print("👀 Tela de leitura conectada")
+        print("👍 TranscriptConsumer: Conectado e aguardando mensagens no grupo.")
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(
             self.room_group_name,
             self.channel_name
         )
+        print("🗑️ TranscriptConsumer: Desconectado e removido do grupo.")
 
     async def receive(self, text_data):
+        # Este consumer não recebe dados, apenas envia
         pass
 
     async def send_transcription(self, event):
+        # PONTO CRÍTICO 3: A mensagem chegou neste consumer?
+        print("🎉 TranscriptConsumer: MENSAGEM RECEBIDA DO GRUPO!")
+        message_pt = event.get('message_pt', '')
+        
+        # PONTO CRÍTICO 4: A mensagem está sendo enviada para o frontend de leitura?
+        print(f"↪️ TranscriptConsumer: Enviando para o frontend: '{message_pt}'")
         await self.send(text_data=json.dumps({
-            'pt': event.get('message_pt', ''),
+            'pt': message_pt,
             'translations': event.get('translations', {})
         }))
