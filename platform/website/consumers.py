@@ -22,7 +22,7 @@ def translate_text(text):
 
 class AudioConsumer(AsyncWebsocketConsumer):
     async def connect(self):
-        print("WebSocket conectado")
+        print("🔌 WebSocket conectado")
         await self.accept()
 
         self.speech_key = "4b2W4Yk4J0eVg1niTlo7jxDcp2oTypGTbzA2qV41G5mfnfkJXGsXJQQJ99BFACZoyfiXJ3w3AAAYACOGnoS2"
@@ -44,6 +44,7 @@ class AudioConsumer(AsyncWebsocketConsumer):
         )
 
         def recognizing_handler(evt):
+            print("🟡 Recognizing event:", evt.result.text)
             pt_text = evt.result.text
             async_to_sync(self.channel_layer.group_send)(
                 'transcription_group',
@@ -56,9 +57,9 @@ class AudioConsumer(AsyncWebsocketConsumer):
             )
 
         def recognized_handler(evt):
+            print("🟢 Recognized event:", evt.result.text)
             pt_text = evt.result.text
             translations = translate_text(pt_text)
-
             async_to_sync(self.channel_layer.group_send)(
                 'transcription_group',
                 {
@@ -77,11 +78,10 @@ class AudioConsumer(AsyncWebsocketConsumer):
         self.buffer_size = 15000
         self.send_interval = 0.5
 
-        # Cria tarefa para enviar buffer periodicamente
         self._sending_task = asyncio.create_task(self._send_buffer_periodically())
 
     async def disconnect(self, close_code):
-        print("WebSocket desconectado:", close_code)
+        print("❌ WebSocket desconectado:", close_code)
         if self.speech_recognizer:
             await sync_to_async(self.speech_recognizer.stop_continuous_recognition)()
             self.speech_recognizer = None
@@ -139,6 +139,7 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
         pass
 
     async def send_transcription(self, event):
+        print("📝 Enviando transcrição:", event.get('message_pt'))
         await self.send(text_data=json.dumps({
             'pt': event.get('message_pt', ''),
             'translations': event.get('translations', {})
