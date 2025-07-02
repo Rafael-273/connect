@@ -74,7 +74,7 @@
         console.warn("⚠️ WebSocket fechado");
       };
 
-      audioContext = new AudioContext({ sampleRate: 16000 });
+      audioContext = new AudioContext({ sampleRate: 44100 });
 
       await audioContext.audioWorklet.addModule('/static/translator/recorder-worklet.js');
 
