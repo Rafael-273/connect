@@ -7,8 +7,8 @@ from googletrans import Translator
 from .azure_keyvault import get_speech_key
 from asgiref.sync import async_to_sync, sync_to_async
 import asyncio
+import datetime
 
-# Configura o logger para este módulo
 logger = logging.getLogger(__name__)
 
 translator = Translator()
@@ -25,12 +25,7 @@ def translate_text(text):
             results[lang] = "⚠️ Error"
     return results
 
-# --- CLASSE DO CONSUMER DE ÁUDIO (COM CORREÇÃO) ---
 class AudioConsumer(AsyncWebsocketConsumer):
-
-    # --- Handlers movidos para serem métodos da classe ---
-    # Isso garante que eles não sejam descartados pela coleta de lixo.
-
     def _session_started_handler(self, evt):
         logger.info(f"🚀 SESSÃO AZURE INICIADA: {evt}")
 
@@ -94,14 +89,12 @@ class AudioConsumer(AsyncWebsocketConsumer):
                 audio_config=self.audio_config
             )
 
-            # Conectando os handlers que agora são métodos da classe (self._...)
             self.speech_recognizer.session_started.connect(self._session_started_handler)
             self.speech_recognizer.session_stopped.connect(self._session_stopped_handler)
             self.speech_recognizer.canceled.connect(self._canceled_handler)
             self.speech_recognizer.recognizing.connect(self._recognizing_handler)
             self.speech_recognizer.recognized.connect(self._recognized_handler)
-            
-            # Inicia o reconhecimento de forma assíncrona para não bloquear
+
             await sync_to_async(self.speech_recognizer.start_continuous_recognition)()
             logger.info("🎤 AudioConsumer: Reconhecimento contínuo da Azure iniciado.")
 
@@ -127,18 +120,25 @@ class AudioConsumer(AsyncWebsocketConsumer):
                 pass
 
     async def receive(self, text_data=None, bytes_data=None):
-        logger.debug("➡️ AudioConsumer: Pacote de áudio recebido.")
-        data = json.loads(text_data)
-        audio_b64 = data.get("audio")
+        logger.info("🎙️ Pacote de áudio recebido via WebSocket")
+        logger.info(f"🕒 Recebido em: {datetime.datetime.utcnow().isoformat()} UTC")
 
-        if audio_b64:
-            try:
+        try:
+            data = json.loads(text_data)
+            audio_b64 = data.get("audio")
+
+            if audio_b64:
+                logger.info(f"📦 Tamanho base64: {len(audio_b64)} bytes")
                 header, encoded = audio_b64.split(",", 1)
                 audio_bytes = base64.b64decode(encoded)
+                logger.info(f"🔊 Tamanho do áudio decodificado: {len(audio_bytes)} bytes")
+
                 if hasattr(self, 'audio_stream'):
                     self.audio_stream.write(audio_bytes)
-            except Exception as e:
-                logger.error(f"Erro ao processar áudio recebido: {e}")
+            else:
+                logger.warning("⚠️ Nenhum campo 'audio' no pacote recebido.")
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar áudio recebido: {e}")
 
     async def _send_buffer_periodically(self):
         try:
@@ -152,8 +152,6 @@ class AudioConsumer(AsyncWebsocketConsumer):
         except asyncio.CancelledError:
             pass
 
-# --- CLASSE DO CONSUMER DA TELA DE LEITURA ---
-# Nenhuma alteração necessária aqui
 class TranscriptConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         logger.info("\n--- TranscriptConsumer ---")
