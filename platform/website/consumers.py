@@ -25,8 +25,55 @@ def translate_text(text):
             results[lang] = "⚠️ Error"
     return results
 
-# --- CLASSE DO CONSUMER DE ÁUDIO ---
+# --- CLASSE DO CONSUMER DE ÁUDIO (COM CORREÇÃO) ---
 class AudioConsumer(AsyncWebsocketConsumer):
+
+    # --- Handlers movidos para serem métodos da classe ---
+    # Isso garante que eles não sejam descartados pela coleta de lixo.
+
+    def _session_started_handler(self, evt):
+        logger.info(f"🚀 SESSÃO AZURE INICIADA: {evt}")
+
+    def _session_stopped_handler(self, evt):
+        logger.info(f"🛑 SESSÃO AZURE TERMINADA: {evt}")
+
+    def _canceled_handler(self, evt):
+        logger.error(f"‼️ RECONHECIMENTO CANCELADO: {evt.reason}")
+        if evt.reason == speechsdk.CancellationReason.Error:
+            logger.error(f"    CÓDIGO DO ERRO: {evt.error_code}")
+            logger.error(f"    DETALHES DO ERRO: {evt.error_details}")
+
+    def _recognizing_handler(self, evt):
+        pt_text = evt.result.text
+        logger.info(f"👀 Azure (parcial): '{pt_text}'")
+        async_to_sync(self.channel_layer.group_send)(
+            'transcription_group',
+            {
+                'type': 'send_transcription',
+                'message_pt': pt_text,
+                'translations': {},
+                'message_type': 'partial'
+            }
+        )
+
+    def _recognized_handler(self, evt):
+        if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+            pt_text = evt.result.text
+            logger.info(f"✅ Azure (FINAL): '{pt_text}'")
+            translations = translate_text(pt_text)
+            logger.info("📤 AudioConsumer: Enviando para o grupo 'transcription_group'")
+            async_to_sync(self.channel_layer.group_send)(
+                'transcription_group',
+                {
+                    'type': 'send_transcription',
+                    'message_pt': pt_text,
+                    'translations': translations,
+                    'message_type': 'final'
+                }
+            )
+        elif evt.result.reason == speechsdk.ResultReason.NoMatch:
+            logger.warning("- SEM CORRESPONDÊNCIA: A fala não pôde ser reconhecida.")
+
     async def connect(self):
         logger.info("--- AudioConsumer: Conectando WebSocket de Áudio ---")
         await self.accept()
@@ -35,77 +82,49 @@ class AudioConsumer(AsyncWebsocketConsumer):
             self.speech_key = get_speech_key()
             self.service_region = "brazilsouth"
 
-            speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
+            self.speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
+            self.speech_config.speech_recognition_language = "pt-BR"
             
-            # Forçando o idioma para simplificar e evitar erros de detecção
-            speech_config.speech_recognition_language = "pt-BR"
-
-            # Habilita o log detalhado do SDK da Azure para um arquivo
-            log_path = "/tmp/azure_speech.log"
-            speech_config.set_property(speechsdk.PropertyId.Speech_LogFilename, log_path)
-            logger.info(f"SDK da Azure configurado para salvar logs em: {log_path}")
-
             stream_format = speechsdk.audio.AudioStreamFormat(samples_per_second=16000, bits_per_sample=16, channels=1)
             self.audio_stream = speechsdk.audio.PushAudioInputStream(stream_format)
-            audio_config = speechsdk.audio.AudioConfig(stream=self.audio_stream)
+            self.audio_config = speechsdk.audio.AudioConfig(stream=self.audio_stream)
 
-            # Criando o reconhecedor sem a detecção automática de idioma
             self.speech_recognizer = speechsdk.SpeechRecognizer(
-                speech_config=speech_config,
-                audio_config=audio_config
+                speech_config=self.speech_config,
+                audio_config=self.audio_config
             )
 
-            # --- Handlers para todos os eventos do SDK ---
-
-            def session_started_handler(evt):
-                logger.info(f"🚀 SESSÃO AZURE INICIADA: {evt}")
-
-            def session_stopped_handler(evt):
-                logger.info(f"🛑 SESSÃO AZURE TERMINADA: {evt}")
-
-            def canceled_handler(evt):
-                logger.error(f"‼️ RECONHECIMENTO CANCELADO: {evt.reason}")
-                if evt.reason == speechsdk.CancellationReason.Error:
-                    logger.error(f"    CÓDIGO DO ERRO: {evt.error_code}")
-                    logger.error(f"    DETALHES DO ERRO: {evt.error_details}")
-
-            def recognizing_handler(evt):
-                pt_text = evt.result.text
-                logger.info(f"👀 Azure (parcial): '{pt_text}'")
-                async_to_sync(self.channel_layer.group_send)('transcription_group', {'type': 'send_transcription', 'message_pt': pt_text, 'translations': {}, 'message_type': 'partial'})
-
-            def recognized_handler(evt):
-                if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
-                    pt_text = evt.result.text
-                    logger.info(f"✅ Azure (FINAL): '{pt_text}'")
-                    translations = translate_text(pt_text)
-                    logger.info("📤 AudioConsumer: Enviando para o grupo 'transcription_group'")
-                    async_to_sync(self.channel_layer.group_send)(
-                        'transcription_group',
-                        {
-                            'type': 'send_transcription',
-                            'message_pt': pt_text,
-                            'translations': translations,
-                            'message_type': 'final'
-                        }
-                    )
-                elif evt.result.reason == speechsdk.ResultReason.NoMatch:
-                    logger.warning("- SEM CORRESPONDÊNCIA: A fala não pôde ser reconhecida.")
-
-            # Conectando todos os handlers
-            self.speech_recognizer.session_started.connect(session_started_handler)
-            self.speech_recognizer.session_stopped.connect(session_stopped_handler)
-            self.speech_recognizer.canceled.connect(canceled_handler)
-            self.speech_recognizer.recognizing.connect(recognizing_handler)
-            self.speech_recognizer.recognized.connect(recognized_handler)
+            # Conectando os handlers que agora são métodos da classe (self._...)
+            self.speech_recognizer.session_started.connect(self._session_started_handler)
+            self.speech_recognizer.session_stopped.connect(self._session_stopped_handler)
+            self.speech_recognizer.canceled.connect(self._canceled_handler)
+            self.speech_recognizer.recognizing.connect(self._recognizing_handler)
+            self.speech_recognizer.recognized.connect(self._recognized_handler)
             
-            # Inicia o reconhecimento
-            self.speech_recognizer.start_continuous_recognition()
+            # Inicia o reconhecimento de forma assíncrona para não bloquear
+            await sync_to_async(self.speech_recognizer.start_continuous_recognition)()
             logger.info("🎤 AudioConsumer: Reconhecimento contínuo da Azure iniciado.")
+
+            self.audio_buffer = b""
+            self.buffer_size = 15000
+            self.send_interval = 0.5
+            self._sending_task = asyncio.create_task(self._send_buffer_periodically())
 
         except Exception as e:
             logger.error(f"ERRO CRÍTICO no connect do AudioConsumer: {e}", exc_info=True)
             await self.close()
+
+    async def disconnect(self, close_code):
+        logger.info(f"❌ AudioConsumer: WebSocket de Áudio desconectado: {close_code}")
+        if hasattr(self, 'speech_recognizer') and self.speech_recognizer:
+            await sync_to_async(self.speech_recognizer.stop_continuous_recognition_async)()
+            self.speech_recognizer = None
+        if hasattr(self, '_sending_task') and not self._sending_task.done():
+            self._sending_task.cancel()
+            try:
+                await self._sending_task
+            except asyncio.CancelledError:
+                pass
 
     async def receive(self, text_data=None, bytes_data=None):
         logger.debug("➡️ AudioConsumer: Pacote de áudio recebido.")
@@ -121,13 +140,20 @@ class AudioConsumer(AsyncWebsocketConsumer):
             except Exception as e:
                 logger.error(f"Erro ao processar áudio recebido: {e}")
 
-    async def disconnect(self, close_code):
-        logger.info(f"❌ AudioConsumer: WebSocket de Áudio desconectado: {close_code}")
-        if hasattr(self, 'speech_recognizer') and self.speech_recognizer:
-            await sync_to_async(self.speech_recognizer.stop_continuous_recognition_async)()
-            self.speech_recognizer = None
+    async def _send_buffer_periodically(self):
+        try:
+            while True:
+                await asyncio.sleep(self.send_interval)
+                if self.audio_buffer:
+                    logger.debug("Enviando buffer de áudio para Azure.")
+                    if hasattr(self, 'audio_stream'):
+                        self.audio_stream.write(self.audio_buffer)
+                        self.audio_buffer = b""
+        except asyncio.CancelledError:
+            pass
 
 # --- CLASSE DO CONSUMER DA TELA DE LEITURA ---
+# Nenhuma alteração necessária aqui
 class TranscriptConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         logger.info("\n--- TranscriptConsumer ---")
@@ -144,7 +170,7 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
             self.room_group_name,
             self.channel_name
         )
-        logger.info("🗑️ TranscriptConsumer: Desconectado.")
+        logger.info(f"🗑️ TranscriptConsumer: Desconectado. Código: {close_code}")
 
     async def receive(self, text_data):
         pass
@@ -155,6 +181,6 @@ class TranscriptConsumer(AsyncWebsocketConsumer):
         
         logger.info(f"↪️ TranscriptConsumer: Enviando para o frontend: '{message_pt}'")
         await self.send(text_data=json.dumps({
-            'pt': message_pt,
+            'pt': event.get('message_pt', ''),
             'translations': event.get('translations', {})
         }))
