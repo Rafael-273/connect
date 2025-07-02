@@ -57,13 +57,22 @@ class AudioConsumer(AsyncWebsocketConsumer):
         )
 
     def _recognized_handler(self, evt):
-        # TESTE DEFINITIVO: Apenas imprimir no console.
-        # Estamos removendo toda a lógica de tradução e envio para o Redis temporariamente.
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-        print("!!!!!!!!!! ✅ SUCESSO! HANDLER FOI CHAMADO! ✅ !!!!!!!!!!!")
-        print(f"!!!!!!!!!! RESULTADO DA AZURE: {evt.result.text} !!!!!!!!!!!")
-        print(f"!!!!!!!!!! MOTIVO: {evt.result.reason} !!!!!!!!!!!")
-        print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+        if evt.result.reason == speechsdk.ResultReason.RecognizedSpeech:
+            pt_text = evt.result.text
+            logger.info(f"✅ Azure (FINAL): '{pt_text}'")
+            translations = translate_text(pt_text)
+            logger.info("📤 AudioConsumer: Enviando para o grupo 'transcription_group'")
+            async_to_sync(self.channel_layer.group_send)(
+                'transcription_group',
+                {
+                    'type': 'send_transcription',
+                    'message_pt': pt_text,
+                    'translations': translations,
+                    'message_type': 'final'
+                }
+            )
+        elif evt.result.reason == speechsdk.ResultReason.NoMatch:
+            logger.warning("- SEM CORRESPONDÊNCIA: A fala não pôde ser reconhecida.")
 
     async def connect(self):
         logger.info("--- AudioConsumer: Conectando WebSocket de Áudio ---")
