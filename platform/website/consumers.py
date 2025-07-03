@@ -97,14 +97,15 @@ class AudioConsumer(AsyncWebsocketConsumer):
             await self.close()
 
     async def disconnect(self, close_code):
-        # Removido o stop_continuous_recognition_async()
+        if hasattr(self, 'speech_recognizer') and self.speech_recognizer:
+            await sync_to_async(self.speech_recognizer.stop_continuous_recognition_async)()
+            self.speech_recognizer = None
         if hasattr(self, '_sending_task') and not self._sending_task.done():
             self._sending_task.cancel()
             try:
                 await self._sending_task
             except asyncio.CancelledError:
                 pass
-
 
     async def receive(self, text_data=None, bytes_data=None):
         try:
