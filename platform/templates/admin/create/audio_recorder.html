@@ -43,6 +43,10 @@
   let micStream;
   let socket;
 
+  let audioBufferQueue = [];
+  let sendIntervalId = null;
+  const BUFFER_SEND_INTERVAL = 200; // em ms
+
   startBtn.addEventListener('click', async () => {
     console.log("Botão iniciar clicado");
 
@@ -87,12 +91,31 @@
       workletNode.connect(audioContext.destination);
 
       workletNode.port.onmessage = (event) => {
-        const float32 = event.data;
-        const int16 = convertFloat32ToInt16(float32);
-        const b64 = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)));
+        audioBufferQueue.push(event.data);
 
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ audio: `data:audio/raw;base64,${b64}` }));
+        if (!sendIntervalId) {
+          sendIntervalId = setInterval(() => {
+            if (audioBufferQueue.length > 0) {
+              // junta todos os buffers Float32 em um só
+              const totalLength = audioBufferQueue.reduce((sum, buf) => sum + buf.length, 0);
+              const combinedBuffer = new Float32Array(totalLength);
+
+              let offset = 0;
+              for (const buf of audioBufferQueue) {
+                combinedBuffer.set(buf, offset);
+                offset += buf.length;
+              }
+
+              audioBufferQueue = [];
+
+              const int16 = convertFloat32ToInt16(combinedBuffer);
+              const b64 = btoa(String.fromCharCode(...new Uint8Array(int16.buffer)));
+
+              if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ audio: `data:audio/raw;base64,${b64}` }));
+              }
+            }
+          }, BUFFER_SEND_INTERVAL);
         }
       };
 
@@ -108,6 +131,11 @@
 
   stopBtn.addEventListener('click', () => {
     console.log("⏹ Botão parar clicado");
+
+    if (sendIntervalId) {
+      clearInterval(sendIntervalId);
+      sendIntervalId = null;
+    }
 
     if (workletNode) workletNode.disconnect();
     if (audioContext) audioContext.close();
@@ -133,6 +161,7 @@
     return int16Buffer;
   }
 </script>
+
 
 
 {% endblock %}

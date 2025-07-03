@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 translator = Translator()
 
 def translate_text(text):
-    translator = Translator()
     targets = ['en', 'nl']
     results = {}
     for lang in targets:
@@ -88,7 +87,6 @@ class AudioConsumer(AsyncWebsocketConsumer):
             await sync_to_async(self.speech_recognizer.start_continuous_recognition)()
 
             self.audio_buffer = b""
-            self.buffer_size = 15000
             self.send_interval = 0.5
             self._sending_task = asyncio.create_task(self._send_buffer_periodically())
 
@@ -114,8 +112,8 @@ class AudioConsumer(AsyncWebsocketConsumer):
             if audio_b64:
                 header, encoded = audio_b64.split(",", 1)
                 audio_bytes = base64.b64decode(encoded)
-                if hasattr(self, 'audio_stream'):
-                    self.audio_stream.write(audio_bytes)
+                # Acumula no buffer
+                self.audio_buffer += audio_bytes
         except Exception as e:
             logger.error(f"Erro ao processar áudio recebido: {e}")
 
