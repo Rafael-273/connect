@@ -4,7 +4,7 @@ EXPOSE 8000
 WORKDIR /usr/src/platform
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl-dev \
+    libssl1.1 \
     && rm -rf /var/lib/apt/lists/*
 
 ADD requirements.txt /usr/src/platform/
