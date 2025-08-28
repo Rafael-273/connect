@@ -95,10 +95,8 @@ def dashboard_view(request):
     # Últimos visitantes
     recent_visitors_list = Visitor.objects.order_by('-visit_date')[:5]
     
-    # Visitantes convertidos recentemente (com nota de conversão)
-    recently_converted_visitors = Visitor.objects.filter(
-        profile_notes__icontains='[CONVERTIDO]',
-        decision_for_jesus=True
+    recently_converted_members = Member.objects.filter(
+        conversion='new_convert'
     ).order_by('-update_at')[:3]
     
     # Próximos eventos
@@ -119,7 +117,7 @@ def dashboard_view(request):
         'visitors_by_month_json': visitors_by_month_json,
         'ministries_stats': ministries_stats,
         'recent_visitors_list': recent_visitors_list,
-        'recently_converted_visitors': recently_converted_visitors,
+        'recently_converted_members': recently_converted_members,
         'upcoming_events_list': upcoming_events_list,
     }
     

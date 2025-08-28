@@ -112,6 +112,10 @@
               {% if visitor.prayer_request %}
                 <p><strong>🙏 Pedido de Oração:</strong> {{ visitor.prayer_request }}</p>
               {% endif %}
+              
+              {% if visitor.wants_home_prayer %}
+                <p><strong>🏠 Deseja oração na casa:</strong> Sim</p>
+              {% endif %}
             </div>
           {% endif %}
 

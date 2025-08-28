@@ -9,6 +9,7 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from ..models.visitor import Visitor
 from ..forms.visitor import VisitorForm
+from ..models.member import Member
 
 
 class VisitorCreateView(CreateView):

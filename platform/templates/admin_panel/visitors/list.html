@@ -162,6 +162,9 @@
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ visitor.email|default:"--" }}</div>
                                     <div class="text-sm text-gray-500">{{ visitor.phone|default:"--" }}</div>
+                                    {% if visitor.wants_home_prayer %}
+                                        <div class="text-xs text-green-700 mt-1">🏠 Deseja oração na casa</div>
+                                    {% endif %}
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ visitor.visit_date|date:"d/m/Y" }}</div>
@@ -346,6 +349,13 @@
                             <div>
                                 <span class="font-medium text-gray-700">Pedido de Oração:</span>
                                 <p class="text-gray-900">${data.prayer_request}</p>
+                            </div>
+                        ` : ''}
+                        
+                        ${data.wants_home_prayer ? `
+                            <div>
+                                <span class="font-medium text-green-700">🏠 Deseja oração na casa:</span>
+                                <span class="text-green-700 font-semibold ml-1">Sim</span>
                             </div>
                         ` : ''}
                         

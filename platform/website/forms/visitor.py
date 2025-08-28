@@ -5,23 +5,19 @@ from ..models.visitor import Visitor
 class VisitorForm(forms.ModelForm):
     class Meta:
         model = Visitor
-        fields = ['name', 'email', 'phone', 'address', 'neighborhood', 'prayer_request']
+        fields = ['name', 'phone', 'address', 'neighborhood', 'prayer_request', 'wants_home_prayer']
         labels = {
             'name': 'Nome completo',
-            'email': 'Email',
             'phone': 'Telefone',
             'address': 'Endereço',
             'neighborhood': 'Bairro',
             'prayer_request': 'Pedido de oração',
+            'wants_home_prayer': 'Deseja oração na sua casa?',
         }
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
                 'placeholder': 'Nome completo'
-            }),
-            'email': forms.EmailInput(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Seu email'
             }),
             'phone': forms.TextInput(attrs={
                 'id': 'id_telephone',

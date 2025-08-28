@@ -265,6 +265,12 @@
                                   placeholder="Descreva o pedido de oração do visitante...">{{ visitor.prayer_request|default:'' }}</textarea>
                     </div>
                     
+                    <!-- Deseja oração na sua casa? -->
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" name="wants_home_prayer" id="wants_home_prayer" class="checkbox-input" {% if visitor.wants_home_prayer %}checked{% endif %}>
+                        <label for="wants_home_prayer" class="form-label mb-0">Deseja oração na sua casa</label>
+                    </div>
+                    
                     <!-- Observações -->
                     <div class="form-group">
                         <label class="form-label">Observações/Anotações</label>

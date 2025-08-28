@@ -123,9 +123,6 @@
                     <div class="relative z-10">
                         <div class="text-3xl font-bold">{{ recent_conversions }}</div>
                         <div class="text-sm opacity-90 mt-1">Conversões (30 dias)</div>
-                        <div class="text-xs opacity-75 mt-2">
-                            {{ recent_visitor_conversions }} visitantes + {{ recent_member_conversions }} membros
-                        </div>
                         <ion-icon name="heart" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
                     </div>
                 </div>
@@ -193,11 +190,11 @@
                         </a>
                     </div>
                     <div class="space-y-3">
-                        {% for visitor in recently_converted_visitors %}
+                        {% for member in recently_converted_members %}
                         <div class="flex items-center justify-between p-3 border-l-4 border-green-500 bg-green-50">
                             <div>
-                                <div class="font-medium text-gray-800">{{ visitor.name }}</div>
-                                <div class="text-sm text-green-700">Convertido em {{ visitor.visit_date|date:"d/m/Y" }}</div>
+                                <div class="font-medium text-gray-800">{{ member.name }}</div>
+                                <div class="text-sm text-green-700">Convertido em {{ member.conversion_date|date:"d/m/Y" }}</div>
                             </div>
                             <div class="flex items-center gap-1">
                                 <ion-icon name="heart" class="text-green-600 text-lg"></ion-icon>
