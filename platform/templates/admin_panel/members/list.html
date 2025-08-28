@@ -1,0 +1,381 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Membros - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .sidebar {
+        background: white;
+        min-height: 100vh;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .sidebar-item:hover, .sidebar-item.active {
+        background-color: #f1f5f9;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+        text-decoration: none;
+    }
+    
+    .sidebar-item ion-icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+    
+    .member-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid var(--color-accent);
+    }
+    
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    
+    .status-active {
+        background-color: #dcfce7;
+        color: #166534;
+    }
+    
+    .status-inactive {
+        background-color: #fef2f2;
+        color: #991b1b;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Membros</h1>
+                    <p class="text-gray-600 mt-2">Gerenciar membros da igreja</p>
+                </div>
+                <a href="{% url 'admin_member_create' %}" class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center">
+                    <ion-icon name="add" class="mr-2"></ion-icon>
+                    Novo Membro
+                </a>
+            </div>
+
+            <div class="admin-card p-6 mb-6">
+                <form method="GET" class="flex flex-wrap gap-4 items-center">
+                    <div class="flex-1 min-w-64">
+                        <input type="text" name="search" value="{{ search }}" 
+                               placeholder="Buscar por nome, email ou telefone..." 
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                    </div>
+                    
+                    <div>
+                        <select name="ministry" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none w-[14rem] focus:border-[var(--color-primary)]">
+                            <option value="">Todos os Ministérios</option>
+                            {% for ministry in ministries %}
+                            <option value="{{ ministry.id }}" {% if ministry_filter == ministry.id|slugify %}selected{% endif %}>
+                                {{ ministry.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <select name="status" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                            <option value="">Todos os Status</option>
+                            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Ativo</option>
+                            <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inativo</option>
+                            <option value="new_convert" {% if status_filter == 'new_convert' %}selected{% endif %}>Novos Convertidos</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
+                        <ion-icon name="search" class="mr-2"></ion-icon>
+                        Buscar
+                    </button>
+                    
+                    <a href="{% url 'admin_members_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
+                        Limpar
+                    </a>
+                </form>
+            </div>
+
+            <div class="admin-card overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Membro</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contato</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ministério</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {% for member in members %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        {% if member.profile_picture %}
+                                        <img class="member-avatar" src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                        {% else %}
+                                        <div class="member-avatar bg-[var(--color-primary)] flex items-center justify-center text-white font-bold">
+                                            {{ member.name|first }}
+                                        </div>
+                                        {% endif %}
+                                        <div class="ml-4">
+                                            <div class="text-sm font-medium text-gray-900">{{ member.name }}</div>
+                                            {% if member.birth_date %}
+                                            <div class="text-sm text-gray-500">{{ member.birth_date|date:"d/m/Y" }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900">{{ member.email|default:"--" }}</div>
+                                    <div class="text-sm text-gray-500">{{ member.phone|default:"--" }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="text-sm text-gray-900">{{ member.ministry.name|default:"Sem ministério" }}</div>
+                                    {% if member.neighborhood %}
+                                    <div class="text-sm text-gray-500">{{ member.neighborhood.name }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    {% if member.is_active %}
+                                    <span class="status-badge status-active">Ativo</span>
+                                    {% else %}
+                                    <span class="status-badge status-inactive">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <div class="flex space-x-2">
+                                        <button onclick="viewMember({{ member.id }})" 
+                                                class="text-[var(--color-primary)] hover:text-opacity-80">
+                                            <ion-icon name="eye" class="text-lg"></ion-icon>
+                                        </button>
+                                        <button onclick="editMember({{ member.id }})" 
+                                                class="text-blue-600 hover:text-blue-800">
+                                            <ion-icon name="create" class="text-lg"></ion-icon>
+                                        </button>
+                                        <button onclick="deleteMember({{ member.id }}, '{{ member.name }}')" 
+                                                class="text-red-600 hover:text-red-800">
+                                            <ion-icon name="trash" class="text-lg"></ion-icon>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
+                                    Nenhum membro encontrado.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if members.has_other_pages %}
+                <div class="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+                    <div class="text-sm text-gray-500">
+                        Mostrando {{ members.start_index }} a {{ members.end_index }} de {{ members.paginator.count }} membros
+                    </div>
+                    <div class="flex space-x-2">
+                        {% if members.has_previous %}
+                        <a href="?page={{ members.previous_page_number }}&{{ request.GET.urlencode }}" 
+                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                            Anterior
+                        </a>
+                        {% endif %}
+                        
+                        {% for num in members.paginator.page_range %}
+                        {% if num == members.number %}
+                        <span class="px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm">{{ num }}</span>
+                        {% elif num > members.number|add:'-3' and num < members.number|add:'3' %}
+                        <a href="?page={{ num }}&{{ request.GET.urlencode }}" 
+                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                            {{ num }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                        
+                        {% if members.has_next %}
+                        <a href="?page={{ members.next_page_number }}&{{ request.GET.urlencode }}" 
+                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                            Próximo
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="memberModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Detalhes do Membro</h3>
+            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+                <ion-icon name="close" class="text-xl"></ion-icon>
+            </button>
+        </div>
+        <div id="memberDetails">
+        </div>
+    </div>
+</div>
+
+<script>
+    function viewMember(memberId) {
+        fetch(`/admin-panel/api/member/${memberId}/`)
+            .then(response => response.json())
+            .then(data => {
+                const detailsHtml = `
+                    <div class="space-y-4">
+                        <div class="flex items-center space-x-4">
+                            ${data.profile_picture ? 
+                                `<img src="${data.profile_picture}" alt="${data.name}" class="w-16 h-16 rounded-full object-cover">` : 
+                                `<div class="w-16 h-16 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold text-xl">${data.name.charAt(0)}</div>`
+                            }
+                            <div>
+                                <h4 class="text-xl font-semibold text-gray-900">${data.name}</h4>
+                                <p class="text-gray-600">${data.ministry || 'Sem ministério'}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <span class="font-medium text-gray-700">Email:</span>
+                                <p class="text-gray-900">${data.email || '--'}</p>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-700">Telefone:</span>
+                                <p class="text-gray-900">${data.phone || '--'}</p>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-700">Data de Nascimento:</span>
+                                <p class="text-gray-900">${data.birth_date || '--'}</p>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-700">Gênero:</span>
+                                <p class="text-gray-900">${data.gender || '--'}</p>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-700">Estado Civil:</span>
+                                <p class="text-gray-900">${data.marital_status || '--'}</p>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-700">Bairro:</span>
+                                <p class="text-gray-900">${data.neighborhood || '--'}</p>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-700">Conversão:</span>
+                                <p class="text-gray-900">${data.conversion || '--'}</p>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-700">Data da Conversão:</span>
+                                <p class="text-gray-900">${data.conversion_date || '--'}</p>
+                            </div>
+                            <div>
+                                <span class="font-medium text-gray-700">Status:</span>
+                                <p class="text-gray-900">${data.is_active ? 'Ativo' : 'Inativo'}</p>
+                            </div>
+                        </div>
+                        
+                        ${data.address ? `
+                            <div>
+                                <span class="font-medium text-gray-700">Endereço:</span>
+                                <p class="text-gray-900">${data.address}</p>
+                            </div>
+                        ` : ''}
+                        
+                        ${data.testimony ? `
+                            <div>
+                                <span class="font-medium text-gray-700">Testemunho:</span>
+                                <p class="text-gray-900">${data.testimony}</p>
+                            </div>
+                        ` : ''}
+                        
+                        ${data.interests ? `
+                            <div>
+                                <span class="font-medium text-gray-700">Interesses:</span>
+                                <p class="text-gray-900">${data.interests}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                document.getElementById('memberDetails').innerHTML = detailsHtml;
+                document.getElementById('memberModal').classList.remove('hidden');
+            })
+            .catch(error => {
+                alert('Erro ao carregar detalhes do membro');
+            });
+    }
+    
+    function editMember(memberId) {
+        window.location.href = `/admin-panel/members/${memberId}/edit/`;
+    }
+    
+    function deleteMember(memberId, memberName) {
+        if (confirm(`Tem certeza que deseja excluir o membro "${memberName}"?`)) {
+            fetch('{% url "admin_api_delete" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'member',
+                    id: memberId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Erro ao excluir membro: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('Erro na comunicação com o servidor');
+            });
+        }
+    }
+    
+    function closeModal() {
+        document.getElementById('memberModal').classList.add('hidden');
+    }
+</script>
+{% endblock %}

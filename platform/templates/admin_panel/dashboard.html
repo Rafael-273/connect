@@ -1,0 +1,296 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Painel Administrativo - Igreja Filadélfia{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .admin-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, var(--color-primary), var(--color-danger));
+        color: white;
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.1);
+        transform: rotate(45deg);
+    }
+    
+    .sidebar {
+        background: white;
+        min-height: 100vh;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .sidebar-item:hover, .sidebar-item.active {
+        background-color: #f1f5f9;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+        text-decoration: none;
+    }
+    
+    .sidebar-item ion-icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+    
+    .chart-container {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    <!-- Sidebar -->
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <!-- Header -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900">Dashboard</h1>
+                <p class="text-gray-600 mt-2">Visão geral do sistema da Igreja Filadélfia</p>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stat-card">
+                    <div class="relative z-10">
+                        <div class="text-3xl font-bold">{{ total_members }}</div>
+                        <div class="text-sm opacity-90 mt-1">Membros Ativos</div>
+                        <ion-icon name="people" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
+                    </div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, var(--color-light), var(--color-primary));">
+                    <div class="relative z-10">
+                        <div class="text-3xl font-bold">{{ total_visitors }}</div>
+                        <div class="text-sm opacity-90 mt-1">Total de Visitantes</div>
+                        <ion-icon name="person-add" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
+                    </div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, var(--color-danger), var(--color-dark));">
+                    <div class="relative z-10">
+                        <div class="text-3xl font-bold">{{ total_events }}</div>
+                        <div class="text-sm opacity-90 mt-1">Eventos</div>
+                        <ion-icon name="calendar" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
+                    </div>
+                </div>
+                
+                <div class="stat-card" style="background: linear-gradient(135deg, var(--color-primary), var(--color-light));">
+                    <div class="relative z-10">
+                        <div class="text-3xl font-bold">{{ recent_conversions }}</div>
+                        <div class="text-sm opacity-90 mt-1">Conversões (30 dias)</div>
+                        <div class="text-xs opacity-75 mt-2">
+                            {{ recent_visitor_conversions }} visitantes + {{ recent_member_conversions }} membros
+                        </div>
+                        <ion-icon name="heart" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts and Quick Stats -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- Visitors Chart -->
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Visitantes por Mês</h3>
+                    <div style="position: relative; height: 300px;">
+                        <canvas id="visitorsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Ministry Stats -->
+                <div class="chart-container">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Membros por Ministério</h3>
+                    <div class="space-y-3">
+                        {% for ministry in ministries_stats %}
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                            <span class="font-medium text-gray-700">{{ ministry.name }}</span>
+                            <span class="bg-[var(--color-primary)] text-white px-3 py-1 rounded-full text-sm">
+                                {{ ministry.member_count }}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Recent Visitors -->
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Visitantes Recentes</h3>
+                        <a href="{% url 'admin_visitors_list' %}" class="text-[var(--color-primary)] text-sm hover:underline">
+                            Ver todos
+                        </a>
+                    </div>
+                    <div class="space-y-3">
+                        {% for visitor in recent_visitors_list %}
+                        <div class="flex items-center justify-between p-3 border-l-4 border-[var(--color-primary)] bg-gray-50">
+                            <div>
+                                <div class="font-medium text-gray-800">{{ visitor.name }}</div>
+                                <div class="text-sm text-gray-600">{{ visitor.visit_date|date:"d/m/Y" }}</div>
+                            </div>
+                            {% if visitor.decision_for_jesus %}
+                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                                Convertido
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Recently Converted -->
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Recém Convertidos</h3>
+                        <a href="{% url 'admin_members_list' %}?status=new_convert" class="text-green-600 text-sm hover:underline">
+                            Ver todos
+                        </a>
+                    </div>
+                    <div class="space-y-3">
+                        {% for visitor in recently_converted_visitors %}
+                        <div class="flex items-center justify-between p-3 border-l-4 border-green-500 bg-green-50">
+                            <div>
+                                <div class="font-medium text-gray-800">{{ visitor.name }}</div>
+                                <div class="text-sm text-green-700">Convertido em {{ visitor.visit_date|date:"d/m/Y" }}</div>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <ion-icon name="heart" class="text-green-600 text-lg"></ion-icon>
+                                <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                                    Novo Membro
+                                </span>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-4 text-gray-500">
+                            <ion-icon name="heart-outline" class="text-3xl mb-2"></ion-icon>
+                            <p class="text-sm">Nenhuma conversão recente</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Upcoming Events -->
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Próximos Eventos</h3>
+                        <a href="{% url 'admin_events_list' %}" class="text-[var(--color-primary)] text-sm hover:underline">
+                            Ver todos
+                        </a>
+                    </div>
+                    <div class="space-y-3">
+                        {% for event in upcoming_events_list %}
+                        <div class="flex items-center justify-between p-3 border-l-4 border-[var(--color-light)] bg-gray-50">
+                            <div>
+                                <div class="font-medium text-gray-800">{{ event.title }}</div>
+                                <div class="text-sm text-gray-600">{{ event.event_date|date:"d/m/Y" }}</div>
+                            </div>
+                            <ion-icon name="calendar" class="text-[var(--color-light)] text-xl"></ion-icon>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Visitors Chart
+    const ctx = document.getElementById('visitorsChart').getContext('2d');
+    const visitorsData = {{ visitors_by_month_json|safe }};
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: visitorsData.map(item => item.month),
+            datasets: [{
+                label: 'Visitantes',
+                data: visitorsData.map(item => item.count),
+                borderColor: 'rgb(201, 9, 5)',
+                backgroundColor: 'rgba(201, 9, 5, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0,0,0,0.1)'
+                    },
+                    ticks: {
+                        stepSize: 1
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            elements: {
+                point: {
+                    radius: 4,
+                    hoverRadius: 6
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

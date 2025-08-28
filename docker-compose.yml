@@ -1,9 +1,9 @@
 version: '3'
 
 services:
-  connect-database: 
+  connect-database : 
     image: postgres:latest 
-    container_name: connect-database 
+    container_name: connect-database  
     ports:
       - "5432:${DB_PORT}"
     environment:
@@ -26,7 +26,10 @@ services:
       context: .
       dockerfile: Dockerfile
     working_dir: /usr/src/platform
-    command: daphne -b 0.0.0.0 -p ${PORT} connect.asgi:application
+    command: >
+      bash -c "
+        python manage.py runserver ${HOSTNAME}:${PORT}
+      "
     volumes:
       - ./platform/:/usr/src/platform
     ports:
@@ -34,11 +37,10 @@ services:
     environment:
       - PYTHONUNBUFFERED=True
       - OAUTHLIB_INSECURE_TRANSPORT=False
-      - REDIS_URL=redis://redis:6379
     env_file:
-      .env
+      - .env
     depends_on:
-      - connect-database
+      - connect-database 
       - redis
     networks:
       - connect-network

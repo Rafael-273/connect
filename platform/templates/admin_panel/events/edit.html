@@ -1,0 +1,233 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{% if event %}Editar Evento{% else %}Novo Evento{% endif %} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .sidebar {
+        background: white;
+        min-height: 100vh;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .sidebar-item:hover, .sidebar-item.active {
+        background-color: #f1f5f9;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+        text-decoration: none;
+    }
+    
+    .sidebar-item ion-icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+    
+    .form-input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        transition: border-color 0.2s;
+    }
+    
+    .form-input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
+    }
+    
+    .form-textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        resize: vertical;
+        min-height: 120px;
+        transition: border-color 0.2s;
+    }
+    
+    .form-textarea:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
+    }
+    
+    .banner-preview {
+        max-width: 300px;
+        max-height: 200px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 2px solid #e5e7eb;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Include messages component -->
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    <!-- Sidebar -->
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">
+                        {% if event %}Editar Evento{% else %}Novo Evento{% endif %}
+                    </h1>
+                    <p class="text-gray-600 mt-2">
+                        {% if event %}Atualizar informações do evento{% else %}Criar novo evento da igreja{% endif %}
+                    </p>
+                </div>
+                <a href="{% url 'admin_events_list' %}" class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center">
+                    <ion-icon name="arrow-back" class="mr-2"></ion-icon>
+                    Voltar à Lista
+                </a>
+            </div>
+
+            <!-- Form -->
+            <div class="admin-card p-8">
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Informações Básicas -->
+                        <div class="form-group">
+                            <label class="form-label">Título do Evento *</label>
+                            <input type="text" name="title" value="{{ event.title|default:'' }}" 
+                                   class="form-input" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Slug (URL) *</label>
+                            <input type="text" name="slug" value="{{ event.slug|default:'' }}" 
+                                   class="form-input" required 
+                                   placeholder="url-amigavel-do-evento">
+                            <p class="text-xs text-gray-500 mt-1">Usado na URL do evento. Apenas letras, números e hífens.</p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Data do Evento *</label>
+                            <input type="date" name="event_date" 
+                                   value="{% if event.event_date %}{{ event.event_date|date:'Y-m-d' }}{% endif %}" 
+                                   class="form-input" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Horário do Evento</label>
+                            <input type="time" name="event_time" 
+                                   value="{% if event.event_time %}{{ event.event_time|time:'H:i' }}{% endif %}" 
+                                   class="form-input">
+                        </div>
+                        
+                        <div class="form-group md:col-span-2">
+                            <label class="form-label">Local do Evento</label>
+                            <input type="text" name="location" value="{{ event.location|default:'' }}" 
+                                   class="form-input" placeholder="Endereço ou descrição do local">
+                        </div>
+                        
+                        <div class="form-group md:col-span-2">
+                            <label class="form-label">Link para Mais Informações</label>
+                            <input type="url" name="link_more_info" value="{{ event.link_more_info|default:'' }}" 
+                                   class="form-input" placeholder="https://exemplo.com/evento">
+                        </div>
+                    </div>
+                    
+                    <!-- Descrição -->
+                    <div class="form-group">
+                        <label class="form-label">Descrição do Evento *</label>
+                        <textarea name="description" class="form-textarea" required
+                                  placeholder="Descreva detalhadamente o evento...">{{ event.description|default:'' }}</textarea>
+                    </div>
+                    
+                    <!-- Banner -->
+                    <div class="form-group">
+                        <label class="form-label">Banner do Evento</label>
+                        {% if event.banner %}
+                        <div class="mb-4">
+                            <img src="{{ event.banner.url }}" alt="{{ event.title }}" class="banner-preview">
+                            <p class="text-sm text-gray-600 mt-2">Banner atual</p>
+                        </div>
+                        {% endif %}
+                        <input type="file" name="banner" class="form-input" accept="image/*">
+                        <p class="text-xs text-gray-500 mt-1">Formatos aceitos: JPG, PNG. Tamanho recomendado: 1200x630px</p>
+                    </div>
+                    
+                    <!-- Botões -->
+                    <div class="flex justify-end space-x-4 mt-8">
+                        <a href="{% url 'admin_events_list' %}" 
+                           class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                            Cancelar
+                        </a>
+                        <button type="submit" 
+                                class="px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition">
+                            {% if event %}Atualizar Evento{% else %}Criar Evento{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-generate slug from title
+    document.querySelector('input[name="title"]').addEventListener('input', function(e) {
+        const title = e.target.value;
+        const slug = title
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .trim('-');
+        
+        if (!document.querySelector('input[name="slug"]').value || 
+            document.querySelector('input[name="slug"]').getAttribute('data-auto') !== 'false') {
+            document.querySelector('input[name="slug"]').value = slug;
+        }
+    });
+    
+    // Disable auto-generation if user manually edits slug
+    document.querySelector('input[name="slug"]').addEventListener('input', function(e) {
+        e.target.setAttribute('data-auto', 'false');
+    });
+</script>
+{% endblock %}

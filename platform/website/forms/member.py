@@ -9,15 +9,39 @@ class MemberForm(forms.ModelForm):
         }),
         required=False,
     )
-    
+    tags = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+            'placeholder': 'Tags (separadas por vírgula)'
+        })
+    )
+    spouse = forms.ModelChoiceField(
+        queryset=Member.objects.all(),
+        required=False,
+        widget=forms.Select(attrs={
+            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+            'placeholder': 'Selecione o cônjuge'
+        })
+    )
+    ministry = forms.ModelMultipleChoiceField(
+        queryset=Member._meta.get_field('ministry').related_model.objects.all(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={
+            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+            'id': 'ministry-select',
+            'multiple': 'multiple',
+        })
+    )
+
     class Meta:
         model = Member
         fields = [
             'name', 'profile_picture', 'email', 'gender', 'phone', 'address', 'neighborhood', 'birth_date',
-            'marital_status', 'conversion', 'conversion_date',
-            'spiritual_maturity', 'ministry', 'personality_type', 'testimony', 'initial_challenges',
+            'tags', 'marital_status', 'spouse', 'conversion', 'conversion_date',
+            'ministry', 'personality_type', 'testimony', 'initial_challenges',
             'interests', 'available_days', 'is_available_to_consolidate',
-            'is_available_to_disciple'
+            'is_available_to_disciple', 'is_active'
         ]
         labels = {
             'name': 'Nome completo',
@@ -26,11 +50,12 @@ class MemberForm(forms.ModelForm):
             'address': 'Endereço',
             'neighborhood': 'Bairro',
             'birth_date': 'Data de nascimento',
+            'tags': 'Tags',
             'gender': 'Gênero',
             'marital_status': 'Estado civil',
+            'spouse': 'Cônjuge',
             'conversion': 'Convertido?',
             'conversion_date': 'Data da conversão',
-            'spiritual_maturity': 'Maturidade espiritual',
             'ministry': 'Ministério',
             'testimony': 'Testemunho',
             'initial_challenges': 'Desafios iniciais',
@@ -38,6 +63,7 @@ class MemberForm(forms.ModelForm):
             'available_days': 'Dias disponíveis para consolidar/discipular',
             'is_available_to_consolidate': 'Disponível para consolidar?',
             'is_available_to_disciple': 'Disponível para discipular?',
+            'is_active': 'Status ativo',
             'profile_picture': 'Foto de perfil',
             'personality_type': 'Tipo de personalidade'
         }
@@ -81,13 +107,10 @@ class MemberForm(forms.ModelForm):
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] flatpickr-date',
                 'placeholder': 'Data da conversão'
             }),
-            'spiritual_maturity': forms.Select(attrs={
+            'ministry': forms.SelectMultiple(attrs={
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Selecione a maturidade espiritual'
-            }),
-            'ministry': forms.Select(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Selecione o ministério'
+                'id': 'ministry-select',
+                'multiple': 'multiple',
             }),
             'testimony': forms.Textarea(attrs={
                 'rows': 3,
@@ -95,7 +118,7 @@ class MemberForm(forms.ModelForm):
                 'placeholder': 'Testemunho de conversão...'
             }),
             'initial_challenges': forms.Textarea(attrs={
-                'rows': 3,
+                'rows': 2,
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)]',
                 'placeholder': 'Principais desafios no início da caminhada?'
             }),
@@ -120,5 +143,9 @@ class MemberForm(forms.ModelForm):
             'personality_type': forms.TextInput(attrs={
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
                 'placeholder': 'Tipo de personalidade'
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-checkbox h-5 w-5 text-[var(--color-primary)]',
+                'checked': True
             }),
         }

@@ -1,0 +1,108 @@
+<!-- Component para exibir mensagens do Django em templates do admin panel -->
+{% if messages %}
+<div id="messages-container" class="fixed top-20 right-4 z-50">
+    {% for message in messages %}
+    <div class="message-alert mb-4 p-4 rounded-lg shadow-lg max-w-md animate-slide-in
+        {% if message.tags == 'success' %}bg-green-500 text-white{% endif %}
+        {% if message.tags == 'error' %}bg-red-500 text-white{% endif %}
+        {% if message.tags == 'warning' %}bg-yellow-500 text-white{% endif %}
+        {% if message.tags == 'info' %}bg-blue-500 text-white{% endif %}"
+        data-message-type="{{ message.tags }}"
+        data-message-id="{{ forloop.counter }}"
+        data-page-context="{{ request.resolver_match.url_name|default:'unknown' }}">
+        
+        <div class="flex items-center justify-between">
+            <div class="flex items-center">
+                {% if message.tags == 'success' %}
+                    <ion-icon name="checkmark-circle" class="text-xl mr-2"></ion-icon>
+                {% elif message.tags == 'error' %}
+                    <ion-icon name="alert-circle" class="text-xl mr-2"></ion-icon>
+                {% elif message.tags == 'warning' %}
+                    <ion-icon name="warning" class="text-xl mr-2"></ion-icon>
+                {% elif message.tags == 'info' %}
+                    <ion-icon name="information-circle" class="text-xl mr-2"></ion-icon>
+                {% endif %}
+                <span class="font-medium">{{ message }}</span>
+            </div>
+            <button onclick="closeMessage(this)" class="ml-4 text-white hover:text-gray-200">
+                <ion-icon name="close" class="text-lg"></ion-icon>
+            </button>
+        </div>
+        
+        <!-- Debug info in development -->
+        {% if debug %}
+        <div class="text-xs mt-2 opacity-70">
+            Página: {{ request.resolver_match.url_name|default:'unknown' }} | ID: {{ forloop.counter }}
+        </div>
+        {% endif %}
+        
+        {% if message.extra_tags %}
+        <div class="text-xs mt-2 text-gray-200 break-words">{{ message.extra_tags }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+
+<style>
+@keyframes slide-in {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+}
+
+@keyframes slide-out {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+.animate-slide-out {
+    animation: slide-out 0.3s ease-in;
+}
+</style>
+
+<script>
+function closeMessage(button) {
+    const messageElement = button.closest('.message-alert');
+    messageElement.classList.add('animate-slide-out');
+    setTimeout(() => {
+        messageElement.remove();
+        
+        // Se não há mais mensagens, remove o container
+        const container = document.getElementById('messages-container');
+        if (container && container.children.length === 0) {
+            container.remove();
+        }
+    }, 300);
+}
+
+// Auto-close messages after 5 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    const messages = document.querySelectorAll('.message-alert');
+    messages.forEach(function(message) {
+        setTimeout(function() {
+            if (document.body.contains(message)) {
+                const closeButton = message.querySelector('button');
+                if (closeButton) {
+                    closeMessage(closeButton);
+                }
+            }
+        }, 5000);
+    });
+});
+</script>
+{% endif %}

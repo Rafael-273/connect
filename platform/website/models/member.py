@@ -14,12 +14,6 @@ class Member(BaseModel):
         ('from_another_church', 'Vindo de outra Igreja'),
     ]
 
-    SPIRITUAL_MATURITY_CHOICES = [
-        ('immature', 'Imaturo'),
-        ('intermediate', 'Intermediário'),
-        ('mature', 'Maduro'),
-    ]
-
     GENDER_CHOICES = [
         ('male', 'Masculino'),
         ('female', 'Feminino')
@@ -48,7 +42,6 @@ class Member(BaseModel):
 
     conversion = models.CharField(max_length=20, choices=CONVERSION_CHOICES, blank=True, null=True)
     conversion_date = models.DateField(blank=True, null=True)
-    spiritual_maturity = models.CharField(max_length=20, choices=SPIRITUAL_MATURITY_CHOICES, blank=True, null=True)
 
     personality_type = models.CharField(max_length=50, blank=True, null=True)
     interests = models.TextField(blank=True, null=True)
@@ -60,7 +53,7 @@ class Member(BaseModel):
     testimony = models.TextField(blank=True, null=True)
     initial_challenges = models.TextField(blank=True, null=True)
 
-    ministry = models.ForeignKey(Ministry, on_delete=models.SET_NULL, blank=True, null=True)
+    ministry = models.ManyToManyField(Ministry, blank=True)
     is_active = models.BooleanField(default=True)
 
     is_available_to_consolidate = models.BooleanField(default=False)

@@ -1,0 +1,63 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    {% block head %}{% endblock %}
+    {% include 'parciais/head.html' %}
+    <title>{% block title %}{% endblock %}</title>
+    <style>
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansRegular.otf' %}") format("truetype");
+            font-style: normal;
+        }
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansMedium.otf' %}") format("truetype");
+            font-style: medium;
+        }
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansLight.otf' %}") format("truetype");
+            font-style: light;
+        }
+        @font-face {
+            font-family: "Tusker";
+            src: url("{% static 'fonts/TuskerGrotesk.ttf' %}") format("truetype");
+        }
+        @font-face {
+            font-family: "Integral";
+            src: url("{% static 'fonts/Integral.otf' %}") format("truetype");
+        }
+    </style>
+</head>
+
+<body class="{% block body_class %}flex flex-col min-h-screen background-page{% endblock %}" style="background-color: #f7f1ef;">
+
+<div id="admin-menu-container">
+    {% include 'parciais/menu.html' %}
+</div>
+
+{% block content %}
+
+{% endblock %}
+
+<script>
+    if (window.location.pathname.includes('/admin-login')) {
+        var menu = document.getElementById('admin-menu-container');
+        if (menu) menu.style.display = 'none';
+    }
+    $(document).ready(function() {
+        $(window).scroll(function() {
+            const navbar = $('#navbar');
+            if ($(this).scrollTop() > 0) {
+                navbar.addClass('menu-scroll');
+            } else {
+                navbar.removeClass('menu-scroll');
+            }
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Excluir Follow-up - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .warning-box {
+        background-color: #fef3c7;
+        border: 1px solid #f59e0b;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+    }
+    
+    .warning-icon {
+        color: #d97706;
+        font-size: 24px;
+    }
+    
+    .detail-item {
+        padding: 8px 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #374151;
+        display: inline-block;
+        width: 120px;
+    }
+    
+    .detail-value {
+        color: #6b7280;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    <!-- Sidebar -->
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <div class="max-w-2xl mx-auto">
+                <div class="admin-card">
+                    <div class="p-6">
+                        <!-- Header -->
+                        <div class="mb-6">
+                            <h1 class="text-2xl font-bold text-gray-900">Confirmar Exclusão</h1>
+                            <p class="text-gray-600 mt-1">Você tem certeza que deseja excluir este follow-up?</p>
+                        </div>
+
+                        <!-- Warning -->
+                        <div class="warning-box">
+                            <div class="flex items-start">
+                                <ion-icon name="warning" class="warning-icon mr-3 flex-shrink-0 mt-1"></ion-icon>
+                                <div>
+                                    <h3 class="font-semibold text-yellow-800 mb-2">Atenção!</h3>
+                                    <p class="text-yellow-700 text-sm">
+                                        Esta ação não pode ser desfeita. Todos os dados relacionados a este follow-up serão permanentemente removidos do sistema.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Follow-up Details -->
+                        <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                            <h3 class="font-semibold text-gray-900 mb-4">Detalhes do Follow-up a ser excluído:</h3>
+                            
+                            <div class="detail-item">
+                                <span class="detail-label">Nome:</span>
+                                <span class="detail-value">{{ followup.person_name }}</span>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <span class="detail-label">Telefone:</span>
+                                <span class="detail-value">{{ followup.phone|default:"--" }}</span>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <span class="detail-label">Tipo:</span>
+                                <span class="detail-value">
+                                    {% if followup.followup_type == 'consolidacao' %}
+                                        Consolidação
+                                    {% elif followup.followup_type == 'discipulado' %}
+                                        Discipulado
+                                    {% elif followup.followup_type == 'visita' %}
+                                        Visita
+                                    {% else %}
+                                        {{ followup.followup_type|capfirst }}
+                                    {% endif %}
+                                </span>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <span class="detail-label">Responsável:</span>
+                                <span class="detail-value">{{ followup.responsible_person|default:"--" }}</span>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <span class="detail-label">Status:</span>
+                                <span class="detail-value">
+                                    {% if followup.status == 'active' %}
+                                        Ativo
+                                    {% else %}
+                                        Finalizado
+                                    {% endif %}
+                                </span>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <span class="detail-label">Criado em:</span>
+                                <span class="detail-value">{{ followup.created_at|date:"d/m/Y H:i" }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <form method="post" class="flex gap-3">
+                            {% csrf_token %}
+                            <button type="submit" 
+                                    class="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition duration-300 flex items-center"
+                                    onclick="return confirm('Tem certeza absoluta que deseja excluir este follow-up? Esta ação não pode ser desfeita!')">
+                                <ion-icon name="trash-outline" class="mr-2"></ion-icon>
+                                Sim, Excluir Follow-up
+                            </button>
+                            
+                            <a href="{% url 'admin_followup_detail' followup.id %}" 
+                               class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition duration-300 flex items-center">
+                                <ion-icon name="close-outline" class="mr-2"></ion-icon>
+                                Cancelar
+                            </a>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

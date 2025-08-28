@@ -1,0 +1,114 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{% if followup %}Editar Follow-up{% else %}Novo Follow-up{% endif %} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <div class="admin-card">
+                <div class="p-6">
+                <!-- Header -->
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">
+                            {% if followup %}Editar Follow-up{% else %}Novo Follow-up{% endif %}
+                        </h1>
+                        <p class="text-gray-600 mt-1">Configure o acompanhamento de consolidação</p>
+                    </div>
+                    <a href="{% url 'admin_followups_list' %}" 
+                       class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition duration-300 flex items-center">
+                        <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
+                        Voltar
+                    </a>
+                </div>
+
+                <!-- Formulário -->
+                <form method="post" class="space-y-6">
+                    {% csrf_token %}
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Membro Acompanhado -->
+                        <div class="form-group">
+                            <label class="form-label">{{ form.accompanied.label }}</label>
+                            {{ form.accompanied }}
+                            {% if form.accompanied.errors %}
+                                <div class="text-red-600 text-sm mt-1">{{ form.accompanied.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Responsável -->
+                        <div class="form-group">
+                            <label class="form-label">{{ form.responsible.label }}</label>
+                            {{ form.responsible }}
+                            {% if form.responsible.errors %}
+                                <div class="text-red-600 text-sm mt-1">{{ form.responsible.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Data de Encerramento -->
+                    <div class="form-group">
+                        <label class="form-label">{{ form.end_date.label }}</label>
+                        {{ form.end_date }}
+                        <p class="text-sm text-gray-500 mt-1">Deixe em branco se o follow-up ainda estiver ativo</p>
+                        {% if form.end_date.errors %}
+                            <div class="text-red-600 text-sm mt-1">{{ form.end_date.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Observações -->
+                    <div class="form-group">
+                        <label class="form-label">{{ form.profile_notes.label }}</label>
+                        {{ form.profile_notes }}
+                        {% if form.profile_notes.errors %}
+                            <div class="text-red-600 text-sm mt-1">{{ form.profile_notes.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Botões -->
+                    <div class="flex justify-end space-x-4">
+                        <a href="{% url 'admin_followups_list' %}" 
+                           class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-300">
+                            Cancelar
+                        </a>
+                        <button type="submit" 
+                                class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300">
+                            {% if followup %}Atualizar Follow-up{% else %}Criar Follow-up{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

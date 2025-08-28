@@ -1,16 +1,12 @@
 FROM python:3.10.5
 
 EXPOSE 8000
-WORKDIR /usr/src/platform
+WORKDIR /platform
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl1.1 \
-    && rm -rf /var/lib/apt/lists/*
-
-ADD requirements.txt /usr/src/platform/
+ADD requirements.txt /platform
+    
 RUN pip install -r requirements.txt
-RUN pip install daphne
 
-ADD ./platform /usr/src/platform
+ADD ./platform /platform
 
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "connect.asgi:application"]
+CMD gunicorn --bind 0.0.0.0:8000 --reload platform.wsgi:application

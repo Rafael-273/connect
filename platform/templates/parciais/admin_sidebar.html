@@ -1,0 +1,76 @@
+<!-- Sidebar Admin -->
+<div class="sidebar w-64 fixed left-0 top-24 bottom-0 z-40">
+    <div class="p-6 border-b">
+        <h2 class="text-xl font-bold text-gray-800">Painel Admin</h2>
+        <p class="text-sm text-gray-600">Igreja Filadélfia</p>
+    </div>
+    
+    <nav class="mt-6">
+        <a href="{% url 'admin_dashboard' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
+            <ion-icon name="analytics-outline"></ion-icon>
+            Dashboard
+        </a>
+        <a href="{% url 'admin_members_list' %}" class="sidebar-item {% if 'members' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="people-outline"></ion-icon>
+            Membros
+        </a>
+        <a href="{% url 'admin_visitors_list' %}" class="sidebar-item {% if 'visitors' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="person-add-outline"></ion-icon>
+            Visitantes
+        </a>
+        <a href="{% url 'admin_followups_list' %}" class="sidebar-item {% if 'followups' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="chatbubbles-outline"></ion-icon>
+            Acompanhamentos
+        </a>
+        <a href="{% url 'admin_events_list' %}" class="sidebar-item {% if 'events' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="calendar-outline"></ion-icon>
+            Eventos
+        </a>
+        <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="library-outline"></ion-icon>
+            Ministérios
+        </a>
+        <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="location-outline"></ion-icon>
+            Bairros
+        </a>
+        <a href="{% url 'admin_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}">
+            <ion-icon name="person-circle-outline"></ion-icon>
+            Meu Perfil
+        </a>
+        <a href="{% url 'admin_logout' %}" class="sidebar-item">
+            <ion-icon name="log-out-outline"></ion-icon>
+            Sair
+        </a>
+    </nav>
+</div>
+
+<style>
+    .sidebar {
+        background: white;
+        min-height: 100vh;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .sidebar-item:hover, .sidebar-item.active {
+        background-color: #f1f5f9;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+        text-decoration: none;
+    }
+    
+    .sidebar-item ion-icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+</style>

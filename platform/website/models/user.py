@@ -22,6 +22,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
+    first_name = models.CharField(max_length=50, blank=True, verbose_name='Nome')
+    last_name = models.CharField(max_length=50, blank=True, verbose_name='Sobrenome')
+    avatar = models.ImageField(upload_to='avatars/', blank=True, null=True, verbose_name='Foto de Perfil')
+    phone = models.CharField(max_length=20, blank=True, verbose_name='Telefone')
+    bio = models.TextField(blank=True, verbose_name='Sobre você')
+
     date_joined = models.DateTimeField(auto_now_add=True)
 
     objects = UserManager()

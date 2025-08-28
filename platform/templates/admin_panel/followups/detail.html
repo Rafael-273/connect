@@ -1,0 +1,172 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Detalhes do Follow-up - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .detail-item {
+        padding: 12px 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+    
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 4px;
+    }
+    
+    .detail-value {
+        color: #6b7280;
+    }
+    
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .status-active {
+        background-color: #dcfce7;
+        color: #166534;
+    }
+    
+    .status-finished {
+        background-color: #f3f4f6;
+        color: #374151;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    <!-- Sidebar -->
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <div class="admin-card">
+                <div class="p-6">
+                    <!-- Header -->
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">Detalhes do Follow-up</h1>
+                            <p class="text-gray-600 mt-1">Informações completas do acompanhamento</p>
+                        </div>
+                        <div class="flex gap-3">
+                            <a href="{% url 'admin_followup_edit' followup.id %}" 
+                               class="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 flex items-center">
+                                <ion-icon name="create-outline" class="mr-2"></ion-icon>
+                                Editar
+                            </a>
+                            <a href="{% url 'admin_followups_list' %}" 
+                               class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 flex items-center">
+                                <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
+                                Voltar
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Details -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Informações Básicas -->
+                        <div class="space-y-4">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Informações Básicas</h3>
+                            
+                            <div class="detail-item">
+                                <div class="detail-label">Nome da Pessoa</div>
+                                <div class="detail-value">{{ followup.person_name }}</div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <div class="detail-label">Telefone</div>
+                                <div class="detail-value">{{ followup.phone|default:"--" }}</div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <div class="detail-label">Tipo de Follow-up</div>
+                                <div class="detail-value">
+                                    {% if followup.followup_type == 'consolidacao' %}
+                                        Consolidação
+                                    {% elif followup.followup_type == 'discipulado' %}
+                                        Discipulado
+                                    {% elif followup.followup_type == 'visita' %}
+                                        Visita
+                                    {% else %}
+                                        {{ followup.followup_type|capfirst }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <div class="detail-label">Status</div>
+                                <div class="detail-value">
+                                    {% if followup.status == 'active' %}
+                                        <span class="status-badge status-active">Ativo</span>
+                                    {% else %}
+                                        <span class="status-badge status-finished">Finalizado</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Detalhes do Acompanhamento -->
+                        <div class="space-y-4">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Detalhes do Acompanhamento</h3>
+                            
+                            <div class="detail-item">
+                                <div class="detail-label">Responsável</div>
+                                <div class="detail-value">{{ followup.responsible_person|default:"--" }}</div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <div class="detail-label">Data de Criação</div>
+                                <div class="detail-value">{{ followup.created_at|date:"d/m/Y H:i" }}</div>
+                            </div>
+                            
+                            <div class="detail-item">
+                                <div class="detail-label">Última Atualização</div>
+                                <div class="detail-value">{{ followup.updated_at|date:"d/m/Y H:i" }}</div>
+                            </div>
+                            
+                            {% if followup.next_contact_date %}
+                            <div class="detail-item">
+                                <div class="detail-label">Próximo Contato</div>
+                                <div class="detail-value">{{ followup.next_contact_date|date:"d/m/Y" }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Observações -->
+                    {% if followup.notes %}
+                    <div class="mt-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Observações</h3>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-gray-700 whitespace-pre-wrap">{{ followup.notes }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
