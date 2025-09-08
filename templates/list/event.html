@@ -34,6 +34,42 @@ Eventos
     .footer-color {
         background-color: var(--color-danger) !important;
     }
+    
+    .event {
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .event::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 4px;
+        height: 0;
+        background: var(--color-danger);
+        transition: height 0.4s ease;
+    }
+    
+    .event:hover::before {
+        height: 100%;
+    }
+    
+    .date-badge {
+        background: linear-gradient(135deg, rgba(var(--color-danger-rgb), 0.15), rgba(var(--color-danger-rgb), 0.05));
+        border: 1px solid rgba(var(--color-danger-rgb), 0.2);
+    }
+    
+    .saiba-mais-btn {
+        background: var(--color-danger);
+        transition: all 0.3s ease;
+    }
+    
+    .saiba-mais-btn:hover {
+        background: linear-gradient(to right, var(--color-danger), #ff4d4d);
+        transform: translateX(5px);
+    }
 </style>
 
 {% endblock %}
@@ -60,7 +96,7 @@ Eventos
             </div>
             <div class="flex flex-col gap-2 md:gap-3 max-w-lg sm:max-w-xl lg:max-w-2xl md:mt-0 mt-[-0.5rem]">
                 <p class="text-white text-sm sm:text-lg lg:text-xl leading-relaxed">
-                    Aqui você encontra todas as informações sobre os eventos da nossa Família — cultos, conferências, retiros, encontros e muito mais. Acompanhe as datas, horários e detalhes de cada programação para participar conosco e viver momentos de comunhão, fé e crescimento espiritual.
+                    Aqui você encontra todas as informações sobre os eventos da nossa Família — conferências, retiros, encontros e muito mais. Acompanhe as datas, horários e detalhes de cada programação para participar conosco e viver momentos de comunhão, fé e crescimento espiritual.
                 </p>
             </div>
         </div>
@@ -125,43 +161,43 @@ Eventos
     </form>
 
 </div>
-<div class="articles flex flex-col gap-6 w-full py-6 px-12 justify-center">
+<div class="articles flex flex-col gap-8 w-full py-8 px-6 md:px-12 justify-center">
     {% for event in events %}
-    <div class="event p-4 rounded-lg shadow-md flex flex-col md:flex-row gap-2 md:gap-4 h-auto md:h-[25rem] cursor-pointer" style="background-color: #0d0d0d;">
-        <div class="cover-event w-full md:w-1/2 flex-shrink-0">
-            <a href="{% url 'event_detail' slug=event.slug %}">
-                <img src="{{ event.banner.url }}" alt="{{ event.title }}" class="w-full h-[250px] md:h-full object-cover rounded-lg" />
+    <div class="event p-5 rounded-xl shadow-lg flex flex-col md:flex-row gap-4 h-auto md:h-[25rem] transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-xl" style="background-color: #0d0d0d; border: 1px solid rgba(255,255,255,0.05);">
+        <div class="cover-event w-full md:w-1/2 flex-shrink-0 overflow-hidden rounded-lg">
+            <a href="{% url 'event_detail' slug=event.slug %}" class="block h-full">
+                <img src="{{ event.banner.url }}" alt="{{ event.title }}" class="w-full h-[250px] md:h-full object-cover rounded-lg transition-transform duration-500 hover:scale-105" />
             </a>
         </div>
 
         <div class="event-content flex flex-col justify-between w-full md:w-1/2 p-2 md:p-4 gap-4">
             <div>
-                <div class="flex flex-col gap-2 md:gap-0 md:flex-row justify-between items-center md:items-end">
-                    <a href="{% url 'event_detail' slug=event.slug %}">
-                        <h2 class="text-white text-center md:text-left text-3xl md:text-4xl">
+                <div class="flex flex-col gap-3 md:gap-1 md:flex-row justify-between items-center md:items-start">
+                    <a href="{% url 'event_detail' slug=event.slug %}" class="group w-2/3">
+                        <h2 class="text-white text-center md:text-left text-3xl font-bold transition-colors duration-300">
                             {{ event.title }}
                         </h2>
                     </a>
-                    <h1 class="text-xl md:text-2xl text-center md:text-right text-gray-900 w-32 md:mr-2"
-                        style="color: var(--tertiary-color-light); font-family: 'Montserrat', sans-serif; font-size: 1.375rem !important;">
-                        {{ event.event_date|date:"d/m" }} às 
-                        {% if event.event_time|time:"i" == "00" %}
-                            {{ event.event_time|time:"H" }}H
-                        {% else %}
-                            {{ event.event_time|time:"H:i" }}H
-                        {% endif %}
-                    </h1>
+                    <div class="date-badge flex items-center justify-center px-6 py-2 rounded-lg text-white bg-[var(--color-danger)]">
+                        <ion-icon name="calendar-outline" class="mr-2 text-xl"></ion-icon>
+                        <span>
+                            {{ event.event_date|date:"d/m" }} • {{ event.event_time|time:"H" }}h
+                        </span>
+                    </div>
                 </div>
-                <p class="mt-2 text-white text-center md:text-left text-sm md:text-base">{{ event.description|truncatewords:40 }}</p>
+                <p class="mt-4 text-gray-300 text-center md:text-left text-sm md:text-base leading-relaxed">{{ event.description }}</p>
             </div>
-            <a href="{% url 'event_detail' slug=event.slug %}" class="mt-4 md:mt-0 w-full md:w-1/3 flex justify-center items-center gap-2 px-4 py-4 md:px-4 md:py-2 rounded-md bg-secondary text-white transition-colors duration-300 hover:bg-primary" style="background-color: var(--color-danger); color: white;">
-                <h3 class="text-sm md:text-base">Saiba Mais</h3>
+            <a href="{% url 'event_detail' slug=event.slug %}" class="saiba-mais-btn mt-6 md:mt-0 w-full md:w-auto md:self-start flex justify-center items-center gap-2 px-6 py-3 rounded-lg text-white transition-all duration-300 hover:shadow-lg">
+                <h3 class="text-sm md:text-base font-medium">Saiba Mais</h3>
                 <ion-icon name="arrow-forward" class="text-lg md:text-xl"></ion-icon>
             </a>
         </div>
     </div>
     {% empty %}
-    <p class="text-center text-gray-500 col-span-full">Nenhum evento encontrado.</p>
+    <div class="text-center py-12">
+        <ion-icon name="calendar-outline" class="text-5xl text-gray-500 mb-4"></ion-icon>
+        <p class="text-gray-400 text-lg">Nenhum evento encontrado.</p>
+    </div>
     {% endfor %}
 </div>
 

@@ -5,8 +5,128 @@
 {{ event.name }}
 {% endblock %}
 
+{% block head %}
+<style>
+    body {
+        background-color: #070707 !important;
+    }
+    
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .fade-in {
+        animation: fadeInUp 0.8s ease-out;
+    }
+    
+    .event-banner {
+        position: relative;
+        overflow: hidden;
+        border-radius: 12px;
+        transition: all 0.3s ease;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .event-banner:hover img {
+        transform: scale(1.05);
+    }
+    
+    .event-banner img {
+        transition: transform 0.6s ease;
+    }
+    
+    .event-title {
+        font-weight: 700;
+        color: white;
+        transition: color 0.3s ease;
+    }
+    
+    .date-badge {
+        background: linear-gradient(135deg, var(--color-danger), #ff4d4d);
+        border-radius: 8px;
+        padding: 8px 16px;
+        color: white;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(var(--color-danger-rgb), 0.3);
+        transition: all 0.3s ease;
+    }
+    
+    .date-badge:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 15px rgba(var(--color-danger-rgb), 0.4);
+    }
+    
+    .register-btn {
+        background: var(--color-danger);
+        transition: all 0.3s ease;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    .register-btn:hover {
+        background: linear-gradient(to right, var(--color-danger), #ff4d4d);
+        transform: translateY(-3px);
+        box-shadow: 0 6px 16px rgba(var(--color-danger-rgb), 0.4);
+    }
+    
+    .event-details-card {
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        transform: translateY(0);
+    }
+    
+    .event-details-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+    }
+    
+    .gallery-title {
+        position: relative;
+        display: inline-block;
+        color: white;
+        font-weight: 700;
+        margin-bottom: 2rem;
+    }
+    
+    .gallery-title::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 3px;
+        background: var(--color-danger);
+    }
+    
+    .gallery-image {
+        border-radius: 8px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    
+    .gallery-image:hover {
+        transform: scale(1.03);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="flex-grow content container mx-auto mb-8 mt-28 flex flex-col justify-center items-center px-4">
+<div class="flex-grow content container mx-auto mb-16 mt-40 flex flex-col justify-center items-center px-4 sm:px-6">
 
     <div class="messages-container">
         {% if messages %}
@@ -14,7 +134,7 @@
                 {% for message in messages %}
                     <div class="message text-center p-4 mb-4 w-full text-white rounded-md
                         {% if message.tags == 'error' %} bg-red-500 {% endif %}"
-                        style="{% if message.tags == 'success' %} background-color: var(--event-secondary-color);{% endif %}">
+                        style="{% if message.tags == 'success' %} background-color: var(--color-danger);{% endif %}">
                         {{ message }}
                     </div>
                 {% endfor %}
@@ -22,56 +142,91 @@
         {% endif %}
     </div>
 
-    <div class="flex flex-col mb-12 gap-4">
-        <div class="flex flex-wrap md:flex-nowrap">
-            <div class="flex-shrink-0 w-full md:w-1/2 mb-4 md:mb-0 md:mr-6">
-                <div class="relative h-full w-full pt-[56.25%] rounded-md shadow-md overflow-hidden">
-                    <img src="{{ event.cover.url }}" alt="{{ event.name }}" class="absolute inset-0 w-full h-full object-cover" />
+    <div class="flex flex-col w-full max-w-6xl fade-in">
+        <div class="flex flex-col md:flex-row gap-8 mb-12">
+            <div class="w-full md:w-1/2">
+                <div class="event-banner w-full h-[300px] sm:h-[400px] md:h-full">
+                    <img src="{{ event.banner.url }}" alt="{{ event.name }}" class="w-full h-full object-cover" />
                 </div>
             </div>
-            <div class="flex flex-col gap-4 w-full md:w-1/2 justify-center p-4">
-                <div class="flex flex-col gap-4 md:gap-0 md:flex-row justify-between items-center md:items-end">
-                    <h1 class="text-5xl text-center md:text-left text-gray-900" style="color: var(--event-primary-color); font-family: 'Piepie W01 Regular', sans-serif;">
-                        {{ event.name }}
-                    </h1>
-                    <h2 class="text-xl text-center md:text-right md:text-3xl text-gray-900 w-1/3"
-                        style="color: var(--event-accent-color); font-family: 'Montserrat', sans-serif;">
-                        {{ event.date|date:"d/m/Y" }}
-                    </h2>
-                </div>
-                <p class="text-base md:text-lg text-white">{{ event.description }}</p>
+            
+            <div class="event-details-card flex flex-col justify-between w-full md:w-1/2 p-6 bg-[#0d0d0d] rounded-xl border border-gray-800">
                 <div>
-                    <h3 class="text-lg md:text-xl mb-2" style="color: var(--event-accent-color);">Local:</h3>
-                    <p class="text-white">{{ event.location }}</p>
+                    <div class="flex flex-col gap-3 mb-6">
+                        <div class="date-badge self-start mb-2">
+                            <ion-icon name="calendar-outline" class="mr-2 text-xl text-white"></ion-icon>
+                            {{ event.event_date|date:"d/m" }} • 
+                            {{ event.event_time|time:"H" }}h
+                        </div>
+                        
+                        <h1 class="event-title text-4xl sm:text-5xl">
+                            {{ event.title }}
+                        </h1>
+                    </div>
+                    
+                    <div class="mb-6">
+                        <p class="text-gray-300 text-base leading-relaxed mb-6">{{ event.description }}</p>
+                        
+                        <div class="flex items-center gap-2 text-gray-200 mb-2">
+                            <ion-icon name="location-outline" class="text-xl text-[var(--color-danger)]"></ion-icon>
+                            <h3 class="text-lg font-medium">Local</h3>
+                        </div>
+                        <p class="text-gray-300 ml-7">{{ event.location }}</p>
+                    </div>
                 </div>
+                
+                {% if event.registration_link %}
+                    <a href="{{ event.registration_link }}" target="_blank" class="w-full">
+                        <div class="register-btn text-center cursor-pointer py-4 text-white font-bold text-lg flex items-center justify-center gap-2">
+                            Inscreva-se agora
+                            <ion-icon name="arrow-forward-outline" class="text-xl"></ion-icon>
+                        </div>
+                    </a>
+                {% else %}
+                    <div class="rounded-lg text-center py-4 text-white bg-gray-700 font-medium flex items-center justify-center gap-2">
+                        <ion-icon name="close-circle-outline" class="text-xl"></ion-icon>
+                        Inscrições encerradas
+                    </div>
+                {% endif %}
             </div>
         </div>
 
-        {% if event.registration_link %}
-            <a href="{{ event.registration_link }}" target="_blank">
-                <div class="rounded-lg text-center cursor-pointer py-4" 
-                    style="background-color: var(--event-accent-color); color: white;">
-                    Inscreva-se <b>agora</b>
+        {% if event.images.all %}
+            <div class="w-full mt-12 fade-in" style="animation-delay: 0.3s;">
+                <h2 class="gallery-title text-3xl text-center mb-8">Galeria do Evento</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                    {% for image in event.images.all %}
+                        <div class="gallery-image aspect-w-1 aspect-h-1 shadow-lg">
+                            <img src="{{ image.url }}" class="w-full h-full object-cover cursor-pointer open-modal" />
+                        </div>
+                    {% endfor %}
                 </div>
-            </a>
-        {% else %}
-            <div class="rounded-lg text-center py-4 text-white bg-gray-400">
-                Inscrições encerradas
             </div>
         {% endif %}
     </div>
-
-    {% if event.images.all %}
-        <div class="w-full">
-            <h2 class="text-2xl mb-4 text-center" style="color: var(--event-accent-color);">Galeria do Evento</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                {% for image in event.images.all %}
-                    <div class="aspect-w-1 aspect-h-1 rounded-md shadow-lg overflow-hidden">
-                        <img src="{{ image.url }}" class="w-full h-full object-cover cursor-pointer open-modal" />
-                    </div>
-                {% endfor %}
-            </div>
-        </div>
-    {% endif %}
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add hover effect to registration button
+        const registerBtn = document.querySelector('.register-btn');
+        if (registerBtn) {
+            registerBtn.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-3px)';
+            });
+            registerBtn.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+            });
+        }
+        
+        // Enhance image gallery interaction
+        const galleryImages = document.querySelectorAll('.gallery-image img');
+        galleryImages.forEach(img => {
+            img.addEventListener('click', function() {
+                // Future enhancement: Add lightbox functionality
+                console.log('Image clicked:', this.src);
+            });
+        });
+    });
+</script>
 {% endblock %}

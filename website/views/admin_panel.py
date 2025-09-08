@@ -177,7 +177,7 @@ def members_list_view(request):
 @user_passes_test(is_admin)
 def visitors_list_view(request):
     """Lista de visitantes com filtros e busca"""
-    visitors = Visitor.objects.select_related('neighborhood').all()
+    visitors = Visitor.objects.select_related('neighborhood').all().order_by('-visit_date', '-id')
     
     # Filtros
     search = request.GET.get('search', '')
