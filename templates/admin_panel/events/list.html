@@ -6,13 +6,23 @@
 {% block head %}
 <style>
     body {
-        background-color: #f8f9fa !important;
     }
     
     .admin-card {
         background: white;
         border-radius: 12px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    @media (max-width: 768px) {
+        .admin-card {
+            padding: 0;
+            border-radius: 8px;
+        }
+        
+        .table-container {
+            margin: 0 -8px;
+        }
     }
     
     .sidebar {
@@ -44,10 +54,11 @@
     }
     
     .event-banner {
-        width: 80px;
-        height: 60px;
+        width: 70px;
+        height: 50px;
         object-fit: cover;
         border-radius: 8px;
+        flex-shrink: 0;
     }
     
     .status-badge {
@@ -55,6 +66,12 @@
         border-radius: 20px;
         font-size: 12px;
         font-weight: 600;
+        max-width: 100%;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     .status-upcoming {
@@ -77,114 +94,134 @@
 
     <div class="flex-1 ml-64">
         <div class="p-6 mt-24">
-            <div class="flex justify-between items-center mb-8">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Eventos</h1>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                <div class="mb-4 sm:mb-0">
+                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Eventos</h1>
                     <p class="text-gray-600 mt-2">Gerenciar eventos da igreja</p>
                 </div>
-                <a href="{% url 'admin_event_create' %}" class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center">
+                <a href="{% url 'admin_event_create' %}" class="bg-[var(--color-primary)] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center w-full sm:w-auto">
                     <ion-icon name="add" class="mr-2"></ion-icon>
                     Novo Evento
                 </a>
             </div>
 
-            <div class="admin-card p-6 mb-6">
-                <form method="GET" class="flex flex-wrap gap-4 items-center">
-                    <div class="flex-1 min-w-64">
+            <div class="admin-card p-4 sm:p-6 mb-6">
+                <form method="GET" class="flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-center">
+                    <div class="w-full sm:flex-1 sm:min-w-64">
                         <input type="text" name="search" value="{{ search }}" 
                                placeholder="Buscar por título, descrição ou local..." 
                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
                     </div>
                     
-                    <div>
-                        <select name="status" class="px-4 py-2 w-[13rem] border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                    <div class="w-full sm:w-auto">
+                        <select name="status" class="w-full sm:w-[13rem] px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
                             <option value="">Todos os Status</option>
                             <option value="upcoming" {% if status_filter == 'upcoming' %}selected{% endif %}>Próximos</option>
                             <option value="past" {% if status_filter == 'past' %}selected{% endif %}>Passados</option>
                         </select>
                     </div>
                     
-                    <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
-                        <ion-icon name="search" class="mr-2"></ion-icon>
-                        Buscar
-                    </button>
-                    
-                    <a href="{% url 'admin_events_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
-                        Limpar
-                    </a>
+                    <div class="flex gap-2 w-full sm:w-auto">
+                        <button type="submit" class="flex-1 sm:flex-initial bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center">
+                            <ion-icon name="search" class="mr-2"></ion-icon>
+                            Buscar
+                        </button>
+                        
+                        <a href="{% url 'admin_events_list' %}" class="flex-1 sm:flex-initial bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center">
+                            Limpar
+                        </a>
+                    </div>
                 </form>
             </div>
 
-            <div class="admin-card overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Evento</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data/Hora</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Local</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-                            </tr>
-                        </thead>
+            <div class="admin-card overflow-hidden shadow-sm">
+                <div class="overflow-x-auto sm:-mx-6 lg:-mx-8">
+                    <div class="inline-block min-w-full py-2 sm:px-6 lg:px-8">
+                        <div class="overflow-hidden">
+                            <table class="w-full table-fixed">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3 md:w-1/4">Evento</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Data/Hora</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6 hidden md:table-cell">Local</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Ações</th>
+                                    </tr>
+                                </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             {% for event in events %}
                             <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-6 py-4">
                                     <div class="flex items-center">
                                         {% if event.banner %}
-                                        <img class="event-banner" src="{{ event.banner.url }}" alt="{{ event.title }}">
+                                        <img class="event-banner flex-shrink-0" src="{{ event.banner.url }}" alt="{{ event.title }}">
                                         {% else %}
-                                        <div class="event-banner bg-[var(--color-primary)] flex items-center justify-center text-white font-bold">
+                                        <div class="event-banner flex-shrink-0 bg-[var(--color-primary)] flex items-center justify-center text-white font-bold">
                                             <ion-icon name="calendar"></ion-icon>
                                         </div>
                                         {% endif %}
-                                        <div class="ml-4">
-                                            <div class="text-sm font-medium text-gray-900">{{ event.title }}</div>
-                                            <div class="text-sm text-gray-500">{{ event.description|truncatewords:10 }}</div>
+                                        <div class="ml-3 min-w-0 flex-1">
+                                            <div class="text-sm font-medium text-gray-900 truncate">{{ event.title }}</div>
+                                            <div class="text-xs text-gray-500 truncate">{{ event.description|truncatewords:8 }}</div>
                                         </div>
                                     </div>
                                 </td>
                                 <td class="px-6 py-4 whitespace-nowrap">
                                     <div class="text-sm text-gray-900">{{ event.event_date|date:"d/m/Y" }}</div>
                                     {% if event.event_time %}
-                                    <div class="text-sm text-gray-500">{{ event.event_time|time:"H:i" }}h</div>
+                                    <div class="text-xs text-gray-500">{{ event.event_time|time:"H:i" }}h</div>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900">{{ event.location|default:"--" }}</div>
+                                <td class="px-6 py-4 hidden md:table-cell">
+                                    <div class="text-sm text-gray-900 truncate">{{ event.location|default:"--" }}</div>
                                     {% if event.link_more_info %}
-                                    <a href="{{ event.link_more_info }}" target="_blank" class="text-sm text-[var(--color-primary)] hover:underline">
+                                    <a href="{{ event.link_more_info }}" target="_blank" class="text-xs text-[var(--color-primary)] hover:underline truncate block">
                                         Mais informações
                                     </a>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-6 py-4">
                                     {% now "Y-m-d" as today %}
                                     {% if event.event_date|date:"Y-m-d" >= today %}
-                                    <span class="status-badge status-upcoming">
-                                        <ion-icon name="time" class="mr-1"></ion-icon>
-                                        Próximo
+                                    <span class="status-badge status-upcoming inline-flex items-center">
+                                        <ion-icon name="time" class="mr-1 text-xs"></ion-icon>
+                                        <span class="truncate">Próximo</span>
                                     </span>
                                     {% else %}
-                                    <span class="status-badge status-past">
-                                        <ion-icon name="checkmark-circle" class="mr-1"></ion-icon>
-                                        Realizado
+                                    <span class="status-badge status-past inline-flex items-center">
+                                        <ion-icon name="checkmark-circle" class="mr-1 text-xs"></ion-icon>
+                                        <span class="truncate">Realizado</span>
                                     </span>
                                     {% endif %}
+                                    
+                                    {% if event.display_start|date:"Y-m-d" <= today and event.display_end|date:"Y-m-d" >= today %}
+                                    <div class="mt-1">
+                                        <span class="status-badge inline-flex items-center" style="background-color: #dcfce7; color: #166534;">
+                                            <ion-icon name="eye" class="mr-1 text-xs"></ion-icon>
+                                            <span class="truncate">Visível</span>
+                                        </span>
+                                    </div>
+                                    {% else %}
+                                    <div class="mt-1">
+                                        <span class="status-badge inline-flex items-center" style="background-color: #fee2e2; color: #991b1b;">
+                                            <ion-icon name="eye-off" class="mr-1 text-xs"></ion-icon>
+                                            <span class="truncate">Oculto</span>
+                                        </span>
+                                    </div>
+                                    {% endif %}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex space-x-2">
+                                <td class="px-2 py-4">
+                                    <div class="flex items-center justify-around space-x-1">
                                         <a href="{% url 'event_detail' slug=event.slug %}" target="_blank"
-                                           class="text-[var(--color-primary)] hover:text-opacity-80">
+                                           class="text-[var(--color-primary)] hover:text-opacity-80 p-1">
                                             <ion-icon name="eye" class="text-lg"></ion-icon>
                                         </a>
                                         <button onclick="editEvent({{ event.id }})" 
-                                                class="text-blue-600 hover:text-blue-800">
+                                                class="text-blue-600 hover:text-blue-800 p-1">
                                             <ion-icon name="create" class="text-lg"></ion-icon>
                                         </button>
                                         <button onclick="deleteEvent({{ event.id }}, '{{ event.title }}')" 
-                                                class="text-red-600 hover:text-red-800">
+                                                class="text-red-600 hover:text-red-800 p-1">
                                             <ion-icon name="trash" class="text-lg"></ion-icon>
                                         </button>
                                     </div>
@@ -192,8 +229,11 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
-                                    Nenhum evento encontrado.
+                                <td colspan="5" class="px-6 py-8 text-center text-gray-500">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <ion-icon name="calendar-outline" class="text-4xl mb-2 text-gray-400"></ion-icon>
+                                        <p>Nenhum evento encontrado.</p>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -201,13 +241,12 @@
                     </table>
                 </div>
 
-                <!-- Pagination -->
                 {% if events.has_other_pages %}
-                <div class="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
-                    <div class="text-sm text-gray-500">
+                <div class="px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between">
+                    <div class="text-sm text-gray-500 mb-4 sm:mb-0">
                         Mostrando {{ events.start_index }} a {{ events.end_index }} de {{ events.paginator.count }} eventos
                     </div>
-                    <div class="flex space-x-2">
+                    <div class="flex flex-wrap gap-2 justify-center">
                         {% if events.has_previous %}
                         <a href="?page={{ events.previous_page_number }}&{{ request.GET.urlencode }}" 
                            class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
@@ -235,6 +274,9 @@
                     </div>
                 </div>
                 {% endif %}
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

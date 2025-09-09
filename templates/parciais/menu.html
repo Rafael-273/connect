@@ -29,9 +29,9 @@
         </a>
     </nav>
 
-    <ul id="mobile-menu" class="md:hidden flex flex-col items-center space-y-6 mt-2 py-4 absolute w-full top-20 hidden p-4" style="z-index: 1; background-color: var(--tertiary-color-dark);">
+    <ul id="mobile-menu" class="md:hidden flex-col items-center space-y-6 mt-2 py-4 absolute w-full top-20 hidden p-4" style="z-index: 1; background-color: var(--color-danger);">
         <li class="p-2"><a href="" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Início</a></li>
-        <li class="p-2"><a href="" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Eventos</a></li>
+        <li class="p-2"><a href="{% url 'event_list' %}" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Eventos</a></li>
     </ul>
 </header>
 
@@ -55,12 +55,17 @@
 
     $('#menu-toggle').on('click', function() {
         $('#mobile-menu').toggleClass('hidden');
+        if (!$('#mobile-menu').hasClass('hidden')) {
+            $('#mobile-menu').addClass('flex');
+        } else {
+            $('#mobile-menu').removeClass('flex');
+        }
         updateNavbarColor();
     });
 
     $(document).on('click', function(event) {
         if (!$(event.target).closest('#mobile-menu, #menu-toggle').length) {
-            $('#mobile-menu').addClass('hidden');
+            $('#mobile-menu').addClass('hidden').removeClass('flex');
             updateNavbarColor();
         }
     });

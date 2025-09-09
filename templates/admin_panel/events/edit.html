@@ -158,6 +158,22 @@
                                    class="form-input">
                         </div>
                         
+                        <div class="form-group">
+                            <label class="form-label">Data Início de Exibição *</label>
+                            <input type="date" name="display_start" 
+                                   value="{% if event.display_start %}{{ event.display_start|date:'Y-m-d' }}{% endif %}" 
+                                   class="form-input" required>
+                            <p class="text-xs text-gray-500 mt-1">A partir de quando o evento aparecerá no site</p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Data Fim de Exibição *</label>
+                            <input type="date" name="display_end" 
+                                   value="{% if event.display_end %}{{ event.display_end|date:'Y-m-d' }}{% endif %}" 
+                                   class="form-input" required>
+                            <p class="text-xs text-gray-500 mt-1">Até quando o evento aparecerá no site</p>
+                        </div>
+                        
                         <div class="form-group md:col-span-2">
                             <label class="form-label">Local do Evento</label>
                             <input type="text" name="location" value="{{ event.location|default:'' }}" 

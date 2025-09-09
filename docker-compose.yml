@@ -31,7 +31,7 @@ services:
         python manage.py runserver ${HOSTNAME}:${PORT}
       "
     volumes:
-      - ./platform/:/usr/src/platform
+      - ./:/usr/src/platform
     ports:
       - "${PORT}:${PORT}"
     environment:

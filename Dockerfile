@@ -1,12 +1,12 @@
 FROM python:3.10.5
 
 EXPOSE 8000
-WORKDIR /platform
+WORKDIR /usr/src/platform
 
-ADD requirements.txt /platform
+COPY requirements.txt /usr/src/platform/
     
 RUN pip install -r requirements.txt
 
-ADD ./platform /platform
+# No need to copy files here since we're using volumes in docker-compose
 
-CMD gunicorn --bind 0.0.0.0:8000 --reload platform.wsgi:application
+CMD gunicorn --bind 0.0.0.0:8000 --reload connect.wsgi:application

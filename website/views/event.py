@@ -1,5 +1,6 @@
 from django.views.generic import ListView, DetailView
 from django.db.models import Q
+from django.utils import timezone
 from ..models.event import Event
 
 
@@ -11,7 +12,9 @@ class EventListView(ListView):
 
     def get_queryset(self):
         query = self.request.GET.get('q', '')
-        queryset = Event.objects.all().order_by('-event_date')
+        today = timezone.now().date()
+        
+        queryset = Event.objects.all()
 
         if query:
             queryset = queryset.filter(
@@ -31,3 +34,15 @@ class EventDetailView(DetailView):
     model = Event
     template_name = 'front/event.html'
     context_object_name = 'event'
+    
+    def get_object(self, queryset=None):
+        # First get the regular object
+        obj = super().get_object(queryset)
+        
+        # Check if it's visible based on display dates
+        today = timezone.now().date()
+        if not (obj.display_start <= today <= obj.display_end):
+            from django.http import Http404
+            raise Http404("Este evento não está disponível no momento.")
+            
+        return obj

@@ -21,15 +21,20 @@
                 <form method="post" enctype="multipart/form-data" class="space-y-6" id="profile-form">
                     {% csrf_token %}
                     <div class="flex flex-col items-center mb-6 relative group">
-                        <div class="relative group/avatar">
-                            <img id="avatar-preview" src="{% if user.avatar %}{{ user.avatar.url }}{% endif %}" alt="Avatar" class="w-36 h-36 rounded-full object-cover border-4 border-[var(--color-primary)] shadow-lg transition-all duration-200 bg-gray-100" style="display: {% if user.avatar %}block{% else %}none{% endif %};">
-                            <ion-icon id="avatar-placeholder" name="person-circle-outline" class="w-36 h-36 text-gray-300 absolute top-0 left-0" style="display: {% if user.avatar %}none{% else %}block{% endif %};"></ion-icon>
+                        <div class="relative group/avatar" style="width: 144px; height: 144px;">
+                            <img id="avatar-preview" src="{% if user.avatar %}{{ user.avatar.url }}{% endif %}" alt="Avatar" class="w-36 h-36 rounded-full object-cover border-4 border-[var(--color-primary)] shadow-lg transition-opacity duration-300 bg-gray-100 absolute" style="display: {% if user.avatar %}block{% else %}none{% endif %}; opacity: {% if user.avatar %}1{% else %}0{% endif %};">
+                            <div id="avatar-placeholder" class="w-36 h-36 rounded-full border-4 border-[var(--color-primary)] shadow-lg flex items-center justify-center transition-opacity duration-300 absolute" style="display: {% if user.avatar %}none{% else %}flex{% endif %}; background-color: var(--color-primary-light, #adadad); opacity: {% if user.avatar %}0{% else %}1{% endif %};">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-28 h-28 text-white opacity-90">
+                                    <path fill-rule="evenodd" d="M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
                             <label for="id_avatar" class="absolute bottom-2 right-2 bg-[var(--color-primary)] text-white p-3 rounded-full shadow cursor-pointer hover:bg-[var(--color-primary-dark)] transition-all flex items-center justify-center border-2 border-white group-hover/avatar:scale-110" title="Alterar foto">
                                 <ion-icon name="camera-outline" class="text-2xl"></ion-icon>
                             </label>
                         </div>
                         {% if user.avatar %}
                         <button type="button" id="remove-avatar" class="mt-2 text-xs text-red-500 underline hover:text-red-700 transition">Remover foto</button>
+                        <input type="hidden" id="remove_avatar_field" name="remove_avatar" value="false">
                         {% endif %}
                         <input type="file" id="id_avatar" name="avatar" accept="image/*" class="hidden">
                     </div>
@@ -86,6 +91,11 @@
         transform: scale(1.08);
         box-shadow: 0 4px 16px rgba(0,0,0,0.10);
     }
+    
+    /* Definindo uma cor alternativa caso a variável não exista */
+    :root {
+        --color-primary-light: #4f7cd6;
+    }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 <script>
@@ -95,20 +105,83 @@
     document.getElementById('id_avatar').addEventListener('change', function(e) {
         const [file] = this.files;
         if (file) {
-            document.getElementById('avatar-preview').src = URL.createObjectURL(file);
-            document.getElementById('avatar-preview').style.display = 'block';
-            document.getElementById('avatar-placeholder').style.display = 'none';
+            // Pré-carrega a imagem antes de exibi-la para evitar flashes
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatar-preview').src = e.target.result;
+                
+                // Faz uma transição suave
+                document.getElementById('avatar-placeholder').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('avatar-preview').style.display = 'block';
+                    document.getElementById('avatar-placeholder').style.display = 'none';
+                    setTimeout(() => {
+                        document.getElementById('avatar-preview').style.opacity = '1';
+                    }, 50);
+                }, 200);
+            }
+            reader.readAsDataURL(file);
+            
+            // Adiciona o botão de remover se não existir
+            if (!document.getElementById('remove-avatar')) {
+                const removeBtn = document.createElement('button');
+                removeBtn.id = 'remove-avatar';
+                removeBtn.type = 'button';
+                removeBtn.className = 'mt-2 text-xs text-red-500 underline hover:text-red-700 transition';
+                removeBtn.textContent = 'Remover foto';
+                removeBtn.addEventListener('click', removeAvatarHandler);
+                
+                // Adiciona após a div do avatar
+                const avatarContainer = document.querySelector('.group/avatar');
+                avatarContainer.parentNode.insertBefore(removeBtn, avatarContainer.nextSibling);
+                
+                // Cria campo hidden para remoção se não existir
+                if (!document.getElementById('remove_avatar_field')) {
+                    const hiddenField = document.createElement('input');
+                    hiddenField.type = 'hidden';
+                    hiddenField.id = 'remove_avatar_field';
+                    hiddenField.name = 'remove_avatar';
+                    hiddenField.value = 'false';
+                    avatarContainer.parentNode.insertBefore(hiddenField, removeBtn.nextSibling);
+                }
+            }
         }
     });
+    
+    function removeAvatarHandler(e) {
+        e.preventDefault();
+        
+        // Faz uma transição suave
+        document.getElementById('avatar-preview').style.opacity = '0';
+        setTimeout(() => {
+            document.getElementById('avatar-preview').style.display = 'none';
+            document.getElementById('avatar-placeholder').style.display = 'flex';
+            document.getElementById('avatar-preview').src = '';
+            setTimeout(() => {
+                document.getElementById('avatar-placeholder').style.opacity = '1';
+            }, 50);
+        }, 200);
+        
+        document.getElementById('id_avatar').value = '';
+        
+        // Marca o campo hidden para indicar que a foto deve ser removida
+        const removeField = document.getElementById('remove_avatar_field');
+        if (removeField) {
+            removeField.value = 'true';
+        } else {
+            // Cria o campo se não existir
+            const newRemoveField = document.createElement('input');
+            newRemoveField.type = 'hidden';
+            newRemoveField.id = 'remove_avatar_field';
+            newRemoveField.name = 'remove_avatar';
+            newRemoveField.value = 'true';
+            document.getElementById('profile-form').appendChild(newRemoveField);
+        }
+    }
+    
     const removeBtn = document.getElementById('remove-avatar');
     if (removeBtn) {
-        removeBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            document.getElementById('avatar-preview').src = '';
-            document.getElementById('avatar-preview').style.display = 'none';
-            document.getElementById('avatar-placeholder').style.display = 'block';
-            document.getElementById('id_avatar').value = '';
-        });
+        removeBtn.addEventListener('click', removeAvatarHandler);
     }
 </script>
 {% endblock %}

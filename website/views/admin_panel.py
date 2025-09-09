@@ -222,10 +222,8 @@ def visitors_list_view(request):
 
 @user_passes_test(is_admin)
 def events_list_view(request):
-    """Lista de eventos com filtros e busca"""
     events = Event.objects.all()
     
-    # Filtros
     search = request.GET.get('search', '')
     status_filter = request.GET.get('status', '')
     
