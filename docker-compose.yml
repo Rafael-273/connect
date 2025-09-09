@@ -11,12 +11,16 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - connect-network
 
   redis:
     image: "redis:alpine"
     restart: always
+    volumes:
+      - redis_data:/data
     networks:
       - connect-network
 
@@ -28,10 +32,13 @@ services:
     working_dir: /usr/src/platform
     command: >
       bash -c "
+        python manage.py collectstatic --noinput &&
+        python manage.py migrate &&
         python manage.py runserver ${HOSTNAME}:${PORT}
       "
     volumes:
       - ./:/usr/src/platform
+      - media_volume:/usr/src/platform/media
     ports:
       - "${PORT}:${PORT}"
     environment:
@@ -48,3 +55,8 @@ services:
 networks:
   connect-network:
     external: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_volume:

@@ -24,5 +24,9 @@ urlpatterns = [
     path('', include('website.urls')),
 ]
 
+# Servir arquivos de mídia tanto em desenvolvimento quanto em produção
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Para arquivos estáticos em modo DEBUG
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

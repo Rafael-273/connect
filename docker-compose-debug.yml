@@ -11,12 +11,16 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     restart: always
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - connect-network
 
   redis:
     image: "redis:alpine"
     restart: always
+    volumes:
+      - redis_data:/data
     networks:
       - connect-network
 
@@ -33,6 +37,7 @@ services:
     ]
     volumes:
       - ./:/usr/src/platform
+      - media_volume:/usr/src/platform/media
     ports:
       - "${PORT}:${PORT}"
       - "3000:3000"
@@ -49,5 +54,12 @@ services:
       - connect-network
 
 networks:
+  connect-network:
+    external: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_volume:
     connect-network:
         external: true
