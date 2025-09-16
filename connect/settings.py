@@ -201,12 +201,16 @@ if USE_S3:
     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
-    AWS_DEFAULT_ACL = None
+    AWS_DEFAULT_ACL = None  # Não usar ACLs para evitar o erro AccessControlListNotSupported
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     AWS_S3_OBJECT_PARAMETERS = {
         'CacheControl': 'max-age=86400',
     }
-    S3_USE_SIGV4 = True
+    S3_USE_SIGV4 = True  # Usar a assinatura v4 para solicitações
+    
+    # Configurações adicionais para resolver problemas de CORS
+    AWS_S3_REGION_NAME = os.getenv('AWS_S3_REGION_NAME', 'us-east-1')  # Região do bucket
+    AWS_QUERYSTRING_AUTH = False  # Desabilitar assinatura de URLs (melhor para CDN)
     
     # S3 media settings
     STORAGES['default'] = {
@@ -214,6 +218,8 @@ if USE_S3:
         'OPTIONS': {
             'location': 'media',
             'file_overwrite': False,
+            'default_acl': None,  # Não definir ACL nos arquivos
+            'querystring_auth': False,  # Não usar query string auth nas URLs
         }
     }
     
