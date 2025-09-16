@@ -195,18 +195,18 @@ USE_S3 = os.getenv('USE_S3', 'FALSE').upper() == 'TRUE'
 
 if USE_S3:
     print("✅ CONFIGURANDO S3 PARA ARMAZENAMENTO DE MÍDIA...")
-    # Add django-storages to INSTALLED_APPS
     INSTALLED_APPS.append('storages')
     
     # AWS settings
     AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
     AWS_STORAGE_BUCKET_NAME = os.getenv('AWS_STORAGE_BUCKET_NAME')
-    AWS_DEFAULT_ACL = 'public-read'
+    AWS_DEFAULT_ACL = None
     AWS_S3_CUSTOM_DOMAIN = f'{AWS_STORAGE_BUCKET_NAME}.s3.amazonaws.com'
     AWS_S3_OBJECT_PARAMETERS = {
         'CacheControl': 'max-age=86400',
     }
+    S3_USE_SIGV4 = True
     
     # S3 media settings
     STORAGES['default'] = {
