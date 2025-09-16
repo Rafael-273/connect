@@ -867,12 +867,46 @@ def event_edit_view(request, event_id=None):
             title = request.POST.get('title')
             slug = request.POST.get('slug')
             description = request.POST.get('description')
-            event_date = request.POST.get('event_date')
+            
+            # Recorrência
+            is_recurring = request.POST.get('is_recurring') == 'on'
+            
+            # Dependendo se é recorrente ou não, a data é processada de forma diferente
+            if is_recurring:
+                # Para eventos recorrentes, usamos o dia da semana
+                weekday = int(request.POST.get('weekday', 0))  # Default para Segunda-feira (0)
+                
+                # Encontrar a próxima data que corresponde ao dia da semana selecionado
+                today = timezone.now().date()
+                days_ahead = weekday - today.weekday()
+                if days_ahead < 0:  # Se o dia da semana já passou, vá para a próxima semana
+                    days_ahead += 7
+                event_date = today + timezone.timedelta(days=days_ahead)
+                
+                # Eventos recorrentes são sempre visíveis (definir datas bem distantes)
+                display_start = timezone.now().date() - timezone.timedelta(days=1)  # Ontem
+                display_end = timezone.now().date() + timezone.timedelta(days=3650)  # +10 anos
+            else:
+                # Para eventos normais, usamos a data específica
+                event_date = request.POST.get('event_date')
+                display_start = request.POST.get('display_start') or event_date
+                display_end = request.POST.get('display_end') or event_date
+            
             event_time = request.POST.get('event_time') or None
             location = request.POST.get('location') or None
             link_more_info = request.POST.get('link_more_info') or None
-            display_start = request.POST.get('display_start') or event_date
-            display_end = request.POST.get('display_end') or event_date
+            link_type = request.POST.get('link_type') or 'more_info'
+            
+            # Para eventos não recorrentes, usamos as datas de exibição do formulário
+            if not is_recurring:
+                display_start = request.POST.get('display_start') or event_date
+                display_end = request.POST.get('display_end') or event_date
+            # Para eventos recorrentes, as datas são definidas automaticamente (já configuradas acima)
+            
+            # Outras informações de recorrência
+            recurrence_pattern = request.POST.get('recurrence_pattern') if is_recurring else None
+            # Não precisamos mais do campo recurrence_description para eventos recorrentes
+            recurrence_description = None
             
             # Ensure slug is unique
             if not slug:
@@ -895,12 +929,23 @@ def event_edit_view(request, event_id=None):
                 event.event_time = event_time
                 event.location = location
                 event.link_more_info = link_more_info
+                event.link_type = link_type
                 event.display_start = display_start
                 event.display_end = display_end
+                
+                # Recorrência
+                event.is_recurring = is_recurring
+                event.recurrence_pattern = recurrence_pattern
+                event.recurrence_description = recurrence_description
+                
+                # Se for evento recorrente, atualize a data com base no dia da semana selecionado
+                if is_recurring and event_date:
+                    event.event_date = event_date  # Já calculamos a data correta acima
                 
                 # Handle banner
                 if 'banner' in request.FILES:
                     event.banner = request.FILES['banner']
+                    event.save()
                 
                 event.save()
                 messages.success(request, 'Evento atualizado com sucesso!')
@@ -914,8 +959,12 @@ def event_edit_view(request, event_id=None):
                     event_time=event_time,
                     location=location,
                     link_more_info=link_more_info,
+                    link_type=link_type,
                     display_start=display_start,
-                    display_end=display_end
+                    display_end=display_end,
+                    is_recurring=is_recurring,
+                    recurrence_pattern=recurrence_pattern,
+                    recurrence_description=recurrence_description
                 )
                 
                 # Handle banner

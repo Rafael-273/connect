@@ -14,7 +14,8 @@ class EventListView(ListView):
         query = self.request.GET.get('q', '')
         today = timezone.now().date()
         
-        queryset = Event.objects.all()
+        # Filtramos apenas eventos NÃO recorrentes
+        queryset = Event.objects.filter(is_recurring=False)
 
         if query:
             queryset = queryset.filter(
@@ -27,6 +28,10 @@ class EventListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['navbar_transparent'] = True
+        
+        # Adicionar eventos recorrentes separadamente
+        context['recurring_events'] = Event.objects.filter(is_recurring=True)
+        
         return context
 
 
@@ -39,7 +44,12 @@ class EventDetailView(DetailView):
         # First get the regular object
         obj = super().get_object(queryset)
         
-        # Check if it's visible based on display dates
+        # Check if it's visible based on display dates or if it's recurring
+        if obj.is_recurring:
+            # Eventos recorrentes são sempre visíveis
+            return obj
+            
+        # Para eventos não recorrentes, verificar datas de exibição
         today = timezone.now().date()
         if not (obj.display_start <= today <= obj.display_end):
             from django.http import Http404

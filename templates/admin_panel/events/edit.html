@@ -144,21 +144,56 @@
                             <p class="text-xs text-gray-500 mt-1">Usado na URL do evento. Apenas letras, números e hífens.</p>
                         </div>
                         
+                        <!-- Configuração de Recorrência -->
                         <div class="form-group">
+                            <div class="flex items-center">
+                                <input type="checkbox" id="is_recurring" name="is_recurring" class="mr-2 h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)]" 
+                                       {% if event.is_recurring %}checked{% endif %}>
+                                <label for="is_recurring" class="form-label m-0">Evento Recorrente</label>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Marque se o evento ocorre regularmente (semanal, mensal, etc.)</p>
+                        </div>
+                        
+                        <div class="form-group recurrence-options" id="recurrenceOptions">
+                            <label class="form-label">Padrão de Recorrência</label>
+                            <select name="recurrence_pattern" class="form-input">
+                                <option value="">Selecione...</option>
+                                <option value="weekly" {% if event.recurrence_pattern == 'weekly' %}selected{% endif %}>Semanal</option>
+                                <option value="biweekly" {% if event.recurrence_pattern == 'biweekly' %}selected{% endif %}>Quinzenal</option>
+                                <option value="monthly" {% if event.recurrence_pattern == 'monthly' %}selected{% endif %}>Mensal</option>
+                                <option value="custom" {% if event.recurrence_pattern == 'custom' %}selected{% endif %}>Personalizado</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Selecione a frequência com que o evento se repete</p>
+                        </div>
+                        
+                        <div class="form-group event-date-field">
                             <label class="form-label">Data do Evento *</label>
                             <input type="date" name="event_date" 
-                                   value="{% if event.event_date %}{{ event.event_date|date:'Y-m-d' }}{% endif %}" 
+                                   value="{% if event.event_date and not event.is_recurring %}{{ event.event_date|date:'Y-m-d' }}{% endif %}" 
                                    class="form-input" required>
                         </div>
                         
-                        <div class="form-group">
-                            <label class="form-label">Horário do Evento</label>
-                            <input type="time" name="event_time" 
-                                   value="{% if event.event_time %}{{ event.event_time|time:'H:i' }}{% endif %}" 
-                                   class="form-input">
+                        <div class="form-group recurrence-weekday-field" style="display: none;">
+                            <label class="form-label">Dia da Semana *</label>
+                            <select name="weekday" class="form-input">
+                                <option value="0" {% if event.is_recurring and event.event_date.weekday == 0 %}selected{% endif %}>Segunda-feira</option>
+                                <option value="1" {% if event.is_recurring and event.event_date.weekday == 1 %}selected{% endif %}>Terça-feira</option>
+                                <option value="2" {% if event.is_recurring and event.event_date.weekday == 2 %}selected{% endif %}>Quarta-feira</option>
+                                <option value="3" {% if event.is_recurring and event.event_date.weekday == 3 %}selected{% endif %}>Quinta-feira</option>
+                                <option value="4" {% if event.is_recurring and event.event_date.weekday == 4 %}selected{% endif %}>Sexta-feira</option>
+                                <option value="5" {% if event.is_recurring and event.event_date.weekday == 5 %}selected{% endif %}>Sábado</option>
+                                <option value="6" {% if event.is_recurring and event.event_date.weekday == 6 %}selected{% endif %}>Domingo</option>
+                            </select>
                         </div>
                         
                         <div class="form-group">
+                            <label class="form-label">Horário do Evento *</label>
+                            <input type="time" name="event_time" 
+                                   value="{% if event.event_time %}{{ event.event_time|time:'H:i' }}{% endif %}" 
+                                   class="form-input" required>
+                        </div>
+                        
+                        <div class="form-group display-date-fields">
                             <label class="form-label">Data Início de Exibição *</label>
                             <input type="date" name="display_start" 
                                    value="{% if event.display_start %}{{ event.display_start|date:'Y-m-d' }}{% endif %}" 
@@ -166,7 +201,7 @@
                             <p class="text-xs text-gray-500 mt-1">A partir de quando o evento aparecerá no site</p>
                         </div>
                         
-                        <div class="form-group">
+                        <div class="form-group display-date-fields">
                             <label class="form-label">Data Fim de Exibição *</label>
                             <input type="date" name="display_end" 
                                    value="{% if event.display_end %}{{ event.display_end|date:'Y-m-d' }}{% endif %}" 
@@ -184,6 +219,18 @@
                             <label class="form-label">Link para Mais Informações</label>
                             <input type="url" name="link_more_info" value="{{ event.link_more_info|default:'' }}" 
                                    class="form-input" placeholder="https://exemplo.com/evento">
+                        </div>
+
+                        <div class="form-group md:col-span-2">
+                            <label class="form-label">Tipo de Link</label>
+                            <select name="link_type" class="form-input">
+                                <option value="more_info" {% if event.link_type == 'more_info' %}selected{% endif %}>Saiba Mais</option>
+                                <option value="registration" {% if event.link_type == 'registration' %}selected{% endif %}>Inscrição</option>
+                                <option value="instagram" {% if event.link_type == 'instagram' %}selected{% endif %}>Instagram</option>
+                                <option value="contact" {% if event.link_type == 'contact' %}selected{% endif %}>Contato</option>
+                                <option value="other" {% if event.link_type == 'other' %}selected{% endif %}>Outro</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">Define como o botão será exibido no site</p>
                         </div>
                     </div>
                     
@@ -245,5 +292,57 @@
     document.querySelector('input[name="slug"]').addEventListener('input', function(e) {
         e.target.setAttribute('data-auto', 'false');
     });
+    
+    // Toggle recurrence options visibility
+    const isRecurringCheckbox = document.getElementById('is_recurring');
+    const recurrenceOptions = document.querySelectorAll('.recurrence-options');
+    const eventDateField = document.querySelector('.event-date-field');
+    const recurrenceWeekdayField = document.querySelector('.recurrence-weekday-field');
+    const displayDateFields = document.querySelectorAll('.display-date-fields');
+    
+    function toggleRecurrenceOptions() {
+        const isRecurring = isRecurringCheckbox.checked;
+        
+        // Mostrar/esconder opções de recorrência
+        recurrenceOptions.forEach(option => {
+            option.style.display = isRecurring ? 'block' : 'none';
+        });
+        
+        // Alternar entre campo de data específica e dia da semana
+        eventDateField.style.display = isRecurring ? 'none' : 'block';
+        recurrenceWeekdayField.style.display = isRecurring ? 'block' : 'none';
+        
+        // Mostrar/esconder campos de datas de exibição para eventos recorrentes
+        displayDateFields.forEach(field => {
+            field.style.display = isRecurring ? 'none' : 'block';
+        });
+        
+        // Atualizar propriedade required dos campos
+        const eventDateInput = eventDateField.querySelector('input');
+        const weekdaySelect = recurrenceWeekdayField.querySelector('select');
+        const displayInputs = document.querySelectorAll('.display-date-fields input');
+        
+        if (isRecurring) {
+            eventDateInput.removeAttribute('required');
+            weekdaySelect.setAttribute('required', 'required');
+            // Remover required das datas de exibição para eventos recorrentes
+            displayInputs.forEach(input => {
+                input.removeAttribute('required');
+            });
+        } else {
+            eventDateInput.setAttribute('required', 'required');
+            weekdaySelect.removeAttribute('required');
+            // Adicionar required nas datas de exibição para eventos não recorrentes
+            displayInputs.forEach(input => {
+                input.setAttribute('required', 'required');
+            });
+        }
+    }
+    
+    // Initialize visibility on page load
+    toggleRecurrenceOptions();
+    
+    // Add event listener for checkbox changes
+    isRecurringCheckbox.addEventListener('change', toggleRecurrenceOptions);
 </script>
 {% endblock %}

@@ -60,7 +60,7 @@ Eventos
         background: linear-gradient(135deg, rgba(var(--color-danger-rgb), 0.15), rgba(var(--color-danger-rgb), 0.05));
         border: 1px solid rgba(var(--color-danger-rgb), 0.2);
     }
-    
+
     .saiba-mais-btn {
         background: var(--color-danger);
         transition: all 0.3s ease;
@@ -69,6 +69,59 @@ Eventos
     .saiba-mais-btn:hover {
         background: linear-gradient(to right, var(--color-danger), #ff4d4d);
         transform: translateX(5px);
+    }
+    
+    .action-btn {
+        background: var(--color-danger);
+        transition: all 0.3s ease;
+    }
+    
+    .action-btn:hover {
+        background: var(--color-danger);
+        transform: translateX(5px);
+    }
+    
+    .recurring-event {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 450px; /* Aumentando a altura mínima do card */
+    }
+    
+    .recurring-event::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 4px;
+        background: var(--color-primary); /* Alterado de gradiente roxo para cor primária */
+        transform: scaleY(0);
+        transform-origin: top;
+        transition: transform 0.4s ease;
+    }
+    
+    .recurring-event:hover::before {
+        transform: scaleY(1);
+    }
+    
+    .event-section-title {
+        position: relative;
+    }
+    
+    .event-section-title::after {
+        content: '';
+        position: absolute;
+        bottom: -10px;
+        left: 0;
+        width: 60px;
+        height: 3px;
+        background: var(--color-danger);
+    }
+    
+    .fixed-events {
+        margin-bottom: 40px;
     }
 </style>
 
@@ -161,7 +214,14 @@ Eventos
     </form>
 
 </div>
+
 <div class="articles flex flex-col gap-8 w-full py-8 px-6 md:px-12 justify-center">
+    {% if events %}
+    <div class="event-section-title mb-4">
+        <h2 class="text-3xl font-bold text-white">Próximos <span style="color: var(--color-danger);">Eventos</span></h2>
+        <p class="text-gray-300 mt-2">Confira nossa agenda de eventos especiais</p>
+    </div>
+    
     {% for event in events %}
         {% if event.is_visible %}
             <div class="event p-5 rounded-xl shadow-lg flex flex-col md:flex-row gap-4 h-auto md:h-[25rem] transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-xl" style="background-color: #0d0d0d; border: 1px solid rgba(255,255,255,0.05);">
@@ -180,16 +240,46 @@ Eventos
                                 </h2>
                             </a>
                             <div class="date-badge flex items-center justify-center px-6 py-2 md:mt-0 md:w-1/3 mt-2 w-full rounded-lg text-white bg-[var(--color-danger)]">
-                                <ion-icon name="calendar-outline" class="mr-2 text-xl"></ion-icon>
-                                <span>
-                                    {{ event.event_date|date:"d/m" }} • {{ event.event_time|time:"H" }}h
-                                </span>
+                                {% if event.is_recurring %}
+                                    <ion-icon name="repeat-outline" class="mr-2 text-xl"></ion-icon>
+                                {% else %}
+                                    <ion-icon name="calendar-outline" class="mr-2 text-xl"></ion-icon>
+                                {% endif %}
+                                    <span>
+                                        {% if event.is_recurring %}
+                                        {{ event.get_weekday_name }} • {{ event.event_time|time:"H" }}h
+                                        <span class="ml-1 text-xs bg-purple-700 px-1 py-0.5 rounded-full">Recorrente</span>
+                                        {% else %}
+                                        {{ event.event_date|date:"d/m" }} • {{ event.event_time|time:"H" }}h
+                                        {% endif %}
+                                    </span>
                             </div>
                         </div>
                         <p class="mt-4 text-gray-300 text-center md:text-left text-sm md:text-base leading-relaxed">{{ event.description }}</p>
+                        
+                        {% if event.is_recurring %}
+                        <div class="flex items-center gap-2 mt-3 text-sm text-gray-300">
+                            <span class="flex items-center">
+                                <ion-icon name="repeat-outline" class="mr-1 text-[var(--color-danger)]"></ion-icon>
+                                {% if event.recurrence_pattern == 'weekly' %}
+                                    Evento semanal
+                                {% elif event.recurrence_pattern == 'biweekly' %}
+                                    Evento quinzenal
+                                {% elif event.recurrence_pattern == 'monthly' %}
+                                    Evento mensal
+                                {% endif %}
+                            </span>
+                        </div>
+                        {% endif %}
                     </div>
                     <a href="{% url 'event_detail' slug=event.slug %}" class="saiba-mais-btn mt-6 md:mt-0 w-full md:w-auto md:self-start flex justify-center items-center gap-2 px-6 py-3 rounded-lg text-white transition-all duration-300 hover:shadow-lg">
-                        <h3 class="text-sm md:text-base font-medium">Saiba Mais</h3>
+                        <h3 class="text-sm md:text-base font-medium">
+                            {% if event.link_type == 'registration' %}
+                                Inscreva-se
+                            {% else %}
+                                Saiba Mais
+                            {% endif %}
+                        </h3>
                         <ion-icon name="arrow-forward" class="text-lg md:text-xl"></ion-icon>
                     </a>
                 </div>
@@ -201,7 +291,65 @@ Eventos
             </div>
         {% endif %}
     {% endfor %}
+    {% else %}
+    <div class="text-center py-12">
+        <ion-icon name="calendar-outline" class="text-5xl text-gray-500 mb-4"></ion-icon>
+        <p class="text-gray-400 text-lg">Nenhum evento encontrado.</p>
+    </div>
+    {% endif %}
 </div>
+
+{% if recurring_events %}
+<div class="fixed-events flex flex-col w-full py-8 px-6 md:px-12">
+    <div class="event-section-title mb-12">
+        <h2 class="text-3xl font-bold text-white">Eventos Fixos <span style="color: var(--color-danger);">da Igreja</span></h2>
+        <p class="text-gray-300 mt-2">Programação que acontece regularmente todas as semanas</p>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for event in recurring_events %}
+            <div class="recurring-event p-5 rounded-xl shadow-lg flex flex-col transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-xl" 
+                 style="background-color: #0d0d0d; border: 1px solid rgba(255,255,255,0.05);">
+                <div class="cover-event w-full h-[250px] flex-shrink-0 overflow-hidden rounded-lg mb-4">
+                    <a href="{% url 'event_detail' slug=event.slug %}" class="block h-full">
+                        <img src="{{ event.banner.url }}" alt="{{ event.title }}" class="w-full h-full object-cover rounded-lg transition-transform duration-500 hover:scale-105" />
+                    </a>
+                </div>
+
+                <div class="recurring-event-content flex flex-col justify-between flex-grow">
+                    <div>
+                        <div class="flex f justify-between items-start mb-3">
+                            <a href="{% url 'event_detail' slug=event.slug %}" class="group">
+                                <h2 class="text-white text-2xl font-bold transition-colors duration-300">
+                                    {{ event.title }}
+                                </h2>
+                            </a>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 text-white mb-3">
+                            <ion-icon name="time-outline" class="text-[var(--color-primary)]"></ion-icon>
+                            <span>{{ event.get_weekday_name }} • {{ event.event_time|time:"H" }}h</span>
+                        </div>
+                        
+                        <p class="text-gray-400 text-sm line-clamp-4 mb-5">{{ event.description|truncatewords:20 }}</p>
+                    </div>
+                    
+                    <a href="{% url 'event_detail' slug=event.slug %}" class="saiba-mais-btn mt-auto w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-white font-medium transition-all duration-300 hover:shadow-lg">
+                        <h3 class="text-sm font-medium">
+                            {% if event.link_type == 'registration' %}
+                                Inscreva-se
+                            {% else %}
+                                Saiba Mais
+                            {% endif %}
+                        </h3>
+                        <ion-icon name="arrow-forward" class="text-lg"></ion-icon>
+                    </a>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 <script>
     $(document).ready(function () {

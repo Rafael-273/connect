@@ -50,7 +50,7 @@
     }
     
     .date-badge {
-        background: linear-gradient(135deg, var(--color-danger), #ff4d4d);
+        background: var(--color-danger);
         border-radius: 8px;
         padding: 8px 16px;
         color: white;
@@ -154,7 +154,7 @@
                 <div>
                     <div class="flex flex-col gap-3 mb-6">
                         <div class="date-badge self-start mb-2">
-                            <ion-icon name="calendar-outline" class="mr-2 text-xl text-white"></ion-icon>
+                                <ion-icon name="calendar-outline" class="mr-2 text-xl text-white"></ion-icon>
                             {{ event.event_date|date:"d/m" }} • 
                             {{ event.event_time|time:"H" }}h
                         </div>
@@ -167,25 +167,58 @@
                     <div class="mb-6">
                         <p class="text-gray-300 text-base leading-relaxed mb-6">{{ event.description }}</p>
                         
+                        {% if event.is_recurring %}
+                        <div class="flex items-center gap-2 text-gray-200 mb-2">
+                            <ion-icon name="repeat-outline" class="text-xl text-[var(--color-danger)]"></ion-icon>
+                            <h3 class="text-lg font-medium">Recorrência</h3>
+                        </div>
+                        <p class="text-gray-300 ml-7 mb-4">
+                            {% if event.recurrence_pattern == 'weekly' %}
+                                Evento semanal
+                            {% elif event.recurrence_pattern == 'biweekly' %}
+                                Evento quinzenal
+                            {% elif event.recurrence_pattern == 'monthly' %}
+                                Evento mensal
+                            {% endif %}
+                            {% if event.recurrence_description %}
+                                <br/>{{ event.recurrence_description }}
+                            {% endif %}
+                        </p>
+                        {% endif %}
+                        
+                        {% if event.location %}
                         <div class="flex items-center gap-2 text-gray-200 mb-2">
                             <ion-icon name="location-outline" class="text-xl text-[var(--color-danger)]"></ion-icon>
                             <h3 class="text-lg font-medium">Local</h3>
                         </div>
                         <p class="text-gray-300 ml-7">{{ event.location }}</p>
+                        {% endif %}
                     </div>
                 </div>
                 
                 {% if event.link_more_info %}
                     <a href="{{ event.link_more_info }}" target="_blank" class="w-full">
-                        <div class="register-btn text-center cursor-pointer py-4 text-white font-bold text-lg flex items-center justify-center gap-2">
-                            Inscreva-se agora
-                            <ion-icon name="arrow-forward-outline" class="text-xl"></ion-icon>
+                        <div class="register-btn text-center cursor-pointer py-4 text-white font-bold text-lg flex items-center justify-center gap-2" 
+                             style="background-color: var(--color-danger);">
+                            {% if event.link_type == 'registration' %}
+                                Inscreva-se
+                                <ion-icon name="arrow-forward-outline" class="text-xl"></ion-icon>
+                            {% elif event.link_type == 'instagram' %}
+                                Ver no Instagram
+                                <ion-icon name="logo-instagram" class="text-xl"></ion-icon>
+                            {% elif event.link_type == 'contact' %}
+                                Entre em contato
+                                <ion-icon name="chatbubble-outline" class="text-xl"></ion-icon>
+                            {% else %}
+                                Saiba mais
+                                <ion-icon name="arrow-forward-outline" class="text-xl"></ion-icon>
+                            {% endif %}
                         </div>
                     </a>
                 {% else %}
                     <div class="rounded-lg text-center py-4 text-white bg-gray-700 font-medium flex items-center justify-center gap-2">
-                        <ion-icon name="close-circle-outline" class="text-xl"></ion-icon>
-                        Inscrições encerradas
+                        <ion-icon name="information-circle-outline" class="text-xl"></ion-icon>
+                        Sem link adicional
                     </div>
                 {% endif %}
             </div>
@@ -208,7 +241,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Add hover effect to registration button
+        // Add hover effect to link button
         const registerBtn = document.querySelector('.register-btn');
         if (registerBtn) {
             registerBtn.addEventListener('mouseenter', function() {
