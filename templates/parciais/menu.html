@@ -29,9 +29,14 @@
         </a>
     </nav>
 
-    <ul id="mobile-menu" class="md:hidden flex-col items-center space-y-6 mt-2 py-4 absolute w-full top-20 hidden p-4" style="z-index: 1; background-color: var(--color-danger);">
-        <li class="p-2"><a href="" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Início</a></li>
-        <li class="p-2"><a href="{% url 'event_list' %}" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Eventos</a></li>
+    <ul id="mobile-menu" class="md:hidden flex-col items-center space-y-6 mt-2 py-4 absolute w-full top-20 hidden p-4"
+        style="z-index: 1; background-color: {% if request.resolver_match.url_name == 'event_list' %}var(--color-danger){% else %}var(--color-primary){% endif %};">
+        <li class="p-2">
+            <a href="" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Início</a>
+        </li>
+        <li class="p-2">
+            <a href="{% url 'event_list' %}" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Eventos</a>
+        </li>
     </ul>
 </header>
 

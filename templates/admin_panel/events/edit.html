@@ -105,30 +105,30 @@
     {% include 'parciais/admin_sidebar.html' %}
 
     <!-- Main Content -->
-    <div class="flex-1 ml-64">
-        <div class="p-6 mt-24">
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-3 md:p-6 mt-24">
             <!-- Header -->
-            <div class="flex justify-between items-center mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
                 <div>
-                    <h1 class="text-3xl font-bold text-gray-900">
+                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900">
                         {% if event %}Editar Evento{% else %}Novo Evento{% endif %}
                     </h1>
                     <p class="text-gray-600 mt-2">
                         {% if event %}Atualizar informações do evento{% else %}Criar novo evento da igreja{% endif %}
                     </p>
                 </div>
-                <a href="{% url 'admin_events_list' %}" class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center">
+                <a href="{% url 'admin_events_list' %}" class="bg-gray-500 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg hover:bg-opacity-90 transition flex items-center mt-4 md:mt-0">
                     <ion-icon name="arrow-back" class="mr-2"></ion-icon>
                     Voltar à Lista
                 </a>
             </div>
 
             <!-- Form -->
-            <div class="admin-card p-8">
+            <div class="admin-card p-4 md:p-8">
                 <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                         <!-- Informações Básicas -->
                         <div class="form-group">
                             <label class="form-label">Título do Evento *</label>

@@ -57,7 +57,130 @@
                 navbar.removeClass('menu-scroll');
             }
         });
+        
+        // Mobile admin sidebar toggle
+        $('#mobile-sidebar-toggle').on('click', function() {
+            $('#mobile-admin-sidebar').removeClass('hidden').addClass('flex');
+            $('#mobile-sidebar-content').removeClass('-translate-x-full').addClass('translate-x-0');
+        });
+        
+        $('#close-mobile-sidebar').on('click', function() {
+            closeMobileSidebar();
+        });
+        
+        // Close sidebar when clicking outside
+        $('#mobile-admin-sidebar').on('click', function(e) {
+            if (e.target === this) {
+                closeMobileSidebar();
+            }
+        });
+        
+        function closeMobileSidebar() {
+            $('#mobile-sidebar-content').removeClass('translate-x-0').addClass('-translate-x-full');
+            setTimeout(function() {
+                $('#mobile-admin-sidebar').removeClass('flex').addClass('hidden');
+            }, 300);
+        }
     });
 </script>
+
+<style>
+    /* Desktop and Mobile admin styling */
+    @media screen and (min-width: 769px) {
+        .main-content-wrapper {
+            margin-left: 16rem !important; /* 64 * 0.25rem = 16rem */
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .main-content-wrapper {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+        
+        .admin-card {
+            padding: 0.75rem !important;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem !important;
+        }
+        
+        .grid {
+            gap: 1rem !important;
+        }
+        
+        /* Buttons in header sections */
+        .header-actions {
+            flex-direction: column !important;
+            width: 100% !important;
+            gap: 0.5rem !important;
+        }
+        
+        /* Responsive tables */
+        .table-responsive {
+            display: block;
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        /* Responsive form layouts */
+        .form-row {
+            flex-direction: column !important;
+        }
+        
+        /* Fix for flex items in mobile view */
+        .flex-col-mobile {
+            flex-direction: column !important;
+        }
+    }
+    
+    /* Improved form responsiveness */
+    @media (max-width: 640px) {
+        .form-input, .form-textarea {
+            font-size: 16px !important; /* Prevent zoom on iOS */
+        }
+        
+        /* Header title adjustments for mobile */
+        h1.page-title {
+            font-size: 1.5rem !important;
+        }
+        
+        /* Card adjustments for very small screens */
+        .admin-card {
+            border-radius: 8px !important;
+        }
+    }
+    
+    /* Sidebar styling */
+    .sidebar {
+        background: white;
+        min-height: 100vh;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .sidebar-item:hover, .sidebar-item.active {
+        background-color: #f1f5f9;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+        text-decoration: none;
+    }
+    
+    .sidebar-item ion-icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+</style>
 </body>
 </html>

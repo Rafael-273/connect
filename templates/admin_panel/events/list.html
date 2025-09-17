@@ -92,8 +92,8 @@
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
 
-    <div class="flex-1 ml-64">
-        <div class="p-6 mt-24">
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-3 md:p-6 mt-24">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
                 <div class="mb-4 sm:mb-0">
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Eventos</h1>
@@ -141,38 +141,42 @@
                             <table class="w-full table-fixed">
                                 <thead class="bg-gray-50">
                                     <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3 md:w-1/4">Evento</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6">Data/Hora</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6 hidden md:table-cell">Local</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Status</th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Ações</th>
+                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3 md:w-1/4">Evento</th>
+                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6 hidden sm:table-cell">Data/Hora</th>
+                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6 hidden md:table-cell">Local</th>
+                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Status</th>
+                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Ações</th>
                                     </tr>
                                 </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
                             {% for event in events %}
                             <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4">
+                                <td class="px-2 md:px-6 py-4">
                                     <div class="flex items-center">
                                         {% if event.banner %}
-                                        <img class="event-banner flex-shrink-0" src="{{ event.banner.url }}" alt="{{ event.title }}">
+                                        <img class="event-banner flex-shrink-0 hidden sm:block" src="{{ event.banner.url }}" alt="{{ event.title }}">
                                         {% else %}
-                                        <div class="event-banner flex-shrink-0 bg-[var(--color-primary)] flex items-center justify-center text-white font-bold">
+                                        <div class="event-banner flex-shrink-0 bg-[var(--color-primary)] hidden sm:flex items-center justify-center text-white font-bold">
                                             <ion-icon name="calendar"></ion-icon>
                                         </div>
                                         {% endif %}
-                                        <div class="ml-3 min-w-0 flex-1">
+                                        <div class="ml-0 sm:ml-3 min-w-0 flex-1">
                                             <div class="text-sm font-medium text-gray-900 truncate">{{ event.title }}</div>
-                                            <div class="text-xs text-gray-500 truncate">{{ event.description|truncatewords:8 }}</div>
+                                            <div class="text-xs text-gray-500 truncate hidden sm:block">{{ event.description|truncatewords:8 }}</div>
+                                            <div class="text-xs text-gray-500 sm:hidden">
+                                                {{ event.event_date|date:"d/m/Y" }}
+                                                {% if event.event_time %} • {{ event.event_time|time:"H:i" }}h{% endif %}
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="px-2 md:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
                                     <div class="text-sm text-gray-900">{{ event.event_date|date:"d/m/Y" }}</div>
                                     {% if event.event_time %}
                                     <div class="text-xs text-gray-500">{{ event.event_time|time:"H:i" }}h</div>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 hidden md:table-cell">
+                                <td class="px-2 md:px-6 py-4 hidden md:table-cell">
                                     <div class="text-sm text-gray-900 truncate">{{ event.location|default:"--" }}</div>
                                     {% if event.link_more_info %}
                                     <a href="{{ event.link_more_info }}" target="_blank" class="text-xs text-[var(--color-primary)] hover:underline truncate block">
@@ -180,15 +184,15 @@
                                     </a>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4">
+                                <td class="px-2 md:px-6 py-4">
                                     {% now "Y-m-d" as today %}
                                     {% if event.event_date|date:"Y-m-d" >= today %}
-                                    <span class="status-badge status-upcoming inline-flex items-center">
+                                    <span class="status-badge status-upcoming inline-flex items-center text-[10px] md:text-xs">
                                         <ion-icon name="time" class="mr-1 text-xs"></ion-icon>
                                         <span class="truncate">Próximo</span>
                                     </span>
                                     {% else %}
-                                    <span class="status-badge status-past inline-flex items-center">
+                                    <span class="status-badge status-past inline-flex items-center text-[10px] md:text-xs">
                                         <ion-icon name="checkmark-circle" class="mr-1 text-xs"></ion-icon>
                                         <span class="truncate">Realizado</span>
                                     </span>
@@ -196,21 +200,21 @@
                                     
                                     {% if event.display_start|date:"Y-m-d" <= today and event.display_end|date:"Y-m-d" >= today %}
                                     <div class="mt-1">
-                                        <span class="status-badge inline-flex items-center" style="background-color: #dcfce7; color: #166534;">
+                                        <span class="status-badge inline-flex items-center text-[10px] md:text-xs" style="background-color: #dcfce7; color: #166534;">
                                             <ion-icon name="eye" class="mr-1 text-xs"></ion-icon>
                                             <span class="truncate">Visível</span>
                                         </span>
                                     </div>
                                     {% else %}
                                     <div class="mt-1">
-                                        <span class="status-badge inline-flex items-center" style="background-color: #fee2e2; color: #991b1b;">
+                                        <span class="status-badge inline-flex items-center text-[10px] md:text-xs" style="background-color: #fee2e2; color: #991b1b;">
                                             <ion-icon name="eye-off" class="mr-1 text-xs"></ion-icon>
                                             <span class="truncate">Oculto</span>
                                         </span>
                                     </div>
                                     {% endif %}
                                 </td>
-                                <td class="px-2 py-4">
+                                <td class="px-1 md:px-2 py-4">
                                     <div class="flex items-center justify-around space-x-1">
                                         <a href="{% url 'event_detail' slug=event.slug %}" target="_blank"
                                            class="text-[var(--color-primary)] hover:text-opacity-80 p-1">
@@ -242,24 +246,24 @@
                 </div>
 
                 {% if events.has_other_pages %}
-                <div class="px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between">
-                    <div class="text-sm text-gray-500 mb-4 sm:mb-0">
+                <div class="px-3 md:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between">
+                    <div class="text-xs md:text-sm text-gray-500 mb-4 sm:mb-0 text-center sm:text-left">
                         Mostrando {{ events.start_index }} a {{ events.end_index }} de {{ events.paginator.count }} eventos
                     </div>
-                    <div class="flex flex-wrap gap-2 justify-center">
+                    <div class="flex flex-wrap gap-1 md:gap-2 justify-center">
                         {% if events.has_previous %}
                         <a href="?page={{ events.previous_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                           class="px-2 md:px-3 py-1 border border-gray-300 rounded text-xs md:text-sm text-gray-600 hover:bg-gray-50">
                             Anterior
                         </a>
                         {% endif %}
                         
                         {% for num in events.paginator.page_range %}
                         {% if num == events.number %}
-                        <span class="px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm">{{ num }}</span>
+                        <span class="px-2 md:px-3 py-1 bg-[var(--color-primary)] text-white rounded text-xs md:text-sm">{{ num }}</span>
                         {% elif num > events.number|add:'-3' and num < events.number|add:'3' %}
                         <a href="?page={{ num }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                           class="px-2 md:px-3 py-1 border border-gray-300 rounded text-xs md:text-sm text-gray-600 hover:bg-gray-50">
                             {{ num }}
                         </a>
                         {% endif %}
@@ -267,7 +271,7 @@
                         
                         {% if events.has_next %}
                         <a href="?page={{ events.next_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                           class="px-2 md:px-3 py-1 border border-gray-300 rounded text-xs md:text-sm text-gray-600 hover:bg-gray-50">
                             Próximo
                         </a>
                         {% endif %}
