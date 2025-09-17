@@ -32,7 +32,14 @@ from ..forms.canteen import CanteenDebtorForm
 User = get_user_model()
 
 def is_admin(user):
-    return user.is_authenticated and user.is_staff
+    """Verifica se o usuário tem acesso ao painel administrativo"""
+    return user.is_authenticated and user.has_admin_access()
+
+def has_module_permission(module_name):
+    """Retorna uma função que verifica se o usuário tem permissão para um módulo específico"""
+    def check_permission(user):
+        return user.is_authenticated and (user.is_superuser or user.has_module_permission(module_name))
+    return check_permission
 
 
 @user_passes_test(is_admin)
@@ -176,7 +183,7 @@ def members_list_view(request):
     return render(request, 'admin_panel/members/list.html', context)
 
 
-@user_passes_test(is_admin)
+@user_passes_test(has_module_permission('visitors'))
 def visitors_list_view(request):
     """Lista de visitantes com filtros e busca"""
     visitors = Visitor.objects.select_related('neighborhood').all().order_by('-visit_date', '-id')
@@ -222,7 +229,7 @@ def visitors_list_view(request):
     return render(request, 'admin_panel/visitors/list.html', context)
 
 
-@user_passes_test(is_admin)
+@user_passes_test(has_module_permission('events'))
 def events_list_view(request):
     events = Event.objects.all()
     
@@ -486,6 +493,7 @@ def member_edit_view(request, member_id=None):
             available_days = request.POST.get('available_days') or None
             is_available_to_consolidate = request.POST.get('is_available_to_consolidate') == 'on'
             is_available_to_disciple = request.POST.get('is_available_to_disciple') == 'on'
+            user_type = request.POST.get('user_type') or 'member'  # Tipo de usuário, default: membro normal
             
             # Validações obrigatórias
             if not name:
@@ -530,6 +538,10 @@ def member_edit_view(request, member_id=None):
                 # Update user email if provided
                 if email and member.user:
                     member.user.email = email
+                    # Atualizar tipo de usuário
+                    member.user.user_type = user_type
+                    # Atualizar is_staff com base no tipo de usuário
+                    member.user.is_staff = user_type != 'member'
                     member.user.save()
                 
                 # Handle profile picture
@@ -547,7 +559,9 @@ def member_edit_view(request, member_id=None):
                 
                 user = User.objects.create_user(
                     email=email,
-                    password='senha_temporaria123'
+                    password='123',  # Senha padrão
+                    user_type=user_type,  # Tipo de usuário
+                    is_staff=user_type != 'member'  # Is staff baseado no tipo
                 )
                 
                 member = Member.objects.create(
@@ -606,7 +620,7 @@ def member_edit_view(request, member_id=None):
     return render(request, 'admin_panel/members/edit.html', context)
 
 
-@user_passes_test(is_admin)
+@user_passes_test(has_module_permission('visitors'))
 def visitor_edit_view(request, visitor_id=None):
     """Criar ou editar visitante"""
     visitor = None
@@ -851,7 +865,7 @@ def visitor_edit_view(request, visitor_id=None):
     return render(request, 'admin_panel/visitors/edit.html', context)
 
 
-@user_passes_test(is_admin)
+@user_passes_test(has_module_permission('events'))
 def event_edit_view(request, event_id=None):
     """Criar ou editar evento"""
     event = None
@@ -1147,7 +1161,8 @@ def convert_visitor_to_member(visitor):
                 # Criar user
                 user = User.objects.create_user(
                     email=email,
-                    password='senha_temporaria123'  # Senha padrão
+                    password='123',  # Senha padrão
+                    user_type='member'  # Tipo de usuário padrão
                 )
                 print(f"Usuário criado com sucesso: {email}")
             except Exception as e:
@@ -1156,7 +1171,8 @@ def convert_visitor_to_member(visitor):
                 email = f"membro_{uuid.uuid4().hex[:12]}@autogerado.com"
                 user = User.objects.create_user(
                     email=email,
-                    password='senha_temporaria123'
+                    password='123',
+                    user_type='member'
                 )
                 print(f"Usuário criado com email alternativo: {email}")
         
@@ -1208,6 +1224,7 @@ def convert_visitor_to_member(visitor):
 # === FOLLOW UP VIEWS ===
 
 @login_required
+@user_passes_test(has_module_permission('consolidation'))
 def followup_list_view(request):
     """Listar follow-ups"""
     followups = FollowUp.objects.select_related('accompanied', 'responsible').order_by('-created_at')
@@ -1246,6 +1263,7 @@ def followup_list_view(request):
     })
 
 @login_required
+@user_passes_test(has_module_permission('consolidation'))
 def followup_edit_view(request, followup_id=None):
     """Criar ou editar follow-up"""
     followup = None
@@ -1269,6 +1287,7 @@ def followup_edit_view(request, followup_id=None):
     })
 
 @login_required
+@user_passes_test(has_module_permission('consolidation'))
 def followup_delete_view(request, followup_id):
     """Deletar follow-up"""
     followup = get_object_or_404(FollowUp, id=followup_id)
@@ -1283,6 +1302,7 @@ def followup_delete_view(request, followup_id):
     })
 
 @login_required
+@user_passes_test(has_module_permission('consolidation'))
 def followup_report_view(request, followup_id):
     """Adicionar relatório ao follow-up"""
     followup = get_object_or_404(FollowUp, id=followup_id)
@@ -1306,6 +1326,7 @@ def followup_report_view(request, followup_id):
     })
 
 @login_required
+@user_passes_test(has_module_permission('consolidation'))
 def followup_detail_view(request, followup_id):
     """Detalhes do follow-up com relatórios"""
     followup = get_object_or_404(FollowUp, id=followup_id)
@@ -1331,7 +1352,7 @@ def profile_view(request):
     return render(request, 'admin_panel/profile.html', {'form': form, 'user': user})
 
 # Canteen Views
-@user_passes_test(is_admin)
+@user_passes_test(has_module_permission('canteen'))
 def canteen_list_view(request):
     """Lista todos os fiados registrados na cantina"""
     search = request.GET.get('search', '')
@@ -1380,7 +1401,7 @@ def canteen_list_view(request):
     
     return render(request, 'admin_panel/cantina/list.html', context)
 
-@user_passes_test(is_admin)
+@user_passes_test(has_module_permission('canteen'))
 def canteen_edit_view(request, debtor_id=None):
     """Cria ou edita um registro de fiado da cantina"""
     debtor = None

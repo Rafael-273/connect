@@ -296,6 +296,25 @@ $(document).ready(function() {
                         </div>
                     </div>
                     
+                    <!-- Permissões de Usuário -->
+                    <div class="mt-8 border-t pt-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Permissões de Acesso ao Sistema</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="form-group">
+                                <label class="form-label">Tipo de Usuário</label>
+                                <select name="user_type" class="form-select">
+                                    <option value="member" {% if member.user.user_type == 'member' or not member %}selected{% endif %}>Membro (Sem acesso ao painel)</option>
+                                    <option value="admin" {% if member.user.user_type == 'admin' %}selected{% endif %}>Administrador (Acesso total)</option>
+                                    <option value="canteen" {% if member.user.user_type == 'canteen' %}selected{% endif %}>Cantina (Gerencia fiados)</option>
+                                    <option value="visitors" {% if member.user.user_type == 'visitors' %}selected{% endif %}>Visitantes (Gerencia visitantes)</option>
+                                    <option value="consolidation" {% if member.user.user_type == 'consolidation' %}selected{% endif %}>Consolidação (Gerencia acompanhamentos)</option>
+                                    <option value="events" {% if member.user.user_type == 'events' %}selected{% endif %}>Eventos (Gerencia eventos)</option>
+                                </select>
+                                <p class="text-sm text-gray-500 mt-1">O usuário será criado automaticamente com a senha padrão "123"</p>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <!-- Botões -->
                     <div class="flex justify-end space-x-4 mt-8">
                         <a href="{% url 'admin_members_list' %}" 

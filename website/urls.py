@@ -1,10 +1,12 @@
 from django.urls import path
+from django.contrib.auth import views as auth_views
 from .views.home import HomeView
 from .views.visitor import VisitorCreateView, VisitorListView
 from .views.member import MemberCreateView, NewConvertsListView
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
 from .views.auth import admin_login_view, admin_logout_view
+from .views.user_management import user_management_view, reset_user_password, change_password_view
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
     events_list_view, ministries_list_view, neighborhoods_list_view,
@@ -49,6 +51,11 @@ urlpatterns = [
     path('admin-panel/neighborhoods/new/', neighborhood_edit_view, name='admin_neighborhood_create'),
     path('admin-panel/neighborhoods/<int:neighborhood_id>/edit/', neighborhood_edit_view, name='admin_neighborhood_edit'),
     path('admin-panel/profile/', profile_view, name='admin_profile'),
+    
+    # User Management URLs
+    path('admin-panel/users/', user_management_view, name='admin_user_management'),
+    path('admin-panel/users/<int:user_id>/reset-password/', reset_user_password, name='admin_reset_user_password'),
+    path('admin-panel/change-password/', change_password_view, name='admin_change_password'),
     
     # Follow-up URLs
     path('admin-panel/followups/', followup_list_view, name='admin_followups_list'),

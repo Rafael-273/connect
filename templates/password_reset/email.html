@@ -1,0 +1,14 @@
+{% autoescape off %}
+Olá,
+
+Recebemos uma solicitação para redefinir a senha da sua conta na Igreja Filadélfia.
+
+Por favor, clique no link abaixo para redefinir sua senha:
+
+{{ protocol }}://{{ domain }}{% url 'password_reset_confirm' uidb64=uid token=token %}
+
+Se você não solicitou essa redefinição, ignore este email.
+
+Atenciosamente,
+Equipe Igreja Filadélfia
+{% endautoescape %}

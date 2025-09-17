@@ -8,6 +8,11 @@ class UserManager(BaseUserManager):
             raise ValueError("O campo email é obrigatório")
         email = self.normalize_email(email)
         user = self.model(email=email, **extra_fields)
+        
+        # Define a senha padrão se não for fornecida
+        if password is None:
+            password = "123"
+            
         user.set_password(password)
         user.save()
         return user
@@ -18,9 +23,19 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin):
+    USER_TYPE_CHOICES = (
+        ('member', 'Membro (Sem acesso ao painel)'),
+        ('admin', 'Administrador (Acesso total)'),
+        ('canteen', 'Cantina (Gerencia fiados)'),
+        ('visitors', 'Visitantes (Gerencia visitantes)'),
+        ('consolidation', 'Consolidação (Gerencia acompanhamentos)'),
+        ('events', 'Eventos (Gerencia eventos)'),
+    )
+    
     email = models.EmailField(unique=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES, default='member', verbose_name='Tipo de Usuário')
 
     first_name = models.CharField(max_length=50, blank=True, verbose_name='Nome')
     last_name = models.CharField(max_length=50, blank=True, verbose_name='Sobrenome')
@@ -37,3 +52,21 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
+    
+    def has_admin_access(self):
+        """Verifica se o usuário tem acesso ao painel de administração"""
+        return self.is_staff or self.user_type in ['admin', 'canteen', 'visitors', 'consolidation', 'events']
+    
+    def has_module_permission(self, module):
+        """Verifica se o usuário tem permissão para acessar um módulo específico"""
+        if self.is_superuser or self.user_type == 'admin':
+            return True
+            
+        module_permissions = {
+            'canteen': ['canteen'],
+            'visitors': ['visitors'],
+            'consolidation': ['consolidation', 'followup'],
+            'events': ['events'],
+        }
+        
+        return module in module_permissions.get(self.user_type, [])

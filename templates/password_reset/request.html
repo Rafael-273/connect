@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+
+{% block title %}Redefinição de Senha{% endblock %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body p-4 p-lg-5">
+                    <h2 class="card-title text-center mb-4">Redefinição de Senha</h2>
+                    
+                    {% include 'parciais/messages.html' %}
+                    
+                    <p class="text-muted mb-4">
+                        Digite seu e-mail para receber instruções de redefinição de senha.
+                    </p>
+                    
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">Enviar Link de Redefinição</button>
+                        </div>
+                    </form>
+                    
+                    <div class="mt-4 text-center">
+                        <a href="{% url 'admin_login' %}" class="text-decoration-none">Voltar ao Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

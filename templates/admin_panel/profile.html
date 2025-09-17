@@ -65,6 +65,17 @@
                         <a href="{% url 'admin_dashboard' %}" class="bg-gray-200 text-gray-700 px-8 py-3 text-center rounded-xl font-bold text-lg hover:bg-gray-300 transition w-1/2">Cancelar</a>
                     </div>
                 </form>
+                
+                <div class="mt-8 pt-6 border-t border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Segurança da conta</h3>
+                    <a href="{% url 'admin_change_password' %}" class="flex items-center justify-between bg-blue-50 hover:bg-blue-100 text-blue-700 p-4 rounded-lg transition">
+                        <div class="flex items-center">
+                            <ion-icon name="lock-closed-outline" class="text-xl mr-2"></ion-icon>
+                            <span>Alterar senha</span>
+                        </div>
+                        <ion-icon name="chevron-forward-outline" class="text-xl"></ion-icon>
+                    </a>
+                </div>
             </div>
         </div>
     </div>

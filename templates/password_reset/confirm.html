@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}Redefinir Senha{% endblock %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body p-4 p-lg-5">
+                    <h2 class="card-title text-center mb-4">Redefinir Senha</h2>
+                    
+                    {% include 'parciais/messages.html' %}
+                    
+                    {% if validlink %}
+                        <p class="text-muted mb-4">
+                            Digite sua nova senha abaixo.
+                        </p>
+                        
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="new_password1" class="form-label">Nova Senha</label>
+                                <input type="password" class="form-control" id="new_password1" name="new_password1" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="new_password2" class="form-label">Confirmar Nova Senha</label>
+                                <input type="password" class="form-control" id="new_password2" name="new_password2" required>
+                                <div class="form-text">
+                                    As senhas devem ser iguais.
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary btn-lg">Redefinir Senha</button>
+                            </div>
+                        </form>
+                    {% else %}
+                        <div class="alert alert-danger">
+                            O link de redefinição de senha é inválido, possivelmente porque já foi usado.
+                            Por favor solicite uma nova redefinição de senha.
+                        </div>
+                        
+                        <div class="d-grid mt-4">
+                            <a href="{% url 'password_reset_request' %}" class="btn btn-primary btn-lg">
+                                Solicitar Nova Redefinição
+                            </a>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="mt-4 text-center">
+                        <a href="{% url 'admin_login' %}" class="text-decoration-none">Voltar ao Login</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

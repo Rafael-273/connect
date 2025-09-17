@@ -6,38 +6,70 @@
     </div>
     
     <nav class="mt-6">
+        {% if user.user_type == 'admin' or user.is_superuser %}
+        <!-- Dashboard só para admin -->
         <a href="{% url 'admin_dashboard' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
             <ion-icon name="analytics-outline"></ion-icon>
             Dashboard
         </a>
+        
+        <!-- Gerenciamento de Membros só para admin -->
         <a href="{% url 'admin_members_list' %}" class="sidebar-item {% if 'members' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="people-outline"></ion-icon>
             Membros
         </a>
+        {% endif %}
+        
+        {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'visitors' %}
+        <!-- Visitantes só para admin e usuários do tipo visitors -->
         <a href="{% url 'admin_visitors_list' %}" class="sidebar-item {% if 'visitors' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="person-add-outline"></ion-icon>
             Visitantes
         </a>
+        {% endif %}
+        
+        {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'consolidation' %}
+        <!-- Acompanhamentos só para admin e usuários do tipo consolidation -->
         <a href="{% url 'admin_followups_list' %}" class="sidebar-item {% if 'followups' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="chatbubbles-outline"></ion-icon>
             Acompanhamentos
         </a>
+        {% endif %}
+        
+        {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'events' %}
+        <!-- Eventos só para admin e usuários do tipo events -->
         <a href="{% url 'admin_events_list' %}" class="sidebar-item {% if 'events' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="calendar-outline"></ion-icon>
             Eventos
         </a>
+        {% endif %}
+        
+        {% if user.user_type == 'admin' or user.is_superuser %}
+        <!-- Ministérios só para admin -->
         <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="library-outline"></ion-icon>
             Ministérios
         </a>
+        
+        <!-- Bairros só para admin -->
         <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="location-outline"></ion-icon>
             Bairros
         </a>
+        {% endif %}
+        
+        {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'canteen' %}
         <a href="{% url 'admin_cantina_list' %}" class="sidebar-item {% if 'cantina' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="cafe-outline"></ion-icon>
             Cantina
         </a>
+        {% endif %}
+        {% if user.user_type == 'admin' %}
+        <a href="{% url 'admin_user_management' %}" class="sidebar-item {% if 'user_management' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="shield-outline"></ion-icon>
+            Usuários
+        </a>
+        {% endif %}
         <a href="{% url 'admin_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}">
             <ion-icon name="person-circle-outline"></ion-icon>
             Meu Perfil
@@ -67,42 +99,80 @@
         </div>
         
         <nav class="mt-4">
+            {% if user.user_type == 'admin' or user.is_superuser %}
+            <!-- Dashboard só para admin -->
             <a href="{% url 'admin_dashboard' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
                 <ion-icon name="analytics-outline"></ion-icon>
                 Dashboard
             </a>
+            
+            <!-- Gerenciamento de Membros só para admin -->
             <a href="{% url 'admin_members_list' %}" class="sidebar-item {% if 'members' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="people-outline"></ion-icon>
                 Membros
             </a>
+            {% endif %}
+            
+            {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'visitors' %}
+            <!-- Visitantes só para admin e usuários do tipo visitors -->
             <a href="{% url 'admin_visitors_list' %}" class="sidebar-item {% if 'visitors' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="person-add-outline"></ion-icon>
                 Visitantes
             </a>
+            {% endif %}
+            
+            {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'consolidation' %}
+            <!-- Acompanhamentos só para admin e usuários do tipo consolidation -->
             <a href="{% url 'admin_followups_list' %}" class="sidebar-item {% if 'followups' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="chatbubbles-outline"></ion-icon>
                 Acompanhamentos
             </a>
+            {% endif %}
+            
+            {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'events' %}
+            <!-- Eventos só para admin e usuários do tipo events -->
             <a href="{% url 'admin_events_list' %}" class="sidebar-item {% if 'events' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="calendar-outline"></ion-icon>
                 Eventos
             </a>
+            {% endif %}
+            
+            {% if user.user_type == 'admin' or user.is_superuser %}
+            <!-- Ministérios só para admin -->
             <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="library-outline"></ion-icon>
                 Ministérios
             </a>
+            
+            <!-- Bairros só para admin -->
             <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="location-outline"></ion-icon>
                 Bairros
             </a>
+            {% endif %}
+            
+            {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'canteen' %}
+            <!-- Cantina só para admin e usuários do tipo canteen -->
             <a href="{% url 'admin_cantina_list' %}" class="sidebar-item {% if 'cantina' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="cafe-outline"></ion-icon>
                 Cantina
             </a>
+            {% endif %}
+            
+            {% if user.user_type == 'admin' %}
+            <!-- Usuários só para admin -->
+            <a href="{% url 'admin_user_management' %}" class="sidebar-item {% if 'user_management' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="shield-outline"></ion-icon>
+                Usuários
+            </a>
+            {% endif %}
+            
+            <!-- Perfil do usuário para todos -->
             <a href="{% url 'admin_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}">
                 <ion-icon name="person-circle-outline"></ion-icon>
                 Meu Perfil
             </a>
+            
             <a href="{% url 'admin_logout' %}" class="sidebar-item">
                 <ion-icon name="log-out-outline"></ion-icon>
                 Sair
