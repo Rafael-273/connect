@@ -1,0 +1,261 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{% if debtor %}Editar Fiado{% else %}Novo Fiado{% endif %} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* Estilizar o toggle switch */
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 52px;
+        height: 26px;
+    }
+    
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+        background-color: var(--color-primary);
+    }
+    
+    input:focus + .slider {
+        box-shadow: 0 0 1px var(--color-primary);
+    }
+    
+    input:checked + .slider:before {
+        transform: translateX(26px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-6 mt-24">
+            <div class="admin-card">
+                <div class="p-6">
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 text-center md:text-left">
+                            {% if debtor %}Editar Fiado{% else %}Novo Fiado{% endif %}
+                        </h1>
+                        <p class="text-gray-600 mt-1 text-center md:text-left">{% if debtor %}Atualize os dados do fiado{% else %}Registre um novo fiado na cantina{% endif %}</p>
+                    </div>
+                    <a href="{% url 'admin_cantina_list' %}" 
+                       class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition duration-300 flex items-center w-full md:w-auto justify-center">
+                        <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
+                        Voltar
+                    </a>
+                </div>
+
+                <!-- Formulário -->
+                <form method="post" class="space-y-6">
+                    {% csrf_token %}
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Nome do Cliente -->
+                        <div class="form-group">
+                            <label class="form-label">{{ form.name.label }}</label>
+                            {{ form.name }}
+                            {% if form.name.errors %}
+                                <div class="text-red-600 text-sm mt-1">{{ form.name.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Telefone/WhatsApp -->
+                        <div class="form-group">
+                            <label class="form-label">{{ form.phone.label }}</label>
+                            {{ form.phone }}
+                            {% if form.phone.errors %}
+                                <div class="text-red-600 text-sm mt-1">{{ form.phone.errors.0 }}</div>
+                            {% endif %}
+                            <div class="text-gray-500 text-sm mt-1">Será formatado automaticamente: (99) 99999-9999</div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Data da Compra -->
+                        <div class="form-group">
+                            <label class="form-label">{{ form.purchase_date.label }}</label>
+                            {{ form.purchase_date }}
+                            {% if form.purchase_date.errors %}
+                                <div class="text-red-600 text-sm mt-1">{{ form.purchase_date.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Valor -->
+                        <div class="form-group">
+                            <label class="form-label">{{ form.amount.label }}</label>
+                            {{ form.amount }}
+                            {% if form.amount.errors %}
+                                <div class="text-red-600 text-sm mt-1">{{ form.amount.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Descrição dos Itens -->
+                    <div class="form-group">
+                        <label class="form-label">{{ form.description.label }}</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                            <div class="text-red-600 text-sm mt-1">{{ form.description.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Status de Pagamento -->
+                    <div class="form-group">
+                        <div class="flex items-center">
+                            <label class="form-label mb-0 mr-3">{{ form.paid.label }}</label>
+                            <label class="toggle-switch">
+                                {{ form.paid }}
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        {% if form.paid.errors %}
+                            <div class="text-red-600 text-sm mt-1">{{ form.paid.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Data de Pagamento -->
+                    <div class="form-group paid-date-group" id="paidDateGroup">
+                        <label class="form-label">{{ form.paid_date.label }}</label>
+                        {{ form.paid_date }}
+                        <div class="text-sm text-gray-500 mt-1">Deixe em branco se ainda não foi pago</div>
+                        {% if form.paid_date.errors %}
+                            <div class="text-red-600 text-sm mt-1">{{ form.paid_date.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Observações -->
+                    <div class="form-group">
+                        <label class="form-label">{{ form.notes.label }}</label>
+                        {{ form.notes }}
+                        {% if form.notes.errors %}
+                            <div class="text-red-600 text-sm mt-1">{{ form.notes.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Botões -->
+                    <div class="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
+                        <a href="{% url 'admin_cantina_list' %}" 
+                           class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-300 text-center">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="px-6 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition duration-300">
+                            {% if debtor %}Atualizar{% else %}Salvar{% endif %}
+                        </button>
+                    </div>
+                </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const paidCheckbox = document.querySelector('#id_paid');
+    const paidDateGroup = document.querySelector('#paidDateGroup');
+    const phoneInput = document.querySelector('#id_phone');
+    
+    function togglePaidDateVisibility() {
+        if (paidCheckbox.checked) {
+            paidDateGroup.style.display = 'block';
+        } else {
+            paidDateGroup.style.display = 'none';
+        }
+    }
+    
+    // Initial state
+    togglePaidDateVisibility();
+    
+    // Listen for changes
+    paidCheckbox.addEventListener('change', togglePaidDateVisibility);
+    
+    // Máscara para o campo de telefone
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            // Remove tudo que não for número
+            let value = this.value.replace(/\D/g, '');
+            
+            // Limita a 11 dígitos (DDD + 9 dígitos)
+            if (value.length > 11) {
+                value = value.slice(0, 11);
+            }
+            
+            // Aplica a máscara conforme o usuário digita
+            if (value.length <= 2) {
+                // Apenas DDD
+                this.value = value;
+            } else if (value.length <= 7) {
+                // DDD + parte do número
+                this.value = `(${value.slice(0, 2)}) ${value.slice(2)}`;
+            } else {
+                // Formato completo: (99) 99999-9999
+                this.value = `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`;
+            }
+        });
+        
+        // Formata qualquer valor inicial
+        if (phoneInput.value) {
+            let event = new Event('input');
+            phoneInput.dispatchEvent(event);
+        }
+    }
+});
+</script>
+{% endblock %}

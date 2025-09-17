@@ -34,6 +34,10 @@
             <ion-icon name="location-outline"></ion-icon>
             Bairros
         </a>
+        <a href="{% url 'admin_cantina_list' %}" class="sidebar-item {% if 'cantina' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="cafe-outline"></ion-icon>
+            Cantina
+        </a>
         <a href="{% url 'admin_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}">
             <ion-icon name="person-circle-outline"></ion-icon>
             Meu Perfil
@@ -90,6 +94,10 @@
             <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="location-outline"></ion-icon>
                 Bairros
+            </a>
+            <a href="{% url 'admin_cantina_list' %}" class="sidebar-item {% if 'cantina' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="cafe-outline"></ion-icon>
+                Cantina
             </a>
             <a href="{% url 'admin_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}">
                 <ion-icon name="person-circle-outline"></ion-icon>

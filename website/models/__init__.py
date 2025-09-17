@@ -12,3 +12,4 @@ from .visitor import Visitor
 from .ministry import Ministry
 from .neighborhood import Neighborhood
 from .follow_up import FollowUp
+from .canteen import CanteenDebtor

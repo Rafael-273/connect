@@ -11,7 +11,9 @@ from .views.admin_panel import (
     api_delete_item, ministry_create_edit_api, neighborhood_create_edit_api,
     member_detail_api, visitor_detail_api, member_edit_view, visitor_edit_view, event_edit_view,
     ministry_edit_view, neighborhood_edit_view, followup_list_view, followup_edit_view,
-    followup_delete_view, followup_report_view, followup_detail_view, profile_view
+    followup_delete_view, followup_report_view, followup_detail_view, profile_view,
+    canteen_list_view, canteen_edit_view, canteen_detail_view, canteen_delete_view,
+    canteen_toggle_paid, canteen_api
 )
 
 urlpatterns = [
@@ -55,6 +57,15 @@ urlpatterns = [
     path('admin-panel/followups/<int:followup_id>/detail/', followup_detail_view, name='admin_followup_detail'),
     path('admin-panel/followups/<int:followup_id>/report/', followup_report_view, name='admin_followup_report'),
     path('admin-panel/followups/<int:followup_id>/delete/', followup_delete_view, name='admin_followup_delete'),
+    
+    # Cantina URLs
+    path('admin-panel/cantina/', canteen_list_view, name='admin_cantina_list'),
+    path('admin-panel/cantina/new/', canteen_edit_view, name='admin_cantina_create'),
+    path('admin-panel/cantina/<int:debtor_id>/edit/', canteen_edit_view, name='admin_cantina_edit'),
+    path('admin-panel/cantina/<int:debtor_id>/', canteen_detail_view, name='admin_cantina_detail'),
+    path('admin-panel/cantina/<int:debtor_id>/delete/', canteen_delete_view, name='admin_cantina_delete'),
+    path('admin-panel/cantina/<int:debtor_id>/toggle-paid/', canteen_toggle_paid, name='admin_cantina_toggle_paid'),
+    path('admin-panel/api/cantina/', canteen_api, name='admin_cantina_api'),
     
     # APIs
     path('admin-panel/api/delete/', api_delete_item, name='admin_api_delete'),
