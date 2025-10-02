@@ -9,14 +9,6 @@ body {
     font-weight: 400;
 }
 
-h1 {
-    font-family: "Integral", sans-serif;
-}
-
-h2 {
-    font-family: "Tusker", sans-serif;
-}
-
 :root {
     --color-primary: #C90905;
     --color-accent: #FDDEB9;

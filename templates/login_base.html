@@ -4,8 +4,8 @@
 <html lang="pt-br">
 <head>
     {% block head %}{% endblock %}
-    <link rel="stylesheet" href="{% static 'base.css' %}">
     {% include 'parciais/head.html' %}
+    <link rel="stylesheet" href="{% static 'user_base.css' %}">
     <title>{% block title %}{% endblock %}</title>
     <style>
         @font-face {
@@ -31,31 +31,27 @@
             font-family: "Integral";
             src: url("{% static 'fonts/Integral.otf' %}") format("truetype");
         }
+        
+        :root {
+            --color-primary: #C90905;
+            --color-accent: #FDDEB9;
+            --color-dark: #260200;
+            --color-danger: #8C0910;
+            --color-light: #F66F03;
+            --text-color-primary: #0e0e0e;
+            --text-color-on-primary: #FFFFFF;
+        }
     </style>
 </head>
 
-<body class="{% block body_class %}flex flex-col min-h-screen background-page{% endblock %}" style="background-color: #f7f1ef;">
-
-{% include 'parciais/menu.html' %}
+<body class="{% block body_class %}{% endblock %}">
 
 {% block content %}
 
 {% endblock %}
 
-{% include 'parciais/footer.html' %}
-
 <script>
-    $(document).ready(function() {
-        $(window).scroll(function() {
-            const navbar = $('#navbar');
-            
-            if ($(this).scrollTop() > 0) {
-                navbar.addClass('menu-scroll');
-            } else {
-                navbar.removeClass('menu-scroll');
-            }
-        });
-    });
+    // Qualquer script global pode ir aqui
 </script>
 </body>
 </html>

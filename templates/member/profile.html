@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Meu Perfil - {{ member.name }}{% endblock %}
+
+{% block head %}
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'church-red': '#C90905',
+                    'church-dark': '#260200',
+                    'church-danger': '#8C0910',
+                    'church-light': '#F66F03',
+                    'church-accent': '#FDDEB9'
+                },
+                fontFamily: {
+                    'giga': ['GigaSansRegular', 'sans-serif'],
+                    'giga-medium': ['GigaSansMedium', 'sans-serif'],
+                    'giga-light': ['GigaSansLight', 'sans-serif']
+                }
+            }
+        }
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<!-- Header do Perfil -->
+<div class="bg-gradient-to-br from-church-red to-church-dark text-white py-12 lg:py-16">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col lg:flex-row items-center gap-6 lg:gap-8">
+            <div class="w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 bg-white rounded-full flex items-center justify-center shadow-xl overflow-hidden flex-shrink-0">
+                {% if member.profile_picture %}
+                    <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}" class="w-full h-full object-cover">
+                {% else %}
+                    <div class="text-4xl lg:text-5xl text-church-red">👤</div>
+                {% endif %}
+            </div>
+            
+            <div class="text-center lg:text-left">
+                <h1 class="font-giga-medium text-3xl sm:text-4xl lg:text-5xl mb-3 drop-shadow-lg">{{ member.name }}</h1>
+                <p class="text-lg lg:text-xl opacity-90">Edite suas informações pessoais e preferências</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Navegação -->
+<div class="bg-white shadow-lg sticky top-0 z-10">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col sm:flex-row justify-between items-center py-4">
+            <div class="flex flex-wrap justify-center sm:justify-start gap-6 lg:gap-8 mb-4 sm:mb-0">
+                <a href="{% url 'member_dashboard' %}" class="flex items-center gap-2 py-2 px-1 text-gray-600 border-b-2 border-transparent hover:text-church-red hover:border-church-red transition-colors duration-200">
+                    <span class="text-lg">🏠</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'member_profile' %}" class="flex items-center gap-2 py-2 px-1 text-church-red border-b-2 border-church-red font-medium transition-colors duration-200">
+                    <span class="text-lg">👤</span>
+                    <span>Perfil</span>
+                </a>
+                <a href="{% url 'event_list' %}" class="flex items-center gap-2 py-2 px-1 text-gray-600 border-b-2 border-transparent hover:text-church-red hover:border-church-red transition-colors duration-200">
+                    <span class="text-lg">📅</span>
+                    <span>Eventos</span>
+                </a>
+            </div>
+            
+            <a href="{% url 'member_dashboard' %}" class="bg-church-red hover:bg-church-dark text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+                Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Mensagens do Django -->
+{% if messages %}
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        {% for message in messages %}
+            <div class="px-4 py-3 rounded-lg mb-3 text-sm
+                {% if message.tags == 'error' %}
+                    bg-red-50 border border-red-200 text-church-danger
+                {% elif message.tags == 'success' %}
+                    bg-green-50 border border-green-200 text-green-700
+                {% else %}
+                    bg-blue-50 border border-blue-200 text-blue-700
+                {% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<!-- Conteúdo do Perfil -->
+<div class="bg-gray-50 min-h-screen py-8">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Formulário Principal -->
+            <div class="lg:col-span-2">
+                <form method="post" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-lg border p-8">
+                    {% csrf_token %}
+                    
+                    <!-- Informações de Contato -->
+                    <div class="mb-12">
+                        <h2 class="font-giga-medium text-xl text-gray-900 mb-6 flex items-center gap-3 pb-3 border-b border-gray-200">
+                            <span class="text-2xl">📞</span>
+                            Informações de Contato
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="phone" class="block text-sm font-medium text-gray-900 mb-2">Telefone</label>
+                                <input type="tel" 
+                                       id="phone" 
+                                       name="phone" 
+                                       class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
+                                              focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
+                                              focus:ring-church-red focus:ring-opacity-10 transition-all duration-300" 
+                                       placeholder="(11) 99999-9999"
+                                       value="{{ member.phone|default:'' }}">
+                            </div>
+                            
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-gray-900 mb-2">Email</label>
+                                <input type="email" 
+                                       id="email" 
+                                       class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-100 text-gray-500 cursor-not-allowed" 
+                                       value="{{ member.email|default:'Não informado' }}"
+                                       disabled>
+                                <p class="text-sm text-gray-500 mt-2">Para alterar o email, entre em contato com a administração</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6">
+                            <label for="address" class="block text-sm font-medium text-gray-900 mb-2">Endereço</label>
+                            <textarea id="address" 
+                                      name="address" 
+                                      rows="3"
+                                      class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
+                                             focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
+                                             focus:ring-church-red focus:ring-opacity-10 transition-all duration-300 resize-none" 
+                                      placeholder="Digite seu endereço completo">{{ member.address|default:'' }}</textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Informações Pessoais -->
+                    <div class="mb-12">
+                        <h2 class="font-giga-medium text-xl text-gray-900 mb-6 flex items-center gap-3 pb-3 border-b border-gray-200">
+                            <span class="text-2xl">👤</span>
+                            Informações Pessoais
+                        </h2>
+                        
+                        <div class="space-y-6">
+                            <div>
+                                <label for="interests" class="block text-sm font-medium text-gray-900 mb-2">Interesses e Hobbies</label>
+                                <textarea id="interests" 
+                                          name="interests" 
+                                          rows="4"
+                                          class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
+                                                 focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
+                                                 focus:ring-church-red focus:ring-opacity-10 transition-all duration-300 resize-none" 
+                                          placeholder="Descreva seus interesses, hobbies e atividades que gosta de fazer">{{ member.interests|default:'' }}</textarea>
+                            </div>
+                            
+                            <div>
+                                <label for="available_days" class="block text-sm font-medium text-gray-900 mb-2">Dias Disponíveis</label>
+                                <input type="text" 
+                                       id="available_days" 
+                                       name="available_days" 
+                                       class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
+                                              focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
+                                              focus:ring-church-red focus:ring-opacity-10 transition-all duration-300" 
+                                       placeholder="Ex: Terças e quintas à noite, fins de semana"
+                                       value="{{ member.available_days|default:'' }}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Testemunho -->
+                    <div class="mb-12">
+                        <h2 class="font-giga-medium text-xl text-gray-900 mb-6 flex items-center gap-3 pb-3 border-b border-gray-200">
+                            <span class="text-2xl">✝️</span>
+                            Meu Testemunho
+                        </h2>
+                        
+                        <div>
+                            <label for="testimony" class="block text-sm font-medium text-gray-900 mb-2">Compartilhe seu testemunho</label>
+                            <textarea id="testimony" 
+                                      name="testimony" 
+                                      rows="6"
+                                      class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
+                                             focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
+                                             focus:ring-church-red focus:ring-opacity-10 transition-all duration-300 resize-none" 
+                                      placeholder="Conte um pouco sobre sua história com Deus, como chegou à igreja, transformações em sua vida...">{{ member.testimony|default:'' }}</textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Disponibilidade para Ministério -->
+                    <div class="mb-8">
+                        <h2 class="font-giga-medium text-xl text-gray-900 mb-6 flex items-center gap-3 pb-3 border-b border-gray-200">
+                            <span class="text-2xl">🙏</span>
+                            Disponibilidade para Ministério
+                        </h2>
+                        
+                        <div class="space-y-4">
+                            <label class="flex items-start gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-gray-300 transition-all duration-200 cursor-pointer
+                                {% if member.is_available_to_consolidate %}
+                                    bg-green-50 border-green-200
+                                {% else %}
+                                    bg-gray-50
+                                {% endif %}">
+                                <input type="checkbox" 
+                                       id="is_available_to_consolidate" 
+                                       name="is_available_to_consolidate" 
+                                       class="w-5 h-5 text-church-red border-gray-300 rounded focus:ring-church-red focus:ring-2 mt-0.5"
+                                       {% if member.is_available_to_consolidate %}checked{% endif %}>
+                                <div>
+                                    <div class="font-medium text-gray-900">Disponível para Consolidação</div>
+                                    <p class="text-sm text-gray-600 mt-1">Ajudar novos convertidos em seus primeiros passos na fé</p>
+                                </div>
+                            </label>
+                            
+                            <label class="flex items-start gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-gray-300 transition-all duration-200 cursor-pointer
+                                {% if member.is_available_to_disciple %}
+                                    bg-green-50 border-green-200
+                                {% else %}
+                                    bg-gray-50
+                                {% endif %}">
+                                <input type="checkbox" 
+                                       id="is_available_to_disciple" 
+                                       name="is_available_to_disciple" 
+                                       class="w-5 h-5 text-church-red border-gray-300 rounded focus:ring-church-red focus:ring-2 mt-0.5"
+                                       {% if member.is_available_to_disciple %}checked{% endif %}>
+                                <div>
+                                    <div class="font-medium text-gray-900">Disponível para Discipulado</div>
+                                    <p class="text-sm text-gray-600 mt-1">Acompanhar e ensinar outros membros em seu crescimento espiritual</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="w-full py-3 px-6 bg-gradient-to-r from-church-red to-church-dark text-white 
+                                                   rounded-xl font-semibold text-lg transition-all duration-300 
+                                                   hover:shadow-lg hover:shadow-church-red/25 hover:-translate-y-0.5 
+                                                   active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-church-red 
+                                                   focus:ring-opacity-25 flex items-center justify-center gap-2">
+                        <span>💾</span>
+                        <span>Salvar Alterações</span>
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Sidebar -->
+            <div class="space-y-8">
+                <!-- Informações da Conta -->
+                <div class="bg-white rounded-2xl shadow-lg border">
+                    <div class="p-6 border-b border-gray-100">
+                        <h3 class="font-giga-medium text-lg text-gray-900 flex items-center gap-3">
+                            <span class="text-xl">ℹ️</span>
+                            Informações da Conta
+                        </h3>
+                    </div>
+                    
+                    <div class="p-6 space-y-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">📧</span>
+                            <span class="text-gray-700">{{ member.email|default:'Email não informado' }}</span>
+                        </div>
+                        
+                        {% if member.birth_date %}
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">🎂</span>
+                            <span class="text-gray-700">{{ member.birth_date|date:"d/m/Y" }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if member.gender %}
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">👤</span>
+                            <span class="text-gray-700">{{ member.get_gender_display }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if member.marital_status %}
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">💍</span>
+                            <span class="text-gray-700">{{ member.get_marital_status_display }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if member.conversion_date %}
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">✝️</span>
+                            <span class="text-gray-700">Convertido em {{ member.conversion_date|date:"d/m/Y" }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Ministérios -->
+                {% if ministries %}
+                <div class="bg-white rounded-2xl shadow-lg border">
+                    <div class="p-6 border-b border-gray-100">
+                        <h3 class="font-giga-medium text-lg text-gray-900 flex items-center gap-3">
+                            <span class="text-xl">⛪</span>
+                            Meus Ministérios
+                        </h3>
+                    </div>
+                    
+                    <div class="p-6 space-y-3">
+                        {% for ministry in ministries %}
+                        <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                            <span class="text-lg">🙏</span>
+                            <span class="text-gray-700">{{ ministry.name }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Bairro -->
+                {% if member.neighborhood %}
+                <div class="bg-white rounded-2xl shadow-lg border">
+                    <div class="p-6 border-b border-gray-100">
+                        <h3 class="font-giga-medium text-lg text-gray-900 flex items-center gap-3">
+                            <span class="text-xl">📍</span>
+                            Localização
+                        </h3>
+                    </div>
+                    
+                    <div class="p-6">
+                        <div class="flex items-center gap-3">
+                            <span class="text-lg">🏘️</span>
+                            <span class="text-gray-700">{{ member.neighborhood.name }}</span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Formatação do telefone
+        const phoneInput = document.getElementById('phone');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function(e) {
+                let value = e.target.value.replace(/\D/g, '');
+                if (value.length <= 11) {
+                    value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                    if (value.length < 14) {
+                        value = value.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+                    }
+                }
+                e.target.value = value;
+            });
+        }
+        
+        // Atualização visual dos checkboxes
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            const label = checkbox.closest('label');
+            
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    label.classList.add('bg-green-50', 'border-green-200');
+                    label.classList.remove('bg-gray-50');
+                } else {
+                    label.classList.remove('bg-green-50', 'border-green-200');
+                    label.classList.add('bg-gray-50');
+                }
+            });
+        });
+        
+        // Efeitos visuais nos inputs
+        const inputs = document.querySelectorAll('input:not([disabled]), textarea');
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.parentElement.classList.add('transform', 'scale-105');
+            });
+            
+            input.addEventListener('blur', function() {
+                this.parentElement.classList.remove('transform', 'scale-105');
+            });
+        });
+    });
+</script>
+{% endblock %}

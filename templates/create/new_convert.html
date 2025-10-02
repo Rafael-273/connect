@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Novo Convertido - Connect{% endblock %}
+
+{% block content %}
+<section class="flex-grow container mx-auto mb-8 mt-28 flex flex-col items-center px-4 lg:px-8">
+    <div></div>
+    <div class="flex flex-col gap-2 justify-center items-center px-4 md:px-0 w-full md:w-1/2">
+        <div class="sticky text-center py-2 flex flex-col gap-2">
+            <h1 class="text-5xl md:text-7xl flex flex-col">
+              <span class="block md:inline">Novo</span>
+              <span class="block md:inline font-bold text-[var(--color-primary)]">Convertido!</span>
+            </h1>
+            <p class="text-sm md:text-base break-words">
+              Seja muito <b>bem-vindo à Família Filadélfia!</b> Queremos conhecer você melhor para te acompanhar nessa nova jornada.
+            </p>
+        </div>
+          
+        <form method="POST" class="space-y-4 w-full">
+            {% csrf_token %}
+        
+            {% for field in form %}
+                <div>
+                    <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">
+                        {{ field.label }}
+                        {% if field.field.required %}
+                            <span class="text-red-500">*</span>
+                        {% endif %}
+                    </label>
+                    {{ field }}
+                    {% if field.errors %}
+                        <p class="text-sm text-red-600 mt-1">{{ field.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        
+            <div class="">
+                <button type="submit" class="w-full bg-[var(--color-primary)] hover:bg-opacity-90 text-white font-semibold py-2 px-4 rounded-xl shadow-sm transition-all">
+                    Cadastrar
+                </button>
+            </div>
+        </form>
+    </div>
+    <div></div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+    $(document).ready(function(){
+        $('#id_telephone').mask('(00) 00000-0000');
+    });
+</script>
+{% endblock %}
+

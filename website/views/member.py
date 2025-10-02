@@ -3,8 +3,10 @@ from django.contrib.auth import get_user_model
 from django.views.generic.edit import CreateView
 from django.views.generic import ListView
 from django.urls import reverse_lazy
+from django.db.models import Q
+from django.utils import timezone
 from ..models.member import Member
-from ..forms.member import MemberForm
+from ..forms.member import MemberForm, NewConvertForm
 from ..models.user import User
 
 User = get_user_model()
@@ -33,7 +35,24 @@ class MemberCreateView(CreateView):
         self.object = member
 
         return super().form_valid(form)
-    
+
+
+class NewConvertCreateView(CreateView):
+    """View para cadastro simplificado de novos convertidos"""
+    model = Member
+    form_class = NewConvertForm
+    template_name = 'create/new_convert.html'
+    success_url = reverse_lazy('home')
+
+    def form_valid(self, form):
+        # Define a data de conversão como hoje
+        member = form.save(commit=False)
+        member.conversion_date = timezone.now().date()
+        member.save()
+        
+        self.object = member
+        return super().form_valid(form)
+
 
 class NewConvertsListView(ListView):
     model = Member
@@ -44,7 +63,7 @@ class NewConvertsListView(ListView):
         queryset = super().get_queryset()
         queryset = queryset.order_by('-created_at')
         query = self.request.GET.get('q', '')
-        queryset = queryset.filter(conversion='new_convert')
+        queryset = queryset.filter(conversion__in=['new_convert', 'reconciliation'])
         if query:
             queryset = queryset.filter(
                 Q(name__icontains=query) |

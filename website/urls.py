@@ -2,10 +2,11 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from .views.home import HomeView
 from .views.visitor import VisitorCreateView, VisitorListView
-from .views.member import MemberCreateView, NewConvertsListView
+from .views.member import MemberCreateView, NewConvertsListView, NewConvertCreateView
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
 from .views.auth import admin_login_view, admin_logout_view
+from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view
 from .views.user_management import user_management_view, reset_user_password, change_password_view
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
@@ -22,7 +23,8 @@ urlpatterns = [
     path('', HomeView.as_view(), name='home'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
     path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
-    path('new_converts/list/', NewConvertsListView.as_view(), name='new_converts_list'),
+    path('new_convert/', NewConvertCreateView.as_view(), name='new_convert'),
+    path('new_convert/list/', NewConvertsListView.as_view(), name='new_converts_list'),
     path('member/register/', MemberCreateView.as_view(), name='member_register'),
     path('translator/recorder/', AudioRecorderView.as_view(), name='audio_recorder'),
     path('translator/', TranscriptionDisplayView.as_view(), name='transcription'),
@@ -32,6 +34,12 @@ urlpatterns = [
     # Authentication URLs
     path('admin-login/', admin_login_view, name='admin_login'),
     path('admin-logout/', admin_logout_view, name='admin_logout'),
+    
+    # Member Authentication URLs
+    path('login/', MemberLoginView.as_view(), name='member_login'),
+    path('dashboard/', MemberDashboardView.as_view(), name='member_dashboard'),
+    path('logout/', member_logout_view, name='member_logout'),
+    path('profile/', member_profile_view, name='member_profile'),
     
     # Admin Panel URLs
     path('admin-panel/', dashboard_view, name='admin_dashboard'),
