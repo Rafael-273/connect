@@ -102,8 +102,105 @@
                 </form>
             </div>
 
-            <!-- Visitors Table -->
-            <div class="admin-card overflow-hidden">
+            <!-- Versão Mobile: Cards -->
+            <div class="block md:hidden space-y-4 py-6">
+                {% for visitor in visitors %}
+                <div class="admin-card p-4 hover:shadow-lg transition-shadow">
+                    <div class="flex items-start justify-between mb-3 gap-2">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="w-12 h-12 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                                {{ visitor.name|first }}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="text-base font-bold text-gray-900 truncate">{{ visitor.name }}</h3>
+                                {% if visitor.gender %}
+                                <p class="text-xs text-gray-500">
+                                    {% if visitor.gender == 'male' %}Masculino{% else %}Feminino{% endif %}
+                                </p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if visitor.profile_notes and '[CONVERTIDO]' in visitor.profile_notes %}
+                        <span class="conversion-badge conversion-member text-xs flex-shrink-0">
+                            <ion-icon name="person-add" class="text-xs"></ion-icon>
+                            <span class="hidden sm:inline">Membro</span>
+                            <span class="sm:hidden">M</span>
+                        </span>
+                        {% elif visitor.decision_for_jesus or visitor.conversion %}
+                        <span class="conversion-badge conversion-yes text-xs flex-shrink-0">
+                            <ion-icon name="checkmark-circle" class="text-xs"></ion-icon>
+                            <span class="hidden sm:inline">Convertido</span>
+                            <span class="sm:hidden">C</span>
+                        </span>
+                        {% else %}
+                        <span class="conversion-badge conversion-no text-xs flex-shrink-0">
+                            <ion-icon name="close-circle" class="text-xs"></ion-icon>
+                            <span class="hidden sm:inline">Aguardando</span>
+                            <span class="sm:hidden">A</span>
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="space-y-2 mb-3 text-sm">
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="mail" class="text-gray-400"></ion-icon>
+                            <span class="text-gray-700 truncate">{{ visitor.email|default:"--" }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="call" class="text-gray-400"></ion-icon>
+                            <span class="text-gray-700">{{ visitor.phone|default:"--" }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="calendar" class="text-gray-400"></ion-icon>
+                            <span class="text-gray-700">{{ visitor.visit_date|date:"d/m/Y" }}</span>
+                        </div>
+                        {% if visitor.neighborhood %}
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="location" class="text-gray-400"></ion-icon>
+                            <span class="text-gray-700">{{ visitor.neighborhood.name }}</span>
+                        </div>
+                        {% endif %}
+                        {% if visitor.wants_home_prayer %}
+                        <div class="flex items-center gap-2 text-green-700">
+                            <ion-icon name="home" class="text-green-600"></ion-icon>
+                            <span class="text-xs font-medium">Deseja oração na casa</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
+                        <button onclick="viewVisitor({{ visitor.id }})" 
+                                class="flex-1 min-w-[80px] py-2 px-2 bg-[var(--color-primary)] bg-opacity-10 text-white rounded-lg font-medium text-xs sm:text-sm hover:bg-opacity-20 transition flex items-center justify-center gap-1">
+                            <ion-icon name="eye" class="text-base"></ion-icon>
+                            <span class="hidden xs:inline">Ver</span>
+                        </button>
+                        {% if visitor.phone %}
+                        <a href="https://wa.me/55{{ visitor.phone|default:'' }}?text=Olá {{ visitor.name|urlencode }}, tudo bem? Eu sou da Igreja Filadélfia!" 
+                           target="_blank" 
+                           class="flex-1 min-w-[80px] py-2 px-2 bg-green-50 text-green-600 rounded-lg font-medium text-xs sm:text-sm hover:bg-green-100 transition flex items-center justify-center gap-1">
+                            <ion-icon name="logo-whatsapp" class="text-base"></ion-icon>
+                            <span class="hidden xs:inline">WhatsApp</span>
+                        </a>
+                        {% endif %}
+                        <button onclick="editVisitor({{ visitor.id }})" 
+                                class="py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-xs sm:text-sm hover:bg-blue-100 transition flex items-center justify-center">
+                            <ion-icon name="create" class="text-base"></ion-icon>
+                        </button>
+                        <button onclick="deleteVisitor({{ visitor.id }}, '{{ visitor.name }}')" 
+                                class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-xs sm:text-sm hover:bg-red-100 transition flex items-center justify-center">
+                            <ion-icon name="trash" class="text-base"></ion-icon>
+                        </button>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="admin-card p-8 text-center text-gray-500">
+                    Nenhum visitante encontrado.
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Versão Desktop: Tabela -->
+            <div class="admin-card overflow-hidden hidden md:block">
                 <div class="overflow-x-auto table-responsive">
                     <table class="w-full">
                         <thead class="bg-gray-50">
@@ -206,6 +303,7 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
 
                 <!-- Pagination -->
                 {% if visitors.has_other_pages %}

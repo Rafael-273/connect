@@ -11,8 +11,14 @@
     
     .admin-card {
         background: white;
-        border-radius: 12px;
+        border-radius: 0.75rem;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    @media (min-width: 640px) {
+        .admin-card {
+            border-radius: 12px;
+        }
     }
     
     .sidebar {
@@ -44,7 +50,13 @@
     }
     
     .form-group {
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    @media (min-width: 640px) {
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
     }
     
     .form-label {
@@ -52,15 +64,29 @@
         font-weight: 600;
         color: #374151;
         margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    @media (min-width: 640px) {
+        .form-label {
+            font-size: 1rem;
+        }
     }
     
     .form-input {
         width: 100%;
-        padding: 0.75rem;
+        padding: 0.625rem;
         border: 1px solid #d1d5db;
         border-radius: 0.5rem;
         font-size: 0.875rem;
         transition: border-color 0.2s;
+    }
+    
+    @media (min-width: 640px) {
+        .form-input {
+            padding: 0.75rem;
+            font-size: 0.875rem;
+        }
     }
     
     .form-input:focus {
@@ -71,12 +97,18 @@
     
     .form-select {
         width: 100%;
-        padding: 0.75rem;
+        padding: 0.625rem;
         border: 1px solid #d1d5db;
         border-radius: 0.5rem;
         font-size: 0.875rem;
         background-color: white;
         transition: border-color 0.2s;
+    }
+    
+    @media (min-width: 640px) {
+        .form-select {
+            padding: 0.75rem;
+        }
     }
     
     .form-select:focus {
@@ -87,13 +119,20 @@
     
     .form-textarea {
         width: 100%;
-        padding: 0.75rem;
+        padding: 0.625rem;
         border: 1px solid #d1d5db;
         border-radius: 0.5rem;
         font-size: 0.875rem;
         resize: vertical;
-        min-height: 100px;
+        min-height: 80px;
         transition: border-color 0.2s;
+    }
+    
+    @media (min-width: 640px) {
+        .form-textarea {
+            padding: 0.75rem;
+            min-height: 100px;
+        }
     }
     
     .form-textarea:focus {
@@ -131,28 +170,28 @@ $(document).ready(function() {
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
 
-    <div class="flex-1 ml-64">
-        <div class="p-6 mt-24">
-            <div class="flex justify-between items-center mb-8">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">
+    <div class="flex-1 lg:ml-64 mt-6 md:mt-0">
+        <div class="p-4 sm:p-6 mt-20 sm:mt-24">
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+                <div class="text-center sm:text-left">
+                    <h1 class="text-3xl sm:text-3xl font-bold text-gray-900">
                         {% if member %}Editar Membro{% else %}Novo Membro{% endif %}
                     </h1>
-                    <p class="text-gray-600 mt-2">
+                    <p class="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
                         {% if member %}Atualizar informações do membro{% else %}Adicionar novo membro à igreja{% endif %}
                     </p>
                 </div>
-                <a href="{% url 'admin_members_list' %}" class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center">
+                <a href="{% url 'admin_members_list' %}" class="bg-gray-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center text-sm sm:text-base w-full sm:w-auto">
                     <ion-icon name="arrow-back" class="mr-2"></ion-icon>
                     Voltar à Lista
                 </a>
             </div>
 
-            <div class="admin-card p-8">
+            <div class="admin-card p-4 sm:p-6 md:p-8">
                 <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                         <div class="form-group">
                             <label class="form-label">Nome Completo *</label>
                             <input type="text" name="name" value="{{ member.name|default:'' }}" 
@@ -270,39 +309,39 @@ $(document).ready(function() {
                     </div>
                     
                     <!-- Agrupar todos os checkboxes no final -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 mt-4 sm:mt-6">
                         <div class="form-group">
-                            <label class="form-label">Status</label>
+                            <label class="form-label text-sm sm:text-base">Status</label>
                             <div class="flex items-center">
                                 <input type="checkbox" name="is_active" 
                                        {% if member.is_active or not member %}checked{% endif %}
-                                       class="form-checkbox h-5 w-5 text-[var(--color-primary)] rounded border-gray-300 focus:ring-[var(--color-primary)]">
-                                <label class="ml-2 text-sm text-gray-700">Membro ativo</label>
+                                       class="form-checkbox h-4 w-4 sm:h-5 sm:w-5 text-[var(--color-primary)] rounded border-gray-300 focus:ring-[var(--color-primary)]">
+                                <label class="ml-2 text-xs sm:text-sm text-gray-700">Membro ativo</label>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Disponível para consolidar?</label>
+                            <label class="form-label text-sm sm:text-base">Disponível para consolidar?</label>
                             <div class="flex items-center">
-                                <input type="checkbox" name="is_available_to_consolidate" {% if member.is_available_to_consolidate %}checked{% endif %} class="form-checkbox h-5 w-5 text-[var(--color-primary)]">
-                                <label class="ml-2 text-sm text-gray-700">Sim</label>
+                                <input type="checkbox" name="is_available_to_consolidate" {% if member.is_available_to_consolidate %}checked{% endif %} class="form-checkbox h-4 w-4 sm:h-5 sm:w-5 text-[var(--color-primary)]">
+                                <label class="ml-2 text-xs sm:text-sm text-gray-700">Sim</label>
                             </div>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Disponível para discipular?</label>
+                            <label class="form-label text-sm sm:text-base">Disponível para discipular?</label>
                             <div class="flex items-center">
-                                <input type="checkbox" name="is_available_to_disciple" {% if member.is_available_to_disciple %}checked{% endif %} class="form-checkbox h-5 w-5 text-[var(--color-primary)]">
-                                <label class="ml-2 text-sm text-gray-700">Sim</label>
+                                <input type="checkbox" name="is_available_to_disciple" {% if member.is_available_to_disciple %}checked{% endif %} class="form-checkbox h-4 w-4 sm:h-5 sm:w-5 text-[var(--color-primary)]">
+                                <label class="ml-2 text-xs sm:text-sm text-gray-700">Sim</label>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Permissões de Usuário -->
-                    <div class="mt-8 border-t pt-6">
-                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Permissões de Acesso ao Sistema</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="mt-6 sm:mt-8 border-t pt-4 sm:pt-6">
+                        <h3 class="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Permissões de Acesso ao Sistema</h3>
+                        <div class="grid grid-cols-1 gap-4 sm:gap-6">
                             <div class="form-group">
-                                <label class="form-label">Tipo de Usuário</label>
-                                <select name="user_type" class="form-select">
+                                <label class="form-label text-sm sm:text-base">Tipo de Usuário</label>
+                                <select name="user_type" class="form-select text-sm sm:text-base">
                                     <option value="member" {% if member.user.user_type == 'member' or not member %}selected{% endif %}>Membro (Sem acesso ao painel)</option>
                                     <option value="admin" {% if member.user.user_type == 'admin' %}selected{% endif %}>Administrador (Acesso total)</option>
                                     <option value="canteen" {% if member.user.user_type == 'canteen' %}selected{% endif %}>Cantina (Gerencia fiados)</option>
@@ -310,19 +349,19 @@ $(document).ready(function() {
                                     <option value="consolidation" {% if member.user.user_type == 'consolidation' %}selected{% endif %}>Consolidação (Gerencia acompanhamentos)</option>
                                     <option value="events" {% if member.user.user_type == 'events' %}selected{% endif %}>Eventos (Gerencia eventos)</option>
                                 </select>
-                                <p class="text-sm text-gray-500 mt-1">O usuário será criado automaticamente com a senha padrão "123"</p>
+                                <p class="text-xs sm:text-sm text-gray-500 mt-1">O usuário será criado automaticamente com a senha padrão "123"</p>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Botões -->
-                    <div class="flex justify-end space-x-4 mt-8">
+                    <div class="flex flex-col sm:flex-row justify-end gap-3 sm:space-x-4 mt-6 sm:mt-8">
                         <a href="{% url 'admin_members_list' %}" 
-                           class="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition">
+                           class="px-4 sm:px-6 py-2 sm:py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-center text-sm sm:text-base">
                             Cancelar
                         </a>
                         <button type="submit" 
-                                class="px-6 py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition">
+                                class="px-4 sm:px-6 py-2 sm:py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm sm:text-base">
                             {% if member %}Atualizar Membro{% else %}Criar Membro{% endif %}
                         </button>
                     </div>

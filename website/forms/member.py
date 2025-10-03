@@ -1,56 +1,6 @@
 from django import forms
 from ..models.member import Member
 
-
-class NewConvertForm(forms.ModelForm):
-    """Formulário simplificado para cadastro de novos convertidos"""
-    
-    class Meta:
-        model = Member
-        fields = ['name', 'phone', 'conversion', 'address', 'neighborhood', 'birth_date', 'testimony']
-        labels = {
-            'name': 'Nome completo',
-            'phone': 'Telefone',
-            'conversion': 'Tipo de conversão',
-            'address': 'Endereço',
-            'neighborhood': 'Bairro',
-            'birth_date': 'Data de nascimento',
-            'testimony': 'Testemunho ou pedido de oração',
-        }
-        widgets = {
-            'name': forms.TextInput(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Nome completo'
-            }),
-            'phone': forms.TextInput(attrs={
-                'id': 'id_telephone',
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': '(DDD) 90000-0000'
-            }),
-            'conversion': forms.Select(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-            }),
-            'address': forms.Textarea(attrs={
-                'rows': 2,
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)]',
-                'placeholder': 'Rua, número, complemento'
-            }),
-            'neighborhood': forms.Select(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
-            }),
-            'birth_date': forms.DateInput(attrs={
-                'type': 'date',
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Data de nascimento'
-            }),
-            'testimony': forms.Textarea(attrs={
-                'rows': 4,
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)]',
-                'placeholder': 'Compartilhe seu testemunho ou pedido de oração...'
-            }),
-        }
-
-
 class MemberForm(forms.ModelForm):
     email = forms.EmailField(
         widget=forms.EmailInput(attrs={

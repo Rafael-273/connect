@@ -2,7 +2,7 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from .views.home import HomeView
 from .views.visitor import VisitorCreateView, VisitorListView
-from .views.member import MemberCreateView, NewConvertsListView, NewConvertCreateView
+from .views.member import MemberCreateView, NewConvertsListView
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
 from .views.auth import admin_login_view, admin_logout_view
@@ -23,8 +23,7 @@ urlpatterns = [
     path('', HomeView.as_view(), name='home'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
     path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
-    path('new_convert/', NewConvertCreateView.as_view(), name='new_convert'),
-    path('new_convert/list/', NewConvertsListView.as_view(), name='new_converts_list'),
+    path('new_converts/list/', NewConvertsListView.as_view(), name='new_converts_list'),
     path('member/register/', MemberCreateView.as_view(), name='member_register'),
     path('translator/recorder/', AudioRecorderView.as_view(), name='audio_recorder'),
     path('translator/', TranscriptionDisplayView.as_view(), name='transcription'),
