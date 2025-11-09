@@ -1,14 +1,15 @@
 from django import forms
-from ..models.follow_up import FollowUp, FollowUpReport
+from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate
 from ..models.member import Member
 
 class FollowUpForm(forms.ModelForm):
     class Meta:
         model = FollowUp
-        fields = ['accompanied', 'responsible', 'end_date', 'profile_notes']
+        fields = ['accompanied', 'responsible', 'template', 'end_date', 'profile_notes']
         labels = {
             'accompanied': 'Membro Acompanhado',
             'responsible': 'Consolidador Responsável',
+            'template': 'Template de Consolidação',
             'end_date': 'Data de Finalização',
             'profile_notes': 'Observações do Perfil'
         }
@@ -18,6 +19,10 @@ class FollowUpForm(forms.ModelForm):
             }),
             'responsible': forms.Select(attrs={
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
+            }),
+            'template': forms.Select(attrs={
+                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+                'onchange': 'updateTemplateInfo(this.value)'
             }),
             'end_date': forms.DateInput(attrs={
                 'type': 'date',
@@ -38,6 +43,10 @@ class FollowUpForm(forms.ModelForm):
             is_active=True,
             is_available_to_consolidate=True
         ).order_by('name')
+        
+        # Configurar templates disponíveis
+        self.fields['template'].queryset = FollowUpTemplate.objects.all().order_by('name')
+        self.fields['template'].empty_label = "Selecione um template..."
 
 class FollowUpReportForm(forms.ModelForm):
     class Meta:

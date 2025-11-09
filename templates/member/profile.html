@@ -1,390 +1,429 @@
-{% extends "base.html" %}
+{% extends "login_base.html" %}
 {% load static %}
 
 {% block title %}Meu Perfil - {{ member.name }}{% endblock %}
 
 {% block head %}
-<script>
-    tailwind.config = {
-        theme: {
-            extend: {
-                colors: {
-                    'church-red': '#C90905',
-                    'church-dark': '#260200',
-                    'church-danger': '#8C0910',
-                    'church-light': '#F66F03',
-                    'church-accent': '#FDDEB9'
-                },
-                fontFamily: {
-                    'giga': ['GigaSansRegular', 'sans-serif'],
-                    'giga-medium': ['GigaSansMedium', 'sans-serif'],
-                    'giga-light': ['GigaSansLight', 'sans-serif']
-                }
-            }
-        }
+<style>
+    :root {
+        --church-red: #C90905;
+        --church-dark: #260200;
+        --church-light: #E63946;
+        --church-gold: #F59E0B;
+        --church-cream: #FEF7ED;
     }
-</script>
+
+    .bg-church-red { background-color: var(--church-red) !important; }
+    .bg-church-light { background-color: var(--church-light) !important; }
+    .text-church-red { color: var(--church-red) !important; }
+    .text-church-dark { color: var(--church-dark) !important; }
+    .border-church-red { border-color: var(--church-red) !important; }
+    
+    .gradient-church {
+        background: linear-gradient(135deg, var(--church-red) 0%, var(--church-dark) 100%);
+    }
+    
+    .gradient-light {
+        background: linear-gradient(135deg, var(--church-light) 0%, var(--church-red) 100%);
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-fade { animation: fadeIn 0.6s ease-out; }
+    .animate-delay { animation-delay: 0.2s; animation-fill-mode: both; }
+
+    .profile-photo {
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+    }
+
+    .nav-hidden {
+        transform: translate(-50%, 120%) !important;
+        opacity: 0.7 !important;
+    }
+
+    .nav-visible {
+        transform: translate(-50%, 0) !important;
+        opacity: 1 !important;
+    }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 {% endblock %}
 
 {% block content %}
-<!-- Header do Perfil -->
-<div class="bg-gradient-to-br from-church-red to-church-dark text-white py-12 lg:py-16">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex flex-col lg:flex-row items-center gap-6 lg:gap-8">
-            <div class="w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 bg-white rounded-full flex items-center justify-center shadow-xl overflow-hidden flex-shrink-0">
-                {% if member.profile_picture %}
-                    <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}" class="w-full h-full object-cover">
-                {% else %}
-                    <div class="text-4xl lg:text-5xl text-church-red">👤</div>
+    <!-- Header minimalista -->
+    <section class="relative bg-gradient-to-br from-gray-50 to-white">
+        <div class="px-6 py-6">
+            <!-- Botão voltar elegante -->
+            <div class="flex justify-between items-center my-2">
+                <h1 class="text-2xl font-bold text-gray-800">Meu <b>Perfil</b></h1>
+                <a href="{% url 'member_dashboard' %}" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition-all duration-300">
+                    <i class="fas fa-arrow-left text-sm"></i>
+                    <span class="text-sm font-medium">Voltar</span>
+                </a>
+            </div>
+
+            <!-- Card de perfil moderno -->
+            <div class="p-4 text-center">
+                <!-- Foto do usuário com ícone de edição -->
+                <form method="post" enctype="multipart/form-data" id="photoForm" class="hidden">
+                    {% csrf_token %}
+                    <input type="hidden" name="form_type" value="personal_info">
+                    <input type="file" id="photoInput" name="profile_picture" accept="image/*" class="hidden">
+                </form>
+                
+                <div class="relative inline-block mb-6 group cursor-pointer" onclick="document.getElementById('photoInput').click()">
+                    <div class="w-52 h-52 mx-auto rounded-full overflow-hidden shadow-lg transition-all duration-300 group-hover:shadow-xl">
+                        {% if member.profile_picture %}
+                            <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}" class="w-full h-full object-cover transition-all duration-300 group-hover:brightness-75">
+                        {% else %}
+                            <div class="w-full h-full bg-gray-100 flex items-center justify-center transition-all duration-300 group-hover:bg-gray-200">
+                                <i class="fas fa-user text-gray-400 text-6xl"></i>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Ícone de edição overlay -->
+                    <div class="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center">
+                        <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <div class="bg-white rounded-full p-3 shadow-lg">
+                                <i class="fas fa-camera text-gray-600 text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Badge online discreto -->
+                    <div class="absolute bottom-4 right-4 w-6 h-6 bg-green-400 rounded-full border-3 border-white shadow-md"></div>
+                </div>
+                
+                <h2 class="text-xl font-bold text-gray-800 mb-2">{{ member.name }}</h2>
+                <p class="text-gray-500 text-sm mb-4">Membro Filadélfia</p>
+                
+                <!-- Info compacta -->
+                {% if member.neighborhood or ministries %}
+                <div class="flex justify-center gap-6 text-sm text-gray-600">
+                    {% if member.neighborhood %}
+                    <div class="flex items-center gap-1">
+                        <i class="fas fa-map-marker-alt text-gray-400"></i>
+                        <span>{{ member.neighborhood.name }}</span>
+                    </div>
+                    {% endif %}
+                    {% if ministries %}
+                    <div class="flex items-center gap-1">
+                        <i class="fas fa-hands-praying text-gray-400"></i>
+                        <span>{{ ministries|length }} Ministério{{ ministries|length|pluralize }}</span>
+                    </div>
+                    {% endif %}
+                </div>
                 {% endif %}
             </div>
-            
-            <div class="text-center lg:text-left">
-                <h1 class="font-giga-medium text-3xl sm:text-4xl lg:text-5xl mb-3 drop-shadow-lg">{{ member.name }}</h1>
-                <p class="text-lg lg:text-xl opacity-90">Edite suas informações pessoais e preferências</p>
-            </div>
         </div>
-    </div>
-</div>
+    </section>
 
-<!-- Navegação -->
-<div class="bg-white shadow-lg sticky top-0 z-10">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex flex-col sm:flex-row justify-between items-center py-4">
-            <div class="flex flex-wrap justify-center sm:justify-start gap-6 lg:gap-8 mb-4 sm:mb-0">
-                <a href="{% url 'member_dashboard' %}" class="flex items-center gap-2 py-2 px-1 text-gray-600 border-b-2 border-transparent hover:text-church-red hover:border-church-red transition-colors duration-200">
-                    <span class="text-lg">🏠</span>
-                    <span>Dashboard</span>
-                </a>
-                <a href="{% url 'member_profile' %}" class="flex items-center gap-2 py-2 px-1 text-church-red border-b-2 border-church-red font-medium transition-colors duration-200">
-                    <span class="text-lg">👤</span>
-                    <span>Perfil</span>
-                </a>
-                <a href="{% url 'event_list' %}" class="flex items-center gap-2 py-2 px-1 text-gray-600 border-b-2 border-transparent hover:text-church-red hover:border-church-red transition-colors duration-200">
-                    <span class="text-lg">📅</span>
-                    <span>Eventos</span>
-                </a>
-            </div>
-            
-            <a href="{% url 'member_dashboard' %}" class="bg-church-red hover:bg-church-dark text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg">
-                Voltar ao Dashboard
-            </a>
-        </div>
-    </div>
-</div>
-
-<!-- Mensagens do Django -->
-{% if messages %}
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+    <!-- Mensagens -->
+    {% if messages %}
+    <div class="px-6 pt-4">
         {% for message in messages %}
-            <div class="px-4 py-3 rounded-lg mb-3 text-sm
-                {% if message.tags == 'error' %}
-                    bg-red-50 border border-red-200 text-church-danger
-                {% elif message.tags == 'success' %}
-                    bg-green-50 border border-green-200 text-green-700
-                {% else %}
-                    bg-blue-50 border border-blue-200 text-blue-700
-                {% endif %}">
+            <div class="px-4 py-3 rounded-2xl mb-3 text-sm font-medium border
+                {% if message.tags == 'error' %}bg-red-50 border-red-100 text-red-600
+                {% elif message.tags == 'success' %}bg-green-50 border-green-100 text-green-600
+                {% else %}bg-blue-50 border-blue-100 text-blue-600{% endif %}">
+                <i class="fas fa-{% if message.tags == 'error' %}exclamation-circle{% elif message.tags == 'success' %}check-circle{% else %}info-circle{% endif %} mr-2"></i>
                 {{ message }}
             </div>
         {% endfor %}
     </div>
-{% endif %}
+    {% endif %}
 
-<!-- Conteúdo do Perfil -->
-<div class="bg-gray-50 min-h-screen py-8">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Formulário Principal -->
-            <div class="lg:col-span-2">
-                <form method="post" enctype="multipart/form-data" class="bg-white rounded-2xl shadow-lg border p-8">
+    <!-- Conteúdo principal -->
+    <main class="px-6 pb-24 space-y-6">
+        
+        <!-- Formulário de Informações Pessoais -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100">
+            <div class="p-6 border-b border-gray-100">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                    <i class="fas fa-user-edit text-gray-400"></i>
+                    Informações Pessoais
+                </h3>
+            </div>
+            
+            <form method="post" enctype="multipart/form-data" class="p-6">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="personal_info">
+                
+                <div class="space-y-5">
+                    <!-- Telefone -->
+                    <div>
+                        <label for="phone" class="block text-sm font-medium text-gray-700 mb-3">
+                            <i class="fas fa-phone text-gray-400 mr-2"></i>Telefone
+                        </label>
+                        <input type="tel" id="phone" name="phone" value="{{ member.phone|default:'' }}"
+                               class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
+                               placeholder="(11) 99999-9999">
+                    </div>
+                    
+                    <!-- Endereço -->
+                    <div>
+                        <label for="address" class="block text-sm font-medium text-gray-700 mb-3">
+                            <i class="fas fa-map-marker-alt text-gray-400 mr-2"></i>Endereço
+                        </label>
+                        <textarea id="address" name="address" rows="3"
+                                  class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all resize-none"
+                                  placeholder="Seu endereço completo">{{ member.address|default:'' }}</textarea>
+                    </div>
+                    
+                    <!-- Email (somente leitura) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-3">
+                            <i class="fas fa-envelope text-gray-400 mr-2"></i>Email
+                        </label>
+                        <input type="email" value="{{ member.email|default:'Não informado' }}" disabled
+                               class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-100 text-gray-500">
+                        <p class="text-xs text-gray-500 mt-2">Entre em contato com a administração para alterar</p>
+                    </div>
+                </div>
+                
+                <div class="mt-8 flex justify-end">
+                    <button type="submit" class="px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl transition-all duration-300 shadow-sm hover:shadow-md">
+                        <i class="fas fa-save mr-2"></i>Salvar Alterações
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Formulário de Alteração de Senha (Colapsável) -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100">
+            <button type="button" onclick="togglePasswordForm()" class="w-full p-6 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                <h3 class="text-lg font-semibold text-gray-800 flex items-center justify-between">
+                    <span class="flex items-center gap-2">
+                        <i class="fas fa-key text-gray-400"></i>
+                        Alterar Senha
+                    </span>
+                    <i id="passwordToggleIcon" class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+                </h3>
+            </button>
+            
+            <div id="passwordForm" class="hidden">
+                <form method="post" class="p-6">
                     {% csrf_token %}
+                    <input type="hidden" name="form_type" value="change_password">
                     
-                    <!-- Informações de Contato -->
-                    <div class="mb-12">
-                        <h2 class="font-giga-medium text-xl text-gray-900 mb-6 flex items-center gap-3 pb-3 border-b border-gray-200">
-                            <span class="text-2xl">📞</span>
-                            Informações de Contato
-                        </h2>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label for="phone" class="block text-sm font-medium text-gray-900 mb-2">Telefone</label>
-                                <input type="tel" 
-                                       id="phone" 
-                                       name="phone" 
-                                       class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
-                                              focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
-                                              focus:ring-church-red focus:ring-opacity-10 transition-all duration-300" 
-                                       placeholder="(11) 99999-9999"
-                                       value="{{ member.phone|default:'' }}">
-                            </div>
-                            
-                            <div>
-                                <label for="email" class="block text-sm font-medium text-gray-900 mb-2">Email</label>
-                                <input type="email" 
-                                       id="email" 
-                                       class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-100 text-gray-500 cursor-not-allowed" 
-                                       value="{{ member.email|default:'Não informado' }}"
-                                       disabled>
-                                <p class="text-sm text-gray-500 mt-2">Para alterar o email, entre em contato com a administração</p>
-                            </div>
+                    <div class="space-y-5">
+                        <div>
+                            <label for="current_password" class="block text-sm font-medium text-gray-700 mb-3">
+                                <i class="fas fa-lock text-gray-400 mr-2"></i>Senha Atual
+                            </label>
+                            <input type="password" id="current_password" name="current_password" required
+                                   class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
+                                   placeholder="Digite sua senha atual">
                         </div>
-                        
-                        <div class="mt-6">
-                            <label for="address" class="block text-sm font-medium text-gray-900 mb-2">Endereço</label>
-                            <textarea id="address" 
-                                      name="address" 
-                                      rows="3"
-                                      class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
-                                             focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
-                                             focus:ring-church-red focus:ring-opacity-10 transition-all duration-300 resize-none" 
-                                      placeholder="Digite seu endereço completo">{{ member.address|default:'' }}</textarea>
-                        </div>
-                    </div>
-                    
-                    <!-- Informações Pessoais -->
-                    <div class="mb-12">
-                        <h2 class="font-giga-medium text-xl text-gray-900 mb-6 flex items-center gap-3 pb-3 border-b border-gray-200">
-                            <span class="text-2xl">👤</span>
-                            Informações Pessoais
-                        </h2>
-                        
-                        <div class="space-y-6">
-                            <div>
-                                <label for="interests" class="block text-sm font-medium text-gray-900 mb-2">Interesses e Hobbies</label>
-                                <textarea id="interests" 
-                                          name="interests" 
-                                          rows="4"
-                                          class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
-                                                 focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
-                                                 focus:ring-church-red focus:ring-opacity-10 transition-all duration-300 resize-none" 
-                                          placeholder="Descreva seus interesses, hobbies e atividades que gosta de fazer">{{ member.interests|default:'' }}</textarea>
-                            </div>
-                            
-                            <div>
-                                <label for="available_days" class="block text-sm font-medium text-gray-900 mb-2">Dias Disponíveis</label>
-                                <input type="text" 
-                                       id="available_days" 
-                                       name="available_days" 
-                                       class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
-                                              focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
-                                              focus:ring-church-red focus:ring-opacity-10 transition-all duration-300" 
-                                       placeholder="Ex: Terças e quintas à noite, fins de semana"
-                                       value="{{ member.available_days|default:'' }}">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Testemunho -->
-                    <div class="mb-12">
-                        <h2 class="font-giga-medium text-xl text-gray-900 mb-6 flex items-center gap-3 pb-3 border-b border-gray-200">
-                            <span class="text-2xl">✝️</span>
-                            Meu Testemunho
-                        </h2>
                         
                         <div>
-                            <label for="testimony" class="block text-sm font-medium text-gray-900 mb-2">Compartilhe seu testemunho</label>
-                            <textarea id="testimony" 
-                                      name="testimony" 
-                                      rows="6"
-                                      class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-gray-50 
-                                             focus:outline-none focus:border-church-red focus:bg-white focus:ring-4 
-                                             focus:ring-church-red focus:ring-opacity-10 transition-all duration-300 resize-none" 
-                                      placeholder="Conte um pouco sobre sua história com Deus, como chegou à igreja, transformações em sua vida...">{{ member.testimony|default:'' }}</textarea>
+                            <label for="new_password" class="block text-sm font-medium text-gray-700 mb-3">
+                                <i class="fas fa-key text-gray-400 mr-2"></i>Nova Senha
+                            </label>
+                            <input type="password" id="new_password" name="new_password" required
+                                   class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
+                                   placeholder="Digite sua nova senha">
                         </div>
-                    </div>
-                    
-                    <!-- Disponibilidade para Ministério -->
-                    <div class="mb-8">
-                        <h2 class="font-giga-medium text-xl text-gray-900 mb-6 flex items-center gap-3 pb-3 border-b border-gray-200">
-                            <span class="text-2xl">🙏</span>
-                            Disponibilidade para Ministério
-                        </h2>
                         
-                        <div class="space-y-4">
-                            <label class="flex items-start gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-gray-300 transition-all duration-200 cursor-pointer
-                                {% if member.is_available_to_consolidate %}
-                                    bg-green-50 border-green-200
-                                {% else %}
-                                    bg-gray-50
-                                {% endif %}">
-                                <input type="checkbox" 
-                                       id="is_available_to_consolidate" 
-                                       name="is_available_to_consolidate" 
-                                       class="w-5 h-5 text-church-red border-gray-300 rounded focus:ring-church-red focus:ring-2 mt-0.5"
-                                       {% if member.is_available_to_consolidate %}checked{% endif %}>
-                                <div>
-                                    <div class="font-medium text-gray-900">Disponível para Consolidação</div>
-                                    <p class="text-sm text-gray-600 mt-1">Ajudar novos convertidos em seus primeiros passos na fé</p>
-                                </div>
+                        <div>
+                            <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-3">
+                                <i class="fas fa-check-circle text-gray-400 mr-2"></i>Confirmar Nova Senha
                             </label>
-                            
-                            <label class="flex items-start gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-gray-300 transition-all duration-200 cursor-pointer
-                                {% if member.is_available_to_disciple %}
-                                    bg-green-50 border-green-200
-                                {% else %}
-                                    bg-gray-50
-                                {% endif %}">
-                                <input type="checkbox" 
-                                       id="is_available_to_disciple" 
-                                       name="is_available_to_disciple" 
-                                       class="w-5 h-5 text-church-red border-gray-300 rounded focus:ring-church-red focus:ring-2 mt-0.5"
-                                       {% if member.is_available_to_disciple %}checked{% endif %}>
-                                <div>
-                                    <div class="font-medium text-gray-900">Disponível para Discipulado</div>
-                                    <p class="text-sm text-gray-600 mt-1">Acompanhar e ensinar outros membros em seu crescimento espiritual</p>
-                                </div>
-                            </label>
+                            <input type="password" id="confirm_password" name="confirm_password" required
+                                   class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
+                                   placeholder="Confirme sua nova senha">
                         </div>
                     </div>
                     
-                    <button type="submit" class="w-full py-3 px-6 bg-gradient-to-r from-church-red to-church-dark text-white 
-                                                   rounded-xl font-semibold text-lg transition-all duration-300 
-                                                   hover:shadow-lg hover:shadow-church-red/25 hover:-translate-y-0.5 
-                                                   active:translate-y-0 focus:outline-none focus:ring-4 focus:ring-church-red 
-                                                   focus:ring-opacity-25 flex items-center justify-center gap-2">
-                        <span>💾</span>
-                        <span>Salvar Alterações</span>
-                    </button>
+                    <div class="mt-8 flex justify-end">
+                        <button type="submit" class="px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl transition-all duration-300 shadow-sm hover:shadow-md">
+                            <i class="fas fa-shield-alt mr-2"></i>Alterar Senha
+                        </button>
+                    </div>
                 </form>
             </div>
-            
-            <!-- Sidebar -->
-            <div class="space-y-8">
-                <!-- Informações da Conta -->
-                <div class="bg-white rounded-2xl shadow-lg border">
-                    <div class="p-6 border-b border-gray-100">
-                        <h3 class="font-giga-medium text-lg text-gray-900 flex items-center gap-3">
-                            <span class="text-xl">ℹ️</span>
-                            Informações da Conta
-                        </h3>
-                    </div>
-                    
-                    <div class="p-6 space-y-4">
-                        <div class="flex items-center gap-3">
-                            <span class="text-lg">📧</span>
-                            <span class="text-gray-700">{{ member.email|default:'Email não informado' }}</span>
-                        </div>
-                        
-                        {% if member.birth_date %}
-                        <div class="flex items-center gap-3">
-                            <span class="text-lg">🎂</span>
-                            <span class="text-gray-700">{{ member.birth_date|date:"d/m/Y" }}</span>
-                        </div>
-                        {% endif %}
-                        
-                        {% if member.gender %}
-                        <div class="flex items-center gap-3">
-                            <span class="text-lg">👤</span>
-                            <span class="text-gray-700">{{ member.get_gender_display }}</span>
-                        </div>
-                        {% endif %}
-                        
-                        {% if member.marital_status %}
-                        <div class="flex items-center gap-3">
-                            <span class="text-lg">💍</span>
-                            <span class="text-gray-700">{{ member.get_marital_status_display }}</span>
-                        </div>
-                        {% endif %}
-                        
-                        {% if member.conversion_date %}
-                        <div class="flex items-center gap-3">
-                            <span class="text-lg">✝️</span>
-                            <span class="text-gray-700">Convertido em {{ member.conversion_date|date:"d/m/Y" }}</span>
-                        </div>
-                        {% endif %}
-                    </div>
+        </div>
+
+        <!-- Ministérios (se houver) -->
+        {% if ministries %}
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="fas fa-hands-praying text-gray-400"></i>
+                Meus Ministérios
+            </h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {% for ministry in ministries %}
+                <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                    <i class="fas fa-cross text-gray-400"></i>
+                    <span class="text-sm font-medium text-gray-700">{{ ministry.name }}</span>
                 </div>
-                
-                <!-- Ministérios -->
-                {% if ministries %}
-                <div class="bg-white rounded-2xl shadow-lg border">
-                    <div class="p-6 border-b border-gray-100">
-                        <h3 class="font-giga-medium text-lg text-gray-900 flex items-center gap-3">
-                            <span class="text-xl">⛪</span>
-                            Meus Ministérios
-                        </h3>
-                    </div>
-                    
-                    <div class="p-6 space-y-3">
-                        {% for ministry in ministries %}
-                        <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                            <span class="text-lg">🙏</span>
-                            <span class="text-gray-700">{{ ministry.name }}</span>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-                
-                <!-- Bairro -->
-                {% if member.neighborhood %}
-                <div class="bg-white rounded-2xl shadow-lg border">
-                    <div class="p-6 border-b border-gray-100">
-                        <h3 class="font-giga-medium text-lg text-gray-900 flex items-center gap-3">
-                            <span class="text-xl">📍</span>
-                            Localização
-                        </h3>
-                    </div>
-                    
-                    <div class="p-6">
-                        <div class="flex items-center gap-3">
-                            <span class="text-lg">🏘️</span>
-                            <span class="text-gray-700">{{ member.neighborhood.name }}</span>
-                        </div>
-                    </div>
-                </div>
-                {% endif %}
+                {% endfor %}
             </div>
         </div>
-    </div>
-</div>
+        {% endif %}
+    </main>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Formatação do telefone
-        const phoneInput = document.getElementById('phone');
-        if (phoneInput) {
-            phoneInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\D/g, '');
-                if (value.length <= 11) {
-                    value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
-                    if (value.length < 14) {
-                        value = value.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+    <!-- Bottom Navigation -->
+    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-lg bg-white/95 backdrop-blur-lg rounded-2xl shadow-lg border border-gray-200 px-2 py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out nav-visible">
+        <!-- Home -->
+        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 bg-gray-100 group-hover:bg-gray-200">
+                <i class="fas fa-home text-lg transition-transform group-hover:scale-110 text-gray-600"></i>
+            </div>
+            <span class="group-hover:font-semibold transition-all">Home</span>
+        </a>
+        
+        <!-- Consolidação -->
+        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 bg-gray-100 group-hover:bg-gray-200">
+                <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110 text-gray-600"></i>
+            </div>
+            <span class="group-hover:font-semibold transition-all">Consolidar</span>
+        </a>
+        
+        <!-- Eventos -->
+        <a href="{% url 'event_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 bg-gray-100 group-hover:bg-gray-200">
+                <i class="fas fa-calendar-check text-lg transition-transform group-hover:scale-110 text-gray-600"></i>
+            </div>
+            <span class="group-hover:font-semibold transition-all">Eventos</span>
+        </a>
+        
+        <!-- Perfil (Ativo) -->
+        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-semibold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
+            <div class="relative">
+                <div class="py-2.5 px-4 rounded-xl mb-1.5 bg-gray-800 shadow-md">
+                    <i class="fas fa-user-circle text-white text-lg"></i>
+                </div>
+            </div>
+            <span class="text-gray-800">Perfil</span>
+        </a>
+    </nav>
+
+    <script>
+        // Função para alternar o formulário de senha
+        function togglePasswordForm() {
+            const form = document.getElementById('passwordForm');
+            const icon = document.getElementById('passwordToggleIcon');
+            
+            if (form.classList.contains('hidden')) {
+                form.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                form.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Upload automático da foto
+            const photoInput = document.getElementById('photoInput');
+            const photoForm = document.getElementById('photoForm');
+            
+            photoInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    // Validar tipo de arquivo
+                    const file = this.files[0];
+                    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+                    const maxSize = 5 * 1024 * 1024; // 5MB
+                    
+                    if (!validTypes.includes(file.type)) {
+                        alert('Por favor, selecione um arquivo de imagem válido (JPG, PNG ou GIF)');
+                        return;
+                    }
+                    
+                    if (file.size > maxSize) {
+                        alert('O arquivo deve ter no máximo 5MB');
+                        return;
+                    }
+                    
+                    // Enviar formulário automaticamente
+                    photoForm.submit();
+                }
+            });
+
+            // Formatação do telefone
+            const phoneInput = document.getElementById('phone');
+            if (phoneInput) {
+                phoneInput.addEventListener('input', function(e) {
+                    let value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 11) {
+                        value = value.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+                        if (value.length < 14) {
+                            value = value.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+                        }
+                    }
+                    e.target.value = value;
+                });
+            }
+
+            // Validação de senha
+            const newPassword = document.getElementById('new_password');
+            const confirmPassword = document.getElementById('confirm_password');
+            
+            function validatePasswords() {
+                if (newPassword.value && confirmPassword.value) {
+                    if (newPassword.value !== confirmPassword.value) {
+                        confirmPassword.setCustomValidity('As senhas não coincidem');
+                        confirmPassword.classList.add('border-red-400');
+                    } else {
+                        confirmPassword.setCustomValidity('');
+                        confirmPassword.classList.remove('border-red-400');
                     }
                 }
-                e.target.value = value;
-            });
-        }
-        
-        // Atualização visual dos checkboxes
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(checkbox => {
-            const label = checkbox.closest('label');
-            
-            checkbox.addEventListener('change', function() {
-                if (this.checked) {
-                    label.classList.add('bg-green-50', 'border-green-200');
-                    label.classList.remove('bg-gray-50');
-                } else {
-                    label.classList.remove('bg-green-50', 'border-green-200');
-                    label.classList.add('bg-gray-50');
+            }
+
+            newPassword?.addEventListener('input', validatePasswords);
+            confirmPassword?.addEventListener('input', validatePasswords);
+
+            // Script para ocultar/mostrar menu inferior ao rolar
+            let lastScrollTop = 0;
+            let isScrolling;
+            const nav = document.getElementById('bottomNav');
+            const scrollThreshold = 50;
+
+            window.addEventListener('scroll', function() {
+                clearTimeout(isScrolling);
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                
+                if (scrollTop <= 100) {
+                    nav.classList.remove('nav-hidden');
+                    nav.classList.add('nav-visible');
+                    lastScrollTop = scrollTop;
+                    return;
+                }
+
+                if (Math.abs(scrollTop - lastScrollTop) > scrollThreshold) {
+                    if (scrollTop > lastScrollTop) {
+                        nav.classList.add('nav-hidden');
+                        nav.classList.remove('nav-visible');
+                    } else {
+                        nav.classList.remove('nav-hidden');
+                        nav.classList.add('nav-visible');
+                    }
+                    lastScrollTop = scrollTop;
+                }
+
+                isScrolling = setTimeout(function() {
+                    nav.classList.remove('nav-hidden');
+                    nav.classList.add('nav-visible');
+                }, 1000);
+            }, false);
+
+            // Mostra o menu quando passar o mouse próximo à parte inferior
+            document.addEventListener('mousemove', function(e) {
+                const windowHeight = window.innerHeight;
+                const mouseY = e.clientY;
+                
+                if (windowHeight - mouseY < 150) {
+                    nav.classList.remove('nav-hidden');
+                    nav.classList.add('nav-visible');
                 }
             });
         });
-        
-        // Efeitos visuais nos inputs
-        const inputs = document.querySelectorAll('input:not([disabled]), textarea');
-        inputs.forEach(input => {
-            input.addEventListener('focus', function() {
-                this.parentElement.classList.add('transform', 'scale-105');
-            });
-            
-            input.addEventListener('blur', function() {
-                this.parentElement.classList.remove('transform', 'scale-105');
-            });
-        });
-    });
-</script>
+    </script>
 {% endblock %}

@@ -145,25 +145,7 @@
         </div>
     </section>
 
-<!-- Mensagens do Django -->
-{% if messages %}
-        <div class="px-4 sm:px-6 md:px-8 mt-4">
-        {% for message in messages %}
-                <div class="px-4 py-3 rounded-lg mb-3 text-sm
-                    {% if message.tags == 'error' %}
-                        bg-red-50 border border-red-200 text-church-danger
-                    {% elif message.tags == 'success' %}
-                        bg-church-red/10 border border-church-red/20 text-church-red
-                    {% else %}
-                        bg-church-red/5 border border-church-red/10 text-church-red
-                    {% endif %}">
-                {{ message }}
-            </div>
-        {% endfor %}
-    </div>
-{% endif %}
-
-    <main class="px-4 md:px-8 pt-6 pb-24 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400">
+    <main class="px-4 md:px-8 pt-6 pb-12 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400" style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
         
         {% if can_consolidate %}
             <section class="relative overflow-hidden rounded-2xl border-2 shadow-xl" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
@@ -305,129 +287,13 @@
                     
                     <!-- Botão CTA Principal -->
                     <div class="text-center pt-4 sm:pt-6 border-t-2" style="border-color: rgba(201, 9, 5, 0.1);">
-                        <a href="#consolidacao" class="inline-flex items-center justify-center gap-2 sm:gap-3 md:gap-4 px-6 sm:px-12 md:px-24 py-3 sm:py-4 md:py-5 text-white font-black text-base sm:text-lg rounded-xl sm:rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105 shadow-xl hover:-translate-y-1 w-full sm:w-auto" style="background-color: #C90905;">
+                        <a href="{% url 'member_consolidation' %}" class="inline-flex items-center justify-center gap-2 sm:gap-3 md:gap-4 px-6 sm:px-12 md:px-24 py-3 sm:py-4 md:py-5 text-white font-black text-base sm:text-lg rounded-xl sm:rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105 shadow-xl hover:-translate-y-1 w-full sm:w-auto" style="background-color: #C90905;">
                             <i class="fas fa-users text-white text-lg sm:text-xl md:text-2xl"></i>
                             <span class="text-white">Meus Consolidados</span>
                             <i class="fas fa-arrow-right text-white text-base sm:text-lg md:text-xl"></i>
                         </a>
                         <p class="text-xs sm:text-sm text-gray-600 mt-3 sm:mt-4 font-medium px-4">Clique para ver todas as pessoas que você acompanha</p>
                 </div>
-            </div>
-        </section>
-        {% endif %}
-
-        
-        <!-- Pessoas que Acompanho -->
-        {% if followups_responsible %}
-        <section>
-            <div class="mb-6">
-                <div class="flex items-center justify-between mb-2">
-                    <h3 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                        <div class="w-10 h-10 bg-gradient-to-br from-church-red/20 to-church-red/30 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-users text-church-red text-lg"></i>
-                        </div>
-                    Pessoas que Acompanho
-                    </h3>
-                    <div class="flex items-center gap-2 px-3 py-2 bg-church-red/10 rounded-xl">
-                        <i class="fas fa-heart text-church-red"></i>
-                        <span class="text-sm font-medium text-church-red">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }}</span>
-                    </div>
-                </div>
-                <p class="text-sm text-slate-500">Membros que estão sob sua orientação espiritual</p>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {% for followup in followups_responsible %}
-                <div class="group bg-gradient-to-br from-church-cream to-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-church-red/20 hover:border-church-red/40 hover:-translate-y-2 relative overflow-hidden">
-                    <div class="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-church-gold/10 to-transparent rounded-full -mr-10 -mt-10"></div>
-                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-church-red to-church-red-light"></div>
-
-                    <div class="flex items-center gap-4 mb-4">
-                        <div class="w-16 h-16 bg-gradient-to-br from-church-red/15 to-church-red-light/25 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md border border-church-red/20">
-                            <span class="text-church-red font-bold text-xl drop-shadow-sm">{{ followup.accompanied.name|first|upper }}</span>
-                        </div>
-                        <div class="flex-1">
-                            <h4 class="font-bold text-lg text-church-dark">{{ followup.accompanied.name }}</h4>
-                            <p class="text-sm text-gray-600 flex items-center gap-2">
-                                <i class="fas fa-phone text-church-gold"></i>
-                                {{ followup.accompanied.phone|default:"Telefone não informado" }}
-                            </p>
-                        </div>
-                        <span class="px-3 py-1 bg-gradient-to-r from-church-red/15 to-church-red-light/15 text-church-red text-xs font-semibold rounded-full border border-church-red/30 shadow-sm">
-                            <i class="fas fa-circle text-church-red text-xs mr-1"></i>
-                            Ativo
-                        </span>
-                    </div>
-                    
-                    <div class="flex items-center justify-between pt-4 border-t border-church-red/10">
-                        <div class="flex items-center gap-3">
-                            <button class="flex flex-col items-center p-2 bg-church-red/5 hover:bg-church-red/10 rounded-xl transition-colors group/btn">
-                                <div class="w-10 h-10 bg-gradient-to-br from-church-red to-church-red-light rounded-lg flex items-center justify-center mb-1 group-hover/btn:scale-110 transition-transform shadow-md">
-                                    <i class="fas fa-calendar-plus text-church-cream text-sm drop-shadow-sm"></i>
-                                </div>
-                                <span class="text-xs text-church-red font-semibold">Agendar</span>
-                            </button>
-                            <button class="flex flex-col items-center p-2 bg-church-gold/5 hover:bg-church-gold/10 rounded-xl transition-colors group/btn">
-                                <div class="w-10 h-10 bg-gradient-to-br from-church-gold to-church-light rounded-lg flex items-center justify-center mb-1 group-hover/btn:scale-110 transition-transform shadow-md">
-                                    <i class="fas fa-message text-church-cream text-sm drop-shadow-sm"></i>
-                                </div>
-                                <span class="text-xs text-church-gold font-semibold">Contatar</span>
-                            </button>
-                            <button class="flex flex-col items-center p-2 bg-church-red-light/5 hover:bg-church-red-light/10 rounded-xl transition-colors group/btn">
-                                <div class="w-10 h-10 bg-gradient-to-br from-church-red-light to-church-red rounded-lg flex items-center justify-center mb-1 group-hover/btn:scale-110 transition-transform shadow-md">
-                                    <i class="fas fa-chart-line text-church-cream text-sm drop-shadow-sm"></i>
-                                </div>
-                                <span class="text-xs text-church-red-light font-semibold">Progresso</span>
-                            </button>
-                        </div>
-                        <button class="px-4 py-2 bg-gradient-to-r from-church-red to-church-red-light text-church-cream text-sm font-bold rounded-xl hover:shadow-lg transition-all duration-300 hover:scale-105 shadow-md border border-church-red/20">
-                            <i class="fas fa-eye mr-1"></i>
-                            Detalhes
-                        </button>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </section>
-        {% endif %}
-        
-        <!-- Meus Acompanhadores -->
-        {% if followups_received %}
-        <section>
-            <div class="mb-6">
-                <div class="flex items-center justify-between mb-2">
-                    <h3 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                        <i class="fas fa-handshake text-church-red"></i>
-                    Meus Acompanhadores
-                    </h3>
-                </div>
-                <p class="text-sm text-slate-500">Pessoas que estão me orientando espiritualmente</p>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {% for followup in followups_received %}
-                <div class="bg-gradient-to-br from-church-warm to-church-cream rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-church-gold/30 hover:border-church-gold/50 hover:-translate-y-2 relative overflow-hidden">
-                    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-church-gold to-church-light"></div>
-                    <div class="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-church-red/5 to-transparent rounded-full -mr-8 -mt-8"></div>
-                    
-                    <div class="flex items-center gap-4">
-                        <div class="w-16 h-16 bg-gradient-to-br from-church-gold/20 to-church-light/30 rounded-full flex items-center justify-center shadow-md border border-church-gold/30">
-                            <span class="text-church-gold font-bold text-xl drop-shadow-sm">{{ followup.responsible.name|first|upper }}</span>
-                        </div>
-                        <div class="flex-1">
-                            <h4 class="font-bold text-lg text-church-dark">{{ followup.responsible.name }}</h4>
-                            <p class="text-sm text-gray-600 flex items-center gap-2">
-                                <i class="fas fa-phone text-church-red"></i>
-                                {{ followup.responsible.phone|default:"Telefone não informado" }}
-                            </p>
-                            <span class="inline-flex px-3 py-1 bg-church-gold/15 text-church-gold text-xs font-semibold rounded-full mt-2 border border-church-gold/30 shadow-sm">
-                                <i class="fas fa-check-circle mr-1"></i>
-                                Mentor Ativo
-                            </span>
-                    </div>
-                    </div>
-                </div>
-                {% endfor %}
             </div>
         </section>
         {% endif %}
@@ -510,7 +376,7 @@
         
         <!-- Consolidação -->
         {% if can_consolidate %}
-        <a href="#consolidacao" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover:shadow-lg" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
                 <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
             </div>

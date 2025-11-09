@@ -5,116 +5,182 @@
 
 {% block head %}
 <style>
-    /* Cores customizadas da igreja */
+    /* Variáveis CSS customizadas para cores da igreja */
     :root {
-        --church-red: #C90905;
-        --church-dark: #260200;
-        --church-danger: #8C0910;
-        --church-light: #F66F03;
+        --church-primary: #C90905;
+        --church-secondary: #260200;
         --church-accent: #FDDEB9;
+        --church-light: #F66F03;
     }
-    
-    /* Classes customizadas com cores da igreja */
-    .bg-church-red { background-color: var(--church-red) !important; }
-    .bg-church-dark { background-color: var(--church-dark) !important; }
-    .bg-church-danger { background-color: var(--church-danger) !important; }
-    .text-church-red { color: var(--church-red) !important; }
-    .text-church-dark { color: var(--church-dark) !important; }
-    .text-church-danger { color: var(--church-danger) !important; }
-    .border-church-red { border-color: var(--church-red) !important; }
-    .border-church-dark { border-color: var(--church-dark) !important; }
-    
-    /* Gradientes personalizados */
-    .bg-gradient-church {
-        background: linear-gradient(135deg, var(--church-red) 0%, var(--church-dark) 100%) !important;
+
+    /* Animações customizadas */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
-    
-    /* Focus states com cores da igreja */
+
+    @keyframes fadeInLeft {
+        from {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+
+    @keyframes scaleIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0px) rotate(0deg); }
+        50% { transform: translateY(-10px) rotate(180deg); }
+    }
+
+    .animate-fade-in-up {
+        animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .animate-fade-in-left {
+        animation: fadeInLeft 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .animate-scale-in {
+        animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .animate-float {
+        animation: float 20s ease-in-out infinite;
+    }
+
+    /* Classes customizadas para gradientes da igreja */
+    .bg-church-gradient {
+        background: linear-gradient(135deg, var(--church-primary) 0%, var(--church-secondary) 100%);
+    }
+
+    .bg-church-light-gradient {
+        background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
+    }
+
+    /* Pattern de fundo */
+    .bg-pattern::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+        background-size: 40px 40px;
+        pointer-events: none;
+        z-index: 1;
+        animation: float 25s ease-in-out infinite;
+    }
+
+    /* Focus personalizado */
     .focus-church:focus {
         outline: none;
-        border-color: var(--church-red) !important;
+        border-color: var(--church-primary) !important;
         box-shadow: 0 0 0 4px rgba(201, 9, 5, 0.1) !important;
     }
-    
-    /* Input focus states */
-    input:focus {
-        border-color: #C90905 !important;
-        box-shadow: 0 0 0 4px rgba(201, 9, 5, 0.1) !important;
+
+    /* Efeito de texto gradiente */
+    .text-gradient {
+        background: linear-gradient(45deg, white, rgba(255, 255, 255, 0.8));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
-    
-    /* Hover effects */
-    .hover-church:hover {
-        background-color: var(--church-dark) !important;
-        transform: translateY(-2px);
-        box-shadow: 0 10px 25px rgba(201, 9, 5, 0.3) !important;
-    }
-    
-    .hover-text-church:hover {
-        color: var(--church-dark) !important;
-    }
-    
-    /* Ring colors */
-    .ring-church {
-        --tw-ring-color: rgba(201, 9, 5, 0.1) !important;
-    }
-    
-    @keyframes spin {
-        to { transform: rotate(360deg); }
-    }
-    
-    .animate-spin-custom {
-        animation: spin 1s linear infinite;
+
+    /* Responsive ajustes */
+    @media (max-width: 640px) {
+        .text-gradient {
+            -webkit-text-fill-color: white;
+            background: none;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<body class="min-h-screen font-sans" style="background: linear-gradient(135deg, #C90905 0%, #260200 100%)">
-    <div class="min-h-screen flex items-center justify-center p-4 sm:p-8">
-        <div class="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-5xl w-full grid grid-cols-1 lg:grid-cols-2 min-h-[600px]">
-            <!-- Left Side - Welcome -->
-            <div class="flex flex-col items-center justify-center p-8 lg:p-12 text-white text-center" style="background: linear-gradient(135deg, #C90905 0%, #260200 100%)">
-                <div class="w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 bg-white rounded-full flex items-center justify-center mb-6 lg:mb-8 shadow-xl overflow-hidden">
+<body class="min-h-screen overflow-x-hidden" style="font-family: 'Giga Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, var(--church-primary) 0%, var(--church-secondary) 100%);">
+    <!-- Container principal -->
+    <div class="min-h-screen flex items-center justify-center p-0 sm:p-3 lg:p-8 relative bg-pattern">
+        <!-- Card de login -->
+        <div class="bg-white rounded-none sm:rounded-2xl lg:rounded-3xl shadow-none sm:shadow-2xl overflow-hidden w-full max-w-none sm:max-w-lg lg:max-w-5xl grid grid-cols-1 lg:grid-cols-2 min-h-screen sm:min-h-[500px] lg:min-h-[600px] animate-scale-in">
+            
+            <!-- Seção de boas-vindas - Mobile: top, Desktop: left -->
+            <div class="text-white p-6 sm:p-8 lg:p-12 flex flex-col items-center justify-center text-center relative overflow-hidden order-1 lg:order-1" style="background: var(--church-secondary);">
+                <!-- Logo -->
+                <div class="w-20 h-20 sm:w-24 sm:h-24 lg:w-32 lg:h-32 bg-white rounded-full flex items-center justify-center mb-4 sm:mb-6 lg:mb-8 shadow-xl overflow-hidden z-10 animate-fade-in-up" style="animation-delay: 0.2s; animation-fill-mode: both;">
                     <img src="{% static 'assets/logotype.jpg' %}" alt="Igreja Filadelfia" class="w-full h-full object-cover" onerror="this.style.display='none'">
                 </div>
                 
-                <div class="mb-8">
-                    <h2 class="font-bold text-3xl lg:text-4xl xl:text-5xl mb-2 drop-shadow-lg">Bem-vindo!</h2>
-                    <p class="text-sm lg:text-xl opacity-90 leading-relaxed max-w-sm">Faça login para acessar sua área de membro da Igreja Filadelfia</p>
+                <!-- Título e subtítulo -->
+                <div class="mb-6 lg:mb-8 z-10">
+                    <h1 class="font-bold text-2xl sm:text-3xl lg:text-4xl xl:text-5xl mb-2 sm:mb-3 text-gradient animate-fade-in-up" style="animation-delay: 0.3s; animation-fill-mode: both; font-family: 'Tusker', 'Giga Sans', sans-serif;">
+                        Bem-vindo!
+                    </h1>
+                    <p class="text-sm sm:text-base lg:text-lg opacity-90 leading-relaxed max-w-xs sm:max-w-sm animate-fade-in-up" style="animation-delay: 0.4s; animation-fill-mode: both;">
+                        Faça login para acessar sua área de membro da Igreja Filadelfia
+                    </p>
                 </div>
                 
-                <div class="hidden lg:flex flex-col space-y-4 mt-6">
-                    <div class="flex items-center gap-3 text-base">
+                <!-- Features - apenas desktop -->
+                <div class="hidden lg:flex flex-col space-y-3 z-10 animate-fade-in-up" style="animation-delay: 0.5s; animation-fill-mode: both;">
+                    <div class="flex items-center gap-3 text-sm lg:text-base opacity-90">
                         <div class="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-sm">👥</div>
                         <span>Acompanhe seus discipulados</span>
                     </div>
-                    <div class="flex items-center gap-3 text-base">
+                    <div class="flex items-center gap-3 text-sm lg:text-base opacity-90">
                         <div class="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-sm">📅</div>
                         <span>Veja eventos da igreja</span>
                     </div>
-                    <div class="flex items-center gap-3 text-base">
+                    <div class="flex items-center gap-3 text-sm lg:text-base opacity-90">
                         <div class="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-sm">🙏</div>
                         <span>Gerencie seus ministérios</span>
                     </div>
-                    <div class="flex items-center gap-3 text-base">
+                    <div class="flex items-center gap-3 text-sm lg:text-base opacity-90">
                         <div class="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-sm">💬</div>
                         <span>Mantenha seu perfil atualizado</span>
                     </div>
                 </div>
             </div>
             
-            <div class="flex flex-col justify-center p-8 sm:p-12 lg:p-16 bg-[#fffae7] from-gray-50 to-white">
-                <div class="text-center mb-8 lg:mb-10">
-                    <h1 class="font-bold text-3xl text-gray-900 mb-3">Entrar na Conta</h1>
-                    <p class="text-gray-600 text-base lg:text-lg">Digite suas credenciais para continuar</p>
+            <!-- Seção do formulário -->
+            <div class="p-6 sm:p-8 lg:p-12 xl:p-16 flex flex-col justify-center order-2 lg:order-2" style="background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);">
+                <!-- Cabeçalho do form -->
+                <div class="text-center mb-6 sm:mb-8 lg:mb-10 animate-fade-in-left" style="animation-delay: 0.3s; animation-fill-mode: both;">
+                    <h2 class="font-bold text-xl sm:text-2xl lg:text-3xl text-gray-900 mb-2 sm:mb-3" style="font-family: 'Tusker', 'Giga Sans', sans-serif;">
+                        Entrar na Conta
+                    </h2>
+                    <p class="text-gray-600 text-sm sm:text-base lg:text-lg">
+                        Digite suas credenciais para continuar
+                    </p>
                 </div>
                 
+                <!-- Mensagens de erro/sucesso -->
                 {% if messages %}
-                    <div class="mb-6">
+                    <div class="mb-4 sm:mb-6 animate-fade-in-left" style="animation-delay: 0.4s; animation-fill-mode: both;">
                         {% for message in messages %}
-                            <div class="px-4 py-3 rounded-lg mb-3 text-sm
+                            <div class="px-3 sm:px-4 py-2 sm:py-3 rounded-lg mb-2 sm:mb-3 text-xs sm:text-sm font-medium
                                 {% if message.tags == 'error' %}
-                                    bg-red-50 border border-red-200 text-church-danger
+                                    bg-red-50 border border-red-200 text-red-700
                                 {% elif message.tags == 'success' %}
                                     bg-green-50 border border-green-200 text-green-700
                                 {% else %}
@@ -126,57 +192,65 @@
                     </div>
                 {% endif %}
                 
-                <form method="post" id="loginForm" class="space-y-6">
+                <!-- Formulário -->
+                <form method="post" id="loginForm" class="space-y-4 sm:space-y-6 animate-fade-in-left" style="animation-delay: 0.5s; animation-fill-mode: both;">
                     {% csrf_token %}
                     
-                    <div>
-                        <label for="email" class="block text-sm font-medium text-gray-900 mb-2">Email</label>
+                    <!-- Campo Email -->
+                    <div class="group">
+                        <label for="email" class="block text-xs sm:text-sm font-semibold text-gray-800 mb-1 sm:mb-2 tracking-wide">
+                            Email
+                        </label>
                         <input type="email" 
                                id="email" 
                                name="email" 
-                               class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-white 
-                                      focus:outline-none transition-all duration-300" 
+                               class="w-full px-3 sm:px-4 py-3 sm:py-4 border-2 border-gray-200 rounded-xl text-sm sm:text-base bg-white 
+                                      transition-all duration-300 hover:border-gray-300 focus:border-gray-400 focus:outline-none
+                                      transform hover:-translate-y-0.5 focus:-translate-y-1" 
                                placeholder="Digite seu email"
                                value="{{ request.POST.email|default:'' }}"
                                required>
                     </div>
                     
-                    <div>
-                        <label for="password" class="block text-sm font-medium text-gray-900 mb-2">Senha</label>
+                    <!-- Campo Senha -->
+                    <div class="group">
+                        <label for="password" class="block text-xs sm:text-sm font-semibold text-gray-800 mb-1 sm:mb-2 tracking-wide">
+                            Senha
+                        </label>
                         <input type="password" 
                                id="password" 
                                name="password" 
-                               class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base bg-white 
-                                      focus:outline-none transition-all duration-300" 
+                               class="w-full px-3 sm:px-4 py-3 sm:py-4 border-2 border-gray-200 rounded-xl text-sm sm:text-base bg-white 
+                                      transition-all duration-300 hover:border-gray-300 focus:border-gray-400 focus:outline-none
+                                      transform hover:-translate-y-0.5 focus:-translate-y-1" 
                                placeholder="Digite sua senha"
                                required>
                     </div>
                     
+                    <!-- Botão de login -->
                     <button type="submit" 
                             id="loginBtn"
-                            class="w-full py-3 px-6 text-white rounded-xl font-semibold text-lg 
-                                   transition-all duration-300 active:translate-y-0 
-                                   focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed
-                                   relative overflow-hidden"
-                            style="background: linear-gradient(135deg, #C90905 0%, #260200 100%);"
-                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 25px rgba(201, 9, 5, 0.3)'"
-                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
-                            onmousedown="this.style.transform='translateY(0)'"
-                            onmouseup="this.style.transform='translateY(-2px)'">
-                        <span id="loginBtnText">Entrar</span>
+                            class="w-full py-3 sm:py-4 px-4 sm:px-6 text-white rounded-xl font-semibold text-sm sm:text-base lg:text-lg 
+                                   transition-all duration-300 active:scale-95 
+                                   focus:outline-none focus:ring-4 focus:ring-red-100 disabled:opacity-75 disabled:cursor-not-allowed
+                                   relative overflow-hidden shadow-lg hover:shadow-xl
+                                   transform hover:-translate-y-1 hover:shadow-red-200/50"
+                            style="margin-top: 1.5rem; background: var(--church-secondary);">
+                        <span id="loginBtnText" class="transition-opacity duration-300">Entrar</span>
                         <div id="loginBtnSpinner" class="hidden absolute inset-0 flex items-center justify-center">
-                            <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <div class="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                         </div>
                     </button>
                 </form>
                 
-                <div class="text-center mt-8 space-y-3">
-                    <p class="text-sm text-gray-600">
+                <!-- Footer -->
+                <div class="text-center mt-6 sm:mt-8 animate-fade-in-left" style="animation-delay: 0.6s; animation-fill-mode: both;">
+                    <p class="text-xs sm:text-sm text-gray-600">
                         Não tem uma conta? 
-                        <a href="" class="font-medium transition-colors duration-200" 
-                           style="color: #C90905;"
-                           onmouseover="this.style.color='#260200'"
-                           onmouseout="this.style.color='#C90905'">
+                        <a href="#" class="font-semibold transition-colors duration-200 hover:underline" 
+                           style="color: var(--church-primary);"
+                           onmouseover="this.style.color='var(--church-secondary)'"
+                           onmouseout="this.style.color='var(--church-primary)'">
                             Entre em contato com a administração
                         </a>
                     </p>
@@ -193,33 +267,46 @@
             const btnSpinner = document.getElementById('loginBtnSpinner');
             const emailInput = document.getElementById('email');
             
+            // Foco automático no campo email (com delay para animações)
+            setTimeout(() => emailInput.focus(), 800);
+            
+            // Animação de submit
             form.addEventListener('submit', function() {
                 btn.disabled = true;
-                btnText.classList.add('opacity-0');
+                btnText.style.opacity = '0';
                 btnSpinner.classList.remove('hidden');
                 
-                // Remove loading após 5 segundos para evitar travamento
+                // Timeout de segurança
                 setTimeout(() => {
                     btn.disabled = false;
-                    btnText.classList.remove('opacity-0');
+                    btnText.style.opacity = '1';
                     btnSpinner.classList.add('hidden');
                 }, 5000);
             });
             
-            // Focus no primeiro campo
-            emailInput.focus();
-            
-            // Adicionar efeitos visuais nos inputs
+            // Efeitos visuais nos inputs
             const inputs = document.querySelectorAll('input[type="email"], input[type="password"]');
             inputs.forEach(input => {
+                // Efeito focus melhorado (sem mudança de cor)
                 input.addEventListener('focus', function() {
-                    this.parentElement.classList.add('transform', 'scale-105');
+                    this.parentElement.style.transform = 'scale(1.02)';
+                    this.parentElement.style.transition = 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
                 });
                 
                 input.addEventListener('blur', function() {
-                    this.parentElement.classList.remove('transform', 'scale-105');
+                    this.parentElement.style.transform = 'scale(1)';
                 });
             });
+            
+            // Melhorar responsividade: ajustar viewport height em mobile
+            function adjustViewportHeight() {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+            }
+            
+            adjustViewportHeight();
+            window.addEventListener('resize', adjustViewportHeight);
+            window.addEventListener('orientationchange', adjustViewportHeight);
         });
     </script>
 </body>

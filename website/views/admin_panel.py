@@ -21,11 +21,12 @@ from ..models.event import Event
 from ..models.ministry import Ministry
 from ..models.neighborhood import Neighborhood
 from ..models.evangelism import Evangelized
-from ..models.follow_up import FollowUp, FollowUpReport
+from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate, FollowUpTemplateStep
 from ..models.canteen import CanteenDebtor
 from ..forms.ministry import MinistryForm
 from ..forms.neighborhood import NeighborhoodForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
+from ..forms.template import FollowUpTemplateForm, FollowUpTemplateStepFormSet, FollowUpTemplateStepFormSetForCreate
 from ..forms.user import UserProfileForm
 from ..forms.canteen import CanteenDebtorForm
 
@@ -1281,9 +1282,20 @@ def followup_edit_view(request, followup_id=None):
     else:
         form = FollowUpForm(instance=followup)
     
+    # Buscar templates com suas informações para o JavaScript
+    templates_data = []
+    for template in FollowUpTemplate.objects.all():
+        templates_data.append({
+            'id': template.id,
+            'name': template.name,
+            'description': template.description or 'Sem descrição',
+            'steps_count': template.steps.count()
+        })
+    
     return render(request, 'admin_panel/followups/edit.html', {
         'form': form,
-        'followup': followup
+        'followup': followup,
+        'templates_data': templates_data
     })
 
 @login_required
@@ -1529,3 +1541,258 @@ def canteen_api(request):
             'success': False,
             'error': str(e)
         })
+
+
+# Views temporárias para Templates e Relatórios
+@login_required
+@user_passes_test(lambda u: u.user_type in ['admin', 'consolidation'] or u.is_superuser)
+def templates_view(request):
+    """Lista os templates de consolidação"""
+    # Filtros
+    search = request.GET.get('search', '')
+    category_filter = request.GET.get('category', '')
+    status_filter = request.GET.get('status', '')
+    
+    # Queryset base
+    templates = FollowUpTemplate.objects.all()
+    
+    # Aplicar filtros
+    if search:
+        templates = templates.filter(
+            Q(name__icontains=search) | Q(description__icontains=search)
+        )
+    
+    # Anotar com informações estatísticas
+    templates = templates.annotate(
+        steps_count=Count('steps'),
+        usage_count=Count('followup')
+    ).order_by('-created_at')
+    
+    # Calcular estatísticas
+    total_templates = FollowUpTemplate.objects.count()
+    active_templates = templates.filter(followup__isnull=False).distinct().count()
+    total_usage = FollowUp.objects.filter(template__isnull=False).count()
+    
+    context = {
+        'templates': templates,
+        'search': search,
+        'category_filter': category_filter,
+        'status_filter': status_filter,
+        'stats': {
+            'total_templates': total_templates,
+            'active_templates': active_templates,
+            'total_usage': total_usage
+        }
+    }
+    return render(request, 'admin_panel/templates.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.user_type in ['admin', 'consolidation'] or u.is_superuser)
+def template_create_view(request):
+    """Criar novo template de consolidação"""
+    # Verificar se é duplicação de template existente
+    duplicate_from_id = request.POST.get('duplicate_from')
+    original_template = None
+    
+    if duplicate_from_id:
+        try:
+            original_template = FollowUpTemplate.objects.get(id=duplicate_from_id)
+        except FollowUpTemplate.DoesNotExist:
+            messages.error(request, 'Template para duplicação não encontrado.')
+            return redirect('admin_templates')
+    
+    if request.method == 'POST':
+        # Verificar se é duplicação primeiro
+        if duplicate_from_id and original_template:
+            # Para duplicação, usar os dados do POST para o nome
+            form = FollowUpTemplateForm(request.POST)
+            
+            if form.is_valid():
+                # Criar novo template com dados do formulário
+                template = form.save(commit=False)
+                template.description = original_template.description
+                template.save()
+                
+                # Copiar etapas do template original
+                for step in original_template.steps.all():
+                    FollowUpTemplateStep.objects.create(
+                        template=template,
+                        week=step.week,
+                        title=step.title,
+                        description=step.description
+                    )
+                
+                messages.success(request, f'Template "{template.name}" criado com sucesso a partir de "{original_template.name}"!')
+                return redirect('admin_template_detail', template_id=template.id)
+            else:
+                messages.error(request, 'Erro ao duplicar template. Verifique os dados informados.')
+        else:
+            # Criação normal
+            form = FollowUpTemplateForm(request.POST)
+            formset = FollowUpTemplateStepFormSetForCreate(request.POST)
+            
+            if form.is_valid() and formset.is_valid():
+                template = form.save()
+                formset.instance = template
+                formset.save()
+                
+                messages.success(request, f'Template "{template.name}" criado com sucesso!')
+                return redirect('admin_template_detail', template_id=template.id)
+            else:
+                messages.error(request, 'Erro ao criar template. Verifique os dados informados.')
+    else:
+        # Preparar formulário inicial
+        if original_template:
+            form = FollowUpTemplateForm(initial={
+                'name': f'Cópia de {original_template.name}',
+                'description': original_template.description
+            })
+            # Criar formset vazio para duplicação (etapas serão copiadas no POST)
+            formset = FollowUpTemplateStepFormSetForCreate()
+        else:
+            form = FollowUpTemplateForm()
+            formset = FollowUpTemplateStepFormSetForCreate()
+    
+    context = {
+        'form': form,
+        'formset': formset,
+        'title': f'Duplicar Template: {original_template.name}' if original_template else 'Novo Template de Consolidação',
+        'original_template': original_template
+    }
+    return render(request, 'admin_panel/template_form.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.user_type in ['admin', 'consolidation'] or u.is_superuser)
+def template_edit_view(request, template_id):
+    """Editar template de consolidação"""
+    template = get_object_or_404(FollowUpTemplate, id=template_id)
+    
+    if request.method == 'POST':
+        form = FollowUpTemplateForm(request.POST, instance=template)
+        formset = FollowUpTemplateStepFormSet(request.POST, instance=template)
+        
+        if form.is_valid() and formset.is_valid():
+            template = form.save()
+            formset.save()
+            
+            messages.success(request, f'Template "{template.name}" atualizado com sucesso!')
+            return redirect('admin_template_detail', template_id=template.id)
+        else:
+            messages.error(request, 'Erro ao atualizar template. Verifique os dados informados.')
+    else:
+        form = FollowUpTemplateForm(instance=template)
+        formset = FollowUpTemplateStepFormSet(instance=template)
+    
+    context = {
+        'form': form,
+        'formset': formset,
+        'template': template,
+        'title': f'Editar Template: {template.name}'
+    }
+    return render(request, 'admin_panel/template_form.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.user_type in ['admin', 'consolidation'] or u.is_superuser)
+def template_detail_view(request, template_id):
+    """Visualizar detalhes do template"""
+    template = get_object_or_404(FollowUpTemplate, id=template_id)
+    steps = template.steps.all().order_by('week')
+    followups_using = FollowUp.objects.filter(template=template)
+    
+    context = {
+        'template': template,
+        'steps': steps,
+        'followups_using': followups_using,
+        'usage_count': followups_using.count()
+    }
+    return render(request, 'admin_panel/template_detail.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.user_type in ['admin', 'consolidation'] or u.is_superuser)
+def template_delete_view(request, template_id):
+    """Excluir template de consolidação"""
+    template = get_object_or_404(FollowUpTemplate, id=template_id)
+    
+    if request.method == 'POST':
+        template_name = template.name
+        template.delete()
+        messages.success(request, f'Template "{template_name}" excluído com sucesso!')
+        return redirect('admin_templates')
+    
+    followups_using = FollowUp.objects.filter(template=template)
+    
+    context = {
+        'template': template,
+        'followups_using': followups_using
+    }
+    return render(request, 'admin_panel/template_delete.html', context)
+
+
+@login_required
+@user_passes_test(lambda u: u.user_type in ['admin', 'consolidation'] or u.is_superuser)
+def reports_view(request):
+    """Relatórios de consolidação com dados reais"""
+    
+    # Estatísticas gerais
+    total_followups = FollowUp.objects.count()
+    active_followups = FollowUp.objects.count()  # Todos são ativos por padrão
+    completed_followups = 0
+    overdue_followups = 0
+    
+    # Calcular estatísticas baseadas nas propriedades
+    if total_followups > 0:
+        for followup in FollowUp.objects.all():
+            if followup.is_completed:
+                completed_followups += 1
+            elif followup.is_overdue:
+                overdue_followups += 1
+        
+        # Recalcular ativos (total - concluídos)
+        active_followups = total_followups - completed_followups
+    
+    # Taxa de conclusão
+    completion_rate = 0
+    if total_followups > 0:
+        completion_rate = (completed_followups / total_followups) * 100
+    
+    # Consolidações recentes (últimas 10)
+    recent_followups = FollowUp.objects.select_related(
+        'accompanied', 'responsible', 'template'
+    ).order_by('-created_at')[:10]
+    
+    # Estatísticas por template
+    template_stats = []
+    templates = FollowUpTemplate.objects.all()
+    
+    for template in templates:
+        template_followups = FollowUp.objects.filter(template=template)
+        if template_followups.exists():
+            # Calcular progresso médio
+            total_progress = 0
+            count = 0
+            for followup in template_followups:
+                total_progress += followup.progress_percentage
+                count += 1
+            
+            avg_progress = total_progress / count if count > 0 else 0
+            template_stats.append({
+                'name': template.name,
+                'progress': avg_progress,
+                'total_followups': template_followups.count()
+            })
+    
+    context = {
+        'title': 'Relatórios de Consolidação',
+        'total_followups': total_followups,
+        'active_followups': active_followups,
+        'completed_followups': completed_followups,
+        'overdue_followups': overdue_followups,
+        'completion_rate': completion_rate,
+        'recent_followups': recent_followups,
+        'template_stats': template_stats,
+    }
+    return render(request, 'admin_panel/reports.html', context)

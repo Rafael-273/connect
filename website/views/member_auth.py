@@ -115,28 +115,102 @@ def member_profile_view(request):
     member = request.user.member
     
     if request.method == 'POST':
-        # Campos que o membro pode editar
-        member.phone = request.POST.get('phone', member.phone)
-        member.address = request.POST.get('address', member.address)
-        member.interests = request.POST.get('interests', member.interests)
-        member.available_days = request.POST.get('available_days', member.available_days)
-        member.testimony = request.POST.get('testimony', member.testimony)
+        form_type = request.POST.get('form_type')
         
-        # Atualiza disponibilidade para ministério
-        member.is_available_to_consolidate = 'is_available_to_consolidate' in request.POST
-        member.is_available_to_disciple = 'is_available_to_disciple' in request.POST
-        
-        try:
-            member.save()
-            messages.success(request, 'Perfil atualizado com sucesso!')
-        except Exception as e:
-            messages.error(request, f'Erro ao atualizar perfil: {str(e)}')
+        if form_type == 'personal_info':
+            # Atualização de informações pessoais
+            member.phone = request.POST.get('phone', member.phone)
+            member.address = request.POST.get('address', member.address)
+            
+            # Upload de foto de perfil
+            if 'profile_picture' in request.FILES:
+                profile_picture = request.FILES['profile_picture']
+                # Validação do arquivo
+                if profile_picture.size > 5 * 1024 * 1024:  # 5MB
+                    messages.error(request, 'O arquivo é muito grande. Tamanho máximo: 5MB.')
+                    return redirect('member_profile')
+                
+                allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+                if profile_picture.content_type not in allowed_types:
+                    messages.error(request, 'Formato de arquivo não suportado. Use JPG, PNG ou GIF.')
+                    return redirect('member_profile')
+                
+                member.profile_picture = profile_picture
+            
+            try:
+                member.save()
+                messages.success(request, 'Informações pessoais atualizadas com sucesso!')
+            except Exception as e:
+                messages.error(request, f'Erro ao atualizar informações: {str(e)}')
+                
+        elif form_type == 'change_password':
+            # Alteração de senha
+            current_password = request.POST.get('current_password')
+            new_password = request.POST.get('new_password')
+            confirm_password = request.POST.get('confirm_password')
+            
+            # Validações
+            if not current_password or not new_password or not confirm_password:
+                messages.error(request, 'Todos os campos de senha são obrigatórios.')
+                return redirect('member_profile')
+            
+            if not request.user.check_password(current_password):
+                messages.error(request, 'Senha atual incorreta.')
+                return redirect('member_profile')
+            
+            if new_password != confirm_password:
+                messages.error(request, 'As senhas não coincidem.')
+                return redirect('member_profile')
+            
+            if len(new_password) < 6:
+                messages.error(request, 'A nova senha deve ter pelo menos 6 caracteres.')
+                return redirect('member_profile')
+            
+            try:
+                request.user.set_password(new_password)
+                request.user.save()
+                messages.success(request, 'Senha alterada com sucesso! Faça login novamente.')
+                logout(request)
+                return redirect('member_login')
+            except Exception as e:
+                messages.error(request, f'Erro ao alterar senha: {str(e)}')
         
         return redirect('member_profile')
+    
+    # Verificar se pode consolidar (para o menu)
+    can_consolidate = (
+        member.is_available_to_consolidate and 
+        member.ministry.exists() and
+        member.conversion_date
+    )
     
     context = {
         'member': member,
         'ministries': member.ministry.all(),
+        'can_consolidate': can_consolidate,
     }
     
     return render(request, 'member/profile.html', context)
+
+
+@login_required
+def member_consolidation_view(request):
+    """View para listar consolidados do membro logado"""
+    member = request.user.member
+    
+    consolidations = member.performed_followups.select_related('accompanied').prefetch_related('reports').all()
+    
+    total_consolidations = consolidations.count()
+    active_consolidations = consolidations.filter(end_date__isnull=True).count()
+    completed_consolidations = consolidations.filter(end_date__isnull=False).count()
+    
+    context = {
+        'member': member,
+        'consolidations': consolidations,
+        'total_consolidations': total_consolidations,
+        'active_consolidations': active_consolidations,
+        'completed_consolidations': completed_consolidations,
+        'can_consolidate': member.is_available_to_consolidate,
+    }
+    
+    return render(request, 'member/consolidation.html', context)

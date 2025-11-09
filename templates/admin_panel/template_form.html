@@ -1,0 +1,549 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .step-formset {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #f9fafb;
+    }
+    
+    .step-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .step-number-badge {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.9rem;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+    
+    .step-title-container {
+        display: flex;
+        align-items: center;
+        flex: 1;
+    }
+    
+    .delete-step {
+        color: #dc2626;
+        cursor: pointer;
+        padding: 8px;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+    }
+    
+    .delete-step:hover {
+        background: #fef2f2;
+        transform: scale(1.1);
+    }
+    
+    .add-step-btn {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .add-step-btn:hover {
+        background: linear-gradient(135deg, #0d9488, #047857);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    
+    .step-content {
+        margin-left: 44px;
+    }
+    
+    .empty-steps-message {
+        text-align: center;
+        padding: 40px 20px;
+        border: 2px dashed #d1d5db;
+        border-radius: 8px;
+        background: #f9fafb;
+        margin-bottom: 20px;
+    }
+    
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    .form-label {
+        display: block;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 6px;
+        font-size: 0.875rem;
+    }
+    
+    .required-field::after {
+        content: ' *';
+        color: #dc2626;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/messages.html' %}
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-6 mt-24">
+            <div class="admin-card">
+                <div class="p-6">
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 text-center md:text-left">{{ title }}</h1>
+                        <p class="text-gray-600 mt-1 text-center md:text-left">
+                            {% if template %}Edite as informações do template{% else %}Crie um novo template de consolidação{% endif %}
+                        </p>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="{% url 'admin_templates' %}" 
+                           class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition duration-300 flex items-center justify-center">
+                            <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
+                            Voltar
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Formulário -->
+                <form method="POST" novalidate>
+                    {% csrf_token %}
+                    
+                    <!-- Informações Básicas -->
+                    <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 mb-4">Informações Básicas</h3>
+                        
+                        <div class="grid grid-cols-1 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Nome do Template *</label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <p class="text-red-600 text-sm mt-1">{{ form.name.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                                {{ form.description }}
+                                {% if form.description.errors %}
+                                    <p class="text-red-600 text-sm mt-1">{{ form.description.errors.0 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Etapas do Template -->
+                    <div class="mb-6">
+                        <div class="mb-6">
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900 mb-2">Etapas do Template</h3>
+                                <p class="text-sm text-gray-600">Configure as atividades que serão realizadas durante a consolidação</p>
+                            </div>
+                        </div>
+                        
+                        {{ formset.management_form }}
+                        
+                        <div id="step-formset">
+                            {% if formset.forms %}
+                                {% for step_form in formset %}
+                                    <div class="step-formset" data-form-idx="{{ forloop.counter0 }}">
+                                        <div class="step-header">
+                                            <div class="step-title-container">
+                                                <div class="step-number-badge">
+                                                    <span class="step-number" style="margin-top: 0.2rem;">{{ forloop.counter }}</span>
+                                                </div>
+                                                <h4 class="font-semibold text-gray-800">
+                                                    Semana <span class="step-week-display">{{ step_form.week.value|default:forloop.counter }}</span>
+                                                </h4>
+                                            </div>
+                                            {% if not forloop.first %}
+                                                <button type="button" class="delete-step" onclick="removeStep(this)" title="Remover esta etapa">
+                                                    <ion-icon name="trash-outline"></ion-icon>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <div class="step-content">
+                                            <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                                                <div class="form-group">
+                                                    <label class="form-label required-field">Semana</label>
+                                                    {{ step_form.week }}
+                                                    {% if step_form.week.errors %}
+                                                        <p class="text-red-600 text-sm mt-1">{{ step_form.week.errors.0 }}</p>
+                                                    {% endif %}
+                                                </div>
+                                                
+                                                <div class="lg:col-span-4 form-group">
+                                                    <label class="form-label required-field">Título da Etapa</label>
+                                                    {{ step_form.title }}
+                                                    <p class="text-xs text-gray-500 mt-1">Nome resumido da atividade (ex: Primeiro Contato, Ensino sobre Salvação)</p>
+                                                    {% if step_form.title.errors %}
+                                                        <p class="text-red-600 text-sm mt-1">{{ step_form.title.errors.0 }}</p>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="form-group mt-4">
+                                                <label class="form-label">Descrição da Atividade</label>
+                                                {{ step_form.description }}
+                                                <p class="text-xs text-gray-500 mt-1">Descrição opcional - adicione mais detalhes se necessário</p>
+                                                {% if step_form.description.errors %}
+                                                    <p class="text-red-600 text-sm mt-1">{{ step_form.description.errors.0 }}</p>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Campos ocultos para controle do formset -->
+                                        <div style="display: none;">
+                                            {{ step_form.DELETE }}
+                                        </div>
+                                        {% for hidden in step_form.hidden_fields %}
+                                            {{ hidden }}
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="empty-steps-message" id="empty-steps-message">
+                                    <ion-icon name="document-text-outline" style="font-size: 3rem; color: #9ca3af; margin-bottom: 16px;"></ion-icon>
+                                    <h4 class="text-lg font-medium text-gray-600 mb-2">Nenhuma etapa configurada</h4>
+                                    <p class="text-gray-500 mb-4">Adicione pelo menos uma etapa para definir o processo de consolidação</p>
+                                    <button type="button" onclick="addStep()" class="add-step-btn">
+                                        <ion-icon name="add-outline"></ion-icon>
+                                        <span>Adicionar Primeira Etapa</span>
+                                    </button>
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Botão para adicionar mais etapas -->
+                        <div class="mt-4 text-center flex justify-end">
+                            <button type="button" onclick="addStep()" class="add-step-btn">
+                                <ion-icon name="add-outline"></ion-icon>
+                                <span>Adicionar Etapa</span>
+                            </button>
+                        </div>
+                        
+                        {% if formset.non_form_errors %}
+                            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+                                <div class="flex items-start">
+                                    <ion-icon name="warning-outline" class="text-red-500 text-xl mr-3 mt-1 flex-shrink-0"></ion-icon>
+                                    <div>
+                                        <p class="text-red-800 font-medium mb-2">Erro nas etapas:</p>
+                                        <ul class="text-red-700 text-sm space-y-1">
+                                            {% for error in formset.non_form_errors %}
+                                                <li>• {{ error }}</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                        
+                        <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div class="flex items-start">
+                                <ion-icon name="information-circle-outline" class="text-blue-500 text-xl mr-3 mt-1 flex-shrink-0"></ion-icon>
+                                <div>
+                                    <p class="text-blue-800 font-medium mb-1">Dicas para criar etapas eficazes:</p>
+                                    <ul class="text-blue-700 text-sm space-y-1">
+                                        <li>• Seja específico sobre o que deve ser feito em cada etapa</li>
+                                        <li>• Organize as etapas em ordem cronológica (semana 1, 2, 3...)</li>
+                                        <li>• Inclua objetivos claros para cada encontro</li>
+                                        <li>• Considere o tempo necessário para cada atividade</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Botões de Ação -->
+                    <div class="flex flex-col md:flex-row gap-3 justify-end">
+                        <a href="{% url 'admin_templates' %}" 
+                           class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition duration-300 text-center">
+                            Cancelar
+                        </a>
+                        <button type="submit" 
+                                class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300">
+                            {% if template %}
+                                <ion-icon name="save-outline" class="mr-2"></ion-icon>
+                                Atualizar Template
+                            {% else %}
+                                <ion-icon name="add-outline" class="mr-2"></ion-icon>
+                                Criar Template
+                            {% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function addStep() {
+    const container = document.getElementById('step-formset');
+    const totalForms = document.getElementById('id_steps-TOTAL_FORMS');
+    const formIdx = parseInt(totalForms.value);
+    const stepNumber = formIdx + 1;
+    
+    // Esconder mensagem vazia se existir
+    const emptyMessage = document.getElementById('empty-steps-message');
+    if (emptyMessage) {
+        emptyMessage.style.display = 'none';
+    }
+    
+    const stepHtml = `
+        <div class="step-formset" data-form-idx="${formIdx}">
+            <div class="step-header">
+                <div class="step-title-container">
+                    <div class="step-number-badge">
+                        <span class="step-number">${stepNumber}</span>
+                    </div>
+                    <h4 class="font-semibold text-gray-800">
+                        Semana <span class="step-week-display">${stepNumber}</span>
+                    </h4>
+                </div>
+                <button type="button" class="delete-step" onclick="removeStep(this)" title="Remover esta etapa">
+                    <ion-icon name="trash-outline"></ion-icon>
+                </button>
+            </div>
+            
+            <div class="step-content">
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                    <div class="form-group">
+                        <label class="form-label required-field">Semana</label>
+                        <input type="number" 
+                               name="steps-${formIdx}-week" 
+                               min="1" 
+                               max="52" 
+                               value="${stepNumber}"
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
+                    </div>
+                    
+                    <div class="lg:col-span-4 form-group">
+                        <label class="form-label required-field">Título da Etapa</label>
+                        <input type="text" 
+                               name="steps-${formIdx}-title" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]" 
+                               placeholder="Nome resumido da atividade (ex: Primeiro Contato, Ensino sobre Salvação)">
+                        <p class="text-xs text-gray-500 mt-1">Nome resumido da atividade (ex: Primeiro Contato, Ensino sobre Salvação)</p>
+                    </div>
+                </div>
+                
+                <div class="form-group mt-4">
+                    <label class="form-label">Descrição da Atividade</label>
+                    <textarea name="steps-${formIdx}-description" 
+                              rows="3" 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]" 
+                              placeholder="Descrição opcional - adicione mais detalhes se necessário..."></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Descrição opcional - adicione mais detalhes se necessário</p>
+                </div>
+            </div>
+            
+            <input type="hidden" name="steps-${formIdx}-id" value="">
+            <input type="hidden" name="steps-${formIdx}-DELETE" value="">
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', stepHtml);
+    totalForms.value = formIdx + 1;
+    updateStepNumbers();
+    
+    // Scroll suave para a nova etapa
+    const newStep = container.lastElementChild;
+    newStep.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    
+    // Focar no campo título da nova etapa
+    setTimeout(() => {
+        const titleField = newStep.querySelector('input[name$="-title"]');
+        if (titleField) {
+            titleField.focus();
+        }
+    }, 300);
+}
+
+function removeStep(button) {
+    const stepDiv = button.closest('.step-formset');
+    const container = document.getElementById('step-formset');
+    
+    // Procurar pelo campo DELETE específico desta etapa
+    const formIdx = stepDiv.getAttribute('data-form-idx');
+    
+    // Primeiro verificar se a etapa tem ID (já existe no banco)
+    const idInput = stepDiv.querySelector('input[name$="-id"]');
+    const hasId = idInput && idInput.value && idInput.value.trim() !== '';
+    
+    console.log('Removendo etapa - formIdx:', formIdx, 'hasId:', hasId, 'idValue:', idInput?.value);
+    
+    if (hasId) {
+        // Etapa existe no banco - marcar para exclusão
+        let deleteInput = stepDiv.querySelector('input[name$="-DELETE"]');
+        
+        if (!deleteInput) {
+            deleteInput = stepDiv.querySelector(`input[name="steps-${formIdx}-DELETE"]`);
+        }
+        
+        if (deleteInput) {
+            console.log('Marcando para exclusão:', deleteInput.name);
+            deleteInput.checked = true;
+            deleteInput.value = 'on';
+            stepDiv.style.display = 'none';
+        } else {
+            console.error('Campo DELETE não encontrado para etapa existente');
+        }
+    } else {
+        // Etapa nova (não existe no banco) - remover do DOM
+        console.log('Removendo etapa nova do DOM');
+        stepDiv.remove();
+        
+        // Atualiza o contador de formulários
+        const totalForms = document.getElementById('id_steps-TOTAL_FORMS');
+        totalForms.value = parseInt(totalForms.value) - 1;
+    }
+    
+    updateStepNumbers();
+    
+    // Verificar se não há mais etapas visíveis
+    const visibleSteps = container.querySelectorAll('.step-formset:not([style*="display: none"])');
+    if (visibleSteps.length === 0) {
+        const emptyMessage = document.getElementById('empty-steps-message');
+        if (emptyMessage) {
+            emptyMessage.style.display = 'block';
+        }
+    }
+}
+
+function updateStepNumbers() {
+    const container = document.getElementById('step-formset');
+    const visibleSteps = container.querySelectorAll('.step-formset:not([style*="display: none"])');
+    
+    visibleSteps.forEach((step, index) => {
+        const stepNumber = index + 1;
+        
+        // Atualizar número do badge
+        const numberSpan = step.querySelector('.step-number');
+        if (numberSpan) {
+            numberSpan.textContent = stepNumber;
+        }
+        
+        // Atualizar número na semana display
+        const weekDisplay = step.querySelector('.step-week-display');
+        const weekInput = step.querySelector('input[name$="-week"]');
+        
+        if (weekDisplay && weekInput) {
+            // Usa o valor atual do campo semana, não o número sequencial
+            const currentWeekValue = weekInput.value || stepNumber;
+            weekDisplay.textContent = currentWeekValue;
+        }
+        
+        // NÃO atualizar valor do campo semana automaticamente para preservar dados do banco
+    });
+}
+
+// Atualizar numeração e configurar eventos ao carregar a página
+document.addEventListener('DOMContentLoaded', function() {
+    // Primeiro, sincronizar os displays com os valores reais dos campos
+    const allSteps = document.querySelectorAll('.step-formset');
+    allSteps.forEach(step => {
+        const weekInput = step.querySelector('input[name$="-week"]');
+        const weekDisplay = step.querySelector('.step-week-display');
+        
+        if (weekInput && weekDisplay && weekInput.value) {
+            weekDisplay.textContent = weekInput.value;
+        }
+    });
+    
+    // Depois atualizar apenas a numeração dos badges
+    updateStepNumbers();
+    
+    // Adicionar listener para mudanças no campo semana
+    document.addEventListener('change', function(e) {
+        if (e.target.matches('input[name$="-week"]')) {
+            const stepDiv = e.target.closest('.step-formset');
+            const weekDisplay = stepDiv.querySelector('.step-week-display');
+            if (weekDisplay) {
+                weekDisplay.textContent = e.target.value || '?';
+            }
+        }
+    });
+    
+    // Melhorar feedback visual ao adicionar etapas
+    const addButtons = document.querySelectorAll('button[onclick="addStep()"]');
+    addButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            this.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                this.style.transform = '';
+            }, 150);
+        });
+    });
+});
+
+// Debug: Adicionar log antes do submit do formulário
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form[method="POST"]');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            console.log('=== DEBUG FORMULÁRIO ===');
+            
+            // Verificar campos DELETE
+            const deleteInputs = document.querySelectorAll('input[name*="DELETE"]');
+            deleteInputs.forEach((input, index) => {
+                console.log(`DELETE ${index}:`, input.name, '=', input.value, '(checked:', input.checked, ')');
+            });
+            
+            // Verificar total de formulários
+            const totalForms = document.getElementById('id_steps-TOTAL_FORMS');
+            console.log('Total forms:', totalForms?.value);
+            
+            console.log('=== FIM DEBUG ===');
+        });
+    }
+});
+</script>
+{% endblock %}

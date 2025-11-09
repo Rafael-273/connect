@@ -6,7 +6,7 @@ from .views.member import MemberCreateView, NewConvertsListView
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
 from .views.auth import admin_login_view, admin_logout_view
-from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view
+from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view
 from .views.user_management import user_management_view, reset_user_password, change_password_view
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
@@ -16,7 +16,8 @@ from .views.admin_panel import (
     ministry_edit_view, neighborhood_edit_view, followup_list_view, followup_edit_view,
     followup_delete_view, followup_report_view, followup_detail_view, profile_view,
     canteen_list_view, canteen_edit_view, canteen_detail_view, canteen_delete_view,
-    canteen_toggle_paid, canteen_api
+    canteen_toggle_paid, canteen_api, templates_view, reports_view,
+    template_create_view, template_edit_view, template_detail_view, template_delete_view
 )
 
 urlpatterns = [
@@ -39,6 +40,7 @@ urlpatterns = [
     path('dashboard/', MemberDashboardView.as_view(), name='member_dashboard'),
     path('logout/', member_logout_view, name='member_logout'),
     path('profile/', member_profile_view, name='member_profile'),
+    path('consolidation/', member_consolidation_view, name='member_consolidation'),
     
     # Admin Panel URLs
     path('admin-panel/', dashboard_view, name='admin_dashboard'),
@@ -71,6 +73,33 @@ urlpatterns = [
     path('admin-panel/followups/<int:followup_id>/detail/', followup_detail_view, name='admin_followup_detail'),
     path('admin-panel/followups/<int:followup_id>/report/', followup_report_view, name='admin_followup_report'),
     path('admin-panel/followups/<int:followup_id>/delete/', followup_delete_view, name='admin_followup_delete'),
+    
+    # TODO: Implementar as views abaixo
+    # Follow-up Templates URLs
+    # path('admin-panel/followup-templates/', followup_template_list_view, name='admin_followup_template_list'),
+    # path('admin-panel/followup-templates/new/', followup_template_edit_view, name='admin_followup_template_create'),
+    # path('admin-panel/followup-templates/<int:template_id>/edit/', followup_template_edit_view, name='admin_followup_template_edit'),
+    # path('admin-panel/followup-templates/<int:template_id>/', followup_template_detail_view, name='admin_followup_template_detail'),
+    # path('admin-panel/followup-templates/<int:template_id>/delete/', followup_template_delete_view, name='admin_followup_template_delete'),
+    # path('admin-panel/followup-templates/<int:template_id>/duplicate/', followup_template_duplicate_view, name='admin_followup_template_duplicate'),
+    
+    # Follow-up Steps URLs  
+    # path('admin-panel/followups/<int:followup_id>/steps/', followup_steps_manage_view, name='admin_followup_steps_manage'),
+    # path('admin-panel/followup-steps/<int:step_id>/update-status/', followup_step_update_status, name='admin_followup_step_update_status'),
+    # path('admin-panel/followup-steps/<int:step_id>/update-notes/', followup_step_update_notes, name='admin_followup_step_update_notes'),
+    # path('admin-panel/followups/<int:followup_id>/complete-all-steps/', followup_complete_all_steps, name='admin_followup_complete_all_steps'),
+    # path('admin-panel/followups/<int:followup_id>/generate-steps/', followup_generate_steps, name='admin_followup_generate_steps'),
+    
+    # Follow-up Reports URLs
+    # path('admin-panel/followup-reports/', followup_reports_view, name='admin_followup_reports'),
+    
+    # Templates e Relatórios URLs
+    path('admin-panel/templates/', templates_view, name='admin_templates'),
+    path('admin-panel/templates/new/', template_create_view, name='admin_template_create'),
+    path('admin-panel/templates/<int:template_id>/edit/', template_edit_view, name='admin_template_edit'),
+    path('admin-panel/templates/<int:template_id>/', template_detail_view, name='admin_template_detail'),
+    path('admin-panel/templates/<int:template_id>/delete/', template_delete_view, name='admin_template_delete'),
+    path('admin-panel/reports/', reports_view, name='admin_reports'),
     
     # Cantina URLs
     path('admin-panel/cantina/', canteen_list_view, name='admin_cantina_list'),

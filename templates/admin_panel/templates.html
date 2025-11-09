@@ -1,0 +1,354 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Templates - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .template-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .template-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .status-active {
+        background-color: #dcfce7;
+        color: #166534;
+    }
+    
+    .status-inactive {
+        background-color: #f3f4f6;
+        color: #374151;
+    }
+    
+    /* Modal para exclusão */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .modal-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .modal-content {
+        background: white;
+        padding: 32px;
+        border-radius: 12px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        max-width: 500px;
+        width: 90%;
+        transform: scale(0.9);
+        transition: transform 0.3s ease;
+    }
+    
+    .modal-overlay.active .modal-content {
+        transform: scale(1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/messages.html' %}
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-6 mt-24">
+            <div class="admin-card">
+                <div class="p-6">
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 gap-4">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 text-center md:text-left">Templates</h1>
+                        <p class="text-gray-600 mt-1 text-center md:text-left">Gerencie templates de consolidação</p>
+                    </div>
+                    <a href="{% url 'admin_template_create' %}" 
+                       class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 flex items-center justify-center w-full md:w-auto">
+                        <ion-icon name="add-outline" class="mr-2"></ion-icon>
+                        Novo Template
+                    </a>
+                </div>
+
+                <!-- Filtros -->
+                <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                    <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
+                            <input type="text" name="search" value="{{ search }}" 
+                                   placeholder="Nome do template..."
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                            <select name="category" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
+                                <option value="">Todas</option>
+                                <option value="basic" {% if category_filter == 'basic' %}selected{% endif %}>Básico</option>
+                                <option value="advanced" {% if category_filter == 'advanced' %}selected{% endif %}>Avançado</option>
+                                <option value="youth" {% if category_filter == 'youth' %}selected{% endif %}>Jovens</option>
+                                <option value="custom" {% if category_filter == 'custom' %}selected{% endif %}>Personalizado</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                            <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
+                                <option value="">Todos</option>
+                                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Ativo</option>
+                                <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inativo</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end md:flex-col lg:flex-row gap-2">
+                            <button type="submit" 
+                                    class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-300 w-full">
+                                Filtrar
+                            </button>
+                            <a href="{% url 'admin_templates' %}" 
+                               class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-300 w-full text-center">
+                                Limpar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Lista de Templates -->
+                <div class="space-y-4">
+                    {% for template in templates %}
+                    <div class="template-card" data-url="{% url 'admin_template_detail' template.id %}" onclick="window.location.href = this.dataset.url;">
+                        <div class="flex flex-col md:flex-row justify-between items-start gap-3">
+                            <div class="flex-1 w-full">
+                                <div class="flex flex-col md:flex-row md:items-center gap-2 md:space-x-3 mb-2">
+                                    <h3 class="font-semibold text-lg text-gray-900 break-words">{{ template.name }}</h3>
+                                    <span class="status-badge {% if template.usage_count > 0 %}status-active{% else %}status-inactive{% endif %} inline-block">
+                                        {% if template.usage_count > 0 %}Em Uso{% else %}Inativo{% endif %}
+                                    </span>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-600">
+                                    <div>
+                                        <span class="font-medium">Etapas:</span> {{ template.steps_count }} atividade{{ template.steps_count|pluralize }}
+                                    </div>
+                                    <div>
+                                        <span class="font-medium">Usos:</span> {{ template.usage_count }} consolidaç{{ template.usage_count|pluralize:"ão,ões" }}
+                                    </div>
+                                    <div>
+                                        <span class="font-medium">Criado em:</span> {{ template.created_at|date:"d/m/Y" }}
+                                    </div>
+                                    <div>
+                                        <span class="font-medium">Atualizado:</span> {{ template.update_at|date:"d/m/Y" }}
+                                    </div>
+                                </div>
+                                {% if template.description %}
+                                    <p class="text-gray-700 text-sm mt-2 break-words">{{ template.description|truncatechars:100 }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="flex space-x-2 mt-2 md:mt-0">
+                                <a href="{% url 'admin_template_detail' template.id %}" 
+                                   class="text-blue-600 hover:text-blue-800 p-1"
+                                   onclick="event.stopPropagation();" title="Visualizar">
+                                    <ion-icon name="eye-outline"></ion-icon>
+                                </a>
+                                <a href="{% url 'admin_followup_create' %}?template={{ template.id }}" 
+                                   class="text-green-600 hover:text-green-800 p-1"
+                                   onclick="event.stopPropagation();" title="Usar Template">
+                                    <ion-icon name="play-outline"></ion-icon>
+                                </a>
+                                <a href="{% url 'admin_template_edit' template.id %}" 
+                                   class="text-gray-600 hover:text-gray-800 p-1"
+                                   onclick="event.stopPropagation();" title="Editar">
+                                    <ion-icon name="create-outline"></ion-icon>
+                                </a>
+                                <button type="button"
+                                        onclick="openDeleteModal('{{ template.id }}', '{{ template.name }}', '{{ template.usage_count }}')"
+                                        class="text-red-600 hover:text-red-800 p-1"
+                                        title="Excluir">
+                                    <ion-icon name="trash-outline"></ion-icon>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-12">
+                        <ion-icon name="document-text-outline" class="text-6xl text-gray-400 mb-4"></ion-icon>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">Nenhum template encontrado</h3>
+                        <p class="text-gray-600 mb-4 px-4">Comece criando seu primeiro template de consolidação.</p>
+                        <a href="{% url 'admin_template_create' %}" 
+                           class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 inline-block">
+                            <ion-icon name="add-outline" class="mr-2"></ion-icon>
+                            Criar Template
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Exclusão de Template -->
+<div class="modal-overlay" id="deleteModal">
+    <div class="modal-content">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                <ion-icon name="warning-outline" class="text-red-600 text-2xl"></ion-icon>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Confirmar Exclusão</h3>
+            <p class="text-sm text-gray-500 mb-4">
+                Deseja realmente excluir o template "<strong id="templateName"></strong>"?
+            </p>
+            
+            <!-- Alerta para templates em uso -->
+            <div id="usageWarning" class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4" style="display: none;">
+                <div class="flex items-start">
+                    <ion-icon name="warning-outline" class="text-yellow-600 text-lg mr-2 mt-0.5 flex-shrink-0"></ion-icon>
+                    <div class="text-sm text-yellow-800">
+                        <p class="font-medium mb-1">Atenção!</p>
+                        <p>Este template está sendo usado por <strong id="usageCount"></strong> consolidação(ões) ativa(s). A exclusão pode afetar esses processos.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <p class="text-sm text-red-600 font-medium mb-6">
+                Esta ação não pode ser desfeita.
+            </p>
+        </div>
+        
+        <form id="deleteForm" method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="_method" value="DELETE">
+            <div class="flex gap-3 justify-center">
+                <button type="button" 
+                        onclick="closeDeleteModal()"
+                        class="px-4 py-2 w-full text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                    Cancelar
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 w-full text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                    <ion-icon name="trash-outline" class="mr-1"></ion-icon>
+                    Excluir Template
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let currentTemplateId = null;
+
+function openDeleteModal(templateId, templateName, usageCount) {
+    event.stopPropagation(); // Evitar propagação para o clique do card
+    
+    currentTemplateId = templateId;
+    const modal = document.getElementById('deleteModal');
+    const nameElement = document.getElementById('templateName');
+    const warningElement = document.getElementById('usageWarning');
+    const usageElement = document.getElementById('usageCount');
+    const deleteForm = document.getElementById('deleteForm');
+    
+    // Atualizar dados do modal
+    nameElement.textContent = templateName;
+    
+    // Criar URL usando Django template tag com valor placeholder e depois substituir
+    const deleteUrl = `/admin-panel/templates/${templateId}/delete/`;
+    deleteForm.action = deleteUrl;
+    
+    console.log('Delete URL:', deleteUrl); // Debug
+    
+    // Mostrar/esconder aviso de uso
+    if (parseInt(usageCount) > 0) {
+        usageElement.textContent = usageCount;
+        warningElement.style.display = 'block';
+    } else {
+        warningElement.style.display = 'none';
+    }
+    
+    // Mostrar modal
+    modal.classList.add('active');
+}
+
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteModal');
+    modal.classList.remove('active');
+    currentTemplateId = null;
+}
+
+// Fechar modal ao clicar no overlay
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeDeleteModal();
+    }
+});
+
+// Fechar modal com ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && currentTemplateId) {
+        closeDeleteModal();
+    }
+});
+
+// Submeter formulário e mostrar loading
+document.getElementById('deleteForm').addEventListener('submit', function(e) {
+    e.preventDefault(); // Prevenir submit padrão
+    
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    // Mostrar loading
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<ion-icon name="hourglass-outline" class="mr-1"></ion-icon> Excluindo...';
+    
+    // Criar formulário e submeter manualmente
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = this.action;
+    
+    // Adicionar CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+    
+    // Adicionar ao DOM e submeter
+    document.body.appendChild(form);
+    form.submit();
+});
+</script>
+{% endblock %}

@@ -29,11 +29,31 @@
         {% endif %}
         
         {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'consolidation' %}
-        <!-- Acompanhamentos só para admin e usuários do tipo consolidation -->
-        <a href="{% url 'admin_followups_list' %}" class="sidebar-item {% if 'followups' in request.resolver_match.url_name %}active{% endif %}">
-            <ion-icon name="chatbubbles-outline"></ion-icon>
-            Consolidação
-        </a>
+        <!-- Consolidação só para admin e usuários do tipo consolidation -->
+        <div class="sidebar-group">
+            <div class="sidebar-item-group {% if 'followup' in request.resolver_match.url_name %}active{% endif %}" 
+                 onclick="toggleSubmenu('consolidation-submenu')" style="cursor: pointer;">
+                <div style="display: flex; align-items: center; width: 100%;">
+                    <ion-icon name="chatbubbles-outline"></ion-icon>
+                    <span>Consolidação</span>
+                </div>
+            </div>
+            
+            <div id="consolidation-submenu" class="submenu {% if 'followup' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'admin_followups_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_followups_list' %}active{% endif %}">
+                    <ion-icon name="list-outline"></ion-icon>
+                    Consolidações
+                </a>
+                <a href="{% url 'admin_templates' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_templates' %}active{% endif %}" title="Templates de consolidação">
+                    <ion-icon name="clipboard-outline"></ion-icon>
+                    Templates
+                </a>
+                <a href="{% url 'admin_reports' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_reports' %}active{% endif %}" title="Relatórios de consolidação">
+                    <ion-icon name="analytics-outline"></ion-icon>
+                    Relatórios
+                </a>
+            </div>
+        </div>
         {% endif %}
         
         {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'events' %}
@@ -122,11 +142,31 @@
             {% endif %}
             
             {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'consolidation' %}
-            <!-- Acompanhamentos só para admin e usuários do tipo consolidation -->
-            <a href="{% url 'admin_followups_list' %}" class="sidebar-item {% if 'followups' in request.resolver_match.url_name %}active{% endif %}">
-                <ion-icon name="chatbubbles-outline"></ion-icon>
-                Acompanhamentos
-            </a>
+            <!-- Consolidação só para admin e usuários do tipo consolidation -->
+            <div class="sidebar-group">
+                <div class="sidebar-item-group {% if 'followup' in request.resolver_match.url_name %}active{% endif %}" 
+                     onclick="toggleSubmenu('mobile-consolidation-submenu')" style="cursor: pointer;">
+                    <div style="display: flex; align-items: center; width: 100%;">
+                        <ion-icon name="chatbubbles-outline"></ion-icon>
+                        <span>Consolidação</span>
+                    </div>
+                </div>
+                
+                <div id="mobile-consolidation-submenu" class="submenu {% if 'followup' in request.resolver_match.url_name %}active{% endif %}">
+                    <a href="{% url 'admin_followups_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_followups_list' %}active{% endif %}">
+                        <ion-icon name="list-outline"></ion-icon>
+                        Consolidações
+                    </a>
+                    <a href="{% url 'admin_templates' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_templates' %}active{% endif %}" title="Templates de consolidação">
+                        <ion-icon name="clipboard-outline"></ion-icon>
+                        Templates
+                    </a>
+                    <a href="{% url 'admin_reports' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_reports' %}active{% endif %}" title="Relatórios de consolidação">
+                        <ion-icon name="analytics-outline"></ion-icon>
+                        Relatórios
+                    </a>
+                </div>
+            </div>
             {% endif %}
             
             {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'events' %}

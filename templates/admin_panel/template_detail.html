@@ -1,0 +1,364 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ template.name }} - Detalhes do Template{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .step-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #f9fafb;
+    }
+    
+    .usage-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 12px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .usage-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        transform: translateY(-1px);
+    }
+    
+    /* Modal para duplicação */
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .modal-overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .modal-content {
+        background: white;
+        padding: 32px;
+        border-radius: 12px;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        max-width: 500px;
+        width: 90%;
+        transform: scale(0.9);
+        transition: transform 0.3s ease;
+    }
+    
+    .modal-overlay.active .modal-content {
+        transform: scale(1);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/messages.html' %}
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-6 mt-24">
+            <!-- Header com Informações do Template -->
+            <div class="admin-card mb-6">
+                <div class="p-6">
+                    <div class="flex flex-col md:flex-row justify-between items-start gap-4">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <h1 class="text-2xl font-bold text-gray-900">{{ template.name }}</h1>
+                                <span class="bg-{% if usage_count > 0 %}green{% else %}gray{% endif %}-100 text-{% if usage_count > 0 %}green{% else %}gray{% endif %}-800 text-sm font-medium px-3 py-1 rounded-full">
+                                    {% if usage_count > 0 %}Em Uso{% else %}Inativo{% endif %}
+                                </span>
+                            </div>
+                            
+                            {% if template.description %}
+                                <p class="text-gray-600 mb-4">{{ template.description }}</p>
+                            {% endif %}
+                            
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-[var(--color-primary)]">{{ steps.count }}</div>
+                                    <div class="text-gray-600">Etapa{{ steps.count|pluralize }}</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-green-600">{{ usage_count }}</div>
+                                    <div class="text-gray-600">Em Uso</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-blue-600">{{ template.created_at|date:"d/m/Y" }}</div>
+                                    <div class="text-gray-600">Criado</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-bold text-purple-600">{{ template.update_at|date:"d/m/Y" }}</div>
+                                    <div class="text-gray-600">Atualizado</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col gap-2">
+                            <a href="{% url 'admin_followup_create' %}?template={{ template.id }}" 
+                               class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition duration-300 text-center">
+                                <ion-icon name="play-outline" class="mr-2"></ion-icon>
+                                Usar Template
+                            </a>
+                            <a href="{% url 'admin_template_edit' template.id %}" 
+                               class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-300 text-center">
+                                <ion-icon name="create-outline" class="mr-2"></ion-icon>
+                                Editar
+                            </a>
+                            <a href="{% url 'admin_templates' %}" 
+                               class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition duration-300 text-center">
+                                <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
+                                Voltar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Etapas do Template -->
+                <div class="lg:col-span-2">
+                    <div class="admin-card">
+                        <div class="p-6">
+                            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                                <ion-icon name="list-outline" class="mr-2"></ion-icon>
+                                Etapas do Template ({{ steps.count }})
+                            </h2>
+                            
+                            {% if steps %}
+                                <div class="space-y-4">
+                                    {% for step in steps %}
+                                        <div class="step-card">
+                                            <div class="flex items-start gap-3">
+                                                <div class="bg-[var(--color-primary)] text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm flex-shrink-0">
+                                                    <span style="margin-top: 0.2rem;">{{ step.week }}</span>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <h4 class="font-medium text-gray-900">{{ step.title }}</h4>
+                                                    {% if step.description %}
+                                                        <p class="text-gray-600 text-sm">{{ step.description }}</p>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-8">
+                                    <ion-icon name="document-outline" class="text-4xl text-gray-400 mb-2"></ion-icon>
+                                    <p class="text-gray-500">Nenhuma etapa configurada ainda</p>
+                                    <a href="{% url 'admin_template_edit' template.id %}" 
+                                       class="text-[var(--color-primary)] hover:underline">
+                                        Adicionar etapas
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Consolidações que Usam Este Template -->
+                <div class="lg:col-span-1">
+                    <div class="admin-card">
+                        <div class="p-6">
+                            <h2 class="text-xl font-semibold text-gray-900 mb-4">
+                                <ion-icon name="people-outline" class="mr-2"></ion-icon>
+                                Consolidações ({{ usage_count }})
+                            </h2>
+                            
+                            {% if followups_using %}
+                                <div class="space-y-2 max-h-96 overflow-y-auto">
+                                    {% for followup in followups_using %}
+                                        <div class="usage-card" data-url="{% url 'admin_followup_detail' followup.id %}" onclick="window.location.href = this.dataset.url;">
+                                            <h5 class="font-medium text-gray-900">{{ followup.accompanied.name }}</h5>
+                                            <p class="text-sm text-gray-600">
+                                                Responsável: {{ followup.responsible.name }}
+                                            </p>
+                                            <p class="text-xs text-gray-500">
+                                                Início: {{ followup.start_date|date:"d/m/Y"|default:followup.created_at|date:"d/m/Y" }}
+                                                {% if followup.end_date %}
+                                                    | Fim: {{ followup.end_date|date:"d/m/Y" }}
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                
+                                {% if followups_using.count > 10 %}
+                                    <div class="mt-4 text-center">
+                                        <a href="{% url 'admin_followups_list' %}?template={{ template.id }}" 
+                                           class="text-[var(--color-primary)] hover:underline">
+                                            Ver todas as consolidações
+                                        </a>
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <div class="text-center py-8">
+                                    <ion-icon name="people-outline" class="text-4xl text-gray-400 mb-2"></ion-icon>
+                                    <p class="text-gray-500 mb-3">Nenhuma consolidação usando este template ainda</p>
+                                    <a href="{% url 'admin_followup_create' %}?template={{ template.id }}" 
+                                       class="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 inline-block">
+                                        <ion-icon name="add-outline" class="mr-2"></ion-icon>
+                                        Criar Consolidação
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Ações Rápidas -->
+                    <div class="admin-card mt-6">
+                        <div class="p-6">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Ações</h3>
+                            
+                            <div class="space-y-2">
+                                <a href="{% url 'admin_template_edit' template.id %}" 
+                                   class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-300 block text-center">
+                                    <ion-icon name="create-outline" class="mr-2"></ion-icon>
+                                    Editar Template
+                                </a>
+                                
+                                <button type="button" onclick="duplicateTemplate()" 
+                                        class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition duration-300">
+                                    <ion-icon name="copy-outline" class="mr-2"></ion-icon>
+                                    Duplicar Template
+                                </button>
+                                
+                                <a href="{% url 'admin_template_delete' template.id %}" 
+                                   class="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-300 block text-center"
+                                   onclick="return confirm('Tem certeza que deseja excluir este template?')">
+                                    <ion-icon name="trash-outline" class="mr-2"></ion-icon>
+                                    Excluir Template
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Duplicação de Template -->
+<div class="modal-overlay" id="duplicateModal">
+    <div class="modal-content">
+        <div class="text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 mb-4">
+                <ion-icon name="copy-outline" class="text-purple-600 text-2xl"></ion-icon>
+            </div>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Duplicar Template</h3>
+            <p class="text-sm text-gray-500 mb-6">
+                Deseja criar uma cópia do template "<strong>{{ template.name }}</strong>"?<br>
+                Uma nova versão será criada com todas as etapas configuradas.
+            </p>
+        </div>
+        
+        <form id="duplicateForm" method="POST" action="{% url 'admin_template_create' %}">
+            {% csrf_token %}
+            <input type="hidden" name="duplicate_from" value="{{ template.id }}">
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Nome do novo template</label>
+                <input type="text" 
+                       name="name" 
+                       id="duplicateName"
+                       value="Cópia de {{ template.name }}"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                       required>
+            </div>
+            
+            <div class="flex gap-3 justify-end">
+                <button type="button" 
+                        onclick="closeDuplicateModal()"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                    Cancelar
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                    <ion-icon name="copy-outline" class="mr-1"></ion-icon>
+                    Duplicar Template
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function duplicateTemplate() {
+    openDuplicateModal();
+}
+
+function openDuplicateModal() {
+    const modal = document.getElementById('duplicateModal');
+    const nameInput = document.getElementById('duplicateName');
+    
+    // Focar no campo de nome após a animação
+    modal.classList.add('active');
+    setTimeout(() => {
+        nameInput.focus();
+        nameInput.select();
+    }, 300);
+}
+
+function closeDuplicateModal() {
+    const modal = document.getElementById('duplicateModal');
+    modal.classList.remove('active');
+}
+
+// Fechar modal ao clicar no overlay
+document.getElementById('duplicateModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeDuplicateModal();
+    }
+});
+
+// Fechar modal com ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeDuplicateModal();
+    }
+});
+
+// Submeter formulário e mostrar loading
+document.getElementById('duplicateForm').addEventListener('submit', function() {
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<ion-icon name="hourglass-outline" class="mr-1"></ion-icon> Duplicando...';
+    
+    // Restaurar botão se houver erro (backup)
+    setTimeout(() => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalText;
+    }, 5000);
+});
+</script>
+
+{% csrf_token %}
+{% endblock %}

@@ -1,0 +1,438 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Editar {{ template.name }} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        padding: 24px;
+    }
+    
+    .step-item {
+        background: #f8f9fa;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
+    }
+    
+    .step-item:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .step-header {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        display: flex;
+        justify-content: between;
+        align-items: center;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        border: none;
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-weight: 600;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #e55a2b, #e8831a);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    }
+    
+    .btn-add-step {
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        color: #6c757d;
+        border-radius: 12px;
+        padding: 20px;
+        width: 100%;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-add-step:hover {
+        border-color: #ff6b35;
+        color: #ff6b35;
+        background: #fff5f0;
+    }
+    
+    .form-control {
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        padding: 12px 16px;
+    }
+    
+    .form-control:focus {
+        border-color: #ff6b35;
+        box-shadow: 0 0 0 0.2rem rgba(255, 107, 53, 0.25);
+    }
+    
+    .step-number {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 12px;
+    }
+    
+    .remove-step {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .remove-step:hover {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .existing-step {
+        border-left: 4px solid #28a745;
+    }
+    
+    .new-step {
+        border-left: 4px solid #ff6b35;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold text-dark mb-1">Editar Template: {{ template.name }}</h2>
+                    <p class="text-muted mb-0">Modifique as informações e etapas do template</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'admin_followup_template_detail' template.id %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-eye me-2"></i>Visualizar
+                    </a>
+                    <a href="{% url 'admin_followup_templates_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="post" id="templateForm">
+        {% csrf_token %}
+        
+        <!-- Informações Básicas -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="admin-card">
+                    <h5 class="fw-bold mb-3">
+                        <i class="fas fa-info-circle text-primary me-2"></i>Informações Básicas
+                    </h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="name" class="form-label fw-semibold">Nome do Template *</label>
+                                <input type="text" class="form-control" id="name" name="name" 
+                                       value="{{ template.name }}" placeholder="Ex: Consolidação 5 Semanas" required>
+                                <small class="text-muted">Nome que identificará este template</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="duration_weeks" class="form-label fw-semibold">Duração (semanas) *</label>
+                                <input type="number" class="form-control" id="duration_weeks" name="duration_weeks" 
+                                       min="1" max="52" value="{{ template.duration_weeks }}" required>
+                                <small class="text-muted">Número total de semanas do plano</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label fw-semibold">Descrição</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"
+                                  placeholder="Descreva o objetivo e características deste template">{{ template.description }}</textarea>
+                        <small class="text-muted">Descrição opcional para ajudar na identificação</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Etapas do Template -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="admin-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0">
+                            <i class="fas fa-list-ol text-primary me-2"></i>Etapas do Template
+                        </h5>
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="addStep()">
+                            <i class="fas fa-plus me-1"></i>Adicionar Etapa
+                        </button>
+                    </div>
+                    
+                    <div id="stepsContainer">
+                        <!-- Etapas existentes -->
+                        {% for step in template.steps.all %}
+                        <div class="step-item existing-step" data-step="{{ step.week }}" data-step-id="{{ step.id }}">
+                            <div class="step-header">
+                                <div class="d-flex align-items-center">
+                                    <div class="step-number">{{ step.week }}</div>
+                                    <span class="fw-bold">Semana {{ step.week }}</span>
+                                    <span class="badge bg-success ms-2">Existente</span>
+                                </div>
+                                <button type="button" class="remove-step" onclick="removeStep({{ step.week }})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            
+                            <input type="hidden" name="steps[{{ step.week }}][id]" value="{{ step.id }}">
+                            
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Tarefa/Objetivo *</label>
+                                        <input type="text" class="form-control" name="steps[{{ step.week }}][task]" 
+                                               value="{{ step.task }}" placeholder="Ex: Primeira visita - Conhecer a família" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Semana</label>
+                                        <input type="number" class="form-control" name="steps[{{ step.week }}][week]" 
+                                               value="{{ step.week }}" min="1" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Descrição Detalhada</label>
+                                <textarea class="form-control" name="steps[{{ step.week }}][description]" rows="2"
+                                          placeholder="Descreva os detalhes desta etapa...">{{ step.description }}</textarea>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Material de Apoio</label>
+                                        <input type="text" class="form-control" name="steps[{{ step.week }}][materials]" 
+                                               value="{{ step.materials }}" placeholder="Ex: Cartilha do Novo Convertido">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Observações</label>
+                                        <input type="text" class="form-control" name="steps[{{ step.week }}][notes]" 
+                                               value="{{ step.notes }}" placeholder="Observações importantes">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Botão para adicionar etapa -->
+                    <button type="button" class="btn-add-step" onclick="addStep()">
+                        <i class="fas fa-plus mb-2" style="font-size: 2rem;"></i>
+                        <div class="fw-semibold">Adicionar Nova Etapa</div>
+                        <small class="text-muted">Clique para criar uma nova etapa no template</small>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ações -->
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <a href="{% url 'admin_followup_template_delete' template.id %}" 
+                           class="btn btn-outline-danger"
+                           onclick="return confirm('Tem certeza que deseja excluir este template? Esta ação não pode ser desfeita.')">
+                            <i class="fas fa-trash me-2"></i>Excluir Template
+                        </a>
+                    </div>
+                    <div class="d-flex gap-3">
+                        <a href="{% url 'admin_followup_template_detail' template.id %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-2"></i>Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Salvar Alterações
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+let stepCounter = {{ template.steps.count }};
+
+function addStep() {
+    stepCounter++;
+    const container = document.getElementById('stepsContainer');
+    const duration = document.getElementById('duration_weeks').value || {{ template.duration_weeks }};
+    
+    if (stepCounter > duration) {
+        alert(`O template permite no máximo ${duration} etapas conforme a duração configurada.`);
+        stepCounter--;
+        return;
+    }
+    
+    const stepHtml = `
+        <div class="step-item new-step" data-step="${stepCounter}">
+            <div class="step-header">
+                <div class="d-flex align-items-center">
+                    <div class="step-number">${stepCounter}</div>
+                    <span class="fw-bold">Semana ${stepCounter}</span>
+                    <span class="badge bg-primary ms-2">Nova</span>
+                </div>
+                <button type="button" class="remove-step" onclick="removeStep(${stepCounter})">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Tarefa/Objetivo *</label>
+                        <input type="text" class="form-control" name="steps[${stepCounter}][task]" 
+                               placeholder="Ex: Visita de acompanhamento" required>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Semana</label>
+                        <input type="number" class="form-control" name="steps[${stepCounter}][week]" 
+                               value="${stepCounter}" min="1" readonly>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Descrição Detalhada</label>
+                <textarea class="form-control" name="steps[${stepCounter}][description]" rows="2"
+                          placeholder="Descreva os detalhes desta etapa..."></textarea>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Material de Apoio</label>
+                        <input type="text" class="form-control" name="steps[${stepCounter}][materials]" 
+                               placeholder="Ex: Material específico">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Observações</label>
+                        <input type="text" class="form-control" name="steps[${stepCounter}][notes]" 
+                               placeholder="Observações importantes">
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.insertAdjacentHTML('beforeend', stepHtml);
+}
+
+function removeStep(stepNumber) {
+    if (confirm('Tem certeza que deseja remover esta etapa?')) {
+        const stepElement = document.querySelector(`[data-step="${stepNumber}"]`);
+        stepElement.remove();
+        
+        // Reordena as etapas
+        reorderSteps();
+    }
+}
+
+function reorderSteps() {
+    const steps = document.querySelectorAll('.step-item');
+    steps.forEach((step, index) => {
+        const newStepNumber = index + 1;
+        step.setAttribute('data-step', newStepNumber);
+        
+        // Atualiza número visual
+        const stepNumber = step.querySelector('.step-number');
+        const stepTitle = step.querySelector('.step-header span');
+        stepNumber.textContent = newStepNumber;
+        stepTitle.textContent = `Semana ${newStepNumber}`;
+        
+        // Atualiza inputs
+        const weekInput = step.querySelector('input[name*="[week]"]');
+        weekInput.value = newStepNumber;
+        weekInput.setAttribute('name', `steps[${newStepNumber}][week]`);
+        
+        // Atualiza outros inputs
+        step.querySelectorAll('input, textarea').forEach(input => {
+            const name = input.getAttribute('name');
+            if (name && name.includes('steps[')) {
+                const fieldName = name.match(/\[(\w+)\]$/)[1];
+                input.setAttribute('name', `steps[${newStepNumber}][${fieldName}]`);
+            }
+        });
+        
+        // Atualiza botão de remover
+        const removeBtn = step.querySelector('.remove-step');
+        removeBtn.setAttribute('onclick', `removeStep(${newStepNumber})`);
+    });
+    
+    stepCounter = steps.length;
+}
+
+// Atualiza limite de etapas quando duração muda
+document.getElementById('duration_weeks').addEventListener('change', function() {
+    const maxWeeks = parseInt(this.value);
+    const currentSteps = document.querySelectorAll('.step-item').length;
+    
+    if (currentSteps > maxWeeks) {
+        alert(`Reduza o número de etapas para ${maxWeeks} conforme a nova duração.`);
+        this.value = currentSteps;
+    }
+});
+
+// Validação antes do envio
+document.getElementById('templateForm').addEventListener('submit', function(e) {
+    const steps = document.querySelectorAll('.step-item').length;
+    const duration = parseInt(document.getElementById('duration_weeks').value);
+    
+    if (steps === 0) {
+        e.preventDefault();
+        alert('Adicione pelo menos uma etapa ao template.');
+        return;
+    }
+    
+    if (steps > duration) {
+        e.preventDefault();
+        alert(`O número de etapas (${steps}) não pode ser maior que a duração (${duration} semanas).`);
+        return;
+    }
+});
+</script>
+{% endblock %}

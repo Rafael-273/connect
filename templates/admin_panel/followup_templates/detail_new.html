@@ -1,0 +1,320 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ template.name }} - Template de Consolidação{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        padding: 24px;
+    }
+    
+    .template-header {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+    
+    .step-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
+    }
+    
+    .step-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    .step-number {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        border: none;
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-weight: 600;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #e55a2b, #e8831a);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    }
+    
+    .info-item {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+    }
+    
+    .info-label {
+        font-weight: 600;
+        color: #374151;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+    }
+    
+    .info-value {
+        color: #6b7280;
+    }
+    
+    .badge-custom {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    
+    .timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 19px;
+        top: 60px;
+        bottom: 20px;
+        width: 2px;
+        background: linear-gradient(to bottom, #ff6b35, #f7931e);
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 24px;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -11px;
+        top: 20px;
+        width: 12px;
+        height: 12px;
+        background: #ff6b35;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 0 0 3px #ff6b35;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="template-header">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h2 class="fw-bold mb-2">{{ template.name }}</h2>
+                        {% if template.description %}
+                            <p class="mb-3 opacity-90">{{ template.description }}</p>
+                        {% endif %}
+                        <div class="d-flex gap-3">
+                            <span class="badge-custom">
+                                <i class="fas fa-clock me-1"></i>{{ template.duration_weeks }} semana{{ template.duration_weeks|pluralize }}
+                            </span>
+                            <span class="badge-custom">
+                                <i class="fas fa-list me-1"></i>{{ template.steps.count }} etapa{{ template.steps.count|pluralize }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'admin_followup_template_edit' template.id %}" class="btn btn-light">
+                            <i class="fas fa-edit me-2"></i>Editar
+                        </a>
+                        <a href="{% url 'admin_followup_templates_list' %}" class="btn btn-outline-light">
+                            <i class="fas fa-arrow-left me-2"></i>Voltar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações Gerais -->
+        <div class="col-md-4">
+            <div class="admin-card">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-info-circle text-primary me-2"></i>Informações Gerais
+                </h5>
+                
+                <div class="info-item">
+                    <div class="info-label">Nome do Template</div>
+                    <div class="info-value">{{ template.name }}</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="info-label">Duração</div>
+                    <div class="info-value">{{ template.duration_weeks }} semana{{ template.duration_weeks|pluralize }}</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="info-label">Total de Etapas</div>
+                    <div class="info-value">{{ template.steps.count }} etapa{{ template.steps.count|pluralize }}</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="info-label">Criado em</div>
+                    <div class="info-value">{{ template.created_at|date:"d/m/Y às H:i" }}</div>
+                </div>
+                
+                {% if template.updated_at != template.created_at %}
+                <div class="info-item">
+                    <div class="info-label">Última atualização</div>
+                    <div class="info-value">{{ template.updated_at|date:"d/m/Y às H:i" }}</div>
+                </div>
+                {% endif %}
+                
+                {% if template.description %}
+                <div class="info-item">
+                    <div class="info-label">Descrição</div>
+                    <div class="info-value">{{ template.description }}</div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Estatísticas de Uso -->
+            <div class="admin-card mt-4">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-chart-bar text-primary me-2"></i>Estatísticas de Uso
+                </h5>
+                
+                <div class="info-item">
+                    <div class="info-label">Consolidações Ativas</div>
+                    <div class="info-value">{{ template.followups.count }} consolidações</div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="info-label">Taxa de Conclusão</div>
+                    <div class="info-value">85% <small class="text-muted">(em desenvolvimento)</small></div>
+                </div>
+                
+                <div class="info-item">
+                    <div class="info-label">Tempo Médio</div>
+                    <div class="info-value">{{ template.duration_weeks }} semanas <small class="text-muted">(previsto)</small></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Etapas do Template -->
+        <div class="col-md-8">
+            <div class="admin-card">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-bold mb-0">
+                        <i class="fas fa-list-ol text-primary me-2"></i>Etapas do Template
+                    </h5>
+                    <a href="{% url 'admin_followup_template_edit' template.id %}" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-plus me-1"></i>Adicionar Etapa
+                    </a>
+                </div>
+                
+                {% if template.steps.all %}
+                    <div class="timeline">
+                        {% for step in template.steps.all %}
+                            <div class="timeline-item">
+                                <div class="step-card">
+                                    <div class="d-flex align-items-start">
+                                        <div class="step-number me-3">
+                                            {{ step.week }}
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <h6 class="fw-bold mb-0">Semana {{ step.week }}</h6>
+                                                <small class="text-muted">Etapa {{ forloop.counter }}</small>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <div class="fw-semibold text-primary mb-1">Tarefa/Objetivo:</div>
+                                                <p class="mb-0">{{ step.task }}</p>
+                                            </div>
+                                            
+                                            {% if step.description %}
+                                            <div class="mb-3">
+                                                <div class="fw-semibold text-primary mb-1">Descrição:</div>
+                                                <p class="mb-0 text-muted">{{ step.description }}</p>
+                                            </div>
+                                            {% endif %}
+                                            
+                                            <div class="row">
+                                                {% if step.materials %}
+                                                <div class="col-md-6">
+                                                    <div class="fw-semibold text-primary mb-1">Material de Apoio:</div>
+                                                    <p class="mb-0 small">{{ step.materials }}</p>
+                                                </div>
+                                                {% endif %}
+                                                
+                                                {% if step.notes %}
+                                                <div class="col-md-6">
+                                                    <div class="fw-semibold text-primary mb-1">Observações:</div>
+                                                    <p class="mb-0 small">{{ step.notes }}</p>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-list-ol text-muted mb-3" style="font-size: 3rem;"></i>
+                        <h6 class="text-muted mb-3">Nenhuma etapa definida</h6>
+                        <p class="text-muted mb-4">Este template ainda não possui etapas configuradas</p>
+                        <a href="{% url 'admin_followup_template_edit' template.id %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Adicionar Primeira Etapa
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Ações -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-end gap-3">
+                <a href="{% url 'admin_followup_template_delete' template.id %}" 
+                   class="btn btn-outline-danger"
+                   onclick="return confirm('Tem certeza que deseja excluir este template? Esta ação não pode ser desfeita.')">
+                    <i class="fas fa-trash me-2"></i>Excluir Template
+                </a>
+                <a href="{% url 'admin_followup_template_edit' template.id %}" class="btn btn-primary">
+                    <i class="fas fa-edit me-2"></i>Editar Template
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

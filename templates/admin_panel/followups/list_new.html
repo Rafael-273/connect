@@ -1,0 +1,368 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Consolidação - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .followup-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
+        background: white;
+        position: relative;
+    }
+    
+    .followup-card:hover {
+        box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    .followup-card.completed {
+        background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+        border-color: #10b981;
+    }
+    
+    .progress-circle {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background: conic-gradient(from 0deg, #ff6b35 0%, #ff6b35 var(--progress), #e5e7eb var(--progress), #e5e7eb 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+    }
+    
+    .progress-circle::before {
+        content: '';
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: white;
+        position: absolute;
+    }
+    
+    .progress-text {
+        position: relative;
+        z-index: 1;
+        font-weight: bold;
+        font-size: 0.9rem;
+        color: #374151;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        border: none;
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-weight: 600;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #e55a2b, #e8831a);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    }
+    
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .status-active {
+        background: #fef3c7;
+        color: #d97706;
+    }
+    
+    .status-completed {
+        background: #dcfce7;
+        color: #166534;
+    }
+    
+    .template-badge {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 8px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+    
+    .steps-preview {
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 12px;
+        margin-top: 12px;
+    }
+    
+    .filter-tabs {
+        background: white;
+        border-radius: 12px;
+        padding: 6px;
+        margin-bottom: 20px;
+        display: inline-flex;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .filter-tab {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: none;
+        background: transparent;
+        color: #6b7280;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    
+    .filter-tab.active {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold text-dark mb-1">Consolidação</h2>
+                    <p class="text-muted mb-0">Gerencie o acompanhamento dos novos convertidos</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'admin_followup_template_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-clipboard-list me-2"></i>Gerenciar Templates
+                    </a>
+                    <a href="{% url 'admin_followup_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Nova Consolidação
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas Rápidas -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="admin-card p-4 text-center">
+                <div class="fs-2 fw-bold text-primary mb-1">{{ stats.total }}</div>
+                <small class="text-muted">Total de Consolidações</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="admin-card p-4 text-center">
+                <div class="fs-2 fw-bold text-warning mb-1">{{ stats.active }}</div>
+                <small class="text-muted">Em Andamento</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="admin-card p-4 text-center">
+                <div class="fs-2 fw-bold text-success mb-1">{{ stats.completed }}</div>
+                <small class="text-muted">Concluídas</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="admin-card p-4 text-center">
+                <div class="fs-2 fw-bold text-danger mb-1">{{ stats.overdue }}</div>
+                <small class="text-muted">Com Etapas Atrasadas</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="filter-tabs">
+                <button class="filter-tab active" data-filter="all">Todas</button>
+                <button class="filter-tab" data-filter="active">Em Andamento</button>
+                <button class="filter-tab" data-filter="completed">Concluídas</button>
+                <button class="filter-tab" data-filter="overdue">Atrasadas</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Consolidações -->
+    <div class="row">
+        <div class="col-12">
+            {% if followups %}
+                {% for followup in followups %}
+                <div class="followup-card {% if followup.completed %}completed{% endif %}" 
+                     data-status="{% if followup.completed %}completed{% elif followup.has_overdue_steps %}overdue{% else %}active{% endif %}">
+                    <div class="row align-items-center">
+                        <div class="col-md-1">
+                            <div class="progress-circle" style="--progress: {{ followup.progress_percentage }}%">
+                                <span class="progress-text">{{ followup.progress_percentage }}%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-7">
+                            <div class="d-flex align-items-center mb-2">
+                                <h5 class="fw-bold mb-0 me-3">{{ followup.accompanied.name }}</h5>
+                                {% if followup.completed %}
+                                    <span class="status-badge status-completed">
+                                        <i class="fas fa-check-circle me-1"></i>Concluída
+                                    </span>
+                                {% elif followup.has_overdue_steps %}
+                                    <span class="status-badge" style="background: #fee2e2; color: #dc2626;">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>Atrasada
+                                    </span>
+                                {% else %}
+                                    <span class="status-badge status-active">
+                                        <i class="fas fa-clock me-1"></i>Em Andamento
+                                    </span>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-user me-1"></i>Responsável: {{ followup.responsible.name }}
+                                </small>
+                                {% if followup.template %}
+                                    <span class="template-badge ms-2">{{ followup.template.name }}</span>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar me-1"></i>
+                                    Início: {{ followup.start_date|date:"d/m/Y" }}
+                                    {% if followup.end_date %}
+                                        | Conclusão: {{ followup.end_date|date:"d/m/Y" }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            
+                            {% if followup.steps.exists %}
+                            <div class="steps-preview">
+                                <small class="text-muted fw-semibold d-block mb-1">
+                                    Progresso: {{ followup.completed_steps_count }} de {{ followup.total_steps_count }} etapas
+                                </small>
+                                <div class="d-flex gap-1">
+                                    {% for step in followup.steps.all|slice:":5" %}
+                                        <div class="badge {% if step.completed %}bg-success{% elif step.due_date < today %}bg-danger{% else %}bg-warning{% endif %} p-1" 
+                                             style="width: 20px; height: 8px; border-radius: 4px;" 
+                                             title="Semana {{ step.week }}: {{ step.task|truncatechars:30 }}">
+                                        </div>
+                                    {% endfor %}
+                                    {% if followup.total_steps_count > 5 %}
+                                        <small class="text-muted align-self-center">+{{ followup.total_steps_count|add:"-5" }}</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="text-end">
+                                <div class="btn-group mb-2">
+                                    <a href="{% url 'admin_followup_detail' followup.id %}" 
+                                       class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-eye me-1"></i>Detalhes
+                                    </a>
+                                    {% if followup.steps.exists %}
+                                    <a href="{% url 'admin_followup_steps_manage' followup.id %}" 
+                                       class="btn btn-outline-success btn-sm">
+                                        <i class="fas fa-tasks me-1"></i>Gerenciar Etapas
+                                    </a>
+                                    {% endif %}
+                                    <a href="{% url 'admin_followup_edit' followup.id %}" 
+                                       class="btn btn-outline-secondary btn-sm">
+                                        <i class="fas fa-edit me-1"></i>Editar
+                                    </a>
+                                </div>
+                                
+                                {% if not followup.steps.exists and followup.template %}
+                                <div>
+                                    <button type="button" class="btn btn-success btn-sm" 
+                                            onclick="generateSteps({{ followup.id }})">
+                                        <i class="fas fa-magic me-1"></i>Gerar Etapas
+                                    </button>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="admin-card p-5 text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-user-graduate text-muted" style="font-size: 4rem;"></i>
+                    </div>
+                    <h4 class="text-muted mb-3">Nenhuma consolidação encontrada</h4>
+                    <p class="text-muted mb-4">Comece criando sua primeira consolidação</p>
+                    <a href="{% url 'admin_followup_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>Criar Primeira Consolidação
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Filtros
+document.querySelectorAll('.filter-tab').forEach(tab => {
+    tab.addEventListener('click', function() {
+        // Atualizar tab ativo
+        document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+        this.classList.add('active');
+        
+        // Filtrar cards
+        const filter = this.dataset.filter;
+        document.querySelectorAll('.followup-card').forEach(card => {
+            if (filter === 'all' || card.dataset.status === filter) {
+                card.style.display = 'block';
+            } else {
+                card.style.display = 'none';
+            }
+        });
+    });
+});
+
+// Gerar etapas
+function generateSteps(followupId) {
+    if (confirm('Gerar etapas baseadas no template?')) {
+        fetch(`/admin/followups/${followupId}/generate-steps/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Erro ao gerar etapas');
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao gerar etapas');
+        });
+    }
+}
+</script>
+
+{% csrf_token %}
+{% endblock %}

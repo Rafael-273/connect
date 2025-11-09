@@ -1,7 +1,7 @@
 {% extends 'admin_base.html' %}
 {% load static %}
 
-{% block title %}{% if followup %}Editar Follow-up{% else %}Novo Follow-up{% endif %} - Painel Administrativo{% endblock %}
+{% block title %}{% if followup %}Editar Consolidação{% else %}Nova Consolidação{% endif %} - Painel Administrativo{% endblock %}
 
 {% block head %}
 <style>
@@ -41,7 +41,7 @@
                 <div class="flex justify-between items-center mb-6">
                     <div>
                         <h1 class="text-2xl font-bold text-gray-900">
-                            {% if followup %}Editar Follow-up{% else %}Novo Follow-up{% endif %}
+                            {% if followup %}Editar Consolidação{% else %}Nova Consolidação{% endif %}
                         </h1>
                         <p class="text-gray-600 mt-1">Configure o acompanhamento de consolidação</p>
                     </div>
@@ -74,6 +74,27 @@
                                 <div class="text-red-600 text-sm mt-1">{{ form.responsible.errors.0 }}</div>
                             {% endif %}
                         </div>
+                    </div>
+
+                    <!-- Template de Consolidação -->
+                    <div class="form-group">
+                        <label class="form-label">{{ form.template.label }}</label>
+                        {{ form.template }}
+                        <div id="template-info" class="mt-2" style="display: none;">
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                                <div class="flex items-start">
+                                    <ion-icon name="information-circle-outline" class="text-blue-500 text-lg mr-2 mt-0.5 flex-shrink-0"></ion-icon>
+                                    <div class="text-sm text-blue-800">
+                                        <p class="font-bold mb-1">Informações do Template:</p>
+                                        <p id="template-description" class="mb-1"></p>
+                                        <p id="template-steps"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% if form.template.errors %}
+                            <div class="text-red-600 text-sm mt-1">{{ form.template.errors.0 }}</div>
+                        {% endif %}
                     </div>
 
                     <!-- Data de Encerramento -->
@@ -111,4 +132,42 @@
         </div>
     </div>
 </div>
+
+<script>
+// Dados dos templates para JavaScript
+const templatesData = {
+    {% for template in templates_data %}
+    {{ template.id }}: {
+        'name': '{{ template.name|escapejs }}',
+        'description': '{{ template.description|escapejs }}',
+        'steps_count': {{ template.steps_count }}
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+};
+
+function updateTemplateInfo(templateId) {
+    const infoDiv = document.getElementById('template-info');
+    const descriptionP = document.getElementById('template-description');
+    const stepsP = document.getElementById('template-steps');
+    
+    if (templateId && templatesData[templateId]) {
+        const template = templatesData[templateId];
+        
+        descriptionP.textContent = template.description;
+        stepsP.textContent = `Este template possui ${template.steps_count} etapa${template.steps_count !== 1 ? 's' : ''} de consolidação.`;
+        
+        infoDiv.style.display = 'block';
+    } else {
+        infoDiv.style.display = 'none';
+    }
+}
+
+// Mostrar informações do template ao carregar a página se já houver um selecionado
+document.addEventListener('DOMContentLoaded', function() {
+    const templateSelect = document.querySelector('select[name="template"]');
+    if (templateSelect && templateSelect.value) {
+        updateTemplateInfo(templateSelect.value);
+    }
+});
+</script>
 {% endblock %}

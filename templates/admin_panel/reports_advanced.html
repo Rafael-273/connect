@@ -1,0 +1,804 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Relatórios Avançados - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        padding: 24px;
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        border-radius: 12px;
+        padding: 24px;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+    }
+    
+    .stat-card.stat-success {
+        background: linear-gradient(135deg, #10b981, #059669);
+    }
+    
+    .stat-card.stat-info {
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    }
+    
+    .stat-card.stat-warning {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+    
+    .stat-card.stat-danger {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        display: block;
+        margin-bottom: 8px;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+    
+    .chart-card {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        border: none;
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-weight: 600;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #e55a2b, #e8831a);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    }
+    
+    .progress-bar-custom {
+        height: 8px;
+        border-radius: 20px;
+        background: #e5e7eb;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+    
+    .progress-fill {
+        height: 100%;
+        border-radius: 20px;
+        transition: width 0.5s ease;
+    }
+    
+    .progress-success {
+        background: linear-gradient(135deg, #10b981, #059669);
+    }
+    
+    .progress-warning {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+    }
+    
+    .progress-danger {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+    }
+    
+    .consolidation-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        transition: all 0.3s ease;
+    }
+    
+    .consolidation-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    .status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .status-active {
+        background: #fef3c7;
+        color: #d97706;
+    }
+    
+    .status-completed {
+        background: #dcfce7;
+        color: #166534;
+    }
+    
+    .status-overdue {
+        background: #fee2e2;
+        color: #dc2626;
+    }
+    
+    .status-paused {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+    
+    .filter-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .filter-tabs {
+        background: white;
+        border-radius: 12px;
+        padding: 6px;
+        margin-bottom: 20px;
+        display: inline-flex;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .filter-tab {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: none;
+        background: transparent;
+        color: #6b7280;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .filter-tab.active {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+    }
+    
+    .chart-placeholder {
+        background: #f8f9fa;
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        color: #6b7280;
+    }
+    
+    .insight-card {
+        border-left: 4px solid #ff6b35;
+        background: #fff5f0;
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+    }
+    
+    .insight-icon {
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 12px;
+    }
+    
+    .export-menu {
+        position: relative;
+        display: inline-block;
+    }
+    
+    .export-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        padding: 8px 0;
+        min-width: 200px;
+        z-index: 1000;
+        display: none;
+    }
+    
+    .export-item {
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+    }
+    
+    .export-item:hover {
+        background: #f8f9fa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header com Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <h2 class="fw-bold text-dark mb-1">Relatórios de Consolidação</h2>
+                    <p class="text-muted mb-0">Análise completa do progresso e desempenho</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <div class="export-menu">
+                        <button class="btn btn-success" onclick="toggleExportMenu()">
+                            <i class="fas fa-download me-2"></i>Exportar <i class="fas fa-chevron-down ms-1"></i>
+                        </button>
+                        <div class="export-dropdown" id="exportDropdown">
+                            <div class="export-item" onclick="exportReport('pdf')">
+                                <i class="fas fa-file-pdf text-danger me-2"></i>Relatório em PDF
+                            </div>
+                            <div class="export-item" onclick="exportReport('excel')">
+                                <i class="fas fa-file-excel text-success me-2"></i>Planilha Excel
+                            </div>
+                            <div class="export-item" onclick="exportReport('csv')">
+                                <i class="fas fa-file-csv text-info me-2"></i>Dados CSV
+                            </div>
+                            <div class="export-item" onclick="exportReport('print')">
+                                <i class="fas fa-print text-secondary me-2"></i>Imprimir
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{% url 'admin_followups_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Voltar
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Filtros Avançados -->
+            <div class="filter-card">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Período</label>
+                        <select class="form-select" id="periodFilter" onchange="applyFilters()">
+                            <option value="week">Esta Semana</option>
+                            <option value="month" selected>Este Mês</option>
+                            <option value="quarter">Trimestre</option>
+                            <option value="year">Este Ano</option>
+                            <option value="custom">Período Personalizado</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Template</label>
+                        <select class="form-select" id="templateFilter" onchange="applyFilters()">
+                            <option value="all">Todos os Templates</option>
+                            <option value="5weeks">Consolidação 5 Semanas</option>
+                            <option value="discipleship">Discipulado Básico</option>
+                            <option value="special">Acompanhamento Especial</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Status</label>
+                        <select class="form-select" id="statusFilter" onchange="applyFilters()">
+                            <option value="all">Todos os Status</option>
+                            <option value="active">Em Andamento</option>
+                            <option value="completed">Concluídas</option>
+                            <option value="overdue">Atrasadas</option>
+                            <option value="paused">Pausadas</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Consolidador</label>
+                        <select class="form-select" id="consolidatorFilter" onchange="applyFilters()">
+                            <option value="all">Todos os Consolidadores</option>
+                            <option value="joao">João Santos</option>
+                            <option value="ana">Ana Oliveira</option>
+                            <option value="lucas">Lucas Ribeiro</option>
+                            <option value="maria">Maria Costa</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estatísticas Principais -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card" onclick="filterByStatus('all')">
+                <span class="stat-number" id="totalCount">45</span>
+                <span class="stat-label">Total de Consolidações</span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card stat-success" onclick="filterByStatus('active')">
+                <span class="stat-number" id="activeCount">32</span>
+                <span class="stat-label">Em Andamento</span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card stat-info" onclick="filterByStatus('completed')">
+                <span class="stat-number" id="completedCount">13</span>
+                <span class="stat-label">Concluídas</span>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card stat-danger" onclick="filterByStatus('overdue')">
+                <span class="stat-number" id="overdueCount">8</span>
+                <span class="stat-label">Com Atraso</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráficos e Análises Detalhadas -->
+    <div class="row mb-4">
+        <!-- Progresso por Template -->
+        <div class="col-md-6">
+            <div class="chart-card">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-chart-pie text-primary me-2"></i>Progresso por Template
+                </h5>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-sm">Consolidação 5 Semanas</span>
+                        <span class="text-sm fw-bold">24 consolidações (71%)</span>
+                    </div>
+                    <div class="progress-bar-custom">
+                        <div class="progress-fill progress-success" style="width: 71%"></div>
+                    </div>
+                    <small class="text-muted">Taxa de conclusão: 85%</small>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-sm">Discipulado Básico</span>
+                        <span class="text-sm fw-bold">15 consolidações (45%)</span>
+                    </div>
+                    <div class="progress-bar-custom">
+                        <div class="progress-fill progress-warning" style="width: 45%"></div>
+                    </div>
+                    <small class="text-muted">Taxa de conclusão: 67%</small>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-sm">Acompanhamento Especial</span>
+                        <span class="text-sm fw-bold">6 consolidações (23%)</span>
+                    </div>
+                    <div class="progress-bar-custom">
+                        <div class="progress-fill progress-danger" style="width: 23%"></div>
+                    </div>
+                    <small class="text-muted">Taxa de conclusão: 45%</small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Desempenho por Consolidador -->
+        <div class="col-md-6">
+            <div class="chart-card">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-users text-primary me-2"></i>Desempenho por Consolidador
+                </h5>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-sm">João Santos</span>
+                        <span class="text-sm fw-bold">12 consolidações</span>
+                    </div>
+                    <div class="progress-bar-custom">
+                        <div class="progress-fill progress-success" style="width: 92%"></div>
+                    </div>
+                    <small class="text-muted">Taxa de sucesso: 92%</small>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-sm">Ana Oliveira</span>
+                        <span class="text-sm fw-bold">10 consolidações</span>
+                    </div>
+                    <div class="progress-bar-custom">
+                        <div class="progress-fill progress-success" style="width: 87%"></div>
+                    </div>
+                    <small class="text-muted">Taxa de sucesso: 87%</small>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-sm">Lucas Ribeiro</span>
+                        <span class="text-sm fw-bold">8 consolidações</span>
+                    </div>
+                    <div class="progress-bar-custom">
+                        <div class="progress-fill progress-warning" style="width: 75%"></div>
+                    </div>
+                    <small class="text-muted">Taxa de sucesso: 75%</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tendências e Metas -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="chart-card">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-chart-line text-primary me-2"></i>Tendências Mensais
+                </h5>
+                
+                <div class="chart-placeholder">
+                    <i class="fas fa-chart-area mb-3" style="font-size: 3rem;"></i>
+                    <h6>Gráfico de Tendências</h6>
+                    <p class="mb-0">Visualização das tendências de consolidação ao longo do tempo</p>
+                    <small class="text-muted">Últimos 6 meses • Novas consolidações • Taxa de conclusão</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="chart-card">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-target text-primary me-2"></i>Metas do Período
+                </h5>
+                
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold">Meta Mensal</span>
+                        <span class="badge bg-success">90%</span>
+                    </div>
+                    <div class="progress-bar-custom mb-1">
+                        <div class="progress-fill progress-success" style="width: 90%"></div>
+                    </div>
+                    <small class="text-muted">45 de 50 consolidações atingidas</small>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold">Taxa de Conclusão</span>
+                        <span class="badge bg-warning">78%</span>
+                    </div>
+                    <div class="progress-bar-custom mb-1">
+                        <div class="progress-fill progress-warning" style="width: 78%"></div>
+                    </div>
+                    <small class="text-muted">Meta: 85%</small>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold">Pontualidade</span>
+                        <span class="badge bg-success">82%</span>
+                    </div>
+                    <div class="progress-bar-custom mb-1">
+                        <div class="progress-fill progress-success" style="width: 82%"></div>
+                    </div>
+                    <small class="text-muted">Meta: 80%</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista Detalhada de Consolidações -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-card">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-bold mb-0">
+                        <i class="fas fa-list text-primary me-2"></i>Consolidações Detalhadas
+                    </h5>
+                    <div class="d-flex gap-2">
+                        <input type="search" class="form-control" placeholder="Buscar por nome..." 
+                               style="width: 200px;" id="searchInput" onkeyup="filterConsolidations()">
+                        <button class="btn btn-outline-primary" onclick="toggleAdvancedFilters()">
+                            <i class="fas fa-filter me-1"></i>Filtros
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="consolidationsList">
+                    <!-- Consolidação 1 -->
+                    <div class="consolidation-card">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <h6 class="fw-bold mb-1">Maria Silva</h6>
+                                <small class="text-muted">Consolidador: João Santos</small>
+                                <br><small class="text-muted">Iniciado: 15/10/2024</small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Template</small>
+                                <span class="fw-semibold">Consolidação 5 Semanas</span>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Progresso</small>
+                                <div class="progress-bar-custom">
+                                    <div class="progress-fill progress-success" style="width: 80%"></div>
+                                </div>
+                                <small class="text-muted">80% (4/5)</small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Próxima Etapa</small>
+                                <span class="small">25/11/2024</span>
+                                <br><small class="text-success">Em dia</small>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="status-badge status-active">Em andamento</span>
+                            </div>
+                            <div class="col-md-1 text-end">
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-eye me-2"></i>Ver Detalhes</a></li>
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-edit me-2"></i>Editar</a></li>
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-clock me-2"></i>Histórico</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Consolidação 2 -->
+                    <div class="consolidation-card">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <h6 class="fw-bold mb-1">Pedro Costa</h6>
+                                <small class="text-muted">Consolidador: Ana Oliveira</small>
+                                <br><small class="text-muted">Iniciado: 10/10/2024</small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Template</small>
+                                <span class="fw-semibold">Consolidação 5 Semanas</span>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Progresso</small>
+                                <div class="progress-bar-custom">
+                                    <div class="progress-fill progress-success" style="width: 100%"></div>
+                                </div>
+                                <small class="text-muted">100% (5/5)</small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Concluído em</small>
+                                <span class="small">20/11/2024</span>
+                                <br><small class="text-success">No prazo</small>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="status-badge status-completed">Concluída</span>
+                            </div>
+                            <div class="col-md-1 text-end">
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-primary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-eye me-2"></i>Ver Detalhes</a></li>
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-award me-2"></i>Certificado</a></li>
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-clock me-2"></i>Histórico</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Consolidação 3 -->
+                    <div class="consolidation-card">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <h6 class="fw-bold mb-1">Carlos Ferreira</h6>
+                                <small class="text-muted">Consolidador: Lucas Ribeiro</small>
+                                <br><small class="text-muted">Iniciado: 01/10/2024</small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Template</small>
+                                <span class="fw-semibold">Discipulado Básico</span>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Progresso</small>
+                                <div class="progress-bar-custom">
+                                    <div class="progress-fill progress-danger" style="width: 25%"></div>
+                                </div>
+                                <small class="text-muted">25% (2/8)</small>
+                            </div>
+                            <div class="col-md-2">
+                                <small class="text-muted d-block">Próxima Etapa</small>
+                                <span class="small">18/11/2024</span>
+                                <br><small class="text-danger">3 dias atrasado</small>
+                            </div>
+                            <div class="col-md-2">
+                                <span class="status-badge status-overdue">Atrasada</span>
+                            </div>
+                            <div class="col-md-1 text-end">
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-danger btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-eye me-2"></i>Ver Detalhes</a></li>
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-phone me-2"></i>Contatar</a></li>
+                                        <li><a class="dropdown-item" href="#"><i class="fas fa-exclamation me-2"></i>Marcar Urgente</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-outline-primary" onclick="loadMoreConsolidations()">
+                        <i class="fas fa-plus me-2"></i>Carregar Mais Consolidações
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Insights e Recomendações -->
+    <div class="row">
+        <div class="col-12">
+            <div class="chart-card">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-lightbulb text-warning me-2"></i>Insights e Recomendações Inteligentes
+                </h5>
+                
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="insight-card">
+                            <div class="d-flex align-items-start">
+                                <div class="insight-icon">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold">Taxa de Conclusão Elevada</h6>
+                                    <p class="mb-0 small">78% das consolidações são concluídas com sucesso. Considere replicar as práticas dos consolidadores mais eficazes.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="insight-card">
+                            <div class="d-flex align-items-start">
+                                <div class="insight-icon">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold">Atenção às Consolidações Atrasadas</h6>
+                                    <p class="mb-0 small">8 consolidações precisam de intervenção imediata. Priorize o contato com esses casos.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="insight-card">
+                            <div class="d-flex align-items-start">
+                                <div class="insight-icon">
+                                    <i class="fas fa-target"></i>
+                                </div>
+                                <div>
+                                    <h6 class="fw-bold">Meta Quase Atingida</h6>
+                                    <p class="mb-0 small">Faltam apenas 5 consolidações para atingir a meta mensal de 50. Excelente desempenho!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Controle do menu de exportação
+function toggleExportMenu() {
+    const dropdown = document.getElementById('exportDropdown');
+    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+}
+
+// Fechar dropdown ao clicar fora
+document.addEventListener('click', function(event) {
+    const exportMenu = document.querySelector('.export-menu');
+    if (!exportMenu.contains(event.target)) {
+        document.getElementById('exportDropdown').style.display = 'none';
+    }
+});
+
+// Funções de exportação
+function exportReport(format) {
+    const messages = {
+        'pdf': 'Gerando relatório em PDF...',
+        'excel': 'Exportando dados para Excel...',
+        'csv': 'Preparando arquivo CSV...',
+        'print': 'Abrindo versão para impressão...'
+    };
+    
+    alert(messages[format] + ' Funcionalidade em desenvolvimento.');
+    document.getElementById('exportDropdown').style.display = 'none';
+}
+
+// Aplicar filtros
+function applyFilters() {
+    const period = document.getElementById('periodFilter').value;
+    const template = document.getElementById('templateFilter').value;
+    const status = document.getElementById('statusFilter').value;
+    const consolidator = document.getElementById('consolidatorFilter').value;
+    
+    console.log('Aplicando filtros:', { period, template, status, consolidator });
+    
+    // Aqui você implementaria a lógica de filtros
+    updateStats();
+    filterConsolidations();
+}
+
+// Filtrar por status ao clicar nos cards
+function filterByStatus(status) {
+    document.getElementById('statusFilter').value = status;
+    applyFilters();
+}
+
+// Busca nas consolidações
+function filterConsolidations() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const cards = document.querySelectorAll('.consolidation-card');
+    
+    cards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(searchTerm) ? 'block' : 'none';
+    });
+}
+
+// Carregar mais consolidações
+function loadMoreConsolidations() {
+    alert('Carregando mais consolidações... Funcionalidade em desenvolvimento.');
+}
+
+// Atualizar estatísticas
+function updateStats() {
+    // Simula atualização das estatísticas baseada nos filtros
+    const stats = {
+        total: Math.floor(Math.random() * 50) + 20,
+        active: Math.floor(Math.random() * 30) + 15,
+        completed: Math.floor(Math.random() * 15) + 5,
+        overdue: Math.floor(Math.random() * 10) + 3
+    };
+    
+    document.getElementById('totalCount').textContent = stats.total;
+    document.getElementById('activeCount').textContent = stats.active;
+    document.getElementById('completedCount').textContent = stats.completed;
+    document.getElementById('overdueCount').textContent = stats.overdue;
+}
+
+// Toggle filtros avançados
+function toggleAdvancedFilters() {
+    alert('Abrindo filtros avançados... Funcionalidade em desenvolvimento.');
+}
+
+// Inicialização
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Relatórios carregados com sucesso');
+});
+</script>
+{% endblock %}

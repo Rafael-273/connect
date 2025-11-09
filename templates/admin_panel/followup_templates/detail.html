@@ -1,0 +1,242 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ template.name }} - Detalhes do Template{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .step-timeline {
+        position: relative;
+        padding-left: 60px;
+    }
+    
+    .step-timeline::before {
+        content: '';
+        position: absolute;
+        left: 20px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(to bottom, #ff6b35, #f7931e);
+    }
+    
+    .step-item {
+        position: relative;
+        margin-bottom: 24px;
+        padding: 20px;
+        background: #fafafa;
+        border-radius: 12px;
+        border-left: 4px solid #ff6b35;
+    }
+    
+    .step-number {
+        position: absolute;
+        left: -50px;
+        top: 20px;
+        width: 40px;
+        height: 40px;
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    }
+    
+    .step-item:last-child {
+        margin-bottom: 0;
+    }
+    
+    .btn-primary {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        border: none;
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-weight: 600;
+    }
+    
+    .btn-primary:hover {
+        background: linear-gradient(135deg, #e55a2b, #e8831a);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+    }
+    
+    .stats-card {
+        background: linear-gradient(135deg, #ff6b35, #f7931e);
+        color: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+    }
+    
+    .stats-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        display: block;
+    }
+    
+    .badge-week {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.8rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="fw-bold text-dark mb-1">{{ template.name }}</h2>
+                    <p class="text-muted mb-0">Detalhes do template de consolidação</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'admin_followup_template_edit' template.id %}" class="btn btn-primary">
+                        <i class="fas fa-edit me-2"></i>Editar
+                    </a>
+                    <a href="{% url 'admin_followup_template_list' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Informações Gerais -->
+        <div class="col-md-4 mb-4">
+            <div class="admin-card p-4">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-info-circle text-primary me-2"></i>Informações
+                </h5>
+                
+                <div class="mb-3">
+                    <small class="text-muted d-block">Nome</small>
+                    <strong>{{ template.name }}</strong>
+                </div>
+                
+                {% if template.description %}
+                <div class="mb-3">
+                    <small class="text-muted d-block">Descrição</small>
+                    <p class="mb-0">{{ template.description }}</p>
+                </div>
+                {% endif %}
+                
+                <div class="mb-3">
+                    <small class="text-muted d-block">Criado em</small>
+                    <strong>{{ template.created_at|date:"d/m/Y H:i" }}</strong>
+                </div>
+                
+                <div class="mb-3">
+                    <small class="text-muted d-block">Última atualização</small>
+                    <strong>{{ template.updated_at|date:"d/m/Y H:i" }}</strong>
+                </div>
+            </div>
+            
+            <!-- Estatísticas -->
+            <div class="stats-card mt-4">
+                <span class="stats-number">{{ template.steps.count }}</span>
+                <small>Etapa{{ template.steps.count|pluralize }} configurada{{ template.steps.count|pluralize }}</small>
+            </div>
+        </div>
+
+        <!-- Timeline das Etapas -->
+        <div class="col-md-8 mb-4">
+            <div class="admin-card p-4">
+                <h5 class="fw-bold mb-4">
+                    <i class="fas fa-tasks text-primary me-2"></i>Cronograma de Etapas
+                </h5>
+                
+                {% if template.steps.all %}
+                    <div class="step-timeline">
+                        {% for step in template.steps.all %}
+                        <div class="step-item">
+                            <div class="step-number">{{ step.week }}</div>
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="fw-bold mb-1">Semana {{ step.week }}</h6>
+                                <span class="badge-week">{{ step.week }}ª semana</span>
+                            </div>
+                            <p class="mb-0 text-dark">{{ step.task }}</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-tasks text-muted mb-3" style="font-size: 3rem;"></i>
+                        <h5 class="text-muted">Nenhuma etapa configurada</h5>
+                        <p class="text-muted">Este template ainda não possui etapas definidas.</p>
+                        <a href="{% url 'admin_followup_template_edit' template.id %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Adicionar Etapas
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Ações Adicionais -->
+    <div class="row">
+        <div class="col-12">
+            <div class="admin-card p-4">
+                <h5 class="fw-bold mb-3">
+                    <i class="fas fa-cogs text-primary me-2"></i>Ações
+                </h5>
+                
+                <div class="d-flex gap-3">
+                    <a href="{% url 'admin_followup_create' %}?template={{ template.id }}" class="btn btn-success">
+                        <i class="fas fa-user-plus me-2"></i>Criar Consolidação com este Template
+                    </a>
+                    
+                    <button type="button" class="btn btn-info" onclick="duplicateTemplate()">
+                        <i class="fas fa-copy me-2"></i>Duplicar Template
+                    </button>
+                    
+                    <a href="{% url 'admin_followup_template_delete' template.id %}" 
+                       class="btn btn-outline-danger"
+                       onclick="return confirm('Tem certeza que deseja excluir este template?')">
+                        <i class="fas fa-trash me-2"></i>Excluir Template
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function duplicateTemplate() {
+    if (confirm('Deseja criar uma cópia deste template?')) {
+        // Implementar lógica de duplicação
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '{% url "admin_followup_template_duplicate" template.id %}';
+        
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = 'csrfmiddlewaretoken';
+        csrfInput.value = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        form.appendChild(csrfInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

@@ -49,6 +49,31 @@
         var menu = document.getElementById('admin-menu-container');
         if (menu) menu.style.display = 'none';
     }
+    
+    // Função global para controlar submenus
+    function toggleSubmenu(submenuId) {
+        const submenu = document.getElementById(submenuId);
+        if (!submenu) return;
+        
+        const parentGroup = submenu.parentElement.querySelector('.sidebar-item-group');
+        
+        if (submenu.classList.contains('active')) {
+            submenu.classList.remove('active');
+            parentGroup.classList.remove('active');
+        } else {
+            // Fechar outros submenus
+            document.querySelectorAll('.submenu.active').forEach(menu => {
+                menu.classList.remove('active');
+                const pg = menu.parentElement.querySelector('.sidebar-item-group');
+                if (pg) pg.classList.remove('active');
+            });
+            
+            // Abrir o submenu clicado
+            submenu.classList.add('active');
+            parentGroup.classList.add('active');
+        }
+    }
+    
     $(document).ready(function() {
         $(window).scroll(function() {
             const navbar = $('#navbar');
@@ -80,12 +105,23 @@
             $('#mobile-sidebar-content').removeClass('translate-x-0').addClass('-translate-x-full');
             setTimeout(function() {
                 $('#mobile-admin-sidebar').removeClass('flex').addClass('hidden');
-            }, 300);
+        }, 300);
+    }
+    
+    // Inicializar submenus ativos baseado na página atual
+    const activeSubmenuItems = document.querySelectorAll('.submenu-item.active');
+    activeSubmenuItems.forEach(item => {
+        const submenu = item.closest('.submenu');
+        if (submenu) {
+            const parentGroup = submenu.parentElement.querySelector('.sidebar-item-group');
+            if (parentGroup) {
+                submenu.classList.add('active');
+                parentGroup.classList.add('active');
+            }
         }
     });
-</script>
-
-<style>
+});
+</script><style>
     /* Desktop and Mobile admin styling */
     @media screen and (min-width: 769px) {
         .main-content-wrapper {
@@ -176,6 +212,98 @@
     .sidebar-item ion-icon {
         font-size: 20px;
         margin-right: 12px;
+    }
+    
+    /* Submenu styling */
+    .sidebar-group {
+        margin-bottom: 4px;
+    }
+    
+    .sidebar-item-group {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+        cursor: pointer;
+        user-select: none;
+    }
+    
+    .sidebar-item-group:hover, .sidebar-item-group.active {
+        background-color: #f1f5f9;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+    }
+    
+    .sidebar-item-group ion-icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+    
+    .submenu-arrow {
+        font-size: 18px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        color: #94a3b8;
+        margin-left: auto;
+        background: #f1f5f9;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-item-group:hover .submenu-arrow {
+        color: var(--color-primary);
+        background: #fee2e2;
+        box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15);
+        transform: scale(1.05);
+    }
+    
+    .sidebar-item-group.active .submenu-arrow {
+        transform: rotate(180deg) scale(1.05);
+        color: var(--color-primary);
+        background: linear-gradient(135deg, #dc2626, #ef4444);
+        color: white;
+        box-shadow: 0 3px 8px rgba(220, 38, 38, 0.3);
+    }
+    
+    .submenu {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+        background-color: #f8fafc;
+    }
+    
+    .submenu.active {
+        max-height: 300px;
+    }
+    
+    .submenu-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 20px 10px 45px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+        font-size: 14px;
+    }
+    
+    .submenu-item:hover, .submenu-item.active {
+        background-color: #e2e8f0;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+        text-decoration: none;
+    }
+    
+    .submenu-item ion-icon {
+        font-size: 16px;
+        margin-right: 10px;
     }
 </style>
 </body>

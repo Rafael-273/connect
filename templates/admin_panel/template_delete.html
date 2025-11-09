@@ -1,0 +1,114 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Excluir {{ template.name }} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .danger-card {
+        border: 2px solid #dc2626;
+    }
+    
+    .warning-icon {
+        font-size: 4rem;
+        color: #dc2626;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/messages.html' %}
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-6 mt-24">
+            <div class="max-w-2xl mx-auto">
+                <div class="admin-card danger-card">
+                    <div class="p-8 text-center">
+                        <ion-icon name="warning-outline" class="warning-icon"></ion-icon>
+                        
+                        <h2 class="text-2xl font-bold text-red-600 mb-4">Confirmar Exclusão</h2>
+                        
+                        <p class="text-gray-700 mb-6">
+                            Você está prestes a excluir o template <strong>"{{ template.name }}"</strong>.
+                            Esta ação irá remover permanentemente:
+                        </p>
+                        
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 text-left">
+                            <ul class="list-disc list-inside space-y-1 text-gray-700">
+                                <li>O template "{{ template.name }}"</li>
+                                <li>{{ template.steps.count }} etapa{{ template.steps.count|pluralize }} configurada{{ template.steps.count|pluralize }}</li>
+                                <li>Todas as configurações associadas</li>
+                            </ul>
+                            
+                            {% if followups_using %}
+                            <div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                                <p class="text-yellow-800 font-medium">
+                                    <ion-icon name="warning-outline" class="mr-2"></ion-icon>
+                                    Atenção: Existem {{ followups_using.count }} consolidaç{{ followups_using.count|pluralize:"ão,ões" }} 
+                                    que utilizam este template. 
+                                </p>
+                                <p class="text-yellow-700 text-sm mt-1">
+                                    Elas não serão excluídas, mas perderão a referência ao template.
+                                </p>
+                                
+                                {% if followups_using.count <= 5 %}
+                                    <div class="mt-3">
+                                        <p class="text-yellow-800 text-sm font-medium mb-2">Consolidações afetadas:</p>
+                                        <ul class="text-yellow-700 text-sm space-y-1">
+                                            {% for followup in followups_using %}
+                                                <li>• {{ followup.accompanied.name }} ({{ followup.responsible.name }})</li>
+                                            {% endfor %}
+                                        </ul>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+                            <p class="text-gray-600 text-sm">
+                                <ion-icon name="information-circle-outline" class="mr-2"></ion-icon>
+                                Esta ação não pode ser desfeita. Certifique-se de que realmente deseja excluir este template.
+                            </p>
+                        </div>
+                        
+                        <form method="post" class="flex justify-center gap-4">
+                            {% csrf_token %}
+                            <a href="{% url 'admin_template_detail' template.id %}" 
+                               class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition duration-300">
+                                <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
+                                Cancelar
+                            </a>
+                            <button type="submit" 
+                                    class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition duration-300">
+                                <ion-icon name="trash-outline" class="mr-2"></ion-icon>
+                                Sim, Excluir Template
+                            </button>
+                        </form>
+                        
+                        <div class="mt-6">
+                            <a href="{% url 'admin_templates' %}" 
+                               class="text-gray-500 hover:text-gray-700 text-sm">
+                                ← Voltar para lista de templates
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
