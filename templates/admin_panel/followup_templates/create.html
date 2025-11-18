@@ -141,20 +141,12 @@
                     </h5>
                     
                     <div class="row">
-                        <div class="col-md-6">
+                        <div class="col-md-12">
                             <div class="mb-3">
                                 <label for="name" class="form-label fw-semibold">Nome do Template *</label>
                                 <input type="text" class="form-control" id="name" name="name" 
-                                       placeholder="Ex: Consolidação 5 Semanas" required>
+                                       placeholder="Ex: Consolidação 5 Períodos" required>
                                 <small class="text-muted">Nome que identificará este template</small>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="duration_weeks" class="form-label fw-semibold">Duração (semanas) *</label>
-                                <input type="number" class="form-control" id="duration_weeks" name="duration_weeks" 
-                                       min="1" max="52" value="5" required>
-                                <small class="text-muted">Número total de semanas do plano</small>
                             </div>
                         </div>
                     </div>
@@ -175,20 +167,20 @@
                 <div class="admin-card">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="fw-bold mb-0">
-                            <i class="fas fa-list-ol text-primary me-2"></i>Etapas do Template
+                            <i class="fas fa-list-ol text-primary me-2"></i>Períodos do Template
                         </h5>
                         <button type="button" class="btn btn-outline-primary btn-sm" onclick="addStep()">
-                            <i class="fas fa-plus me-1"></i>Adicionar Etapa
+                            <i class="fas fa-plus me-1"></i>Adicionar Período
                         </button>
                     </div>
                     
                     <div id="stepsContainer">
-                        <!-- Etapa inicial -->
+                        <!-- Período inicial -->
                         <div class="step-item" data-step="1">
                             <div class="step-header">
                                 <div class="d-flex align-items-center">
                                     <div class="step-number">1</div>
-                                    <span class="fw-bold">Semana 1</span>
+                                    <span class="fw-bold">Período 1</span>
                                 </div>
                                 <button type="button" class="remove-step" onclick="removeStep(1)" style="display: none;">
                                     <i class="fas fa-times"></i>
@@ -196,52 +188,45 @@
                             </div>
                             
                             <div class="row">
-                                <div class="col-md-8">
+                                <div class="col-md-3">
                                     <div class="mb-3">
-                                        <label class="form-label fw-semibold">Tarefa/Objetivo *</label>
-                                        <input type="text" class="form-control" name="steps[1][task]" 
-                                               placeholder="Ex: Primeira visita - Conhecer a família" required>
+                                        <label class="form-label fw-semibold">Número do Período *</label>
+                                        <input type="number" class="form-control" name="steps[1][period]" 
+                                               value="1" min="1" readonly>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <div class="mb-3">
-                                        <label class="form-label fw-semibold">Semana</label>
-                                        <input type="number" class="form-control" name="steps[1][week]" 
-                                               value="1" min="1" readonly>
+                                        <label class="form-label fw-semibold">Tipo de Período *</label>
+                                        <select class="form-control" name="steps[1][period_type]" required>
+                                            <option value="weekly">Semanal</option>
+                                            <option value="biweekly">Quinzenal</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Título *</label>
+                                        <input type="text" class="form-control" name="steps[1][title]" 
+                                               placeholder="Ex: Primeira Visita" required>
                                     </div>
                                 </div>
                             </div>
                             
                             <div class="mb-3">
-                                <label class="form-label fw-semibold">Descrição Detalhada</label>
-                                <textarea class="form-control" name="steps[1][description]" rows="2"
-                                          placeholder="Descreva os detalhes desta etapa..."></textarea>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label fw-semibold">Material de Apoio</label>
-                                        <input type="text" class="form-control" name="steps[1][materials]" 
-                                               placeholder="Ex: Cartilha do Novo Convertido">
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label class="form-label fw-semibold">Observações</label>
-                                        <input type="text" class="form-control" name="steps[1][notes]" 
-                                               placeholder="Observações importantes">
-                                    </div>
-                                </div>
+                                <label class="form-label fw-semibold">Dicas para este Período *</label>
+                                <textarea class="form-control" name="steps[1][description]" rows="4"
+                                          placeholder="Liste as dicas e orientações para este período..." required></textarea>
+                                <small class="text-muted">Estas dicas serão exibidas para o consolidador durante este período</small>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Botão para adicionar etapa -->
+                    <!-- Botão para adicionar período -->
                     <button type="button" class="btn-add-step" onclick="addStep()">
                         <i class="fas fa-plus mb-2" style="font-size: 2rem;"></i>
-                        <div class="fw-semibold">Adicionar Nova Etapa</div>
-                        <small class="text-muted">Clique para criar uma nova etapa no template</small>
+                        <div class="fw-semibold">Adicionar Novo Período</div>
+                        <small class="text-muted">Clique para criar um novo período no template</small>
                     </button>
                 </div>
             </div>
@@ -269,20 +254,13 @@ let stepCounter = 1;
 function addStep() {
     stepCounter++;
     const container = document.getElementById('stepsContainer');
-    const duration = document.getElementById('duration_weeks').value || 5;
-    
-    if (stepCounter > duration) {
-        alert(`O template permite no máximo ${duration} etapas conforme a duração configurada.`);
-        stepCounter--;
-        return;
-    }
     
     const stepHtml = `
         <div class="step-item" data-step="${stepCounter}">
             <div class="step-header">
                 <div class="d-flex align-items-center">
                     <div class="step-number">${stepCounter}</div>
-                    <span class="fw-bold">Semana ${stepCounter}</span>
+                    <span class="fw-bold">Período ${stepCounter}</span>
                 </div>
                 <button type="button" class="remove-step" onclick="removeStep(${stepCounter})">
                     <i class="fas fa-times"></i>
@@ -290,43 +268,36 @@ function addStep() {
             </div>
             
             <div class="row">
-                <div class="col-md-8">
+                <div class="col-md-3">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Tarefa/Objetivo *</label>
-                        <input type="text" class="form-control" name="steps[${stepCounter}][task]" 
-                               placeholder="Ex: Visita de acompanhamento" required>
+                        <label class="form-label fw-semibold">Número do Período *</label>
+                        <input type="number" class="form-control" name="steps[${stepCounter}][period]" 
+                               value="${stepCounter}" min="1" readonly>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Semana</label>
-                        <input type="number" class="form-control" name="steps[${stepCounter}][week]" 
-                               value="${stepCounter}" min="1" readonly>
+                        <label class="form-label fw-semibold">Tipo de Período *</label>
+                        <select class="form-control" name="steps[${stepCounter}][period_type]" required>
+                            <option value="weekly">Semanal</option>
+                            <option value="biweekly">Quinzenal</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Título *</label>
+                        <input type="text" class="form-control" name="steps[${stepCounter}][title]" 
+                               placeholder="Ex: Acompanhamento Espiritual" required>
                     </div>
                 </div>
             </div>
             
             <div class="mb-3">
-                <label class="form-label fw-semibold">Descrição Detalhada</label>
-                <textarea class="form-control" name="steps[${stepCounter}][description]" rows="2"
-                          placeholder="Descreva os detalhes desta etapa..."></textarea>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Material de Apoio</label>
-                        <input type="text" class="form-control" name="steps[${stepCounter}][materials]" 
-                               placeholder="Ex: Material específico">
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Observações</label>
-                        <input type="text" class="form-control" name="steps[${stepCounter}][notes]" 
-                               placeholder="Observações importantes">
-                    </div>
-                </div>
+                <label class="form-label fw-semibold">Dicas para este Período *</label>
+                <textarea class="form-control" name="steps[${stepCounter}][description]" rows="4"
+                          placeholder="Liste as dicas e orientações para este período..." required></textarea>
+                <small class="text-muted">Estas dicas serão exibidas para o consolidador durante este período</small>
             </div>
         </div>
     `;
@@ -339,7 +310,7 @@ function removeStep(stepNumber) {
     const stepElement = document.querySelector(`[data-step="${stepNumber}"]`);
     stepElement.remove();
     
-    // Reordena as etapas
+    // Reordena os períodos
     reorderSteps();
     updateRemoveButtons();
 }
@@ -354,15 +325,15 @@ function reorderSteps() {
         const stepNumber = step.querySelector('.step-number');
         const stepTitle = step.querySelector('.step-header span');
         stepNumber.textContent = newStepNumber;
-        stepTitle.textContent = `Semana ${newStepNumber}`;
+        stepTitle.textContent = `Período ${newStepNumber}`;
         
-        // Atualiza inputs
-        const weekInput = step.querySelector('input[name*="[week]"]');
-        weekInput.value = newStepNumber;
-        weekInput.setAttribute('name', `steps[${newStepNumber}][week]`);
+        // Atualiza input de período
+        const periodInput = step.querySelector('input[name*="[period]"]');
+        periodInput.value = newStepNumber;
+        periodInput.setAttribute('name', `steps[${newStepNumber}][period]`);
         
         // Atualiza outros inputs
-        step.querySelectorAll('input, textarea').forEach(input => {
+        step.querySelectorAll('input, textarea, select').forEach(input => {
             const name = input.getAttribute('name');
             if (name && name.includes('steps[')) {
                 const fieldName = name.match(/\[(\w+)\]$/)[1];
@@ -385,31 +356,13 @@ function updateRemoveButtons() {
     });
 }
 
-// Atualiza limite de etapas quando duração muda
-document.getElementById('duration_weeks').addEventListener('change', function() {
-    const maxWeeks = parseInt(this.value);
-    const currentSteps = document.querySelectorAll('.step-item').length;
-    
-    if (currentSteps > maxWeeks) {
-        alert(`Reduza o número de etapas para ${maxWeeks} conforme a nova duração.`);
-        this.value = currentSteps;
-    }
-});
-
 // Validação antes do envio
 document.getElementById('templateForm').addEventListener('submit', function(e) {
     const steps = document.querySelectorAll('.step-item').length;
-    const duration = parseInt(document.getElementById('duration_weeks').value);
     
     if (steps === 0) {
         e.preventDefault();
-        alert('Adicione pelo menos uma etapa ao template.');
-        return;
-    }
-    
-    if (steps > duration) {
-        e.preventDefault();
-        alert(`O número de etapas (${steps}) não pode ser maior que a duração (${duration} semanas).`);
+        alert('Adicione pelo menos um período ao template.');
         return;
     }
 });

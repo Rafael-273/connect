@@ -1618,7 +1618,8 @@ def template_create_view(request):
                 for step in original_template.steps.all():
                     FollowUpTemplateStep.objects.create(
                         template=template,
-                        week=step.week,
+                        period=step.period,
+                        period_type=step.period_type,
                         title=step.title,
                         description=step.description
                     )

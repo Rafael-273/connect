@@ -1,0 +1,307 @@
+{% extends "login_base.html" %}
+{% load static %}
+
+{% block title %}{{ followup.accompanied.name }} - Consolidação{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --church-red: #C90905;
+        --church-gold: #F59E0B;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Animações do menu inferior */
+    .nav-hidden {
+        transform: translate(-50%, 120%) !important;
+        opacity: 0 !important;
+    }
+
+    .nav-visible {
+        transform: translate(-50%, 0) !important;
+        opacity: 1 !important;
+    }
+
+    .animate-fade { animation: fadeIn 0.6s ease-out; }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+    <!-- Header -->
+    <section class="relative overflow-hidden p-2 md:p-4">
+        <div class="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-amber-50"></div>
+        <div class="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-orange-100 to-red-100 rounded-full -mr-36 -mt-36 opacity-60"></div>
+        
+        <div class="relative z-10 px-4 md:px-6 py-4 md:py-8">
+            <div class="flex flex-col md:flex-row justify-between md:items-start gap-4 mb-6 md:mb-8">
+                <div class="flex items-center gap-3 md:gap-4">
+                    <div class="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white text-xl md:text-2xl font-bold shadow-xl">
+                        {{ followup.accompanied.name|slice:":1"|upper }}
+                    </div>
+                    <div>
+                        <h1 class="text-xl md:text-3xl font-bold text-gray-800 mb-1">{{ followup.accompanied.name }}</h1>
+                        <p class="text-sm md:text-base text-gray-600 flex items-center gap-2">
+                            {% if followup.template %}
+                                <i class="fas fa-book-open text-orange-500 text-xs md:text-sm"></i>
+                                {{ followup.template.name }}
+                            {% else %}
+                                Consolidação
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <a href="{% url 'member_consolidation' %}" class="flex items-center justify-center gap-2 px-4 md:px-6 py-2 md:py-3 bg-white/70 backdrop-blur-sm hover:bg-white/90 text-gray-700 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl self-start md:self-auto">
+                    <i class="fas fa-arrow-left text-xs md:text-sm"></i>
+                    <span class="text-xs md:text-sm font-medium">Voltar</span>
+                </a>
+            </div>
+
+            <!-- Card de Progresso -->
+            <div class="bg-white/90 backdrop-blur-sm rounded-3xl p-4 md:p-6 shadow-lg border border-white/50">
+                <div class="flex items-center justify-between mb-3 md:mb-4">
+                    <h3 class="text-base md:text-lg font-bold text-gray-800">Progresso Geral</h3>
+                    <span class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-orange-500 to-red-600 bg-clip-text text-transparent">
+                        {{ followup.progress_percentage }}%
+                    </span>
+                </div>
+                <div class="h-3 md:h-4 bg-gray-100 rounded-full overflow-hidden shadow-inner">
+                    <div class="h-full bg-gradient-to-r from-orange-500 to-red-600 rounded-full transition-all duration-500"
+                         style="width: {{ followup.progress_percentage }}%"></div>
+                </div>
+                <p class="text-xs md:text-sm text-gray-600 mt-2 md:mt-3">
+                    {{ followup.completed_steps }} de {{ followup.total_steps }} relatórios enviados
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Conteúdo Principal -->
+    <section class="px-4 md:px-6 pb-8 space-y-4 md:space-y-6 animate-fade">
+        {% if current_step %}
+        <!-- Dicas da Semana/Quinzena Atual -->
+        <div class="relative overflow-hidden bg-white rounded-2xl md:rounded-3xl shadow-2xl border-2 border-orange-100">
+            <!-- Background Decorativo -->
+            <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full -mr-32 -mt-32 opacity-50"></div>
+            <div class="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-yellow-100 to-orange-100 rounded-full -ml-24 -mb-24 opacity-40"></div>
+            
+            <div class="relative z-10 p-4 md:p-8">
+                <!-- Header com Badge e Título -->
+                <div class="flex items-start gap-3 md:gap-6 mb-4 md:mb-6">
+                    <div class="flex-shrink-0 w-14 h-14 md:w-20 md:h-20 bg-gradient-to-br from-orange-400 via-orange-500 to-red-500 rounded-2xl md:rounded-3xl flex items-center justify-center shadow-2xl transform hover:scale-105 transition-transform">
+                        <i class="fas fa-lightbulb text-white text-xl md:text-3xl"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 md:gap-3 mb-2 md:mb-3">
+                            <span class="inline-flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs md:text-sm font-bold rounded-full shadow-lg">
+                                <i class="fas fa-calendar-week text-xs md:text-sm"></i>
+                                {{ period_name|upper }} {{ followup.current_period }}
+                            </span>
+                        </div>
+                        <h2 class="text-xl md:text-3xl font-bold text-gray-800 leading-tight">{{ current_step.title }}</h2>
+                    </div>
+                </div>
+
+                <!-- Dicas e Orientações -->
+                {% if current_step.description %}
+                <div class="bg-gradient-to-br from-amber-50/50 to-orange-50/50 backdrop-blur-sm rounded-xl md:rounded-2xl p-4 md:p-6 mb-4 md:mb-6 border-2 border-orange-200/30 shadow-inner">
+                    <div class="flex items-center gap-2 mb-3 md:mb-4">
+                        <div class="w-7 h-7 md:w-8 md:h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-clipboard-list text-white text-xs md:text-sm"></i>
+                        </div>
+                        <h4 class="text-sm md:text-base font-bold text-gray-800">Orientações para esta {{ period_name|lower }}:</h4>
+                    </div>
+                    <div class="bg-white/80 rounded-xl p-4 md:p-5 shadow-sm">
+                        <ul class="space-y-2 md:space-y-3">
+                            {% for line in current_step.description.splitlines %}
+                                {% if line.strip %}
+                                <li class="flex items-start gap-2 md:gap-3 text-gray-700">
+                                    <div class="flex-shrink-0 w-2 h-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-full mt-1.5 md:mt-2"></div>
+                                    <span class="flex-1 leading-relaxed text-sm md:text-base">{{ line }}</span>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Botão de Ação -->
+                {% if can_submit_report %}
+                <a href="{% url 'member_consolidation_report' followup.id %}"
+                   class="group relative block w-full overflow-hidden rounded-xl md:rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300">
+                    <div class="absolute inset-0 bg-gradient-to-r from-orange-500 via-orange-600 to-red-600"></div>
+                    <div class="absolute inset-0 bg-gradient-to-r from-orange-400 to-red-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div class="relative px-4 md:px-6 py-4 md:py-5 flex items-center justify-center gap-2 md:gap-3 text-white font-bold text-base md:text-lg">
+                        <i class="fas fa-paper-plane group-hover:translate-x-1 transition-transform text-sm md:text-base"></i>
+                        <span class="text-sm md:text-base">Enviar Relatório da {{ period_name }} {{ followup.current_period }}</span>
+                        <i class="fas fa-arrow-right opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all text-sm md:text-base"></i>
+                    </div>
+                </a>
+                {% else %}
+                <div class="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl md:rounded-2xl p-4 md:p-6 text-center shadow-lg">
+                    <div class="inline-flex items-center justify-center w-12 h-12 md:w-16 md:h-16 bg-green-500 rounded-full mb-2 md:mb-3 shadow-lg">
+                        <i class="fas fa-check-circle text-white text-2xl md:text-3xl"></i>
+                    </div>
+                    <p class="text-green-800 font-bold text-base md:text-lg mb-1">Relatório Enviado!</p>
+                    <p class="text-green-700 text-xs md:text-sm">O relatório da {{ period_name|lower }} {{ followup.current_period }} já foi registrado com sucesso.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl md:rounded-3xl p-8 md:p-12 text-center shadow-xl">
+            <i class="fas fa-trophy text-5xl md:text-6xl text-green-500 mb-3 md:mb-4"></i>
+            <h3 class="text-xl md:text-2xl font-bold text-gray-800 mb-2">Consolidação Concluída!</h3>
+            <p class="text-sm md:text-base text-gray-600">Todos os períodos foram completados com sucesso.</p>
+        </div>
+        {% endif %}
+
+        <!-- Informações do Consolidado -->
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-lg border border-white/50">
+            <h3 class="text-base md:text-lg font-bold text-gray-800 mb-3 md:mb-4">Informações</h3>
+            <div class="space-y-2 md:space-y-3">
+                <div class="flex items-center gap-2 md:gap-3 text-gray-700">
+                    <i class="fas fa-calendar-check w-4 md:w-5 text-orange-500 text-sm md:text-base"></i>
+                    <span class="text-xs md:text-sm">Iniciado em {{ followup.start_date|date:"d/m/Y" }}</span>
+                </div>
+                <div class="flex items-center gap-2 md:gap-3 text-gray-700">
+                    <i class="fas fa-clock w-4 md:w-5 text-orange-500 text-sm md:text-base"></i>
+                    <span class="text-xs md:text-sm">Último contato: {{ followup.last_contact|date:"d/m/Y" }}</span>
+                </div>
+                {% if followup.profile_notes %}
+                <div class="pt-2 md:pt-3 border-t">
+                    <p class="text-xs md:text-sm font-bold text-gray-700 mb-2">Observações:</p>
+                    <p class="text-xs md:text-sm text-gray-600">{{ followup.profile_notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Histórico de Relatórios -->
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl md:rounded-3xl p-4 md:p-6 shadow-lg border border-white/50">
+            <h3 class="text-base md:text-lg font-bold text-gray-800 mb-3 md:mb-4">Histórico de Relatórios</h3>
+            {% if reports %}
+            <div class="space-y-3">
+                {% for report in reports %}
+                <div class="bg-gradient-to-br from-orange-50/50 to-white p-3 md:p-4 rounded-xl md:rounded-2xl border-2 border-orange-100/50 hover:shadow-md transition">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-bold px-2 md:px-3 py-1 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-full">
+                            {{ report.period_name|upper }} {{ report.period }}
+                        </span>
+                        <span class="text-xs text-gray-500">{{ report.date|date:"d/m/Y" }}</span>
+                    </div>
+                    <p class="text-sm font-bold text-gray-800 mb-1">{{ report.get_status_display }}</p>
+                    <p class="text-xs text-gray-600 line-clamp-2">{{ report.description }}</p>
+                    
+                    <div class="flex flex-wrap gap-2 md:gap-3 mt-3">
+                        {% if report.attended_service %}
+                        <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold" title="Participou do culto">
+                            <i class="fas fa-church mr-1"></i>Culto
+                        </span>
+                        {% endif %}
+                        {% if report.reading_bible %}
+                        <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-semibold" title="Lendo a Bíblia">
+                            <i class="fas fa-book-bible mr-1"></i>Leitura
+                        </span>
+                        {% endif %}
+                        {% if report.praying_regularly %}
+                        <span class="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-semibold" title="Orando regularmente">
+                            <i class="fas fa-praying-hands mr-1"></i>Oração
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-xs md:text-sm text-center py-6 md:py-8">Nenhum relatório enviado ainda.</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Menu Inferior Flutuante -->
+    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-lg rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
+        <!-- Home -->
+        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(245, 158, 11, 0.05); border-color: rgba(245, 158, 11, 0.15);">
+                <i class="fas fa-home text-lg transition-transform group-hover:scale-110" style="color: #F59E0B;"></i>
+            </div>
+            <span class="group-hover:font-bold transition-all">Home</span>
+        </a>
+        
+        <!-- Consolidação (Ativo) -->
+        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
+            <div class="relative">
+                <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #F59E0B;">
+                    <i class="fas fa-user-graduate text-white text-lg"></i>
+                </div>
+            </div>
+            <span style="color: #F59E0B;">Consolidar</span>
+        </a>
+        
+        <!-- Eventos -->
+        <a href="{% url 'event_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(246, 111, 3, 0.05); border-color: rgba(246, 111, 3, 0.15);">
+                <i class="fas fa-calendar-check text-lg transition-transform group-hover:scale-110" style="color: #F66F03;"></i>
+            </div>
+            <span class="group-hover:font-bold transition-all">Eventos</span>
+        </a>
+        
+        <!-- Perfil -->
+        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(230, 57, 70, 0.05); border-color: rgba(230, 57, 70, 0.15);">
+                <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #E63946;"></i>
+            </div>
+            <span class="group-hover:font-bold transition-all">Perfil</span>
+        </a>
+    </nav>
+
+    <script>
+        // Script para ocultar/mostrar menu inferior ao rolar
+        let lastScrollTop = 0;
+        const nav = document.getElementById('bottomNav');
+        const scrollThreshold = 10;
+
+        window.addEventListener('scroll', function() {
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const windowHeight = window.innerHeight;
+            const documentHeight = document.documentElement.scrollHeight;
+            
+            // Verificar se está próximo do final da página (últimos 100px)
+            const isNearBottom = (scrollTop + windowHeight) >= (documentHeight - 100);
+            
+            if (isNearBottom) {
+                // Esconder menu quando chegar ao final
+                nav.classList.add('nav-hidden');
+                nav.classList.remove('nav-visible');
+                return;
+            }
+            
+            // Se está no topo, mostrar menu
+            if (scrollTop <= 50) {
+                nav.classList.remove('nav-hidden');
+                nav.classList.add('nav-visible');
+                lastScrollTop = scrollTop;
+                return;
+            }
+
+            // Detectar direção do scroll
+            if (scrollTop > lastScrollTop && scrollTop > 100) {
+                // Rolando para baixo - esconder
+                nav.classList.add('nav-hidden');
+                nav.classList.remove('nav-visible');
+            } else if (scrollTop < lastScrollTop) {
+                // Rolando para cima - mostrar
+                nav.classList.remove('nav-hidden');
+                nav.classList.add('nav-visible');
+            }
+            
+            lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+        }, false);
+    </script>
+{% endblock %}

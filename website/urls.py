@@ -2,7 +2,13 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from .views.home import HomeView
 from .views.visitor import VisitorCreateView, VisitorListView
-from .views.member import MemberCreateView, NewConvertsListView
+from .views.member import (
+    MemberCreateView, 
+    NewConvertsListView,
+    member_consolidation_list,
+    member_consolidation_detail,
+    member_consolidation_report
+)
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
 from .views.auth import admin_login_view, admin_logout_view
@@ -40,7 +46,11 @@ urlpatterns = [
     path('dashboard/', MemberDashboardView.as_view(), name='member_dashboard'),
     path('logout/', member_logout_view, name='member_logout'),
     path('profile/', member_profile_view, name='member_profile'),
-    path('consolidation/', member_consolidation_view, name='member_consolidation'),
+    
+    # Member Consolidation URLs
+    path('consolidation/', member_consolidation_list, name='member_consolidation'),
+    path('consolidation/<int:followup_id>/', member_consolidation_detail, name='member_consolidation_detail'),
+    path('consolidation/<int:followup_id>/report/', member_consolidation_report, name='member_consolidation_report'),
     
     # Admin Panel URLs
     path('admin-panel/', dashboard_view, name='admin_dashboard'),

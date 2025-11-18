@@ -118,7 +118,7 @@
                     <!-- Info do Usuário -->
                     <div class="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
                         <div class="relative flex-shrink-0">
-                            <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center overflow-hidden shadow-xl" style="background-color: #C90905;">
+                            <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center overflow-hidden" style="background-color: #C90905;">
                                 {% if member.profile_picture %}
                                     <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}" class="w-full h-full object-cover">
                                 {% else %}
@@ -145,160 +145,44 @@
         </div>
     </section>
 
-    <main class="px-4 md:px-8 pt-6 pb-12 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400" style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
+    <main class="px-4 md:px-8 pt-6 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400" style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
         
         {% if can_consolidate %}
-            <section class="relative overflow-hidden rounded-2xl border-2 shadow-xl" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
+            <section class="relative overflow-hidden rounded-2xl border-2" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
                 <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-30" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.08), transparent);"></div>
                 <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-30" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.08), transparent);"></div>
                 
-                <div class="relative z-10 p-4 sm:p-6 md:p-8">
-                    <div class="mb-6 md:mb-8 pb-4 md:pb-6 border-b-2" style="border-color: rgba(201, 9, 5, 0.1);">
-                        <div class="flex items-start sm:items-center justify-between gap-3 sm:gap-4 mb-3">
-                            <div class="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                                <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-xl flex-shrink-0" style="background-color: #C90905;">
-                                    <i class="fas fa-user-graduate text-white text-lg sm:text-xl md:text-2xl"></i>
-                                </div>
-                                <div class="min-w-0">
-                                    <h3 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
-                                        Minha <span style="color: #C90905;">Consolidação</span>
-                                    </h3>
-                                    <p class="text-xs sm:text-sm text-gray-600 font-medium mt-1 hidden sm:block">Pessoas que estou ajudando a consolidar sua fé</p>
-                                </div>
+                <div class="relative z-10 p-6 sm:p-8">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center" style="background-color: #C90905;">
+                                <i class="fas fa-user-graduate text-white text-xl sm:text-2xl"></i>
                             </div>
-                            <div class="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 md:px-8 py-2 sm:py-3 border-2 rounded-lg sm:rounded-xl shadow-lg flex-shrink-0" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.4);">
-                                <i class="fas fa-heart text-xs sm:text-base" style="color: #C90905;"></i>
-                                <div class="text-center">
-                                    <p class="text-lg sm:text-2xl font-black leading-none" style="color: #C90905;">{{ followups_responsible|length }}</p>
-                                    <p class="text-xs font-bold" style="color: #C90905;">pessoa{{ followups_responsible|length|pluralize:"s" }}</p>
-                                </div>
+                            <div>
+                                <h3 class="text-2xl sm:text-3xl font-black text-gray-900">
+                                    Minha <span style="color: #C90905;">Consolidação</span>
+                                </h3>
+                                <p class="text-sm text-gray-600 font-medium mt-1">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-5 mb-6 md:mb-7">
-                        <div class="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 border-2 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer" style="border-color: rgba(246, 111, 3, 0.3); border-left-width: 5px;">
-                            <div class="flex items-center gap-3 sm:gap-4">
-                                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 shadow-md" style="background-color: #F66F03;">
-                                    <i class="fas fa-calendar-alt text-white text-lg sm:text-xl"></i>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-xs text-gray-600 font-bold uppercase tracking-wide mb-1">Encontros esta semana</p>
-                                    <p class="text-2xl sm:text-3xl font-black" style="color: #F66F03;">0</p>
-                                </div>
-                                <div class="text-gray-300 hidden sm:block">
-                                    <i class="fas fa-chevron-right text-xl"></i>
+                    <a href="{% url 'member_consolidation' %}" class="group block bg-white rounded-xl p-6 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div>
+                                    <h4 class="text-lg font-black text-gray-900 mb-1">Ver Consolidados</h4>
+                                    <p class="text-sm text-gray-600">Acesse o dashboard completo de consolidação</p>
                                 </div>
                             </div>
+                            <i class="fas fa-arrow-right text-2xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
                         </div>
-                        
-                        <!-- Alerta: Relatórios Pendentes -->
-                        <div class="bg-white rounded-lg sm:rounded-xl p-4 sm:p-5 border-2 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer" style="border-color: rgba(201, 9, 5, 0.3); border-left-width: 5px;">
-                            <div class="flex items-center gap-3 sm:gap-4">
-                                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl flex items-center justify-center flex-shrink-0 shadow-md" style="background-color: #C90905;">
-                                    <i class="fas fa-clipboard-list text-white text-lg sm:text-xl"></i>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-xs text-gray-600 font-bold uppercase tracking-wide mb-1">Relatórios pendentes</p>
-                                    <p class="text-2xl sm:text-3xl font-black" style="color: #C90905;">0</p>
-                                </div>
-                                <div class="text-gray-300 hidden sm:block">
-                                    <i class="fas fa-chevron-right text-xl"></i>
-                                </div>
-                        </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Acesso Rápido a Materiais -->
-                    <div class="mb-6 md:mb-8">
-                        <h4 class="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2">
-                            <div class="w-1 h-5 sm:h-6 rounded-full" style="background-color: #C90905;"></div>
-                            Acesso Rápido
-                        </h4>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
-                            <!-- Card Materiais de Estudo -->
-                            <a href="#materiais" class="group bg-white rounded-xl sm:rounded-2xl hover:shadow-2xl transition-all duration-300 flex flex-col border-2 hover:border-red-600 hover:-translate-y-2 overflow-hidden p-4 sm:p-5 md:p-6 relative shadow-lg cursor-pointer" style="border-color: rgba(201, 9, 5, 0.4);">
-                                <div class="absolute top-0 left-0 w-full h-1 sm:h-1.5" style="background-color: #C90905;"></div>
-                                
-                                <div class="relative z-10">
-                                    <div class="flex items-start justify-between mb-3 sm:mb-4">
-                                        <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-lg sm:rounded-xl flex items-center justify-center shadow-xl flex-shrink-0" style="background-color: #C90905;">
-                                            <i class="fas fa-book-bible text-white text-lg sm:text-xl md:text-2xl"></i>
-                                        </div>
-                                        <span class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-white text-xs font-black rounded-full shadow-md" style="background-color: #C90905;">
-                                            5 NOVOS
-                                        </span>
-                                    </div>
-
-                                    <h4 class="text-gray-900 text-sm sm:text-base font-black mb-1.5 sm:mb-2">Materiais de Estudo</h4>
-                                    <p class="text-xs text-gray-600 mb-3 sm:mb-4 font-medium">Lições, estudos bíblicos e recursos para consolidação</p>
-                                    <div class="flex items-center justify-between text-xs sm:text-sm pt-2 sm:pt-3 border-t" style="border-color: rgba(201, 9, 5, 0.1);">
-                                        <span class="font-bold" style="color: #C90905;">Acessar conteúdo</span>
-                                        <i class="fas fa-arrow-right group-hover:translate-x-2 transition-transform" style="color: #C90905;"></i>
-                                    </div>
-                                </div>
-                            </a>
-                            
-                            <!-- Card Guia de Consolidação -->
-                            <a href="#guia" class="group bg-white rounded-xl sm:rounded-2xl hover:shadow-2xl transition-all duration-300 flex flex-col border-2 hover:border-red-500 hover:-translate-y-2 overflow-hidden p-4 sm:p-5 md:p-6 relative shadow-lg cursor-pointer" style="border-color: rgba(201, 9, 5, 0.4);">
-                                <div class="absolute top-0 left-0 w-full h-1 sm:h-1.5" style="background-color: #C90905;"></div>
-                                
-                                <div class="relative z-10">
-                                    <div class="flex items-start justify-between mb-3 sm:mb-4">
-                                        <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-lg sm:rounded-xl flex items-center justify-center shadow-xl flex-shrink-0" style="background-color: #C90905;">
-                                            <i class="fas fa-compass text-white text-lg sm:text-xl md:text-2xl"></i>
-                        </div>
-                                        <span class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-white text-xs font-black rounded-full shadow-md" style="background-color: #C90905;">
-                                            GUIA
-                            </span>
-                        </div>
-                                    <h4 class="text-gray-900 text-sm sm:text-base font-black mb-1.5 sm:mb-2">Guia do Consolidador</h4>
-                                    <p class="text-xs text-gray-600 mb-3 sm:mb-4 font-medium">Passo a passo e melhores práticas</p>
-                                    <div class="flex items-center justify-between text-xs sm:text-sm pt-2 sm:pt-3 border-t" style="border-color: rgba(201, 9, 5, 0.1);">
-                                        <span class="font-bold" style="color: #C90905;">Ver guia completo</span>
-                                        <i class="fas fa-arrow-right group-hover:translate-x-2 transition-transform" style="color: #C90905;"></i>
-                    </div>
+                    </a>
                 </div>
-                            </a>
-                            
-                            <!-- Card Agenda e Relatórios -->
-                            <a href="#agenda" class="group bg-white rounded-xl sm:rounded-2xl hover:shadow-2xl transition-all duration-300 flex flex-col border-2 hover:border-amber-500 hover:-translate-y-2 overflow-hidden p-4 sm:p-5 md:p-6 relative shadow-lg cursor-pointer" style="border-color: rgba(246, 111, 3, 0.4);">
-                                <div class="absolute top-0 left-0 w-full h-1 sm:h-1.5" style="background-color: #F66F03;"></div>
-                                
-                                <div class="relative z-10">
-                                    <div class="flex items-start justify-between mb-3 sm:mb-4">
-                                        <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-lg sm:rounded-xl flex items-center justify-center shadow-xl flex-shrink-0" style="background-color: #F66F03;">
-                                            <i class="fas fa-calendar-check text-white text-lg sm:text-xl md:text-2xl"></i>
-                        </div>
-                                        <span class="px-2.5 sm:px-3 py-1 sm:py-1.5 text-white text-xs font-black rounded-full shadow-md" style="background-color: #F66F03;">
-                                            HOJE
-                            </span>
-                        </div>
-                                    <h4 class="text-gray-900 text-sm sm:text-base font-black mb-1.5 sm:mb-2">Agenda & Relatórios</h4>
-                                    <p class="text-xs text-gray-600 mb-3 sm:mb-4 font-medium">Organize encontros e registre progresso</p>
-                                    <div class="flex items-center justify-between text-xs sm:text-sm pt-2 sm:pt-3 border-t" style="border-color: rgba(246, 111, 3, 0.1);">
-                                        <span class="font-bold" style="color: #F66F03;">Abrir agenda</span>
-                                        <i class="fas fa-arrow-right group-hover:translate-x-2 transition-transform" style="color: #F66F03;"></i>
-                                    </div>
-                                </div>
-                            </a>
-                        </div>
-                    </div>
-                    
-                    <!-- Botão CTA Principal -->
-                    <div class="text-center pt-4 sm:pt-6 border-t-2" style="border-color: rgba(201, 9, 5, 0.1);">
-                        <a href="{% url 'member_consolidation' %}" class="inline-flex items-center justify-center gap-2 sm:gap-3 md:gap-4 px-6 sm:px-12 md:px-24 py-3 sm:py-4 md:py-5 text-white font-black text-base sm:text-lg rounded-xl sm:rounded-2xl hover:shadow-2xl transition-all duration-300 hover:scale-105 shadow-xl hover:-translate-y-1 w-full sm:w-auto" style="background-color: #C90905;">
-                            <i class="fas fa-users text-white text-lg sm:text-xl md:text-2xl"></i>
-                            <span class="text-white">Meus Consolidados</span>
-                            <i class="fas fa-arrow-right text-white text-base sm:text-lg md:text-xl"></i>
-                        </a>
-                        <p class="text-xs sm:text-sm text-gray-600 mt-3 sm:mt-4 font-medium px-4">Clique para ver todas as pessoas que você acompanha</p>
-                </div>
-            </div>
-        </section>
+            </section>
         {% endif %}
 
-        <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 shadow-xl mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
+        <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
             <!-- Elementos Decorativos -->
             <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-30" style="background: radial-gradient(circle, rgba(230, 57, 70, 0.08), transparent);"></div>
             <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-30" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.08), transparent);"></div>
@@ -306,19 +190,19 @@
             <div class="relative z-10 p-4 sm:p-6 md:p-8">
                 <!-- Header -->
                 <div class="mb-6 md:mb-8 pb-4 md:pb-6 border-b-2" style="border-color: rgba(201, 9, 5, 0.1);">
-                    <div class="flex items-start sm:items-center justify-between gap-3 sm:gap-4 mb-3">
+                    <div class="flex items-center justify-between gap-3 sm:gap-4 mb-3">
                         <div class="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                            <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-xl flex-shrink-0" style="background-color: #C90905;">
+                            <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
                                 <i class="fas fa-hands-praying text-white text-lg sm:text-xl md:text-2xl"></i>
                             </div>
-                            <div class="min-w-0">
+                            <div class="min-w-0 mt-2">
                                 <h3 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
                                     Meus <span style="color: #C90905;">Ministérios</span>
                                 </h3>
                                 <p class="text-xs sm:text-sm text-gray-600 font-medium mt-1 hidden sm:block">Áreas onde você serve ao Reino de Deus</p>
                             </div>
                         </div>
-                        <a href="{% url 'member_profile' %}" class="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 md:py-3 border-2 rounded-lg sm:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 flex-shrink-0" style="background: rgba(201, 9, 5, 0.1); border-color: rgba(201, 9, 5, 0.4);">
+                        <a href="{% url 'member_profile' %}" class="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 md:py-3 border-2 rounded-lg sm:rounded-xl transition-all duration-300 hover:-translate-y-1 flex-shrink-0" style="background: rgba(201, 9, 5, 0.1); border-color: rgba(201, 9, 5, 0.4);">
                             <i class="fas fa-edit text-xs sm:text-sm" style="color: #C90905;"></i>
                             <span class="text-xs sm:text-sm font-bold" style="color: #C90905;">Editar</span>
                         </a>
@@ -328,12 +212,12 @@
                 {% if ministries %}
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
                         {% for ministry in ministries %}
-                        <div class="bg-white rounded-xl sm:rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 p-4 sm:p-5 md:p-6 border-2 hover:-translate-y-2 relative overflow-hidden" style="border-color: rgba(201, 9, 5, 0.4);">
+                        <div class="bg-white rounded-xl sm:rounded-2xl transition-all duration-300 p-4 sm:p-5 md:p-6 border-2 hover:-translate-y-2 relative overflow-hidden" style="border-color: rgba(201, 9, 5, 0.4);">
                             <div class="absolute top-0 left-0 w-full h-1 sm:h-1.5" style="background-color: #C90905;"></div>
                             <div class="absolute top-0 right-0 w-16 h-16 rounded-full -mr-8 -mt-8 opacity-20" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.3), transparent);"></div>
                             
                             <div class="text-center relative z-10">
-                                <div class="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 mx-auto mb-3 sm:mb-4 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-xl" style="background-color: #C90905;">
+                                <div class="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 mx-auto mb-3 sm:mb-4 rounded-xl sm:rounded-2xl flex items-center justify-center" style="background-color: #C90905;">
                                     <i class="fas fa-church text-white text-2xl sm:text-2xl md:text-3xl"></i>
                                 </div>
                                 <h4 class="font-black text-base sm:text-lg text-gray-900 mb-2 sm:mb-3">{{ ministry.name }}</h4>
@@ -348,8 +232,8 @@
                         {% endfor %}
                     </div>
                 {% else %}
-                    <div class="text-center py-12 sm:py-16 bg-white rounded-xl sm:rounded-2xl border-2 shadow-lg px-4" style="border-color: rgba(201, 9, 5, 0.15);">
-                        <div class="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg" style="background: rgba(201, 9, 5, 0.1);">
+                    <div class="text-center py-12 sm:py-16 bg-white rounded-xl sm:rounded-2xl border-2 px-4" style="border-color: rgba(201, 9, 5, 0.15);">
+                        <div class="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-xl sm:rounded-2xl flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
                             <i class="fas fa-hands-praying text-3xl sm:text-4xl" style="color: #C90905;"></i>
                         </div>
                         <h4 class="text-xl sm:text-2xl font-black text-gray-900 mb-2 sm:mb-3">Explore os Ministérios</h4>
@@ -367,7 +251,7 @@
         <!-- Home -->
         <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
             <div class="relative">
-                <div class="py-2.5 px-4 rounded-xl mb-1.5 shadow-lg transition-all duration-300" style="background-color: #C90905;">
+                <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #C90905;">
                     <i class="fas fa-home text-white text-lg"></i>
                 </div>
             </div>
@@ -377,7 +261,7 @@
         <!-- Consolidação -->
         {% if can_consolidate %}
         <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover:shadow-lg" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
                 <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
             </div>
             <span class="group-hover:font-bold transition-all">Consolidar</span>
@@ -393,7 +277,7 @@
         
         <!-- Eventos -->
         <a href="{% url 'event_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover:shadow-lg" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
                 <i class="fas fa-calendar-check text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
             </div>
             <span class="group-hover:font-bold transition-all">Eventos</span>
@@ -401,7 +285,7 @@
         
         <!-- Perfil -->
         <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover:shadow-lg" style="background: rgba(230, 57, 70, 0.05); border-color: rgba(230, 57, 70, 0.15);">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(230, 57, 70, 0.05); border-color: rgba(230, 57, 70, 0.15);">
                 <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #E63946;"></i>
             </div>
             <span class="group-hover:font-bold transition-all">Perfil</span>

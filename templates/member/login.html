@@ -114,26 +114,82 @@
             background: none;
         }
     }
+    
+    /* Prevenir scroll extra e fundo vermelho sobrando */
+    html, body {
+        overflow-x: hidden;
+        width: 100%;
+        height: 100%;
+        position: fixed;
+        margin: 0;
+        padding: 0;
+    }
+    
+    /* Container principal fixo */
+    .login-wrapper {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
+        width: 100%;
+        height: 100vh;
+    }
+    
+    /* Permitir scroll apenas no card */
+    .login-card-container {
+        height: 100vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Esconder scrollbar mas manter funcionalidade */
+    .login-card-container::-webkit-scrollbar {
+        display: none;
+    }
+    
+    .login-card-container {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    
+    /* Ajustes mobile específicos */
+    @media (max-width: 640px) {
+        .login-card-container {
+            height: 100vh;
+            height: -webkit-fill-available;
+        }
+        
+        /* Garantir que o card ocupe toda altura */
+        .mobile-full-height {
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+        }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<body class="min-h-screen overflow-x-hidden" style="font-family: 'Giga Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, var(--church-primary) 0%, var(--church-secondary) 100%);">
-    <!-- Container principal -->
-    <div class="min-h-screen flex items-center justify-center p-0 sm:p-3 lg:p-8 relative bg-pattern">
-        <!-- Card de login -->
-        <div class="bg-white rounded-none sm:rounded-2xl lg:rounded-3xl shadow-none sm:shadow-2xl overflow-hidden w-full max-w-none sm:max-w-lg lg:max-w-5xl grid grid-cols-1 lg:grid-cols-2 min-h-screen sm:min-h-[500px] lg:min-h-[600px] animate-scale-in">
-            
-            <!-- Seção de boas-vindas - Mobile: top, Desktop: left -->
-            <div class="text-white p-6 sm:p-8 lg:p-12 flex flex-col items-center justify-center text-center relative overflow-hidden order-1 lg:order-1" style="background: var(--church-secondary);">
-                <!-- Logo -->
-                <div class="w-20 h-20 sm:w-24 sm:h-24 lg:w-32 lg:h-32 bg-white rounded-full flex items-center justify-center mb-4 sm:mb-6 lg:mb-8 shadow-xl overflow-hidden z-10 animate-fade-in-up" style="animation-delay: 0.2s; animation-fill-mode: both;">
-                    <img src="{% static 'assets/logotype.jpg' %}" alt="Igreja Filadelfia" class="w-full h-full object-cover" onerror="this.style.display='none'">
-                </div>
+<body class="overflow-hidden" style="font-family: 'Giga Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <!-- Wrapper fixo com background -->
+    <div class="login-wrapper bg-pattern" style="background: linear-gradient(135deg, var(--church-primary) 0%, var(--church-secondary) 100%);">
+        <!-- Container com scroll -->
+        <div class="login-card-container flex items-center justify-center p-0 sm:p-3 lg:p-8">
+            <!-- Card de login -->
+            <div class="bg-white rounded-none sm:rounded-2xl lg:rounded-3xl shadow-none sm:shadow-2xl overflow-hidden w-full max-w-none sm:max-w-lg lg:max-w-5xl grid grid-cols-1 lg:grid-cols-2 mobile-full-height sm:min-h-[500px] lg:min-h-[600px] animate-scale-in">
+                
+                <!-- Seção de boas-vindas - Mobile: top, Desktop: left -->
+                <div class="text-white p-6 sm:p-8 lg:p-12 flex flex-col items-center justify-center text-center relative overflow-hidden order-1 lg:order-1" style="background: var(--church-secondary);">
+                    <!-- Logo -->
+                    <div class="w-24 h-24 sm:w-24 sm:h-24 lg:w-32 lg:h-32 bg-white rounded-full flex items-center justify-center mb-4 sm:mb-6 lg:mb-8 shadow-xl overflow-hidden z-10 animate-fade-in-up" style="animation-delay: 0.2s; animation-fill-mode: both;">
+                        <img src="{% static 'assets/logotype.jpg' %}" alt="Igreja Filadelfia" class="w-full h-full object-cover" onerror="this.style.display='none'">
+                    </div>
                 
                 <!-- Título e subtítulo -->
                 <div class="mb-6 lg:mb-8 z-10">
-                    <h1 class="font-bold text-2xl sm:text-3xl lg:text-4xl xl:text-5xl mb-2 sm:mb-3 text-gradient animate-fade-in-up" style="animation-delay: 0.3s; animation-fill-mode: both; font-family: 'Tusker', 'Giga Sans', sans-serif;">
+                    <h1 class="font-bold text-4xl sm:text-3xl lg:text-4xl xl:text-5xl mb-2 sm:mb-3 text-gradient animate-fade-in-up" style="animation-delay: 0.3s; animation-fill-mode: both; font-family: 'Tusker', 'Giga Sans', sans-serif;">
                         Bem-vindo!
                     </h1>
                     <p class="text-sm sm:text-base lg:text-lg opacity-90 leading-relaxed max-w-xs sm:max-w-sm animate-fade-in-up" style="animation-delay: 0.4s; animation-fill-mode: both;">
@@ -166,7 +222,7 @@
             <div class="p-6 sm:p-8 lg:p-12 xl:p-16 flex flex-col justify-center order-2 lg:order-2" style="background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);">
                 <!-- Cabeçalho do form -->
                 <div class="text-center mb-6 sm:mb-8 lg:mb-10 animate-fade-in-left" style="animation-delay: 0.3s; animation-fill-mode: both;">
-                    <h2 class="font-bold text-xl sm:text-2xl lg:text-3xl text-gray-900 mb-2 sm:mb-3" style="font-family: 'Tusker', 'Giga Sans', sans-serif;">
+                    <h2 class="font-bold text-2xl sm:text-2xl lg:text-3xl text-gray-900 mb-2 sm:mb-3" style="font-family: 'Tusker', 'Giga Sans', sans-serif;">
                         Entrar na Conta
                     </h2>
                     <p class="text-gray-600 text-sm sm:text-base lg:text-lg">
@@ -256,6 +312,7 @@
                     </p>
                 </div>
             </div>
+        </div>
         </div>
     </div>
 

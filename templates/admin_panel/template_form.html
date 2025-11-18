@@ -210,7 +210,7 @@
                                         </div>
                                         
                                         <div class="step-content">
-                                            <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                                            <div class="grid grid-cols-1 lg:grid-cols-6 gap-4">
                                                 <div class="form-group">
                                                     <label class="form-label required-field">Semana</label>
                                                     {{ step_form.week }}
@@ -219,10 +219,10 @@
                                                     {% endif %}
                                                 </div>
                                                 
-                                                <div class="lg:col-span-4 form-group">
-                                                    <label class="form-label required-field">Título da Etapa</label>
+                                                <div class="lg:col-span-5 form-group">
+                                                    <label class="form-label required-field">Título da Semana</label>
                                                     {{ step_form.title }}
-                                                    <p class="text-xs text-gray-500 mt-1">Nome resumido da atividade (ex: Primeiro Contato, Ensino sobre Salvação)</p>
+                                                    <p class="text-xs text-gray-500 mt-1">Nome resumido (ex: Primeiro Contato, Fundamentos da Fé)</p>
                                                     {% if step_form.title.errors %}
                                                         <p class="text-red-600 text-sm mt-1">{{ step_form.title.errors.0 }}</p>
                                                     {% endif %}
@@ -230,12 +230,12 @@
                                             </div>
                                             
                                             <div class="form-group mt-4">
-                                                <label class="form-label">Descrição da Atividade</label>
+                                                <label class="form-label required-field">Dicas e Orientações</label>
                                                 {{ step_form.description }}
-                                                <p class="text-xs text-gray-500 mt-1">Descrição opcional - adicione mais detalhes se necessário</p>
+                                                <p class="text-xs text-gray-500 mt-1">Dicas que serão exibidas para o consolidador durante esta semana</p>
                                                 {% if step_form.description.errors %}
                                                     <p class="text-red-600 text-sm mt-1">{{ step_form.description.errors.0 }}</p>
-                                                {% endif %}
+                                                    {% endif %}
                                             </div>
                                         </div>
                                         
@@ -249,27 +249,25 @@
                                     </div>
                                 {% endfor %}
                             {% else %}
-                                <div class="empty-steps-message" id="empty-steps-message">
-                                    <ion-icon name="document-text-outline" style="font-size: 3rem; color: #9ca3af; margin-bottom: 16px;"></ion-icon>
-                                    <h4 class="text-lg font-medium text-gray-600 mb-2">Nenhuma etapa configurada</h4>
-                                    <p class="text-gray-500 mb-4">Adicione pelo menos uma etapa para definir o processo de consolidação</p>
-                                    <button type="button" onclick="addStep()" class="add-step-btn">
-                                        <ion-icon name="add-outline"></ion-icon>
-                                        <span>Adicionar Primeira Etapa</span>
-                                    </button>
-                                </div>
-                            {% endif %}
-                        </div>
-                        
-                        <!-- Botão para adicionar mais etapas -->
-                        <div class="mt-4 text-center flex justify-end">
-                            <button type="button" onclick="addStep()" class="add-step-btn">
-                                <ion-icon name="add-outline"></ion-icon>
-                                <span>Adicionar Etapa</span>
-                            </button>
-                        </div>
-                        
-                        {% if formset.non_form_errors %}
+                <div class="empty-steps-message" id="empty-steps-message">
+                    <ion-icon name="document-text-outline" style="font-size: 3rem; color: #9ca3af; margin-bottom: 16px;"></ion-icon>
+                    <h4 class="text-lg font-medium text-gray-600 mb-2">Nenhuma semana configurada</h4>
+                    <p class="text-gray-500 mb-4">Adicione pelo menos uma semana para definir o processo de consolidação</p>
+                    <button type="button" onclick="addStep()" class="add-step-btn">
+                        <ion-icon name="add-outline"></ion-icon>
+                        <span>Adicionar Primeira Semana</span>
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+        
+        <!-- Botão para adicionar mais etapas -->
+        <div class="mt-4 text-center flex justify-end">
+            <button type="button" onclick="addStep()" class="add-step-btn">
+                <ion-icon name="add-outline"></ion-icon>
+                <span>Adicionar Semana</span>
+            </button>
+        </div>                        {% if formset.non_form_errors %}
                             <div class="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
                                 <div class="flex items-start">
                                     <ion-icon name="warning-outline" class="text-red-500 text-xl mr-3 mt-1 flex-shrink-0"></ion-icon>
@@ -354,7 +352,7 @@ function addStep() {
             </div>
             
             <div class="step-content">
-                <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+                <div class="grid grid-cols-1 lg:grid-cols-6 gap-4">
                     <div class="form-group">
                         <label class="form-label required-field">Semana</label>
                         <input type="number" 
@@ -365,23 +363,23 @@ function addStep() {
                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
                     </div>
                     
-                    <div class="lg:col-span-4 form-group">
-                        <label class="form-label required-field">Título da Etapa</label>
+                    <div class="lg:col-span-5 form-group">
+                        <label class="form-label required-field">Título da Semana</label>
                         <input type="text" 
                                name="steps-${formIdx}-title" 
                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]" 
-                               placeholder="Nome resumido da atividade (ex: Primeiro Contato, Ensino sobre Salvação)">
-                        <p class="text-xs text-gray-500 mt-1">Nome resumido da atividade (ex: Primeiro Contato, Ensino sobre Salvação)</p>
+                               placeholder="Nome resumido (ex: Primeiro Contato, Fundamentos da Fé)">
+                        <p class="text-xs text-gray-500 mt-1">Nome resumido (ex: Primeiro Contato, Fundamentos da Fé)</p>
                     </div>
                 </div>
                 
                 <div class="form-group mt-4">
-                    <label class="form-label">Descrição da Atividade</label>
+                    <label class="form-label required-field">Dicas e Orientações</label>
                     <textarea name="steps-${formIdx}-description" 
-                              rows="3" 
+                              rows="4" 
                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]" 
-                              placeholder="Descrição opcional - adicione mais detalhes se necessário..."></textarea>
-                    <p class="text-xs text-gray-500 mt-1">Descrição opcional - adicione mais detalhes se necessário</p>
+                              placeholder="Dicas que serão exibidas para o consolidador durante esta semana..."></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Dicas que serão exibidas para o consolidador durante esta semana</p>
                 </div>
             </div>
             
@@ -471,17 +469,17 @@ function updateStepNumbers() {
             numberSpan.textContent = stepNumber;
         }
         
-        // Atualizar número na semana display
+        // Atualizar número no período display
         const weekDisplay = step.querySelector('.step-week-display');
-        const weekInput = step.querySelector('input[name$="-week"]');
+        const periodInput = step.querySelector('input[name$="-period"]');
         
-        if (weekDisplay && weekInput) {
-            // Usa o valor atual do campo semana, não o número sequencial
-            const currentWeekValue = weekInput.value || stepNumber;
-            weekDisplay.textContent = currentWeekValue;
+        if (weekDisplay && periodInput) {
+            // Usa o valor atual do campo período, não o número sequencial
+            const currentPeriodValue = periodInput.value || stepNumber;
+            weekDisplay.textContent = currentPeriodValue;
         }
         
-        // NÃO atualizar valor do campo semana automaticamente para preservar dados do banco
+        // NÃO atualizar valor do campo período automaticamente para preservar dados do banco
     });
 }
 
@@ -490,20 +488,20 @@ document.addEventListener('DOMContentLoaded', function() {
     // Primeiro, sincronizar os displays com os valores reais dos campos
     const allSteps = document.querySelectorAll('.step-formset');
     allSteps.forEach(step => {
-        const weekInput = step.querySelector('input[name$="-week"]');
+        const periodInput = step.querySelector('input[name$="-period"]');
         const weekDisplay = step.querySelector('.step-week-display');
         
-        if (weekInput && weekDisplay && weekInput.value) {
-            weekDisplay.textContent = weekInput.value;
+        if (periodInput && weekDisplay && periodInput.value) {
+            weekDisplay.textContent = periodInput.value;
         }
     });
     
     // Depois atualizar apenas a numeração dos badges
     updateStepNumbers();
     
-    // Adicionar listener para mudanças no campo semana
+    // Adicionar listener para mudanças no campo período
     document.addEventListener('change', function(e) {
-        if (e.target.matches('input[name$="-week"]')) {
+        if (e.target.matches('input[name$="-period"]')) {
             const stepDiv = e.target.closest('.step-formset');
             const weekDisplay = stepDiv.querySelector('.step-week-display');
             if (weekDisplay) {

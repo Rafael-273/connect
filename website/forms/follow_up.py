@@ -51,29 +51,70 @@ class FollowUpForm(forms.ModelForm):
 class FollowUpReportForm(forms.ModelForm):
     class Meta:
         model = FollowUpReport
-        fields = ['type', 'status', 'location', 'description', 'prayer_request']
+        fields = [
+            'week',
+            'type', 
+            'status', 
+            'description', 
+            'attended_service',
+            'reading_bible',
+            'praying_regularly',
+            'has_spiritual_life',
+            'building_relationships',
+            'lifestyle_changes',
+            'overcoming_struggles',
+            'prayer_request'
+        ]
         labels = {
+            'week': 'Semana',
             'type': 'Tipo de Consolidação',
-            'status': 'Status do Acompanhamento',
-            'location': 'Local do Encontro',
-            'description': 'Como foi o encontro?',
+            'status': 'Como está o progresso?',
+            'description': 'Como foi a semana?',
+            'attended_service': 'Participou do culto?',
+            'reading_bible': 'Está lendo a Bíblia?',
+            'praying_regularly': 'Está orando regularmente?',
+            'has_spiritual_life': 'Tem vida no Espírito? (frutos visíveis)',
+            'building_relationships': 'Está construindo relacionamentos saudáveis?',
+            'lifestyle_changes': 'Houve mudanças no estilo de vida?',
+            'overcoming_struggles': 'Está superando lutas/vícios?',
             'prayer_request': 'Pedidos de Oração'
         }
         widgets = {
+            'week': forms.NumberInput(attrs={
+                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+                'min': '1'
+            }),
             'type': forms.Select(attrs={
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
             }),
             'status': forms.Select(attrs={
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
             }),
-            'location': forms.TextInput(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Ex: Casa do membro, Igreja, Café...'
-            }),
             'description': forms.Textarea(attrs={
                 'rows': 4,
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)]',
-                'placeholder': 'Descreva como foi o encontro...'
+                'placeholder': 'Descreva como foi este período de acompanhamento...'
+            }),
+            'attended_service': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'reading_bible': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'praying_regularly': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'has_spiritual_life': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'building_relationships': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'lifestyle_changes': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'overcoming_struggles': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
             }),
             'prayer_request': forms.Textarea(attrs={
                 'rows': 3,
@@ -81,3 +122,12 @@ class FollowUpReportForm(forms.ModelForm):
                 'placeholder': 'Pedidos de oração (opcional)...'
             })
         }
+    
+    def __init__(self, *args, **kwargs):
+        followup = kwargs.pop('followup', None)
+        super().__init__(*args, **kwargs)
+        
+        # Pré-preencher a semana atual e tipo se estiver criando novo relatório
+        if followup and not self.instance.pk:
+            self.fields['week'].initial = followup.current_week
+            self.fields['type'].initial = 'consolidation'  # Sempre consolidação por padrão

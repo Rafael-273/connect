@@ -25,17 +25,23 @@ class FollowUpTemplateStepForm(forms.ModelForm):
             'week': forms.NumberInput(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
                 'min': 1,
-                'max': 52
+                'max': 52,
+                'placeholder': 'Ex: 1, 2, 3...'
             }),
             'title': forms.TextInput(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Título da etapa (ex: Primeiro Contato, Ensino Básico...)'
+                'placeholder': 'Título da semana (ex: Acolhimento, Fundamentos...)'
             }),
             'description': forms.Textarea(attrs={
                 'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
                 'rows': 3,
-                'placeholder': 'Descrição opcional - adicione mais detalhes se necessário...'
+                'placeholder': 'Dicas e orientações para esta semana...'
             })
+        }
+        labels = {
+            'week': 'Número da Semana',
+            'title': 'Título',
+            'description': 'Dicas e Orientações'
         }
 
 # Formset para gerenciar múltiplas etapas
