@@ -146,9 +146,9 @@ STORAGES = {
 AUTH_USER_MODEL = 'website.User'
 
 # Authentication URLs
-LOGIN_URL = '/admin-login/'
-LOGIN_REDIRECT_URL = '/admin-panel/'
-LOGOUT_REDIRECT_URL = '/admin-login/'
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/dashboard/'
+LOGOUT_REDIRECT_URL = '/login/'
 
 CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',

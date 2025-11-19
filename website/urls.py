@@ -11,7 +11,6 @@ from .views.member import (
 )
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
-from .views.auth import admin_login_view, admin_logout_view
 from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view
 from .views.user_management import user_management_view, reset_user_password, change_password_view
 from .views.admin_panel import (
@@ -37,14 +36,12 @@ urlpatterns = [
     path('event/list', EventListView.as_view(), name='event_list'),
     path('event/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
     
-    # Authentication URLs
-    path('admin-login/', admin_login_view, name='admin_login'),
-    path('admin-logout/', admin_logout_view, name='admin_logout'),
-    
-    # Member Authentication URLs
+    # Authentication URLs (Unified Login System)
     path('login/', MemberLoginView.as_view(), name='member_login'),
+    path('admin-login/', MemberLoginView.as_view(), name='admin_login'),  # Redirect old admin login to unified login
     path('dashboard/', MemberDashboardView.as_view(), name='member_dashboard'),
     path('logout/', member_logout_view, name='member_logout'),
+    path('admin-logout/', member_logout_view, name='admin_logout'),  # Redirect old admin logout to unified logout
     path('profile/', member_profile_view, name='member_profile'),
     
     # Member Consolidation URLs

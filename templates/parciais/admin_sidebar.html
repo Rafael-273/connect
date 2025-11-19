@@ -6,6 +6,12 @@
     </div>
     
     <nav class="mt-6">
+        <!-- Botão Área de Membros -->
+        <a href="{% url 'member_dashboard' %}" class="sidebar-item" style="background: linear-gradient(135deg, #C90905, #E63946); color: white; display: flex; align-items: center; justify-content: center;">
+            <ion-icon name="home-outline"></ion-icon>
+            <span class="mt-1">Área de Membros</span>
+        </a>
+        
         {% if user.user_type == 'admin' or user.is_superuser %}
         <!-- Dashboard só para admin -->
         <a href="{% url 'admin_dashboard' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">

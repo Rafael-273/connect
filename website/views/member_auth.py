@@ -13,16 +13,12 @@ from ..models.member import Member
 
 
 class MemberLoginView(View):
-    """View de login específica para membros da igreja"""
+    """View de login unificada para membros e administradores"""
     
     def get(self, request):
-        # Se o usuário já estiver logado e for membro, redireciona para o dashboard
-        if request.user.is_authenticated and hasattr(request.user, 'member'):
+        # Se o usuário já estiver logado, redireciona para dashboard de membros
+        if request.user.is_authenticated:
             return redirect('member_dashboard')
-        
-        # Se for admin logado, redireciona para o painel admin
-        if request.user.is_authenticated and request.user.has_admin_access():
-            return redirect('admin_dashboard')
             
         return render(request, 'member/login.html')
     
@@ -38,20 +34,17 @@ class MemberLoginView(View):
         user = authenticate(request, username=email, password=password)
         
         if user is not None:
-            # Verifica se é um membro (não admin)
+            login(request, user)
+            
+            # Sempre redireciona para o dashboard de membros
             try:
                 member = user.member
-                if user.user_type == 'member' and not user.has_admin_access():
-                    login(request, user)
-                    messages.success(request, f'Bem-vindo(a), {member.name}!')
-                    
-                    # Redireciona para a URL solicitada ou para o dashboard
-                    next_url = request.GET.get('next', 'member_dashboard')
-                    return redirect(next_url)
-                else:
-                    messages.error(request, 'Esta área é exclusiva para membros. Use o painel administrativo.')
+                messages.success(request, f'Bem-vindo(a), {member.name}!')
             except Member.DoesNotExist:
-                messages.error(request, 'Usuário não está cadastrado como membro da igreja.')
+                messages.success(request, f'Bem-vindo(a)!')
+            
+            next_url = request.GET.get('next', 'member_dashboard')
+            return redirect(next_url)
         else:
             messages.error(request, 'Email ou senha incorretos.')
         
@@ -62,9 +55,9 @@ class MemberDashboardView(LoginRequiredMixin, View):
     """Dashboard principal para membros logados"""
     
     def dispatch(self, request, *args, **kwargs):
-        # Verifica se o usuário é um membro (não admin)
-        if not hasattr(request.user, 'member') or request.user.has_admin_access():
-            messages.error(request, 'Acesso negado. Esta área é exclusiva para membros.')
+        # Verifica se o usuário é um membro
+        if not hasattr(request.user, 'member'):
+            messages.error(request, 'Acesso negado. Você precisa estar cadastrado como membro.')
             return redirect('member_login')
         
         return super().dispatch(request, *args, **kwargs)
@@ -96,11 +89,11 @@ class MemberDashboardView(LoginRequiredMixin, View):
 
 
 def member_logout_view(request):
-    """Logout específico para membros"""
+    """Logout unificado para membros e administradores"""
     if request.user.is_authenticated:
-        member_name = request.user.member.name if hasattr(request.user, 'member') else request.user.email
+        user_name = request.user.member.name if hasattr(request.user, 'member') else request.user.email
         logout(request)
-        messages.success(request, f'Até logo, {member_name}! Volte sempre.')
+        messages.success(request, f'Até logo, {user_name}! Volte sempre.')
     
     return redirect('member_login')
 
@@ -108,7 +101,7 @@ def member_logout_view(request):
 @login_required
 def member_profile_view(request):
     """Visualização e edição do perfil do membro"""
-    if not hasattr(request.user, 'member') or request.user.has_admin_access():
+    if not hasattr(request.user, 'member'):
         messages.error(request, 'Acesso negado.')
         return redirect('member_login')
     
@@ -119,8 +112,37 @@ def member_profile_view(request):
         
         if form_type == 'personal_info':
             # Atualização de informações pessoais
+            member.name = request.POST.get('name', member.name)
             member.phone = request.POST.get('phone', member.phone)
             member.address = request.POST.get('address', member.address)
+            member.testimony = request.POST.get('testimony', member.testimony)
+            
+            # Data de nascimento
+            birth_date = request.POST.get('birth_date')
+            if birth_date:
+                member.birth_date = birth_date
+            
+            # Bairro
+            neighborhood_id = request.POST.get('neighborhood')
+            if neighborhood_id:
+                from website.models import Neighborhood
+                try:
+                    member.neighborhood = Neighborhood.objects.get(id=neighborhood_id)
+                except Neighborhood.DoesNotExist:
+                    pass
+            else:
+                member.neighborhood = None
+            
+            # Upload de foto de perfil
+            neighborhood_id = request.POST.get('neighborhood')
+            if neighborhood_id:
+                from website.models import Neighborhood
+                try:
+                    member.neighborhood = Neighborhood.objects.get(id=neighborhood_id)
+                except Neighborhood.DoesNotExist:
+                    pass
+            else:
+                member.neighborhood = None
             
             # Upload de foto de perfil
             if 'profile_picture' in request.FILES:
@@ -184,10 +206,15 @@ def member_profile_view(request):
         member.conversion_date
     )
     
+    # Obter todos os bairros
+    from website.models import Neighborhood
+    neighborhoods = Neighborhood.objects.all().order_by('name')
+    
     context = {
         'member': member,
         'ministries': member.ministry.all(),
         'can_consolidate': can_consolidate,
+        'neighborhoods': neighborhoods,
     }
     
     return render(request, 'member/profile.html', context)
