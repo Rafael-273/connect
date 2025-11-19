@@ -59,7 +59,12 @@ class FollowUpReportForm(forms.ModelForm):
             'attended_service',
             'reading_bible',
             'praying_regularly',
-            'has_spiritual_life',
+            'is_receptive',
+            'responding_messages',
+            'attending_classes',
+            'volunteering',
+            'met_one_on_one',
+            'met_in_group',
             'building_relationships',
             'lifestyle_changes',
             'overcoming_struggles',
@@ -73,7 +78,12 @@ class FollowUpReportForm(forms.ModelForm):
             'attended_service': 'Participou do culto?',
             'reading_bible': 'Está lendo a Bíblia?',
             'praying_regularly': 'Está orando regularmente?',
-            'has_spiritual_life': 'Tem vida no Espírito? (frutos visíveis)',
+            'is_receptive': 'Está receptivo?',
+            'responding_messages': 'Respondeu mensagens?',
+            'attending_classes': 'Participou das aulas?',
+            'volunteering': 'Participou como voluntário?',
+            'met_one_on_one': 'Saiu sozinho com o consolidador?',
+            'met_in_group': 'Saiu em grupo?',
             'building_relationships': 'Está construindo relacionamentos saudáveis?',
             'lifestyle_changes': 'Houve mudanças no estilo de vida?',
             'overcoming_struggles': 'Está superando lutas/vícios?',
@@ -104,7 +114,22 @@ class FollowUpReportForm(forms.ModelForm):
             'praying_regularly': forms.CheckboxInput(attrs={
                 'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
             }),
-            'has_spiritual_life': forms.CheckboxInput(attrs={
+            'is_receptive': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'responding_messages': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'attending_classes': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'volunteering': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'met_one_on_one': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
+            }),
+            'met_in_group': forms.CheckboxInput(attrs={
                 'class': 'h-4 w-4 text-[var(--color-primary)] focus:ring-[var(--color-primary)] border-gray-300 rounded'
             }),
             'building_relationships': forms.CheckboxInput(attrs={

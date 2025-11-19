@@ -136,12 +136,11 @@ class FollowUp(BaseModel):
 
 class FollowUpReport(BaseModel):
     STATUS_CHOICES = [
-        ('excellent', 'Excelente progresso'),
-        ('good', 'Bom progresso'),
-        ('regular', 'Progresso regular'),
-        ('needs_support', 'Precisa de apoio'),
-        ('difficult', 'Enfrentando dificuldades'),
-        ('no_contact', 'Sem contato'),
+        ('excellent', '🌟 Excelente'),
+        ('good', '😊 Bom'),
+        ('regular', '😐 Regular'),
+        ('difficult', '😟 Difícil'),
+        ('no_contact', '📵 Não consegui contato'),
     ]
 
     FOLLOWUP_TYPE_CHOICES = [
@@ -162,7 +161,13 @@ class FollowUpReport(BaseModel):
     reading_bible = models.BooleanField(default=False, verbose_name="Está lendo a Bíblia?")
     praying_regularly = models.BooleanField(default=False, verbose_name="Está orando regularmente?")
     
-    has_spiritual_life = models.BooleanField(default=False, verbose_name="Demonstra vida do Espírito Santo?", help_text="Frutos do Espírito visíveis: amor, alegria, paz, paciência, bondade, etc.")
+    is_receptive = models.BooleanField(default=False, verbose_name="Está receptivo esta semana?", help_text="Demonstra abertura e interesse nas conversas")
+    responding_messages = models.BooleanField(default=False, verbose_name="Respondeu mensagens esta semana?")
+    attending_classes = models.BooleanField(default=False, verbose_name="Participou das aulas de consolidação?")
+    volunteering = models.BooleanField(default=False, verbose_name="Participou como voluntário esta semana?")
+    met_one_on_one = models.BooleanField(default=False, verbose_name="Saiu sozinho com o consolidador esta semana?")
+    met_in_group = models.BooleanField(default=False, verbose_name="Saiu em grupo esta semana?")
+    
     building_relationships = models.BooleanField(default=False, verbose_name="Está criando vínculos com outros membros?")
     
     lifestyle_changes = models.BooleanField(default=False, verbose_name="Demonstra mudanças no estilo de vida?")
@@ -177,12 +182,17 @@ class FollowUpReport(BaseModel):
     @property
     def spiritual_health_score(self):
         """Calcula um score de saúde espiritual (0-100)"""
-        total_indicators = 7
+        total_indicators = 12
         positive_count = sum([
             self.attended_service,
             self.reading_bible,
             self.praying_regularly,
-            self.has_spiritual_life,
+            self.is_receptive,
+            self.responding_messages,
+            self.attending_classes,
+            self.volunteering,
+            self.met_one_on_one,
+            self.met_in_group,
             self.building_relationships,
             self.lifestyle_changes,
             self.overcoming_struggles,

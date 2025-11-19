@@ -11,6 +11,13 @@
     }
 
     .animate-fade { animation: fadeIn 0.6s ease-out; }
+    
+    /* Placeholder menor no mobile */
+    @media (max-width: 768px) {
+        textarea[name="description"]::placeholder {
+            font-size: 0.8125rem;
+        }
+    }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 {% endblock %}
@@ -82,14 +89,14 @@
                 <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl md:rounded-2xl p-4 md:p-6 border-2 border-blue-200/50">
                     <h4 class="text-xs md:text-sm font-bold text-gray-800 mb-3 md:mb-4 flex items-center gap-2">
                         <i class="fas fa-book-bible text-blue-600"></i>
-                        Práticas Espirituais Básicas
+                        Práticas de crescimento Espiritual
                     </h4>
                     <div class="space-y-2 md:space-y-3">
                         <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
                             {{ form.attended_service }}
                             <span class="text-xs md:text-sm font-medium text-gray-700">
                                 <i class="fas fa-church text-green-600 mr-1 md:mr-2"></i>
-                                Participou do culto
+                                Participou dos cultos dessa semana
                             </span>
                         </label>
                         <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
@@ -109,18 +116,48 @@
                     </div>
                 </div>
 
-                <!-- Vida no Espírito -->
                 <div class="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl md:rounded-2xl p-4 md:p-6 border-2 border-amber-200/50">
                     <h4 class="text-xs md:text-sm font-bold text-gray-800 mb-3 md:mb-4 flex items-center gap-2">
-                        <i class="fas fa-fire text-amber-600"></i>
-                        Vida no Espírito Santo
+                        <i class="fas fa-comments text-amber-600"></i>
+                        Comunicação e Receptividade
                     </h4>
                     <div class="space-y-2 md:space-y-3">
                         <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
-                            {{ form.has_spiritual_life }}
+                            {{ form.is_receptive }}
                             <span class="text-xs md:text-sm font-medium text-gray-700">
-                                <i class="fas fa-seedling text-green-600 mr-1 md:mr-2"></i>
-                                Demonstra vida no Espírito
+                                <i class="fas fa-smile text-green-600 mr-1 md:mr-2"></i>
+                                Está receptivo
+                            </span>
+                        </label>
+                        <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
+                            {{ form.responding_messages }}
+                            <span class="text-xs md:text-sm font-medium text-gray-700">
+                                <i class="fas fa-message text-blue-600 mr-1 md:mr-2"></i>
+                                Respondeu mensagens durante a semana
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Participação -->
+                <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl md:rounded-2xl p-4 md:p-6 border-2 border-indigo-200/50">
+                    <h4 class="text-xs md:text-sm font-bold text-gray-800 mb-3 md:mb-4 flex items-center gap-2">
+                        <i class="fas fa-hands-helping text-indigo-600"></i>
+                        Participação e Engajamento
+                    </h4>
+                    <div class="space-y-2 md:space-y-3">
+                        <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
+                            {{ form.attending_classes }}
+                            <span class="text-xs md:text-sm font-medium text-gray-700">
+                                <i class="fas fa-graduation-cap text-purple-600 mr-1 md:mr-2"></i>
+                                Participou das aulas de consolidação
+                            </span>
+                        </label>
+                        <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
+                            {{ form.volunteering }}
+                            <span class="text-xs md:text-sm font-medium text-gray-700">
+                                <i class="fas fa-hand-holding-heart text-red-600 mr-1 md:mr-2"></i>
+                                Participou como voluntário
                             </span>
                         </label>
                     </div>
@@ -133,6 +170,20 @@
                         Comunhão e Relacionamentos
                     </h4>
                     <div class="space-y-2 md:space-y-3">
+                        <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
+                            {{ form.met_one_on_one }}
+                            <span class="text-xs md:text-sm font-medium text-gray-700">
+                                <i class="fas fa-user text-blue-600 mr-1 md:mr-2"></i>
+                                Saiu sozinho com o consolidador
+                            </span>
+                        </label>
+                        <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
+                            {{ form.met_in_group }}
+                            <span class="text-xs md:text-sm font-medium text-gray-700">
+                                <i class="fas fa-users text-purple-600 mr-1 md:mr-2"></i>
+                                Saiu em grupo
+                            </span>
+                        </label>
                         <label class="flex items-center gap-2 md:gap-3 p-2 md:p-3 bg-white/70 backdrop-blur-sm rounded-lg md:rounded-xl cursor-pointer hover:bg-white transition">
                             {{ form.building_relationships }}
                             <span class="text-xs md:text-sm font-medium text-gray-700">
@@ -196,46 +247,87 @@
     </section>
 
     <script>
+        // Placeholders dinâmicos para o campo de descrição
+        const placeholders = [
+            'Ex: Conversamos sobre a importância da oração. Descobri que ele gosta de futebol e trabalha com vendas...',
+            'Ex: Saímos para tomar um café. Ele compartilhou suas lutas com ansiedade. Está mais aberto à Palavra...',
+            'Ex: Visitei sua casa e conheci a família. Percebo que tem dúvidas sobre batismo. Comportamento humilde...',
+            'Ex: Ele está empolgado com o crescimento espiritual. Compartilhou testemunho com colegas de trabalho...',
+            'Ex: Descobri que gosta de música. Tem facilidade em se expressar. Mostrou interesse em servir na igreja...',
+            'Ex: Conversamos sobre seus relacionamentos. Está se esforçando para perdoar. Demonstra sede pela Palavra...',
+            'Ex: Percebi mudanças no comportamento. Está mais calmo e paciente. Compartilhou sobre suas conquistas...',
+            'Ex: Temos gostos em comum sobre esportes. Falamos sobre propósito de vida. Ele fez perguntas profundas...',
+            'Ex: Notei que está lutando com vícios antigos. Oramos juntos. Ele demonstrou arrependimento genuíno...',
+            'Ex: Está frequentando os cultos regularmente. Fez amizade com outros membros. Comportamento alegre...'
+        ];
+
+        let currentPlaceholder = 0;
+        const descriptionField = document.querySelector('textarea[name="description"]');
+        
+        if (descriptionField) {
+            // Define o primeiro placeholder
+            descriptionField.placeholder = placeholders[0];
+            
+            // Alterna o placeholder a cada 3 segundos
+            setInterval(function() {
+                // Só alterna se o campo não estiver em foco e estiver vazio
+                if (document.activeElement !== descriptionField && !descriptionField.value) {
+                    currentPlaceholder = (currentPlaceholder + 1) % placeholders.length;
+                    descriptionField.placeholder = placeholders[currentPlaceholder];
+                }
+            }, 3000);
+            
+            // Também alterna quando o campo recebe foco
+            descriptionField.addEventListener('focus', function() {
+                if (!this.value) {
+                    currentPlaceholder = (currentPlaceholder + 1) % placeholders.length;
+                    this.placeholder = placeholders[currentPlaceholder];
+                }
+            });
+        }
+
         // Script para ocultar/mostrar menu inferior ao rolar
         let lastScrollTop = 0;
         const nav = document.getElementById('bottomNav');
         const scrollThreshold = 10;
 
-        window.addEventListener('scroll', function() {
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            const windowHeight = window.innerHeight;
-            const documentHeight = document.documentElement.scrollHeight;
-            
-            // Verificar se está próximo do final da página (últimos 100px)
-            const isNearBottom = (scrollTop + windowHeight) >= (documentHeight - 100);
-            
-            if (isNearBottom) {
-                // Esconder menu quando chegar ao final
-                nav.classList.add('nav-hidden');
-                nav.classList.remove('nav-visible');
-                return;
-            }
-            
-            // Se está no topo, mostrar menu
-            if (scrollTop <= 50) {
-                nav.classList.remove('nav-hidden');
-                nav.classList.add('nav-visible');
-                lastScrollTop = scrollTop;
-                return;
-            }
+        if (nav) {
+            window.addEventListener('scroll', function() {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const windowHeight = window.innerHeight;
+                const documentHeight = document.documentElement.scrollHeight;
+                
+                // Verificar se está próximo do final da página (últimos 100px)
+                const isNearBottom = (scrollTop + windowHeight) >= (documentHeight - 100);
+                
+                if (isNearBottom) {
+                    // Esconder menu quando chegar ao final
+                    nav.classList.add('nav-hidden');
+                    nav.classList.remove('nav-visible');
+                    return;
+                }
+                
+                // Se está no topo, mostrar menu
+                if (scrollTop <= 50) {
+                    nav.classList.remove('nav-hidden');
+                    nav.classList.add('nav-visible');
+                    lastScrollTop = scrollTop;
+                    return;
+                }
 
-            // Detectar direção do scroll
-            if (scrollTop > lastScrollTop && scrollTop > 100) {
-                // Rolando para baixo - esconder
-                nav.classList.add('nav-hidden');
-                nav.classList.remove('nav-visible');
-            } else if (scrollTop < lastScrollTop) {
-                // Rolando para cima - mostrar
-                nav.classList.remove('nav-hidden');
-                nav.classList.add('nav-visible');
-            }
-            
-            lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
-        }, false);
+                // Detectar direção do scroll
+                if (scrollTop > lastScrollTop && scrollTop > 100) {
+                    // Rolando para baixo - esconder
+                    nav.classList.add('nav-hidden');
+                    nav.classList.remove('nav-visible');
+                } else if (scrollTop < lastScrollTop) {
+                    // Rolando para cima - mostrar
+                    nav.classList.remove('nav-hidden');
+                    nav.classList.add('nav-visible');
+                }
+                
+                lastScrollTop = scrollTop <= 0 ? 0 : scrollTop;
+            }, false);
+        }
     </script>
 {% endblock %}

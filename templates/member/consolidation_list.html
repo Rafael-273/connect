@@ -54,7 +54,7 @@
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Minha Consolidação</h1>
                     <p class="text-sm sm:text-base text-gray-600">Acompanhe o crescimento espiritual dos seus consolidados</p>
                 </div>
-                <a href="{% url 'member_dashboard' %}" class="flex items-center justify-center sm:justify-start gap-2 px-6 py-3 bg-white/70 backdrop-blur-sm hover:bg-white/90 text-gray-700 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1">
+                <a href="{% url 'member_dashboard' %}" class="hidden sm:flex items-center justify-center sm:justify-start gap-2 px-6 py-3 bg-white/70 backdrop-blur-sm hover:bg-white/90 text-gray-700 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1">
                     <i class="fas fa-arrow-left text-sm"></i>
                     <span class="text-sm font-medium">Voltar</span>
                 </a>
@@ -84,7 +84,7 @@
     </section>
 
     <!-- Lista de Consolidados -->
-    <section class="px-4 sm:px-6 pb-8 space-y-3 sm:space-y-4 animate-fade">
+    <section class="px-4 sm:px-8 pb-8 space-y-3 sm:space-y-4 animate-fade">
         {% if followups %}
             {% for followup in followups %}
             <a href="{% url 'member_consolidation_detail' followup.id %}" 
@@ -101,7 +101,7 @@
                             
                             <!-- Info -->
                             <div class="flex-1 min-w-0">
-                                <h3 class="text-base sm:text-lg font-bold text-gray-800 mb-1 truncate">{{ followup.accompanied.name }}</h3>
+                                <h3 class="text-xl sm:text-2xl font-bold text-gray-800 truncate">{{ followup.accompanied.name }}</h3>
                                 <p class="text-xs sm:text-sm text-gray-600 flex items-center gap-2 truncate">
                                     {% if followup.template %}
                                         <i class="fas fa-book-open text-orange-500 flex-shrink-0"></i>
@@ -126,14 +126,14 @@
                     <!-- Barra de Progresso -->
                     <div>
                         <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs sm:text-sm font-semibold text-gray-700">Progresso</span>
+                            <span class="text-2xs sm:text-xl font-semibold text-gray-700">Progresso</span>
                             <span class="text-xs sm:text-sm font-bold text-orange-600">{{ followup.progress_percentage }}%</span>
                         </div>
                         <div class="h-2.5 sm:h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
                             <div class="h-full bg-gradient-to-r from-orange-500 to-red-600 rounded-full transition-all duration-500 shadow-lg"
                                  style="width: {{ followup.progress_percentage }}%"></div>
                         </div>
-                        <p class="text-xs text-gray-500 mt-1">
+                        <p class="text-xs text-gray-500 mt-3">
                             {{ followup.completed_steps }} de {{ followup.total_steps }} relatórios enviados
                         </p>
                     </div>
