@@ -3,3 +3,32 @@
 __pycache__/
 .vscode/
 /platform/media
+
+# Static files
+staticfiles/
+*.br
+
+# Database
+*.sqlite3
+db.sqlite3
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
