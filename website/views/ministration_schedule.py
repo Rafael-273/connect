@@ -8,7 +8,8 @@ from django.conf import settings
 from datetime import datetime, timedelta
 from website.models import MinistrationSchedule, Member, Ministry
 from website.forms import MinistrationScheduleForm
-from weasyprint import HTML
+from xhtml2pdf import pisa
+from io import BytesIO
 import calendar
 import os
 
@@ -165,14 +166,16 @@ def export_monthly_schedule_pdf(request):
     }
     
     # Renderizar template HTML
-    html_string = render_to_string('admin_panel/ministration/schedule_pdf.html', context)
+    html_string = render_to_string('admin_panel/ministration/schedule_pdf_simple.html', context)
     
-    # Gerar PDF com base_url para resolver paths relativos
-    html = HTML(string=html_string, base_url=request.build_absolute_uri('/'))
-    pdf = html.write_pdf()
+    # Gerar PDF usando xhtml2pdf
+    result = BytesIO()
+    pdf = pisa.pisaDocument(BytesIO(html_string.encode('UTF-8')), result)
     
-    # Retornar resposta com PDF
-    response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="Escala_Ministracao_{month_name}_{year}.pdf"'
+    if not pdf.err:
+        response = HttpResponse(result.getvalue(), content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="Escala_Ministracao_{month_name}_{year}.pdf"'
+        return response
     
-    return response
+    messages.error(request, 'Erro ao gerar PDF.')
+    return redirect('ministration_schedule_list')
