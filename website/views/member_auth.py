@@ -63,7 +63,21 @@ class MemberDashboardView(LoginRequiredMixin, View):
         return super().dispatch(request, *args, **kwargs)
     
     def get(self, request):
+        from datetime import datetime, timedelta
+        from website.models import MinistrationSchedule, WordOfKnowledge
+        
         member = request.user.member
+        
+        # Verifica se o membro está escalado na semana atual
+        today = datetime.now().date()
+        # Calcula o início da semana (segunda-feira)
+        week_start = today - timedelta(days=today.weekday())
+        
+        is_scheduled = MinistrationSchedule.objects.filter(
+            week_start_date=week_start,
+            members=member,
+            is_active=True
+        ).exists()
         
         # Busca informações relevantes para o dashboard
         context = {
@@ -71,7 +85,17 @@ class MemberDashboardView(LoginRequiredMixin, View):
             'ministries': member.ministry.all(),
             'can_consolidate': member.is_available_to_consolidate,
             'can_disciple': member.is_available_to_disciple,
+            'is_scheduled_this_week': is_scheduled,
+            'is_approver': member.is_approver,
         }
+        
+        # Se for aprovador, busca palavras pendentes de aprovação
+        if member.is_approver:
+            pending_words = WordOfKnowledge.objects.filter(
+                is_approved=False
+            ).select_related('member').order_by('service_date', 'recorded_at')
+            context['pending_words'] = pending_words
+            context['pending_words_count'] = pending_words.count()
         
         # Busca acompanhamentos onde o membro é responsável
         if hasattr(member, 'performed_followups'):
@@ -241,3 +265,80 @@ def member_consolidation_view(request):
     }
     
     return render(request, 'member/consolidation.html', context)
+
+
+@login_required
+def member_approve_word(request, word_id):
+    """Permite que um membro aprovador aprove uma palavra de conhecimento"""
+    if request.method != 'POST':
+        messages.error(request, 'Método não permitido.')
+        return redirect('member_dashboard')
+    
+    # Verificar se o membro é aprovador
+    try:
+        member = request.user.member
+        if not member.is_approver:
+            messages.error(request, 'Você não tem permissão para aprovar palavras.')
+            return redirect('member_dashboard')
+    except:
+        messages.error(request, 'Acesso negado.')
+        return redirect('member_login')
+    
+    from website.models import WordOfKnowledge
+    from django.utils import timezone
+    from django.shortcuts import get_object_or_404
+    
+    word = get_object_or_404(WordOfKnowledge, id=word_id)
+    
+    # Aprovar a palavra
+    word.is_approved = True
+    word.approved_by = member
+    word.approved_at = timezone.now()
+    word.save()
+    
+    messages.success(request, f'Palavra de {word.member.name} aprovada com sucesso!')
+    
+    # Se for requisição AJAX, retorna JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'success': True,
+            'message': 'Palavra aprovada com sucesso!'
+        })
+    
+    return redirect('member_dashboard')
+
+
+@login_required
+def member_reject_word(request, word_id):
+    """Permite que um membro aprovador rejeite uma palavra de conhecimento"""
+    if request.method != 'POST':
+        messages.error(request, 'Método não permitido.')
+        return redirect('member_dashboard')
+    
+    # Verificar se o membro é aprovador
+    try:
+        member = request.user.member
+        if not member.is_approver:
+            messages.error(request, 'Você não tem permissão para rejeitar palavras.')
+            return redirect('member_dashboard')
+    except:
+        messages.error(request, 'Acesso negado.')
+        return redirect('member_login')
+    
+    from website.models import WordOfKnowledge
+    from django.shortcuts import get_object_or_404
+    
+    word = get_object_or_404(WordOfKnowledge, id=word_id)
+    member_name = word.member.name
+    word.delete()
+    
+    messages.warning(request, f'Palavra de {member_name} foi rejeitada e removida.')
+    
+    # Se for requisição AJAX, retorna JSON
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'success': True,
+            'message': 'Palavra rejeitada com sucesso!'
+        })
+    
+    return redirect('member_dashboard')

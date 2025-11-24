@@ -1,0 +1,63 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 md:p-6 mt-24 flex items-center justify-center">
+            <div class="admin-card p-6 md:p-8 max-w-2xl w-full">
+                <div class="text-center mb-6">
+                    <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <ion-icon name="warning" class="text-4xl text-red-600"></ion-icon>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-900 mb-2">Confirmar Exclusão</h2>
+                    <p class="text-gray-600">Tem certeza que deseja excluir esta escala?</p>
+                </div>
+
+                <div class="bg-gray-50 rounded-lg p-4 md:p-6 mb-6">
+                    <h3 class="font-bold text-gray-900 mb-3">Detalhes da Escala:</h3>
+                    <div class="space-y-2 text-sm">
+                        <p><strong>Semana:</strong> {{ schedule.week_start_date|date:"d/m/Y" }}</p>
+                        <p><strong>Quarta-feira:</strong> {{ schedule.get_wednesday_date|date:"d/m/Y" }}</p>
+                        <p><strong>Domingo:</strong> {{ schedule.get_sunday_date|date:"d/m/Y" }}</p>
+                        <p><strong>Ministradores:</strong> {{ schedule.members.count }}</p>
+                    </div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <a href="{% url 'ministration_schedule_list' %}" class="bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold text-center transition-colors flex items-center justify-center">
+                            <ion-icon name="close-circle" class="mr-2"></ion-icon>
+                            Cancelar
+                        </a>
+                        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                            <ion-icon name="trash" class="mr-2"></ion-icon>
+                            Confirmar Exclusão
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -494,6 +494,7 @@ def member_edit_view(request, member_id=None):
             available_days = request.POST.get('available_days') or None
             is_available_to_consolidate = request.POST.get('is_available_to_consolidate') == 'on'
             is_available_to_disciple = request.POST.get('is_available_to_disciple') == 'on'
+            is_approver = request.POST.get('is_approver') == 'on'
             user_type = request.POST.get('user_type') or 'member'  # Tipo de usuário, default: membro normal
             
             # Validações obrigatórias
@@ -535,6 +536,7 @@ def member_edit_view(request, member_id=None):
                 member.available_days = available_days
                 member.is_available_to_consolidate = is_available_to_consolidate
                 member.is_available_to_disciple = is_available_to_disciple
+                member.is_approver = is_approver
                 
                 # Update user email if provided
                 if email and member.user:
@@ -585,7 +587,8 @@ def member_edit_view(request, member_id=None):
                     initial_challenges=initial_challenges,
                     available_days=available_days,
                     is_available_to_consolidate=is_available_to_consolidate,
-                    is_available_to_disciple=is_available_to_disciple
+                    is_available_to_disciple=is_available_to_disciple,
+                    is_approver=is_approver
                 )
                 member.ministry.set(ministries)
                 

@@ -62,29 +62,61 @@
         </div>
         {% endif %}
         
-        {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'events' %}
-        <!-- Eventos só para admin e usuários do tipo events -->
-        <a href="{% url 'admin_events_list' %}" class="sidebar-item {% if 'events' in request.resolver_match.url_name %}active{% endif %}">
-            <ion-icon name="calendar-outline"></ion-icon>
-            Eventos
-        </a>
-        {% endif %}
-        
-        {% if user.user_type == 'admin' or user.is_superuser %}
-        <!-- Ministérios só para admin -->
-        <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
-            <ion-icon name="library-outline"></ion-icon>
-            Ministérios
-        </a>
-        
-        <!-- Bairros só para admin -->
-        <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
-            <ion-icon name="location-outline"></ion-icon>
-            Bairros
-        </a>
-        {% endif %}
-        
-        {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'canteen' %}
+            {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'events' %}
+            <!-- Eventos só para admin e usuários do tipo events -->
+            <a href="{% url 'admin_events_list' %}" class="sidebar-item {% if 'events' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="calendar-outline"></ion-icon>
+                Eventos
+            </a>
+            {% endif %}
+            
+            {% if user.user_type == 'admin' or user.is_superuser %}
+            <!-- Ministérios só para admin -->
+            <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="library-outline"></ion-icon>
+                Ministérios
+            </a>
+            
+            <!-- Ministração com submenu só para admin -->
+            <div class="sidebar-group">
+                <div class="sidebar-item-group {% if 'ministration' in request.resolver_match.url_name %}active{% endif %}" 
+                     onclick="toggleSubmenu('mobile-ministration-submenu')" style="cursor: pointer;">
+                    <div style="display: flex; align-items: center; width: 100%;">
+                        <ion-icon name="hand-right-outline"></ion-icon>
+                        <span>Ministração</span>
+                    </div>
+                </div>
+                
+                <div id="mobile-ministration-submenu" class="submenu {% if 'ministration' in request.resolver_match.url_name %}active{% endif %}">
+                    <a href="{% url 'ministration_dashboard' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_dashboard' %}active{% endif %}">
+                        <ion-icon name="grid-outline"></ion-icon>
+                        Dashboard
+                    </a>
+                    <a href="{% url 'ministration_schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
+                        <ion-icon name="calendar-number-outline"></ion-icon>
+                        Escalas
+                    </a>
+                    <a href="{% url 'ministration_words_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_words_list' %}active{% endif %}">
+                        <ion-icon name="book-outline"></ion-icon>
+                        Palavras de Conhecimento
+                    </a>
+                    <a href="{% url 'ministration_healings_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_healings_list' %}active{% endif %}">
+                        <ion-icon name="heart-outline"></ion-icon>
+                        Curas
+                    </a>
+                    <a href="{% url 'ministration_members_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_members_list' %}active{% endif %}">
+                        <ion-icon name="people-outline"></ion-icon>
+                        Membros
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Bairros só para admin -->
+            <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="location-outline"></ion-icon>
+                Bairros
+            </a>
+            {% endif %}        {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'canteen' %}
         <a href="{% url 'admin_cantina_list' %}" class="sidebar-item {% if 'cantina' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="cafe-outline"></ion-icon>
             Cantina
@@ -183,21 +215,49 @@
             </a>
             {% endif %}
             
-            {% if user.user_type == 'admin' or user.is_superuser %}
-            <!-- Ministérios só para admin -->
-            <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
-                <ion-icon name="library-outline"></ion-icon>
-                Ministérios
-            </a>
+        {% if user.user_type == 'admin' or user.is_superuser %}
+        <!-- Ministérios só para admin -->
+        <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="library-outline"></ion-icon>
+            Ministérios
+        </a>
+        
+        <!-- Ministração com submenu só para admin -->
+        <div class="sidebar-group">
+            <div class="sidebar-item-group {% if 'ministration' in request.resolver_match.url_name %}active{% endif %}" 
+                 onclick="toggleSubmenu('ministration-submenu')" style="cursor: pointer;">
+                <div style="display: flex; align-items: center; width: 100%;">
+                    <ion-icon name="hand-right-outline"></ion-icon>
+                    <span>Ministração</span>
+                </div>
+            </div>
             
-            <!-- Bairros só para admin -->
-            <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
-                <ion-icon name="location-outline"></ion-icon>
-                Bairros
-            </a>
-            {% endif %}
-            
-            {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'canteen' %}
+            <div id="ministration-submenu" class="submenu {% if 'ministration' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'ministration_schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
+                    <ion-icon name="calendar-number-outline"></ion-icon>
+                    Escalas
+                </a>
+                <a href="{% url 'ministration_words_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_words_list' %}active{% endif %}" title="Palavras de Conhecimento">
+                    <ion-icon name="book-outline"></ion-icon>
+                    Palavras
+                </a>
+                <a href="{% url 'ministration_healings_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_healings_list' %}active{% endif %}" title="Curas">
+                    <ion-icon name="heart-outline"></ion-icon>
+                    Curas
+                </a>
+                <a href="{% url 'ministration_members_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_members_list' %}active{% endif %}" title="Membros do Ministério">
+                    <ion-icon name="people-outline"></ion-icon>
+                    Membros
+                </a>
+            </div>
+        </div>
+        
+        <!-- Bairros só para admin -->
+        <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="location-outline"></ion-icon>
+            Bairros
+        </a>
+        {% endif %}            {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'canteen' %}
             <!-- Cantina só para admin e usuários do tipo canteen -->
             <a href="{% url 'admin_cantina_list' %}" class="sidebar-item {% if 'cantina' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="cafe-outline"></ion-icon>

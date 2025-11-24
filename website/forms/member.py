@@ -41,7 +41,7 @@ class MemberForm(forms.ModelForm):
             'tags', 'marital_status', 'spouse', 'conversion', 'conversion_date',
             'ministry', 'personality_type', 'testimony', 'initial_challenges',
             'interests', 'available_days', 'is_available_to_consolidate',
-            'is_available_to_disciple', 'is_active'
+            'is_available_to_disciple', 'is_approver', 'is_active'
         ]
         labels = {
             'name': 'Nome completo',
@@ -63,6 +63,7 @@ class MemberForm(forms.ModelForm):
             'available_days': 'Dias disponíveis para consolidar/discipular',
             'is_available_to_consolidate': 'Disponível para consolidar?',
             'is_available_to_disciple': 'Disponível para discipular?',
+            'is_approver': 'Aprovador de Palavras de Conhecimento',
             'is_active': 'Status ativo',
             'profile_picture': 'Foto de perfil',
             'personality_type': 'Tipo de personalidade'

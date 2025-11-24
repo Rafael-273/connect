@@ -55,6 +55,11 @@ class Member(BaseModel):
 
     ministry = models.ManyToManyField(Ministry, blank=True)
     is_active = models.BooleanField(default=True)
+    is_approver = models.BooleanField(
+        default=False,
+        verbose_name='Aprovador de Palavras',
+        help_text='Membro pode aprovar palavras de conhecimento de outros ministradores'
+    )
 
     is_available_to_consolidate = models.BooleanField(default=False)
     is_available_to_disciple = models.BooleanField(default=False)

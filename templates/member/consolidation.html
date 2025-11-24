@@ -286,42 +286,40 @@
         {% endif %}
     </main>
 
-    <!-- Bottom Navigation aprimorado -->
-    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-lg bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/50 px-3 py-3 flex items-center justify-around z-50 transition-all duration-500 ease-in-out nav-visible">
+    <!-- Bottom Navigation -->
+    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-lg rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(245, 158, 11, 0.2);">
         <!-- Home -->
-        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-110 p-3 group">
-            <div class="py-3 px-4 rounded-2xl mb-2 transition-all duration-300 bg-gray-100 group-hover:bg-gradient-to-br group-hover:from-orange-400 group-hover:to-red-500 group-hover:shadow-lg">
-                <i class="fas fa-home text-lg transition-all duration-300 group-hover:text-white group-hover:scale-110 text-gray-600"></i>
+        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(245, 158, 11, 0.05); border-color: rgba(245, 158, 11, 0.15);">
+                <i class="fas fa-home text-lg transition-transform group-hover:scale-110" style="color: #F59E0B;"></i>
             </div>
-            <span class="group-hover:font-semibold transition-all group-hover:text-gray-800">Home</span>
+            <span class="group-hover:font-bold transition-all">Home</span>
         </a>
         
         <!-- Consolidação (Ativo) -->
-        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-110 p-3 relative group">
+        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
             <div class="relative">
-                <div class="py-3 px-4 rounded-2xl mb-2 bg-gradient-to-br from-orange-500 to-red-600 shadow-xl">
+                <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #F59E0B;">
                     <i class="fas fa-user-graduate text-white text-lg"></i>
                 </div>
-                <!-- Indicador ativo -->
-                <div class="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
             </div>
-            <span class="text-orange-600 font-semibold">Consolidar</span>
+            <span style="color: #F59E0B;">Consolidar</span>
         </a>
         
-        <!-- Eventos -->
-        <a href="{% url 'event_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-110 p-3 group">
-            <div class="py-3 px-4 rounded-2xl mb-2 transition-all duration-300 bg-gray-100 group-hover:bg-gradient-to-br group-hover:from-orange-400 group-hover:to-red-500 group-hover:shadow-lg">
-                <i class="fas fa-calendar-check text-lg transition-all duration-300 group-hover:text-white group-hover:scale-110 text-gray-600"></i>
+        <!-- Curas -->
+        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(251, 146, 60, 0.05); border-color: rgba(251, 146, 60, 0.15);">
+                <i class="fas fa-heart-pulse text-lg transition-transform group-hover:scale-110" style="color: #FB923C;"></i>
             </div>
-            <span class="group-hover:font-semibold transition-all group-hover:text-gray-800">Eventos</span>
+            <span class="group-hover:font-bold transition-all">Curas</span>
         </a>
         
         <!-- Perfil -->
-        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-110 p-3 group">
-            <div class="py-3 px-4 rounded-2xl mb-2 transition-all duration-300 bg-gray-100 group-hover:bg-gradient-to-br group-hover:from-orange-400 group-hover:to-red-500 group-hover:shadow-lg">
-                <i class="fas fa-user-circle text-lg transition-all duration-300 group-hover:text-white group-hover:scale-110 text-gray-600"></i>
+        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(217, 119, 6, 0.05); border-color: rgba(217, 119, 6, 0.15);">
+                <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #D97706;"></i>
             </div>
-            <span class="group-hover:font-semibold transition-all group-hover:text-gray-800">Perfil</span>
+            <span class="group-hover:font-bold transition-all">Perfil</span>
         </a>
     </nav>
 

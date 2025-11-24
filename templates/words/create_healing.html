@@ -1,0 +1,197 @@
+{% extends "login_base.html" %}
+{% load static %}
+
+{% block title %}Registrar Cura{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .animate-slide-down {
+        animation: slideDown 0.5s ease-out forwards;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-24" style="background: #ffffff;">
+    
+    <!-- Header Moderno -->
+    <div class="px-4 sm:px-6 md:px-8 py-6 border-b-2 animate-slide-down" style="border-color: rgba(201, 9, 5, 0.2);">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-black text-gray-900">Registrar <span style="color: #C90905;">Cura</span></h1>
+                <p class="text-sm text-gray-600 font-medium mt-1">Testemunho de cura e milagre</p>
+            </div>
+            <a href="{% url 'word_of_knowledge_list' %}" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- Formulário -->
+    <div class="px-4 sm:px-6 md:px-8 py-6">
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            
+            <!-- Card do Formulário -->
+            <div class="bg-white rounded-2xl border-2 p-6 sm:p-8 shadow-sm animate-slide-down" style="border-color: rgba(201, 9, 5, 0.15); animation-delay: 0.1s;">
+                
+                <!-- Palavra de Conhecimento Vinculada (só aparece se vier do link) -->
+                {% if preselected_word %}
+                <div class="mb-6 p-4 rounded-xl" style="background: rgba(147, 51, 234, 0.05); border: 2px solid rgba(147, 51, 234, 0.2);">
+                    <div class="flex items-start gap-3">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(147, 51, 234, 0.1);">
+                            <i class="fas fa-link text-lg" style="color: #9333ea;"></i>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-xs font-bold mb-1" style="color: #9333ea;">VINCULADA À PALAVRA:</p>
+                            <p class="text-sm text-gray-700 leading-relaxed">{{ preselected_word.word }}</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Campo oculto para enviar a palavra -->
+                <input type="hidden" name="word_of_knowledge" value="{{ preselected_word.id }}">
+                {% endif %}
+                
+                <!-- Nome da Pessoa -->
+                <div class="mb-6">
+                    <label for="{{ form.healed_person_name.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-user mr-2" style="color: #C90905;"></i>Nome da Pessoa Curada
+                    </label>
+                    <div class="relative">
+                        {{ form.healed_person_name }}
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <i class="fas fa-user-circle text-gray-400"></i>
+                        </div>
+                    </div>
+                    {% if form.healed_person_name.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.healed_person_name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Parte do Corpo -->
+                <div class="mb-6">
+                    <label for="{{ form.body_part.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-hand-pointer mr-2" style="color: #C90905;"></i>Parte do Corpo Curada
+                    </label>
+                    <div class="relative">
+                        {{ form.body_part }}
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <i class="fas fa-hands text-gray-400"></i>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2 font-medium">Ex: perna, olho, cabeça, coluna</p>
+                    {% if form.body_part.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.body_part.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Condição -->
+                <div class="mb-6">
+                    <label for="{{ form.condition.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-stethoscope mr-2" style="color: #C90905;"></i>Condição
+                    </label>
+                    <div class="relative">
+                        {{ form.condition }}
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <i class="fas fa-notes-medical text-gray-400"></i>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2 font-medium">Ex: perna quebrada, cegueira, enxaqueca, dor crônica</p>
+                    {% if form.condition.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.condition.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Tipo de Cura -->
+                <div class="mb-6">
+                    <label class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-heart-pulse mr-2" style="color: #C90905;"></i>{{ form.healing_type.label }}
+                    </label>
+                    <div class="flex gap-6">
+                        {% for radio in form.healing_type %}
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            {{ radio.tag }}
+                            <span class="text-sm font-medium text-gray-700">{{ radio.choice_label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    {% if form.healing_type.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.healing_type.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Testemunho da Cura -->
+                <div>
+                    <label for="{{ form.description.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-heartbeat mr-2" style="color: #C90905;"></i>Testemunho da Cura
+                    </label>
+                    {{ form.description }}
+                    <p class="text-xs text-gray-500 mt-2 font-medium">Descreva o testemunho da cura que aconteceu</p>
+                    {% if form.description.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.description.errors.0 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Botões de Ação -->
+            <div class="flex flex-col sm:flex-row gap-3 animate-slide-down" style="animation-delay: 0.2s;">
+                <a href="{% url 'word_of_knowledge_list' %}" class="flex-1 px-6 py-4 rounded-xl font-bold transition-all hover:-translate-y-0.5 text-center border-2 shadow-sm" style="background-color: white; color: #6b7280; border-color: rgba(156, 163, 175, 0.3);">
+                    <i class="fas fa-times mr-2"></i>Cancelar
+                </a>
+                <button type="submit" class="flex-1 px-6 py-4 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 shadow-lg" style="background: linear-gradient(135deg, #C90905 0%, #E63946 100%);">
+                    <i class="fas fa-heart-pulse mr-2"></i>Registrar Cura
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Bottom Navigation -->
+<nav class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-lg rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
+    <!-- Home -->
+    <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
+            <i class="fas fa-home text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
+        </div>
+        <span class="group-hover:font-bold transition-all">Home</span>
+    </a>
+    
+    <!-- Consolidação -->
+    <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
+            <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
+        </div>
+        <span class="group-hover:font-bold transition-all">Consolidar</span>
+    </a>
+    
+    <!-- Curas (Ativo) -->
+    <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
+        <div class="relative">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #C90905;">
+                <i class="fas fa-heart-pulse text-white text-lg"></i>
+            </div>
+        </div>
+        <span style="color: #C90905;">Curas</span>
+    </a>
+    
+    <!-- Perfil -->
+    <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(230, 57, 70, 0.05); border-color: rgba(230, 57, 70, 0.15);">
+            <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #E63946;"></i>
+        </div>
+        <span class="group-hover:font-bold transition-all">Perfil</span>
+    </a>
+</nav>
+{% endblock %}

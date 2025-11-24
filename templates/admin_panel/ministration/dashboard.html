@@ -1,0 +1,248 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        transition: all 0.3s ease;
+    }
+    
+    .admin-card:hover {
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    
+    .stat-card {
+        background: linear-gradient(135deg, var(--color-primary) 0%, #991b1b 100%);
+        color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+    
+    .action-card {
+        border: 2px solid var(--color-primary);
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .action-card:hover {
+        background-color: var(--color-primary);
+        color: white;
+        transform: translateY(-5px);
+    }
+    
+    .action-card:hover ion-icon {
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 md:p-6 mt-24">
+            <!-- Header -->
+            <div class="mb-6 md:mb-8">
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-900 page-title">Ministração</h1>
+                <p class="text-gray-600 mt-2">Painel de controle do Ministério de Ministração</p>
+            </div>
+
+            <!-- Estatísticas Principais -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                <div class="stat-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Palavras de Conhecimento</p>
+                            <p class="text-3xl font-bold">{{ total_words }}</p>
+                        </div>
+                        <ion-icon name="book" class="text-5xl opacity-20"></ion-icon>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Curas</p>
+                            <p class="text-3xl font-bold">{{ total_healings }}</p>
+                        </div>
+                        <ion-icon name="heart" class="text-5xl opacity-20"></ion-icon>
+                    </div>
+                </div>
+                
+                <div class="stat-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Membros Ativos</p>
+                            <p class="text-3xl font-bold">{{ active_ministry_members }}</p>
+                        </div>
+                        <ion-icon name="people" class="text-5xl opacity-20"></ion-icon>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ações Rápidas -->
+            <div class="mb-8">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Ações Rápidas</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <a href="{% url 'ministration_schedule_list' %}" class="action-card">
+                        <ion-icon name="calendar-number" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
+                        <h3 class="font-bold text-lg mb-2">Escalas</h3>
+                        <p class="text-sm text-gray-600">Gerenciar escalas semanais</p>
+                    </a>
+                    
+                    <a href="{% url 'ministration_members_list' %}" class="action-card">
+                        <ion-icon name="person-add" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
+                        <h3 class="font-bold text-lg mb-2">Adicionar Membros</h3>
+                        <p class="text-sm text-gray-600">Gerenciar membros do ministério</p>
+                    </a>
+                    
+                    <a href="{% url 'ministration_words_list' %}" class="action-card">
+                        <ion-icon name="book" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
+                        <h3 class="font-bold text-lg mb-2">Palavras de Conhecimento</h3>
+                        <p class="text-sm text-gray-600">Ver todas as palavras</p>
+                    </a>
+                    
+                    <a href="{% url 'ministration_healings_list' %}" class="action-card">
+                        <ion-icon name="heart" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
+                        <h3 class="font-bold text-lg mb-2">Curas</h3>
+                        <p class="text-sm text-gray-600">Ver todos os testemunhos</p>
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Escala Atual -->
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-gray-900">Escala Atual</h2>
+                        <a href="{% url 'ministration_schedule_list' %}" class="text-[var(--color-primary)] text-sm hover:underline">Ver todas</a>
+                    </div>
+                    
+                    {% if current_schedule %}
+                        <div class="bg-gradient-to-br from-gray-50 to-gray-100 border-l-4 border-red-600 rounded-lg p-5 mb-5">
+                            <div class="flex items-center gap-2 mb-3">
+                                <div class="bg-red-600 p-2 rounded-lg">
+                                    <ion-icon name="calendar" class="text-white text-xl"></ion-icon>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-gray-500 font-medium">Semana Atual</p>
+                                    <p class="font-bold text-gray-900">{{ current_schedule.week_start_date|date:"d/m/Y" }}</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-4">
+                                <div class="flex-1 bg-white rounded-lg p-3 border border-gray-200">
+                                    <p class="text-xs text-gray-500 mb-1">Quarta-feira</p>
+                                    <p class="text-sm font-semibold text-gray-800">{{ current_schedule.get_wednesday_date|date:"d/m/Y" }}</p>
+                                </div>
+                                <div class="flex-1 bg-white rounded-lg p-3 border border-gray-200">
+                                    <p class="text-xs text-gray-500 mb-1">Domingo</p>
+                                    <p class="text-sm font-semibold text-gray-800">{{ current_schedule.get_sunday_date|date:"d/m/Y" }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-5">
+                            <div class="flex items-center gap-2 mb-3">
+                                <ion-icon name="people" class="text-gray-600 text-lg"></ion-icon>
+                                <p class="text-sm font-semibold text-gray-700">Ministradores</p>
+                                <span class="ml-auto bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-bold">{{ current_schedule.members.count }}</span>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                {% for member in current_schedule.members.all %}
+                                    <span class="px-3 py-1.5 bg-white border border-gray-200 text-gray-700 rounded-lg text-xs font-medium hover:border-red-300 hover:bg-red-50 transition-colors">
+                                        <ion-icon name="person" class="text-gray-500"></ion-icon>
+                                        {{ member.name }}
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <a href="{% url 'ministration_schedule_detail' current_schedule.id %}" class="block w-full text-center bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-4 py-3 rounded-lg text-sm font-semibold transition-all shadow-sm hover:shadow-md">
+                            <ion-icon name="eye" class="text-base"></ion-icon> Ver Detalhes Completos
+                        </a>
+                    {% else %}
+                        <div class="text-center py-12">
+                            <div class="inline-block p-4 bg-gray-100 rounded-full mb-4">
+                                <ion-icon name="calendar-outline" class="text-5xl text-gray-400"></ion-icon>
+                            </div>
+                            <p class="text-gray-600 mb-2 font-medium">Nenhuma escala ativa</p>
+                            <p class="text-gray-500 text-sm mb-6">Crie uma nova escala para esta semana</p>
+                            <a href="{% url 'ministration_schedule_create' %}" class="inline-flex items-center gap-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-sm hover:shadow-md">
+                                <ion-icon name="add-circle" class="text-lg"></ion-icon> Criar Nova Escala
+                            </a>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Próximas Escalas -->
+                    {% if upcoming_schedules %}
+                        <div class="mt-6 pt-6 border-t-2 border-gray-100">
+                            <div class="flex items-center gap-2 mb-4">
+                                <ion-icon name="time-outline" class="text-gray-600 text-lg"></ion-icon>
+                                <p class="text-sm font-semibold text-gray-700">Próximas Escalas</p>
+                            </div>
+                            <div class="space-y-2">
+                                {% for schedule in upcoming_schedules %}
+                                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                        <div class="flex items-center gap-2">
+                                            <ion-icon name="calendar-outline" class="text-gray-400"></ion-icon>
+                                            <span class="text-sm font-medium text-gray-700">{{ schedule.week_start_date|date:"d/m/Y" }}</span>
+                                        </div>
+                                        <span class="text-xs bg-white border border-gray-200 text-gray-600 px-2 py-1 rounded-full font-medium">{{ schedule.members.count }} membro{{ schedule.members.count|pluralize }}</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Estatísticas de Curas -->
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-2">
+                            <div class="bg-green-100 p-2 rounded-lg">
+                                <ion-icon name="stats-chart" class="text-green-600 text-xl"></ion-icon>
+                            </div>
+                            <h2 class="text-xl font-bold text-gray-900">Curas por Mês ({{ current_year }})</h2>
+                        </div>
+                    </div>
+                    
+                    {% if monthly_stats %}
+                        <div class="space-y-3">
+                            {% for stat in monthly_stats %}
+                                <div class="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-white rounded-lg border border-green-100 hover:border-green-200 transition-colors">
+                                    <span class="text-sm font-medium text-gray-700">{{ stat.month_name }}</span>
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-32 bg-gray-200 rounded-full h-2">
+                                            <div class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: {{ stat.percentage }}%"></div>
+                                        </div>
+                                        <span class="text-sm font-bold text-green-600 w-8 text-right">{{ stat.count }}</span>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-8">
+                            <ion-icon name="bar-chart-outline" class="text-5xl text-gray-300 mb-2"></ion-icon>
+                            <p class="text-gray-600">Nenhuma cura registrada este ano</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

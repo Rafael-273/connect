@@ -1,0 +1,159 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 md:p-6 mt-24">
+            <!-- Header -->
+            <div class="mb-6 md:mb-8">
+                <div class="flex items-center mb-4">
+                    <a href="{% url 'ministration_schedule_list' %}" class="text-gray-600 hover:text-gray-900 mr-4">
+                        <ion-icon name="arrow-back" class="text-2xl"></ion-icon>
+                    </a>
+                    <div>
+                        <h1 class="text-2xl md:text-3xl font-bold text-gray-900 page-title">{{ title }}</h1>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Formulário -->
+            <div class="admin-card p-4 md:p-6">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="space-y-6">
+                        <!-- Data de Início -->
+                        <div>
+                            <label for="{{ form.week_start_date.id_for_label }}" class="form-label">
+                                <ion-icon name="calendar"></ion-icon>
+                                {{ form.week_start_date.label }}
+                            </label>
+                            {{ form.week_start_date }}
+                            {% if form.week_start_date.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.week_start_date.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-xs text-gray-500">Selecione uma segunda-feira para iniciar a semana da escala</p>
+                        </div>
+
+                        <!-- Ministradores -->
+                        <div>
+                            <label class="form-label">
+                                <ion-icon name="people"></ion-icon>
+                                {{ form.members.label }}
+                            </label>
+                            <div class="bg-gray-50 border border-gray-300 rounded-lg p-4 max-h-96 overflow-y-auto">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {% for checkbox in form.members %}
+                                        <div class="flex items-center">
+                                            <label class="flex items-center cursor-pointer hover:bg-white p-2 rounded transition-colors">
+                                                {{ checkbox.tag }}
+                                                <span class="ml-2 text-sm text-gray-700">{{ checkbox.choice_label }}</span>
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% if form.members.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.members.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-xs text-gray-500">Selecione os membros que estarão na escala desta semana</p>
+                        </div>
+
+                        <!-- Líderes da Escala -->
+                        <div>
+                            <label class="form-label">
+                                <ion-icon name="ribbon" class="text-yellow-600"></ion-icon>
+                                {{ form.leaders.label }}
+                            </label>
+                            <div class="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 max-h-96 overflow-y-auto">
+                                <div class="mb-3 p-3 bg-yellow-100 border border-yellow-400 rounded-lg">
+                                    <p class="text-xs text-yellow-800 flex items-center gap-2">
+                                        <ion-icon name="information-circle" class="text-base"></ion-icon>
+                                        <span>Selecione quem será o(s) líder(es) responsável(is) por esta escala. O líder aparecerá em destaque na visualização e nos relatórios.</span>
+                                    </p>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {% for checkbox in form.leaders %}
+                                        <div class="flex items-center">
+                                            <label class="flex items-center cursor-pointer hover:bg-yellow-100 p-2 rounded transition-colors">
+                                                {{ checkbox.tag }}
+                                                <span class="ml-2 text-sm text-gray-700 font-medium">{{ checkbox.choice_label }}</span>
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% if form.leaders.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.leaders.errors.0 }}</p>
+                            {% endif %}
+                            <p class="mt-1 text-xs text-gray-500">Opcional: Defina quem liderará a equipe nesta semana</p>
+                        </div>
+
+                        <!-- Observações -->
+                        <div>
+                            <label for="{{ form.notes.id_for_label }}" class="form-label">
+                                <ion-icon name="document-text"></ion-icon>
+                                {{ form.notes.label }}
+                            </label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.notes.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Ativa -->
+                        <div class="flex items-center">
+                            {{ form.is_active }}
+                            <label for="{{ form.is_active.id_for_label }}" class="ml-2 text-sm font-medium text-gray-700">
+                                {{ form.is_active.label }}
+                            </label>
+                            {% if form.is_active.errors %}
+                                <p class="mt-1 text-sm text-red-600">{{ form.is_active.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Botões -->
+                    <div class="flex flex-col sm:flex-row gap-3 mt-8 pt-6 border-t border-gray-200">
+                        <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center">
+                            <ion-icon name="checkmark-circle" class="mr-2"></ion-icon>
+                            Salvar Escala
+                        </button>
+                        <a href="{% url 'ministration_schedule_list' %}" class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition text-center flex items-center justify-center">
+                            <ion-icon name="close-circle" class="mr-2"></ion-icon>
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

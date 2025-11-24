@@ -1,0 +1,295 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background: linear-gradient(135deg, #fef2f2 0%, #fff5f7 100%) !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 4px 20px rgba(220, 38, 38, 0.1);
+        border: 1px solid rgba(220, 38, 38, 0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .admin-card:hover {
+        box-shadow: 0 8px 30px rgba(220, 38, 38, 0.15);
+    }
+    
+    .word-card {
+        background: white;
+        border-left: 4px solid #f59e0b;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+        border: 1px solid #fef3c7;
+    }
+    
+    .word-card:hover {
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+        transform: translateY(-2px);
+    }
+    
+    .word-card-approved {
+        border-left-color: #10b981;
+        background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+        border: 1px solid #d1fae5;
+    }
+    
+    .badge-pending {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        color: #92400e;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 2px solid #fbbf24;
+    }
+    
+    .badge-approved {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+        color: #065f46;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 2px solid #10b981;
+    }
+    
+    .btn-approve {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        padding: 8px 20px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-approve:hover {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    
+    .btn-reject {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        color: white;
+        padding: 8px 20px;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-reject:hover {
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 md:p-6 mt-24">
+            <!-- Header -->
+            <div class="bg-white rounded-16 p-6 mb-6 shadow-lg border border-red-100">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                            <ion-icon name="shield-checkmark" class="text-red-600 text-4xl"></ion-icon>
+                            Aprovação de Palavras
+                        </h1>
+                        <p class="text-gray-600">Aprove ou rejeite palavras de conhecimento para os cultos</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="bg-yellow-50 border-2 border-yellow-300 px-4 py-2 rounded-lg">
+                            <span class="text-yellow-800 font-bold text-lg">{{ pending_count }}</span>
+                            <span class="text-yellow-700 text-sm ml-2">Pendentes</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Palavras Pendentes -->
+            <div class="admin-card p-6 mb-6">
+                <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                    <ion-icon name="time" class="text-yellow-600"></ion-icon>
+                    Aguardando Aprovação
+                </h2>
+
+                {% if pending_words %}
+                    <div class="space-y-4">
+                        {% for word in pending_words %}
+                            <div class="word-card" id="word-{{ word.id }}">
+                                <div class="flex flex-col md:flex-row justify-between gap-4">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-3 mb-3">
+                                            <div class="bg-red-100 p-2 rounded-full">
+                                                <ion-icon name="person" class="text-red-600 text-xl"></ion-icon>
+                                            </div>
+                                            <div>
+                                                <h3 class="font-bold text-gray-900">{{ word.member.name }}</h3>
+                                                <p class="text-sm text-gray-600">
+                                                    {{ word.get_service_type_display }} - {{ word.service_date|date:"d/m/Y" }}
+                                                </p>
+                                            </div>
+                                            <span class="badge-pending ml-auto">
+                                                <ion-icon name="hourglass"></ion-icon>
+                                                Pendente
+                                            </span>
+                                        </div>
+                                        
+                                        <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                            <p class="text-gray-800 leading-relaxed">{{ word.word }}</p>
+                                        </div>
+                                        
+                                        <p class="text-xs text-gray-500 mt-2">
+                                            Registrada em: {{ word.recorded_at|date:"d/m/Y H:i" }}
+                                        </p>
+                                    </div>
+                                    
+                                    <div class="flex md:flex-col gap-2 md:w-32">
+                                        <button onclick="approveWord({{ word.id }})" class="btn-approve flex-1 md:flex-none flex items-center justify-center gap-2">
+                                            <ion-icon name="checkmark-circle"></ion-icon>
+                                            Aprovar
+                                        </button>
+                                        <button onclick="rejectWord({{ word.id }})" class="btn-reject flex-1 md:flex-none flex items-center justify-center gap-2">
+                                            <ion-icon name="close-circle"></ion-icon>
+                                            Rejeitar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-12">
+                        <div class="inline-block p-6 bg-green-50 rounded-full mb-4">
+                            <ion-icon name="checkmark-done" class="text-6xl text-green-500"></ion-icon>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">Tudo em dia!</h3>
+                        <p class="text-gray-600">Não há palavras aguardando aprovação no momento.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Últimas Aprovadas -->
+            {% if approved_words %}
+                <div class="admin-card p-6">
+                    <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                        <ion-icon name="checkmark-done-circle" class="text-green-600"></ion-icon>
+                        Últimas Aprovadas
+                    </h2>
+
+                    <div class="space-y-3">
+                        {% for word in approved_words %}
+                            <div class="word-card word-card-approved">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-3 mb-2">
+                                            <h3 class="font-bold text-gray-900">{{ word.member.name }}</h3>
+                                            <span class="badge-approved">
+                                                <ion-icon name="checkmark-circle"></ion-icon>
+                                                Aprovada
+                                            </span>
+                                        </div>
+                                        <p class="text-sm text-gray-700 mb-2">{{ word.word|truncatewords:20 }}</p>
+                                        <div class="flex items-center gap-4 text-xs text-gray-500">
+                                            <span>{{ word.get_service_type_display }} - {{ word.service_date|date:"d/m/Y" }}</span>
+                                            <span>Aprovada por {{ word.approved_by.name }} em {{ word.approved_at|date:"d/m H:i" }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    function approveWord(wordId) {
+        if (!confirm('Tem certeza que deseja aprovar esta palavra?')) {
+            return;
+        }
+        
+        fetch(`/admin-panel/ministration/words/approve/${wordId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const wordCard = document.getElementById(`word-${wordId}`);
+                wordCard.style.transition = 'all 0.5s ease';
+                wordCard.style.opacity = '0';
+                wordCard.style.transform = 'translateX(100px)';
+                setTimeout(() => {
+                    wordCard.remove();
+                    location.reload();
+                }, 500);
+            } else {
+                alert('Erro ao aprovar palavra: ' + (data.error || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao aprovar palavra');
+        });
+    }
+    
+    function rejectWord(wordId) {
+        if (!confirm('Tem certeza que deseja REJEITAR esta palavra? Ela será removida permanentemente!')) {
+            return;
+        }
+        
+        fetch(`/admin-panel/ministration/words/reject/${wordId}/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const wordCard = document.getElementById(`word-${wordId}`);
+                wordCard.style.transition = 'all 0.5s ease';
+                wordCard.style.opacity = '0';
+                wordCard.style.transform = 'translateX(-100px)';
+                setTimeout(() => {
+                    wordCard.remove();
+                    location.reload();
+                }, 500);
+            } else {
+                alert('Erro ao rejeitar palavra: ' + (data.error || 'Erro desconhecido'));
+            }
+        })
+        .catch(error => {
+            console.error('Erro:', error);
+            alert('Erro ao rejeitar palavra');
+        });
+    }
+</script>
+{% endblock %}

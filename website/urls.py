@@ -11,8 +11,22 @@ from .views.member import (
 )
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
-from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view
+from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view, member_approve_word, member_reject_word
 from .views.user_management import user_management_view, reset_user_password, change_password_view
+from .views.word_of_knowledge import (
+    word_of_knowledge_list, word_of_knowledge_create, healing_create,
+    service_words_view, mark_word_as_healed
+)
+from .views.ministration_schedule import (
+    schedule_list, schedule_create, schedule_edit, schedule_delete, schedule_detail,
+    export_monthly_schedule_pdf
+)
+from .views.ministration_admin import (
+    MinistrationWordsListView, MinistrationHealingsListView, MinistrationMembersListView,
+    ministration_add_member, ministration_remove_member, ministration_toggle_approver
+)
+from .views.ministration_dashboard import ministration_dashboard
+from .views.word_approval import pending_words_list, approve_word, reject_word
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
     events_list_view, ministries_list_view, neighborhoods_list_view,
@@ -44,10 +58,39 @@ urlpatterns = [
     path('admin-logout/', member_logout_view, name='admin_logout'),  # Redirect old admin logout to unified logout
     path('profile/', member_profile_view, name='member_profile'),
     
+    # Member Word Approval URLs
+    path('words/approve/<int:word_id>/', member_approve_word, name='member_approve_word'),
+    path('words/reject/<int:word_id>/', member_reject_word, name='member_reject_word'),
+    
     # Member Consolidation URLs
     path('consolidation/', member_consolidation_list, name='member_consolidation'),
     path('consolidation/<int:followup_id>/', member_consolidation_detail, name='member_consolidation_detail'),
     path('consolidation/<int:followup_id>/report/', member_consolidation_report, name='member_consolidation_report'),
+    
+    # Words of Knowledge URLs
+    path('words/', word_of_knowledge_list, name='word_of_knowledge_list'),
+    path('words/create/', word_of_knowledge_create, name='word_of_knowledge_create'),
+    path('words/healing/create/', healing_create, name='healing_create'),
+    path('words/service/', service_words_view, name='service_words_view'),
+    path('words/<int:word_id>/mark-healed/', mark_word_as_healed, name='mark_word_as_healed'),
+    
+    # Ministration URLs
+    path('admin-panel/ministration/', ministration_dashboard, name='ministration_dashboard'),
+    path('admin-panel/ministration/schedules/', schedule_list, name='ministration_schedule_list'),
+    path('admin-panel/ministration/schedules/export-pdf/', export_monthly_schedule_pdf, name='export_monthly_schedule_pdf'),
+    path('admin-panel/ministration/schedules/new/', schedule_create, name='ministration_schedule_create'),
+    path('admin-panel/ministration/schedules/<int:schedule_id>/', schedule_detail, name='ministration_schedule_detail'),
+    path('admin-panel/ministration/schedules/<int:schedule_id>/edit/', schedule_edit, name='ministration_schedule_edit'),
+    path('admin-panel/ministration/schedules/<int:schedule_id>/delete/', schedule_delete, name='ministration_schedule_delete'),
+    path('admin-panel/ministration/words/', MinistrationWordsListView.as_view(), name='ministration_words_list'),
+    path('admin-panel/ministration/words/pending/', pending_words_list, name='pending_words_list'),
+    path('admin-panel/ministration/words/approve/<int:word_id>/', approve_word, name='approve_word'),
+    path('admin-panel/ministration/words/reject/<int:word_id>/', reject_word, name='reject_word'),
+    path('admin-panel/ministration/healings/', MinistrationHealingsListView.as_view(), name='ministration_healings_list'),
+    path('admin-panel/ministration/members/', MinistrationMembersListView.as_view(), name='ministration_members_list'),
+    path('admin-panel/ministration/members/<int:member_id>/add/', ministration_add_member, name='ministration_add_member'),
+    path('admin-panel/ministration/members/<int:member_id>/remove/', ministration_remove_member, name='ministration_remove_member'),
+    path('admin-panel/ministration/members/<int:member_id>/toggle-approver/', ministration_toggle_approver, name='ministration_toggle_approver'),
     
     # Admin Panel URLs
     path('admin-panel/', dashboard_view, name='admin_dashboard'),

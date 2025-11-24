@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Escala de Ministração - {{ month_name }} {{ year }}</title>
+    <style>
+        @font-face {
+            font-family: 'Integral';
+            src: url('{{ font_path }}') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+        
+        @page {
+            size: A4;
+            margin: 1.5cm;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #1f2937;
+            line-height: 1.5;
+            background: #ffffff;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 35px;
+            padding: 0;
+            background: transparent;
+            border-bottom: 3px solid #dc2626;
+            padding-bottom: 20px;
+        }
+        
+        .header h1 {
+            font-family: "Integral", sans-serif;
+            font-size: 36px;
+            margin-bottom: 5px;
+            font-weight: normal;
+            letter-spacing: -0.5px;
+            color: #111827;
+        }
+        
+        .header h2 {
+            font-size: 18px;
+            font-weight: 500;
+            color: #dc2626;
+        }
+        
+        .schedule-block {
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+            background: white;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .schedule-header {
+            background: #f9fafb;
+            padding: 16px 20px;
+            border-bottom: 2px solid #dc2626;
+        }
+        
+        .schedule-title {
+            margin-bottom: 10px;
+        }
+        
+        .schedule-header h3 {
+            font-size: 16px;
+            color: #111827;
+            font-weight: 600;
+        }
+        
+        .schedule-dates {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+            color: #4b5563;
+        }
+        
+        .schedule-dates span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .date-icon {
+            color: #dc2626;
+            font-weight: bold;
+        }
+        
+        .schedule-body {
+            padding: 20px;
+        }
+        
+        .members-section h4 {
+            color: #374151;
+            font-size: 14px;
+            margin-bottom: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .members-section h4 .count {
+            background: #dc2626;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .members-list {
+            line-height: 2;
+        }
+        
+        .member-item {
+            color: #374151;
+            font-size: 13px;
+            padding: 4px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .member-icon {
+            color: #dc2626;
+            font-size: 12px;
+        }
+        
+        .leader-section {
+            background: #f9fafb;
+            border-left: 4px solid #6b7280;
+            border-radius: 8px;
+            padding: 16px 18px;
+            margin-bottom: 20px;
+        }
+        
+        .leader-section h4 {
+            color: #374151;
+            font-size: 14px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            letter-spacing: 0.5px;
+        }
+        
+        .leader-icon {
+            color: #6b7280;
+            font-size: 16px;
+        }
+        
+        .leader-item {
+            color: #1f2937;
+            font-size: 14px;
+            padding: 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+        
+        .notes-box {
+            background: #fef2f2;
+            border-left: 4px solid #dc2626;
+            border-radius: 6px;
+            padding: 14px 16px;
+            margin-top: 15px;
+        }
+        
+        .notes-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #dc2626;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+        
+        .notes-box p {
+            font-size: 13px;
+            color: #374151;
+            line-height: 1.6;
+        }
+        
+        .no-members {
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 16px;
+            border-radius: 6px;
+            text-align: center;
+            font-size: 13px;
+            border: 1px dashed #fca5a5;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-active {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .status-inactive {
+            background: #9ca3af;
+            color: white;
+        }
+        
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+            text-align: center;
+            color: #6b7280;
+            font-size: 11px;
+        }
+        
+        .footer p {
+            margin: 3px 0;
+        }
+        
+        .footer strong {
+            color: #dc2626;
+            font-size: 12px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: #f9fafb;
+            border: 2px dashed #d1d5db;
+            border-radius: 12px;
+            margin: 40px 0;
+        }
+        
+        .empty-state h3 {
+            color: #374151;
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        
+        .empty-state p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Escala de Ministração</h1>
+        <h2>{{ month_name }} de {{ year }}</h2>
+    </div>
+
+    {% if schedules %}
+        {% for schedule in schedules %}
+        <div class="schedule-block">
+            <div class="schedule-header">
+                <div class="schedule-title">
+                    <h3>Semana {{ schedule.week_start_date|date:"d/m/Y" }}</h3>
+                </div>
+                <div class="schedule-dates">
+                    <span><span class="date-icon">▸</span> Quarta: {{ schedule.get_wednesday_date|date:"d/m/Y" }}</span>
+                    <span><span class="date-icon">▸</span> Domingo: {{ schedule.get_sunday_date|date:"d/m/Y" }}</span>
+                </div>
+            </div>
+            
+            <div class="schedule-body">
+                <!-- Líderes da Escala -->
+                {% if schedule.leaders.all %}
+                <div class="leader-section">
+                    <h4>
+                        Liderança da Equipe:
+                    </h4>
+                    <div class="members-list">
+                        {% for leader in schedule.leaders.all %}
+                            <div class="leader-item">
+                                <span class="leader-icon">★</span>
+                                <span>{{ leader.name }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Ministradores -->
+                <div class="members-section">
+                    <h4>
+                        Ministradores Escalados
+                        <span class="count">{{ schedule.members.count }}</span>
+                    </h4>
+                    
+                    {% if schedule.members.all %}
+                        <div class="members-list">
+                            {% for member in schedule.members.all %}
+                                {% if member not in schedule.leaders.all %}
+                                <div class="member-item">
+                                    <span class="member-icon">●</span>
+                                    <span>{{ member.name }}</span>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="no-members">
+                            Nenhum ministrador escalado para esta semana
+                        </div>
+                    {% endif %}
+                </div>
+                
+                {% if schedule.notes %}
+                <div class="notes-box">
+                    <div class="notes-label">Observações</div>
+                    <p>{{ schedule.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <h3>Nenhuma Escala Encontrada</h3>
+            <p>Não há escalas cadastradas para {{ month_name }} de {{ year }}.</p>
+        </div>
+    {% endif %}
+
+    <div class="footer">
+        <p><strong>Igreja Filadelfia</strong></p>
+        <p>Ministério de Ministração</p>
+    </div>
+</body>
+</html>

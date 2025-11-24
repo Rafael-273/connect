@@ -27,3 +27,4 @@ azure-keyvault-secrets==4.9.0
 channels-redis==4.2.0
 django-storages==1.14.2
 boto3==1.34.124
+weasyprint==62.3
