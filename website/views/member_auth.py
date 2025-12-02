@@ -342,3 +342,22 @@ def member_reject_word(request, word_id):
         })
     
     return redirect('member_dashboard')
+
+
+@login_required
+def redirect_after_login(request):
+    """Redireciona o usuário para a página apropriada após login"""
+    user = request.user
+    
+    # Se é admin ou tem acesso ao painel, vai para admin-panel
+    if user.has_admin_access():
+        return redirect('admin_dashboard')
+    
+    # Se é membro, vai para dashboard de membros
+    if hasattr(user, 'member'):
+        return redirect('member_dashboard')
+    
+    # Se não tem nenhum dos dois, mostra mensagem de erro
+    messages.error(request, 'Acesso negado. Você precisa estar cadastrado como membro ou ter permissões de administrador.')
+    logout(request)
+    return redirect('member_login')

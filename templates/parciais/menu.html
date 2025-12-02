@@ -1,46 +1,60 @@
 {% load static %}
 
 <header class="w-full transition duration-800 ease-in-out fixed left-0 z-50 {% if navbar_transparent %}bg-transparent{% else %}bg-[var(--color-primary)]{% endif %}" id="navbar" style="top: -2px;">
-    <nav class="container mx-auto flex justify-between items-center p-4 h-24">
+    <nav class="container mx-auto flex justify-between items-center px-4 py-8">
         {% if '/admin-panel/' not in request.path %}
-        <button id="menu-toggle" class="flex items-center text-4xl md:hidden focus:outline-none ml-2">
+        <button id="menu-toggle" class="flex items-center text-3xl md:hidden focus:outline-none">
             <ion-icon name="menu-outline" style="color: var(--text-color-on-primary);"></ion-icon>
         </button>
         {% endif %}
 
-        <a href="" class="md:flex-grow-0 {% if '/admin-panel/' in request.path %}mx-auto md:ml-4{% else %}mx-auto md:mx-0 md:ml-4{% endif %} min-w-[150px]">
-            <img class="hidden md:flex w-8 md:w-24 mx-auto md:mx-0" src="{% static 'assets/logo.png' %}" alt="logo">
-            <img class="flex md:hidden w-24 md:w-8 mx-auto md:mx-0" src="{% static 'assets/logo.png' %}" alt="logo">
-        </a>
+        <!-- Logo e navegação alinhados à esquerda -->
+        <div class="flex items-center gap-8 {% if '/admin-panel/' in request.path %}mx-auto{% endif %}">
+            <a href="{% url 'home' %}" class="flex items-center">
+                <img class="h-10 w-auto object-contain" src="{% static 'assets/logo.png' %}" alt="Igreja Filadélfia">
+            </a>
+
+            {% if '/admin-panel/' not in request.path %}
+            <ul class="hidden md:flex items-center space-x-8">
+                <li><a href="{% url 'home' %}" class="font-semibold text-[0.95rem] hover:text-white/80 transition duration-300" style="color: var(--text-color-on-primary);">Início</a></li>
+                <li><a href="{% url 'event_list' %}" class="font-semibold text-[0.95rem] hover:text-white/80 transition duration-300" style="color: var(--text-color-on-primary);">Eventos</a></li>
+            </ul>
+            {% endif %}
+        </div>
 
         {% if '/admin-panel/' not in request.path %}
-        <a href="https://www.instagram.com/filadelfiaitaipuacu/" target="_blank" class="md:hidden text-3xl mr-2 flex justify-center">
+        <a href="https://www.instagram.com/filadelfiaitaipuacu/" target="_blank" class="md:hidden text-3xl flex justify-center">
             <ion-icon name="logo-instagram" style="color: var(--text-color-on-primary);"></ion-icon>
         </a>
 
-        <div class="hidden md:flex md:flex-grow md:items-center md:justify-between">
-            <ul class="flex space-x-12">
-                <li><a href="" class="font-semibold text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">|</a></li>
-                <li><a href="" class="font-semibold text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Início</a></li>
-                <li><a href="{% url 'event_list' %}" class="font-semibold text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Eventos</a></li>
-            </ul>
+        <!-- Botão da área de membros à direita -->
+        <div class="hidden md:flex items-center gap-3">
+            <a href="{% url 'member_login' %}" class="px-5 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 rounded-lg font-semibold text-[0.9rem] transition-all duration-300" style="color: var(--text-color-on-primary);">
+                <span class="flex items-center gap-2">
+                    <ion-icon name="person-outline" class="text-lg"></ion-icon>
+                    Área do Membro
+                </span>
+            </a>
         </div>
-
-        <a href="">
-            <div class="hidden md:flex space-x-4">
-            </div>
-        </a>
         {% endif %}
     </nav>
 
     {% if '/admin-panel/' not in request.path %}
-    <ul id="mobile-menu" class="md:hidden flex-col items-center space-y-6 mt-2 py-4 absolute w-full top-20 hidden p-4"
+    <ul id="mobile-menu" class="md:hidden flex-col items-center space-y-4 py-6 absolute w-full top-20 hidden"
         style="z-index: 1; background-color: {% if request.resolver_match.url_name == 'event_list' %}var(--color-danger){% else %}var(--color-primary){% endif %};">
-        <li class="p-2">
-            <a href="" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Início</a>
+        <li class="w-full text-center">
+            <a href="{% url 'home' %}" class="block py-3 text-[0.95rem] font-medium hover:bg-white/10 transition duration-300" style="color: var(--text-color-on-primary);">Início</a>
         </li>
-        <li class="p-2">
-            <a href="{% url 'event_list' %}" class="text-[0.9rem] hover:text-black transition duration-500" style="color: var(--text-color-on-primary);">Eventos</a>
+        <li class="w-full text-center">
+            <a href="{% url 'event_list' %}" class="block py-3 text-[0.95rem] font-medium hover:bg-white/10 transition duration-300" style="color: var(--text-color-on-primary);">Eventos</a>
+        </li>
+        <li class="w-full px-4">
+            <a href="{% url 'member_login' %}" class="block py-3 px-5 bg-white/10 border border-white/20 rounded-lg text-center font-semibold text-[0.95rem] hover:bg-white/20 transition-all duration-300" style="color: var(--text-color-on-primary);">
+                <span class="flex items-center justify-center gap-2">
+                    <ion-icon name="person-outline" class="text-lg"></ion-icon>
+                    Área do Membro
+                </span>
+            </a>
         </li>
     </ul>
     {% endif %}

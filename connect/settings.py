@@ -147,7 +147,7 @@ AUTH_USER_MODEL = 'website.User'
 
 # Authentication URLs
 LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/dashboard/'
+LOGIN_REDIRECT_URL = '/redirect-after-login/'
 LOGOUT_REDIRECT_URL = '/login/'
 
 CSRF_TRUSTED_ORIGINS = [

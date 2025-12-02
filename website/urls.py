@@ -11,7 +11,7 @@ from .views.member import (
 )
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
-from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view, member_approve_word, member_reject_word
+from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view, member_approve_word, member_reject_word, redirect_after_login
 from .views.user_management import user_management_view, reset_user_password, change_password_view
 from .views.word_of_knowledge import (
     word_of_knowledge_list, word_of_knowledge_create, healing_create,
@@ -53,6 +53,7 @@ urlpatterns = [
     # Authentication URLs (Unified Login System)
     path('login/', MemberLoginView.as_view(), name='member_login'),
     path('admin-login/', MemberLoginView.as_view(), name='admin_login'),  # Redirect old admin login to unified login
+    path('redirect-after-login/', redirect_after_login, name='redirect_after_login'),  # Smart redirect
     path('dashboard/', MemberDashboardView.as_view(), name='member_dashboard'),
     path('logout/', member_logout_view, name='member_logout'),
     path('admin-logout/', member_logout_view, name='admin_logout'),  # Redirect old admin logout to unified logout

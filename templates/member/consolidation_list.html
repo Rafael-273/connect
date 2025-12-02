@@ -59,32 +59,11 @@
                     <span class="text-sm font-medium">Voltar</span>
                 </a>
             </div>
-
-            <!-- Estatísticas modernas -->
-            <div class="grid grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
-                <div class="bg-white/80 backdrop-blur-sm rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-center shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-white/50">
-                    <div class="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl sm:rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-users text-white text-base sm:text-lg"></i>
-                    </div>
-                    <div class="text-xl sm:text-2xl font-bold text-gray-800 mb-1">{{ followups|length }}</div>
-                    <div class="text-xs sm:text-sm text-gray-600">Consolidados Ativos</div>
-                </div>
-                
-                <div class="bg-white/80 backdrop-blur-sm rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-center shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-white/50">
-                    <div class="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl sm:rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-chart-line text-white text-base sm:text-lg"></i>
-                    </div>
-                    <div class="text-xl sm:text-2xl font-bold text-gray-800 mb-1">
-                        {% widthratio followups|length 1 100 %}%
-                    </div>
-                    <div class="text-xs sm:text-sm text-gray-600">Taxa de Envolvimento</div>
-                </div>
-            </div>
         </div>
     </section>
 
     <!-- Lista de Consolidados -->
-    <section class="px-4 sm:px-8 pb-8 space-y-3 sm:space-y-4 animate-fade">
+    <section class="px-4 sm:px-8 pb-8 space-y-3 sm:space-y-4 animate-fade mt-[-2rem]">
         {% if followups %}
             {% for followup in followups %}
             <a href="{% url 'member_consolidation_detail' followup.id %}" 
@@ -101,8 +80,8 @@
                             
                             <!-- Info -->
                             <div class="flex-1 min-w-0">
-                                <h3 class="text-xl sm:text-2xl font-bold text-gray-800 truncate">{{ followup.accompanied.name }}</h3>
-                                <p class="text-xs sm:text-sm text-gray-600 flex items-center gap-2 truncate">
+                                <h3 class="text-lg sm:text-2xl font-bold text-gray-800 truncate">{{ followup.accompanied.name }}</h3>
+                                <p class="text-sm sm:text-sm text-gray-600 flex items-center gap-2 truncate">
                                     {% if followup.template %}
                                         <i class="fas fa-book-open text-orange-500 flex-shrink-0"></i>
                                         <span class="truncate">{{ followup.template.name }}</span>
@@ -126,27 +105,27 @@
                     <!-- Barra de Progresso -->
                     <div>
                         <div class="flex justify-between items-center mb-2">
-                            <span class="text-2xs sm:text-xl font-semibold text-gray-700">Progresso</span>
-                            <span class="text-xs sm:text-sm font-bold text-orange-600">{{ followup.progress_percentage }}%</span>
+                            <span class="text-sm sm:text-base font-semibold text-gray-700">Progresso</span>
+                            <span class="text-sm sm:text-sm font-bold text-orange-600">{{ followup.progress_percentage }}%</span>
                         </div>
                         <div class="h-2.5 sm:h-3 bg-gray-100 rounded-full overflow-hidden shadow-inner">
                             <div class="h-full bg-gradient-to-r from-orange-500 to-red-600 rounded-full transition-all duration-500 shadow-lg"
                                  style="width: {{ followup.progress_percentage }}%"></div>
                         </div>
-                        <p class="text-xs text-gray-500 mt-3">
+                        <p class="text-sm sm:text-sm text-gray-500 mt-2">
                             {{ followup.completed_steps }} de {{ followup.total_steps }} relatórios enviados
                         </p>
                     </div>
 
                     <!-- Status e Info -->
                     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3 sm:pt-4 border-t border-gray-100">
-                        <div class="flex items-center gap-3 sm:gap-4 text-xs text-gray-600">
-                            <span class="flex items-center gap-1">
+                        <div class="flex items-center gap-3 sm:gap-4 text-sm sm:text-xs text-gray-600">
+                            <span class="flex items-center gap-1.5">
                                 <i class="far fa-calendar"></i>
                                 <span class="hidden sm:inline">{{ followup.start_date|date:"d/m/Y" }}</span>
                                 <span class="sm:hidden">{{ followup.start_date|date:"d/m" }}</span>
                             </span>
-                            <span class="flex items-center gap-1">
+                            <span class="flex items-center gap-1.5">
                                 <i class="far fa-clock"></i>
                                 <span class="hidden sm:inline">{{ followup.last_contact|date:"d/m/Y" }}</span>
                                 <span class="sm:hidden">{{ followup.last_contact|date:"d/m" }}</span>
@@ -154,12 +133,12 @@
                         </div>
                         
                         {% if followup.status == 'overdue' %}
-                        <span class="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full inline-flex items-center justify-center">
-                            <i class="fas fa-exclamation-triangle mr-1"></i>Atrasado
+                        <span class="px-3 py-1.5 bg-red-100 text-red-700 text-sm sm:text-xs font-bold rounded-full inline-flex items-center justify-center">
+                            <i class="fas fa-exclamation-triangle mr-1.5"></i>Atrasado
                         </span>
                         {% elif followup.status == 'active' %}
-                        <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full inline-flex items-center justify-center">
-                            <i class="fas fa-check-circle mr-1"></i>Em dia
+                        <span class="px-3 py-1.5 bg-green-100 text-green-700 text-sm sm:text-xs font-bold rounded-full inline-flex items-center justify-center">
+                            <i class="fas fa-check-circle mr-1.5"></i>Em dia
                         </span>
                         {% endif %}
                     </div>
@@ -186,39 +165,39 @@
     </section>
 
     <!-- Menu Inferior Flutuante -->
-    <nav id="bottomNav" class="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[95%] sm:w-[90%] max-w-lg rounded-xl sm:rounded-2xl shadow-2xl border-2 px-1.5 sm:px-2 py-2 sm:py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(245, 158, 11, 0.2);">
+    <nav id="bottomNav" class="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[95%] sm:w-[90%] max-w-lg rounded-xl sm:rounded-2xl shadow-2xl border-2 px-2 sm:px-2 py-2.5 sm:py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(245, 158, 11, 0.2);">
         <!-- Home -->
-        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-1.5 sm:p-2 px-2 sm:px-3 group">
-            <div class="py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(245, 158, 11, 0.05); border-color: rgba(245, 158, 11, 0.15);">
-                <i class="fas fa-home text-base sm:text-lg transition-transform group-hover:scale-110" style="color: #F59E0B;"></i>
+        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 sm:p-2 px-2 sm:px-3 group">
+            <div class="py-2.5 sm:py-2.5 px-4 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(245, 158, 11, 0.05); border-color: rgba(245, 158, 11, 0.15);">
+                <i class="fas fa-home text-lg sm:text-lg transition-transform group-hover:scale-110" style="color: #F59E0B;"></i>
             </div>
-            <span class="text-xs group-hover:font-bold transition-all">Home</span>
+            <span class="text-[11px] sm:text-xs group-hover:font-bold transition-all">Home</span>
         </a>
         
         <!-- Consolidação (Ativo) -->
-        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-1.5 sm:p-2 px-2 sm:px-3 relative group">
+        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-bold transition-all duration-300 hover:scale-105 p-2 sm:p-2 px-2 sm:px-3 relative group">
             <div class="relative">
-                <div class="py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300" style="background-color: #F59E0B;">
-                    <i class="fas fa-user-graduate text-white text-base sm:text-lg"></i>
+                <div class="py-2.5 sm:py-2.5 px-4 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300" style="background-color: #F59E0B;">
+                    <i class="fas fa-user-graduate text-white text-lg sm:text-lg"></i>
                 </div>
             </div>
-            <span class="text-xs" style="color: #F59E0B;">Consolidar</span>
+            <span class="text-[11px] sm:text-xs" style="color: #F59E0B;">Consolidar</span>
         </a>
         
         <!-- Curas -->
-        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-1.5 sm:p-2 px-2 sm:px-3 group">
-            <div class="py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(251, 146, 60, 0.05); border-color: rgba(251, 146, 60, 0.15);">
-                <i class="fas fa-heart-pulse text-base sm:text-lg transition-transform group-hover:scale-110" style="color: #FB923C;"></i>
+        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 sm:p-2 px-2 sm:px-3 group">
+            <div class="py-2.5 sm:py-2.5 px-4 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(251, 146, 60, 0.05); border-color: rgba(251, 146, 60, 0.15);">
+                <i class="fas fa-heart-pulse text-lg sm:text-lg transition-transform group-hover:scale-110" style="color: #FB923C;"></i>
             </div>
-            <span class="text-xs group-hover:font-bold transition-all">Curas</span>
+            <span class="text-[11px] sm:text-xs group-hover:font-bold transition-all">Curas</span>
         </a>
         
         <!-- Perfil -->
-        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-1.5 sm:p-2 px-2 sm:px-3 group">
-            <div class="py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(217, 119, 6, 0.05); border-color: rgba(217, 119, 6, 0.15);">
-                <i class="fas fa-user-circle text-base sm:text-lg transition-transform group-hover:scale-110" style="color: #D97706;"></i>
+        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 sm:p-2 px-2 sm:px-3 group">
+            <div class="py-2.5 sm:py-2.5 px-4 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(217, 119, 6, 0.05); border-color: rgba(217, 119, 6, 0.15);">
+                <i class="fas fa-user-circle text-lg sm:text-lg transition-transform group-hover:scale-110" style="color: #D97706;"></i>
             </div>
-            <span class="text-xs group-hover:font-bold transition-all">Perfil</span>
+            <span class="text-[11px] sm:text-xs group-hover:font-bold transition-all">Perfil</span>
         </a>
     </nav>
 {% endblock %}

@@ -101,8 +101,8 @@ class FollowUpReportForm(forms.ModelForm):
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
             }),
             'description': forms.Textarea(attrs={
-                'rows': 4,
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)]',
+                'rows': 8,
+                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)] min-h-[200px] md:min-h-[150px]',
                 'placeholder': 'Descreva como foi este período de acompanhamento...'
             }),
             'attended_service': forms.CheckboxInput(attrs={
