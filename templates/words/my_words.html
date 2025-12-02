@@ -38,17 +38,31 @@
     
     /* Tab styles */
     .tab-button {
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .tab-button:not(.active):hover {
+        background-color: rgba(255, 255, 255, 0.8);
+        transform: translateY(-1px);
     }
     .tab-button.active {
-        border-bottom-color: #C90905 !important;
-        color: #C90905 !important;
+        background-color: #6b7280 !important;
+        color: white !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    }
+    .tab-button:not(.active) {
+        background: transparent;
+        color: #9ca3af;
     }
     .tab-content {
         display: none;
+        animation: fadeInUp 0.4s ease-out;
     }
     .tab-content.active {
         display: block;
+    }
+    @keyframes tabFade {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 </style>
 {% endblock %}
@@ -63,43 +77,14 @@
         <div class="absolute top-0 left-0 w-48 h-48 rounded-full -ml-24 -mt-16 opacity-20" style="background: radial-gradient(circle, rgba(230, 57, 70, 0.1), transparent);"></div>
         
         <div class="relative z-10 p-4 sm:p-6">
-            <div class="flex justify-between items-center mb-6">
+            <div class="flex justify-between items-center">
                 <div class="flex items-center gap-4">
                     <a href="{% url 'member_dashboard' %}" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
                         <i class="fas fa-arrow-left"></i>
                     </a>
                     <div>
                         <h1 class="text-2xl sm:text-3xl font-black text-gray-900">Palavras<span style="color: #C90905;"> e Curas</span></h1>
-                        <p class="text-sm text-gray-600 font-medium">Histórico de palavras recebidas</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Stats Cards -->
-            <div class="grid grid-cols-2 gap-3 sm:gap-4">
-                <div class="bg-white rounded-xl p-4 border-2 relative overflow-hidden" style="border-color: rgba(201, 9, 5, 0.15);">
-                    <div class="absolute right-0 top-0 w-16 h-16 rounded-full -mr-8 -mt-8 opacity-10" style="background: #C90905;"></div>
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
-                            <i class="fas fa-book-open text-lg sm:text-xl" style="color: #C90905;"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-600 font-bold uppercase tracking-wider">Palavras</p>
-                            <p class="text-2xl sm:text-3xl font-black text-gray-900">{{ total_words }}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white rounded-xl p-4 border-2 relative overflow-hidden" style="border-color: rgba(22, 163, 74, 0.15);">
-                    <div class="absolute right-0 top-0 w-16 h-16 rounded-full -mr-8 -mt-8 opacity-10" style="background: #C90905;"></div>
-                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                        <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center" style="background: rgba(22, 163, 74, 0.1);">
-                            <i class="fas fa-heartbeat text-lg sm:text-xl" style="color: #C90905;"></i>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-600 font-bold uppercase tracking-wider">Curas</p>
-                            <p class="text-2xl sm:text-3xl font-black text-gray-900">{{ total_healings }}</p>
-                        </div>
+                        <p class="text-sm sm:text-sm text-gray-600 font-medium">Histórico de palavras recebidas</p>
                     </div>
                 </div>
             </div>
@@ -110,7 +95,7 @@
     {% if messages %}
     <div class="px-4 sm:px-6 pt-4 max-w-4xl mx-auto">
         {% for message in messages %}
-        <div class="message-alert px-4 py-3 rounded-xl mb-3 text-sm font-bold border shadow-sm flex items-center gap-3
+        <div class="message-alert px-4 py-3 rounded-xl mb-3 text-sm sm:text-sm font-bold border shadow-sm flex items-center gap-3
             {% if message.tags == 'error' %}bg-red-50 border-red-100 text-red-600
             {% elif message.tags == 'success' %}bg-green-50 border-green-100 text-green-700
             {% elif message.tags == 'warning' %}bg-yellow-50 border-yellow-100 text-yellow-700
@@ -151,11 +136,11 @@
     <!-- Action Buttons -->
     <div class="px-4 sm:px-6 md:px-8 lg:px-12 py-6">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            <a href="{% url 'healing_create' %}" class="flex items-center justify-center gap-2 px-4 py-3.5 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 shadow-lg shadow-red-900/20" style="background-color: #C90905;">
+            <a href="{% url 'healing_create' %}" class="flex items-center justify-center gap-2 px-4 py-3.5 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 shadow-lg shadow-red-900/20 text-sm sm:text-base" style="background-color: #C90905;">
                 <i class="fas fa-heartbeat"></i>
                 <span>Registrar Cura</span>
             </a>
-            <a href="{% url 'service_words_view' %}" class="flex items-center justify-center gap-2 px-4 py-3.5 bg-white text-gray-900 font-bold rounded-xl transition-all hover:-translate-y-0.5 border-2" style="border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
+            <a href="{% url 'service_words_view' %}" class="flex items-center justify-center gap-2 px-4 py-3.5 bg-white text-gray-900 font-bold rounded-xl transition-all hover:-translate-y-0.5 border-2 text-sm sm:text-base" style="border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
                 <i class="fas fa-calendar-alt"></i>
                 <span>Palavras do Culto</span>
             </a>
@@ -164,12 +149,12 @@
 
     <!-- Tabs Navigation -->
     <div class="px-4 sm:px-6 md:px-8 lg:px-12 mb-6">
-        <div class="bg-white rounded-xl border-2 p-1 flex gap-1" style="border-color: rgba(201, 9, 5, 0.15);">
-            <button onclick="switchTab('words')" id="tab-words" class="tab-button active flex-1 px-4 py-3 rounded-lg font-bold text-sm transition-all border-b-4" style="border-bottom-color: #C90905; color: #C90905;">
-                <i class="fas fa-book-open mr-2"></i>Palavras ({{ total_words }})
+        <div class="bg-gray-50 rounded-2xl p-1.5 flex gap-2">
+            <button onclick="switchTab('words')" id="tab-words" class="tab-button active flex-1 px-5 py-3.5 rounded-xl font-bold text-sm sm:text-base transition-all duration-300" style="background-color: #6b7280; color: white; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+                <i class="fas fa-book-open mr-2"></i><span class="hidden sm:inline">Palavras</span><span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-black ml-1" style="background-color: rgba(255, 255, 255, 0.25);">{{ total_words }}</span>
             </button>
-            <button onclick="switchTab('healings')" id="tab-healings" class="tab-button flex-1 px-4 py-3 rounded-lg font-bold text-sm transition-all border-b-4 text-gray-600" style="border-bottom-color: transparent;">
-                <i class="fas fa-heart-pulse mr-2"></i>Curas ({{ total_healings }})
+            <button onclick="switchTab('healings')" id="tab-healings" class="tab-button flex-1 px-5 py-3.5 rounded-xl font-bold text-sm sm:text-base transition-all duration-300 text-gray-500 hover:bg-white">
+                <i class="fas fa-heart-pulse mr-2"></i><span class="hidden sm:inline">Curas</span><span class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-black ml-1" style="background-color: rgba(156, 163, 175, 0.1); color: #9ca3af;">{{ total_healings }}</span>
             </button>
         </div>
     </div>
@@ -183,16 +168,16 @@
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-2 flex-wrap">
                             {% if word.is_approved %}
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-white" style="background-color: #16a34a;">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs sm:text-xs font-bold text-white" style="background-color: #16a34a;">
                                     <i class="fas fa-check-circle mr-1"></i>Aprovada
                                 </span>
                             {% else %}
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-white" style="background-color: #eab308;">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs sm:text-xs font-bold text-white" style="background-color: #eab308;">
                                     <i class="fas fa-clock mr-1"></i>Aguardando Aprovação
                                 </span>
                             {% endif %}
                             
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold" style="background-color: rgba(147, 51, 234, 0.1); color: #9333ea;">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs sm:text-xs font-bold" style="background-color: rgba(147, 51, 234, 0.1); color: #9333ea;">
                                 <i class="fas fa-church mr-1"></i>{{ word.get_service_type_display }}
                             </span>
                         </div>
@@ -207,7 +192,7 @@
                     {% endif %}
                 </div>
 
-                <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                <div class="flex flex-wrap items-center gap-3 text-xs sm:text-xs text-gray-500">
                     <span>
                         <i class="far fa-calendar mr-1"></i>
                         Culto: {{ word.service_date|date:"d/m/Y" }}
@@ -229,8 +214,8 @@
                 <div class="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center" style="background: rgba(147, 51, 234, 0.1);">
                     <i class="fas fa-book-open text-3xl" style="color: #9333ea;"></i>
                 </div>
-                <h3 class="text-xl font-black text-gray-900 mb-2">Nenhuma palavra registrada</h3>
-                <p class="text-sm text-gray-600 mb-8 max-w-md mx-auto">
+                <h3 class="text-xl sm:text-xl font-black text-gray-900 mb-2">Nenhuma palavra registrada</h3>
+                <p class="text-sm sm:text-sm text-gray-600 mb-8 max-w-md mx-auto">
                     Você ainda não registrou palavras de conhecimento.
                 </p>
             </div>
@@ -248,18 +233,18 @@
                     </div>
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-2 flex-wrap">
-                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-white" style="{% if healing.healing_type == 'total' %}background-color: #16a34a;{% else %}background-color: #eab308;{% endif %}">
+                            <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs sm:text-xs font-bold text-white" style="{% if healing.healing_type == 'total' %}background-color: #16a34a;{% else %}background-color: #eab308;{% endif %}">
                                 <i class="fas fa-heart mr-1"></i>Cura {{ healing.get_healing_type_display }}
                             </span>
                             {% if healing.word_of_knowledge %}
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold" style="background-color: rgba(147, 51, 234, 0.1); color: #9333ea;">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs sm:text-xs font-bold" style="background-color: rgba(147, 51, 234, 0.1); color: #9333ea;">
                                     <i class="fas fa-link mr-1"></i>Vinculada à Palavra
                                 </span>
                             {% endif %}
                         </div>
                         
                         {% if healing.healed_person_name %}
-                            <p class="text-lg font-bold text-gray-900 mb-2">{{ healing.healed_person_name }}</p>
+                            <p class="text-base sm:text-lg font-bold text-gray-900 mb-2">{{ healing.healed_person_name }}</p>
                         {% endif %}
                         
                         <p class="text-gray-800 leading-relaxed text-sm sm:text-base mb-3">{{ healing.description }}</p>
@@ -267,13 +252,13 @@
                         {% if healing.body_part or healing.condition %}
                             <div class="bg-gray-50 rounded-lg p-3 space-y-1.5 mb-3">
                                 {% if healing.condition %}
-                                    <p class="text-sm text-gray-700">
+                                    <p class="text-sm sm:text-sm text-gray-700">
                                         <i class="fas fa-stethoscope mr-2" style="color: #C90905;"></i>
                                         <span class="font-bold">Condição:</span> {{ healing.condition }}
                                     </p>
                                 {% endif %}
                                 {% if healing.body_part %}
-                                    <p class="text-sm text-gray-700">
+                                    <p class="text-sm sm:text-sm text-gray-700">
                                         <i class="fas fa-hand-pointer mr-2" style="color: #C90905;"></i>
                                         <span class="font-bold">Parte do corpo:</span> {{ healing.body_part }}
                                     </p>
@@ -283,14 +268,14 @@
                         
                         {% if healing.word_of_knowledge %}
                             <div class="bg-purple-50 rounded-lg p-3 border-2" style="border-color: rgba(147, 51, 234, 0.15);">
-                                <p class="text-xs font-bold mb-1" style="color: #9333ea;">PALAVRA VINCULADA:</p>
-                                <p class="text-sm text-gray-700">{{ healing.word_of_knowledge.word }}</p>
+                                <p class="text-xs sm:text-xs font-bold mb-1" style="color: #9333ea;">PALAVRA VINCULADA:</p>
+                                <p class="text-sm sm:text-sm text-gray-700">{{ healing.word_of_knowledge.word }}</p>
                             </div>
                         {% endif %}
                     </div>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                <div class="flex flex-wrap items-center gap-3 text-xs sm:text-xs text-gray-500">
                     <span>
                         <i class="far fa-calendar mr-1"></i>
                         Cura: {{ healing.healing_date|date:"d/m/Y" }}
@@ -305,11 +290,11 @@
                 <div class="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
                     <i class="fas fa-heart-pulse text-3xl" style="color: #C90905;"></i>
                 </div>
-                <h3 class="text-xl font-black text-gray-900 mb-2">Nenhuma cura registrada</h3>
-                <p class="text-sm text-gray-600 mb-8 max-w-md mx-auto">
+                <h3 class="text-xl sm:text-xl font-black text-gray-900 mb-2">Nenhuma cura registrada</h3>
+                <p class="text-sm sm:text-sm text-gray-600 mb-8 max-w-md mx-auto">
                     Você ainda não registrou curas.
                 </p>
-                <a href="{% url 'healing_create' %}" class="inline-flex items-center gap-2 px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5" style="background-color: #C90905;">
+                <a href="{% url 'healing_create' %}" class="inline-flex items-center gap-2 px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 text-sm sm:text-base" style="background-color: #C90905;">
                     <i class="fas fa-heart-pulse"></i>
                     <span>Registrar Cura</span>
                 </a>
@@ -321,7 +306,7 @@
 <!-- Bottom Navigation -->
 <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-lg rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
     <!-- Home -->
-    <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+    <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
         <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
             <i class="fas fa-home text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
         </div>
@@ -329,7 +314,7 @@
     </a>
     
     <!-- Consolidação -->
-    <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+    <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
         <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
             <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
         </div>
@@ -337,7 +322,7 @@
     </a>
     
     <!-- Curas (Ativo) -->
-    <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
+    <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
         <div class="relative">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #C90905;">
                 <i class="fas fa-heart-pulse text-white text-lg"></i>
@@ -347,7 +332,7 @@
     </a>
     
     <!-- Perfil -->
-    <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+    <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
         <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(230, 57, 70, 0.05); border-color: rgba(230, 57, 70, 0.15);">
             <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #E63946;"></i>
         </div>
@@ -363,11 +348,19 @@
             content.classList.remove('active');
         });
         
-        // Remove active class from all tab buttons
+        // Remove active class from all tab buttons and reset styles
         document.querySelectorAll('.tab-button').forEach(button => {
             button.classList.remove('active');
-            button.style.borderBottomColor = 'transparent';
-            button.style.color = '#6b7280';
+            button.style.background = 'transparent';
+            button.style.color = '#9ca3af';
+            button.style.boxShadow = 'none';
+            
+            // Reset badge color for inactive tabs
+            const badge = button.querySelector('span[class*="inline-flex"]');
+            if (badge) {
+                badge.style.backgroundColor = 'rgba(156, 163, 175, 0.1)';
+                badge.style.color = '#9ca3af';
+            }
         });
         
         // Show selected tab content
@@ -376,8 +369,16 @@
         // Activate selected tab button
         const activeButton = document.getElementById('tab-' + tabName);
         activeButton.classList.add('active');
-        activeButton.style.borderBottomColor = '#C90905';
-        activeButton.style.color = '#C90905';
+        activeButton.style.backgroundColor = '#6b7280';
+        activeButton.style.color = 'white';
+        activeButton.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
+        
+        // Update badge color for active tab
+        const activeBadge = activeButton.querySelector('span[class*="inline-flex"]');
+        if (activeBadge) {
+            activeBadge.style.backgroundColor = 'rgba(255, 255, 255, 0.25)';
+            activeBadge.style.color = 'white';
+        }
     }
     
     // Script para ocultar/mostrar menu inferior ao rolar

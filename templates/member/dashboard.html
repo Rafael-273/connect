@@ -128,9 +128,9 @@
                         </div>
                         
                         <div class="min-w-0 flex-1">
-                            <p class="text-xs text-gray-600 tracking-wide">Bem-vindo(a)</p>
-                            <h2 class="font-black text-lg sm:text-2xl text-gray-900 truncate leading-tight">{{ member.name }}</h2>
-                            <p class="text-xs sm:text-sm text-gray-600 font-medium hidden sm:block">Família Filadélfia</p>
+                            <p class="text-xs sm:text-xs text-gray-600 tracking-wide">Bem-vindo(a)</p>
+                            <h2 class="font-black text-xl sm:text-2xl text-gray-900 truncate leading-tight">{{ member.name }}</h2>
+                            <p class="text-sm sm:text-sm text-gray-600 font-medium hidden sm:block">Família Filadélfia</p>
                         </div>
                     </div>
 
@@ -147,7 +147,7 @@
     {% if messages %}
     <div class="px-4 md:px-8 pt-2 max-w-4xl mx-auto">
         {% for message in messages %}
-        <div class="message-alert px-4 py-3 rounded-xl mb-3 text-sm font-bold border shadow-sm flex items-center gap-3
+        <div class="message-alert px-4 py-3 rounded-xl mb-3 text-sm sm:text-sm font-bold border shadow-sm flex items-center gap-3
             {% if message.tags == 'error' %}bg-red-50 border-red-100 text-red-600
             {% elif message.tags == 'success' %}bg-green-50 border-green-100 text-green-700
             {% elif message.tags == 'warning' %}bg-yellow-50 border-yellow-100 text-yellow-700
@@ -179,10 +179,10 @@
                             <i class="fas fa-book-open text-white text-lg sm:text-xl md:text-2xl"></i>
                         </div>
                         <div>
-                            <h3 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
+                            <h3 class="text-2xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
                                 Palavras de <span style="color: #C90905;">Conhecimento</span>
                             </h3>
-                            <p class="text-xs sm:text-sm text-gray-600 font-medium mt-1">Você está escalado(a) esta semana! Registre palavras e curas</p>
+                            <p class="text-sm sm:text-sm text-gray-600 font-medium mt-1">Registre palavras e curas</p>
                         </div>
                     </div>
                 </div>
@@ -191,7 +191,7 @@
                 <form method="post" action="{% url 'word_of_knowledge_create' %}" class="bg-white rounded-xl p-4 sm:p-5 border-2 mb-4" style="border-color: rgba(201, 9, 5, 0.3);">
                     {% csrf_token %}
                     <div class="mb-3 sm:mb-2">
-                        <label class="block text-sm font-bold text-gray-700 mb-2" style="color: #C90905;">
+                        <label class="block text-sm sm:text-sm font-bold text-gray-700 mb-2" style="color: #C90905;">
                             <i class="fas fa-edit mr-2"></i>Registrar Nova Palavra
                         </label>
                         <textarea 
@@ -203,7 +203,7 @@
                             placeholder="Escreva a palavra de conhecimento aqui..."></textarea>
                     </div>
                     <div class="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-                        <button type="submit" class="w-full sm:w-auto px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 order-1 sm:order-2" style="background-color: #C90905;">
+                        <button type="submit" class="w-full sm:w-auto px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 order-1 sm:order-2 text-sm sm:text-base" style="background-color: #C90905;">
                             <i class="fas fa-save mr-2"></i>Enviar
                         </button>
                     </div>
@@ -218,8 +218,8 @@
                                     <i class="fas fa-list text-lg" style="color: #C90905;"></i>
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-bold text-gray-900">Palavras e Curas</h4>
-                                    <p class="text-xs text-gray-600">Ver histórico</p>
+                                    <h4 class="text-sm sm:text-sm font-bold text-gray-900">Palavras e Curas</h4>
+                                    <p class="text-xs sm:text-xs text-gray-600">Ver histórico</p>
                                 </div>
                             </div>
                             <i class="fas fa-arrow-right text-lg transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
@@ -233,8 +233,8 @@
                                     <i class="fas fa-calendar-alt text-lg" style="color: #E63946;"></i>
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-bold text-gray-900">Próximo Culto</h4>
-                                    <p class="text-xs text-gray-600">Ver palavras de conhecimento</p>
+                                    <h4 class="text-sm sm:text-sm font-bold text-gray-900">Próximo Culto</h4>
+                                    <p class="text-xs sm:text-xs text-gray-600">Ver palavras de conhecimento</p>
                                 </div>
                             </div>
                             <i class="fas fa-arrow-right text-lg transition-transform group-hover:translate-x-2" style="color: #E63946;"></i>
@@ -258,10 +258,10 @@
                             <i class="fas fa-crown text-white text-lg sm:text-xl md:text-2xl"></i>
                         </div>
                         <div>
-                            <h3 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
+                            <h3 class="text-2xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
                                 Aprovação de <span style="color: #9333ea;">Palavras</span>
                             </h3>
-                            <p class="text-xs sm:text-sm text-gray-600 font-medium mt-1">
+                            <p class="text-sm sm:text-sm text-gray-600 font-medium mt-1">
                                 <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-white" style="background-color: #9333ea;">
                                     {{ pending_words_count }}
                                 </span>
@@ -280,19 +280,19 @@
                                     {{ word.member.name|first }}
                                 </div>
                                 <div>
-                                    <h4 class="font-bold text-gray-900">{{ word.member.name }}</h4>
-                                    <p class="text-xs text-gray-600">
+                                    <h4 class="font-bold text-sm sm:text-sm text-gray-900">{{ word.member.name }}</h4>
+                                    <p class="text-xs sm:text-xs text-gray-600">
                                         <i class="far fa-calendar mr-1"></i>
                                         Culto: {{ word.service_date|date:"d/m/Y" }}
                                     </p>
                                 </div>
                             </div>
-                            <span class="px-3 py-1 rounded-full text-xs font-bold text-white" style="background-color: #eab308;">
+                            <span class="px-3 py-1 rounded-full text-xs sm:text-xs font-bold text-white" style="background-color: #eab308;">
                                 Pendente
                             </span>
                         </div>
                         
-                        <p class="text-sm text-gray-700 mb-4 pl-13">{{ word.word|truncatewords:20 }}</p>
+                        <p class="text-sm sm:text-sm text-gray-700 mb-4 pl-13">{{ word.word|truncatewords:20 }}</p>
                         
                         <div class="flex gap-2">
                             <form method="post" action="{% url 'member_approve_word' word.id %}" class="flex-1">
@@ -314,7 +314,7 @@
                 
                 {% if pending_words_count > 3 %}
                 <div class="mt-4 text-center">
-                    <p class="text-sm text-gray-600">
+                    <p class="text-sm sm:text-sm text-gray-600">
                         E mais {{ pending_words_count|add:"-3" }} palavra{{ pending_words_count|add:"-3"|pluralize }} aguardando aprovação
                     </p>
                 </div>
@@ -335,10 +335,10 @@
                                 <i class="fas fa-user-graduate text-white text-xl sm:text-2xl"></i>
                             </div>
                             <div>
-                                <h3 class="text-2xl sm:text-3xl font-black text-gray-900">
+                                <h3 class="text-2xl sm:text-2xl md:text-3xl font-black text-gray-900">
                                     Ministério de <span style="color: #C90905;">Consolidação</span>
                                 </h3>
-                                <p class="text-sm text-gray-600 font-medium mt-1">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
+                                <p class="text-sm sm:text-sm text-gray-600 font-medium mt-1">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
                             </div>
                         </div>
                     </div>
@@ -347,8 +347,8 @@
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-4">
                                 <div>
-                                    <h4 class="text-lg font-black text-gray-900 mb-1">Ver Consolidados</h4>
-                                    <p class="text-sm text-gray-600">Acesse todas informações sobre sua consolidação</p>
+                                    <h4 class="text-base sm:text-lg font-black text-gray-900 mb-1">Ver Consolidados</h4>
+                                    <p class="text-sm sm:text-sm text-gray-600">Acesse todas informações sobre sua consolidação</p>
                                 </div>
                             </div>
                             <i class="fas fa-arrow-right text-2xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
@@ -357,71 +357,12 @@
                 </div>
             </section>
         {% endif %}
-
-        <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
-            <!-- Elementos Decorativos -->
-            <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-30" style="background: radial-gradient(circle, rgba(230, 57, 70, 0.08), transparent);"></div>
-            <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-30" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.08), transparent);"></div>
-            
-            <div class="relative z-10 p-4 sm:p-6 md:p-8">
-                <!-- Header -->
-                <div class="mb-6 md:mb-8 pb-4 md:pb-6 border-b-2" style="border-color: rgba(201, 9, 5, 0.1);">
-                    <div class="flex items-center justify-between gap-3 sm:gap-4 mb-3">
-                        <div class="flex items-center gap-3 md:gap-4 flex-1 min-w-0">
-                            <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                                <i class="fas fa-hands-praying text-white text-lg sm:text-xl md:text-2xl"></i>
-                            </div>
-                            <div class="min-w-0 mt-2">
-                                <h3 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
-                                    Meus <span style="color: #C90905;">Ministérios</span>
-                                </h3>
-                                <p class="text-xs sm:text-sm text-gray-600 font-medium mt-1 hidden sm:block">Áreas onde você serve ao Reino de Deus</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                {% if ministries %}
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
-                        {% for ministry in ministries %}
-                        <div class="bg-white rounded-xl sm:rounded-2xl transition-all duration-300 p-4 sm:p-5 md:p-6 border-2 hover:-translate-y-2 relative overflow-hidden" style="border-color: rgba(201, 9, 5, 0.4);">
-                            <div class="absolute top-0 left-0 w-full h-1 sm:h-1.5" style="background-color: #C90905;"></div>
-                            <div class="absolute top-0 right-0 w-16 h-16 rounded-full -mr-8 -mt-8 opacity-20" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.3), transparent);"></div>
-                            
-                            <div class="text-center relative z-10">
-                                <div class="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 mx-auto mb-3 sm:mb-4 rounded-xl sm:rounded-2xl flex items-center justify-center" style="background-color: #C90905;">
-                                    <i class="fas fa-church text-white text-2xl sm:text-2xl md:text-3xl"></i>
-                                </div>
-                                <h4 class="font-black text-base sm:text-lg text-gray-900 mb-2 sm:mb-3">{{ ministry.name }}</h4>
-                                <div class="flex items-center justify-center gap-2">
-                                    <span class="px-3 sm:px-4 py-1.5 sm:py-2 text-white text-xs font-bold rounded-full shadow-md" style="background-color: #C90905;">
-                                        <i class="fas fa-check-circle mr-1"></i>
-                                        Membro Ativo
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="text-center py-12 sm:py-16 bg-white rounded-xl sm:rounded-2xl border-2 px-4" style="border-color: rgba(201, 9, 5, 0.15);">
-                        <div class="w-20 h-20 sm:w-24 sm:h-24 mx-auto mb-4 sm:mb-6 rounded-xl sm:rounded-2xl flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
-                            <i class="fas fa-hands-praying text-3xl sm:text-4xl" style="color: #C90905;"></i>
-                        </div>
-                        <h4 class="text-xl sm:text-2xl font-black text-gray-900 mb-2 sm:mb-3">Explore os Ministérios</h4>
-                        <p class="text-sm sm:text-base text-gray-600 mb-6 sm:mb-8 max-w-md mx-auto font-medium">
-                        Você ainda não participa de nenhum ministério. Entre em contato com a liderança para descobrir como servir.
-                        </p>
-                    </div>
-            {% endif %}
-            </div>
-        </section>
     </main>
 
     <!-- Bottom Navigation -->
     <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-lg rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
         <!-- Home -->
-        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
+        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
             <div class="relative">
                 <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #C90905;">
                     <i class="fas fa-home text-white text-lg"></i>
@@ -432,14 +373,14 @@
         
         <!-- Consolidação -->
         {% if can_consolidate %}
-        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
                 <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
             </div>
             <span class="group-hover:font-bold transition-all">Consolidar</span>
         </a>
         {% else %}
-        <div class="flex flex-col items-center text-xs font-medium text-gray-400 p-2 px-3 opacity-50">
+        <div class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-400 p-2 px-3 opacity-50">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 border-2" style="background: rgba(156, 163, 175, 0.05); border-color: rgba(156, 163, 175, 0.2);">
                 <i class="fas fa-user-graduate text-gray-400 text-lg"></i>
             </div>
@@ -448,7 +389,7 @@
         {% endif %}
         
         <!-- Curas -->
-        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
                 <i class="fas fa-heart-pulse text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
             </div>
@@ -456,7 +397,7 @@
         </a>
         
         <!-- Perfil -->
-        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(230, 57, 70, 0.05); border-color: rgba(230, 57, 70, 0.15);">
                 <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #E63946;"></i>
             </div>
