@@ -11,6 +11,16 @@
         body { background: white !important; }
         .word-item { page-break-inside: avoid; }
     }
+    
+    @keyframes checkmark {
+        0% { transform: scale(0) rotate(45deg); }
+        50% { transform: scale(1.2) rotate(45deg); }
+        100% { transform: scale(1) rotate(45deg); }
+    }
+    
+    .copy-success {
+        animation: checkmark 0.4s ease-out;
+    }
 </style>
 {% endblock %}
 
@@ -19,19 +29,19 @@
     
     <!-- Header Simples -->
     <div class="no-print px-4 sm:px-6 md:px-8 py-4 border-b-2" style="border-color: rgba(201, 9, 5, 0.2);">
-        <div class="flex justify-between items-center">
+        <div class="flex gap-4 items-center">
+            <button onclick="window.history.back()" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
+                <i class="fas fa-arrow-left"></i>
+            </button>
             <div>
                 <h1 class="text-2xl sm:text-3xl font-black text-gray-900">Palavras do <span style="color: #C90905;">Culto</span></h1>
                 <p class="text-sm text-gray-600 font-medium mt-1">{{ service_type_display }} - {{ start_date|date:"d/m" }} a {{ today|date:"d/m/Y" }}</p>
             </div>
-            <a href="{% url 'member_dashboard' %}" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
-                <i class="fas fa-arrow-left"></i>
-            </a>
         </div>
     </div>
 
-    <!-- Filtros -->
-    <div class="no-print px-4 sm:px-6 md:px-8 py-4">
+    <!-- Filtros e Ações -->
+    <div class="no-print px-4 sm:px-6 md:px-8 py-4 space-y-3">
         <div class="flex gap-3">
             <a href="?service_type=wednesday" class="flex-1 px-4 py-3 rounded-xl font-bold transition-all text-center {% if service_type == 'wednesday' %}text-white shadow-lg{% else %}bg-white border-2 hover:-translate-y-0.5{% endif %}" style="{% if service_type == 'wednesday' %}background-color: #C90905;{% else %}color: #C90905; border-color: rgba(201, 9, 5, 0.2);{% endif %}">
                 Quarta {{ next_wednesday|date:"d/m" }}
@@ -40,6 +50,13 @@
                 Domingo {{ next_sunday|date:"d/m" }}
             </a>
         </div>
+        
+        {% if words %}
+        <button onclick="copyAllWords(event)" class="w-full px-4 py-3 rounded-xl font-bold transition-all text-center bg-white border-2 hover:-translate-y-0.5 flex items-center justify-center gap-2" style="color: #C90905; border-color: rgba(201, 9, 5, 0.2);">
+            <i class="fas fa-copy"></i>
+            <span>Copiar Todas as Palavras</span>
+        </button>
+        {% endif %}
     </div>
 
     <!-- Lista de Palavras - ULTRA SIMPLIFICADA -->
@@ -68,14 +85,13 @@
                         </div>
                         
                         <!-- Botão de Cura -->
-                        <form method="post" action="{% url 'mark_word_as_healed' word.id %}" class="flex-shrink-0 no-print pt-3">
-                            {% csrf_token %}
-                            <button type="submit" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-110 focus:outline-none shadow-sm hover:shadow-md" 
-                                    style="{% if word.resulted_in_healing %}background: linear-gradient(135deg, rgba(201, 9, 5, 0.15), rgba(230, 57, 70, 0.05)); color: #C90905; border: 2px solid rgba(201, 9, 5, 0.3);{% else %}background: linear-gradient(135deg, rgba(156, 163, 175, 0.1), rgba(209, 213, 219, 0.05)); color: #9ca3af; border: 2px solid rgba(156, 163, 175, 0.2);{% endif %}"
-                                    title="{% if word.resulted_in_healing %}Desmarcar{% else %}Marcar{% endif %} como resultou em cura">
+                        <a href="{% url 'healing_create' %}?word_id={{ word.id }}" class="flex-shrink-0 no-print pt-3">
+                            <button type="button" class="w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-110 focus:outline-none shadow-sm hover:shadow-md" 
+                                    style="{% if word.healings.exists %}background: linear-gradient(135deg, rgba(201, 9, 5, 0.15), rgba(230, 57, 70, 0.05)); color: #C90905; border: 2px solid rgba(201, 9, 5, 0.3);{% else %}background: linear-gradient(135deg, rgba(156, 163, 175, 0.1), rgba(209, 213, 219, 0.05)); color: #9ca3af; border: 2px solid rgba(156, 163, 175, 0.2);{% endif %}"
+                                    title="Registrar cura desta palavra">
                                 <i class="fas fa-heart text-lg"></i>
                             </button>
-                        </form>
+                        </a>
                     </div>
                 </div>
                 {% endfor %}
@@ -132,4 +148,45 @@
         <span class="group-hover:font-bold transition-all">Perfil</span>
     </a>
 </nav>
+
+<script>
+function copyAllWords(event) {
+    // Construir texto diretamente do DOM para evitar problemas com escapejs
+    const wordElements = document.querySelectorAll('.word-item');
+    
+    let formattedText = "PALAVRAS DE CONHECIMENTO\n";
+    formattedText += "{{ service_type_display }} - {{ start_date|date:'d/m' }} a {{ today|date:'d/m/Y' }}\n";
+    formattedText += "==================================================\n\n";
+    
+    wordElements.forEach(function(element, index) {
+        const wordText = element.querySelector('p').textContent.trim();
+        formattedText += (index + 1) + ". " + wordText + "\n\n";
+    });
+    
+    // Copiar para área de transferência
+    navigator.clipboard.writeText(formattedText).then(function() {
+        // Feedback visual
+        const button = event.target.closest('button');
+        const originalHTML = button.innerHTML;
+        const originalBg = button.style.backgroundColor;
+        const originalColor = button.style.color;
+        const originalBorder = button.style.borderColor;
+        
+        button.innerHTML = '<i class="fas fa-check"></i><span class="ml-2">Copiado!</span>';
+        button.style.backgroundColor = '#16a34a';
+        button.style.color = 'white';
+        button.style.borderColor = '#16a34a';
+        
+        setTimeout(function() {
+            button.innerHTML = originalHTML;
+            button.style.backgroundColor = originalBg;
+            button.style.color = originalColor;
+            button.style.borderColor = originalBorder;
+        }, 2000);
+    }).catch(function(err) {
+        alert('Erro ao copiar: ' + err.message);
+        console.error('Erro ao copiar:', err);
+    });
+}
+</script>
 {% endblock %}

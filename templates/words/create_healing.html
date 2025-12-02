@@ -20,6 +20,37 @@
     .animate-slide-down {
         animation: slideDown 0.5s ease-out forwards;
     }
+    
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .loading-overlay.active {
+        display: flex;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid #C90905;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+    }
 </style>
 {% endblock %}
 
@@ -39,9 +70,17 @@
         </div>
     </div>
 
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="text-center">
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-white font-bold text-lg">Salvando cura...</p>
+        </div>
+    </div>
+
     <!-- Formulário -->
     <div class="px-4 sm:px-6 md:px-8 py-6">
-        <form method="post" class="">
+        <form method="post" class="" id="healingForm" onsubmit="showLoadingOverlay(event)">
             {% csrf_token %}
             
             <!-- Card do Formulário -->
@@ -157,4 +196,28 @@
         </form>
     </div>
 </div>
+
+<script>
+let isSubmitting = false;
+
+function showLoadingOverlay(event) {
+    // Prevenir múltiplas submissões
+    if (isSubmitting) {
+        event.preventDefault();
+        return false;
+    }
+    
+    // Verificar se o formulário é válido antes de mostrar overlay
+    const form = event.target;
+    if (form.checkValidity()) {
+        isSubmitting = true;
+        document.getElementById('loadingOverlay').classList.add('active');
+        // Desabilitar o botão de submit para evitar múltiplos cliques
+        const submitButton = form.querySelector('button[type="submit"]');
+        if (submitButton) {
+            submitButton.disabled = true;
+        }
+    }
+}
+</script>
 {% endblock %}

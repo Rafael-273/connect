@@ -50,7 +50,7 @@
                     <!-- Palavra -->
                     <div>
                         <label for="{{ form.word.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
-                            <i class="fas fa-book-open text-gray-400 mr-2"></i>{{ form.word.label }}
+                            <i class="fas fa-lightbulb text-gray-400 mr-2"></i>{{ form.word.label }}
                         </label>
                         {{ form.word }}
                         {% if form.word.errors %}
@@ -85,7 +85,7 @@
     <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-xs font-semibold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
         <div class="relative">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 bg-gray-800 shadow-md">
-                <i class="fas fa-book-open text-white text-lg"></i>
+                <i class="fas fa-lightbulb text-white text-lg"></i>
             </div>
         </div>
         <span class="text-gray-800">Palavras</span>
