@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 from django.contrib.auth import get_user_model
 from django.views.generic.edit import CreateView
 from django.views.generic import ListView, DetailView
@@ -7,8 +8,9 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
+from django.http import JsonResponse
 from ..models.member import Member
-from ..models.follow_up import FollowUp, FollowUpReport
+from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate
 from ..forms.member import MemberForm
 from ..forms.follow_up import FollowUpReportForm
 from ..models.user import User
@@ -201,3 +203,140 @@ def member_consolidation_report(request, followup_id):
     }
     
     return render(request, 'member/consolidation_report.html', context)
+
+
+@login_required
+def consolidator_guide(request):
+    """Página com guia e materiais para consolidadores"""
+    try:
+        member = request.user.member
+    except Member.DoesNotExist:
+        messages.error(request, "Você precisa estar cadastrado como membro.")
+        return redirect('member_dashboard')
+    
+    context = {
+        'member': member,
+    }
+    
+    return render(request, 'member/consolidator_guide.html', context)
+
+
+@login_required
+def consolidator_assignments(request):
+    """Página onde consolidadores escolhem quem consolidar"""
+    try:
+        member = request.user.member
+    except Member.DoesNotExist:
+        messages.error(request, "Você precisa estar cadastrado como membro.")
+        return redirect('member_dashboard')
+    
+    # Buscar consolidações ativas do membro
+    my_consolidations = FollowUp.objects.filter(
+        responsible=member,
+        is_active=True
+    ).select_related('accompanied').count()
+    
+    # Calcular idade do consolidador
+    from datetime import date
+    consolidator_age = None
+    if member.birth_date:
+        today = date.today()
+        consolidator_age = today.year - member.birth_date.year - (
+            (today.month, today.day) < (member.birth_date.month, member.birth_date.day)
+        )
+    
+    # Filtros base: tem conversão, não está consolidado, não tem consolidação ativa
+    available_people = Member.objects.filter(
+        conversion__in=['new_convert', 'reconciled'],  # Tem conversão
+        is_consolidated=False,  # Não está consolidado
+        is_active=True
+    ).exclude(
+        id=member.id  # Não é o próprio consolidador
+    )
+    
+    # Excluir pessoas que já têm consolidação ativa
+    # Fazemos isso separadamente para evitar problemas com distinct()
+    people_with_active_followup = FollowUp.objects.filter(
+        is_active=True
+    ).values_list('accompanied_id', flat=True)
+    
+    available_people = available_people.exclude(
+        id__in=people_with_active_followup
+    )
+    
+    # Filtro de gênero: mesmo sexo
+    if member.gender:
+        available_people = available_people.filter(gender=member.gender)
+    
+    # Filtro de idade se o consolidador tem data de nascimento
+    if consolidator_age:
+        if consolidator_age >= 50:
+            # 50+ pode consolidar todos de 40 anos pra cima
+            available_people = available_people.filter(
+                birth_date__lte=date(today.year - 40, today.month, today.day)
+            )
+        else:
+            # Diferença de 10 anos para mais ou menos
+            min_birth_year = today.year - (consolidator_age + 10)
+            max_birth_year = today.year - (consolidator_age - 10)
+            
+            available_people = available_people.filter(
+                birth_date__year__gte=min_birth_year,
+                birth_date__year__lte=max_birth_year
+            )
+    
+    # Ordenar por data de conversão mais recente e aplicar distinct
+    available_people = available_people.distinct().order_by('-conversion_date', '-created_at')
+    
+    context = {
+        'member': member,
+        'available_people': available_people,
+        'my_consolidations_count': my_consolidations,
+        'can_consolidate': member.is_available_to_consolidate,
+        'consolidator_age': consolidator_age,
+    }
+    
+    return render(request, 'member/consolidator_assignments.html', context)
+
+
+@login_required
+def request_consolidation(request, person_id):
+    """Criar uma nova consolidação automaticamente"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Método não permitido'}, status=405)
+    
+    # Obter o membro logado
+    member = get_object_or_404(Member, user=request.user)
+    
+    # Verificar se pode consolidar
+    if not member.is_available_to_consolidate:
+        return JsonResponse({
+            'error': 'Você não está disponível para consolidar no momento.'
+        }, status=403)
+    
+    # Obter a pessoa a ser consolidada
+    person = get_object_or_404(Member, id=person_id)
+    
+    # Verificar se a pessoa já tem uma consolidação ativa
+    if FollowUp.objects.filter(accompanied=person, is_active=True).exists():
+        return JsonResponse({
+            'error': 'Esta pessoa já está sendo consolidada.'
+        }, status=400)
+    
+    # Buscar o último template de consolidação criado
+    last_template = FollowUpTemplate.objects.order_by('-created_at').first()
+    
+    # Criar a consolidação
+    followup = FollowUp.objects.create(
+        responsible=member,
+        accompanied=person,
+        template=last_template,  # Adiciona o último template automaticamente
+        is_active=True,
+        profile_notes=f'Consolidação iniciada em {date.today().strftime("%d/%m/%Y")}'
+    )
+    
+    return JsonResponse({
+        'success': True,
+        'message': 'Consolidação iniciada com sucesso!',
+        'followup_id': followup.id
+    })

@@ -1,0 +1,189 @@
+{% extends "login_base.html" %}
+{% load static %}
+
+{% block title %}Guia do Consolidador{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --church-red: #C90905;
+        --church-dark: #260200;
+        --church-light: #E63946;
+        --church-gold: #F59E0B;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+    }
+
+    /* Animações do menu inferior */
+    .nav-hidden {
+        transform: translate(-50%, 120%) !important;
+        opacity: 0 !important;
+    }
+
+    .nav-visible {
+        transform: translate(-50%, 0) !important;
+        opacity: 1 !important;
+    }
+
+    .animate-fade { animation: fadeIn 0.6s ease-out; }
+    .float-animation { animation: float 3s ease-in-out infinite; }
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+    <!-- Header com gradiente elegante -->
+    <section class="relative overflow-hidden p-4">
+        <!-- Background decorativo -->
+        <div class="absolute inset-0 bg-gradient-to-br from-orange-50 via-white to-amber-50"></div>
+        <div class="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-orange-100 to-red-100 rounded-full -mr-36 -mt-36 opacity-60"></div>
+        <div class="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-amber-100 to-orange-100 rounded-full -ml-24 -mb-24 opacity-50"></div>
+        
+        <div class="relative z-10 px-4 sm:px-6 py-6 sm:py-8">
+            <!-- Header com botão voltar -->
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Guia do Consolidador</h1>
+                    <p class="text-sm sm:text-base text-gray-600">Materiais e orientações para consolidação</p>
+                </div>
+                <a href="{% url 'member_consolidation' %}" class="hidden sm:flex items-center justify-center sm:justify-start gap-2 px-6 py-3 bg-white/70 backdrop-blur-sm hover:bg-white/90 text-gray-700 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1">
+                    <i class="fas fa-arrow-left text-sm"></i>
+                    <span class="text-sm font-medium">Voltar</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Conteúdo Principal -->
+    <section class="px-4 sm:px-8 pb-24 space-y-4 sm:space-y-6 animate-fade mt-[-2rem]">
+        
+        <!-- Card: O que é Consolidação -->
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-lg overflow-hidden border border-white/50">
+            <div class="p-5 sm:p-6 bg-gradient-to-r from-orange-50/50 to-white border-b border-orange-100/30">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg">
+                        <i class="fas fa-book-open text-white text-xl sm:text-2xl"></i>
+                    </div>
+                    <h2 class="text-lg sm:text-2xl font-bold text-gray-800">O que é Consolidação?</h2>
+                </div>
+            </div>
+            <div class="p-5 sm:p-6 space-y-3 sm:space-y-4">
+                <p class="text-sm sm:text-base text-gray-700 leading-relaxed">
+                    A consolidação é o processo de <strong>acompanhamento espiritual</strong> de novos convertidos e membros que necessitam de apoio. 
+                    É um ministério que visa fortalecer a fé, ensinar princípios bíblicos e integrar a pessoa na vida da igreja.
+                </p>
+                <div class="bg-orange-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 border border-orange-100">
+                    <p class="text-sm sm:text-base text-orange-900 font-medium">
+                        <i class="fas fa-heart text-orange-600 mr-2"></i>
+                        "O consolidador é como um pai espiritual que cuida, ensina e acompanha seus filhos na fé."
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card: Materiais de Apoio -->
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl sm:rounded-3xl shadow-lg overflow-hidden border border-white/50">
+            <div class="p-5 sm:p-6 bg-gradient-to-r from-orange-50/50 to-white border-b border-orange-100/30">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg">
+                        <i class="fas fa-download text-white text-xl sm:text-2xl"></i>
+                    </div>
+                    <h2 class="text-lg sm:text-2xl font-bold text-gray-800">Materiais de Apoio</h2>
+                </div>
+            </div>
+            <div class="p-5 sm:p-6">
+                <div class="space-y-3 sm:space-y-4">
+                    <a href="#" class="group block bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 border border-orange-100 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-3 sm:gap-4 flex-1">
+                                <div class="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-orange-200 rounded-lg sm:rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-file-pdf text-orange-700 text-lg sm:text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-base sm:text-base font-bold text-gray-800">Manual do Consolidador</h3>
+                                    <p class="text-sm sm:text-sm text-gray-600">Guia completo em PDF</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-right text-orange-400 group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </a>
+                    
+                    <a href="#" class="group block bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 border border-orange-100 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-3 sm:gap-4 flex-1">
+                                <div class="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-orange-200 rounded-lg sm:rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-video text-orange-700 text-lg sm:text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-base sm:text-base font-bold text-gray-800">Vídeos de Treinamento</h3>
+                                    <p class="text-sm sm:text-sm text-gray-600">Série de vídeos práticos</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-right text-orange-400 group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </a>
+                    
+                    <a href="#" class="group block bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl sm:rounded-2xl p-4 sm:p-5 border border-orange-100 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-3 sm:gap-4 flex-1">
+                                <div class="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 bg-orange-200 rounded-lg sm:rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-book text-orange-700 text-lg sm:text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-base sm:text-base font-bold text-gray-800">Estudos Bíblicos</h3>
+                                    <p class="text-sm sm:text-sm text-gray-600">Materiais para ensinar novos convertidos</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-right text-orange-400 group-hover:translate-x-1 transition-transform"></i>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Menu Inferior Flutuante -->
+    <nav id="bottomNav" class="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[95%] sm:w-[90%] max-w-lg rounded-xl sm:rounded-2xl shadow-2xl border-2 px-2 sm:px-2 py-2.5 sm:py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(245, 158, 11, 0.2);">
+        <!-- Home -->
+        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-sm sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 sm:p-2 px-2 sm:px-3 group">
+            <div class="py-2.5 sm:py-2.5 px-4 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(245, 158, 11, 0.05); border-color: rgba(245, 158, 11, 0.15);">
+                <i class="fas fa-home text-lg sm:text-lg transition-transform group-hover:scale-110" style="color: #F59E0B;"></i>
+            </div>
+            <span class="text-sm sm:text-xs group-hover:font-bold transition-all">Home</span>
+        </a>
+        
+        <!-- Consolidação (Ativo) -->
+        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-sm sm:text-xs font-bold transition-all duration-300 hover:scale-105 p-2 sm:p-2 px-2 sm:px-3 relative group">
+            <div class="relative">
+                <div class="py-2.5 sm:py-2.5 px-4 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300" style="background-color: #F59E0B;">
+                    <i class="fas fa-user-graduate text-white text-lg sm:text-lg"></i>
+                </div>
+            </div>
+            <span class="text-sm sm:text-xs" style="color: #F59E0B;">Consolidar</span>
+        </a>
+        
+        <!-- Curas -->
+        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-sm sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 sm:p-2 px-2 sm:px-3 group">
+            <div class="py-2.5 sm:py-2.5 px-4 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(251, 146, 60, 0.05); border-color: rgba(251, 146, 60, 0.15);">
+                <i class="fas fa-heart-pulse text-lg sm:text-lg transition-transform group-hover:scale-110" style="color: #FB923C;"></i>
+            </div>
+            <span class="text-sm sm:text-xs group-hover:font-bold transition-all">Curas</span>
+        </a>
+        
+        <!-- Perfil -->
+        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-sm sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 sm:p-2 px-2 sm:px-3 group">
+            <div class="py-2.5 sm:py-2.5 px-4 sm:px-4 rounded-lg sm:rounded-xl mb-1 sm:mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(217, 119, 6, 0.05); border-color: rgba(217, 119, 6, 0.15);">
+                <i class="fas fa-user-circle text-lg sm:text-lg transition-transform group-hover:scale-110" style="color: #D97706;"></i>
+            </div>
+            <span class="text-sm sm:text-xs group-hover:font-bold transition-all">Perfil</span>
+        </a>
+    </nav>
+{% endblock %}

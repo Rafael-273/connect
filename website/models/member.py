@@ -63,6 +63,17 @@ class Member(BaseModel):
 
     is_available_to_consolidate = models.BooleanField(default=False)
     is_available_to_disciple = models.BooleanField(default=False)
+    
+    is_consolidated = models.BooleanField(
+        default=False,
+        verbose_name='Está Consolidado',
+        help_text='Membro já passou pelo processo de consolidação'
+    )
+    is_discipled = models.BooleanField(
+        default=False,
+        verbose_name='Está Discipulado',
+        help_text='Membro já passou pelo processo de discipulado'
+    )
 
     @property
     def email(self):

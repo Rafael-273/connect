@@ -114,6 +114,12 @@ def dashboard_view(request):
         event_date__gte=timezone.now().date()
     ).order_by('event_date')[:5]
     
+    # Consolidações ativas e recentes
+    active_followups = FollowUp.objects.filter(is_active=True).count()
+    recent_followups = FollowUp.objects.filter(
+        created_at__gte=last_month
+    ).order_by('-created_at')[:5]
+    
     context = {
         'total_members': total_members,
         'total_visitors': total_visitors,
@@ -129,6 +135,8 @@ def dashboard_view(request):
         'recent_visitors_list': recent_visitors_list,
         'recently_converted_members': recently_converted_members,
         'upcoming_events_list': upcoming_events_list,
+        'active_followups': active_followups,
+        'recent_followups': recent_followups,
     }
     
     return render(request, 'admin_panel/dashboard.html', context)
@@ -1308,9 +1316,28 @@ def followup_delete_view(request, followup_id):
     followup = get_object_or_404(FollowUp, id=followup_id)
     
     if request.method == 'POST':
-        followup.delete()
-        messages.success(request, 'Follow-up excluído com sucesso!')
-        return redirect('admin_followups_list')
+        try:
+            followup.delete()
+            
+            # Se for requisição AJAX, retornar JSON
+            if request.headers.get('Content-Type') == 'application/json':
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Consolidação excluída com sucesso!'
+                })
+            
+            # Se não for AJAX, usar o fluxo normal
+            messages.success(request, 'Follow-up excluído com sucesso!')
+            return redirect('admin_followups_list')
+        except Exception as e:
+            if request.headers.get('Content-Type') == 'application/json':
+                return JsonResponse({
+                    'success': False,
+                    'error': str(e)
+                }, status=400)
+            
+            messages.error(request, f'Erro ao excluir follow-up: {str(e)}')
+            return redirect('admin_followups_list')
     
     return render(request, 'admin_panel/followups/delete.html', {
         'followup': followup

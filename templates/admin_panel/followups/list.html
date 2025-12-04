@@ -4,6 +4,9 @@
 {% block title %}Consolidação e Discipulado - Painel Administrativo{% endblock %}
 
 {% block head %}
+<!-- SweetAlert2 for better alerts -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <style>
     body {
         background-color: #f8f9fa !important;
@@ -147,14 +150,21 @@
                                 <div class="flex space-x-2 mt-2 md:mt-0">
                                     <a href="{% url 'admin_followup_edit' followup.id %}" 
                                        class="text-blue-600 hover:text-blue-800 p-1"
-                                       onclick="event.stopPropagation();">
-                                        <ion-icon name="create-outline"></ion-icon>
+                                       onclick="event.stopPropagation();"
+                                       title="Editar">
+                                        <ion-icon name="create-outline" class="text-xl"></ion-icon>
                                     </a>
                                     <a href="{% url 'admin_followup_report' followup.id %}" 
                                        class="text-green-600 hover:text-green-800 p-1"
-                                       onclick="event.stopPropagation();">
-                                        <ion-icon name="add-circle-outline"></ion-icon>
+                                       onclick="event.stopPropagation();"
+                                       title="Adicionar Relatório">
+                                        <ion-icon name="add-circle-outline" class="text-xl"></ion-icon>
                                     </a>
+                                    <button onclick="deleteFollowup({{ followup.id }}, '{{ followup.accompanied.name }}'); event.stopPropagation();" 
+                                       class="text-red-600 hover:text-red-800 p-1"
+                                       title="Deletar">
+                                        <ion-icon name="trash-outline" class="text-xl"></ion-icon>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -174,4 +184,109 @@
         </div>
     </div>
 </div>
+
+<script>
+    function deleteFollowup(followupId, personName) {
+        Swal.fire({
+            title: '⚠️ Confirmar Exclusão',
+            html: `Tem certeza que deseja deletar a consolidação de <strong>${personName}</strong>?<br><br><span class="text-red-600">Esta ação não pode ser desfeita!</span>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#DC2626',
+            cancelButtonColor: '#6B7280',
+            confirmButtonText: '<i class="fas fa-trash mr-2"></i>Sim, deletar!',
+            cancelButtonText: '<i class="fas fa-times mr-2"></i>Cancelar',
+            reverseButtons: true,
+            customClass: {
+                popup: 'rounded-2xl',
+                confirmButton: 'rounded-xl px-6 py-3 font-bold',
+                cancelButton: 'rounded-xl px-6 py-3 font-bold'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Mostrar loading
+                Swal.fire({
+                    title: 'Deletando...',
+                    text: 'Por favor, aguarde...',
+                    icon: 'info',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                // Fazer a requisição para deletar
+                fetch(`/admin-panel/followups/${followupId}/delete/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire({
+                            title: '✅ Deletado!',
+                            text: 'A consolidação foi deletada com sucesso.',
+                            icon: 'success',
+                            confirmButtonColor: '#10B981',
+                            confirmButtonText: '<i class="fas fa-check mr-2"></i>OK',
+                            customClass: {
+                                popup: 'rounded-2xl',
+                                confirmButton: 'rounded-xl px-6 py-3 font-bold'
+                            }
+                        }).then(() => {
+                            // Recarregar a página
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            title: '❌ Erro',
+                            text: data.error || 'Ocorreu um erro ao deletar a consolidação.',
+                            icon: 'error',
+                            confirmButtonColor: '#EF4444',
+                            confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
+                            customClass: {
+                                popup: 'rounded-2xl',
+                                confirmButton: 'rounded-xl px-6 py-3 font-bold'
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro:', error);
+                    Swal.fire({
+                        title: '❌ Erro',
+                        text: 'Ocorreu um erro ao processar a solicitação.',
+                        icon: 'error',
+                        confirmButtonColor: '#EF4444',
+                        confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
+                        customClass: {
+                            popup: 'rounded-2xl',
+                            confirmButton: 'rounded-xl px-6 py-3 font-bold'
+                        }
+                    });
+                });
+            }
+        });
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
 {% endblock %}

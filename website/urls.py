@@ -7,7 +7,10 @@ from .views.member import (
     NewConvertsListView,
     member_consolidation_list,
     member_consolidation_detail,
-    member_consolidation_report
+    member_consolidation_report,
+    consolidator_guide,
+    consolidator_assignments,
+    request_consolidation
 )
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
@@ -67,6 +70,9 @@ urlpatterns = [
     path('consolidation/', member_consolidation_list, name='member_consolidation'),
     path('consolidation/<int:followup_id>/', member_consolidation_detail, name='member_consolidation_detail'),
     path('consolidation/<int:followup_id>/report/', member_consolidation_report, name='member_consolidation_report'),
+    path('consolidation/guide/', consolidator_guide, name='consolidator_guide'),
+    path('consolidation/assignments/', consolidator_assignments, name='consolidator_assignments'),
+    path('consolidation/request/<int:person_id>/', request_consolidation, name='request_consolidation'),
     
     # Words of Knowledge URLs
     path('words/', word_of_knowledge_list, name='word_of_knowledge_list'),
