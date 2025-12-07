@@ -77,6 +77,28 @@
                 Ministérios
             </a>
             
+            <!-- Escalas com submenu só para admin -->
+            <div class="sidebar-group">
+                <div class="sidebar-item-group {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}" 
+                     onclick="toggleSubmenu('mobile-schedules-submenu')" style="cursor: pointer;">
+                    <div style="display: flex; align-items: center; width: 100%;">
+                        <ion-icon name="calendar-number-outline"></ion-icon>
+                        <span>Escalas</span>
+                    </div>
+                </div>
+                
+                <div id="mobile-schedules-submenu" class="submenu {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}">
+                    <a href="{% url 'schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
+                        <ion-icon name="calendar-outline"></ion-icon>
+                        Escalas Mensais
+                    </a>
+                    <a href="{% url 'team_list' %}" class="submenu-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
+                        <ion-icon name="people-circle-outline"></ion-icon>
+                        Equipes
+                    </a>
+                </div>
+            </div>
+            
             <!-- Ministração com submenu só para admin -->
             <div class="sidebar-group">
                 <div class="sidebar-item-group {% if 'ministration' in request.resolver_match.url_name %}active{% endif %}" 
@@ -91,10 +113,6 @@
                     <a href="{% url 'ministration_dashboard' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_dashboard' %}active{% endif %}">
                         <ion-icon name="grid-outline"></ion-icon>
                         Dashboard
-                    </a>
-                    <a href="{% url 'ministration_schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
-                        <ion-icon name="calendar-number-outline"></ion-icon>
-                        Escalas
                     </a>
                     <a href="{% url 'ministration_words_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_words_list' %}active{% endif %}">
                         <ion-icon name="book-outline"></ion-icon>
@@ -216,6 +234,7 @@
             {% endif %}
             
         {% if user.user_type == 'admin' or user.is_superuser %}
+        
         <!-- Ministérios só para admin -->
         <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="library-outline"></ion-icon>
@@ -233,10 +252,6 @@
             </div>
             
             <div id="ministration-submenu" class="submenu {% if 'ministration' in request.resolver_match.url_name %}active{% endif %}">
-                <a href="{% url 'ministration_schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
-                    <ion-icon name="calendar-number-outline"></ion-icon>
-                    Escalas
-                </a>
                 <a href="{% url 'ministration_words_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_words_list' %}active{% endif %}" title="Palavras de Conhecimento">
                     <ion-icon name="book-outline"></ion-icon>
                     Palavras
@@ -248,6 +263,28 @@
                 <a href="{% url 'ministration_members_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_members_list' %}active{% endif %}" title="Membros do Ministério">
                     <ion-icon name="people-outline"></ion-icon>
                     Membros
+                </a>
+            </div>
+        </div>
+        
+        <!-- Escalas -->
+        <div class="sidebar-group">
+            <div class="sidebar-item-group {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}" 
+                 onclick="toggleSubmenu('schedules-submenu')" style="cursor: pointer;">
+                <div style="display: flex; align-items: center; width: 100%;">
+                    <ion-icon name="calendar-number-outline"></ion-icon>
+                    <span>Escalas</span>
+                </div>
+            </div>
+            
+            <div id="schedules-submenu" class="submenu {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
+                    <ion-icon name="calendar-outline"></ion-icon>
+                    Escalas Mensais
+                </a>
+                <a href="{% url 'team_list' %}" class="submenu-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
+                    <ion-icon name="people-circle-outline"></ion-icon>
+                    Equipes
                 </a>
             </div>
         </div>

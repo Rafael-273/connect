@@ -1,0 +1,1298 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ schedule.title }} - {{ schedule.get_month_display }}/{{ schedule.year }} - Admin Panel{% endblock %}
+
+{% block content %}
+<!-- Admin Sidebar -->
+{% include 'parciais/admin_sidebar.html' %}
+
+<!-- Main Content with sidebar offset and top spacing -->
+<div class="md:pl-64 pt-24">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center gap-3 mb-2">
+                <a href="{% url 'schedule_list' %}" class="text-gray-600 hover:text-gray-900">
+                    <ion-icon name="arrow-back-outline" class="text-2xl"></ion-icon>
+                </a>
+                <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">{{ schedule.title }}</h1>
+                {% if schedule.is_published %}
+                <span class="bg-green-100 text-green-800 text-sm px-3 py-1 rounded-full">Publicada</span>
+                {% else %}
+                <span class="bg-gray-100 text-gray-800 text-sm px-3 py-1 rounded-full">Rascunho</span>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap gap-3 text-sm text-gray-600 ml-11">
+                <span class="flex items-center gap-1">
+                    <ion-icon name="library-outline"></ion-icon>
+                    {{ schedule.ministry.name }}
+                </span>
+                <span class="flex items-center gap-1">
+                    <ion-icon name="calendar-outline"></ion-icon>
+                    {{ schedule.get_month_display }}/{{ schedule.year }}
+                </span>
+                <span class="flex items-center gap-1">
+                <ion-icon name="{% if schedule.use_team_rotation %}people-circle-outline{% else %}person-outline{% endif %}"></ion-icon>
+                {% if schedule.use_team_rotation %}Rotação de Equipes{% else %}Membros Diretos{% endif %}
+            </span>
+        </div>
+    </div>
+
+    <!-- Actions Bar -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-6 flex flex-wrap gap-3">
+        <button onclick="openCalendarModal()" 
+                class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg transition font-semibold flex items-center gap-2 shadow-md">
+            <ion-icon name="calendar-outline" class="text-xl"></ion-icon>
+            <span>Adicionar Dias pelo Calendário</span>
+        </button>
+        
+        <a href="{% url 'schedule_export_pdf' schedule.id %}" 
+           target="_blank"
+           class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition text-sm flex items-center gap-2">
+            <ion-icon name="download-outline"></ion-icon>
+            <span>Exportar PDF</span>
+        </a>
+        
+        {% if schedule.is_published %}
+        <button onclick="togglePublish(false)" 
+                class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition text-sm flex items-center gap-2">
+            <ion-icon name="eye-off-outline"></ion-icon>
+            <span>Despublicar</span>
+        </button>
+        {% else %}
+        <button onclick="togglePublish(true)" 
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition text-sm flex items-center gap-2">
+            <ion-icon name="eye-outline"></ion-icon>
+            <span>Publicar Escala</span>
+        </button>
+        {% endif %}
+        
+        <a href="{% url 'schedule_edit' schedule.id %}" 
+           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition text-sm flex items-center gap-2">
+            <ion-icon name="create-outline"></ion-icon>
+            <span>Editar Escala</span>
+        </a>
+    </div>
+
+    <!-- Guidelines -->
+    {% if schedule.guidelines %}
+    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r-lg">
+        <div class="flex items-start gap-2">
+            <ion-icon name="information-circle-outline" class="text-blue-500 text-xl mt-0.5"></ion-icon>
+            <div>
+                <h3 class="font-semibold text-blue-800 mb-1">Orientações</h3>
+                <p class="text-sm text-blue-700 whitespace-pre-line">{{ schedule.guidelines }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Days List -->
+    {% if days %}
+    <div class="space-y-6">
+        {% for week_num, week_days in weeks.items %}
+        <div class="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">Semana {{ week_num }}</h3>
+            
+            <div class="space-y-3">
+                {% for day in week_days %}
+                <div class="border-l-4 pl-4 py-3 {% if day.is_cancelled %}border-gray-300 bg-gray-50{% else %}border-blue-500 bg-blue-50{% endif %} rounded-r-lg">
+                    <div class="flex flex-col sm:flex-row justify-between items-start gap-3">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-2">
+                                <h4 class="font-semibold text-gray-800">
+                                    {{ day.date|date:"d/m/Y (l)" }}
+                                </h4>
+                                {% if day.is_cancelled %}
+                                <span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">Cancelado</span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if day.description %}
+                            <p class="text-sm text-gray-600 mb-2">{{ day.description }}</p>
+                            {% endif %}
+                            
+                            <div class="flex flex-wrap gap-2 text-sm">
+                                {% if day.team %}
+                                <span class="inline-flex items-center gap-1 bg-white px-3 py-1 rounded-full border">
+                                    <div class="w-2 h-2 rounded-full" style="background-color: {{ day.team.color }};"></div>
+                                    <span class="font-medium">{{ day.team.name }}</span>
+                                    <span class="text-gray-500">({{ day.team.get_member_count }} membros)</span>
+                                </span>
+                                {% endif %}
+                                
+                                {% for member in day.members.all %}
+                                <span class="bg-white px-3 py-1 rounded-full border">
+                                    {{ member.name }}
+                                </span>
+                                {% endfor %}
+                                
+                                {% if not day.team and not day.members.all %}
+                                <span class="text-gray-500 italic">Sem atribuição</span>
+                                {% endif %}
+                            </div>
+                            
+                            {% if day.notes %}
+                            <p class="text-sm text-gray-600 mt-2 italic">{{ day.notes }}</p>
+                            {% endif %}
+                            
+                            {% if day.is_cancelled and day.cancellation_reason %}
+                            <p class="text-sm text-red-600 mt-2">
+                                <strong>Motivo:</strong> {{ day.cancellation_reason }}
+                            </p>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="flex gap-2">
+                            <button onclick="editDay({{ day.id }})" 
+                                    class="bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+                                <ion-icon name="create-outline"></ion-icon>
+                            </button>
+                            
+                            {% if day.is_cancelled %}
+                            <button onclick="toggleCancel({{ day.id }}, false)" 
+                                    class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition text-sm">
+                                <ion-icon name="checkmark-outline"></ion-icon>
+                            </button>
+                            {% else %}
+                            <button onclick="toggleCancel({{ day.id }}, true)" 
+                                    class="bg-orange-600 text-white px-3 py-2 rounded-lg hover:bg-orange-700 transition text-sm">
+                                <ion-icon name="close-circle-outline"></ion-icon>
+                            </button>
+                            {% endif %}
+                            
+                            <button onclick="deleteDay({{ day.id }})" 
+                                    class="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-sm">
+                                <ion-icon name="trash-outline"></ion-icon>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow-sm p-8 sm:p-12 text-center">
+        <ion-icon name="calendar-clear-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
+        <h3 class="text-xl font-semibold text-gray-800 mb-2">Nenhum dia adicionado</h3>
+        <p class="text-gray-600 mb-6">Comece adicionando os dias de culto ou eventos desta escala</p>
+        <button onclick="openAddDayModal()" 
+                class="inline-block bg-[var(--church-secondary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition">
+            <ion-icon name="add-outline" class="align-middle"></ion-icon>
+            Adicionar Primeiro Dia
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Calendar Modal -->
+<div id="calendarModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">Gerenciar Escala do Mês</h2>
+                    <p class="text-gray-600 text-sm">Configure todos os dias e salve tudo de uma vez</p>
+                </div>
+                <button onclick="closeCalendarModal()" class="text-gray-500 hover:text-gray-700">
+                    <ion-icon name="close-outline" class="text-3xl"></ion-icon>
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Calendar Column -->
+                <div class="lg:col-span-2">
+                    <p class="text-gray-600 mb-4">Clique nos dias para atribuir {% if schedule.use_team_rotation %}equipes{% else %}membros{% endif %}</p>
+                    
+                    <!-- Calendar -->
+                    <div id="calendar" class="bg-white border border-gray-200 rounded-lg p-4 mb-4"></div>
+                    
+                    <!-- Quick Select Options -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h3 class="font-semibold text-gray-800 mb-3">Ações Rápidas:</h3>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="quickSelectDays('sundays')" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-2 rounded-lg text-sm">
+                                Selecionar Domingos
+                            </button>
+                            <button onclick="quickSelectDays('wednesdays')" class="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-2 rounded-lg text-sm">
+                                Selecionar Quartas
+                            </button>
+                            <button onclick="quickSelectDays('weekends')" class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-2 rounded-lg text-sm">
+                                Selecionar Finais de Semana
+                            </button>
+                            <button onclick="clearPendingDays()" class="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded-lg text-sm">
+                                Limpar Tudo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pending Days Column -->
+                <div class="lg:col-span-1">
+                    <div class="bg-gray-50 rounded-lg p-4 sticky top-0">
+                        <h3 class="font-semibold text-gray-800 mb-3">Dias Pendentes</h3>
+                        <div id="pendingDaysList" class="space-y-2 mb-4 max-h-96 overflow-y-auto">
+                            <p class="text-gray-500 text-sm">Nenhum dia configurado</p>
+                        </div>
+                        
+                        <div class="pt-4 border-t border-gray-300">
+                            <div class="flex items-center justify-between mb-4">
+                                <span class="font-semibold text-gray-700">Total:</span>
+                                <span id="pendingCount" class="bg-orange-100 text-orange-800 px-3 py-1 rounded-full font-bold">0</span>
+                            </div>
+                            
+                            <button onclick="saveAllDays()" 
+                                    id="saveAllDaysBtn"
+                                    class="w-full bg-orange-600 text-white px-6 py-3 rounded-lg transition font-semibold shadow-md disabled:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 disabled:hover:bg-gray-400">
+                                <div class="flex items-center justify-center gap-2">
+                                    <ion-icon name="save-outline" class="text-xl"></ion-icon>
+                                    <span>Salvar Todos os Dias</span>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Day Assignment Modal -->
+<div id="dayAssignmentModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800" id="assignmentModalTitle">Atribuir ao Dia</h2>
+                    <p class="text-gray-600 text-sm" id="assignmentModalDate"></p>
+                </div>
+                <button onclick="closeDayAssignmentModal()" class="text-gray-500 hover:text-gray-700">
+                    <ion-icon name="close-outline" class="text-3xl"></ion-icon>
+                </button>
+            </div>
+            
+            <form id="dayAssignmentForm" class="space-y-4">
+                <input type="hidden" id="assignmentDate" name="date">
+                <input type="hidden" id="assignmentDayId" name="dayId">
+                
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Descrição
+                        <span class="text-gray-500 font-normal">(Ex: Culto de Quarta, Culto de Domingo)</span>
+                    </label>
+                    <input type="text" 
+                           id="assignmentDescription" 
+                           name="description"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
+                           placeholder="Ex: Culto de Quarta-feira">
+                </div>
+                
+                {% if schedule.use_team_rotation %}
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Equipe *</label>
+                    <select id="assignmentTeam" 
+                            name="team"
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500">
+                        <option value="">Selecione a equipe</option>
+                        {% for team in teams %}
+                        <option value="{{ team.id }}">{{ team.name }} ({{ team.get_member_count }} membros)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Membros *</label>
+                    <select id="assignmentMembers" 
+                            name="members" 
+                            multiple
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
+                            style="min-height: 200px;">
+                        {% for member in members %}
+                        <option value="{{ member.id }}">{{ member.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-sm text-gray-500 mt-1">Segure Ctrl/Cmd para selecionar múltiplos membros</p>
+                </div>
+                {% endif %}
+                
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Observações</label>
+                    <textarea id="assignmentNotes" 
+                              name="notes"
+                              rows="3"
+                              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 resize-none"
+                              placeholder="Observações sobre este dia..."></textarea>
+                </div>
+                
+                <div class="flex gap-3 mt-6">
+                    <button type="submit" 
+                            class="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg transition font-semibold">
+                        Salvar
+                    </button>
+                    <button type="button" 
+                            onclick="closeDayAssignmentModal()"
+                            class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition font-semibold">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Day Modal -->
+<div id="dayModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800" id="modalTitle">Adicionar Dia</h2>
+                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                    <ion-icon name="close-outline" class="text-3xl"></ion-icon>
+                </button>
+            </div>
+            
+            <form id="dayForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Data *</label>
+                    <input type="date" 
+                           id="dayDate" 
+                           name="date" 
+                           required
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)]">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Descrição
+                        <span class="text-gray-500 font-normal">(Ex: Culto de Quarta, Culto de Domingo)</span>
+                    </label>
+                    <input type="text" 
+                           id="dayDescription" 
+                           name="description"
+                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)]"
+                           placeholder="Ex: Culto de Quarta-feira">
+                </div>
+                
+                {% if schedule.use_team_rotation %}
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Equipe</label>
+                    <select id="dayTeam" 
+                            name="team"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)]">
+                        <option value="">Selecione a equipe</option>
+                        {% for team in teams %}
+                        <option value="{{ team.id }}">{{ team.name }} ({{ team.get_member_count }} membros)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Membros</label>
+                    <select id="dayMembers" 
+                            name="members" 
+                            multiple
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)]"
+                            style="min-height: 150px;">
+                        {% for member in members %}
+                        <option value="{{ member.id }}">{{ member.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Observações</label>
+                    <textarea id="dayNotes" 
+                              name="notes"
+                              rows="3"
+                              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] resize-none"
+                              placeholder="Observações sobre este dia..."></textarea>
+                </div>
+                
+                <div class="flex gap-3 mt-6">
+                    <button type="submit" 
+                            class="flex-1 bg-[var(--church-secondary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition font-semibold">
+                        Salvar
+                    </button>
+                    <button type="button" 
+                            onclick="closeModal()"
+                            class="flex-1 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition font-semibold">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- SweetAlert2 & Select2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+const scheduleId = {{ schedule.id }};
+let editingDayId = null;
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function openAddDayModal() {
+    editingDayId = null;
+    document.getElementById('modalTitle').textContent = 'Adicionar Dia';
+    document.getElementById('dayForm').reset();
+    document.getElementById('dayModal').classList.remove('hidden');
+    
+    {% if not schedule.use_team_rotation %}
+    $('#dayMembers').select2({
+        placeholder: 'Selecione os membros',
+        allowClear: true,
+        width: '100%',
+        dropdownParent: $('#dayModal')
+    });
+    {% endif %}
+}
+
+function closeModal() {
+    document.getElementById('dayModal').classList.add('hidden');
+    {% if not schedule.use_team_rotation %}
+    $('#dayMembers').select2('destroy');
+    {% endif %}
+}
+
+// Handle form submission
+document.getElementById('dayForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const url = editingDayId 
+        ? `/admin-panel/schedules/days/${editingDayId}/edit/`
+        : `/admin-panel/schedules/${scheduleId}/days/new/`;
+    
+    Swal.fire({
+        title: 'Salvando...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); }
+    });
+    
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                title: 'Sucesso!',
+                text: 'Dia salvo com sucesso.',
+                icon: 'success',
+                confirmButtonColor: 'var(--church-secondary)'
+            }).then(() => {
+                window.location.reload();
+            });
+        } else {
+            Swal.fire('Erro!', data.error || 'Erro ao salvar', 'error');
+        }
+    })
+    .catch(error => {
+        Swal.fire('Erro!', 'Erro ao salvar o dia.', 'error');
+    });
+});
+
+function togglePublish(publish) {
+    Swal.fire({
+        title: publish ? 'Publicar Escala?' : 'Despublicar Escala?',
+        text: publish ? 'A escala ficará visível para os membros.' : 'A escala ficará oculta.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#f97316',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: publish ? 'Sim, publicar!' : 'Sim, despublicar!',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Aguarde...',
+                text: 'Processando...',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            const formData = new FormData();
+            formData.append('action', publish ? 'publish' : 'unpublish');
+            
+            fetch(`/admin-panel/schedules/${scheduleId}/publish/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: 'Sucesso!',
+                        text: publish ? 'Escala publicada com sucesso!' : 'Escala despublicada com sucesso!',
+                        icon: 'success',
+                        confirmButtonColor: '#f97316',
+                        confirmButtonText: 'OK'
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Erro!',
+                        text: data.error || 'Ocorreu um erro ao processar a solicitação',
+                        icon: 'error',
+                        confirmButtonColor: '#f97316',
+                        confirmButtonText: 'OK'
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                Swal.fire({
+                    title: 'Erro!',
+                    text: 'Ocorreu um erro ao processar a solicitação',
+                    icon: 'error',
+                    confirmButtonColor: '#f97316',
+                    confirmButtonText: 'OK'
+                });
+            });
+        }
+    });
+}
+
+function deleteDay(dayId) {
+    Swal.fire({
+        title: 'Deletar este dia?',
+        text: "Esta ação não pode ser desfeita!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, deletar!',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            fetch(`/admin-panel/schedules/days/${dayId}/delete/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire('Deletado!', 'Dia removido com sucesso.', 'success')
+                        .then(() => window.location.reload());
+                }
+            });
+        }
+    });
+}
+
+function editDay(dayId) {
+    // TODO: Implement day editing - requires fetching day data and populating form
+    Swal.fire({
+        title: 'Em desenvolvimento',
+        text: 'A edição de dias será implementada em breve!',
+        icon: 'info',
+        confirmButtonColor: 'var(--church-secondary)'
+    });
+}
+
+function toggleCancel(dayId, cancel) {
+    if (cancel) {
+        Swal.fire({
+            title: 'Cancelar este dia?',
+            input: 'textarea',
+            inputLabel: 'Motivo do cancelamento',
+            inputPlaceholder: 'Digite o motivo...',
+            showCancelButton: true,
+            confirmButtonColor: '#f97316',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Confirmar',
+            cancelButtonText: 'Voltar'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const formData = new FormData();
+                formData.append('action', 'cancel');
+                formData.append('reason', result.value || '');
+                
+                fetch(`/admin-panel/schedules/days/${dayId}/toggle-cancel/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        Swal.fire('Cancelado!', '', 'success')
+                            .then(() => window.location.reload());
+                    }
+                });
+            }
+        });
+    } else {
+        const formData = new FormData();
+        formData.append('action', 'uncancel');
+        
+        fetch(`/admin-panel/schedules/days/${dayId}/toggle-cancel/`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                Swal.fire('Reativado!', '', 'success')
+                    .then(() => window.location.reload());
+            }
+        });
+    }
+}
+
+// Calendar functionality
+let scheduleDays = {}; // Existing days from server
+let pendingDays = {}; // Days configured but not saved yet {date: {description, team/members, notes}}
+const scheduleMonth = {{ schedule.month }};
+const scheduleYear = {{ schedule.year }};
+const useTeamRotation = {{ schedule.use_team_rotation|yesno:"true,false" }};
+
+function openCalendarModal() {
+    document.getElementById('calendarModal').classList.remove('hidden');
+    loadScheduleDays();
+    // Initialize button state
+    setTimeout(() => {
+        updatePendingList();
+    }, 100);
+}
+
+function closeCalendarModal() {
+    if (Object.keys(pendingDays).length > 0) {
+        Swal.fire({
+            title: 'Descartar alterações?',
+            text: 'Você tem dias configurados que não foram salvos',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
+            confirmButtonText: 'Sim, descartar',
+            cancelButtonText: 'Continuar editando'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                pendingDays = {};
+                document.getElementById('calendarModal').classList.add('hidden');
+            }
+        });
+    } else {
+        document.getElementById('calendarModal').classList.add('hidden');
+    }
+}
+
+function loadScheduleDays() {
+    // Load existing days from the page
+    scheduleDays = {};
+    {% for day in days %}
+    scheduleDays['{{ day.date|date:"Y-m-d" }}'] = {
+        id: {{ day.id }},
+        description: '{{ day.description|escapejs }}',
+        {% if schedule.use_team_rotation %}
+        teamId: {{ day.team.id|default:'null' }},
+        teamName: '{{ day.team.name|default:""|escapejs }}',
+        {% else %}
+        memberIds: [{% for member in day.members.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
+        memberNames: [{% for member in day.members.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+        {% endif %}
+        notes: '{{ day.notes|default:""|escapejs }}'
+    };
+    {% endfor %}
+    renderCalendar();
+    updatePendingList();
+}
+
+function renderCalendar() {
+    const firstDay = new Date(scheduleYear, scheduleMonth - 1, 1);
+    const lastDay = new Date(scheduleYear, scheduleMonth, 0);
+    const startingDayOfWeek = firstDay.getDay();
+    const monthLength = lastDay.getDate();
+    
+    const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    
+    let html = `
+        <div class="text-center mb-4">
+            <h3 class="text-xl font-bold text-gray-800">${monthNames[scheduleMonth - 1]} ${scheduleYear}</h3>
+        </div>
+        <div class="grid grid-cols-7 gap-1 mb-2 text-xs sm:text-sm">
+            <div class="text-center font-semibold text-gray-700 py-2">Dom</div>
+            <div class="text-center font-semibold text-gray-700 py-2">Seg</div>
+            <div class="text-center font-semibold text-gray-700 py-2">Ter</div>
+            <div class="text-center font-semibold text-gray-700 py-2">Qua</div>
+            <div class="text-center font-semibold text-gray-700 py-2">Qui</div>
+            <div class="text-center font-semibold text-gray-700 py-2">Sex</div>
+            <div class="text-center font-semibold text-gray-700 py-2">Sáb</div>
+        </div>
+        <div class="grid grid-cols-7 gap-1">`;
+    
+    // Empty cells before the first day
+    for (let i = 0; i < startingDayOfWeek; i++) {
+        html += `<div class="aspect-square"></div>`;
+    }
+    
+    // Days of the month
+    for (let day = 1; day <= monthLength; day++) {
+        const dateStr = `${scheduleYear}-${String(scheduleMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const existingDay = scheduleDays[dateStr];
+        const pendingDay = pendingDays[dateStr];
+        
+        let bgColor, textColor, borderColor, icon;
+        if (existingDay) {
+            bgColor = 'bg-green-100';
+            textColor = 'text-green-800';
+            borderColor = 'border-green-500';
+            icon = '<ion-icon name="checkmark-circle" class="text-green-600"></ion-icon>';
+        } else if (pendingDay) {
+            bgColor = 'bg-yellow-100';
+            textColor = 'text-yellow-800';
+            borderColor = 'border-yellow-500';
+            icon = '<ion-icon name="time-outline" class="text-yellow-600"></ion-icon>';
+        } else {
+            bgColor = 'bg-white hover:bg-orange-50';
+            textColor = 'text-gray-700';
+            borderColor = 'border-gray-300';
+            icon = '';
+        }
+        
+        html += `
+            <div onclick="openDayAssignment('${dateStr}')" 
+                 class="aspect-square flex flex-col items-center justify-center border-2 ${borderColor} ${bgColor} ${textColor} rounded-lg cursor-pointer transition p-1 relative">
+                <span class="font-bold text-sm sm:text-lg">${day}</span>
+                ${icon ? `<div class="absolute top-0.5 right-0.5 text-xs">${icon}</div>` : ''}
+            </div>`;
+    }
+    
+    html += `</div>`;
+    document.getElementById('calendar').innerHTML = html;
+}
+
+function openDayAssignment(dateStr) {
+    const existingDay = scheduleDays[dateStr];
+    const pendingDay = pendingDays[dateStr];
+    const dayData = pendingDay || existingDay;
+    
+    const date = new Date(dateStr + 'T00:00:00');
+    const dayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+    
+    document.getElementById('assignmentModalTitle').textContent = existingDay ? 'Editar Dia (Salvo)' : (pendingDay ? 'Editar Dia (Pendente)' : 'Adicionar Dia');
+    document.getElementById('assignmentModalDate').textContent = `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()} - ${dayNames[date.getDay()]}`;
+    document.getElementById('assignmentDate').value = dateStr;
+    document.getElementById('assignmentDayId').value = existingDay ? existingDay.id : '';
+    
+    // Populate form with existing/pending data
+    document.getElementById('assignmentDescription').value = dayData ? dayData.description : '';
+    document.getElementById('assignmentNotes').value = dayData ? dayData.notes : '';
+    
+    if (useTeamRotation) {
+        document.getElementById('assignmentTeam').value = dayData ? dayData.teamId : '';
+    } else {
+        const memberSelect = document.getElementById('assignmentMembers');
+        Array.from(memberSelect.options).forEach(option => {
+            option.selected = dayData && dayData.memberIds && dayData.memberIds.includes(parseInt(option.value));
+        });
+    }
+    
+    document.getElementById('dayAssignmentModal').classList.remove('hidden');
+}
+
+function closeDayAssignmentModal() {
+    document.getElementById('dayAssignmentModal').classList.add('hidden');
+    document.getElementById('dayAssignmentForm').reset();
+}
+
+// Handle day assignment form submission - now saves to pending instead of server
+document.getElementById('dayAssignmentForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    const date = formData.get('date');
+    const dayId = formData.get('dayId');
+    
+    // If it's an existing day (already saved), edit it directly
+    if (dayId) {
+        saveExistingDay(dayId, formData);
+        return;
+    }
+    
+    // Validate
+    if (useTeamRotation) {
+        if (!formData.get('team')) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Equipe obrigatória',
+                text: 'Por favor, selecione uma equipe',
+                confirmButtonColor: '#f97316'
+            });
+            return;
+        }
+    } else {
+        const members = formData.getAll('members');
+        if (members.length === 0) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Membros obrigatórios',
+                text: 'Por favor, selecione ao menos um membro',
+                confirmButtonColor: '#f97316'
+            });
+            return;
+        }
+    }
+    
+    // Save to pending
+    pendingDays[date] = {
+        description: formData.get('description') || '',
+        notes: formData.get('notes') || ''
+    };
+    
+    if (useTeamRotation) {
+        pendingDays[date].teamId = formData.get('team');
+        const teamSelect = document.getElementById('assignmentTeam');
+        pendingDays[date].teamName = teamSelect.options[teamSelect.selectedIndex].text;
+    } else {
+        pendingDays[date].memberIds = formData.getAll('members').map(id => parseInt(id));
+        const memberSelect = document.getElementById('assignmentMembers');
+        pendingDays[date].memberNames = Array.from(memberSelect.selectedOptions).map(opt => opt.text);
+    }
+    
+    closeDayAssignmentModal();
+    renderCalendar();
+    updatePendingList();
+    
+    Swal.fire({
+        icon: 'success',
+        title: 'Dia configurado!',
+        text: 'Não esqueça de clicar em "Salvar Todos os Dias"',
+        timer: 2000,
+        showConfirmButton: false
+    });
+});
+
+// Update pending days list in sidebar
+function updatePendingList() {
+    const pendingListDiv = document.getElementById('pendingDaysList');
+    const saveButton = document.getElementById('saveAllDaysBtn');
+    const pendingCount = Object.keys(pendingDays).length;
+    
+    console.log('Updating pending list. Count:', pendingCount, 'Pending days:', pendingDays);
+    
+    // Update count badge
+    document.getElementById('pendingCount').textContent = pendingCount;
+    
+    // Enable/disable save button
+    if (saveButton) {
+        if (pendingCount === 0) {
+            saveButton.disabled = true;
+        } else {
+            saveButton.disabled = false;
+        }
+    }
+    
+    if (pendingCount === 0) {
+        pendingListDiv.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                <ion-icon name="calendar-outline" class="text-4xl mb-2"></ion-icon>
+                <p class="text-sm">Nenhum dia pendente</p>
+                <p class="text-xs mt-1">Clique nos dias para configurar</p>
+            </div>`;
+        return;
+    }
+    
+    // Sort by date
+    const sortedDates = Object.keys(pendingDays).sort();
+    
+    let html = '<div class="space-y-2">';
+    sortedDates.forEach(dateStr => {
+        const date = new Date(dateStr + 'T00:00:00');
+        const day = pendingDays[dateStr];
+        
+        let assignmentText = '';
+        if (useTeamRotation) {
+            assignmentText = day.teamName || 'Sem equipe';
+        } else {
+            const count = day.memberIds ? day.memberIds.length : 0;
+            assignmentText = count > 0 ? `${count} membro${count > 1 ? 's' : ''}` : 'Sem membros';
+        }
+        
+        html += `
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-bold text-yellow-800">${date.getDate()}/${date.getMonth() + 1}</span>
+                            <span class="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded">${assignmentText}</span>
+                        </div>
+                        ${day.description ? `<p class="text-sm text-gray-700">${day.description}</p>` : ''}
+                    </div>
+                    <div class="flex gap-1 ml-2">
+                        <button onclick="openDayAssignment('${dateStr}')" 
+                                class="text-blue-600 hover:text-blue-700 p-1"
+                                title="Editar">
+                            <ion-icon name="create-outline"></ion-icon>
+                        </button>
+                        <button onclick="removePendingDay('${dateStr}')" 
+                                class="text-red-600 hover:text-red-700 p-1"
+                                title="Remover">
+                            <ion-icon name="trash-outline"></ion-icon>
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+    });
+    html += '</div>';
+    
+    pendingListDiv.innerHTML = html;
+}
+
+// Remove a day from pending list
+function removePendingDay(dateStr) {
+    Swal.fire({
+        title: 'Remover dia?',
+        text: 'Este dia será removido da lista pendente',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, remover',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            delete pendingDays[dateStr];
+            renderCalendar();
+            updatePendingList();
+        }
+    });
+}
+
+// Save all pending days to server
+function saveAllDays() {
+    const pendingCount = Object.keys(pendingDays).length;
+    
+    if (pendingCount === 0) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Nenhum dia pendente',
+            text: 'Configure ao menos um dia antes de salvar',
+            confirmButtonColor: '#f97316'
+        });
+        return;
+    }
+    
+    Swal.fire({
+        title: `Salvar ${pendingCount} dia(s)?`,
+        text: 'Todos os dias configurados serão salvos',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#f97316',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, salvar tudo',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Salvando...',
+                html: `<div class="mb-2">Salvando dias...</div><div id="saveProgress" class="text-sm text-gray-600">0 de ${pendingCount}</div>`,
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            let savedCount = 0;
+            const promises = Object.keys(pendingDays).map(dateStr => {
+                const day = pendingDays[dateStr];
+                const formData = new FormData();
+                
+                formData.append('date', dateStr);
+                formData.append('description', day.description);
+                formData.append('notes', day.notes);
+                
+                if (useTeamRotation) {
+                    formData.append('team', day.teamId);
+                } else {
+                    day.memberIds.forEach(id => formData.append('members', id));
+                }
+                
+                return fetch(`/admin-panel/schedules/${scheduleId}/days/new/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    body: formData
+                }).then(response => {
+                    savedCount++;
+                    document.getElementById('saveProgress').textContent = `${savedCount} de ${pendingCount}`;
+                    return response.json();
+                });
+            });
+            
+            Promise.all(promises)
+                .then(results => {
+                    const errors = results.filter(r => !r.success);
+                    if (errors.length > 0) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Parcialmente salvo',
+                            text: `${savedCount - errors.length} dias salvos, ${errors.length} com erro`,
+                            confirmButtonColor: '#f97316'
+                        }).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Todos os dias salvos!',
+                            text: `${savedCount} dia(s) adicionado(s) com sucesso`,
+                            confirmButtonColor: '#f97316',
+                            timer: 2000
+                        }).then(() => {
+                            window.location.reload();
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Ocorreu um erro ao salvar os dias',
+                        confirmButtonColor: '#f97316'
+                    });
+                });
+        }
+    });
+}
+
+// Clear all pending days
+function clearAllPending() {
+    if (Object.keys(pendingDays).length === 0) {
+        return;
+    }
+    
+    Swal.fire({
+        title: 'Limpar tudo?',
+        text: 'Todos os dias pendentes serão removidos',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, limpar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            pendingDays = {};
+            renderCalendar();
+            updatePendingList();
+        }
+    });
+}
+
+// Quick select days (sundays, wednesdays, weekends)
+function quickSelectDays(type) {
+    const lastDay = new Date(scheduleYear, scheduleMonth, 0).getDate();
+    const newPending = 0;
+    
+    for (let day = 1; day <= lastDay; day++) {
+        const date = new Date(scheduleYear, scheduleMonth - 1, day);
+        const dateStr = `${scheduleYear}-${String(scheduleMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        // Skip if already exists or already pending
+        if (scheduleDays[dateStr] || pendingDays[dateStr]) continue;
+        
+        let shouldAdd = false;
+        if (type === 'sundays' && date.getDay() === 0) shouldAdd = true;
+        else if (type === 'wednesdays' && date.getDay() === 3) shouldAdd = true;
+        else if (type === 'weekends' && (date.getDay() === 0 || date.getDay() === 6)) shouldAdd = true;
+        
+        if (shouldAdd) {
+            // Add with minimal data - user will need to edit
+            pendingDays[dateStr] = {
+                description: '',
+                notes: '',
+                teamId: null,
+                teamName: '',
+                memberIds: [],
+                memberNames: []
+            };
+        }
+    }
+    
+    renderCalendar();
+    updatePendingList();
+    
+    const count = Object.keys(pendingDays).length;
+    if (count > 0) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Dias adicionados!',
+            text: 'Configure as equipes/membros antes de salvar',
+            confirmButtonColor: '#f97316'
+        });
+    }
+}
+
+// Save existing day (already in database)
+function saveExistingDay(dayId, formData) {
+    Swal.fire({
+        title: 'Salvando...',
+        text: 'Por favor, aguarde',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    fetch(`/admin-panel/schedules/days/${dayId}/edit/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Atualizado!',
+                text: 'Dia atualizado com sucesso',
+                confirmButtonColor: '#f97316'
+            }).then(() => {
+                window.location.reload();
+            });
+        } else {
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro',
+                text: data.error || 'Ocorreu um erro ao salvar',
+                confirmButtonColor: '#f97316'
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Erro',
+            text: 'Ocorreu um erro ao salvar',
+            confirmButtonColor: '#f97316'
+        });
+    });
+}
+
+function quickAddDays(type) {
+    const lastDay = new Date(scheduleYear, scheduleMonth, 0).getDate();
+    const dates = [];
+    
+    for (let day = 1; day <= lastDay; day++) {
+        const date = new Date(scheduleYear, scheduleMonth - 1, day);
+        const dateStr = `${scheduleYear}-${String(scheduleMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        // Skip if already exists
+        if (scheduleDays[dateStr]) continue;
+        
+        if (type === 'sundays' && date.getDay() === 0) dates.push(dateStr);
+        else if (type === 'wednesdays' && date.getDay() === 3) dates.push(dateStr);
+        else if (type === 'weekends' && (date.getDay() === 0 || date.getDay() === 6)) dates.push(dateStr);
+    }
+    
+    if (dates.length === 0) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Nenhum dia para adicionar',
+            text: 'Todos os dias deste tipo já foram adicionados',
+            confirmButtonColor: '#f97316'
+        });
+        return;
+    }
+    
+    Swal.fire({
+        title: `Adicionar ${dates.length} dia(s)?`,
+        text: 'Os dias serão criados sem atribuição. Você poderá atribuir membros/equipes depois.',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#f97316',
+        cancelButtonColor: '#6b7280',
+        confirmButtonText: 'Sim, adicionar',
+        cancelButtonText: 'Cancelar'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            const promises = dates.map(date => {
+                const formData = new FormData();
+                formData.append('date', date);
+                
+                return fetch(`/admin-panel/schedules/${scheduleId}/days/new/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                    body: formData
+                });
+            });
+            
+            Swal.fire({
+                title: 'Adicionando...',
+                text: 'Por favor, aguarde',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            Promise.all(promises)
+                .then(() => {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Dias adicionados!',
+                        text: `${dates.length} dia(s) criado(s). Recarregando...`,
+                        confirmButtonColor: '#f97316',
+                        timer: 2000
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Ocorreu um erro ao adicionar os dias',
+                        confirmButtonColor: '#f97316'
+                    });
+                });
+        }
+    });
+}
+
+function refreshCalendar() {
+    window.location.reload();
+}
+</script>
+</div>
+{% endblock %}

@@ -20,16 +20,19 @@ from .views.word_of_knowledge import (
     word_of_knowledge_list, word_of_knowledge_create, healing_create,
     service_words_view, mark_word_as_healed
 )
-from .views.ministration_schedule import (
-    schedule_list, schedule_create, schedule_edit, schedule_delete, schedule_detail,
-    export_monthly_schedule_pdf
-)
 from .views.ministration_admin import (
     MinistrationWordsListView, MinistrationHealingsListView, MinistrationMembersListView,
     ministration_add_member, ministration_remove_member, ministration_toggle_approver
 )
 from .views.ministration_dashboard import ministration_dashboard
 from .views.word_approval import pending_words_list, approve_word, reject_word
+from .views.schedules import (
+    team_list_view, team_create_view, team_edit_view, team_delete_view,
+    schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
+    schedule_delete_view, schedule_publish_view, schedule_export_pdf_view,
+    schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
+    schedule_day_toggle_cancel_view
+)
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
     events_list_view, ministries_list_view, neighborhoods_list_view,
@@ -83,12 +86,6 @@ urlpatterns = [
     
     # Ministration URLs
     path('admin-panel/ministration/', ministration_dashboard, name='ministration_dashboard'),
-    path('admin-panel/ministration/schedules/', schedule_list, name='ministration_schedule_list'),
-    path('admin-panel/ministration/schedules/export-pdf/', export_monthly_schedule_pdf, name='export_monthly_schedule_pdf'),
-    path('admin-panel/ministration/schedules/new/', schedule_create, name='ministration_schedule_create'),
-    path('admin-panel/ministration/schedules/<int:schedule_id>/', schedule_detail, name='ministration_schedule_detail'),
-    path('admin-panel/ministration/schedules/<int:schedule_id>/edit/', schedule_edit, name='ministration_schedule_edit'),
-    path('admin-panel/ministration/schedules/<int:schedule_id>/delete/', schedule_delete, name='ministration_schedule_delete'),
     path('admin-panel/ministration/words/', MinistrationWordsListView.as_view(), name='ministration_words_list'),
     path('admin-panel/ministration/words/pending/', pending_words_list, name='pending_words_list'),
     path('admin-panel/ministration/words/approve/<int:word_id>/', approve_word, name='approve_word'),
@@ -98,6 +95,27 @@ urlpatterns = [
     path('admin-panel/ministration/members/<int:member_id>/add/', ministration_add_member, name='ministration_add_member'),
     path('admin-panel/ministration/members/<int:member_id>/remove/', ministration_remove_member, name='ministration_remove_member'),
     path('admin-panel/ministration/members/<int:member_id>/toggle-approver/', ministration_toggle_approver, name='ministration_toggle_approver'),
+    
+    # Schedule URLs - Sistema de Escalas
+    path('admin-panel/schedules/', schedule_list_view, name='schedule_list'),
+    path('admin-panel/schedules/new/', schedule_create_view, name='schedule_create'),
+    path('admin-panel/schedules/<int:schedule_id>/', schedule_detail_view, name='schedule_detail'),
+    path('admin-panel/schedules/<int:schedule_id>/edit/', schedule_edit_view, name='schedule_edit'),
+    path('admin-panel/schedules/<int:schedule_id>/delete/', schedule_delete_view, name='schedule_delete'),
+    path('admin-panel/schedules/<int:schedule_id>/publish/', schedule_publish_view, name='schedule_publish'),
+    path('admin-panel/schedules/<int:schedule_id>/export-pdf/', schedule_export_pdf_view, name='schedule_export_pdf'),
+    
+    # Schedule Days URLs
+    path('admin-panel/schedules/<int:schedule_id>/days/new/', schedule_day_create_view, name='schedule_day_create'),
+    path('admin-panel/schedules/days/<int:day_id>/edit/', schedule_day_edit_view, name='schedule_day_edit'),
+    path('admin-panel/schedules/days/<int:day_id>/delete/', schedule_day_delete_view, name='schedule_day_delete'),
+    path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', schedule_day_toggle_cancel_view, name='schedule_day_toggle_cancel'),
+    
+    # Team URLs
+    path('admin-panel/teams/', team_list_view, name='team_list'),
+    path('admin-panel/teams/new/', team_create_view, name='team_create'),
+    path('admin-panel/teams/<int:team_id>/edit/', team_edit_view, name='team_edit'),
+    path('admin-panel/teams/<int:team_id>/delete/', team_delete_view, name='team_delete'),
     
     # Admin Panel URLs
     path('admin-panel/', dashboard_view, name='admin_dashboard'),

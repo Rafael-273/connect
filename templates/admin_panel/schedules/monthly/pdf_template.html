@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Escala - {{ schedule.ministry.name }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #f97316;
+            padding-bottom: 20px;
+        }
+        
+        .header h1 {
+            color: #f97316;
+            font-size: 24px;
+            margin: 0 0 10px 0;
+        }
+        
+        .header h2 {
+            color: #666;
+            font-size: 18px;
+            margin: 0;
+            font-weight: normal;
+        }
+        
+        .info-section {
+            background: #FFF7ED;
+            padding: 15px;
+            border-left: 4px solid #f97316;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        
+        .info-section p {
+            margin: 5px 0;
+        }
+        
+        .info-section strong {
+            color: #f97316;
+        }
+        
+        .guidelines {
+            background: #EFF6FF;
+            padding: 15px;
+            border-left: 4px solid #3B82F6;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+        
+        .guidelines h3 {
+            color: #3B82F6;
+            margin-top: 0;
+            font-size: 16px;
+        }
+        
+        .section-title {
+            color: #f97316;
+            font-size: 18px;
+            margin: 30px 0 15px 0;
+            border-bottom: 2px solid #f97316;
+            padding-bottom: 5px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        
+        table thead {
+            background: #f97316;
+            color: white;
+        }
+        
+        table thead th {
+            padding: 12px 10px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        table tbody tr:nth-child(even) {
+            background: #FFF7ED;
+        }
+        
+        table tbody tr:nth-child(odd) {
+            background: white;
+        }
+        
+        table tbody td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            font-size: 12px;
+        }
+        
+        table tbody td.date {
+            text-align: center;
+            font-weight: bold;
+            color: #f97316;
+            white-space: nowrap;
+        }
+        
+        table tbody td.day-name {
+            text-align: center;
+            color: #666;
+            white-space: nowrap;
+        }
+        
+        .cancelled {
+            background: #FEE2E2 !important;
+            color: #DC2626;
+            font-weight: bold;
+        }
+        
+        .members-list {
+            font-size: 11px;
+            color: #555;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-style: italic;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #999;
+            font-size: 10px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+        
+        .status-published {
+            background: #D1FAE5;
+            color: #065F46;
+        }
+        
+        .status-draft {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+    </style>
+</head>
+<body>
+    <!-- Cabeçalho -->
+    <div class="header">
+        <h1>Escala de {{ schedule.ministry.name }}</h1>
+        <h2>{{ month_name }} de {{ schedule.year }}</h2>
+        {% if schedule.is_published %}
+        <span class="status-badge status-published">PUBLICADA</span>
+        {% else %}
+        <span class="status-badge status-draft">RASCUNHO</span>
+        {% endif %}
+    </div>
+    
+    <!-- Informações da Escala -->
+    {% if schedule.title or schedule.name %}
+    <div class="info-section">
+        {% if schedule.title %}
+        <p><strong>Título:</strong> {{ schedule.title }}</p>
+        {% endif %}
+        
+        {% if schedule.name %}
+        <p><strong>Nome:</strong> {{ schedule.name }}</p>
+        {% endif %}
+        
+        <p><strong>Tipo:</strong> {{ use_team_rotation|yesno:"Rotação por Equipes,Atribuição Individual" }}</p>
+    </div>
+    {% endif %}
+    
+    <!-- Diretrizes -->
+    {% if schedule.guidelines %}
+    <div class="guidelines">
+        <h3>📋 Diretrizes</h3>
+        <p>{{ schedule.guidelines|linebreaks }}</p>
+    </div>
+    {% endif %}
+    
+    <!-- Cronograma -->
+    <h3 class="section-title">📅 Cronograma</h3>
+    
+    {% if days %}
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 12%;">Data</th>
+                <th style="width: 12%;">Dia</th>
+                <th style="width: 30%;">{% if use_team_rotation %}Equipe{% else %}Membros{% endif %}</th>
+                <th style="width: 46%;">Descrição</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for day in days %}
+            <tr {% if day.is_cancelled %}class="cancelled"{% endif %}>
+                <td class="date">{{ day.date_str }}</td>
+                <td class="day-name">{{ day.day_name }}</td>
+                <td>
+                    {% if day.is_cancelled %}
+                        <strong>CANCELADO</strong>
+                    {% else %}
+                        {% if use_team_rotation %}
+                            {% if day.team %}
+                                {{ day.team.name }}
+                            {% else %}
+                                <em style="color: #999;">Sem equipe</em>
+                            {% endif %}
+                        {% else %}
+                            {% if day.members %}
+                                <div class="members-list">
+                                    {% for member in day.members %}
+                                        {{ member.name }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <em style="color: #999;">Sem membros</em>
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if day.is_cancelled %}
+                        {{ day.cancellation_reason|default:"Sem motivo informado" }}
+                    {% else %}
+                        {{ day.description|default:"---" }}
+                        {% if day.notes %}
+                            <br><small style="color: #666;">Obs: {{ day.notes }}</small>
+                        {% endif %}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>Nenhum dia configurado nesta escala.</p>
+    </div>
+    {% endif %}
+    
+    <!-- Rodapé -->
+    <div class="footer">
+        <p>Gerado em {{ generated_at }} • Igreja Filadélfia</p>
+    </div>
+</body>
+</html>

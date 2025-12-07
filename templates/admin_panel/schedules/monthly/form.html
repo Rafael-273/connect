@@ -1,0 +1,229 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{% if schedule %}Editar{% else %}Nova{% endif %} Escala - Admin Panel{% endblock %}
+
+{% block content %}
+<!-- Admin Sidebar -->
+{% include 'parciais/admin_sidebar.html' %}
+
+<!-- Main Content with sidebar offset and top spacing -->
+<div class="md:pl-64 pt-24">
+    <div class="container mx-auto px-4 py-6 max-w-4xl">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center gap-3 mb-2">
+                <a href="{% url 'schedule_list' %}" class="text-gray-600 hover:text-gray-900">
+                    <ion-icon name="arrow-back-outline" class="text-2xl"></ion-icon>
+                </a>
+                <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">
+                    {% if schedule %}Editar Escala{% else %}Nova Escala Mensal{% endif %}
+                </h1>
+            </div>
+            <p class="text-gray-600 text-sm sm:text-base ml-11">
+                {% if schedule %}Atualize as informações da escala{% else %}Preencha os dados para criar uma nova escala{% endif %}
+            </p>
+        </div>
+
+    <!-- Form -->
+    <form method="post" class="bg-white rounded-lg shadow-sm p-6">
+        {% csrf_token %}
+        
+        <div class="space-y-6">
+            <!-- Ministério -->
+            <div>
+                <label for="ministry" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Ministério *
+                </label>
+                <select id="ministry" 
+                        name="ministry" 
+                        required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] focus:ring-2 focus:ring-[var(--church-secondary)] focus:ring-opacity-20">
+                    <option value="">Selecione o ministério</option>
+                    {% for ministry in ministries %}
+                    <option value="{{ ministry.id }}" {% if schedule and schedule.ministry_id == ministry.id %}selected{% endif %}>
+                        {{ ministry.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Título -->
+            <div>
+                <label for="title" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Título da Escala *
+                </label>
+                <input type="text" 
+                       id="title" 
+                       name="title" 
+                       value="{% if schedule %}{{ schedule.title }}{% endif %}"
+                       required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] focus:ring-2 focus:ring-[var(--church-secondary)] focus:ring-opacity-20"
+                       placeholder="Ex: Fotografia, Gravação, Cultos, Ensaios">
+                <p class="mt-1 text-sm text-gray-600">
+                    Ex: Fotografia, Stories, Gravação (para Mídia) ou Culto de Quarta, Culto de Domingo (para Louvor)
+                </p>
+            </div>
+
+            <!-- Mês e Ano -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="month" class="block text-sm font-semibold text-gray-700 mb-2">
+                        Mês *
+                    </label>
+                    <select id="month" 
+                            name="month" 
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] focus:ring-2 focus:ring-[var(--church-secondary)] focus:ring-opacity-20">
+                        <option value="">Selecione o mês</option>
+                        {% for value, label in months %}
+                        <option value="{{ value }}" 
+                                {% if schedule and schedule.month == value %}selected{% elif not schedule and current_month == value %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="year" class="block text-sm font-semibold text-gray-700 mb-2">
+                        Ano *
+                    </label>
+                    <select id="year" 
+                            name="year" 
+                            required
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] focus:ring-2 focus:ring-[var(--church-secondary)] focus:ring-opacity-20">
+                        <option value="">Selecione o ano</option>
+                        {% for year in years %}
+                        <option value="{{ year }}" 
+                                {% if schedule and schedule.year == year %}selected{% elif not schedule and current_year == year %}selected{% endif %}>
+                            {{ year }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Nome Personalizado (Opcional) -->
+            <div>
+                <label for="name" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Nome Personalizado
+                    <span class="text-gray-500 font-normal">(Opcional)</span>
+                </label>
+                <input type="text" 
+                       id="name" 
+                       name="name" 
+                       value="{% if schedule and schedule.name %}{{ schedule.name }}{% endif %}"
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] focus:ring-2 focus:ring-[var(--church-secondary)] focus:ring-opacity-20"
+                       placeholder="Ex: Especial de Natal, Campanha">
+            </div>
+
+            <!-- Cor (Opcional) -->
+            <div>
+                <label for="color" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Cor da Escala
+                    <span class="text-gray-500 font-normal">(Opcional)</span>
+                </label>
+                <div class="flex items-center gap-4">
+                    <input type="color" 
+                           id="color" 
+                           name="color" 
+                           value="{% if schedule and schedule.color %}{{ schedule.color }}{% endif %}"
+                           class="h-12 w-20 rounded-lg border border-gray-300 cursor-pointer">
+                    <span class="text-sm text-gray-600">
+                        Cor para identificação visual (deixe vazio para usar cor padrão)
+                    </span>
+                </div>
+            </div>
+
+            <!-- Tipo de Atribuição -->
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-3">
+                    Tipo de Atribuição *
+                </label>
+                <div class="space-y-3">
+                    <label class="flex items-start gap-3 p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-[var(--church-secondary)] transition">
+                        <input type="radio" 
+                               name="use_team_rotation" 
+                               value="false"
+                               {% if not schedule or not schedule.use_team_rotation %}checked{% endif %}
+                               class="mt-1 w-4 h-4 text-[var(--church-secondary)]">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-800 mb-1">Membros Diretos</div>
+                            <div class="text-sm text-gray-600">
+                                Você atribui membros específicos para cada dia da escala.
+                                <br>
+                                <span class="text-xs text-gray-500">Ideal para: Fotografia, Stories, Gravação</span>
+                            </div>
+                        </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 p-4 border-2 border-gray-300 rounded-lg cursor-pointer hover:border-[var(--church-secondary)] transition">
+                        <input type="radio" 
+                               name="use_team_rotation" 
+                               value="true"
+                               {% if schedule and schedule.use_team_rotation %}checked{% endif %}
+                               class="mt-1 w-4 h-4 text-[var(--church-secondary)]">
+                        <div class="flex-1">
+                            <div class="font-semibold text-gray-800 mb-1">Rotação de Equipes</div>
+                            <div class="text-sm text-gray-600">
+                                Equipes se revezam a cada semana ou dia específico.
+                                <br>
+                                <span class="text-xs text-gray-500">Ideal para: Louvor, Ministração</span>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Orientações -->
+            <div>
+                <label for="guidelines" class="block text-sm font-semibold text-gray-700 mb-2">
+                    Orientações
+                    <span class="text-gray-500 font-normal">(Opcional)</span>
+                </label>
+                <textarea id="guidelines" 
+                          name="guidelines" 
+                          rows="5"
+                          class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] focus:ring-2 focus:ring-[var(--church-secondary)] focus:ring-opacity-20 resize-none"
+                          placeholder="Instruções importantes, regras, informações relevantes para esta escala...">{% if schedule and schedule.guidelines %}{{ schedule.guidelines }}{% endif %}</textarea>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-col sm:flex-row gap-3 mt-8 pt-6 border-t border-gray-200">
+            <button type="submit" 
+                    class="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-6 py-4 rounded-lg transition font-semibold text-lg shadow-md flex items-center justify-center gap-2">
+                <ion-icon name="checkmark-circle-outline" class="text-2xl"></ion-icon>
+                <span>{% if schedule %}Atualizar Escala{% else %}Criar Escala{% endif %}</span>
+            </button>
+            <a href="{% url 'schedule_list' %}" 
+               class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-4 rounded-lg transition font-semibold text-lg text-center flex items-center justify-center gap-2">
+                <ion-icon name="close-circle-outline" class="text-2xl"></ion-icon>
+                <span>Cancelar</span>
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+// Highlight selected radio option
+document.querySelectorAll('input[name="use_team_rotation"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+        document.querySelectorAll('input[name="use_team_rotation"]').forEach(r => {
+            r.closest('label').classList.remove('border-[var(--church-secondary)]', 'bg-red-50');
+        });
+        if (this.checked) {
+            this.closest('label').classList.add('border-[var(--church-secondary)]', 'bg-red-50');
+        }
+    });
+});
+
+// Set initial state
+const checkedRadio = document.querySelector('input[name="use_team_rotation"]:checked');
+if (checkedRadio) {
+    checkedRadio.closest('label').classList.add('border-[var(--church-secondary)]', 'bg-red-50');
+}
+</script>
+</div>
+{% endblock %}

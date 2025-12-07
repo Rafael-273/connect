@@ -14,3 +14,4 @@ from .neighborhood import Neighborhood
 from .follow_up import FollowUp
 from .canteen import CanteenDebtor
 from .word_of_knowledge import WordOfKnowledge, Healing, MinistrationSchedule
+from .schedule import Team, MonthlySchedule, ScheduleDay
