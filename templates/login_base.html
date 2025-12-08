@@ -41,14 +41,38 @@
             --text-color-primary: #0e0e0e;
             --text-color-on-primary: #FFFFFF;
         }
+        
+        /* Sticky footer */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        
+        .content-wrapper {
+            flex: 1 0 auto;
+        }
+        
+        footer {
+            flex-shrink: 0;
+            margin: 0;
+        }
     </style>
 </head>
 
 <body class="{% block body_class %}{% endblock %}">
 
+<div class="content-wrapper">
 {% block content %}
 
 {% endblock %}
+</div>
 
 <script>
     // Qualquer script global pode ir aqui

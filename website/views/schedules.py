@@ -5,9 +5,21 @@ from django.db.models import Q, Count
 from django.template.loader import get_template
 from datetime import datetime
 from calendar import monthrange
+from django.conf import settings
+import os
 from ..models import MonthlySchedule, ScheduleDay, Team, Ministry, Member
 from xhtml2pdf import pisa
 
+
+WEEKDAYS_PT = [
+    'Segunda-feira',
+    'Terça-feira',
+    'Quarta-feira',
+    'Quinta-feira',
+    'Sexta-feira',
+    'Sábado',
+    'Domingo'
+]
 
 def is_admin(user):
     """Verifica se o usuário é admin"""
@@ -152,7 +164,6 @@ def schedule_list_view(request):
     if search:
         schedules = schedules.filter(
             Q(title__icontains=search) |
-            Q(name__icontains=search) |
             Q(ministry__name__icontains=search)
         )
     
@@ -184,8 +195,7 @@ def schedule_create_view(request):
         title = request.POST.get('title')
         month = request.POST.get('month')
         year = request.POST.get('year')
-        name = request.POST.get('name') or None
-        color = request.POST.get('color') or None
+        # removed optional name/color fields
         use_team_rotation = request.POST.get('use_team_rotation') == 'on'
         guidelines = request.POST.get('guidelines') or None
         
@@ -196,8 +206,6 @@ def schedule_create_view(request):
             title=title,
             month=int(month),
             year=int(year),
-            name=name,
-            color=color,
             use_team_rotation=use_team_rotation,
             guidelines=guidelines
         )
@@ -229,8 +237,7 @@ def schedule_edit_view(request, schedule_id):
         schedule.title = request.POST.get('title')
         schedule.month = int(request.POST.get('month'))
         schedule.year = int(request.POST.get('year'))
-        schedule.name = request.POST.get('name') or None
-        schedule.color = request.POST.get('color') or None
+        # removed optional name/color assignments
         schedule.use_team_rotation = request.POST.get('use_team_rotation') == 'on'
         schedule.guidelines = request.POST.get('guidelines') or None
         
@@ -280,6 +287,11 @@ def schedule_detail_view(request, schedule_id):
     # Organizar dias por semana
     weeks = {}
     for day in days:
+        # attach Portuguese weekday name for template use
+        try:
+            day.pt_weekday = WEEKDAYS_PT[day.date.weekday()]
+        except Exception:
+            day.pt_weekday = ''
         week_num = day.get_week_number()
         if week_num not in weeks:
             weeks[week_num] = []
@@ -308,25 +320,7 @@ def schedule_delete_view(request, schedule_id):
     return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
-@user_passes_test(is_admin)
-def schedule_publish_view(request, schedule_id):
-    """Publica/despublica uma escala"""
-    if request.method == 'POST':
-        schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
-        
-        action = request.POST.get('action')
-        if action == 'publish':
-            schedule.publish()
-        elif action == 'unpublish':
-            schedule.unpublish()
-        
-        return JsonResponse({
-            'success': True,
-            'is_published': schedule.is_published,
-            'published_at': schedule.published_at.strftime('%d/%m/%Y %H:%M') if schedule.published_at else None
-        })
-    
-    return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+# Publishing feature removed — schedules are considered active by creation month
 
 
 # ==================== SCHEDULE DAY VIEWS ====================
@@ -455,16 +449,20 @@ def schedule_export_pdf_view(request, schedule_id):
         if schedule.use_team_rotation:
             day_data['team'] = day.team
         else:
-            day_data['members'] = day.members.all()
+            day_data['members'] = list(day.members.all())
         
         processed_days.append(day_data)
+    
+    # Caminho absoluto para a logo
+    logo_path = os.path.join(settings.BASE_DIR, 'static', 'assets', 'red_logo.png')
     
     context = {
         'schedule': schedule,
         'days': processed_days,
         'month_name': month_names[schedule.month - 1],
         'generated_at': datetime.now().strftime('%d/%m/%Y às %H:%M'),
-        'use_team_rotation': schedule.use_team_rotation
+        'use_team_rotation': schedule.use_team_rotation,
+        'logo_path': logo_path
     }
     
     # Renderizar template HTML
@@ -476,8 +474,12 @@ def schedule_export_pdf_view(request, schedule_id):
     filename = f"escala_{schedule.ministry.name.replace(' ', '_')}_{month_names[schedule.month - 1]}_{schedule.year}.pdf"
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
-    # Converter HTML para PDF
-    pisa_status = pisa.CreatePDF(html, dest=response)
+    # Converter HTML para PDF com encoding UTF-8
+    pisa_status = pisa.CreatePDF(
+        html.encode('utf-8'),
+        dest=response,
+        encoding='utf-8'
+    )
     
     if pisa_status.err:
         return HttpResponse('Erro ao gerar PDF', status=500)

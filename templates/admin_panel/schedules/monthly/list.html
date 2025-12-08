@@ -24,18 +24,18 @@
         </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+    <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
+        <form method="get" class="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-3">
             <div>
                 <input type="text" 
                        name="search" 
                        value="{{ search }}" 
-                       placeholder="Buscar..." 
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] text-sm">
+                       placeholder="Buscar escala..." 
+                       class="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
             </div>
             
             <div>
-                <select name="ministry" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] text-sm">
+                <select name="ministry" class="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
                     <option value="">Todos os Ministérios</option>
                     {% for ministry in ministries %}
                     <option value="{{ ministry.id }}" {% if selected_ministry == ministry.id|slugify %}selected{% endif %}>
@@ -46,7 +46,7 @@
             </div>
             
             <div>
-                <select name="year" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] text-sm">
+                <select name="year" class="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
                     <option value="">Todos os Anos</option>
                     {% for year in years %}
                     <option value="{{ year }}" {% if selected_year == year|slugify %}selected{% endif %}>
@@ -57,7 +57,7 @@
             </div>
             
             <div>
-                <select name="month" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] text-sm">
+                <select name="month" class="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
                     <option value="">Todos os Meses</option>
                     {% for value, label in months %}
                     <option value="{{ value }}" {% if selected_month == value|slugify %}selected{% endif %}>
@@ -68,12 +68,12 @@
             </div>
             
             <div class="flex gap-2">
-                <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
-                    <ion-icon name="search-outline"></ion-icon>
-                    Filtrar
+                <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium flex items-center justify-center gap-2">
+                    <ion-icon name="search-outline" class="text-lg"></ion-icon>
+                    <span>Filtrar</span>
                 </button>
-                <a href="{% url 'schedule_list' %}" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition text-sm">
-                    <ion-icon name="close-outline"></ion-icon>
+                <a href="{% url 'schedule_list' %}" class="bg-gray-500 text-white px-3 py-2.5 sm:py-2 rounded-lg hover:bg-gray-600 transition text-sm flex items-center justify-center">
+                    <ion-icon name="close-outline" class="text-lg"></ion-icon>
                 </a>
             </div>
         </form>
@@ -81,68 +81,64 @@
 
     <!-- Schedules List -->
     {% if schedules %}
-    <div class="grid grid-cols-1 gap-4">
+    <div class="grid grid-cols-1 gap-3 sm:gap-4">
         {% for schedule in schedules %}
-        <div class="bg-white rounded-lg shadow-sm hover:shadow-md transition p-4 sm:p-6">
-            <div class="flex flex-col sm:flex-row justify-between items-start gap-4">
-                <div class="flex-1">
-                    <div class="flex items-start gap-3">
-                        <!-- Color indicator -->
-                        <div class="w-1 h-16 rounded-full" style="background-color: {{ schedule.color|default:'#3B82F6' }};"></div>
-                        
-                        <div class="flex-1">
-                            <div class="flex items-center gap-2 mb-1">
-                                <h3 class="text-lg sm:text-xl font-semibold text-gray-800">{{ schedule.title }}</h3>
-                                {% if schedule.is_published %}
-                                <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">Publicada</span>
-                                {% else %}
-                                <span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded-full">Rascunho</span>
-                                {% endif %}
-                            </div>
-                            
-                            {% if schedule.name %}
-                            <p class="text-sm text-gray-600 mb-2">{{ schedule.name }}</p>
-                            {% endif %}
-                            
-                            <div class="flex flex-wrap gap-3 text-sm text-gray-600">
-                                <span class="flex items-center gap-1">
-                                    <ion-icon name="library-outline"></ion-icon>
-                                    {{ schedule.ministry.name }}
-                                </span>
-                                <span class="flex items-center gap-1">
-                                    <ion-icon name="calendar-outline"></ion-icon>
-                                    {{ schedule.get_month_display }}/{{ schedule.year }}
-                                </span>
-                                <span class="flex items-center gap-1">
-                                    <ion-icon name="{% if schedule.use_team_rotation %}people-circle-outline{% else %}person-outline{% endif %}"></ion-icon>
-                                    {% if schedule.use_team_rotation %}Rotação de Equipes{% else %}Membros Diretos{% endif %}
-                                </span>
-                                <span class="flex items-center gap-1">
-                                    <ion-icon name="list-outline"></ion-icon>
-                                    {{ schedule.days.count }} dia{{ schedule.days.count|pluralize }}
-                                </span>
-                            </div>
-                            
-                            {% if schedule.guidelines %}
-                            <p class="text-sm text-gray-500 mt-2 line-clamp-2">{{ schedule.guidelines|truncatewords:20 }}</p>
-                            {% endif %}
+        <div class="bg-white rounded-lg shadow-sm hover:shadow-md transition p-4">
+            <div class="space-y-3">
+                <!-- Header Mobile/Desktop -->
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-base sm:text-lg font-semibold text-gray-800 truncate">{{ schedule.title }}</h3>
+                        <div class="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mt-1">
+                            <ion-icon name="library-outline" class="text-base flex-shrink-0"></ion-icon>
+                            <span class="truncate">{{ schedule.ministry.name }}</span>
                         </div>
+                    </div>
+                    
+                    <!-- Mobile: Only delete button visible -->
+                    <button onclick="deleteSchedule({{ schedule.id }})" 
+                            class="sm:hidden bg-red-600 text-white p-2 rounded-lg hover:bg-red-700 transition flex-shrink-0">
+                        <ion-icon name="trash-outline" class="text-lg"></ion-icon>
+                    </button>
+                </div>
+                
+                <!-- Info Grid -->
+                <div class="grid grid-cols-2 gap-2 text-xs sm:text-sm text-gray-600">
+                    <div class="flex items-center gap-1.5">
+                        <ion-icon name="calendar-outline" class="text-base flex-shrink-0"></ion-icon>
+                        <span>{{ schedule.get_month_display }}/{{ schedule.year }}</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <ion-icon name="list-outline" class="text-base flex-shrink-0"></ion-icon>
+                        <span>{{ schedule.days.count }} dia{{ schedule.days.count|pluralize }}</span>
+                    </div>
+                    <div class="col-span-2 flex items-center gap-1.5">
+                        <ion-icon name="{% if schedule.use_team_rotation %}people-circle-outline{% else %}person-outline{% endif %}" class="text-base flex-shrink-0"></ion-icon>
+                        <span class="truncate">{% if schedule.use_team_rotation %}Rotação de Equipes{% else %}Membros Diretos{% endif %}</span>
                     </div>
                 </div>
                 
-                <div class="flex gap-2 w-full sm:w-auto">
+                {% if schedule.guidelines %}
+                <p class="text-xs sm:text-sm text-gray-500 line-clamp-2">{{ schedule.guidelines|truncatewords:15 }}</p>
+                {% endif %}
+                
+                <!-- Action Buttons -->
+                <div class="flex gap-2 pt-2 border-t border-gray-100">
                     <a href="{% url 'schedule_detail' schedule.id %}" 
-                       class="flex-1 sm:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-center text-sm">
-                        <ion-icon name="eye-outline" class="sm:hidden"></ion-icon>
-                        <span class="hidden sm:inline">Ver Detalhes</span>
+                       class="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-center text-sm font-medium flex items-center justify-center gap-2">
+                        <ion-icon name="eye-outline" class="text-base"></ion-icon>
+                        <span class="hidden xs:inline">Ver</span>
+                        <span class="xs:hidden">Detalhes</span>
                     </a>
                     <a href="{% url 'schedule_edit' schedule.id %}" 
-                       class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm">
-                        <ion-icon name="create-outline"></ion-icon>
+                       class="bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition text-sm font-medium flex items-center justify-center gap-1.5">
+                        <ion-icon name="create-outline" class="text-base"></ion-icon>
+                        <span class="hidden sm:inline">Editar</span>
                     </a>
                     <button onclick="deleteSchedule({{ schedule.id }})" 
-                            class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm">
-                        <ion-icon name="trash-outline"></ion-icon>
+                            class="hidden sm:flex bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-sm font-medium items-center justify-center gap-1.5">
+                        <ion-icon name="trash-outline" class="text-base"></ion-icon>
+                        <span class="hidden md:inline">Deletar</span>
                     </button>
                 </div>
             </div>
@@ -150,11 +146,11 @@
         {% endfor %}
     </div>
     {% else %}
-    <div class="bg-white rounded-lg shadow-sm p-8 sm:p-12 text-center">
-        <ion-icon name="calendar-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
-        <h3 class="text-xl font-semibold text-gray-800 mb-2">Nenhuma escala encontrada</h3>
-        <p class="text-gray-600 mb-6">Comece criando sua primeira escala mensal</p>
-        <a href="{% url 'schedule_create' %}" class="inline-block bg-[var(--church-secondary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition">
+    <div class="bg-white rounded-lg shadow-sm p-6 sm:p-12 text-center">
+        <ion-icon name="calendar-outline" class="text-5xl sm:text-6xl text-gray-300 mb-3 sm:mb-4"></ion-icon>
+        <h3 class="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Nenhuma escala encontrada</h3>
+        <p class="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">Comece criando sua primeira escala mensal</p>
+        <a href="{% url 'schedule_create' %}" class="inline-block bg-orange-600 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-lg hover:bg-orange-700 transition font-medium text-sm sm:text-base">
             <ion-icon name="add-outline" class="align-middle"></ion-icon>
             Criar Primeira Escala
         </a>

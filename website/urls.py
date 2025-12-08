@@ -29,7 +29,7 @@ from .views.word_approval import pending_words_list, approve_word, reject_word
 from .views.schedules import (
     team_list_view, team_create_view, team_edit_view, team_delete_view,
     schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
-    schedule_delete_view, schedule_publish_view, schedule_export_pdf_view,
+    schedule_delete_view, schedule_export_pdf_view,
     schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
     schedule_day_toggle_cancel_view
 )
@@ -102,7 +102,7 @@ urlpatterns = [
     path('admin-panel/schedules/<int:schedule_id>/', schedule_detail_view, name='schedule_detail'),
     path('admin-panel/schedules/<int:schedule_id>/edit/', schedule_edit_view, name='schedule_edit'),
     path('admin-panel/schedules/<int:schedule_id>/delete/', schedule_delete_view, name='schedule_delete'),
-    path('admin-panel/schedules/<int:schedule_id>/publish/', schedule_publish_view, name='schedule_publish'),
+    # publish/unpublish removed — schedule for current month is always active
     path('admin-panel/schedules/<int:schedule_id>/export-pdf/', schedule_export_pdf_view, name='schedule_export_pdf'),
     
     # Schedule Days URLs

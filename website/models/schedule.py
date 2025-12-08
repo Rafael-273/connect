@@ -82,21 +82,6 @@ class MonthlySchedule(BaseModel):
         verbose_name='Ano'
     )
     
-    # Personalização
-    name = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        verbose_name='Nome Personalizado',
-        help_text='Nome adicional para a escala (opcional)'
-    )
-    color = models.CharField(
-        max_length=7,
-        blank=True,
-        null=True,
-        verbose_name='Cor',
-        help_text='Cor para identificação visual (ex: #3B82F6)'
-    )
     
     # Modo de atribuição
     use_team_rotation = models.BooleanField(
