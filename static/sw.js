@@ -1,7 +1,8 @@
 // Service Worker para PWA
-const CACHE_NAME = 'filadelfia-connect-v1';
+const CACHE_NAME = 'filadelfia-connect-v3';
 const urlsToCache = [
-  '/member/dashboard/',
+  '/login/',
+  '/dashboard/',
   '/static/base.css',
   '/static/user_base.css',
 ];

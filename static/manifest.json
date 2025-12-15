@@ -1,8 +1,8 @@
 {
-  "name": "Filadélfia Connect",
-  "short_name": "Connect",
+  "name": "Filadélfia",
+  "short_name": "Filadélfia",
   "description": "Sistema de gerenciamento da Igreja Filadélfia",
-  "start_url": "/member/dashboard/",
+  "start_url": "/login/?source=pwa",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#C90905",
