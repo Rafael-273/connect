@@ -743,6 +743,97 @@
                     closeCropModal();
                 }
             });
+
+            // PWA Install Prompt (apenas mobile)
+            let deferredPrompt;
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+            // Registra o service worker
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(registration => {
+                        console.log('Service Worker registrado com sucesso:', registration);
+                    })
+                    .catch(error => {
+                        console.log('Falha ao registrar Service Worker:', error);
+                    });
+            }
+
+            // Função para mostrar o prompt de instalação
+            window.showInstallPrompt = function() {
+                console.log('showInstallPrompt chamado. isIOS:', isIOS, 'deferredPrompt:', !!deferredPrompt);
+                
+                if (isIOS) {
+                    // iOS - Instruções para adicionar à tela inicial
+                    Swal.fire({
+                        title: 'Instalar App',
+                        html: `
+                            <div class="text-left">
+                                <p class="mb-3">Adicione o <strong>Filadélfia Connect</strong> à sua tela inicial para acesso rápido!</p>
+                                <ol class="list-decimal list-inside space-y-2 text-sm">
+                                    <li>Toque no botão de compartilhar <i class="fas fa-share"></i></li>
+                                    <li>Role para baixo e toque em <strong>"Adicionar à Tela Inicial"</strong></li>
+                                    <li>Toque em <strong>"Adicionar"</strong></li>
+                                </ol>
+                            </div>
+                        `,
+                        icon: 'info',
+                        confirmButtonText: 'Entendi',
+                        confirmButtonColor: '#C90905',
+                        allowOutsideClick: false,
+                        customClass: {
+                            popup: 'text-sm'
+                        }
+                    });
+                } else if (deferredPrompt) {
+                    // Android/Chrome - Prompt nativo
+                    console.log('Mostrando prompt nativo');
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        console.log('User choice:', choiceResult.outcome);
+                        if (choiceResult.outcome === 'accepted') {
+                            Swal.fire({
+                                title: 'Instalado!',
+                                text: 'O app foi instalado com sucesso.',
+                                icon: 'success',
+                                confirmButtonColor: '#C90905',
+                                timer: 2000,
+                                showConfirmButton: false
+                            });
+                        }
+                        deferredPrompt = null;
+                    });
+                } else {
+                    // Prompt visual para Android/Chrome quando não há deferredPrompt ainda
+                    console.log('Mostrando prompt informativo');
+                    Swal.fire({
+                        title: 'Instalar App',
+                        html: `
+                            <div class="text-center">
+                                <i class="fas fa-mobile-alt text-6xl mb-4" style="color: #C90905;"></i>
+                                <p class="mb-3">Instale o <strong>Filadélfia Connect</strong> na sua tela inicial para acesso rápido e experiência completa!</p>
+                                ${isStandalone ? '<p class="text-sm text-green-600 font-semibold"><i class="fas fa-check-circle"></i> App já está instalado!</p>' : '<p class="text-sm text-gray-600">O navegador está preparando a instalação. Tente novamente em alguns segundos.</p>'}
+                            </div>
+                        `,
+                        icon: 'info',
+                        confirmButtonText: 'Entendi',
+                        confirmButtonColor: '#C90905',
+                        allowOutsideClick: false,
+                        customClass: {
+                            popup: 'text-sm'
+                        }
+                    });
+                }
+            };
+
+            // Captura o evento beforeinstallprompt (Android/Chrome)
+            window.addEventListener('beforeinstallprompt', (e) => {
+                console.log('beforeinstallprompt capturado!');
+                e.preventDefault();
+                deferredPrompt = e;
+            });
         });
     </script>
 {% endblock %}

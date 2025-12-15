@@ -636,6 +636,8 @@
 
         // Função para mostrar o prompt de instalação
         window.showInstallPrompt = function() {
+            console.log('showInstallPrompt chamado. isIOS:', isIOS, 'isMobile:', isMobile, 'deferredPrompt:', !!deferredPrompt, 'isStandalone:', isStandalone);
+            
             if (isIOS) {
                 // iOS - Instruções para adicionar à tela inicial
                 Swal.fire({
@@ -660,8 +662,10 @@
                 });
             } else if (deferredPrompt) {
                 // Android/Chrome - Prompt nativo
+                console.log('Mostrando prompt nativo do Android/Chrome');
                 deferredPrompt.prompt();
                 deferredPrompt.userChoice.then((choiceResult) => {
+                    console.log('User choice:', choiceResult.outcome);
                     if (choiceResult.outcome === 'accepted') {
                         Swal.fire({
                             title: 'Instalado!',
@@ -676,13 +680,14 @@
                 });
             } else {
                 // Prompt visual para Android/Chrome quando não há deferredPrompt ainda
+                console.log('deferredPrompt não disponível ainda. isStandalone:', isStandalone);
                 Swal.fire({
                     title: 'Instalar App',
                     html: `
                         <div class="text-center">
                             <i class="fas fa-mobile-alt text-6xl mb-4" style="color: #C90905;"></i>
                             <p class="mb-3">Instale o <strong>Filadélfia Connect</strong> na sua tela inicial para acesso rápido e experiência completa!</p>
-                            <p class="text-sm text-gray-600">O navegador está preparando a instalação...</p>
+                            ${isStandalone ? '<p class="text-sm text-green-600 font-semibold"><i class="fas fa-check-circle"></i> App já está instalado!</p>' : '<p class="text-sm text-gray-600">O navegador está preparando a instalação. Tente novamente em alguns segundos ou verifique se o app já está instalado.</p>'}
                         </div>
                     `,
                     icon: 'info',
