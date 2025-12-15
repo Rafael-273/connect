@@ -617,9 +617,10 @@
             }
         });
 
-        // PWA Install Prompt
+        // PWA Install Prompt (apenas mobile)
         let deferredPrompt;
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
         // Registra o service worker
@@ -633,80 +634,127 @@
                 });
         }
 
-        // Verifica se já está instalado ou se já foi perguntado
-        const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
-        
-        if (!isStandalone && !hasBeenPrompted) {
-            // Aguarda 2 segundos antes de mostrar o prompt
-            setTimeout(() => {
-                if (isIOS) {
-                    // iOS - Instruções para adicionar à tela inicial
+        // Função para mostrar o prompt de instalação
+        window.showInstallPrompt = function() {
+            if (isIOS) {
+                // iOS - Instruções para adicionar à tela inicial
+                Swal.fire({
+                    title: 'Instalar App',
+                    html: `
+                        <div class="text-left">
+                            <p class="mb-3">Adicione o <strong>Filadélfia Connect</strong> à sua tela inicial para acesso rápido!</p>
+                            <ol class="list-decimal list-inside space-y-2 text-sm">
+                                <li>Toque no botão de compartilhar <i class="fas fa-share"></i></li>
+                                <li>Role para baixo e toque em <strong>"Adicionar à Tela Inicial"</strong></li>
+                                <li>Toque em <strong>"Adicionar"</strong></li>
+                            </ol>
+                        </div>
+                    `,
+                    icon: 'info',
+                    confirmButtonText: 'Entendi',
+                    confirmButtonColor: '#C90905',
+                    allowOutsideClick: false,
+                    customClass: {
+                        popup: 'text-sm'
+                    }
+                });
+            } else if (deferredPrompt) {
+                // Android/Chrome - Prompt nativo
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        Swal.fire({
+                            title: 'Instalado!',
+                            text: 'O app foi instalado com sucesso.',
+                            icon: 'success',
+                            confirmButtonColor: '#C90905',
+                            timer: 2000,
+                            showConfirmButton: false
+                        });
+                    }
+                    deferredPrompt = null;
+                });
+            } else {
+                // Prompt visual para Android/Chrome quando não há deferredPrompt ainda
+                Swal.fire({
+                    title: 'Instalar App',
+                    html: `
+                        <div class="text-center">
+                            <i class="fas fa-mobile-alt text-6xl mb-4" style="color: #C90905;"></i>
+                            <p class="mb-3">Instale o <strong>Filadélfia Connect</strong> na sua tela inicial para acesso rápido e experiência completa!</p>
+                            <p class="text-sm text-gray-600">O navegador está preparando a instalação...</p>
+                        </div>
+                    `,
+                    icon: 'info',
+                    confirmButtonText: 'Entendi',
+                    confirmButtonColor: '#C90905',
+                    allowOutsideClick: false,
+                    customClass: {
+                        popup: 'text-sm'
+                    }
+                });
+            }
+        };
+
+        // Captura o evento beforeinstallprompt (Android/Chrome)
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            console.log('beforeinstallprompt capturado');
+
+            // Se for mobile, não estiver instalado e não foi perguntado, mostra automaticamente
+            const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
+            if (isMobile && !isStandalone && !hasBeenPrompted) {
+                setTimeout(() => {
                     Swal.fire({
                         title: 'Instalar App',
                         html: `
-                            <div class="text-left">
-                                <p class="mb-3">Adicione o <strong>Filadélfia Connect</strong> à sua tela inicial para acesso rápido!</p>
-                                <ol class="list-decimal list-inside space-y-2 text-sm">
-                                    <li>Toque no botão de compartilhar <i class="fas fa-share"></i></li>
-                                    <li>Role para baixo e toque em <strong>"Adicionar à Tela Inicial"</strong></li>
-                                    <li>Toque em <strong>"Adicionar"</strong></li>
-                                </ol>
+                            <div class="text-center">
+                                <i class="fas fa-mobile-alt text-6xl mb-4" style="color: #C90905;"></i>
+                                <p class="mb-3">Instale o <strong>Filadélfia Connect</strong> na sua tela inicial para acesso rápido e experiência completa!</p>
                             </div>
                         `,
-                        icon: 'info',
-                        confirmButtonText: 'Entendi',
+                        showCancelButton: true,
+                        confirmButtonText: '<i class="fas fa-download mr-2"></i>Instalar',
+                        cancelButtonText: 'Agora não',
                         confirmButtonColor: '#C90905',
+                        cancelButtonColor: '#6b7280',
                         allowOutsideClick: false,
                         customClass: {
                             popup: 'text-sm'
                         }
+                    }).then((result) => {
+                        if (result.isConfirmed && deferredPrompt) {
+                            deferredPrompt.prompt();
+                            deferredPrompt.userChoice.then((choiceResult) => {
+                                if (choiceResult.outcome === 'accepted') {
+                                    Swal.fire({
+                                        title: 'Instalado!',
+                                        text: 'O app foi instalado com sucesso.',
+                                        icon: 'success',
+                                        confirmButtonColor: '#C90905',
+                                        timer: 2000,
+                                        showConfirmButton: false
+                                    });
+                                }
+                                deferredPrompt = null;
+                            });
+                        }
+                        localStorage.setItem('pwa-install-prompted', 'true');
                     });
-                    localStorage.setItem('pwa-install-prompted', 'true');
-                } else {
-                    // Android/Chrome - Verifica se pode mostrar prompt nativo
-                    window.addEventListener('beforeinstallprompt', (e) => {
-                        e.preventDefault();
-                        deferredPrompt = e;
+                }, 2000);
+            }
+        });
 
-                        Swal.fire({
-                            title: 'Instalar App',
-                            html: `
-                                <div class="text-center">
-                                    <i class="fas fa-mobile-alt text-6xl mb-4" style="color: #C90905;"></i>
-                                    <p class="mb-3">Instale o <strong>Filadélfia Connect</strong> na sua tela inicial para acesso rápido e experiência completa!</p>
-                                </div>
-                            `,
-                            showCancelButton: true,
-                            confirmButtonText: '<i class="fas fa-download mr-2"></i>Instalar',
-                            cancelButtonText: 'Agora não',
-                            confirmButtonColor: '#C90905',
-                            cancelButtonColor: '#6b7280',
-                            allowOutsideClick: false,
-                            customClass: {
-                                popup: 'text-sm'
-                            }
-                        }).then((result) => {
-                            if (result.isConfirmed && deferredPrompt) {
-                                deferredPrompt.prompt();
-                                deferredPrompt.userChoice.then((choiceResult) => {
-                                    if (choiceResult.outcome === 'accepted') {
-                                        Swal.fire({
-                                            title: 'Instalado!',
-                                            text: 'O app foi instalado com sucesso.',
-                                            icon: 'success',
-                                            confirmButtonColor: '#C90905',
-                                            timer: 2000,
-                                            showConfirmButton: false
-                                        });
-                                    }
-                                    deferredPrompt = null;
-                                });
-                            }
-                            localStorage.setItem('pwa-install-prompted', 'true');
-                        });
-                    });
-                }
-            }, 2000);
+        // Para iOS mobile - mostra prompt automaticamente se não foi perguntado
+        if (isIOS && isMobile && !isStandalone) {
+            const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
+            if (!hasBeenPrompted) {
+                setTimeout(() => {
+                    showInstallPrompt();
+                    localStorage.setItem('pwa-install-prompted', 'true');
+                }, 2000);
+            }
         }
     </script>
 {% endblock %}

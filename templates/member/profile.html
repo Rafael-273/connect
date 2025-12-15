@@ -367,6 +367,22 @@
         </div>
         {% endif %}
 
+        <!-- Botão de Instalar App (Mobile) -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden md:hidden">
+            <button onclick="showInstallPrompt()" class="w-full p-4 sm:p-5 flex items-center justify-between group hover:bg-blue-50 transition-all duration-300 border-l-4 border-transparent hover:border-blue-500">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center bg-blue-50 group-hover:bg-blue-100 transition-colors">
+                        <i class="fas fa-mobile-alt text-blue-600 text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-base sm:text-lg font-bold text-gray-800 group-hover:text-blue-600 transition-colors">Instalar App</h3>
+                        <p class="text-xs sm:text-sm text-gray-500">Adicionar à tela inicial</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-400 group-hover:text-blue-600 transition-all group-hover:translate-x-1"></i>
+            </button>
+        </div>
+
         <!-- Botão de Logout -->
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <a href="{% url 'member_logout' %}" class="p-4 sm:p-5 flex items-center justify-between group hover:bg-red-50 transition-all duration-300 block border-l-4 border-transparent hover:border-red-500">
