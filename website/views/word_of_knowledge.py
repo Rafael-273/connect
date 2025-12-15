@@ -44,6 +44,9 @@ def word_of_knowledge_list(request):
     # Para compatibilidade, manter a variável words
     words = all_words
     
+    # Verifica se o membro está no ministério de ministração
+    is_ministration_member = member.ministry.filter(name__icontains='ministração').exists()
+    
     context = {
         'member': member,
         'words': words,  # Mantém para compatibilidade
@@ -53,6 +56,8 @@ def word_of_knowledge_list(request):
         'total_healings': total_healings,
         'words_with_healing': words_with_healing,
         'is_approver': member.is_approver,
+        'can_consolidate': member.is_available_to_consolidate,
+        'is_ministration_member': is_ministration_member,
     }
     
     return render(request, 'words/my_words.html', context)

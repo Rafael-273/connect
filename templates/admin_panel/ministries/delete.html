@@ -1,0 +1,68 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}Deletar Ministério{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
+            <div class="max-w-2xl mx-auto">
+                <!-- Header -->
+                <div class="mb-4 sm:mb-6">
+                    <div class="flex items-center gap-2 sm:gap-3 mb-2">
+                        <a href="{% url 'ministry_list' %}" class="text-gray-600 hover:text-gray-900 flex-shrink-0">
+                            <ion-icon name="arrow-back-outline" class="text-xl sm:text-2xl"></ion-icon>
+                        </a>
+                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Deletar Ministério</h1>
+                    </div>
+                </div>
+
+                <!-- Confirmação -->
+                <div class="bg-white rounded-lg shadow-sm p-4 sm:p-6">
+                    <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+                        <div class="flex items-start gap-3">
+                            <ion-icon name="warning" class="text-red-600 text-2xl flex-shrink-0 mt-0.5"></ion-icon>
+                            <div>
+                                <h3 class="font-semibold text-red-800 mb-2">Atenção! Esta ação não pode ser desfeita.</h3>
+                                <p class="text-sm text-red-700">
+                                    Você está prestes a deletar o ministério <strong>"{{ object.name }}"</strong>.
+                                    Todos os vínculos dos membros com este ministério serão removidos.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <h3 class="font-semibold text-gray-900 mb-3">Informações do Ministério:</h3>
+                        <div class="bg-gray-50 rounded-lg p-4 space-y-2">
+                            <p class="text-sm"><strong>Nome:</strong> {{ object.name }}</p>
+                            {% if object.description %}
+                            <p class="text-sm"><strong>Descrição:</strong> {{ object.description }}</p>
+                            {% endif %}
+                            <p class="text-sm"><strong>Membros:</strong> {{ object.get_member_count }}</p>
+                            <p class="text-sm"><strong>Líderes:</strong> {{ object.get_leader_count }}</p>
+                        </div>
+                    </div>
+
+                    <form method="POST" class="space-y-4">
+                        {% csrf_token %}
+                        
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <button type="submit" class="flex-1 bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition font-semibold shadow-md">
+                                Sim, Deletar Ministério
+                            </button>
+                            <a href="{% url 'ministry_list' %}" class="flex-1 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition font-semibold text-center">
+                                Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

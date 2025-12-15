@@ -2,46 +2,10 @@ from django import forms
 from ..models.member import Member
 
 class MemberForm(forms.ModelForm):
-    email = forms.EmailField(
-        widget=forms.EmailInput(attrs={
-            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-            'placeholder': 'Email'
-        }),
-        required=False,
-    )
-    tags = forms.CharField(
-        required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-            'placeholder': 'Tags (separadas por vírgula)'
-        })
-    )
-    spouse = forms.ModelChoiceField(
-        queryset=Member.objects.all(),
-        required=False,
-        widget=forms.Select(attrs={
-            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-            'placeholder': 'Selecione o cônjuge'
-        })
-    )
-    ministry = forms.ModelMultipleChoiceField(
-        queryset=Member._meta.get_field('ministry').related_model.objects.all(),
-        required=False,
-        widget=forms.SelectMultiple(attrs={
-            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-            'id': 'ministry-select',
-            'multiple': 'multiple',
-        })
-    )
-
     class Meta:
         model = Member
         fields = [
-            'name', 'profile_picture', 'email', 'gender', 'phone', 'address', 'neighborhood', 'birth_date',
-            'tags', 'marital_status', 'spouse', 'conversion', 'conversion_date',
-            'ministry', 'personality_type', 'testimony', 'initial_challenges',
-            'interests', 'available_days', 'is_available_to_consolidate',
-            'is_available_to_disciple', 'is_approver', 'is_active'
+            'name', 'profile_picture', 'email', 'gender', 'phone', 'address', 'neighborhood', 'birth_date'
         ]
         labels = {
             'name': 'Nome completo',
@@ -50,23 +14,8 @@ class MemberForm(forms.ModelForm):
             'address': 'Endereço',
             'neighborhood': 'Bairro',
             'birth_date': 'Data de nascimento',
-            'tags': 'Tags',
             'gender': 'Gênero',
-            'marital_status': 'Estado civil',
-            'spouse': 'Cônjuge',
-            'conversion': 'Convertido?',
-            'conversion_date': 'Data da conversão',
-            'ministry': 'Ministério',
-            'testimony': 'Testemunho',
-            'initial_challenges': 'Desafios iniciais',
-            'interests': 'Áreas de interesse',
-            'available_days': 'Dias disponíveis para consolidar/discipular',
-            'is_available_to_consolidate': 'Disponível para consolidar?',
-            'is_available_to_disciple': 'Disponível para discipular?',
-            'is_approver': 'Aprovador de Palavras de Conhecimento',
-            'is_active': 'Status ativo',
             'profile_picture': 'Foto de perfil',
-            'personality_type': 'Tipo de personalidade'
         }
         widgets = {
             'name': forms.TextInput(attrs={
@@ -94,59 +43,52 @@ class MemberForm(forms.ModelForm):
             'gender': forms.Select(attrs={
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
                 'placeholder': 'Selecione o gênero'
-            }),
-            'marital_status': forms.Select(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Selecione o estado civil'
-            }),
-            'conversion': forms.Select(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Foi convertido?'
-            }),
-            'conversion_date': forms.DateInput(attrs={
-                'type': 'date',
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)] flatpickr-date',
-                'placeholder': 'Data da conversão'
-            }),
-            'ministry': forms.SelectMultiple(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'id': 'ministry-select',
-                'multiple': 'multiple',
-            }),
-            'testimony': forms.Textarea(attrs={
-                'rows': 3,
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)]',
-                'placeholder': 'Testemunho de conversão...'
-            }),
-            'initial_challenges': forms.Textarea(attrs={
-                'rows': 2,
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)]',
-                'placeholder': 'Principais desafios no início da caminhada?'
-            }),
-            'interests': forms.Textarea(attrs={
-                'rows': 2,
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 resize-none focus:outline-none focus:border-[var(--color-primary)]',
-                'placeholder': 'Áreas de interesse'
-            }),
-            'available_days': forms.TextInput(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Ex: Segunda, Quarta, Domingo...'
-            }),
-            'is_available_to_consolidate': forms.CheckboxInput(attrs={
-                'class': 'form-checkbox h-5 w-5 text-[var(--color-primary)]'
-            }),
-            'is_available_to_disciple': forms.CheckboxInput(attrs={
-                'class': 'form-checkbox h-5 w-5 text-[var(--color-primary)]'
-            }),
-            'profile_picture': forms.ClearableFileInput(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
-            }),
-            'personality_type': forms.TextInput(attrs={
-                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
-                'placeholder': 'Tipo de personalidade'
-            }),
-            'is_active': forms.CheckboxInput(attrs={
-                'class': 'form-checkbox h-5 w-5 text-[var(--color-primary)]',
-                'checked': True
-            }),
+            })
         }
+    
+    # Sobrescrever o campo email
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={
+            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+            'placeholder': 'Email'
+        }),
+        required=True,
+    )
+    
+    password = forms.CharField(
+        label='Senha',
+        widget=forms.PasswordInput(attrs={
+            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+            'placeholder': 'Digite sua senha'
+        }),
+        required=True,
+        min_length=6,
+        help_text='Mínimo de 6 caracteres'
+    )
+    
+    password_confirm = forms.CharField(
+        label='Confirmar senha',
+        widget=forms.PasswordInput(attrs={
+            'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+            'placeholder': 'Confirme sua senha'
+        }),
+        required=True,
+        help_text='Digite a mesma senha novamente'
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Reordenar campos: name, foto, email, password, password_confirm, depois o resto
+        field_order = ['name', 'email', 'password', 'password_confirm', 'gender', 'phone', 'address', 'neighborhood', 'birth_date']
+        self.order_fields(field_order)
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get('password')
+        password_confirm = cleaned_data.get('password_confirm')
+        
+        if password and password_confirm:
+            if password != password_confirm:
+                raise forms.ValidationError('As senhas não coincidem. Por favor, verifique e tente novamente.')
+        
+        return cleaned_data

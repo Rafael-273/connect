@@ -1,0 +1,162 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
+            <!-- Header -->
+            <div class="mb-4 sm:mb-6">
+                <div class="flex items-center gap-2 sm:gap-3 mb-3">
+                    <a href="{% url 'ministry_list' %}" class="text-gray-600 hover:text-gray-900 flex-shrink-0">
+                        <ion-icon name="arrow-back-outline" class="text-xl sm:text-2xl"></ion-icon>
+                    </a>
+                    <div class="flex-1 min-w-0">
+                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{{ ministry.name }}</h1>
+                        <p class="text-gray-600 text-xs sm:text-sm mt-1">Gerenciar membros e líderes</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estatísticas -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4">
+                    <div class="flex flex-col">
+                        <p class="text-gray-600 text-xs sm:text-sm truncate">Total Membros</p>
+                        <p class="text-2xl sm:text-3xl font-bold text-gray-900">{{ total_members }}</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4">
+                    <div class="flex flex-col">
+                        <p class="text-gray-600 text-xs sm:text-sm truncate">Líderes</p>
+                        <p class="text-2xl sm:text-3xl font-bold text-orange-600">{{ total_leaders }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
+                <form method="GET" class="space-y-3 sm:space-y-0 sm:flex sm:gap-3">
+                    <input type="text" name="search" value="{{ request.GET.search }}" 
+                           placeholder="Buscar membro..." 
+                           class="w-full sm:flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
+                    
+                    <select name="role" class="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
+                        <option value="">Todos os Papéis</option>
+                        <option value="leader" {% if request.GET.role == 'leader' %}selected{% endif %}>Líderes</option>
+                        <option value="member" {% if request.GET.role == 'member' %}selected{% endif %}>Membros</option>
+                    </select>
+                    
+                    <select name="status" class="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
+                        <option value="">Todos os Status</option>
+                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Ativos</option>
+                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inativos</option>
+                    </select>
+                    
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 sm:flex-none bg-orange-600 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-orange-700 transition text-sm font-medium">
+                            Buscar
+                        </button>
+                        <a href="{% url 'ministry_members' ministry.id %}" class="flex-1 sm:flex-none bg-gray-500 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-gray-600 transition text-sm font-medium text-center">
+                            Limpar
+                        </a>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Membros Atuais -->
+            {% if memberships %}
+            <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
+                <h2 class="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Membros Atuais</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    {% for membership in memberships %}
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                                <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg flex-shrink-0" 
+                                     style="background-color: {{ ministry.color }};">
+                                    {{ membership.member.name|first }}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="font-semibold text-gray-900 text-sm sm:text-base truncate">{{ membership.member.name }}</h3>
+                                    <p class="text-xs sm:text-sm text-gray-600 truncate">{{ membership.member.phone|default:"Sem telefone" }}</p>
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-1 items-end flex-shrink-0 ml-2">
+                                {% if membership.role == 'leader' %}
+                                <span class="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap">Líder</span>
+                                {% else %}
+                                <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap">Membro</span>
+                                {% endif %}
+                                {% if membership.is_active %}
+                                <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap">Ativo</span>
+                                {% else %}
+                                <span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap">Inativo</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <a href="{% url 'ministry_toggle_role' ministry.id membership.member.id %}" 
+                               class="text-center {% if membership.role == 'leader' %}bg-gray-500 hover:bg-gray-600{% else %}bg-orange-600 hover:bg-orange-700{% endif %} text-white px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors font-medium">
+                                <ion-icon name="{% if membership.role == 'leader' %}star{% else %}star-outline{% endif %}" class="text-sm sm:text-base"></ion-icon>
+                                <span class="hidden sm:inline">{% if membership.role == 'leader' %}Remover Líder{% else %}Tornar Líder{% endif %}</span>
+                                <span class="sm:hidden">{% if membership.role == 'leader' %}Membro{% else %}Líder{% endif %}</span>
+                            </a>
+                            <a href="{% url 'ministry_remove_member' ministry.id membership.member.id %}" 
+                               class="text-center bg-red-600 hover:bg-red-700 text-white px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors font-medium"
+                               onclick="return confirm('Remover {{ membership.member.name }} do ministério?')">
+                                <ion-icon name="trash-outline" class="text-sm sm:text-base"></ion-icon>
+                                <span class="hidden sm:inline">Remover</span>
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Adicionar Membros -->
+            {% if available_members %}
+            <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4">
+                <h2 class="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Adicionar Membros</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                    {% for member in available_members %}
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
+                        <div class="flex items-center gap-2 sm:gap-3 mb-3">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-400 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg flex-shrink-0">
+                                {{ member.name|first }}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="font-semibold text-gray-900 text-sm sm:text-base truncate">{{ member.name }}</h3>
+                                <p class="text-xs sm:text-sm text-gray-600 truncate">{{ member.phone|default:"Sem telefone" }}</p>
+                            </div>
+                        </div>
+                        <a href="{% url 'ministry_add_member' ministry.id member.id %}" 
+                           class="block w-full text-center bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition-colors font-medium">
+                            <ion-icon name="add-circle-outline" class="text-sm sm:text-base"></ion-icon>
+                            <span class="hidden sm:inline">Adicionar ao Ministério</span>
+                            <span class="sm:hidden">Adicionar</span>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            {% if not memberships %}
+            <div class="bg-white rounded-lg shadow-sm p-8 sm:p-12 text-center">
+                <ion-icon name="people-outline" class="text-5xl sm:text-6xl text-gray-300 mb-3 sm:mb-4"></ion-icon>
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Nenhum membro disponível</h3>
+                <p class="text-sm sm:text-base text-gray-600">Todos os membros já fazem parte deste ministério.</p>
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

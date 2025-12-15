@@ -24,6 +24,11 @@ from .views.ministration_admin import (
     MinistrationWordsListView, MinistrationHealingsListView, MinistrationMembersListView,
     ministration_add_member, ministration_remove_member, ministration_toggle_approver
 )
+from .views.ministry import (
+    MinistryListView, MinistryCreateView, MinistryUpdateView, MinistryDeleteView,
+    MinistryMembersView, ministry_add_member, ministry_remove_member,
+    ministry_toggle_role, ministry_toggle_status
+)
 from .views.ministration_dashboard import ministration_dashboard
 from .views.word_approval import pending_words_list, approve_word, reject_word
 from .views.schedules import (
@@ -191,4 +196,15 @@ urlpatterns = [
     path('admin-panel/api/neighborhood/', neighborhood_create_edit_api, name='admin_neighborhood_api'),
     path('admin-panel/api/member/<int:member_id>/', member_detail_api, name='admin_member_detail_api'),
     path('admin-panel/api/visitor/<int:visitor_id>/', visitor_detail_api, name='admin_visitor_detail_api'),
+    
+    # Ministérios - Nova Gestão Escalável
+    path('admin-panel/ministries/', MinistryListView.as_view(), name='ministry_list'),
+    path('admin-panel/ministries/create/', MinistryCreateView.as_view(), name='ministry_create'),
+    path('admin-panel/ministries/<int:pk>/edit/', MinistryUpdateView.as_view(), name='ministry_edit'),
+    path('admin-panel/ministries/<int:pk>/delete/', MinistryDeleteView.as_view(), name='ministry_delete'),
+    path('admin-panel/ministries/<int:pk>/members/', MinistryMembersView.as_view(), name='ministry_members'),
+    path('admin-panel/ministries/<int:ministry_id>/members/add/<int:member_id>/', ministry_add_member, name='ministry_add_member'),
+    path('admin-panel/ministries/<int:ministry_id>/members/remove/<int:member_id>/', ministry_remove_member, name='ministry_remove_member'),
+    path('admin-panel/ministries/<int:ministry_id>/members/toggle-role/<int:member_id>/', ministry_toggle_role, name='ministry_toggle_role'),
+    path('admin-panel/ministries/<int:ministry_id>/members/toggle-status/<int:member_id>/', ministry_toggle_status, name='ministry_toggle_status'),
 ]

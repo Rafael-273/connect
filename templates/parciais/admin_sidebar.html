@@ -122,10 +122,6 @@
                         <ion-icon name="heart-outline"></ion-icon>
                         Curas
                     </a>
-                    <a href="{% url 'ministration_members_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_members_list' %}active{% endif %}">
-                        <ion-icon name="people-outline"></ion-icon>
-                        Membros
-                    </a>
                 </div>
             </div>
             
@@ -259,10 +255,6 @@
                 <a href="{% url 'ministration_healings_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_healings_list' %}active{% endif %}" title="Curas">
                     <ion-icon name="heart-outline"></ion-icon>
                     Curas
-                </a>
-                <a href="{% url 'ministration_members_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_members_list' %}active{% endif %}" title="Membros do Ministério">
-                    <ion-icon name="people-outline"></ion-icon>
-                    Membros
                 </a>
             </div>
         </div>

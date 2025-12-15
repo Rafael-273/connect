@@ -1,173 +1,160 @@
-{% extends 'admin_base.html' %}
+{% extends "admin_base.html" %}
 {% load static %}
 
-{% block title %}Ministérios - Painel Administrativo{% endblock %}
-
-{% block head %}
-<style>
-    body {
-        background-color: #f8f9fa !important;
-    }
-    
-    .admin-card {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    }
-    
-    .member-count-badge {
-        background-color: var(--color-primary);
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-</style>
-{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 
 {% block content %}
 <div class="flex min-h-screen bg-gray-50">
-    <!-- Sidebar -->
     {% include 'parciais/admin_sidebar.html' %}
     {% include 'parciais/messages.html' %}
 
-    <!-- Main Content -->
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-4 md:p-6 mt-24">
+        <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
             <!-- Header -->
-            <div class="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 gap-4">
-                <div>
-                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900 page-title">Ministérios</h1>
-                    <p class="text-gray-600 mt-2">Gerenciar ministérios da igreja</p>
+            <div class="mb-4 sm:mb-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                    <div class="flex-1 min-w-0">
+                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">Ministérios</h1>
+                        <p class="text-gray-600 text-xs sm:text-sm mt-1">Gerenciar ministérios da igreja</p>
+                    </div>
+                    <a href="{% url 'ministry_create' %}" 
+                       class="bg-orange-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-orange-700 transition font-medium flex items-center justify-center gap-2 shadow-md text-sm sm:text-base">
+                        <ion-icon name="add-circle-outline" class="text-lg sm:text-xl"></ion-icon>
+                        <span class="hidden xs:inline">Criar Ministério</span>
+                        <span class="xs:hidden">Criar</span>
+                    </a>
                 </div>
-                <a href="{% url 'admin_ministry_create' %}" class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center w-full md:w-auto">
-                    <ion-icon name="add" class="mr-2"></ion-icon>
-                    Novo Ministério
-                </a>
             </div>
 
-            <!-- Search -->
-            <div class="admin-card p-4 md:p-6 mb-6">
-                <form method="GET" class="flex flex-col md:flex-row gap-4 items-start md:items-center">
-                    <div class="w-full md:flex-1">
-                        <input type="text" name="search" value="{{ search }}" 
-                               placeholder="Buscar ministérios..." 
-                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+            <!-- Estatísticas -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
+                <div class="bg-white rounded-lg shadow-sm p-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-gray-600 text-xs sm:text-sm truncate">Total de Ministérios</p>
+                            <p class="text-2xl sm:text-3xl font-bold text-gray-900">{{ total_ministries }}</p>
+                        </div>
+                        <ion-icon name="folder-open" class="text-4xl sm:text-5xl text-orange-600 flex-shrink-0"></ion-icon>
                     </div>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
+                <form method="GET" class="space-y-3 sm:space-y-0 sm:flex sm:gap-3">
+                    <input type="text" name="search" value="{{ request.GET.search }}" 
+                           placeholder="Buscar ministério..." 
+                           class="w-full sm:flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
                     
-                    <div class="flex flex-wrap gap-2 w-full md:w-auto">
-                        <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition w-full md:w-auto">
-                            <ion-icon name="search" class="mr-2"></ion-icon>
-                            Buscar
+                    <select name="status" class="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
+                        <option value="">Todos os Status</option>
+                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Ativos</option>
+                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inativos</option>
+                    </select>
+                    
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 sm:flex-none bg-orange-600 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-orange-700 transition font-medium text-sm flex items-center justify-center gap-2">
+                            <ion-icon name="search" class="text-base"></ion-icon>
+                            <span>Buscar</span>
                         </button>
-                        
-                        <a href="{% url 'admin_ministries_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition text-center w-full md:w-auto">
+                        <a href="{% url 'ministry_list' %}" class="flex-1 sm:flex-none bg-gray-500 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-gray-600 transition font-medium text-sm flex items-center justify-center">
                             Limpar
                         </a>
                     </div>
                 </form>
             </div>
 
-            <!-- Ministries Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Lista de Ministérios -->
+            {% if ministries %}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
                 {% for ministry in ministries %}
-                <div class="admin-card p-6 hover:shadow-lg transition-shadow">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center">
-                            <div class="w-12 h-12 bg-[var(--color-primary)] rounded-lg flex items-center justify-center text-white font-bold text-lg">
-                                {{ ministry.name|first }}
+                <div class="bg-white rounded-lg shadow-sm hover:shadow-md transition p-4">
+                    <div class="flex items-start gap-3 mb-3">
+                        <div class="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" 
+                             style="background-color: {{ ministry.color }}20; border: 2px solid {{ ministry.color }};">
+                            <ion-icon name="people" class="text-2xl" style="color: {{ ministry.color }};"></ion-icon>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-2 mb-1">
+                                <h3 class="text-base sm:text-lg font-semibold text-gray-900 truncate">{{ ministry.name }}</h3>
+                                {% if ministry.is_active %}
+                                <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0">Ativo</span>
+                                {% else %}
+                                <span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0">Inativo</span>
+                                {% endif %}
                             </div>
-                            <div class="ml-3">
-                                <h3 class="text-lg font-semibold text-gray-900">{{ ministry.name }}</h3>
-                                <span class="member-count-badge">
-                                    {{ ministry.member_count }} membro{{ ministry.member_count|pluralize }}
+                            {% if ministry.description %}
+                            <p class="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-2">{{ ministry.description }}</p>
+                            {% endif %}
+                            <div class="flex flex-wrap gap-2 text-xs sm:text-sm text-gray-600">
+                                <span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded">
+                                    <ion-icon name="people-outline" class="flex-shrink-0"></ion-icon>
+                                    <span>{{ ministry.total_members }} membro{{ ministry.total_members|pluralize }}</span>
+                                </span>
+                                <span class="flex items-center gap-1 bg-orange-50 px-2 py-1 rounded">
+                                    <ion-icon name="star-outline" class="flex-shrink-0"></ion-icon>
+                                    <span>{{ ministry.total_leaders }} líder{{ ministry.total_leaders|pluralize:"es" }}</span>
                                 </span>
                             </div>
                         </div>
                     </div>
                     
-                    {% if ministry.description %}
-                    <p class="text-gray-600 text-sm mb-4">{{ ministry.description|truncatewords:20 }}</p>
-                    {% else %}
-                    <p class="text-gray-400 text-sm mb-4 italic">Sem descrição</p>
-                    {% endif %}
-                    
-                    <div class="flex justify-end space-x-2">
-                        <button onclick="viewMinistry({{ ministry.id }})" 
-                                class="text-[var(--color-primary)] hover:text-opacity-80 p-2">
-                            <ion-icon name="eye" class="text-lg"></ion-icon>
-                        </button>
-                        <a href="{% url 'admin_ministry_edit' ministry.id %}" 
-                           class="text-blue-600 hover:text-blue-800 p-2">
-                            <ion-icon name="create" class="text-lg"></ion-icon>
+                    <div class="flex gap-2 pt-3 border-t border-gray-100">
+                        <a href="{% url 'ministry_members' ministry.id %}" 
+                           class="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-center text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5">
+                            <ion-icon name="people-outline" class="text-base"></ion-icon>
+                            <span>Gerenciar Membros</span>
                         </a>
-                        <button onclick="deleteMinistry({{ ministry.id }}, '{{ ministry.name }}')" 
-                                class="text-red-600 hover:text-red-800 p-2">
-                            <ion-icon name="trash" class="text-lg"></ion-icon>
-                        </button>
+                        <a href="{% url 'ministry_edit' ministry.id %}" 
+                           class="bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition text-xs sm:text-sm font-medium flex items-center justify-center">
+                            <ion-icon name="create-outline" class="text-base"></ion-icon>
+                        </a>
+                        <a href="{% url 'ministry_delete' ministry.id %}" 
+                           class="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-xs sm:text-sm font-medium flex items-center justify-center">
+                            <ion-icon name="trash-outline" class="text-base"></ion-icon>
+                        </a>
                     </div>
-                </div>
-                {% empty %}
-                <div class="col-span-full text-center py-12">
-                    <ion-icon name="library-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
-                    <p class="text-gray-500 text-lg">Nenhum ministério encontrado.</p>
                 </div>
                 {% endfor %}
             </div>
 
-            <!-- Pagination -->
-            {% if ministries.has_other_pages %}
-            <div class="mt-8 flex justify-center">
-                <div class="flex flex-wrap justify-center gap-2">
-                    {% if ministries.has_previous %}
-                    <a href="?page={{ ministries.previous_page_number }}&{{ request.GET.urlencode }}" 
-                       class="px-3 py-2 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+            <!-- Paginação -->
+            {% if is_paginated %}
+            <div class="mt-6 flex justify-center">
+                <nav class="flex items-center gap-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
                         Anterior
                     </a>
                     {% endif %}
                     
-                    {% for num in ministries.paginator.page_range %}
-                    {% if num == ministries.number %}
-                    <span class="px-3 py-2 bg-[var(--color-primary)] text-white rounded text-sm">{{ num }}</span>
-                    {% elif num > ministries.number|add:'-3' and num < ministries.number|add:'3' %}
-                    <a href="?page={{ num }}&{{ request.GET.urlencode }}" 
-                       class="px-3 py-2 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                        {{ num }}
-                    </a>
-                    {% endif %}
-                    {% endfor %}
+                    <span class="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm">
+                        {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+                    </span>
                     
-                    {% if ministries.has_next %}
-                    <a href="?page={{ ministries.next_page_number }}&{{ request.GET.urlencode }}" 
-                       class="px-3 py-2 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                        Próximo
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
+                        Próxima
                     </a>
                     {% endif %}
-                </div>
+                </nav>
+            </div>
+            {% endif %}
+            
+            {% else %}
+            <div class="bg-white rounded-lg shadow-sm p-8 sm:p-12 text-center">
+                <ion-icon name="folder-open-outline" class="text-5xl sm:text-6xl text-gray-300 mb-3 sm:mb-4"></ion-icon>
+                <h3 class="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Nenhum ministério encontrado</h3>
+                <p class="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">Crie o primeiro ministério da igreja</p>
+                <a href="{% url 'ministry_create' %}" class="inline-block bg-orange-600 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-lg hover:bg-orange-700 transition font-medium text-sm sm:text-base">
+                    <ion-icon name="add-outline" class="align-middle"></ion-icon>
+                    Criar Primeiro Ministério
+                </a>
             </div>
             {% endif %}
         </div>
     </div>
 </div>
-
-<!-- Modal para adicionar/editar ministério -->
-<div id="ministryModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <div class="flex justify-between items-center mb-4">
-            <h3 id="modalTitle" class="text-lg font-medium text-gray-900">Novo Ministério</h3>
-            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
-                <ion-icon name="close" class="text-xl"></ion-icon>
-            </button>
-        </div>
-        <form id="ministryForm">
-            <div class="mb-4">
-                <label for="ministryName" class="block text-sm font-medium text-gray-700 mb-2">Nome do Ministério</label>
-                <input type="text" id="ministryName" name="name" required
-                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
-            </div>
-            <div class="mb-6">
-                <label for="ministryDescription" class="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
                 <textarea id="ministryDescription" name="description" rows="3"
                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]"></textarea>
             </div>

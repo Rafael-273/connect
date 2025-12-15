@@ -97,17 +97,11 @@
             <!-- Ações Rápidas -->
             <div class="mb-8">
                 <h2 class="text-xl font-bold text-gray-900 mb-4">Ações Rápidas</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <a href="{% url 'ministration_schedule_list' %}" class="action-card">
-                        <ion-icon name="calendar-number" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
-                        <h3 class="font-bold text-lg mb-2">Escalas</h3>
-                        <p class="text-sm text-gray-600">Gerenciar escalas semanais</p>
-                    </a>
-                    
-                    <a href="{% url 'ministration_members_list' %}" class="action-card">
-                        <ion-icon name="person-add" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
-                        <h3 class="font-bold text-lg mb-2">Adicionar Membros</h3>
-                        <p class="text-sm text-gray-600">Gerenciar membros do ministério</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <a href="{% url 'ministry_list' %}" class="action-card">
+                        <ion-icon name="people" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
+                        <h3 class="font-bold text-lg mb-2">Gerenciar Membros</h3>
+                        <p class="text-sm text-gray-600">Membros dos ministérios</p>
                     </a>
                     
                     <a href="{% url 'ministration_words_list' %}" class="action-card">
@@ -126,10 +120,10 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <!-- Escala Atual -->
+                {% comment %}
                 <div class="admin-card p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-xl font-bold text-gray-900">Escala Atual</h2>
-                        <a href="{% url 'ministration_schedule_list' %}" class="text-[var(--color-primary)] text-sm hover:underline">Ver todas</a>
                     </div>
                     
                     {% if current_schedule %}
@@ -208,6 +202,7 @@
                         </div>
                     {% endif %}
                 </div>
+                {% endcomment %}
 
                 <!-- Estatísticas de Curas -->
                 <div class="admin-card p-6">

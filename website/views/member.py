@@ -9,6 +9,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Q
 from django.http import JsonResponse
+from django.core.files.base import ContentFile
+import base64
 from ..models.member import Member
 from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate
 from ..forms.member import MemberForm
@@ -22,25 +24,55 @@ class MemberCreateView(CreateView):
     model = Member
     form_class = MemberForm
     template_name = 'create/member.html'
-    success_url = reverse_lazy('home')
+    success_url = reverse_lazy('member_login')
 
     def form_valid(self, form):
-        email = self.request.POST.get('email')
+        email = form.cleaned_data.get('email')
+        password = form.cleaned_data.get('password')
+        
+        # Validar se o email já existe
+        if email and User.objects.filter(email=email).exists():
+            messages.error(self.request, 'Este e-mail já está cadastrado no sistema. Por favor, use outro e-mail.')
+            return self.form_invalid(form)
+        
         if not email:
-            email = f"{uuid.uuid4().hex[:10]}@autogerado.com"
+            messages.error(self.request, 'O e-mail é obrigatório.')
+            return self.form_invalid(form)
 
-        user = User.objects.create_user(
-            email=email,
-            password='senha_padrão'
-        )
+        try:
+            # Criar usuário com a senha fornecida
+            user = User.objects.create_user(
+                email=email,
+                password=password
+            )
 
-        member = form.save(commit=False)
-        member.user = user
-        member.save()
+            member = form.save(commit=False)
+            member.user = user
+            
+            # Processar imagem cropada em base64
+            cropped_image_data = self.request.POST.get('cropped_image_data')
+            if cropped_image_data:
+                # Remove o prefixo "data:image/jpeg;base64," se existir
+                if ',' in cropped_image_data:
+                    format, imgstr = cropped_image_data.split(';base64,')
+                    ext = format.split('/')[-1]
+                else:
+                    imgstr = cropped_image_data
+                    ext = 'jpg'
+                
+                # Decodifica a imagem base64
+                data = ContentFile(base64.b64decode(imgstr), name=f'profile_{user.id}.{ext}')
+                member.profile_picture = data
+            
+            member.save()
 
-        self.object = member
-
-        return super().form_valid(form)
+            self.object = member
+            messages.success(self.request, 'Cadastro realizado com sucesso! Você já pode fazer login.')
+            return super().form_valid(form)
+            
+        except Exception as e:
+            messages.error(self.request, f'Erro ao realizar cadastro: {str(e)}')
+            return self.form_invalid(form)
     
 
 class NewConvertsListView(ListView):

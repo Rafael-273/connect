@@ -79,6 +79,9 @@ class MemberDashboardView(LoginRequiredMixin, View):
             is_active=True
         ).exists()
         
+        # Verifica se o membro está no ministério de ministração
+        is_ministration_member = member.ministry.filter(name__icontains='ministração').exists()
+        
         # Busca informações relevantes para o dashboard
         context = {
             'member': member,
@@ -87,6 +90,7 @@ class MemberDashboardView(LoginRequiredMixin, View):
             'can_disciple': member.is_available_to_disciple,
             'is_scheduled_this_week': is_scheduled,
             'is_approver': member.is_approver,
+            'is_ministration_member': is_ministration_member,
         }
         
         # Se for aprovador, busca palavras pendentes de aprovação
@@ -234,10 +238,14 @@ def member_profile_view(request):
     from website.models import Neighborhood
     neighborhoods = Neighborhood.objects.all().order_by('name')
     
+    # Verifica se o membro está no ministério de ministração
+    is_ministration_member = member.ministry.filter(name__icontains='ministração').exists()
+    
     context = {
         'member': member,
         'ministries': member.ministry.all(),
         'can_consolidate': can_consolidate,
+        'is_ministration_member': is_ministration_member,
         'neighborhoods': neighborhoods,
     }
     
@@ -255,6 +263,9 @@ def member_consolidation_view(request):
     active_consolidations = consolidations.filter(end_date__isnull=True).count()
     completed_consolidations = consolidations.filter(end_date__isnull=False).count()
     
+    # Verifica se o membro está no ministério de ministração
+    is_ministration_member = member.ministry.filter(name__icontains='ministração').exists()
+    
     context = {
         'member': member,
         'consolidations': consolidations,
@@ -262,6 +273,7 @@ def member_consolidation_view(request):
         'active_consolidations': active_consolidations,
         'completed_consolidations': completed_consolidations,
         'can_consolidate': member.is_available_to_consolidate,
+        'is_ministration_member': is_ministration_member,
     }
     
     return render(request, 'member/consolidation.html', context)

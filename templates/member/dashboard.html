@@ -205,6 +205,83 @@
 
     <main class="px-4 md:px-8 pt-2 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400" style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
         
+        <!-- Seção de Boas-Vindas para Novos Membros (sem vínculos) -->
+        {% if not is_scheduled_this_week and not is_approver and not ministries and not followups_responsible and not followups_received %}
+        <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(135deg, #ffffff 0%, #fef7ed 50%, #ffffff 100%); border-color: rgba(201, 9, 5, 0.2);">
+            <!-- Elementos Decorativos -->
+            <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3), transparent);"></div>
+            <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-20" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.2), transparent);"></div>
+            
+            <div class="relative z-10 p-6 sm:p-8 md:p-10 flex flex-col items-center text-center">
+                <!-- Ícone de Boas-Vindas -->
+                <div class="mb-6">
+                    <div class="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 mx-auto rounded-full flex items-center justify-center" style="background-color: #C90905; box-shadow: 0 10px 30px rgba(201, 9, 5, 0.3);">
+                        <i class="fas fa-heart text-white text-3xl sm:text-4xl md:text-5xl"></i>
+                    </div>
+                </div>
+
+                <!-- Título e Mensagem -->
+                <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-4">
+                    Bem-vindo à <span style="color: #C90905;">Família Filadélfia!</span>
+                </h2>
+                <p class="text-base sm:text-lg text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+                    Estamos muito felizes em ter você conosco, <strong style="color: #C90905;">{{ member.name }}</strong>! 
+                    Seu cadastro foi realizado com sucesso e em breve você receberá mais informações sobre como participar ativamente da nossa igreja.
+                </p>
+
+                <!-- Cards de Informação -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 max-w-4xl mx-auto">
+                    <!-- Card 1 -->
+                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(201, 9, 5, 0.2);">
+                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
+                            <i class="fas fa-users text-xl" style="color: #C90905;"></i>
+                        </div>
+                        <h3 class="font-bold text-gray-900 mb-2">Ministérios</h3>
+                        <p class="text-sm text-gray-600">Em breve você será vinculado a um ministério onde poderá servir</p>
+                    </div>
+
+                    <!-- Card 2 -->
+                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(245, 158, 11, 0.3);">
+                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(245, 158, 11, 0.1);">
+                            <i class="fas fa-calendar-alt text-xl" style="color: #F59E0B;"></i>
+                        </div>
+                        <h3 class="font-bold text-gray-900 mb-2">Escalas</h3>
+                        <p class="text-sm text-gray-600">Você será notificado quando for escalado para atividades</p>
+                    </div>
+
+                    <!-- Card 3 -->
+                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(230, 57, 70, 0.3);">
+                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(230, 57, 70, 0.1);">
+                            <i class="fas fa-user-graduate text-xl" style="color: #E63946;"></i>
+                        </div>
+                        <h3 class="font-bold text-gray-900 mb-2">Consolidação</h3>
+                        <p class="text-sm text-gray-600">Quando estiver disponível, poderá ajudar no acompanhamento de novos convertidos</p>
+                    </div>
+                </div>
+
+                <!-- Botão de Ação -->
+                <div class="flex flex-col w-full md:w-1/2 sm:flex-row gap-3 justify-center items-center">
+                    <a href="{% url 'member_profile' %}" class="w-full inline-flex text-center items-center gap-2 px-6 py-3 text-white font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl" style="background-color: #C90905;">
+                        <i class="fas fa-user-circle"></i>
+                        Completar Perfil
+                    </a>
+                    <a href="{% url 'home' %}" class="w-full inline-flex text-center items-center gap-2 px-6 py-3 font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 border-2" style="color: #C90905; border-color: #C90905; background: white;">
+                        <i class="fas fa-home"></i>
+                        Explorar a Igreja
+                    </a>
+                </div>
+
+                <!-- Informação de Contato -->
+                <div class="mt-8 p-4 rounded-lg" style="background: rgba(201, 9, 5, 0.05);">
+                    <p class="text-sm text-gray-700">
+                        <i class="fas fa-info-circle mr-2" style="color: #C90905;"></i>
+                        Dúvidas? Entre em contato com a liderança da igreja
+                    </p>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+        
         <!-- Palavras de Conhecimento - APENAS SE ESCALADO -->
         {% if is_scheduled_this_week %}
         <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
@@ -400,7 +477,7 @@
     </main>
 
     <!-- Bottom Navigation -->
-    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[90%] max-w-lg rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center justify-around z-50 transition-all duration-500 ease-in-out" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
+    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out {% if can_consolidate and is_ministration_member %}w-[90%] max-w-lg justify-around{% elif can_consolidate or is_ministration_member %}w-auto gap-2 justify-center{% else %}w-auto gap-2 justify-center{% endif %}" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
         <!-- Home -->
         <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
             <div class="relative">
@@ -411,7 +488,7 @@
             <span style="color: #C90905;">Home</span>
         </a>
         
-        <!-- Consolidação -->
+        <!-- Consolidação (somente se disponível) -->
         {% if can_consolidate %}
         <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
@@ -419,22 +496,17 @@
             </div>
             <span class="group-hover:font-bold transition-all">Consolidar</span>
         </a>
-        {% else %}
-        <div class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-400 p-2 px-3 opacity-50">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 border-2" style="background: rgba(156, 163, 175, 0.05); border-color: rgba(156, 163, 175, 0.2);">
-                <i class="fas fa-user-graduate text-gray-400 text-lg"></i>
-            </div>
-            <span>Consolidar</span>
-        </div>
         {% endif %}
         
-        <!-- Curas -->
+        <!-- Curas (somente para membros do ministério de ministração) -->
+        {% if is_ministration_member %}
         <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
             <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
                 <i class="fas fa-heart-pulse text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
             </div>
             <span class="group-hover:font-bold transition-all">Curas</span>
         </a>
+        {% endif %}
         
         <!-- Perfil -->
         <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
@@ -491,20 +563,26 @@
         
         // Script para ocultar/mostrar menu inferior ao rolar
         let lastScrollTop = 0;
-        let isScrolling;
         const nav = document.getElementById('bottomNav');
         const scrollThreshold = 50; // Pixels mínimos para detectar scroll
 
         window.addEventListener('scroll', function() {
-            // Limpa o timeout anterior
-            clearTimeout(isScrolling);
-
             const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const windowHeight = window.innerHeight;
+            const documentHeight = document.documentElement.scrollHeight;
             
             // Se estiver no topo da página, sempre mostra o menu
             if (scrollTop <= 100) {
                 nav.classList.remove('nav-hidden');
                 nav.classList.add('nav-visible');
+                lastScrollTop = scrollTop;
+                return;
+            }
+
+            // Se estiver no final da página (últimos 100px), oculta o menu
+            if (scrollTop + windowHeight >= documentHeight - 100) {
+                nav.classList.add('nav-hidden');
+                nav.classList.remove('nav-visible');
                 lastScrollTop = scrollTop;
                 return;
             }
@@ -522,16 +600,13 @@
                 }
                 lastScrollTop = scrollTop;
             }
-
-            // Define um timeout para mostrar o menu quando parar de rolar
-            isScrolling = setTimeout(function() {
-                nav.classList.remove('nav-hidden');
-                nav.classList.add('nav-visible');
-            }, 1000); // Mostra após 1 segundo de inatividade
         }, false);
 
-        // Mostra o menu quando passar o mouse próximo à parte inferior
+        // Mostra o menu quando passar o mouse próximo à parte inferior (apenas desktop)
         document.addEventListener('mousemove', function(e) {
+            // Detecta se é mobile
+            if (window.innerWidth <= 768) return;
+            
             const windowHeight = window.innerHeight;
             const mouseY = e.clientY;
             

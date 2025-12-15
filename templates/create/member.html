@@ -3,36 +3,260 @@
 
 {% block title %}Connect{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+<style>
+    /* Modal e Cropper */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 9999;
+        animation: fadeIn 0.3s ease-out;
+        padding: 1rem;
+        overflow-y: auto;
+    }
+
+    .modal-overlay.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 20px;
+        max-width: 90%;
+        max-height: 90vh;
+        width: 500px;
+        overflow-y: auto;
+        animation: slideUp 0.3s ease-out;
+        display: flex;
+        flex-direction: column;
+    }
+
+    @keyframes slideUp {
+        from { transform: translateY(50px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .cropper-container {
+        max-height: 350px;
+        margin: 0 auto;
+    }
+
+    .cropper-view-box,
+    .cropper-face {
+        border-radius: 50%;
+    }
+
+    #cropImage {
+        max-height: 350px;
+        width: 100%;
+        object-fit: contain;
+    }
+
+    :root {
+        --color-primary-light: #4f7cd6;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<section class="flex-grow container mx-auto mb-8 mt-28 flex flex-col items-center px-4 lg:px-8">
+<!-- Overlay de Loading -->
+<div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-[var(--color-primary)] mb-4"></div>
+        <p class="text-gray-700 text-lg font-semibold">Criando sua conta...</p>
+    </div>
+</div>
+
+<section class="flex-grow container mx-auto mb-8 mt-32 flex flex-col items-center px-3 sm:px-4 lg:px-8">
     <div></div>
-    <div class="flex flex-col gap-2 justify-center items-center px-4 md:px-0 w-full md:w-1/2">
+    <div class="flex flex-col gap-2 justify-center items-center w-full px-2 sm:px-4 md:px-0 md:w-1/2">
         <div class="sticky text-center py-2 flex flex-col gap-2">
-            <h1 class="text-5xl md:text-7xl flex flex-col">
-              <span class="block md:inline">Faça parte</span>
-              <span class="block md:inline font-bold text-[var(--color-primary)]">da Família</span>
+            <h1 class="flex flex-col">
+              <span class="text-4xl sm:text-5xl md:text-7xl block md:inline">Cadastro de</span>
+              <span class="text-5xl mt-[-0.5rem] sm:mt-[-1rem] md:text-8xl block md:inline font-bold text-[var(--color-primary)]">de Equipe</span>
             </h1>
-            <p class="text-sm md:text-base break-words">
-              Estamos felizes em ter você conosco, <b>queremos te conhecer melhor!</b>
+            <p class="text-xs sm:text-sm md:text-base break-words px-2">
+              Preencha seus dados para fazer parte da nossa equipe!
             </p>
         </div>
-          
-        <form method="POST" enctype="multipart/form-data" class="space-y-4 w-full">
-            {% csrf_token %}
         
-            {% for field in form %}
-                <div>
-                    <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.errors %}
-                        <p class="text-sm text-red-600 mt-1">{{ field.errors.0 }}</p>
-                    {% endif %}
+        <!-- Mensagens de erro/sucesso -->
+        {% if messages %}
+            <div class="w-full space-y-2 mt-4">
+                {% for message in messages %}
+                    <div class="p-3 sm:p-4 rounded-lg text-xs sm:text-sm {% if message.tags == 'error' %}bg-red-50 border border-red-200 text-red-800{% elif message.tags == 'success' %}bg-green-50 border border-green-200 text-green-800{% else %}bg-blue-50 border border-blue-200 text-blue-800{% endif %}">
+                        <div class="flex items-center gap-2">
+                            {% if message.tags == 'error' %}
+                                <ion-icon name="alert-circle" class="text-xl sm:text-2xl flex-shrink-0"></ion-icon>
+                            {% elif message.tags == 'success' %}
+                                <ion-icon name="checkmark-circle" class="text-xl sm:text-2xl flex-shrink-0"></ion-icon>
+                            {% else %}
+                                <ion-icon name="information-circle" class="text-xl sm:text-2xl flex-shrink-0"></ion-icon>
+                            {% endif %}
+                            <span class="font-medium">{{ message }}</span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+        <!-- Erros gerais do formulário -->
+        {% if form.non_field_errors %}
+            <div class="w-full mt-4">
+                <div class="p-3 sm:p-4 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs sm:text-sm">
+                    <div class="flex items-start gap-2">
+                        <ion-icon name="alert-circle" class="text-xl sm:text-2xl flex-shrink-0 mt-0.5"></ion-icon>
+                        <div>
+                            {% for error in form.non_field_errors %}
+                                <p class="font-medium">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
-            {% endfor %}
+            </div>
+        {% endif %}
+          
+        <form method="POST" enctype="multipart/form-data" class="space-y-5 sm:space-y-6 w-full" id="member-form">
+            {% csrf_token %}
+            
+            <!-- Seção: Informações Pessoais -->
+            <div class="space-y-3 sm:space-y-4">
+                <div class="flex items-center gap-2 pb-2 border-b-2 border-gray-200">
+                    <ion-icon name="person-outline" class="text-xl sm:text-2xl text-[var(--color-primary)]"></ion-icon>
+                    <h3 class="text-base sm:text-lg font-semibold text-gray-800">Informações Pessoais</h3>
+                </div>
+                
+                {% for field in form %}
+                    {% if field.name == 'name' %}
+                    <div>
+                        <label for="{{ field.id_for_label }}" class="block text-xs sm:text-sm font-medium text-gray-700">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
+                        {% endif %}
+                        {% if field.errors %}
+                            <p class="text-xs sm:text-sm text-red-600 mt-1">{{ field.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Campo de foto após o nome -->
+                    <div>
+                        <label for="id_profile_picture" class="block text-xs sm:text-sm font-medium text-gray-700">Foto de Perfil</label>
+                        <div class="mt-1">
+                            <button type="button" onclick="document.getElementById('id_profile_picture').click()" class="w-full px-3 py-2 sm:px-4 sm:py-2.5 border-2 border-gray-300 border-dashed rounded-lg hover:border-[var(--color-primary)] hover:bg-gray-50 transition-all cursor-pointer text-gray-600 hover:text-[var(--color-primary)] flex items-center justify-center gap-2">
+                                <ion-icon name="cloud-upload-outline" class="text-xl sm:text-2xl"></ion-icon>
+                                <span class="text-xs sm:text-sm font-medium">Clique para selecionar uma foto</span>
+                            </button>
+                            <input type="file" id="id_profile_picture" name="profile_picture" accept="image/*" class="hidden">
+                            <input type="hidden" id="cropped_image_data" name="cropped_image_data">
+                            <p class="mt-1 text-xs text-gray-500">JPG, PNG ou GIF (máx. 10MB)</p>
+                        </div>
+                        
+                        <!-- Preview da foto (inicialmente oculto) -->
+                        <div id="photo-preview-container" class="mt-2 sm:mt-3" style="display: none;">
+                            <div class="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <img id="avatar-preview" src="" alt="Preview" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-[var(--color-primary)]">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs sm:text-sm font-medium text-gray-700 truncate">Foto selecionada</p>
+                                    <p class="text-xs text-gray-500">Pronta para envio</p>
+                                </div>
+                                <button type="button" id="remove-avatar" class="px-2 py-1 sm:px-3 sm:py-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition flex-shrink-0">
+                                    <ion-icon name="trash-outline" class="text-base sm:text-lg"></ion-icon>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if field.name in 'gender,birth_date' %}
+                    <div>
+                        <label for="{{ field.id_for_label }}" class="block text-xs sm:text-sm font-medium text-gray-700">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
+                        {% endif %}
+                        {% if field.errors %}
+                            <p class="text-xs sm:text-sm text-red-600 mt-1">{{ field.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- Seção: Informações de Acesso -->
+            <div class="space-y-3 sm:space-y-4">
+                <div class="flex items-center gap-2 pb-2 border-b-2 border-gray-200">
+                    <ion-icon name="key-outline" class="text-xl sm:text-2xl text-[var(--color-primary)]"></ion-icon>
+                    <h3 class="text-base sm:text-lg font-semibold text-gray-800">Informações de Acesso</h3>
+                </div>
+                
+                {% for field in form %}
+                    {% if field.name in 'email,password,password_confirm' %}
+                    <div>
+                        <label for="{{ field.id_for_label }}" class="block text-xs sm:text-sm font-medium text-gray-700">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
+                        {% endif %}
+                        {% if field.errors %}
+                            <p class="text-xs sm:text-sm text-red-600 mt-1">{{ field.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- Seção: Contato e Endereço -->
+            <div class="space-y-3 sm:space-y-4">
+                <div class="flex items-center gap-2 pb-2 border-b-2 border-gray-200">
+                    <ion-icon name="location-outline" class="text-xl sm:text-2xl text-[var(--color-primary)]"></ion-icon>
+                    <h3 class="text-base sm:text-lg font-semibold text-gray-800">Contato e Endereço</h3>
+                </div>
+                
+                {% for field in form %}
+                    {% if field.name in 'phone,address,neighborhood' and field.name != 'profile_picture' %}
+                    <div>
+                        <label for="{{ field.id_for_label }}" class="block text-xs sm:text-sm font-medium text-gray-700">
+                            {{ field.label }}
+                            {% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
+                        </label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
+                        {% endif %}
+                        {% if field.errors %}
+                            <p class="text-xs sm:text-sm text-red-600 mt-1">{{ field.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
         
-            <div class="">
-                <button type="submit" class="w-full bg-[var(--color-primary)] hover:bg-opacity-90 text-white font-semibold py-2 px-4 rounded-xl shadow-sm transition-all">
-                    Enviar
+            <div class="pt-2">
+                <button type="submit" class="w-full bg-[var(--color-primary)] hover:bg-opacity-90 text-white font-semibold text-sm sm:text-base py-2.5 sm:py-3 px-4 rounded-xl shadow-sm transition-all">
+                    Criar Conta
                 </button>
             </div>
         </form>
@@ -40,10 +264,255 @@
     <div></div>
 </section>
 
+<!-- Modal de Crop da Foto -->
+<div id="cropModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="p-4 sm:p-6 border-b border-gray-200">
+            <h3 class="text-lg sm:text-xl font-bold text-gray-800 flex items-center gap-2">
+                <ion-icon name="crop-outline" class="text-2xl"></ion-icon>
+                Ajustar Foto de Perfil
+            </h3>
+            <p class="text-xs sm:text-sm text-gray-600 mt-1">Posicione e ajuste sua foto</p>
+        </div>
+        
+        <div class="p-4 sm:p-6 flex-1 overflow-y-auto">
+            <div class="mb-4">
+                <img id="cropImage" src="" alt="Imagem para cortar" style="display: block;">
+            </div>
+            
+            <!-- Controles de Zoom -->
+            <div class="mb-4">
+                <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                    <ion-icon name="search-outline" class="mr-2"></ion-icon>Zoom
+                </label>
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <button type="button" onclick="cropperInstance.zoom(-0.1)" class="px-2 sm:px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-sm">
+                        <ion-icon name="remove-outline"></ion-icon>
+                    </button>
+                    <input type="range" id="zoomRange" min="-1" max="1" step="0.01" value="0" 
+                           class="flex-1" oninput="cropperInstance.zoom(this.value - (this.getAttribute('data-prev') || 0)); this.setAttribute('data-prev', this.value);">
+                    <button type="button" onclick="cropperInstance.zoom(0.1)" class="px-2 sm:px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-sm">
+                        <ion-icon name="add-outline"></ion-icon>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Controles de Rotação -->
+            <div class="mb-4">
+                <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                    <ion-icon name="sync-outline" class="mr-2"></ion-icon>Rotação
+                </label>
+                <div class="grid grid-cols-3 gap-2">
+                    <button type="button" onclick="cropperInstance.rotate(-90)" class="px-2 sm:px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-xs sm:text-sm">
+                        <ion-icon name="arrow-undo-outline"></ion-icon> <span class="hidden sm:inline">90° Esq.</span><span class="sm:hidden">-90°</span>
+                    </button>
+                    <button type="button" onclick="cropperInstance.reset()" class="px-2 sm:px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-xs sm:text-sm">
+                        <ion-icon name="refresh-outline"></ion-icon> <span class="hidden sm:inline">Resetar</span><span class="sm:hidden">Reset</span>
+                    </button>
+                    <button type="button" onclick="cropperInstance.rotate(90)" class="px-2 sm:px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition text-xs sm:text-sm">
+                        <ion-icon name="arrow-redo-outline"></ion-icon> <span class="hidden sm:inline">90° Dir.</span><span class="sm:hidden">+90°</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-4 sm:p-6 bg-gray-50 border-t border-gray-200 flex gap-2 sm:gap-3">
+            <button type="button" onclick="closeCropModal()" class="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium rounded-xl transition text-sm sm:text-base">
+                <ion-icon name="close-outline" class="mr-1 sm:mr-2"></ion-icon>Cancelar
+            </button>
+            <button type="button" onclick="applyCrop()" class="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-[var(--color-primary)] hover:bg-opacity-90 text-white font-medium rounded-xl transition text-sm sm:text-base shadow-lg">
+                <ion-icon name="checkmark-outline" class="mr-1 sm:mr-2"></ion-icon>Aplicar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 <script>
+    let cropperInstance = null;
+    let selectedFile = null;
+
     $(document).ready(function(){
         $('#id_phone').mask('(00) 00000-0000');
     });
+
+    function openCropModal(file) {
+        selectedFile = file;
+        const modal = document.getElementById('cropModal');
+        const image = document.getElementById('cropImage');
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            image.src = e.target.result;
+            modal.classList.add('active');
+            
+            // Destruir cropper anterior se existir
+            if (cropperInstance) {
+                cropperInstance.destroy();
+            }
+            
+            // Inicializar Cropper.js
+            cropperInstance = new Cropper(image, {
+                aspectRatio: 1,
+                viewMode: 1,
+                dragMode: 'move',
+                autoCropArea: 1,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
+                minCropBoxWidth: 200,
+                minCropBoxHeight: 200,
+            });
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function closeCropModal() {
+        const modal = document.getElementById('cropModal');
+        modal.classList.remove('active');
+        
+        if (cropperInstance) {
+            cropperInstance.destroy();
+            cropperInstance = null;
+        }
+        
+        // Limpar o input
+        document.getElementById('id_profile_picture').value = '';
+        selectedFile = null;
+    }
+
+    function applyCrop() {
+        if (!cropperInstance) return;
+        
+        // Obter a imagem cortada como canvas
+        const canvas = cropperInstance.getCroppedCanvas({
+            width: 800,
+            height: 800,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high',
+        });
+        
+        // Converter para base64 e exibir preview
+        const croppedImageData = canvas.toDataURL('image/jpeg', 0.95);
+        
+        // Atualizar preview
+        const preview = document.getElementById('avatar-preview');
+        const previewContainer = document.getElementById('photo-preview-container');
+        
+        preview.src = croppedImageData;
+        previewContainer.style.display = 'block';
+        
+        // Salvar dados da imagem cropada no campo hidden
+        document.getElementById('cropped_image_data').value = croppedImageData;
+        
+        closeCropModal();
+    }
+    
+    // Upload com crop da foto
+    document.getElementById('id_profile_picture').addEventListener('change', function() {
+        if (this.files && this.files[0]) {
+            // Validar tipo de arquivo
+            const file = this.files[0];
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            
+            if (!validTypes.includes(file.type)) {
+                alert('Por favor, selecione um arquivo de imagem válido (JPG, PNG, GIF ou WebP)');
+                this.value = '';
+                return;
+            }
+            
+            if (file.size > maxSize) {
+                alert('O arquivo deve ter no máximo 10MB');
+                this.value = '';
+                return;
+            }
+            
+            // Abrir modal de crop
+            openCropModal(file);
+        }
+    });
+    
+    // Remover avatar
+    document.getElementById('remove-avatar')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const preview = document.getElementById('avatar-preview');
+        const previewContainer = document.getElementById('photo-preview-container');
+        
+        preview.src = '';
+        previewContainer.style.display = 'none';
+        
+        document.getElementById('id_profile_picture').value = '';
+        document.getElementById('cropped_image_data').value = '';
+    });
+    
+    // Validação em tempo real das senhas
+    const passwordField = document.getElementById('id_password');
+    const passwordConfirmField = document.getElementById('id_password_confirm');
+    const submitButton = document.querySelector('button[type="submit"]');
+    
+    function validatePasswords() {
+        const password = passwordField.value;
+        const passwordConfirm = passwordConfirmField.value;
+        
+        // Remove mensagens de erro anteriores
+        const existingError = passwordConfirmField.parentElement.querySelector('.password-match-error');
+        if (existingError) {
+            existingError.remove();
+        }
+        
+        // Remove classe de erro
+        passwordConfirmField.classList.remove('border-red-500', 'border-green-500');
+        
+        if (passwordConfirm.length > 0) {
+            if (password === passwordConfirm) {
+                // Senhas coincidem
+                passwordConfirmField.classList.add('border-green-500');
+                const successMsg = document.createElement('p');
+                successMsg.className = 'text-xs text-green-600 mt-1 password-match-error flex items-center gap-1';
+                successMsg.innerHTML = '<ion-icon name="checkmark-circle" class="text-sm"></ion-icon>As senhas coincidem';
+                passwordConfirmField.parentElement.appendChild(successMsg);
+            } else {
+                // Senhas não coincidem
+                passwordConfirmField.classList.add('border-red-500');
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'text-xs text-red-600 mt-1 password-match-error flex items-center gap-1';
+                errorMsg.innerHTML = '<ion-icon name="alert-circle" class="text-sm"></ion-icon>As senhas não coincidem';
+                passwordConfirmField.parentElement.appendChild(errorMsg);
+            }
+        }
+    }
+    
+    // Adiciona listeners para validação em tempo real
+    if (passwordField && passwordConfirmField) {
+        passwordField.addEventListener('input', validatePasswords);
+        passwordConfirmField.addEventListener('input', validatePasswords);
+        
+        // Valida antes de submeter o formulário
+        document.getElementById('member-form').addEventListener('submit', function(e) {
+            const password = passwordField.value;
+            const passwordConfirm = passwordConfirmField.value;
+            
+            if (password !== passwordConfirm) {
+                e.preventDefault();
+                passwordConfirmField.focus();
+                
+                // Força a exibição da mensagem de erro
+                validatePasswords();
+                
+                // Scroll suave até o campo
+                passwordConfirmField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } else {
+                // Mostrar overlay de loading
+                document.getElementById('loadingOverlay').classList.remove('hidden');
+            }
+        });
+    }
 </script>
 {% endblock %}

@@ -86,11 +86,12 @@ def team_create_view(request):
         return redirect('team_list')
     
     ministries = Ministry.objects.filter(deleted__isnull=True).order_by('name')
-    members = Member.objects.filter(is_active=True, deleted__isnull=True).order_by('name')
+    all_members = Member.objects.filter(is_active=True, deleted__isnull=True).prefetch_related('ministry').order_by('name')
     
     context = {
         'ministries': ministries,
-        'members': members
+        'members': all_members,  # Para compatibilidade com template antigo
+        'all_members': all_members
     }
     
     return render(request, 'admin_panel/schedules/teams/form.html', context)
@@ -116,12 +117,13 @@ def team_edit_view(request, team_id):
         return redirect('team_list')
     
     ministries = Ministry.objects.filter(deleted__isnull=True).order_by('name')
-    members = Member.objects.filter(is_active=True, deleted__isnull=True).order_by('name')
+    all_members = Member.objects.filter(is_active=True, deleted__isnull=True).prefetch_related('ministry').order_by('name')
     
     context = {
         'team': team,
         'ministries': ministries,
-        'members': members
+        'members': all_members,  # Para compatibilidade com template antigo
+        'all_members': all_members
     }
     
     return render(request, 'admin_panel/schedules/teams/form.html', context)
@@ -196,7 +198,7 @@ def schedule_create_view(request):
         month = request.POST.get('month')
         year = request.POST.get('year')
         # removed optional name/color fields
-        use_team_rotation = request.POST.get('use_team_rotation') == 'on'
+        use_team_rotation = request.POST.get('use_team_rotation') == 'true'
         guidelines = request.POST.get('guidelines') or None
         
         ministry = get_object_or_404(Ministry, id=ministry_id)
@@ -238,7 +240,7 @@ def schedule_edit_view(request, schedule_id):
         schedule.month = int(request.POST.get('month'))
         schedule.year = int(request.POST.get('year'))
         # removed optional name/color assignments
-        schedule.use_team_rotation = request.POST.get('use_team_rotation') == 'on'
+        schedule.use_team_rotation = request.POST.get('use_team_rotation') == 'true'
         schedule.guidelines = request.POST.get('guidelines') or None
         
         schedule.save()
