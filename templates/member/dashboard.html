@@ -623,6 +623,14 @@
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
 
+        console.log('=== PWA Debug ===');
+        console.log('isIOS:', isIOS);
+        console.log('isMobile:', isMobile);
+        console.log('isStandalone:', isStandalone);
+        console.log('User Agent:', navigator.userAgent);
+        console.log('Swal disponível:', typeof Swal !== 'undefined');
+        console.log('localStorage pwa-install-prompted:', localStorage.getItem('pwa-install-prompted'));
+
         // Registra o service worker
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/sw.js')
