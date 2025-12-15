@@ -768,23 +768,30 @@
                 if (isIOS) {
                     // iOS - Instruções para adicionar à tela inicial
                     Swal.fire({
-                        title: 'Instalar App',
+                        title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">📱 Instalar Filadélfia</div>',
                         html: `
-                            <div class="text-left">
-                                <p class="mb-3">Adicione o <strong>Filadélfia Connect</strong> à sua tela inicial para acesso rápido!</p>
-                                <ol class="list-decimal list-inside space-y-2 text-sm">
-                                    <li>Toque no botão de compartilhar <i class="fas fa-share"></i></li>
-                                    <li>Role para baixo e toque em <strong>"Adicionar à Tela Inicial"</strong></li>
-                                    <li>Toque em <strong>"Adicionar"</strong></li>
-                                </ol>
+                            <div style="text-align: left; padding: 0.5rem;">
+                                <p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin-bottom: 1rem;">Adicione o <strong style="color: #C90905;">Filadélfia</strong> à sua tela inicial para acesso rápido!</p>
+                                <div style="background: #F9FAFB; border-left: 4px solid #C90905; border-radius: 0.5rem; padding: 1rem;">
+                                    <p style="font-weight: 600; color: #1F2937; margin-bottom: 0.75rem; font-size: 0.95rem;">📋 Passo a passo:</p>
+                                    <ol style="padding-left: 1.5rem; margin: 0; color: #4B5563; font-size: 0.95rem; line-height: 1.8;">
+                                        <li style="margin-bottom: 0.5rem;">Toque no botão <strong>Compartilhar</strong> <i class="fas fa-share" style="color: #3B82F6;"></i></li>
+                                        <li style="margin-bottom: 0.5rem;">Role e toque em <strong style="color: #C90905;">"Adicionar à Tela Inicial"</strong></li>
+                                        <li>Toque em <strong style="color: #10B981;">"Adicionar"</strong></li>
+                                    </ol>
+                                </div>
                             </div>
                         `,
-                        icon: 'info',
-                        confirmButtonText: 'Entendi',
+                        showCloseButton: true,
+                        confirmButtonText: '<i class="fas fa-check"></i> Entendi',
                         confirmButtonColor: '#C90905',
-                        allowOutsideClick: false,
+                        width: '85%',
+                        padding: '1.75rem 1rem',
                         customClass: {
-                            popup: 'text-sm'
+                            popup: 'pwa-popup',
+                            title: 'pwa-title',
+                            htmlContainer: 'pwa-html',
+                            confirmButton: 'pwa-button'
                         }
                     });
                 } else if (deferredPrompt) {
@@ -795,12 +802,13 @@
                         console.log('User choice:', choiceResult.outcome);
                         if (choiceResult.outcome === 'accepted') {
                             Swal.fire({
-                                title: 'Instalado!',
-                                text: 'O app foi instalado com sucesso.',
-                                icon: 'success',
+                                title: '<div style="color: #10B981; font-weight: 700; font-size: 1.25rem;">🎉 Instalado!</div>',
+                                html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> foi instalado com sucesso!</p>',
                                 confirmButtonColor: '#C90905',
-                                timer: 2000,
-                                showConfirmButton: false
+                                timer: 2500,
+                                showConfirmButton: false,
+                                width: '85%',
+                                padding: '1.75rem 1rem'
                             });
                         }
                         deferredPrompt = null;
@@ -808,23 +816,32 @@
                 } else {
                     // Prompt visual para Android/Chrome quando não há deferredPrompt ainda
                     console.log('Mostrando prompt informativo');
-                    Swal.fire({
-                        title: 'Instalar App',
-                        html: `
-                            <div class="text-center">
-                                <i class="fas fa-mobile-alt text-6xl mb-4" style="color: #C90905;"></i>
-                                <p class="mb-3">Instale o <strong>Filadélfia Connect</strong> na sua tela inicial para acesso rápido e experiência completa!</p>
-                                ${isStandalone ? '<p class="text-sm text-green-600 font-semibold"><i class="fas fa-check-circle"></i> App já está instalado!</p>' : '<p class="text-sm text-gray-600">O navegador está preparando a instalação. Tente novamente em alguns segundos.</p>'}
-                            </div>
-                        `,
-                        icon: 'info',
-                        confirmButtonText: 'Entendi',
-                        confirmButtonColor: '#C90905',
-                        allowOutsideClick: false,
-                        customClass: {
-                            popup: 'text-sm'
-                        }
-                    });
+                    
+                    if (isStandalone) {
+                        Swal.fire({
+                            title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">✅ App Instalado</div>',
+                            html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> já está instalado no seu dispositivo!</p>',
+                            confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                            confirmButtonColor: '#C90905',
+                            width: '85%',
+                            padding: '1.75rem 1rem',
+                            customClass: {
+                                confirmButton: 'pwa-button'
+                            }
+                        });
+                    } else {
+                        Swal.fire({
+                            title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">Instalação Indisponível</div>',
+                            html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O navegador está preparando a instalação. Tente novamente em alguns segundos.</p>',
+                            confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                            confirmButtonColor: '#C90905',
+                            width: '85%',
+                            padding: '1.75rem 1rem',
+                            customClass: {
+                                confirmButton: 'pwa-button'
+                            }
+                        });
+                    }
                 }
             };
 
