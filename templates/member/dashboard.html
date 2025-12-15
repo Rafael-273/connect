@@ -630,16 +630,32 @@
         console.log('User Agent:', navigator.userAgent);
         console.log('Swal disponível:', typeof Swal !== 'undefined');
         console.log('localStorage pwa-install-prompted:', localStorage.getItem('pwa-install-prompted'));
+        console.log('Protocol:', window.location.protocol);
+        console.log('Is HTTPS:', window.location.protocol === 'https:');
+        console.log('Is localhost:', window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+        // Verifica se está em HTTPS ou localhost
+        const isSecureContext = window.location.protocol === 'https:' || 
+                               window.location.hostname === 'localhost' || 
+                               window.location.hostname === '127.0.0.1';
+        
+        if (!isSecureContext && isMobile) {
+            console.warn('PWA requer HTTPS para funcionar em produção!');
+        }
 
         // Registra o service worker
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js')
+        if ('serviceWorker' in navigator && isSecureContext) {
+            navigator.serviceWorker.register('/static/sw.js', { updateViaCache: 'none' })
                 .then(registration => {
                     console.log('Service Worker registrado com sucesso:', registration);
+                    // Força atualização do service worker
+                    registration.update();
                 })
                 .catch(error => {
-                    console.log('Falha ao registrar Service Worker:', error);
+                    console.error('Falha ao registrar Service Worker:', error);
                 });
+        } else if (!isSecureContext) {
+            console.warn('Service Worker requer contexto seguro (HTTPS)');
         }
 
         // Função para mostrar o prompt de instalação
@@ -689,23 +705,63 @@
             } else {
                 // Prompt visual para Android/Chrome quando não há deferredPrompt ainda
                 console.log('deferredPrompt não disponível ainda. isStandalone:', isStandalone);
-                Swal.fire({
-                    title: 'Instalar App',
-                    html: `
-                        <div class="text-center">
-                            <i class="fas fa-mobile-alt text-6xl mb-4" style="color: #C90905;"></i>
-                            <p class="mb-3">Instale o <strong>Filadélfia Connect</strong> na sua tela inicial para acesso rápido e experiência completa!</p>
-                            ${isStandalone ? '<p class="text-sm text-green-600 font-semibold"><i class="fas fa-check-circle"></i> App já está instalado!</p>' : '<p class="text-sm text-gray-600">O navegador está preparando a instalação. Tente novamente em alguns segundos ou verifique se o app já está instalado.</p>'}
-                        </div>
-                    `,
-                    icon: 'info',
-                    confirmButtonText: 'Entendi',
-                    confirmButtonColor: '#C90905',
-                    allowOutsideClick: false,
-                    customClass: {
-                        popup: 'text-sm'
-                    }
-                });
+                
+                if (isStandalone) {
+                    Swal.fire({
+                        title: 'App Instalado',
+                        html: `
+                            <div class="text-center">
+                                <i class="fas fa-check-circle text-6xl mb-4 text-green-600"></i>
+                                <p class="mb-3">O <strong>Filadélfia Connect</strong> já está instalado no seu dispositivo!</p>
+                            </div>
+                        `,
+                        icon: 'success',
+                        confirmButtonText: 'Entendi',
+                        confirmButtonColor: '#C90905',
+                        customClass: {
+                            popup: 'text-sm'
+                        }
+                    });
+                } else if (!isSecureContext) {
+                    Swal.fire({
+                        title: 'HTTPS Necessário',
+                        html: `
+                            <div class="text-center">
+                                <i class="fas fa-lock text-6xl mb-4" style="color: #C90905;"></i>
+                                <p class="mb-3">A instalação do app requer uma conexão segura (HTTPS).</p>
+                                <p class="text-sm text-gray-600">Por favor, acesse o site via HTTPS para instalar o aplicativo.</p>
+                            </div>
+                        `,
+                        icon: 'warning',
+                        confirmButtonText: 'Entendi',
+                        confirmButtonColor: '#C90905',
+                        customClass: {
+                            popup: 'text-sm'
+                        }
+                    });
+                } else {
+                    Swal.fire({
+                        title: 'Instalação não disponível',
+                        html: `
+                            <div class="text-center">
+                                <i class="fas fa-info-circle text-6xl mb-4" style="color: #C90905;"></i>
+                                <p class="mb-3">A instalação não está disponível neste momento.</p>
+                                <p class="text-sm text-gray-600">Possíveis motivos:</p>
+                                <ul class="text-left text-sm text-gray-600 mt-2 space-y-1">
+                                    <li>• O app já está instalado</li>
+                                    <li>• O navegador não suporta PWA</li>
+                                    <li>• Aguarde alguns segundos e tente novamente</li>
+                                </ul>
+                            </div>
+                        `,
+                        icon: 'info',
+                        confirmButtonText: 'Entendi',
+                        confirmButtonColor: '#C90905',
+                        customClass: {
+                            popup: 'text-sm'
+                        }
+                    });
+                }
             }
         };
 
