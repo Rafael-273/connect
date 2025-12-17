@@ -10,6 +10,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 
 from ..models.user import User
 from ..models.member import Member
+from ..models.ministry_membership import MinistryMembership
 
 
 class MemberLoginView(View):
@@ -64,23 +65,44 @@ class MemberDashboardView(LoginRequiredMixin, View):
     
     def get(self, request):
         from datetime import datetime, timedelta
-        from website.models import MinistrationSchedule, WordOfKnowledge
+        from django.db.models import Q
+        from website.models import WordOfKnowledge, Ministry
+        from website.models.schedule import ScheduleDay, Team
         
         member = request.user.member
         
-        # Verifica se o membro está escalado na semana atual
+        # Verifica se o membro está escalado na semana atual (segunda a domingo)
         today = datetime.now().date()
-        # Calcula o início da semana (segunda-feira)
-        week_start = today - timedelta(days=today.weekday())
         
-        is_scheduled = MinistrationSchedule.objects.filter(
-            week_start_date=week_start,
-            members=member,
-            is_active=True
+        # Calcula o início e fim da semana atual
+        week_start = today - timedelta(days=today.weekday())  # Segunda
+        week_end = week_start + timedelta(days=6)  # Domingo
+        
+        # Verifica se o membro está escalado em algum dia desta semana
+        # Pode estar diretamente em ScheduleDay.members OU em uma Team escalada
+        # IMPORTANTE: Apenas para o ministério de ministração
+        is_scheduled = ScheduleDay.objects.filter(
+            date__gte=week_start,
+            date__lte=week_end,
+            is_cancelled=False,
+            schedule__ministry__name__icontains='ministração'  # Apenas ministério de ministração
+        ).filter(
+            Q(members=member) |  # Escalado diretamente
+            Q(team__members=member)  # Ou na equipe escalada
         ).exists()
         
         # Verifica se o membro está no ministério de ministração
-        is_ministration_member = member.ministry.filter(name__icontains='ministração').exists()
+        # Buscar no sistema antigo (member.ministry) E no novo sistema (MinistryMembership)
+        from website.models import MinistryMembership
+        
+        is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+        is_ministration_new = MinistryMembership.objects.filter(
+            member=member,
+            ministry__name__icontains='ministração',
+            is_active=True
+        ).exists()
+        
+        is_ministration_member = is_ministration_old or is_ministration_new
         
         # Busca informações relevantes para o dashboard
         context = {
@@ -228,18 +250,20 @@ def member_profile_view(request):
         return redirect('member_profile')
     
     # Verificar se pode consolidar (para o menu)
-    can_consolidate = (
-        member.is_available_to_consolidate and 
-        member.ministry.exists() and
-        member.conversion_date
-    )
+    can_consolidate = member.is_available_to_consolidate
     
     # Obter todos os bairros
     from website.models import Neighborhood
     neighborhoods = Neighborhood.objects.all().order_by('name')
     
-    # Verifica se o membro está no ministério de ministração
-    is_ministration_member = member.ministry.filter(name__icontains='ministração').exists()
+    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
+    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+    is_ministration_new = MinistryMembership.objects.filter(
+        member=member,
+        ministry__name__icontains='ministração',
+        is_active=True
+    ).exists()
+    is_ministration_member = is_ministration_old or is_ministration_new
     
     context = {
         'member': member,
@@ -263,8 +287,14 @@ def member_consolidation_view(request):
     active_consolidations = consolidations.filter(end_date__isnull=True).count()
     completed_consolidations = consolidations.filter(end_date__isnull=False).count()
     
-    # Verifica se o membro está no ministério de ministração
-    is_ministration_member = member.ministry.filter(name__icontains='ministração').exists()
+    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
+    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+    is_ministration_new = MinistryMembership.objects.filter(
+        member=member,
+        ministry__name__icontains='ministração',
+        is_active=True
+    ).exists()
+    is_ministration_member = is_ministration_old or is_ministration_new
     
     context = {
         'member': member,

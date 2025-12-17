@@ -3,58 +3,6 @@ from datetime import datetime, timedelta
 from ._base import BaseModel
 
 
-class MinistrationSchedule(BaseModel):
-    """Modelo para escala de ministração semanal"""
-    
-    week_start_date = models.DateField(
-        verbose_name='Início da Semana',
-        help_text='Data de início da semana (geralmente segunda-feira)',
-        unique=True
-    )
-    members = models.ManyToManyField(
-        'Member',
-        related_name='ministration_schedules',
-        verbose_name='Ministradores Escalados',
-        limit_choices_to={'ministry__name__icontains': 'ministração'}
-    )
-    leaders = models.ManyToManyField(
-        'Member',
-        related_name='ministration_schedules_as_leader',
-        verbose_name='Líderes da Escala',
-        blank=True,
-        limit_choices_to={'ministry__name__icontains': 'ministração'}
-    )
-    notes = models.TextField(
-        blank=True,
-        null=True,
-        verbose_name='Observações'
-    )
-    is_active = models.BooleanField(
-        default=True,
-        verbose_name='Ativa'
-    )
-    
-    class Meta:
-        verbose_name = 'Escala de Ministração'
-        verbose_name_plural = 'Escalas de Ministração'
-        ordering = ['-week_start_date']
-    
-    def __str__(self):
-        return f"Escala {self.week_start_date.strftime('%d/%m/%Y')}"
-    
-    def get_wednesday_date(self):
-        """Retorna a data da quarta-feira desta semana"""
-        days_until_wednesday = (2 - self.week_start_date.weekday()) % 7
-        return self.week_start_date + timedelta(days=days_until_wednesday)
-    
-    def get_sunday_date(self):
-        """Retorna a data do domingo desta semana"""
-        days_until_sunday = (6 - self.week_start_date.weekday()) % 7
-        if days_until_sunday == 0 and self.week_start_date.weekday() != 6:
-            days_until_sunday = 7
-        return self.week_start_date + timedelta(days=days_until_sunday)
-
-
 class WordOfKnowledge(BaseModel):
     """Modelo para armazenar palavras de conhecimento"""
     

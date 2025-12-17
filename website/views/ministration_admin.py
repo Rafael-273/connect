@@ -7,6 +7,7 @@ from django.db.models import Q, Count
 from datetime import datetime, timedelta
 
 from website.models import WordOfKnowledge, Healing, Member, Ministry
+from website.models.ministry_membership import MinistryMembership
 from website.forms.word_of_knowledge import WordOfKnowledgeForm, HealingForm
 
 
@@ -115,7 +116,18 @@ class MinistrationMembersListView(LoginRequiredMixin, StaffRequiredMixin, ListVi
         ministry = Ministry.objects.filter(name__icontains='ministração').first()
         
         if ministry:
-            queryset = Member.objects.filter(ministry=ministry)
+            # Membros do sistema antigo
+            member_ids_old = set(Member.objects.filter(ministry=ministry).values_list('id', flat=True))
+            
+            # Membros do sistema novo
+            member_ids_new = set(MinistryMembership.objects.filter(
+                ministry=ministry,
+                is_active=True
+            ).values_list('member_id', flat=True))
+            
+            # Combinar ambos
+            all_member_ids = member_ids_old | member_ids_new
+            queryset = Member.objects.filter(id__in=all_member_ids)
         else:
             queryset = Member.objects.none()
         
@@ -145,8 +157,26 @@ class MinistrationMembersListView(LoginRequiredMixin, StaffRequiredMixin, ListVi
         ministry = Ministry.objects.filter(name__icontains='ministração').first()
         if ministry:
             context['ministry'] = ministry
-            context['total_members'] = Member.objects.filter(ministry=ministry).distinct().count()
-            context['active_members'] = Member.objects.filter(ministry=ministry, is_active=True).distinct().count()
+            
+            # Contar membros do sistema antigo
+            members_old = set(Member.objects.filter(ministry=ministry).values_list('id', flat=True))
+            
+            # Contar membros do sistema novo
+            members_new = set(MinistryMembership.objects.filter(
+                ministry=ministry,
+                is_active=True
+            ).values_list('member_id', flat=True))
+            
+            # Total único
+            all_member_ids = members_old | members_new
+            context['total_members'] = len(all_member_ids)
+            
+            # Ativos
+            active_member_ids = Member.objects.filter(
+                id__in=all_member_ids,
+                is_active=True
+            ).values_list('id', flat=True)
+            context['active_members'] = len(active_member_ids)
         else:
             context['ministry'] = None
             context['total_members'] = 0

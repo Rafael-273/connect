@@ -70,16 +70,7 @@
                 <select id="leader" 
                         name="leader"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] focus:ring-2 focus:ring-[var(--church-secondary)] focus:ring-opacity-20">
-                    <option value="">{% if not team.ministry_id %}Selecione um ministério primeiro{% else %}Sem líder definido{% endif %}</option>
-                    {% if team.ministry_id %}
-                    {% for member in members %}
-                    {% if team.ministry in member.ministry.all %}
-                    <option value="{{ member.id }}" {% if team and team.leader_id == member.id %}selected{% endif %}>
-                        {{ member.name }}
-                    </option>
-                    {% endif %}
-                    {% endfor %}
-                    {% endif %}
+                    <option value="">Selecione um ministério primeiro</option>
                 </select>
             </div>
 
@@ -110,19 +101,9 @@
                         multiple
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] focus:ring-2 focus:ring-[var(--church-secondary)] focus:ring-opacity-20"
                         style="min-height: 200px;">
-                    {% if team.ministry_id %}
-                    {% for member in members %}
-                    {% if team.ministry in member.ministry.all %}
-                    <option value="{{ member.id }}" 
-                            {% if team and member in team.members.all %}selected{% endif %}>
-                        {{ member.name }}
-                    </option>
-                    {% endif %}
-                    {% endfor %}
-                    {% endif %}
                 </select>
                 <p class="mt-2 text-sm text-gray-600">
-                    {% if not team.ministry_id %}Selecione um ministério primeiro para ver os membros disponíveis{% else %}Segure Ctrl (Windows) ou Command (Mac) para selecionar múltiplos membros{% endif %}
+                    Selecione um ministério primeiro para ver os membros disponíveis
                 </p>
             </div>
         </div>
@@ -150,11 +131,11 @@
     <script>
     // Armazenar todos os membros organizados por ministério
     const allMembers = [
-        {% for member in all_members %}
+        {% for member_data in members_with_ministries %}
         {
-            id: {{ member.id }},
-            name: '{{ member.name|escapejs }}',
-            ministries: [{% for ministry in member.ministry.all %}{{ ministry.id }}{% if not forloop.last %},{% endif %}{% endfor %}]
+            id: {{ member_data.id }},
+            name: '{{ member_data.name|escapejs }}',
+            ministries: {{ member_data.ministry_ids|safe }}
         }{% if not forloop.last %},{% endif %}
         {% endfor %}
     ];

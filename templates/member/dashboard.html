@@ -242,7 +242,7 @@
     <main class="px-4 md:px-8 pt-2 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400" style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
         
         <!-- Seção de Boas-Vindas para Novos Membros (sem vínculos) -->
-        {% if not is_scheduled_this_week and not is_approver and not ministries and not followups_responsible and not followups_received %}
+        {% if not is_scheduled_this_week and not is_approver and not can_consolidate and not ministries %}
         <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(135deg, #ffffff 0%, #fef7ed 50%, #ffffff 100%); border-color: rgba(201, 9, 5, 0.2);">
             <!-- Elementos Decorativos -->
             <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3), transparent);"></div>
@@ -318,8 +318,11 @@
         </section>
         {% endif %}
         
-        <!-- Palavras de Conhecimento - APENAS SE ESCALADO -->
-        {% if is_scheduled_this_week %}
+        <!-- DEBUG: Valores para depuração -->
+        <!-- is_ministration_member: {{ is_ministration_member }} | is_scheduled_this_week: {{ is_scheduled_this_week }} -->
+        
+        <!-- Palavras de Conhecimento - APENAS SE FOR DO MINISTÉRIO DE MINISTRAÇÃO E ESTIVER ESCALADO -->
+        {% if is_ministration_member and is_scheduled_this_week %}
         <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
             <!-- Elementos Decorativos -->
             <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-30" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.08), transparent);"></div>

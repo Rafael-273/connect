@@ -6,7 +6,9 @@ from django.db.models.functions import TruncMonth
 from datetime import datetime, timedelta, date
 from collections import defaultdict
 
-from website.models import WordOfKnowledge, Healing, Member, Ministry, MinistrationSchedule
+from website.models import WordOfKnowledge, Healing, Member, Ministry
+from website.models.ministry_membership import MinistryMembership
+from website.models.schedule import MonthlySchedule, ScheduleDay
 
 
 @login_required
@@ -25,25 +27,67 @@ def ministration_dashboard(request):
     
     # Membros do ministério
     if ministry:
-        total_ministry_members = Member.objects.filter(ministry=ministry).count()
-        active_ministry_members = Member.objects.filter(ministry=ministry, is_active=True).count()
+        # Membros do sistema antigo
+        members_old = set(Member.objects.filter(ministry=ministry).values_list('id', flat=True))
+        
+        # Membros do sistema novo
+        members_new = set(MinistryMembership.objects.filter(
+            ministry=ministry,
+            is_active=True
+        ).values_list('member_id', flat=True))
+        
+        # Total único
+        all_member_ids = members_old | members_new
+        total_ministry_members = len(all_member_ids)
+        
+        # Ativos
+        active_member_ids = Member.objects.filter(
+            id__in=all_member_ids,
+            is_active=True
+        ).values_list('id', flat=True)
+        active_ministry_members = len(active_member_ids)
     else:
         total_ministry_members = 0
         active_ministry_members = 0
     
-    # Escala atual
+    # Escala atual (semana atual)
     today = date.today()
     week_start = today - timedelta(days=today.weekday())  # Segunda-feira da semana atual
-    current_schedule = MinistrationSchedule.objects.filter(
-        week_start_date=week_start,
-        is_active=True
-    ).prefetch_related('members').first()
+    week_end = week_start + timedelta(days=6)  # Domingo da semana atual
     
-    # Próximas escalas
-    upcoming_schedules = MinistrationSchedule.objects.filter(
-        week_start_date__gt=week_start,
-        is_active=True
-    ).order_by('week_start_date')[:3]
+    # Buscar dias da escala na semana atual do ministério de ministração
+    current_schedule_days = None
+    if ministry:
+        current_schedule_days = ScheduleDay.objects.filter(
+            schedule__ministry=ministry,
+            date__gte=week_start,
+            date__lte=week_end,
+            is_cancelled=False
+        ).select_related('schedule', 'team').prefetch_related('members', 'team__members').order_by('date')
+    
+    # Próximas escalas (próximas 3 semanas com escalas)
+    upcoming_schedule_weeks = []
+    if ministry:
+        # Buscar próximos dias de escala após esta semana
+        next_days = ScheduleDay.objects.filter(
+            schedule__ministry=ministry,
+            date__gt=week_end,
+            is_cancelled=False
+        ).select_related('schedule', 'team').prefetch_related('members', 'team__members').order_by('date')[:21]  # 3 semanas * 7 dias
+        
+        # Agrupar por semana
+        weeks_dict = {}
+        for day in next_days:
+            day_week_start = day.date - timedelta(days=day.date.weekday())
+            if day_week_start not in weeks_dict:
+                weeks_dict[day_week_start] = []
+            weeks_dict[day_week_start].append(day)
+        
+        # Pegar as 3 primeiras semanas
+        upcoming_schedule_weeks = [
+            {'week_start': week_start, 'days': days}
+            for week_start, days in sorted(weeks_dict.items())[:3]
+        ]
     
     # Últimas palavras registradas
     recent_words = WordOfKnowledge.objects.select_related('member').order_by('-recorded_at')[:5]
@@ -88,8 +132,8 @@ def ministration_dashboard(request):
         'total_healings': total_healings,
         'total_ministry_members': total_ministry_members,
         'active_ministry_members': active_ministry_members,
-        'current_schedule': current_schedule,
-        'upcoming_schedules': upcoming_schedules,
+        'current_schedule_days': current_schedule_days,
+        'upcoming_schedule_weeks': upcoming_schedule_weeks,
         'recent_words': recent_words,
         'recent_healings': recent_healings,
         'monthly_stats': monthly_stats,

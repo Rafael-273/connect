@@ -14,5 +14,5 @@ from .ministry import Ministry
 from .neighborhood import Neighborhood
 from .follow_up import FollowUp
 from .canteen import CanteenDebtor
-from .word_of_knowledge import WordOfKnowledge, Healing, MinistrationSchedule
+from .word_of_knowledge import WordOfKnowledge, Healing
 from .schedule import Team, MonthlySchedule, ScheduleDay

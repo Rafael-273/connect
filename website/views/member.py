@@ -13,6 +13,7 @@ from django.core.files.base import ContentFile
 import base64
 from ..models.member import Member
 from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate
+from ..models.ministry_membership import MinistryMembership
 from ..forms.member import MemberForm
 from ..forms.follow_up import FollowUpReportForm
 from ..models.user import User
@@ -141,9 +142,19 @@ def member_consolidation_list(request):
         is_active=True
     ).select_related('accompanied', 'template').prefetch_related('reports').order_by('-created_at')
     
+    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
+    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+    is_ministration_new = MinistryMembership.objects.filter(
+        member=member,
+        ministry__name__icontains='ministração',
+        is_active=True
+    ).exists()
+    is_ministration_member = is_ministration_old or is_ministration_new
+    
     context = {
         'followups': followups,
         'can_consolidate': member.is_available_to_consolidate,
+        'is_ministration_member': is_ministration_member,
     }
     
     return render(request, 'member/consolidation_list.html', context)
@@ -177,12 +188,22 @@ def member_consolidation_detail(request, followup_id):
     # Nome do período sempre será "Semana"
     period_name = "Semana"
     
+    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
+    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+    is_ministration_new = MinistryMembership.objects.filter(
+        member=member,
+        ministry__name__icontains='ministração',
+        is_active=True
+    ).exists()
+    is_ministration_member = is_ministration_old or is_ministration_new
+    
     context = {
         'followup': followup,
         'current_step': current_step,
         'reports': reports,
         'can_submit_report': can_submit_report,
         'period_name': period_name,
+        'is_ministration_member': is_ministration_member,
     }
     
     return render(request, 'member/consolidation_detail.html', context)
@@ -227,11 +248,21 @@ def member_consolidation_report(request, followup_id):
     # Nome do período sempre será "Semana"
     period_name = "Semana"
     
+    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
+    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+    is_ministration_new = MinistryMembership.objects.filter(
+        member=member,
+        ministry__name__icontains='ministração',
+        is_active=True
+    ).exists()
+    is_ministration_member = is_ministration_old or is_ministration_new
+    
     context = {
         'followup': followup,
         'form': form,
         'current_step': current_step,
         'period_name': period_name,
+        'is_ministration_member': is_ministration_member,
     }
     
     return render(request, 'member/consolidation_report.html', context)
@@ -246,8 +277,18 @@ def consolidator_guide(request):
         messages.error(request, "Você precisa estar cadastrado como membro.")
         return redirect('member_dashboard')
     
+    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
+    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+    is_ministration_new = MinistryMembership.objects.filter(
+        member=member,
+        ministry__name__icontains='ministração',
+        is_active=True
+    ).exists()
+    is_ministration_member = is_ministration_old or is_ministration_new
+    
     context = {
         'member': member,
+        'is_ministration_member': is_ministration_member,
     }
     
     return render(request, 'member/consolidator_guide.html', context)
@@ -320,12 +361,22 @@ def consolidator_assignments(request):
     # Ordenar por data de conversão mais recente e aplicar distinct
     available_people = available_people.distinct().order_by('-conversion_date', '-created_at')
     
+    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
+    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+    is_ministration_new = MinistryMembership.objects.filter(
+        member=member,
+        ministry__name__icontains='ministração',
+        is_active=True
+    ).exists()
+    is_ministration_member = is_ministration_old or is_ministration_new
+    
     context = {
         'member': member,
         'available_people': available_people,
         'my_consolidations_count': my_consolidations,
         'can_consolidate': member.is_available_to_consolidate,
         'consolidator_age': consolidator_age,
+        'is_ministration_member': is_ministration_member,
     }
     
     return render(request, 'member/consolidator_assignments.html', context)

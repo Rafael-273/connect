@@ -2,12 +2,14 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponse
 from django.db.models import Q, Count
+from django.db import IntegrityError
 from django.template.loader import get_template
 from datetime import datetime
 from calendar import monthrange
 from django.conf import settings
 import os
 from ..models import MonthlySchedule, ScheduleDay, Team, Ministry, Member
+from ..models.ministry_membership import MinistryMembership
 from xhtml2pdf import pisa
 
 
@@ -86,12 +88,41 @@ def team_create_view(request):
         return redirect('team_list')
     
     ministries = Ministry.objects.filter(deleted__isnull=True).order_by('name')
-    all_members = Member.objects.filter(is_active=True, deleted__isnull=True).prefetch_related('ministry').order_by('name')
+    
+    # Buscar todos os membros ativos
+    all_members = Member.objects.filter(
+        is_active=True,
+        deleted__isnull=True
+    ).prefetch_related('ministry').order_by('name')
+    
+    # Criar mapeamento de membros para ministérios (sistema híbrido)
+    members_with_ministries = []
+    for member in all_members:
+        # Ministérios do sistema antigo
+        ministry_ids_old = set(member.ministry.values_list('id', flat=True))
+        
+        # Ministérios do sistema novo
+        ministry_ids_new = set(
+            MinistryMembership.objects.filter(
+                member=member,
+                is_active=True
+            ).values_list('ministry_id', flat=True)
+        )
+        
+        # Combinar ambos
+        all_ministry_ids = ministry_ids_old | ministry_ids_new
+        
+        if all_ministry_ids:  # Só incluir membros que estão em algum ministério
+            members_with_ministries.append({
+                'id': member.id,
+                'name': member.name,
+                'ministry_ids': list(all_ministry_ids)
+            })
     
     context = {
         'ministries': ministries,
-        'members': all_members,  # Para compatibilidade com template antigo
-        'all_members': all_members
+        'members': all_members,
+        'members_with_ministries': members_with_ministries
     }
     
     return render(request, 'admin_panel/schedules/teams/form.html', context)
@@ -117,13 +148,42 @@ def team_edit_view(request, team_id):
         return redirect('team_list')
     
     ministries = Ministry.objects.filter(deleted__isnull=True).order_by('name')
-    all_members = Member.objects.filter(is_active=True, deleted__isnull=True).prefetch_related('ministry').order_by('name')
+    
+    # Buscar todos os membros ativos
+    all_members = Member.objects.filter(
+        is_active=True,
+        deleted__isnull=True
+    ).prefetch_related('ministry').order_by('name')
+    
+    # Criar mapeamento de membros para ministérios (sistema híbrido)
+    members_with_ministries = []
+    for member in all_members:
+        # Ministérios do sistema antigo
+        ministry_ids_old = set(member.ministry.values_list('id', flat=True))
+        
+        # Ministérios do sistema novo
+        ministry_ids_new = set(
+            MinistryMembership.objects.filter(
+                member=member,
+                is_active=True
+            ).values_list('ministry_id', flat=True)
+        )
+        
+        # Combinar ambos
+        all_ministry_ids = ministry_ids_old | ministry_ids_new
+        
+        if all_ministry_ids:  # Só incluir membros que estão em algum ministério
+            members_with_ministries.append({
+                'id': member.id,
+                'name': member.name,
+                'ministry_ids': list(all_ministry_ids)
+            })
     
     context = {
         'team': team,
         'ministries': ministries,
-        'members': all_members,  # Para compatibilidade com template antigo
-        'all_members': all_members
+        'members': all_members,
+        'members_with_ministries': members_with_ministries
     }
     
     return render(request, 'admin_panel/schedules/teams/form.html', context)
@@ -279,9 +339,28 @@ def schedule_detail_view(request, schedule_id):
         deleted__isnull=True
     ).prefetch_related('members')
     
-    # Buscar membros do ministério
-    members = Member.objects.filter(
+    # Buscar membros do ministério (sistema antigo e novo - híbrido)
+    # Membros do sistema antigo
+    members_old = Member.objects.filter(
         ministry=schedule.ministry,
+        is_active=True,
+        deleted__isnull=True
+    )
+    
+    # Membros do sistema novo
+    memberships_new = MinistryMembership.objects.filter(
+        ministry=schedule.ministry,
+        is_active=True
+    ).select_related('member')
+    
+    # Combinar ambos os sistemas sem duplicatas
+    member_ids_old = set(members_old.values_list('id', flat=True))
+    member_ids_new = set(memberships_new.values_list('member_id', flat=True))
+    all_member_ids = member_ids_old | member_ids_new
+    
+    # Buscar todos os membros únicos
+    members = Member.objects.filter(
+        id__in=all_member_ids,
         is_active=True,
         deleted__isnull=True
     ).order_by('name')
@@ -331,6 +410,8 @@ def schedule_delete_view(request, schedule_id):
 def schedule_day_create_view(request, schedule_id):
     """Adiciona um dia à escala"""
     if request.method == 'POST':
+        from safedelete.models import HARD_DELETE
+        
         schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
         
         date_str = request.POST.get('date')
@@ -341,22 +422,54 @@ def schedule_day_create_view(request, schedule_id):
         description = request.POST.get('description') or None
         notes = request.POST.get('notes') or None
         
-        day = ScheduleDay.objects.create(
+        # Verifica se já existe um dia ATIVO para esta data nesta escala
+        existing_active_day = ScheduleDay.objects.filter(
+            schedule=schedule,
+            date=date
+        ).first()
+        
+        if existing_active_day:
+            # Se já existe um dia ativo, retorna erro
+            return JsonResponse({
+                'success': False,
+                'error': f'Já existe um dia escalado para {date.strftime("%d/%m/%Y")} nesta escala. Edite o dia existente ao invés de criar um novo.'
+            }, status=400)
+        
+        # Verifica se existe um dia SOFT-DELETED para esta data
+        soft_deleted_day = ScheduleDay.all_objects.filter(
             schedule=schedule,
             date=date,
-            team_id=team_id if team_id else None,
-            description=description,
-            notes=notes
-        )
+            deleted__isnull=False
+        ).first()
         
-        if member_ids:
-            day.members.set(member_ids)
+        if soft_deleted_day:
+            # Remove permanentemente o registro soft-deleted para evitar conflito de constraint
+            soft_deleted_day.delete(force_policy=HARD_DELETE)
         
-        return JsonResponse({
-            'success': True,
-            'day_id': day.id,
-            'date': day.date.strftime('%d/%m/%Y')
-        })
+        try:
+            # Cria o novo dia
+            day = ScheduleDay.objects.create(
+                schedule=schedule,
+                date=date,
+                team_id=team_id if team_id else None,
+                description=description,
+                notes=notes
+            )
+            
+            if member_ids:
+                day.members.set(member_ids)
+            
+            return JsonResponse({
+                'success': True,
+                'day_id': day.id,
+                'date': day.date.strftime('%d/%m/%Y')
+            })
+        except IntegrityError as e:
+            # Captura erro de duplicação (caso ainda ocorra por race condition)
+            return JsonResponse({
+                'success': False,
+                'error': f'Já existe um dia escalado para {date.strftime("%d/%m/%Y")} nesta escala. Erro: {str(e)}'
+            }, status=400)
     
     return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 

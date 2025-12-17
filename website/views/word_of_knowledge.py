@@ -44,8 +44,15 @@ def word_of_knowledge_list(request):
     # Para compatibilidade, manter a variável words
     words = all_words
     
-    # Verifica se o membro está no ministério de ministração
-    is_ministration_member = member.ministry.filter(name__icontains='ministração').exists()
+    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
+    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
+    from ..models.ministry_membership import MinistryMembership
+    is_ministration_new = MinistryMembership.objects.filter(
+        member=member,
+        ministry__name__icontains='ministração',
+        is_active=True
+    ).exists()
+    is_ministration_member = is_ministration_old or is_ministration_new
     
     context = {
         'member': member,
