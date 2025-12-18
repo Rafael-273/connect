@@ -12,15 +12,24 @@ class EventListView(ListView):
 
     def get_queryset(self):
         query = self.request.GET.get('q', '')
+        event_type = self.request.GET.get('type', '')  # 'normal', 'recurring', ou vazio (todos)
         today = timezone.now().date()
         
         # Filtramos apenas eventos NÃO recorrentes
         queryset = Event.objects.filter(is_recurring=False)
+        
+        # Filtrar por tipo se especificado
+        if event_type == 'normal':
+            queryset = queryset.filter(is_recurring=False)
+        elif event_type == 'recurring':
+            # Se filtrar por recorrente, não retorna nada aqui (será tratado no contexto)
+            queryset = Event.objects.none()
 
         if query:
             queryset = queryset.filter(
                 Q(title__icontains=query) |
-                Q(description__icontains=query)
+                Q(description__icontains=query) |
+                Q(location__icontains=query)
             )
 
         return queryset
@@ -29,8 +38,26 @@ class EventListView(ListView):
         context = super().get_context_data(**kwargs)
         context['navbar_transparent'] = True
         
-        # Adicionar eventos recorrentes separadamente
-        context['recurring_events'] = Event.objects.filter(is_recurring=True)
+        query = self.request.GET.get('q', '')
+        event_type = self.request.GET.get('type', '')
+        
+        # Adicionar eventos recorrentes (também filtrados pela pesquisa se houver)
+        recurring_queryset = Event.objects.filter(is_recurring=True)
+        
+        # Se filtrar por tipo 'normal', não mostra recorrentes
+        if event_type == 'normal':
+            recurring_queryset = Event.objects.none()
+        
+        if query:
+            recurring_queryset = recurring_queryset.filter(
+                Q(title__icontains=query) |
+                Q(description__icontains=query) |
+                Q(location__icontains=query)
+            )
+        
+        context['recurring_events'] = recurring_queryset
+        context['search_query'] = query
+        context['event_type'] = event_type
         
         return context
 
