@@ -19,10 +19,17 @@
                     <p class="text-gray-600 mt-2">Gerenciar cifras e repertório</p>
                 </div>
 
-                <a href=""
-                   class="bg-[var(--color-primary)] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center w-full sm:w-auto">
-                    <ion-icon name="add" class="mr-2"></ion-icon>
-                    Nova Música
+                <a href="{% url 'admin_music_create' %}"
+   class="inline-flex items-center gap-2 
+          bg-red-600 hover:bg-red-700 
+          text-white font-semibold 
+          px-5 py-2.5 
+          rounded-xl 
+          shadow-md hover:shadow-lg 
+          transition-all duration-200">
+    
+    <ion-icon name="add" class="text-xl"></ion-icon>
+    Nova Música
                 </a>
             </div>
 
@@ -103,10 +110,11 @@
                                         {% endif %}
 
                                         <a href="{% url 'admin_music_edit' music.id %}"
-                                           class="text-blue-600 hover:text-blue-800">
+                                                class="text-blue-600 hover:text-blue-800"
+                                                title="Editar música">
                                             <ion-icon name="create"></ion-icon>
                                         </a>
-
+                                        
                                         <button onclick="deleteMusic({{ music.id }}, '{{ music.name }}')"
                                                 class="text-red-600 hover:text-red-800">
                                             <ion-icon name="trash"></ion-icon>
@@ -132,27 +140,101 @@
 </div>
 
 <script>
-function deleteMusic(id, name) {
-    if (confirm(`Deseja excluir a música "${name}"?`)) {
-        fetch("{% url 'admin_api_delete' %}", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                model: "music",
-                id: id
+  const CSRF_TOKEN = "{{ csrf_token }}";
+</script>
+
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+function deleteMusic(musicId, musicName) {
+    Swal.fire({
+        title: '⚠️ Confirmar Exclusão',
+        html: `Tem certeza que deseja deletar a partitura <strong>${musicName}</strong>?<br><br>
+               <span class="text-red-600">Esta ação não pode ser desfeita!</span>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#DC2626',
+        cancelButtonColor: '#6B7280',
+        confirmButtonText: '<i class="fas fa-trash mr-2"></i>Sim, deletar!',
+        cancelButtonText: '<i class="fas fa-times mr-2"></i>Cancelar',
+        reverseButtons: true,
+        customClass: {
+            popup: 'rounded-2xl',
+            confirmButton: 'rounded-xl px-6 py-3 font-bold',
+            cancelButton: 'rounded-xl px-6 py-3 font-bold'
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+
+            // 🔄 Loading
+            Swal.fire({
+                title: 'Deletando...',
+                text: 'Por favor, aguarde...',
+                icon: 'info',
+                allowOutsideClick: false,
+                allowEscapeKey: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+
+            // 🗑️ Requisição de delete
+            fetch(`/admin-panel/music/delete/${musicId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN
+                }
             })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert("Erro ao excluir");
-            }
-        });
-    }
+
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        title: '✅ Deletado!',
+                        text: 'A partitura foi deletada com sucesso.',
+                        icon: 'success',
+                        confirmButtonColor: '#10B981',
+                        confirmButtonText: '<i class="fas fa-check mr-2"></i>OK',
+                        customClass: {
+                            popup: 'rounded-2xl',
+                            confirmButton: 'rounded-xl px-6 py-3 font-bold'
+                        }
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire({
+                        title: '❌ Erro',
+                        text: data.error || 'Ocorreu um erro ao deletar a partitura.',
+                        icon: 'error',
+                        confirmButtonColor: '#EF4444',
+                        confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
+                        customClass: {
+                            popup: 'rounded-2xl',
+                            confirmButton: 'rounded-xl px-6 py-3 font-bold'
+                        }
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Erro:', error);
+                Swal.fire({
+                    title: '❌ Erro',
+                    text: 'Ocorreu um erro ao processar a solicitação.',
+                    icon: 'error',
+                    confirmButtonColor: '#EF4444',
+                    confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
+                    customClass: {
+                        popup: 'rounded-2xl',
+                        confirmButton: 'rounded-xl px-6 py-3 font-bold'
+                    }
+                });
+            });
+        }
+    });
 }
 </script>
 {% endblock %}
