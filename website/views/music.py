@@ -1,5 +1,5 @@
 from django.urls import reverse_lazy
-from django.views.generic import ListView, DetailView, CreateView
+from django.views.generic import ListView, CreateView
 from django.shortcuts import get_object_or_404, redirect
 from django.contrib.auth.mixins import LoginRequiredMixin
 from website.models import Music
@@ -15,16 +15,13 @@ class MusicListView(LoginRequiredMixin, ListView):
     context_object_name = 'musics'
     ordering = ['name']
 
-class MusicDetailView(LoginRequiredMixin, DetailView):
-    model = Music
-    template_name = 'admin_panel/music/detail.html'
-    context_object_name = 'music'
 
 class MusicCreateView(LoginRequiredMixin, CreateView):
     model = Music
     template_name = 'admin_panel/music/form.html'
     fields = ['name', 'singer', 'chord_sheet']
     success_url = reverse_lazy('admin_music_list')
+
 
 class MusicDeleteView(LoginRequiredMixin, View):
 
@@ -37,6 +34,7 @@ class MusicDeleteView(LoginRequiredMixin, View):
             'success': True,
             'message': f'Música "{music_name}" excluída com sucesso!'
         })
+
 
 class MusicUpdateView(LoginRequiredMixin, UpdateView):
     model = Music
