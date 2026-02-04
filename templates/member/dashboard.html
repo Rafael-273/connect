@@ -242,7 +242,7 @@
     <main class="px-4 md:px-8 pt-2 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400" style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
         
         <!-- Seção de Boas-Vindas para Novos Membros (sem vínculos) -->
-        {% if not is_scheduled_this_week and not is_approver and not can_consolidate and not ministries %}
+        {% if not is_scheduled_this_week and not is_approver and not can_consolidate and not ministries and not has_schedules %}
         <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(135deg, #ffffff 0%, #fef7ed 50%, #ffffff 100%); border-color: rgba(201, 9, 5, 0.2);">
             <!-- Elementos Decorativos -->
             <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3), transparent);"></div>
@@ -319,7 +319,16 @@
         {% endif %}
         
         <!-- DEBUG: Valores para depuração -->
-        <!-- is_ministration_member: {{ is_ministration_member }} | is_scheduled_this_week: {{ is_scheduled_this_week }} -->
+        <!-- 
+        DEBUG INFO:
+        - is_ministration_member: {{ is_ministration_member }} 
+        - is_scheduled_this_week: {{ is_scheduled_this_week }}
+        - has_schedules: {{ has_schedules }}
+        - member_schedules count: {{ member_schedules|length }}
+        {% for schedule in member_schedules %}
+        - Escala: {{ schedule.ministry.name }} - {{ schedule.title }} ({{ schedule.month }}/{{ schedule.year }})
+        {% endfor %}
+        -->
         
         <!-- Palavras de Conhecimento - APENAS SE FOR DO MINISTÉRIO DE MINISTRAÇÃO E ESTIVER ESCALADO -->
         {% if is_ministration_member and is_scheduled_this_week %}
@@ -513,7 +522,114 @@
                 </div>
             </section>
         {% endif %}
+
+        <!-- Escalas - Aparece para membros com escalas no mês atual ou próximo -->
+        {% if has_schedules %}
+            <section class="relative overflow-hidden rounded-2xl border-2 mb-6 sm:mb-8" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(59, 130, 246, 0.25);">
+                <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-30" style="background: radial-gradient(circle, rgba(59, 130, 246, 0.1), transparent);"></div>
+                <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-30" style="background: radial-gradient(circle, rgba(96, 165, 250, 0.1), transparent);"></div>
+                
+                <div class="relative z-10 p-6 sm:p-8">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%);">
+                                <i class="fas fa-calendar-check text-white text-xl sm:text-2xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-2xl sm:text-2xl md:text-3xl font-black text-gray-900">
+                                    Minhas <span style="color: #3B82F6;">Escalas</span>
+                                </h3>
+                                <p class="text-sm sm:text-sm text-gray-600 font-medium mt-1">{{ member_schedules|length }} escala{{ member_schedules|length|pluralize }} ativa{{ member_schedules|length|pluralize }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <a href="#" id="btnOpenSchedules" class="group block bg-white rounded-xl p-6 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(59, 130, 246, 0.3);">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(59, 130, 246, 0.1);">
+                                    <i class="fas fa-calendar-alt text-2xl" style="color: #3B82F6;"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-base sm:text-lg font-black text-gray-900 mb-1">Ver Escalas</h4>
+                                    <p class="text-sm sm:text-sm text-gray-600">Confira suas escalas e datas</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-arrow-right text-2xl transition-transform group-hover:translate-x-2" style="color: #3B82F6;"></i>
+                        </div>
+                    </a>
+                </div>
+            </section>
+        {% endif %}
     </main>
+
+    <!-- Modal de Escalas -->
+    <div id="schedulesModal" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onclick="event.stopPropagation()">
+            <!-- Header do Modal -->
+            <div class="sticky top-0 z-10 px-6 py-4 border-b-2 flex items-center justify-between" style="background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%); border-color: rgba(59, 130, 246, 0.3);">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-white bg-opacity-20 flex items-center justify-center">
+                        <i class="fas fa-calendar-check text-white text-lg"></i>
+                    </div>
+                    <h2 class="text-xl sm:text-2xl font-black text-white">Minhas Escalas</h2>
+                </div>
+                <button id="btnCloseSchedules" class="w-8 h-8 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 text-white transition-all">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <!-- Conteúdo do Modal -->
+            <div class="overflow-y-auto max-h-[calc(90vh-80px)] p-6">
+                {% for schedule in member_schedules %}
+                <div class="mb-6 last:mb-0">
+                    <!-- Cabeçalho da Escala -->
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b-2" style="border-color: rgba(59, 130, 246, 0.2);">
+                        <div>
+                            <h3 class="text-lg sm:text-xl font-bold text-gray-900">{{ schedule.ministry.name }}</h3>
+                            <p class="text-sm text-gray-600 font-medium">{{ schedule.title }} - {{ schedule.get_month_display }}/{{ schedule.year }}</p>
+                        </div>
+                        <span class="px-3 py-1 rounded-full text-xs font-bold text-white" style="background-color: #3B82F6;">
+                            {{ schedule.days.count }} dia{{ schedule.days.count|pluralize }}
+                        </span>
+                    </div>
+                    
+                    <!-- Botão Ver Escala Completa -->
+                    <div class="mb-4">
+                        <a href="{% url 'member_schedule_detail' schedule.id %}" target="_blank" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-all duration-300 hover:scale-105 hover:shadow-lg" style="background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%);">
+                            <i class="fas fa-calendar-alt"></i>
+                            Ver Escala Completa
+                            <i class="fas fa-external-link-alt text-xs"></i>
+                        </a>
+                    </div>
+                    
+                    <!-- Orientações (se houver) -->
+                    {% if schedule.guidelines %}
+                    <div class="mb-4 p-4 rounded-xl" style="background: rgba(59, 130, 246, 0.05); border-left: 4px solid #3B82F6;">
+                        <p class="text-sm font-medium text-gray-700">
+                            <i class="fas fa-info-circle mr-2" style="color: #3B82F6;"></i>
+                            {{ schedule.guidelines }}
+                        </p>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Grid de Dias -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" id="schedule-{{ schedule.id }}">
+                        <!-- Os dias serão carregados via JavaScript -->
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-12">
+                    <div class="w-20 h-20 mx-auto mb-4 rounded-full flex items-center justify-center" style="background: rgba(59, 130, 246, 0.1);">
+                        <i class="fas fa-calendar-times text-3xl" style="color: #3B82F6;"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-gray-900 mb-2">Nenhuma escala encontrada</h3>
+                    <p class="text-gray-600">Você não possui escalas ativas no momento.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
 
     <!-- Bottom Navigation -->
     <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out {% if can_consolidate and is_ministration_member %}w-[90%] max-w-lg justify-around{% elif can_consolidate or is_ministration_member %}w-auto gap-2 justify-center{% else %}w-auto gap-2 justify-center{% endif %}" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
@@ -578,8 +694,177 @@
                 }
             }
         }
+
+        // ==================== MODAL DE ESCALAS ====================
         
-        // Message handling
+        window.showSchedulesModal = function() {
+            console.log('showSchedulesModal chamada');
+            const modal = document.getElementById('schedulesModal');
+            if (!modal) {
+                console.error('Modal não encontrado!');
+                return;
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+            
+            // Carrega os dias das escalas
+            loadScheduleDays();
+        }
+        
+        window.closeSchedulesModal = function() {
+            console.log('closeSchedulesModal chamada');
+            const modal = document.getElementById('schedulesModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = 'auto';
+        }
+        
+        // Event listeners para botões do modal
+        document.addEventListener('DOMContentLoaded', function() {
+            const btnOpen = document.getElementById('btnOpenSchedules');
+            const btnClose = document.getElementById('btnCloseSchedules');
+            const modal = document.getElementById('schedulesModal');
+            
+            if (btnOpen) {
+                btnOpen.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    console.log('Botão clicado - abrindo modal');
+                    showSchedulesModal();
+                });
+            }
+            
+            if (btnClose) {
+                btnClose.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    closeSchedulesModal();
+                });
+            }
+            
+            // Fecha ao clicar no fundo
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        closeSchedulesModal();
+                    }
+                });
+            }
+        });
+        
+        // Função para carregar os dias de cada escala
+        async function loadScheduleDays() {
+            console.log('loadScheduleDays iniciada');
+            {% for schedule in member_schedules %}
+            {
+                const scheduleId = {{ schedule.id }};
+                const container = document.getElementById('schedule-' + scheduleId);
+                
+                try {
+                    const response = await fetch(`/member/schedule/${scheduleId}/days/`, {
+                        credentials: 'same-origin',  // Enviar cookies de sessão
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                
+                if (data.days && data.days.length > 0) {
+                    container.innerHTML = data.days.map(day => {
+                        const date = new Date(day.date);
+                        const dayOfWeek = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][date.getDay()];
+                        const dayNum = date.getDate();
+                        const month = date.toLocaleDateString('pt-BR', { month: 'short' });
+                        
+                        // Determina se o membro está escalado neste dia
+                        const isUserScheduled = day.is_user_scheduled;
+                        
+                        // Estilos condicionais
+                        const bgColor = isUserScheduled 
+                            ? 'background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%);' 
+                            : 'background: white;';
+                        const borderStyle = isUserScheduled 
+                            ? 'border: 3px solid #3B82F6; box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);' 
+                            : 'border: 2px solid rgba(59, 130, 246, 0.2);';
+                        const textColor = isUserScheduled ? 'text-white' : 'text-gray-900';
+                        const iconColor = isUserScheduled ? 'color: white;' : 'color: #3B82F6;';
+                        const badgeStyle = isUserScheduled 
+                            ? 'background: rgba(255, 255, 255, 0.25); color: white;' 
+                            : 'background: rgba(59, 130, 246, 0.1); color: #3B82F6;';
+                        
+                        // Badge de destaque
+                        const highlightBadge = isUserScheduled 
+                            ? `<div class="absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center" style="background: #10B981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);">
+                                   <i class="fas fa-check text-white text-sm"></i>
+                               </div>` 
+                            : '';
+                        
+                        // Informações de equipe ou membros
+                        let assignmentInfo = '';
+                        if (day.team_name) {
+                            assignmentInfo = `<p class="text-xs font-semibold ${isUserScheduled ? 'text-white' : 'text-gray-600'}">
+                                <i class="fas fa-users mr-1"></i>${day.team_name}
+                            </p>`;
+                        } else if (day.member_names && day.member_names.length > 0) {
+                            const memberList = day.member_names.slice(0, 2).join(', ');
+                            const extra = day.member_names.length > 2 ? ` +${day.member_names.length - 2}` : '';
+                            assignmentInfo = `<p class="text-xs font-medium ${isUserScheduled ? 'text-white' : 'text-gray-600'}">
+                                <i class="fas fa-user mr-1"></i>${memberList}${extra}
+                            </p>`;
+                        }
+                        
+                        return `
+                            <div class="relative p-4 rounded-xl transition-all duration-300 hover:-translate-y-1 ${isUserScheduled ? 'scale-105' : ''}" 
+                                 style="${bgColor} ${borderStyle}">
+                                ${highlightBadge}
+                                
+                                <div class="flex items-start justify-between mb-3">
+                                    <div>
+                                        <p class="text-xs font-bold ${isUserScheduled ? 'text-white' : 'text-gray-500'} uppercase tracking-wide">${dayOfWeek}</p>
+                                        <p class="text-2xl font-black ${textColor}">${dayNum}</p>
+                                        <p class="text-xs ${isUserScheduled ? 'text-white' : 'text-gray-500'} capitalize">${month}</p>
+                                    </div>
+                                    ${day.description ? `<span class="px-2 py-1 rounded-full text-xs font-bold" style="${badgeStyle}">${day.description}</span>` : ''}
+                                </div>
+                                
+                                ${assignmentInfo}
+                                
+                                ${day.notes ? `<p class="text-xs mt-2 ${isUserScheduled ? 'text-white' : 'text-gray-600'} italic">
+                                    <i class="fas fa-sticky-note mr-1"></i>${day.notes}
+                                </p>` : ''}
+                                
+                                ${day.is_cancelled ? `<div class="mt-2 px-2 py-1 rounded-lg text-xs font-bold text-center" style="background: rgba(239, 68, 68, 0.9); color: white;">
+                                    <i class="fas fa-times-circle mr-1"></i>CANCELADO
+                                </div>` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    container.innerHTML = `
+                        <div class="col-span-full text-center py-8">
+                            <p class="text-gray-500">Nenhum dia escalado ainda.</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dias da escala:', error);
+                container.innerHTML = `
+                    <div class="col-span-full text-center py-8">
+                        <p class="text-red-500">Erro ao carregar escalas. Tente novamente.</p>
+                    </div>
+                `;
+            }
+            }
+            {% endfor %}
+        }
+        
+        // ==================== MESSAGE HANDLING ====================
+        
         function closeMessage(btn) {
             const alert = btn.closest('.message-alert');
             alert.style.opacity = '0';

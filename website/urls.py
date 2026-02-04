@@ -15,7 +15,7 @@ from .views.member import (
 )
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
-from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view, member_approve_word, member_reject_word, redirect_after_login
+from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view, member_approve_word, member_reject_word, redirect_after_login, get_schedule_days, member_schedule_detail_view
 from .views.user_management import user_management_view, reset_user_password, change_password_view
 from .views.word_of_knowledge import (
     word_of_knowledge_list, word_of_knowledge_create, healing_create,
@@ -74,6 +74,10 @@ urlpatterns = [
     # Member Word Approval URLs
     path('words/approve/<int:word_id>/', member_approve_word, name='member_approve_word'),
     path('words/reject/<int:word_id>/', member_reject_word, name='member_reject_word'),
+    
+    # Member Schedule URLs
+    path('member/schedule/<int:schedule_id>/days/', get_schedule_days, name='get_schedule_days'),
+    path('member/schedule/<int:schedule_id>/', member_schedule_detail_view, name='member_schedule_detail'),
     
     # Member Consolidation URLs
     path('consolidation/', member_consolidation_list, name='member_consolidation'),

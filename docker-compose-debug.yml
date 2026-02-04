@@ -1,8 +1,6 @@
-version: '3'
-
 services:
   connect-database: 
-    image: postgres:latest 
+    image: postgres:16-alpine 
     container_name: connect-database  
     ports:
       - "5432:${DB_PORT}"
@@ -17,7 +15,7 @@ services:
       - connect-network
 
   redis:
-    image: "redis:alpine"
+    image: redis/redis-stack-server:latest
     restart: always
     volumes:
       - redis_data:/data
@@ -30,11 +28,13 @@ services:
       context: .
       dockerfile: Dockerfile
     working_dir: /usr/src/platform
-    command: [
-      "sh",
-      "-c",
-      "pip install debugpy && python -m debugpy --listen 0.0.0.0:3000 --wait-for-client -m gunicorn -b 0.0.0.0:${PORT} connect.wsgi:application"
-    ]
+    command: >
+      bash -c "
+        pip install debugpy &&
+        python manage.py collectstatic --noinput &&
+        python manage.py migrate &&
+        python -m debugpy --listen 0.0.0.0:3000 --wait-for-client manage.py runserver ${HOSTNAME}:${PORT}
+      "
     volumes:
       - ./:/usr/src/platform
       - media_volume:/usr/src/platform/media
@@ -44,9 +44,12 @@ services:
     environment:
       - PYTHONUNBUFFERED=True
       - OAUTHLIB_INSECURE_TRANSPORT=False
-      - REDIS_URL=redis://redis:6379
+      - USE_S3=${USE_S3:-FALSE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-}
     env_file:
-      .env
+      - .env
     depends_on:
       - connect-database 
       - redis
@@ -55,11 +58,9 @@ services:
 
 networks:
   connect-network:
-    external: true
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
   media_volume:
-    connect-network:
-        external: true

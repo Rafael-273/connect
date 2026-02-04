@@ -67,7 +67,8 @@ class MemberDashboardView(LoginRequiredMixin, View):
         from datetime import datetime, timedelta
         from django.db.models import Q
         from website.models import WordOfKnowledge, Ministry
-        from website.models.schedule import ScheduleDay, Team
+        from website.models.schedule import ScheduleDay, Team, MonthlySchedule
+        from calendar import monthrange
         
         member = request.user.member
         
@@ -104,6 +105,59 @@ class MemberDashboardView(LoginRequiredMixin, View):
         
         is_ministration_member = is_ministration_old or is_ministration_new
         
+        # Busca escalas do membro no mês atual e próximo
+        current_month = today.month
+        current_year = today.year
+        next_month = current_month + 1 if current_month < 12 else 1
+        next_year = current_year if current_month < 12 else current_year + 1
+        
+        # Busca ministérios do membro (sistema híbrido - antigo e novo)
+        ministry_ids_old = member.ministry.values_list('id', flat=True)
+        ministry_ids_new = MinistryMembership.objects.filter(
+            member=member,
+            is_active=True
+        ).values_list('ministry_id', flat=True)
+        
+        # Unir os IDs dos dois sistemas
+        all_ministry_ids = list(set(list(ministry_ids_old) + list(ministry_ids_new)))
+        
+        # DEBUG
+        print(f"🔍 DEBUG - Membro: {member.name} (ID: {member.id})")
+        print(f"🔍 DEBUG - Ministérios IDs: {all_ministry_ids}")
+        print(f"🔍 DEBUG - Mês atual: {current_month}/{current_year}, Próximo: {next_month}/{next_year}")
+        
+        # Buscar escalas publicadas onde o membro está nos ministérios
+        member_schedules = MonthlySchedule.objects.filter(
+            Q(month=current_month, year=current_year) | Q(month=next_month, year=next_year),
+            ministry_id__in=all_ministry_ids,
+            deleted__isnull=True
+        ).select_related('ministry').distinct()
+        
+        print(f"🔍 DEBUG - Escalas encontradas (antes de filtrar): {member_schedules.count()}")
+        for s in member_schedules:
+            print(f"   - {s.ministry.name}: {s.title} ({s.month}/{s.year})")
+        
+        # Filtrar apenas escalas onde o membro está realmente escalado
+        schedules_with_member = []
+        for schedule in member_schedules:
+            # Verifica se o membro está em algum dia desta escala
+            has_schedule = ScheduleDay.objects.filter(
+                schedule=schedule,
+                is_cancelled=False
+            ).filter(
+                Q(members=member) |  # Escalado diretamente
+                Q(team__members=member)  # Ou na equipe escalada
+            ).exists()
+            
+            print(f"🔍 DEBUG - Escala {schedule.title}: membro escalado = {has_schedule}")
+            
+            if has_schedule:
+                schedules_with_member.append(schedule)
+        
+        has_schedules = len(schedules_with_member) > 0
+        print(f"🔍 DEBUG - Total de escalas com o membro: {len(schedules_with_member)}")
+        print(f"🔍 DEBUG - has_schedules: {has_schedules}")
+        
         # Busca informações relevantes para o dashboard
         context = {
             'member': member,
@@ -113,6 +167,8 @@ class MemberDashboardView(LoginRequiredMixin, View):
             'is_scheduled_this_week': is_scheduled,
             'is_approver': member.is_approver,
             'is_ministration_member': is_ministration_member,
+            'has_schedules': has_schedules,
+            'member_schedules': schedules_with_member,
         }
         
         # Se for aprovador, busca palavras pendentes de aprovação
@@ -403,3 +459,156 @@ def redirect_after_login(request):
     messages.error(request, 'Acesso negado. Você precisa estar cadastrado como membro ou ter permissões de administrador.')
     logout(request)
     return redirect('member_login')
+
+
+@login_required
+def get_schedule_days(request, schedule_id):
+    """Retorna os dias de uma escala específica via AJAX"""
+    print(f"🔍 get_schedule_days chamada! schedule_id={schedule_id}, user={request.user}")
+    
+    try:
+        from django.db.models import Q
+        from website.models.schedule import MonthlySchedule, ScheduleDay
+        from django.shortcuts import get_object_or_404
+        
+        # Verificar se o usuário é membro
+        if not hasattr(request.user, 'member'):
+            print("❌ Usuário não tem atributo member")
+            return JsonResponse({'error': 'Acesso negado'}, status=403)
+        
+        member = request.user.member
+        print(f"✅ Member encontrado: {member.name}")
+        
+        # Buscar a escala (removido is_published=True para permitir escalas não publicadas)
+        schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+        print(f"✅ Schedule encontrado: {schedule.title}")
+        
+    except Exception as e:
+        print(f"❌ ERRO em get_schedule_days: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)
+    
+    # Verificar se o membro faz parte do ministério desta escala
+    from website.models import MinistryMembership
+    ministry_ids_old = member.ministry.values_list('id', flat=True)
+    ministry_ids_new = MinistryMembership.objects.filter(
+        member=member,
+        is_active=True
+    ).values_list('ministry_id', flat=True)
+    
+    all_ministry_ids = list(set(list(ministry_ids_old) + list(ministry_ids_new)))
+    
+    if schedule.ministry_id not in all_ministry_ids:
+        return JsonResponse({'error': 'Você não faz parte deste ministério'}, status=403)
+    
+    # Buscar todos os dias da escala ordenados por data
+    days = ScheduleDay.objects.filter(
+        schedule=schedule
+    ).select_related('team').prefetch_related('members').order_by('date')
+    
+    # Preparar dados para retornar
+    days_data = []
+    for day in days:
+        # Verificar se o membro está escalado neste dia
+        is_user_scheduled = False
+        
+        # Verifica se está diretamente nos membros
+        if member in day.members.all():
+            is_user_scheduled = True
+        
+        # Verifica se está na equipe escalada
+        if day.team and member in day.team.members.all():
+            is_user_scheduled = True
+        
+        # Informações da equipe
+        team_name = day.team.name if day.team else None
+        
+        # Informações dos membros
+        member_names = [m.name for m in day.members.all()] if day.members.exists() else []
+        
+        days_data.append({
+            'date': day.date.isoformat(),
+            'description': day.description or '',
+            'notes': day.notes or '',
+            'is_cancelled': day.is_cancelled,
+            'cancellation_reason': day.cancellation_reason or '',
+            'team_name': team_name,
+            'member_names': member_names,
+            'is_user_scheduled': is_user_scheduled,
+        })
+    
+    return JsonResponse({
+        'days': days_data,
+        'schedule': {
+            'id': schedule.id,
+            'title': schedule.title,
+            'ministry': schedule.ministry.name,
+            'month': schedule.month,
+            'year': schedule.year,
+        }
+    })
+
+
+@login_required
+def member_schedule_detail_view(request, schedule_id):
+    """Visualização de escala para membros"""
+    from website.models.schedule import MonthlySchedule, ScheduleDay
+    from website.models import MinistryMembership
+    from django.shortcuts import get_object_or_404
+    
+    # Verificar se o usuário é membro
+    if not hasattr(request.user, 'member'):
+        return redirect('member_dashboard')
+    
+    member = request.user.member
+    schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+    
+    # Verificar se o membro faz parte do ministério desta escala
+    ministry_ids_old = member.ministry.values_list('id', flat=True)
+    ministry_ids_new = MinistryMembership.objects.filter(
+        member=member,
+        is_active=True
+    ).values_list('ministry_id', flat=True)
+    
+    all_ministry_ids = list(set(list(ministry_ids_old) + list(ministry_ids_new)))
+    
+    if schedule.ministry_id not in all_ministry_ids:
+        messages.error(request, 'Você não tem permissão para visualizar esta escala.')
+        return redirect('member_dashboard')
+    
+    # Buscar todos os dias da escala
+    days = ScheduleDay.objects.filter(
+        schedule=schedule,
+        deleted__isnull=True
+    ).select_related('team').prefetch_related('members').order_by('date')
+    
+    # Organizar dias por semana
+    WEEKDAYS_PT = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+    weeks = {}
+    for day in days:
+        # Adicionar nome do dia em português
+        try:
+            day.pt_weekday = WEEKDAYS_PT[day.date.weekday()]
+        except Exception:
+            day.pt_weekday = ''
+        
+        # Verificar se o membro está escalado neste dia
+        day.is_user_scheduled = False
+        if member in day.members.all():
+            day.is_user_scheduled = True
+        if day.team and member in day.team.members.all():
+            day.is_user_scheduled = True
+        
+        week_num = day.get_week_number()
+        if week_num not in weeks:
+            weeks[week_num] = []
+        weeks[week_num].append(day)
+    
+    context = {
+        'schedule': schedule,
+        'days': days,
+        'weeks': weeks,
+    }
+    
+    return render(request, 'member/schedule_detail.html', context)

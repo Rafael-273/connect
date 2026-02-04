@@ -1,0 +1,372 @@
+{% load static %}
+{% load pt_date %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{{ schedule.title }} | Filadélfia Connect</title>
+    
+    <!-- CSS Dependencies -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom Fonts -->
+    <style>
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansRegular.otf' %}") format("truetype");
+            font-weight: normal;
+        }
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansMedium.otf' %}") format("truetype");
+            font-weight: 500;
+        }
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansLight.otf' %}") format("truetype");
+            font-weight: 300;
+        }
+        @font-face {
+            font-family: "Integral";
+            src: url("{% static 'fonts/Integral.otf' %}") format("truetype");
+            font-weight: bold;
+        }
+
+        /* Cores customizadas da igreja */
+        :root {
+            --church-red: #C90905;
+            --church-dark: #260200;
+            --church-danger: #8C0910;
+            --church-light: #F66F03;
+            --church-accent: #FDDEB9;
+            --church-red-light: #E63946;
+            --church-red-medium: #DC2626;
+            --church-cream: #FEF7ED;
+            --church-gold: #F59E0B;
+            --church-warm: #FED7AA;
+        }
+
+        /* Classes customizadas com cores da igreja */
+        .bg-church-red { background-color: var(--church-red) !important; }
+        .bg-church-dark { background-color: var(--church-dark) !important; }
+        .bg-church-red-light { background-color: var(--church-red-light) !important; }
+        .bg-church-cream { background-color: var(--church-cream) !important; }
+        .bg-church-warm { background-color: var(--church-warm) !important; }
+        .text-church-red { color: var(--church-red) !important; }
+        .text-church-dark { color: var(--church-dark) !important; }
+        .text-church-danger { color: var(--church-danger) !important; }
+        .text-church-gold { color: var(--church-gold) !important; }
+        .text-church-cream { color: var(--church-cream) !important; }
+        .border-church-red { border-color: var(--church-red) !important; }
+        .border-church-gold { border-color: var(--church-gold) !important; }
+        .bg-gradient-church {
+            background: linear-gradient(135deg, var(--church-red) 0%, var(--church-dark) 100%) !important;
+        }
+        .bg-gradient-warm {
+            background: linear-gradient(135deg, var(--church-red-light) 0%, var(--church-red) 100%) !important;
+        }
+        
+        .hover-church-red:hover { color: var(--church-red) !important; }
+        .hover-church-dark:hover { color: var(--church-dark) !important; }
+        .hover-border-church-red:hover { border-color: var(--church-red) !important; }
+
+        body {
+            font-family: "Giga Sans", system-ui, -apple-system, sans-serif;
+            background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);
+            color: var(--church-dark);
+            -webkit-font-smoothing: antialiased;
+            padding-bottom: 100px;
+            margin: 0;
+        }
+
+        .font-integral {
+            font-family: "Integral", sans-serif;
+        }
+
+        /* Animações de entrada */
+        @keyframes slideDown {
+            from { transform: translateY(-30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes scaleIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .animate-slideDown {
+            animation: slideDown 0.6s ease-out;
+        }
+
+        .animate-fadeInUp {
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .animate-scaleIn {
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        .animate-delay-100 {
+            animation-delay: 0.1s;
+            animation-fill-mode: both;
+        }
+
+        .animate-delay-200 {
+            animation-delay: 0.2s;
+            animation-fill-mode: both;
+        }
+
+        .animate-delay-300 {
+            animation-delay: 0.3s;
+            animation-fill-mode: both;
+        }
+
+        .animate-delay-400 {
+            animation-delay: 0.4s;
+            animation-fill-mode: both;
+        }
+
+        /* Card Styling */
+        .glass-card {
+            background: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid rgba(0,0,0,0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.08);
+        }
+
+        .stat-card {
+            background: linear-gradient(to bottom, #ffffff, #fafafa);
+            border: 1px solid rgba(0,0,0,0.03);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .stat-card:active {
+            transform: scale(0.98);
+        }
+
+        /* Status Badges */
+        .badge-scheduled {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+        }
+
+        .badge-cancelled {
+            background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header Section -->
+    <header class="relative overflow-hidden animate-slideDown px-4 py-2" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
+        <!-- Elementos Decorativos -->
+        <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-16 opacity-20" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.1), transparent);"></div>
+        <div class="absolute top-0 left-0 w-48 h-48 rounded-full -ml-24 -mt-16 opacity-20" style="background: radial-gradient(circle, rgba(230, 57, 70, 0.1), transparent);"></div>
+        
+        <div class="relative z-10">
+            <div class="p-4 sm:p-6 md:p-8">
+                <div class="flex items-center justify-between gap-4 mb-6">
+                    <!-- Back Button -->
+                    <a href="{% url 'member_dashboard' %}" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center text-gray-600 shadow-sm border border-gray-100 active:scale-95 transition-all hover:text-red-600 hover:border-red-200">
+                        <i class="fas fa-arrow-left text-lg"></i>
+                    </a>
+                    
+                    <!-- Month Badge -->
+                    <div class="bg-red-50 text-red-600 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-2 border border-red-100 shadow-sm">
+                        <i class="far fa-calendar-check"></i>
+                        <span>{{ schedule.get_month_display }}/{{ schedule.year }}</span>
+                    </div>
+                </div>
+
+                <!-- Title Section -->
+                <div class="text-center mb-2">                    
+                    <h1 class="font-black text-2xl sm:text-6xl text-gray-900 mb-3 font-integral leading-tight">
+                        {{ schedule.title }}
+                    </h1>
+                    
+                    <div class="inline-flex items-center gap-2 text-gray-600 text-2sm font-medium px-4 pb-2">
+                        <span>{{ schedule.ministry.name }}</span>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-2 gap-3 max-w-md mx-auto">
+                    <div class="stat-card p-4 rounded-xl">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
+                                <i class="fas fa-list-ol text-xl" style="color: var(--church-red);"></i>
+                            </div>
+                            <div class="flex-1 text-left">
+                                <p class="text-xs text-gray-500 uppercase font-bold tracking-wide">Total</p>
+                                <p class="text-xl font-black text-gray-900">{{ days.count }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card p-4 rounded-xl">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background: rgba(16, 185, 129, 0.1);">
+                                <i class="fas fa-user-check text-xl text-green-600"></i>
+                            </div>
+                            <div class="flex-1 text-left">
+                                <p class="text-xs text-gray-500 uppercase font-bold tracking-wide">Você</p>
+                                <p class="text-xl font-black text-gray-900">{{ days|length }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="px-4 md:px-8 pt-2 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-200">
+        
+        <!-- Guidelines Card -->
+        {% if schedule.guidelines %}
+        <div class="glass-card p-6 sm:p-8 animate-scaleIn animate-delay-300">
+            <div class="flex items-start gap-4">
+                <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md" style="background: rgba(245, 158, 11, 0.1);">
+                    <i class="fas fa-lightbulb text-xl" style="color: var(--church-gold);"></i>
+                </div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-lg text-gray-900 mb-2">Orientações</h3>
+                    <p class="text-sm text-gray-600 leading-relaxed whitespace-pre-line">{{ schedule.guidelines }}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Schedule Grid -->
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {% for day in days %}
+            <div class="glass-card overflow-hidden animate-scaleIn relative group {% if day.is_user_scheduled %}ring-2 ring-offset-2{% endif %}" style="animation-delay: {{ forloop.counter0|add:3 }}00ms; {% if day.is_user_scheduled %}ring-color: var(--church-red);{% endif %}">
+                
+                <div class="p-5 sm:p-6">
+                    <!-- Date Header -->
+                    <div class="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
+                        <div class="flex items-center gap-4">
+                            <div class="flex flex-col items-center justify-center w-16 h-16 rounded-2xl shadow-md transition-all group-hover:scale-105 {% if day.is_cancelled %}bg-red-50 text-red-500{% elif day.is_today %}text-white shadow-lg shadow-red-200{% else %}bg-gradient-to-br from-gray-50 to-gray-100 text-gray-800 border border-gray-200{% endif %}" {% if day.is_today %}style="background: linear-gradient(135deg, var(--church-red) 0%, var(--church-red-light) 100%);"{% endif %}>
+                                <span class="text-[10px] font-bold uppercase tracking-wider opacity-80">{{ day.pt_weekday|slice:":3" }}</span>
+                                <span class="text-2xl font-black leading-none">{{ day.date|date:"d" }}</span>
+                            </div>
+                            <div>
+                                <div class="text-base font-bold text-gray-900 mb-1">{{ day.date|pt_month }}</div>
+                                <div class="text-xs text-gray-500 font-medium">{{ schedule.year }}</div>
+                            </div>
+                        </div>
+                        {% if day.is_user_scheduled %}
+                        <div class="flex-shrink-0">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-md" style="background: linear-gradient(135deg, #10B981 0%, #059669 100%);">
+                                <i class="fas fa-check-circle"></i>
+                                Você
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Content -->
+                    <div class="space-y-3">
+                        {% if day.is_cancelled %}
+                            <div class="bg-red-50 text-red-600 text-sm font-bold p-4 rounded-xl flex items-center gap-3 border border-red-100">
+                                <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-ban text-lg"></i>
+                                </div>
+                                <span>Escala Cancelada</span>
+                            </div>
+                        {% else %}
+                            
+                            {% if day.team %}
+                            <div class="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-r from-gray-50 to-transparent">
+                                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
+                                    <i class="fas fa-users text-sm" style="color: var(--church-red);"></i>
+                                </div>
+                                <span class="text-sm font-bold text-gray-800">{{ day.team.name }}</span>
+                            </div>
+                            {% endif %}
+
+                            {% if day.members.all %}
+                            <div>
+                                <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 px-1">Escalados</p>
+                                <div class="flex flex-wrap gap-2">
+                                    {% for member in day.members.all %}
+                                    <span class="text-xs px-3 py-2 rounded-lg font-medium transition-all {% if member.user == request.user %}text-white shadow-lg{% else %}bg-white text-gray-700 border border-gray-200 hover:border-gray-300 hover:shadow-sm{% endif %}" {% if member.user == request.user %}style="background: linear-gradient(135deg, var(--church-red) 0%, var(--church-red-light) 100%);"{% endif %}>
+                                        {{ member.name|truncatechars:20 }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if day.description %}
+                            <div class="mt-4 p-4 rounded-xl border-l-4 shadow-sm" style="background: linear-gradient(to right, rgba(201, 9, 5, 0.05), transparent); border-color: var(--church-red);">
+                                <div class="flex items-start gap-3">
+                                    <i class="fas fa-info-circle text-sm mt-0.5" style="color: var(--church-red);"></i>
+                                    <p class="text-xs text-gray-700 leading-relaxed flex-1">
+                                        {{ day.description }}
+                                    </p>
+                                </div>
+                            </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-span-full py-12 text-center">
+                <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                    <i class="far fa-calendar-times text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900">Nenhum dia encontrado</h3>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <!-- Floating Bottom Nav -->
+    <nav class="fixed bottom-4 left-1/2 transform -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out gap-2" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
+        
+        <!-- Home (Inactive) -->
+        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
+                <i class="fas fa-home text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
+            </div>
+            <span class="group-hover:font-bold transition-all">Home</span>
+        </a>
+
+        <!-- Escala (Active) -->
+        <div class="flex flex-col items-center text-[11px] sm:text-xs font-bold transition-all duration-300 p-2 px-3 relative group">
+            <div class="relative">
+                <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 shadow-lg shadow-red-200" style="background-color: #C90905;">
+                    <i class="fas fa-calendar-alt text-white text-lg"></i>
+                </div>
+            </div>
+            <span style="color: #C90905;">Escala</span>
+        </div>
+        
+        <!-- Perfil (Inactive) -->
+        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
+            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(230, 57, 70, 0.05); border-color: rgba(230, 57, 70, 0.15);">
+                <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #E63946;"></i>
+            </div>
+            <span class="group-hover:font-bold transition-all">Perfil</span>
+        </a>
+
+    </nav>
+
+</body>
+</html>
