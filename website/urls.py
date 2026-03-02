@@ -37,7 +37,9 @@ from .views.schedules import (
     schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
     schedule_delete_view, schedule_export_pdf_view,
     schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
-    schedule_day_toggle_cancel_view
+    schedule_day_toggle_cancel_view,
+    division_list_view, division_create_view, division_edit_view, division_delete_view,
+    schedule_day_division_assign_view
 )
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
@@ -116,6 +118,13 @@ urlpatterns = [
     path('admin-panel/schedules/days/<int:day_id>/edit/', schedule_day_edit_view, name='schedule_day_edit'),
     path('admin-panel/schedules/days/<int:day_id>/delete/', schedule_day_delete_view, name='schedule_day_delete'),
     path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', schedule_day_toggle_cancel_view, name='schedule_day_toggle_cancel'),
+    
+    # Division URLs - Subdivisões de Escala
+    path('admin-panel/ministries/<int:ministry_id>/divisions/', division_list_view, name='division_list'),
+    path('admin-panel/ministries/<int:ministry_id>/divisions/new/', division_create_view, name='division_create'),
+    path('admin-panel/divisions/<int:division_id>/edit/', division_edit_view, name='division_edit'),
+    path('admin-panel/divisions/<int:division_id>/delete/', division_delete_view, name='division_delete'),
+    path('admin-panel/schedules/days/<int:day_id>/divisions/', schedule_day_division_assign_view, name='schedule_day_division_assign'),
     
     # Team URLs
     path('admin-panel/teams/', team_list_view, name='team_list'),

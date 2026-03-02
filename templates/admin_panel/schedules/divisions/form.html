@@ -1,0 +1,87 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{% if division %}Editar{% else %}Nova{% endif %} Divisão - {{ ministry.name }} - Admin Panel{% endblock %}
+
+{% block content %}
+<!-- Admin Sidebar -->
+{% include 'parciais/admin_sidebar.html' %}
+
+<!-- Main Content with sidebar offset and top spacing -->
+<div class="md:pl-64 pt-24">
+    <div class="container mx-auto px-4 py-6">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center gap-2 mb-2">
+                <a href="{% url 'division_list' ministry.id %}" class="text-gray-600 hover:text-gray-900">
+                    <ion-icon name="arrow-back-outline" class="text-xl"></ion-icon>
+                </a>
+                <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">
+                    {% if division %}Editar Divisão{% else %}Nova Divisão{% endif %}
+                </h1>
+            </div>
+            <p class="text-gray-600 text-sm ml-7">{{ ministry.name }}</p>
+        </div>
+
+        <!-- Form -->
+        <div class="bg-white rounded-lg shadow-sm p-6 max-w-lg">
+            <form method="post" action="{% if division %}{% url 'division_edit' division.id %}{% else %}{% url 'division_create' ministry.id %}{% endif %}">
+                {% csrf_token %}
+                
+                <div class="space-y-4">
+                    <div>
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Nome da Divisão</label>
+                        <input type="text" name="name" id="name" required
+                               value="{% if division %}{{ division.name }}{% endif %}"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                               placeholder="Ex: Ministro, Back Vocal, Músicos">
+                    </div>
+                    
+                    <div>
+                        <label for="parent" class="block text-sm font-medium text-gray-700 mb-1">Divisão Pai (opcional)</label>
+                        <select name="parent" id="parent"
+                                class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                            <option value="">— Nível Raiz —</option>
+                            {% for ep in eligible_parents %}
+                                <option value="{{ ep.id }}" {% if division and division.parent_id == ep.id %}selected{% endif %}>
+                                    {% for i in "x"|ljust:ep.get_depth %}&nbsp;&nbsp;{% endfor %}{{ ep.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label for="order" class="block text-sm font-medium text-gray-700 mb-1">Ordem de Exibição</label>
+                        <input type="number" name="order" id="order" 
+                               value="{% if division %}{{ division.order }}{% else %}0{% endif %}"
+                               class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                    </div>
+                    
+                    {% if division %}
+                    <div>
+                        <label class="flex items-center gap-2">
+                            <input type="hidden" name="is_active" value="false">
+                            <input type="checkbox" name="is_active" value="true"
+                                   {% if division.is_active %}checked{% endif %}
+                                   class="rounded border-gray-300 text-orange-600 focus:ring-orange-500">
+                            <span class="text-sm font-medium text-gray-700">Ativa</span>
+                        </label>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6">
+                    <a href="{% url 'division_list' ministry.id %}"
+                       class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                        Cancelar
+                    </a>
+                    <button type="submit" 
+                            class="px-4 py-2 text-white bg-orange-600 hover:bg-orange-700 rounded-lg transition">
+                        {% if division %}Salvar{% else %}Criar{% endif %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
