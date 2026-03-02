@@ -22,6 +22,7 @@ from ..models.ministry import Ministry
 from ..models.neighborhood import Neighborhood
 from ..models.evangelism import Evangelized
 from ..models.follow_up import FollowUp, FollowUpReport
+from ..models.escala import Escala
 from ..forms.ministry import MinistryForm
 from ..forms.neighborhood import NeighborhoodForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
@@ -104,6 +105,17 @@ def dashboard_view(request):
         event_date__gte=timezone.now().date()
     ).order_by('event_date')[:5]
     
+    # Verificar se o usuário tem escalas (para mostrar o card)
+    user_has_escalas = False
+    user_escalas_count = 0
+    try:
+        member = Member.objects.get(user=request.user)
+        user_ministries = member.ministry.all()
+        user_escalas_count = Escala.objects.filter(ministry__in=user_ministries).count()
+        user_has_escalas = user_escalas_count > 0
+    except Member.DoesNotExist:
+        pass
+    
     context = {
         'total_members': total_members,
         'total_visitors': total_visitors,
@@ -119,6 +131,8 @@ def dashboard_view(request):
         'recent_visitors_list': recent_visitors_list,
         'recently_converted_members': recently_converted_members,
         'upcoming_events_list': upcoming_events_list,
+        'user_has_escalas': user_has_escalas,
+        'user_escalas_count': user_escalas_count,
     }
     
     return render(request, 'admin_panel/dashboard.html', context)

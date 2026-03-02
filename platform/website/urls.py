@@ -5,6 +5,7 @@ from .views.member import MemberCreateView, NewConvertsListView
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
 from .views.auth import admin_login_view, admin_logout_view
+from .views.escala import minhas_escalas_view, ministry_escalas_view
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
     events_list_view, ministries_list_view, neighborhoods_list_view,
@@ -55,6 +56,10 @@ urlpatterns = [
     path('admin-panel/followups/<int:followup_id>/detail/', followup_detail_view, name='admin_followup_detail'),
     path('admin-panel/followups/<int:followup_id>/report/', followup_report_view, name='admin_followup_report'),
     path('admin-panel/followups/<int:followup_id>/delete/', followup_delete_view, name='admin_followup_delete'),
+    
+    # Escalas URLs
+    path('admin-panel/escalas/', minhas_escalas_view, name='minhas_escalas'),
+    path('admin-panel/escalas/ministry/<int:ministry_id>/', ministry_escalas_view, name='ministry_escalas'),
     
     # APIs
     path('admin-panel/api/delete/', api_delete_item, name='admin_api_delete'),

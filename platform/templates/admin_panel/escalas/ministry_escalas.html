@@ -1,0 +1,288 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ ministry.name }} - Escalas - Igreja Filadélfia{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .escala-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border-left: 4px solid var(--color-primary);
+    }
+    
+    .escala-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    
+    .escala-card.user-assigned {
+        border-left-color: var(--color-danger);
+        background: linear-gradient(135deg, #fff, #fff8f8);
+    }
+    
+    .escala-card.past {
+        opacity: 0.7;
+        border-left-color: #6b7280;
+    }
+    
+    .badge-assigned {
+        background: var(--color-danger);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    
+    .badge-future {
+        background: var(--color-primary);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    
+    .badge-past {
+        background: #6b7280;
+        color: white;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    
+    .ministry-header {
+        background: linear-gradient(135deg, var(--color-primary), var(--color-danger));
+        color: white;
+        padding: 24px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+    }
+    
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 16px;
+        padding-left: 4px;
+        border-left: 4px solid var(--color-primary);
+    }
+    
+    .member-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--color-primary);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 500;
+        font-size: 12px;
+    }
+    
+    .members-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    <!-- Sidebar -->
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <!-- Breadcrumb -->
+            <div class="mb-6">
+                <nav class="flex items-center space-x-2 text-sm text-gray-600">
+                    <a href="{% url 'minhas_escalas' %}" class="hover:text-[var(--color-primary)]">Minhas Escalas</a>
+                    <ion-icon name="chevron-forward" class="text-xs"></ion-icon>
+                    <span class="font-medium text-gray-800">{{ ministry.name }}</span>
+                </nav>
+            </div>
+
+            <!-- Ministry Header -->
+            <div class="ministry-header">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-3xl font-bold">{{ ministry.name }}</h1>
+                        <p class="opacity-90 mt-2 text-lg">Todas as escalas do ministério</p>
+                        <div class="mt-4 flex items-center gap-4 text-sm opacity-90">
+                            <span class="flex items-center gap-1">
+                                <ion-icon name="calendar-outline"></ion-icon>
+                                {{ escalas.count }} escala{{ escalas.count|pluralize:",s" }} total
+                            </span>
+                            <span class="flex items-center gap-1">
+                                <ion-icon name="time-outline"></ion-icon>
+                                {{ future_escalas.count }} próxima{{ future_escalas.count|pluralize:",s" }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <a href="{% url 'minhas_escalas' %}" 
+                           class="inline-flex items-center px-4 py-2 bg-white bg-opacity-20 text-white rounded-lg hover:bg-opacity-30 transition-all">
+                            <ion-icon name="arrow-back" class="mr-2"></ion-icon>
+                            <span>Voltar</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            {% if not escalas %}
+            <div class="text-center py-16">
+                <ion-icon name="calendar-outline" class="text-6xl text-gray-400 mb-4"></ion-icon>
+                <h3 class="text-xl font-semibold text-gray-800 mb-2">Nenhuma escala encontrada</h3>
+                <p class="text-gray-600">Este ministério ainda não possui escalas cadastradas.</p>
+            </div>
+            {% else %}
+
+            <!-- Próximas Escalas -->
+            {% if future_escalas %}
+            <div class="mb-8">
+                <h2 class="section-title">
+                    <ion-icon name="calendar" class="mr-2"></ion-icon>
+                    Próximas Escalas ({{ future_escalas.count }})
+                </h2>
+                <div class="grid gap-6">
+                    {% for escala in future_escalas %}
+                    <div class="escala-card p-6 {% if member in escala.assigned_members.all %}user-assigned{% endif %}">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <h3 class="text-xl font-semibold text-gray-800">{{ escala.title }}</h3>
+                                    {% if member in escala.assigned_members.all %}
+                                    <span class="badge-assigned">
+                                        <ion-icon name="person" class="mr-1"></ion-icon>
+                                        Você está escalado
+                                    </span>
+                                    {% else %}
+                                    <span class="badge-future">Próxima</span>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if escala.description %}
+                                <p class="text-gray-700 mb-4">{{ escala.description }}</p>
+                                {% endif %}
+                                
+                                <div class="flex items-center gap-6 text-sm text-gray-600 mb-4">
+                                    <span class="flex items-center gap-1">
+                                        <ion-icon name="calendar-outline"></ion-icon>
+                                        {{ escala.date|date:"l, d 'de' F 'de' Y" }}
+                                    </span>
+                                    <span class="flex items-center gap-1">
+                                        <ion-icon name="people-outline"></ion-icon>
+                                        {{ escala.assigned_members.count }} escalado{{ escala.assigned_members.count|pluralize:",s" }}
+                                    </span>
+                                </div>
+                                
+                                {% if escala.assigned_members.all %}
+                                <div>
+                                    <p class="text-sm text-gray-600 mb-2 font-medium">Membros escalados:</p>
+                                    <div class="members-list">
+                                        {% for assigned_member in escala.assigned_members.all %}
+                                        <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1">
+                                            <div class="member-avatar">
+                                                {{ assigned_member.name|first|upper }}
+                                            </div>
+                                            <span class="text-sm font-medium {% if assigned_member == member %}text-[var(--color-danger)]{% else %}text-gray-700{% endif %}">
+                                                {% if assigned_member == member %}
+                                                Você
+                                                {% else %}
+                                                {{ assigned_member.name }}
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Escalas Passadas -->
+            {% if past_escalas %}
+            <div>
+                <h2 class="section-title">
+                    <ion-icon name="archive" class="mr-2"></ion-icon>
+                    Escalas Anteriores ({{ past_escalas.count }})
+                </h2>
+                <div class="grid gap-4">
+                    {% for escala in past_escalas %}
+                    <div class="escala-card past p-6 {% if member in escala.assigned_members.all %}user-assigned{% endif %}">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <h3 class="text-lg font-semibold text-gray-800">{{ escala.title }}</h3>
+                                    <span class="badge-past">Concluída</span>
+                                    {% if member in escala.assigned_members.all %}
+                                    <span class="badge-assigned">Você participou</span>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if escala.description %}
+                                <p class="text-gray-600 mb-3 text-sm">{{ escala.description }}</p>
+                                {% endif %}
+                                
+                                <div class="flex items-center gap-6 text-sm text-gray-600 mb-3">
+                                    <span class="flex items-center gap-1">
+                                        <ion-icon name="calendar-outline"></ion-icon>
+                                        {{ escala.date|date:"d/m/Y" }}
+                                    </span>
+                                    <span class="flex items-center gap-1">
+                                        <ion-icon name="people-outline"></ion-icon>
+                                        {{ escala.assigned_members.count }} participante{{ escala.assigned_members.count|pluralize:",s" }}
+                                    </span>
+                                </div>
+                                
+                                {% if escala.assigned_members.all %}
+                                <div>
+                                    <div class="members-list">
+                                        {% for assigned_member in escala.assigned_members.all %}
+                                        <div class="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-1">
+                                            <div class="member-avatar">
+                                                {{ assigned_member.name|first|upper }}
+                                            </div>
+                                            <span class="text-sm {% if assigned_member == member %}text-[var(--color-danger)] font-medium{% else %}text-gray-600{% endif %}">
+                                                {% if assigned_member == member %}
+                                                Você
+                                                {% else %}
+                                                {{ assigned_member.name }}
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

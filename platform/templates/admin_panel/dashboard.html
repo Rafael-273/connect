@@ -155,7 +155,26 @@
             </div>
 
             <!-- Recent Activity -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                <!-- Ver Minhas Escalas Card (only if user has escalas) -->
+                {% if user_has_escalas %}
+                <div class="admin-card p-6" style="border-left: 4px solid var(--color-danger);">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Minhas Escalas</h3>
+                        <ion-icon name="calendar" class="text-[var(--color-danger)] text-xl"></ion-icon>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-[var(--color-danger)] mb-2">{{ user_escalas_count }}</div>
+                        <div class="text-sm text-gray-600 mb-4">escala{{ user_escalas_count|pluralize:",s" }} no{{ user_escalas_count|pluralize:"s" }} seus ministério{{ user_escalas_count|pluralize:",s" }}</div>
+                        <a href="{% url 'minhas_escalas' %}" 
+                           class="inline-flex items-center px-4 py-2 bg-[var(--color-danger)] text-white rounded-lg hover:opacity-90 transition-opacity text-sm">
+                            <ion-icon name="calendar-outline" class="mr-2"></ion-icon>
+                            Ver minhas escalas
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Recent Visitors -->
                 <div class="admin-card p-6">
                     <div class="flex items-center justify-between mb-4">
