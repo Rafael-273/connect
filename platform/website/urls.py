@@ -5,6 +5,7 @@ from .views.member import MemberCreateView, NewConvertsListView
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
 from .views.auth import admin_login_view, admin_logout_view
+from .views.escala import minhas_escalas_view, escalas_ministerio_view
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
     events_list_view, ministries_list_view, neighborhoods_list_view,
@@ -24,6 +25,10 @@ urlpatterns = [
     path('translator/', TranscriptionDisplayView.as_view(), name='transcription'),
     path('event/list', EventListView.as_view(), name='event_list'),
     path('event/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
+    
+    # Escalas URLs
+    path('escalas/minhas/', minhas_escalas_view, name='minhas_escalas'),
+    path('escalas/ministerio/<int:ministry_id>/', escalas_ministerio_view, name='escalas_ministerio'),
     
     # Authentication URLs
     path('admin-login/', admin_login_view, name='admin_login'),

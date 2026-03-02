@@ -1,0 +1,101 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Escalas - {{ ministry.name }} - Igreja Filadélfia{% endblock %}
+
+{% block head %}
+<style>
+    .escala-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        border-left: 4px solid var(--color-primary, #6c63ff);
+    }
+    .escala-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    .badge-escalado {
+        background-color: #d1fae5;
+        color: #065f46;
+        font-size: 0.75rem;
+        padding: 2px 10px;
+        border-radius: 9999px;
+        font-weight: 600;
+    }
+    .badge-membro {
+        background-color: #e0e7ff;
+        color: #3730a3;
+        font-size: 0.72rem;
+        padding: 2px 8px;
+        border-radius: 9999px;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #6b7280;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-10" style="margin-top: 96px;">
+    <div class="mb-6 flex items-center gap-3">
+        <a href="{% url 'minhas_escalas' %}" class="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
+            <ion-icon name="arrow-back-outline" class="align-middle"></ion-icon>
+            Minhas Escalas
+        </a>
+    </div>
+
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-gray-800">Escalas — {{ ministry.name }}</h1>
+        <p class="text-gray-500 mt-1">Todas as escalas do ministério {{ ministry.name }}.</p>
+    </div>
+
+    {% if not escalas %}
+    <div class="empty-state">
+        <ion-icon name="calendar-outline" style="font-size: 3rem; color: #d1d5db;"></ion-icon>
+        <p class="mt-4 text-lg font-medium text-gray-700">Nenhuma escala cadastrada para este ministério.</p>
+    </div>
+    {% else %}
+    <div class="grid gap-4">
+        {% for escala in escalas %}
+        <div class="escala-card p-5">
+            <div class="flex flex-col gap-2">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xl font-semibold text-gray-800">{{ escala.title }}</span>
+                    {% if member in escala.members.all %}
+                    <span class="badge-escalado">Você está escalado(a)</span>
+                    {% endif %}
+                </div>
+                <div class="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <span>
+                        <ion-icon name="calendar-outline" class="align-middle mr-1"></ion-icon>
+                        {{ escala.date|date:"d/m/Y" }}
+                    </span>
+                    <span>
+                        <ion-icon name="people-outline" class="align-middle mr-1"></ion-icon>
+                        {{ escala.ministry.name }}
+                    </span>
+                </div>
+                {% if escala.description %}
+                <p class="text-sm text-gray-500">{{ escala.description }}</p>
+                {% endif %}
+                {% if escala.members.all %}
+                <div class="flex flex-wrap gap-1 mt-1">
+                    {% for m in escala.members.all %}
+                    <span class="badge-membro">{{ m.name }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+<script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+{% endblock %}
