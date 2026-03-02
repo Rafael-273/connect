@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+Dashboard - Connect
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">
+                Olá, {% if member %}{{ member.name }}{% else %}{{ user.first_name|default:user.email }}{% endif %}!
+            </h1>
+            <p class="text-gray-600">Bem-vindo ao seu painel pessoal</p>
+        </div>
+
+        <!-- Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            
+            <!-- Minhas Escalas Card -->
+            {% if has_scales %}
+            <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Ver minhas escalas</h3>
+                <p class="text-gray-600 text-sm mb-4">Você tem {{ upcoming_scales.count }} escala{{ upcoming_scales.count|pluralize }} próxima{{ upcoming_scales.count|pluralize }}</p>
+                
+                {% if upcoming_scales %}
+                <div class="space-y-2 mb-4">
+                    {% for escala in upcoming_scales|slice:":3" %}
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-700 font-medium">{{ escala.ministry.name }}</span>
+                        <span class="text-gray-500">{{ escala.date|date:"d/m" }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                <a href="{% url 'minhas_escalas' %}" class="inline-flex items-center text-blue-600 hover:text-blue-800 font-medium">
+                    Ver todas
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </a>
+            </div>
+            {% endif %}
+
+            <!-- Ministérios Card -->
+            {% if member and member.ministry.exists %}
+            <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Meus Ministérios</h3>
+                <p class="text-gray-600 text-sm mb-4">Você participa de {{ member.ministry.count }} ministério{{ member.ministry.count|pluralize }}</p>
+                
+                <div class="space-y-2">
+                    {% for ministry in member.ministry.all|slice:":3" %}
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="text-gray-700 font-medium">{{ ministry.name }}</span>
+                        <a href="{% url 'escalas_ministerio' ministry.id %}" class="text-blue-600 hover:text-blue-800">
+                            Ver escalas
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Quick Actions Card -->
+            <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-200">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center">
+                        <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-2">Ações Rápidas</h3>
+                <p class="text-gray-600 text-sm mb-4">Acesse funcionalidades importantes</p>
+                
+                <div class="space-y-3">
+                    <a href="{% url 'event_list' %}" class="block text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        → Ver eventos
+                    </a>
+                    {% if member %}
+                    <a href="{% url 'admin_dashboard' %}" class="block text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        → Painel administrativo
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Empty State for users without scales -->
+        {% if not has_scales and member %}
+        <div class="mt-8 text-center">
+            <div class="bg-white rounded-lg shadow-md p-8">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                <h3 class="mt-2 text-sm font-medium text-gray-900">Nenhuma escala encontrada</h3>
+                <p class="mt-1 text-sm text-gray-500">Você não possui escalas agendadas no momento.</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Empty State for users without member profile -->
+        {% if not member %}
+        <div class="mt-8 text-center">
+            <div class="bg-white rounded-lg shadow-md p-8">
+                <h3 class="mt-2 text-sm font-medium text-gray-900">Complete seu perfil</h3>
+                <p class="mt-1 text-sm text-gray-500">Para ver suas escalas, você precisa ter um perfil de membro.</p>
+                <div class="mt-6">
+                    <a href="{% url 'admin_dashboard' %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                        Ir para o painel
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

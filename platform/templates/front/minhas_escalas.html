@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+Minhas Escalas - Connect
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8 flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Minhas Escalas</h1>
+                <p class="text-gray-600">
+                    {% if member %}
+                        Escalas de {{ member.name }}
+                    {% endif %}
+                </p>
+            </div>
+            <a href="{% url 'home' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Voltar ao Dashboard
+            </a>
+        </div>
+
+        {% if escalas %}
+        <!-- Escalas Próximas -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    Próximas Escalas ({{ escalas.count }})
+                </h3>
+                
+                <div class="grid gap-4">
+                    {% for escala in escalas %}
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center space-x-4">
+                                    <!-- Ministry Badge -->
+                                    <div class="flex-shrink-0">
+                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                            {{ escala.ministry.name }}
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Date and Time -->
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium text-gray-900">
+                                            {{ escala.date|date:"l, d \d\e F \d\e Y" }}
+                                        </div>
+                                        {% if escala.start_time %}
+                                        <div class="text-sm text-gray-500">
+                                            {{ escala.start_time|time:"H:i" }}{% if escala.end_time %} às {{ escala.end_time|time:"H:i" }}{% endif %}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    
+                                    <!-- Status Badge -->
+                                    <div class="flex-shrink-0">
+                                        {% if escala.status == 'confirmed' %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                            Confirmada
+                                        </span>
+                                        {% elif escala.status == 'pending' %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                            Pendente
+                                        </span>
+                                        {% elif escala.status == 'cancelled' %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                            Cancelada
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                
+                                {% if escala.notes %}
+                                <div class="mt-2">
+                                    <p class="text-sm text-gray-600">{{ escala.notes }}</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            
+                            <!-- Action Link -->
+                            <div class="flex-shrink-0 ml-4">
+                                <a href="{% url 'escalas_ministerio' escala.ministry.id %}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                    Ver todas as escalas deste ministério →
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-lg shadow">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Anterior</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Próximo</a>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Mostrando
+                        <span class="font-medium">{{ page_obj.start_index }}</span>
+                        à
+                        <span class="font-medium">{{ page_obj.end_index }}</span>
+                        de
+                        <span class="font-medium">{{ paginator.count }}</span>
+                        resultados
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">Anterior</span>
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-blue-50 text-sm font-medium text-blue-600">{{ num }}</span>
+                            {% else %}
+                                <a href="?page={{ num }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">{{ num }}</a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">Próximo</span>
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% endif %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center bg-white rounded-lg shadow p-8">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">Nenhuma escala encontrada</h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Você não possui escalas agendadas no momento.
+            </p>
+        </div>
+        {% endif %}
+
+        {% if escalas_passadas %}
+        <!-- Escalas Anteriores -->
+        <div class="bg-white shadow rounded-lg mt-8">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    Escalas Recentes
+                </h3>
+                
+                <div class="space-y-3">
+                    {% for escala in escalas_passadas %}
+                    <div class="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                        <div class="flex items-center space-x-3">
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
+                                {{ escala.ministry.name }}
+                            </span>
+                            <span class="text-sm text-gray-900">{{ escala.date|date:"d/m/Y" }}</span>
+                            {% if escala.start_time %}
+                            <span class="text-sm text-gray-500">{{ escala.start_time|time:"H:i" }}</span>
+                            {% endif %}
+                        </div>
+                        <a href="{% url 'escalas_ministerio' escala.ministry.id %}" class="text-blue-600 hover:text-blue-800 text-sm">
+                            Ver ministério
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,219 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+Escalas do {{ ministry.name }} - Connect
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8 flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">{{ ministry.name }}</h1>
+                <p class="text-gray-600">
+                    Escalas do ministério
+                    {% if ministry.description %}
+                        - {{ ministry.description }}
+                    {% endif %}
+                </p>
+            </div>
+            <div class="flex space-x-2">
+                <a href="{% url 'minhas_escalas' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    Minhas Escalas
+                </a>
+                <a href="{% url 'home' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                    Dashboard
+                </a>
+            </div>
+        </div>
+
+        {% if escalas %}
+        <!-- Escalas List -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    Próximas Escalas ({{ escalas.count }})
+                </h3>
+                
+                <!-- Group escalas by date for better visualization -->
+                {% regroup escalas by date as escalas_by_date %}
+                
+                <div class="space-y-6">
+                    {% for date_group in escalas_by_date %}
+                    <div>
+                        <!-- Date Header -->
+                        <div class="flex items-center mb-3">
+                            <div class="flex-shrink-0 w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
+                                <div class="text-center">
+                                    <div class="text-lg font-bold text-blue-800">{{ date_group.grouper|date:"d" }}</div>
+                                    <div class="text-xs text-blue-600 uppercase">{{ date_group.grouper|date:"M" }}</div>
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="text-lg font-semibold text-gray-900">{{ date_group.grouper|date:"l, d \d\e F \d\e Y" }}</h4>
+                                <p class="text-sm text-gray-500">{{ date_group.list|length }} pessoa{{ date_group.list|length|pluralize }} escalada{{ date_group.list|length|pluralize }}</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Escalas for this date -->
+                        <div class="ml-20 grid gap-3">
+                            {% for escala in date_group.list %}
+                            <div class="border border-gray-200 rounded-lg p-4 
+                                {% if escala.id in user_scales %}bg-blue-50 border-blue-200{% else %}hover:bg-gray-50{% endif %} 
+                                transition-colors">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-4 flex-1">
+                                        <!-- Member Info -->
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-2">
+                                                <div class="text-sm font-medium text-gray-900">
+                                                    {{ escala.member.name }}
+                                                    {% if escala.id in user_scales %}
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 ml-2">
+                                                        Você
+                                                    </span>
+                                                    {% endif %}
+                                                </div>
+                                                
+                                                <!-- Time if available -->
+                                                {% if escala.start_time %}
+                                                <div class="text-sm text-gray-500">
+                                                    {{ escala.start_time|time:"H:i" }}{% if escala.end_time %} - {{ escala.end_time|time:"H:i" }}{% endif %}
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            
+                                            <!-- Notes if available -->
+                                            {% if escala.notes %}
+                                            <div class="mt-1">
+                                                <p class="text-sm text-gray-600">{{ escala.notes }}</p>
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <!-- Status Badge -->
+                                        <div class="flex-shrink-0">
+                                            {% if escala.status == 'confirmed' %}
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                Confirmada
+                                            </span>
+                                            {% elif escala.status == 'pending' %}
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                Pendente
+                                            </span>
+                                            {% elif escala.status == 'cancelled' %}
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                                Cancelada
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Contact if it's the user's scale -->
+                                    {% if escala.id in user_scales and escala.member.phone %}
+                                    <div class="flex-shrink-0 ml-4">
+                                        <a href="tel:{{ escala.member.phone }}" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                            <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                                            </svg>
+                                        </a>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6 rounded-lg shadow mt-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Anterior</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">Próximo</a>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Mostrando
+                        <span class="font-medium">{{ page_obj.start_index }}</span>
+                        à
+                        <span class="font-medium">{{ page_obj.end_index }}</span>
+                        de
+                        <span class="font-medium">{{ paginator.count }}</span>
+                        resultados
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                        {% if page_obj.has_previous %}
+                            <a href="?page={{ page_obj.previous_page_number }}" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">Anterior</span>
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-blue-50 text-sm font-medium text-blue-600">{{ num }}</span>
+                            {% else %}
+                                <a href="?page={{ num }}" class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">{{ num }}</a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">Próximo</span>
+                                <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% endif %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="text-center bg-white rounded-lg shadow p-8">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            <h3 class="mt-2 text-sm font-medium text-gray-900">Nenhuma escala encontrada</h3>
+            <p class="mt-1 text-sm text-gray-500">
+                Não há escalas agendadas para o ministério {{ ministry.name }} no momento.
+            </p>
+        </div>
+        {% endif %}
+
+        <!-- Ministry Info -->
+        {% if ministry.description %}
+        <div class="bg-white shadow rounded-lg mt-8">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-2">
+                    Sobre o Ministério
+                </h3>
+                <p class="text-gray-700">{{ ministry.description }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
