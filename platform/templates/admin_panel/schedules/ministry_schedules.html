@@ -1,0 +1,264 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Escalas do {{ ministry.name }} - Igreja Filadélfia{% endblock %}
+
+{% block head %}
+<style>
+    .schedule-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border-left: 4px solid var(--color-primary);
+    }
+    
+    .schedule-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    
+    .schedule-card.past {
+        opacity: 0.7;
+        border-left-color: #9ca3af;
+    }
+    
+    .ministry-header {
+        background: linear-gradient(135deg, var(--color-primary), var(--color-light));
+        color: white;
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 32px;
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .ministry-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.1);
+        transform: rotate(45deg);
+    }
+    
+    .date-badge {
+        background: var(--color-light);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    .date-badge.past {
+        background: #9ca3af;
+    }
+    
+    .role-badge {
+        background: #e5e7eb;
+        color: #374151;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    
+    .section-title {
+        background: white;
+        border-radius: 12px;
+        padding: 16px 24px;
+        margin-bottom: 20px;
+        border-left: 4px solid var(--color-primary);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    
+    .no-content-card {
+        text-align: center;
+        padding: 40px 20px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        color: #6b7280;
+    }
+    
+    .back-button {
+        background: white;
+        color: var(--color-primary);
+        border: 2px solid var(--color-primary);
+        padding: 8px 16px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .back-button:hover {
+        background: var(--color-primary);
+        color: white;
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    <!-- Sidebar -->
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <!-- Back Button -->
+            <div class="mb-6">
+                <a href="{% url 'user_schedules' %}" class="back-button">
+                    <ion-icon name="arrow-back"></ion-icon>
+                    Voltar para Minhas Escalas
+                </a>
+            </div>
+
+            <!-- Ministry Header -->
+            <div class="ministry-header">
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h1 class="text-3xl font-bold">{{ ministry.name }}</h1>
+                            {% if ministry.description %}
+                            <p class="opacity-90 mt-2">{{ ministry.description }}</p>
+                            {% endif %}
+                        </div>
+                        <ion-icon name="calendar" class="text-5xl opacity-70"></ion-icon>
+                    </div>
+                </div>
+            </div>
+
+            {% if no_access %}
+                <div class="no-content-card">
+                    <ion-icon name="lock-closed-outline" class="text-6xl mb-4 text-red-400"></ion-icon>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">Acesso restrito</h3>
+                    <p class="text-gray-500">Você não tem permissão para ver as escalas deste ministério.</p>
+                    <p class="text-gray-500">Apenas membros do ministério podem ver suas escalas.</p>
+                </div>
+            {% elif not schedules %}
+                <div class="no-content-card">
+                    <ion-icon name="calendar-outline" class="text-6xl mb-4 text-gray-400"></ion-icon>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">Nenhuma escala encontrada</h3>
+                    <p class="text-gray-500">Este ministério ainda não tem escalas programadas.</p>
+                </div>
+            {% else %}
+                <!-- Future Schedules -->
+                {% if future_schedules %}
+                <div class="mb-8">
+                    <div class="section-title">
+                        <h3 class="text-xl font-semibold text-gray-800 flex items-center">
+                            <ion-icon name="calendar-number" class="text-green-600 mr-3 text-2xl"></ion-icon>
+                            Próximas Escalas
+                        </h3>
+                    </div>
+                    <div class="grid gap-4">
+                        {% for schedule in future_schedules %}
+                        <div class="schedule-card p-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="date-badge">
+                                            {{ schedule.date|date:"d/m/Y" }} - {{ schedule.date|date:"l" }}
+                                        </div>
+                                        {% if schedule.role %}
+                                        <div class="role-badge">
+                                            {{ schedule.role }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <h4 class="font-bold text-lg text-gray-800 flex items-center">
+                                        <ion-icon name="person" class="mr-2 text-[var(--color-primary)]"></ion-icon>
+                                        {{ schedule.member.name }}
+                                    </h4>
+                                    {% if schedule.notes %}
+                                    <div class="mt-3 p-3 bg-gray-50 rounded-lg">
+                                        <p class="text-gray-700 text-sm">
+                                            <ion-icon name="information-circle-outline" class="text-blue-500 mr-1"></ion-icon>
+                                            {{ schedule.notes }}
+                                        </p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="text-right">
+                                    <div class="text-2xl text-green-500">
+                                        <ion-icon name="checkmark-circle-outline"></ion-icon>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Past Schedules -->
+                {% if past_schedules %}
+                <div class="mb-8">
+                    <div class="section-title">
+                        <h3 class="text-xl font-semibold text-gray-800 flex items-center">
+                            <ion-icon name="time" class="text-gray-500 mr-3 text-2xl"></ion-icon>
+                            Escalas Anteriores
+                        </h3>
+                    </div>
+                    <div class="grid gap-4">
+                        {% for schedule in past_schedules %}
+                        <div class="schedule-card past p-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="date-badge past">
+                                            {{ schedule.date|date:"d/m/Y" }} - {{ schedule.date|date:"l" }}
+                                        </div>
+                                        {% if schedule.role %}
+                                        <div class="role-badge">
+                                            {{ schedule.role }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <h4 class="font-bold text-lg text-gray-600 flex items-center">
+                                        <ion-icon name="person" class="mr-2 text-gray-400"></ion-icon>
+                                        {{ schedule.member.name }}
+                                    </h4>
+                                    {% if schedule.notes %}
+                                    <div class="mt-3 p-3 bg-gray-50 rounded-lg">
+                                        <p class="text-gray-600 text-sm">
+                                            <ion-icon name="information-circle-outline" class="text-gray-400 mr-1"></ion-icon>
+                                            {{ schedule.notes }}
+                                        </p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="text-right">
+                                    {% if schedule.status == 'completed' %}
+                                    <div class="text-2xl text-gray-500">
+                                        <ion-icon name="checkmark-done-circle"></ion-icon>
+                                    </div>
+                                    {% elif schedule.status == 'cancelled' %}
+                                    <div class="text-2xl text-red-400">
+                                        <ion-icon name="close-circle"></ion-icon>
+                                    </div>
+                                    {% else %}
+                                    <div class="text-2xl text-gray-400">
+                                        <ion-icon name="time-outline"></ion-icon>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -4,6 +4,7 @@ from .views.visitor import VisitorCreateView, VisitorListView
 from .views.member import MemberCreateView, NewConvertsListView
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
+from .views.schedule import user_schedules_view, ministry_schedules_view
 from .views.auth import admin_login_view, admin_logout_view
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
@@ -24,6 +25,10 @@ urlpatterns = [
     path('translator/', TranscriptionDisplayView.as_view(), name='transcription'),
     path('event/list', EventListView.as_view(), name='event_list'),
     path('event/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
+    
+    # Schedule URLs
+    path('schedules/mine/', user_schedules_view, name='user_schedules'),
+    path('schedules/ministry/<int:ministry_id>/', ministry_schedules_view, name='ministry_schedules'),
     
     # Authentication URLs
     path('admin-login/', admin_login_view, name='admin_login'),

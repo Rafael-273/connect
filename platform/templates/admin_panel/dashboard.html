@@ -155,7 +155,7 @@
             </div>
 
             <!-- Recent Activity -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 <!-- Recent Visitors -->
                 <div class="admin-card p-6">
                     <div class="flex items-center justify-between mb-4">
@@ -232,6 +232,30 @@
                         {% endfor %}
                     </div>
                 </div>
+
+                <!-- My Schedules Card (Only show if user has schedules) -->
+                {% if user_has_schedules %}
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Minhas Escalas</h3>
+                        <a href="{% url 'user_schedules' %}" class="text-[var(--color-primary)] text-sm hover:underline">
+                            Ver todas
+                        </a>
+                    </div>
+                    <div class="text-center py-6">
+                        <div class="flex flex-col items-center">
+                            <div class="w-16 h-16 bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-light)] rounded-full flex items-center justify-center mb-4">
+                                <ion-icon name="calendar" class="text-white text-2xl"></ion-icon>
+                            </div>
+                            <h4 class="font-medium text-gray-800 mb-2">Ver suas escalas</h4>
+                            <p class="text-sm text-gray-600 mb-4">Confira quando você está escalado nos seus ministérios</p>
+                            <a href="{% url 'user_schedules' %}" class="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg text-sm hover:opacity-90 transition">
+                                Acessar Escalas
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>

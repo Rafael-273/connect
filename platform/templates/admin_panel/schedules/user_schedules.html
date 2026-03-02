@@ -1,0 +1,227 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Minhas Escalas - Igreja Filadélfia{% endblock %}
+
+{% block head %}
+<style>
+    .schedule-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        border-left: 4px solid var(--color-primary);
+    }
+    
+    .schedule-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    
+    .schedule-card.user-schedule {
+        border-left-color: var(--color-danger);
+        background: linear-gradient(135deg, #fff 0%, #fef2f2 100%);
+    }
+    
+    .user-badge {
+        background: var(--color-danger);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .ministry-header {
+        background: linear-gradient(135deg, var(--color-primary), var(--color-light));
+        color: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .date-badge {
+        background: var(--color-light);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    .role-badge {
+        background: #e5e7eb;
+        color: #374151;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+    
+    .no-content-card {
+        text-align: center;
+        padding: 40px 20px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        color: #6b7280;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    <!-- Sidebar -->
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <!-- Header -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900">Minhas Escalas</h1>
+                <p class="text-gray-600 mt-2">Veja suas escalas nos ministérios e outras escalas dos seus ministérios</p>
+            </div>
+
+            {% if no_member %}
+                <div class="no-content-card">
+                    <ion-icon name="person-outline" class="text-6xl mb-4 text-gray-400"></ion-icon>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">Perfil não encontrado</h3>
+                    <p class="text-gray-500">Você precisa ter um perfil de membro associado para ver as escalas.</p>
+                </div>
+            {% elif no_ministries %}
+                <div class="no-content-card">
+                    <ion-icon name="business-outline" class="text-6xl mb-4 text-gray-400"></ion-icon>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">Nenhum ministério</h3>
+                    <p class="text-gray-500">Você ainda não faz parte de nenhum ministério.</p>
+                </div>
+            {% elif not schedules %}
+                <div class="no-content-card">
+                    <ion-icon name="calendar-outline" class="text-6xl mb-4 text-gray-400"></ion-icon>
+                    <h3 class="text-lg font-medium text-gray-600 mb-2">Nenhuma escala encontrada</h3>
+                    <p class="text-gray-500">Não há escalas programadas para os seus ministérios ainda.</p>
+                    <div class="mt-4">
+                        {% for ministry in user_ministries %}
+                        <a href="{% url 'ministry_schedules' ministry.id %}" class="inline-block bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg mr-2 mb-2 text-sm hover:opacity-90 transition">
+                            Ver todas do {{ ministry.name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <!-- Ministries Info -->
+                <div class="ministry-header">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-xl font-bold">Seus Ministérios</h2>
+                            <p class="opacity-90 mt-1">
+                                {% for ministry in user_ministries %}
+                                    {{ ministry.name }}{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            </p>
+                        </div>
+                        <ion-icon name="people" class="text-3xl opacity-70"></ion-icon>
+                    </div>
+                </div>
+
+                <!-- User's Schedules Section -->
+                {% if user_schedules %}
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                        <ion-icon name="star" class="text-yellow-500 mr-2"></ion-icon>
+                        Suas Escalas
+                    </h3>
+                    <div class="grid gap-4">
+                        {% for schedule in user_schedules %}
+                        <div class="schedule-card user-schedule p-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-2">
+                                        <div class="date-badge">
+                                            {{ schedule.date|date:"d/m/Y" }}
+                                        </div>
+                                        <div class="user-badge">
+                                            Você está escalado(a)
+                                        </div>
+                                        {% if schedule.role %}
+                                        <div class="role-badge">
+                                            {{ schedule.role }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <h4 class="font-bold text-gray-800">{{ schedule.ministry.name }}</h4>
+                                    {% if schedule.notes %}
+                                    <p class="text-gray-600 mt-2 text-sm">{{ schedule.notes }}</p>
+                                    {% endif %}
+                                </div>
+                                <div class="text-right">
+                                    <a href="{% url 'ministry_schedules' schedule.ministry.id %}" class="text-[var(--color-primary)] text-sm hover:underline">
+                                        Ver todas deste ministério
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Other Schedules Section -->
+                {% if other_schedules %}
+                <div class="mb-8">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                        <ion-icon name="calendar" class="text-[var(--color-primary)] mr-2"></ion-icon>
+                        Outras Escalas dos Seus Ministérios
+                    </h3>
+                    <div class="grid gap-4">
+                        {% for schedule in other_schedules %}
+                        <div class="schedule-card p-6">
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-3 mb-2">
+                                        <div class="date-badge">
+                                            {{ schedule.date|date:"d/m/Y" }}
+                                        </div>
+                                        {% if schedule.role %}
+                                        <div class="role-badge">
+                                            {{ schedule.role }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <h4 class="font-bold text-gray-800">{{ schedule.ministry.name }}</h4>
+                                    <p class="text-gray-600">{{ schedule.member.name }}</p>
+                                    {% if schedule.notes %}
+                                    <p class="text-gray-600 mt-2 text-sm">{{ schedule.notes }}</p>
+                                    {% endif %}
+                                </div>
+                                <div class="text-right">
+                                    <a href="{% url 'ministry_schedules' schedule.ministry.id %}" class="text-[var(--color-primary)] text-sm hover:underline">
+                                        Ver todas deste ministério
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Quick Links -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {% for ministry in user_ministries %}
+                    <a href="{% url 'ministry_schedules' ministry.id %}" class="block bg-white p-6 rounded-12 border border-gray-200 hover:border-[var(--color-primary)] hover:shadow-md transition">
+                        <div class="flex items-center">
+                            <ion-icon name="list" class="text-2xl text-[var(--color-primary)] mr-3"></ion-icon>
+                            <div>
+                                <h4 class="font-medium text-gray-800">{{ ministry.name }}</h4>
+                                <p class="text-sm text-gray-500">Ver todas as escalas</p>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

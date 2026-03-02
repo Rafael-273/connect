@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event
+from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, schedule
 
 admin.site.register(ministry.Ministry)
 admin.site.register(evangelism.Evangelized)
@@ -10,3 +10,4 @@ admin.site.register(visitor.Visitor)
 admin.site.register(neighborhood.Neighborhood)
 admin.site.register(user.User)
 admin.site.register(event.Event)
+admin.site.register(schedule.Schedule)

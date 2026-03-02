@@ -22,6 +22,7 @@ from ..models.ministry import Ministry
 from ..models.neighborhood import Neighborhood
 from ..models.evangelism import Evangelized
 from ..models.follow_up import FollowUp, FollowUpReport
+from ..models.schedule import Schedule
 from ..forms.ministry import MinistryForm
 from ..forms.neighborhood import NeighborhoodForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
@@ -104,6 +105,20 @@ def dashboard_view(request):
         event_date__gte=timezone.now().date()
     ).order_by('event_date')[:5]
     
+    # Verificar se o usuário tem ministérios com escalas para mostrar o card
+    user_has_schedules = False
+    if request.user.is_authenticated:
+        try:
+            member = Member.objects.get(user=request.user)
+            user_ministries = member.ministry.all()
+            # Verifica se algum ministério do usuário tem escalas
+            if user_ministries.exists():
+                user_has_schedules = Schedule.objects.filter(
+                    ministry__in=user_ministries
+                ).exists()
+        except Member.DoesNotExist:
+            user_has_schedules = False
+    
     context = {
         'total_members': total_members,
         'total_visitors': total_visitors,
@@ -119,6 +134,7 @@ def dashboard_view(request):
         'recent_visitors_list': recent_visitors_list,
         'recently_converted_members': recently_converted_members,
         'upcoming_events_list': upcoming_events_list,
+        'user_has_schedules': user_has_schedules,
     }
     
     return render(request, 'admin_panel/dashboard.html', context)
