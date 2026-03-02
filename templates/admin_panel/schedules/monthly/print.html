@@ -1,0 +1,453 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escala - {{ schedule.ministry.name }} - {{ schedule.title }}</title>
+    <style>
+        /* ===== Reset & Base ===== */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #1f2937;
+            line-height: 1.6;
+            font-size: 11pt;
+            background-color: #f3f4f6;
+        }
+
+        /* ===== Screen-only wrapper ===== */
+        .print-page {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px 48px;
+        }
+
+        /* ===== Toolbar (hidden on print) ===== */
+        .toolbar {
+            background: #1f2937;
+            color: white;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .toolbar a {
+            color: #d1d5db;
+            text-decoration: none;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .toolbar a:hover {
+            color: white;
+        }
+
+        .btn-print {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-print:hover {
+            background: #b91c1c;
+        }
+
+        /* ===== Logo ===== */
+        .logo-container {
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .logo-container img {
+            width: 100px;
+            height: auto;
+        }
+
+        /* ===== Header ===== */
+        .header {
+            text-align: center;
+            margin-bottom: 28px;
+            padding-bottom: 16px;
+            border-bottom: 4px solid #C90905;
+        }
+
+        .header h1 {
+            color: #C90905;
+            font-size: 22pt;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+
+        .header h2 {
+            color: #8B0000;
+            font-size: 14pt;
+            margin: 5px 0;
+            font-weight: normal;
+        }
+
+        /* ===== Info Box ===== */
+        .info-box {
+            background-color: #FFF5F5;
+            border: 2px solid #FCA5A5;
+            margin: 20px 0;
+        }
+
+        .info-header {
+            background-color: #C90905;
+            color: white;
+            padding: 10px 15px;
+            font-weight: bold;
+            font-size: 11pt;
+        }
+
+        .info-body {
+            padding: 16px 20px;
+        }
+
+        .info-body p {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        .info-body strong {
+            color: #C90905;
+        }
+
+        .guidelines-section {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 2px dashed #FCA5A5;
+        }
+
+        .guidelines-title {
+            color: #C90905;
+            font-weight: bold;
+            font-size: 10pt;
+            margin-bottom: 8px;
+        }
+
+        .guidelines-content {
+            color: #4B5563;
+            line-height: 1.7;
+            padding-left: 8px;
+        }
+
+        /* ===== Section Title ===== */
+        .section-title {
+            color: #C90905;
+            font-size: 15pt;
+            font-weight: bold;
+            margin: 28px 0 16px 0;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #C90905;
+        }
+
+        /* ===== Day Cards ===== */
+        .day-card {
+            margin: 16px 0;
+            border: 2px solid #FCA5A5;
+            break-inside: avoid;
+        }
+
+        .day-card.cancelled {
+            border-color: #DC2626;
+            background-color: #FEF2F2;
+        }
+
+        .day-header {
+            background-color: #C90905;
+            color: white;
+            padding: 12px 16px;
+            font-weight: bold;
+            font-size: 11pt;
+        }
+
+        .day-card.cancelled .day-header {
+            background-color: #991B1B;
+        }
+
+        .day-body {
+            padding: 16px 18px;
+        }
+
+        .team-box {
+            background-color: #FFF5F5;
+            padding: 12px 14px;
+            border-left: 4px solid #C90905;
+            margin: 8px 0;
+            font-weight: 600;
+            color: #1F2937;
+        }
+
+        .member-item {
+            background-color: #FFF5F5;
+            border: 1px solid #FCA5A5;
+            padding: 8px 14px;
+            margin: 4px 4px 4px 0;
+            display: inline-block;
+            font-size: 10pt;
+        }
+
+        .notes-box {
+            background-color: #FEF3C7;
+            border-left: 4px solid #F59E0B;
+            padding: 12px 14px;
+            margin: 14px 0 0 0;
+            font-size: 10pt;
+            color: #78350F;
+            line-height: 1.5;
+        }
+
+        .notes-box strong {
+            color: #92400E;
+        }
+
+        .cancellation-box {
+            background-color: #FEE2E2;
+            border-left: 4px solid #991B1B;
+            padding: 12px 14px;
+            margin: 10px 0;
+            font-size: 10pt;
+            color: #7F1D1D;
+            font-weight: 600;
+        }
+
+        .no-assignment {
+            color: #9CA3AF;
+            font-style: italic;
+            font-size: 10pt;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px 30px;
+            color: #9CA3AF;
+            font-style: italic;
+            background-color: #FFF5F5;
+            border: 2px dashed #FCA5A5;
+        }
+
+        /* ===== Footer ===== */
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 16px;
+            border-top: 2px solid #FCA5A5;
+            color: #6B7280;
+            font-size: 9pt;
+        }
+
+        /* ===== Print Styles ===== */
+        @media print {
+            @page {
+                size: A4;
+                margin: 1.5cm 2cm;
+            }
+
+            body {
+                background: white;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+
+            .toolbar {
+                display: none !important;
+            }
+
+            .print-page {
+                max-width: none;
+                padding: 0;
+                margin: 0;
+                box-shadow: none;
+            }
+
+            .day-card {
+                break-inside: avoid;
+            }
+
+            .header {
+                border-bottom-color: #C90905 !important;
+            }
+
+            .day-header {
+                background-color: #C90905 !important;
+                color: white !important;
+            }
+
+            .day-card.cancelled .day-header {
+                background-color: #991B1B !important;
+            }
+
+            .info-header {
+                background-color: #C90905 !important;
+                color: white !important;
+            }
+
+            .info-box {
+                background-color: #FFF5F5 !important;
+            }
+
+            .team-box {
+                background-color: #FFF5F5 !important;
+                border-left-color: #C90905 !important;
+            }
+
+            .member-item {
+                background-color: #FFF5F5 !important;
+                border-color: #FCA5A5 !important;
+            }
+
+            .notes-box {
+                background-color: #FEF3C7 !important;
+                border-left-color: #F59E0B !important;
+            }
+
+            .cancellation-box {
+                background-color: #FEE2E2 !important;
+                border-left-color: #991B1B !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Toolbar (hidden on print) -->
+    <div class="toolbar">
+        <a href="{% url 'schedule_detail' schedule.id %}">
+            ← Voltar para a escala
+        </a>
+        <button class="btn-print" onclick="window.print()">
+            🖨️ Imprimir / Salvar PDF
+        </button>
+    </div>
+
+    <!-- Printable Content -->
+    <div class="print-page">
+        <!-- Logo -->
+        <div class="logo-container">
+            <img src="{% static 'assets/red_logo.png' %}" alt="Logo Igreja Filadélfia">
+        </div>
+
+        <!-- Header -->
+        <div class="header">
+            <h1>{{ schedule.ministry.name }} - {{ schedule.title }}</h1>
+            <h2>{{ month_name }} / {{ schedule.year }}</h2>
+        </div>
+
+        <!-- Info Box -->
+        <div class="info-box">
+            <div class="info-header">
+                ℹ️ INFORMAÇÕES DA ESCALA
+            </div>
+            <div class="info-body">
+                <p><strong>Ministério:</strong> {{ schedule.ministry.name }}</p>
+                <p><strong>Período:</strong> {{ month_name }}/{{ schedule.year }}</p>
+                <p><strong>Modo:</strong> {% if use_team_rotation %}Rotação de Equipes{% else %}Membros Diretos{% endif %}</p>
+
+                {% if schedule.guidelines %}
+                <div class="guidelines-section">
+                    <div class="guidelines-title">📋 Orientações Gerais:</div>
+                    <div class="guidelines-content">
+                        {{ schedule.guidelines|linebreaks }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Schedule Days -->
+        <h3 class="section-title">📅 Cronograma do Mês</h3>
+
+        {% if days %}
+            {% for day in days %}
+            <div class="day-card {% if day.is_cancelled %}cancelled{% endif %}">
+                <div class="day-header">
+                    <span>{{ day.date_str }} - {{ day.day_name }}</span>
+                    {% if day.is_cancelled %}
+                        <span> - ❌ CANCELADO</span>
+                    {% else %}
+                        {% if day.description %}
+                            <span> - {{ day.description }}</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                <div class="day-body">
+                    {% if day.is_cancelled %}
+                        <div class="cancellation-box">
+                            <strong>Motivo do cancelamento:</strong> {{ day.cancellation_reason|default:"Não informado" }}
+                        </div>
+                    {% else %}
+                        <div class="assignment-section">
+                            {% if use_team_rotation %}
+                                {% if day.team %}
+                                    <div class="team-box">
+                                        🔷 {{ day.team.name }}
+                                    </div>
+                                {% else %}
+                                    <div class="no-assignment">Nenhuma equipe atribuída</div>
+                                {% endif %}
+                            {% else %}
+                                {% if day.members %}
+                                    {% for member in day.members %}
+                                        <div class="member-item">👤 {{ member.name }}</div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="no-assignment">Nenhum membro atribuído</div>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+
+                        {% if day.notes %}
+                        <div class="notes-box">
+                            <strong>📝 Observações:</strong> {{ day.notes }}
+                        </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <p>📭 Nenhum dia foi configurado nesta escala.</p>
+            </div>
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>Documento gerado em {{ generated_at }} • Igreja Filadélfia</p>
+        </div>
+    </div>
+
+    <script>
+        // Auto-trigger print dialog after page loads
+        window.addEventListener('load', function() {
+            // Small delay to ensure all resources (logo) are loaded
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        });
+    </script>
+</body>
+</html>

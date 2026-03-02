@@ -600,3 +600,47 @@ def schedule_export_pdf_view(request, schedule_id):
         return HttpResponse('Erro ao gerar PDF', status=500)
     
     return response
+
+
+@user_passes_test(is_admin)
+def schedule_print_view(request, schedule_id):
+    """Exibe a escala em formato printável para impressão nativa do navegador"""
+    schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+    days = ScheduleDay.objects.filter(
+        schedule=schedule,
+        deleted__isnull=True
+    ).select_related('team').prefetch_related('members').order_by('date')
+
+    month_names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+
+    day_names = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+
+    processed_days = []
+    for day in days:
+        day_data = {
+            'date': day.date,
+            'date_str': day.date.strftime('%d/%m/%Y'),
+            'day_name': day_names[day.date.weekday()],
+            'description': day.description,
+            'notes': day.notes,
+            'is_cancelled': day.is_cancelled,
+            'cancellation_reason': day.cancellation_reason,
+        }
+
+        if schedule.use_team_rotation:
+            day_data['team'] = day.team
+        else:
+            day_data['members'] = list(day.members.all())
+
+        processed_days.append(day_data)
+
+    context = {
+        'schedule': schedule,
+        'days': processed_days,
+        'month_name': month_names[schedule.month - 1],
+        'generated_at': datetime.now().strftime('%d/%m/%Y às %H:%M'),
+        'use_team_rotation': schedule.use_team_rotation,
+    }
+
+    return render(request, 'admin_panel/schedules/monthly/print.html', context)
