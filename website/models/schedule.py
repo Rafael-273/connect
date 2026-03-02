@@ -239,3 +239,41 @@ class ScheduleDay(BaseModel):
         """Retorna o número da semana no mês (1-5)"""
         return (self.date.day - 1) // 7 + 1
 
+
+class ScheduleConflictOverride(BaseModel):
+    """Registro de auditoria quando um líder confirma atribuição apesar de conflito"""
+
+    schedule_day = models.ForeignKey(
+        ScheduleDay,
+        on_delete=models.CASCADE,
+        related_name='conflict_overrides',
+        verbose_name='Dia da Escala'
+    )
+    member = models.ForeignKey(
+        'Member',
+        on_delete=models.CASCADE,
+        related_name='conflict_overrides',
+        verbose_name='Membro'
+    )
+    conflicting_schedule = models.ForeignKey(
+        MonthlySchedule,
+        on_delete=models.CASCADE,
+        related_name='conflicting_overrides',
+        verbose_name='Escala em Conflito'
+    )
+    overridden_by = models.ForeignKey(
+        'User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Confirmado por'
+    )
+
+    class Meta:
+        verbose_name = 'Override de Conflito'
+        verbose_name_plural = 'Overrides de Conflito'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Override: {self.member} em {self.schedule_day.date} (conflito com {self.conflicting_schedule})"
+

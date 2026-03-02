@@ -8,7 +8,9 @@ from datetime import datetime
 from calendar import monthrange
 from django.conf import settings
 import os
+import json
 from ..models import MonthlySchedule, ScheduleDay, Team, Ministry, Member
+from ..models.schedule import ScheduleConflictOverride
 from ..models.ministry_membership import MinistryMembership
 from xhtml2pdf import pisa
 
@@ -459,6 +461,28 @@ def schedule_day_create_view(request, schedule_id):
             if member_ids:
                 day.members.set(member_ids)
             
+            # Re-verificar conflitos no backend e registrar overrides
+            force = request.POST.get('force') == 'true'
+            conflicts = _find_member_conflicts(member_ids, date, schedule.ministry_id, exclude_day_id=day.id)
+            if conflicts and not force:
+                # Rollback: deletar o dia criado
+                day.delete()
+                return JsonResponse({
+                    'success': False,
+                    'has_conflict': True,
+                    'conflicts': conflicts,
+                    'error': 'Conflito detectado. Envie com force=true para confirmar.'
+                }, status=409)
+            
+            if conflicts and force:
+                for c in conflicts:
+                    ScheduleConflictOverride.objects.create(
+                        schedule_day=day,
+                        member_id=c['member_id'],
+                        conflicting_schedule_id=ScheduleDay.objects.get(id=c['schedule_day_id']).schedule_id,
+                        overridden_by=request.user if request.user.is_authenticated else None,
+                    )
+            
             return JsonResponse({
                 'success': True,
                 'day_id': day.id,
@@ -484,6 +508,31 @@ def schedule_day_edit_view(request, day_id):
         member_ids = request.POST.getlist('members')
         description = request.POST.get('description') or None
         notes = request.POST.get('notes') or None
+        
+        # Re-verificar conflitos no backend
+        force = request.POST.get('force') == 'true'
+        if member_ids:
+            conflicts = _find_member_conflicts(
+                member_ids, day.date, day.schedule.ministry_id, exclude_day_id=day.id
+            )
+            if conflicts and not force:
+                return JsonResponse({
+                    'success': False,
+                    'has_conflict': True,
+                    'conflicts': conflicts,
+                    'error': 'Conflito detectado. Envie com force=true para confirmar.'
+                }, status=409)
+            
+            if conflicts and force:
+                # Limpar overrides antigos deste dia
+                ScheduleConflictOverride.objects.filter(schedule_day=day).delete()
+                for c in conflicts:
+                    ScheduleConflictOverride.objects.create(
+                        schedule_day=day,
+                        member_id=c['member_id'],
+                        conflicting_schedule_id=ScheduleDay.objects.get(id=c['schedule_day_id']).schedule_id,
+                        overridden_by=request.user if request.user.is_authenticated else None,
+                    )
         
         day.team_id = team_id if team_id else None
         day.description = description
@@ -531,6 +580,83 @@ def schedule_day_toggle_cancel_view(request, day_id):
         })
     
     return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+
+
+def _find_member_conflicts(member_ids, date, current_ministry_id, exclude_day_id=None):
+    """Verifica se membros estão escalados em outros ministérios na mesma data.
+    
+    Returns list of dicts: [{member_id, member_name, ministry_name, schedule_title, schedule_day_id}]
+    """
+    conflicts = []
+
+    # ScheduleDays on this date in OTHER ministries
+    conflicting_days_qs = ScheduleDay.objects.filter(
+        date=date,
+        deleted__isnull=True,
+        is_cancelled=False,
+        schedule__deleted__isnull=True,
+    ).exclude(
+        schedule__ministry_id=current_ministry_id,
+    ).select_related('schedule__ministry', 'team').prefetch_related('members', 'team__members')
+
+    if exclude_day_id:
+        conflicting_days_qs = conflicting_days_qs.exclude(id=exclude_day_id)
+
+    member_ids_set = set(int(mid) for mid in member_ids)
+
+    for day in conflicting_days_qs:
+        # Direct members
+        day_member_ids = set(day.members.values_list('id', flat=True))
+        # Team members
+        if day.team:
+            day_member_ids |= set(day.team.members.filter(is_active=True).values_list('id', flat=True))
+
+        overlap = member_ids_set & day_member_ids
+        if overlap:
+            for mid in overlap:
+                member = Member.objects.filter(id=mid).first()
+                if member:
+                    conflicts.append({
+                        'member_id': mid,
+                        'member_name': member.name,
+                        'ministry_name': day.schedule.ministry.name,
+                        'schedule_title': day.schedule.title,
+                        'schedule_day_id': day.id,
+                    })
+
+    return conflicts
+
+
+@user_passes_test(is_admin)
+def check_schedule_conflict_view(request):
+    """AJAX endpoint para verificar conflitos de escala entre ministérios."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+
+    try:
+        member_ids = request.POST.getlist('member_ids')
+        date_str = request.POST.get('date')
+        schedule_id = request.POST.get('schedule_id')
+        exclude_day_id = request.POST.get('exclude_day_id')
+
+        if not date_str or not schedule_id:
+            return JsonResponse({'success': False, 'error': 'Parâmetros obrigatórios: date, schedule_id'}, status=400)
+
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+
+        conflicts = _find_member_conflicts(
+            member_ids, date, schedule.ministry_id,
+            exclude_day_id=exclude_day_id
+        )
+
+        return JsonResponse({
+            'success': True,
+            'has_conflict': len(conflicts) > 0,
+            'conflicts': conflicts,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @user_passes_test(is_admin)
