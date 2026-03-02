@@ -26,6 +26,8 @@ from ..forms.ministry import MinistryForm
 from ..forms.neighborhood import NeighborhoodForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
 from ..forms.user import UserProfileForm
+from ..forms.schedule import ScheduleForm
+from ..models.schedule import Schedule
 
 User = get_user_model()
 
@@ -325,6 +327,8 @@ def api_delete_item(request):
                 item = get_object_or_404(Ministry, id=item_id)
             elif model_name == 'neighborhood':
                 item = get_object_or_404(Neighborhood, id=item_id)
+            elif model_name == 'schedule':
+                item = get_object_or_404(Schedule, id=item_id)
             else:
                 return JsonResponse({'success': False, 'error': 'Modelo inválido'})
             
@@ -1280,3 +1284,153 @@ def profile_view(request):
     else:
         form = UserProfileForm(instance=user)
     return render(request, 'admin_panel/profile.html', {'form': form, 'user': user})
+
+
+@user_passes_test(is_admin)
+def schedules_list_view(request):
+    """Lista de escalas"""
+    schedules = Schedule.objects.select_related('member', 'ministry').order_by('-scheduled_date')
+
+    search = request.GET.get('search', '')
+    if search:
+        schedules = schedules.filter(
+            Q(member__name__icontains=search) | Q(ministry__name__icontains=search)
+        )
+
+    date_filter = request.GET.get('date', '')
+    if date_filter:
+        schedules = schedules.filter(scheduled_date=date_filter)
+
+    ministry_filter = request.GET.get('ministry', '')
+    if ministry_filter:
+        schedules = schedules.filter(ministry_id=ministry_filter)
+
+    paginator = Paginator(schedules, 20)
+    page = request.GET.get('page')
+    schedules = paginator.get_page(page)
+
+    ministries = Ministry.objects.order_by('name')
+
+    context = {
+        'schedules': schedules,
+        'search': search,
+        'date_filter': date_filter,
+        'ministry_filter': ministry_filter,
+        'ministries': ministries,
+    }
+
+    return render(request, 'admin_panel/schedules/list.html', context)
+
+
+@user_passes_test(is_admin)
+def schedule_edit_view(request, schedule_id=None):
+    """View para criar/editar escalas com detecção de conflito."""
+    schedule = None
+    if schedule_id:
+        schedule = get_object_or_404(Schedule, id=schedule_id)
+
+    if request.method == 'GET':
+        storage = messages.get_messages(request)
+        storage.used = True
+
+    if request.method == 'POST':
+        form = ScheduleForm(request.POST, instance=schedule)
+        if form.is_valid():
+            obj = form.save(commit=False)
+
+            # Verificar conflitos
+            conflicts = obj.get_conflicts()
+            confirm_override = request.POST.get('confirm_override') == '1'
+
+            if conflicts.exists() and not confirm_override:
+                conflict_list = [
+                    {
+                        'ministry': c.ministry.name,
+                        'date': c.scheduled_date.strftime('%d/%m/%Y'),
+                    }
+                    for c in conflicts
+                ]
+                context = {
+                    'form': form,
+                    'schedule': schedule,
+                    'conflicts': conflict_list,
+                    'show_conflict_modal': True,
+                }
+                return render(request, 'admin_panel/schedules/edit.html', context)
+
+            if confirm_override and conflicts.exists():
+                obj.override_conflict = True
+                obj.override_by = request.user
+
+            obj.save()
+
+            if schedule_id:
+                messages.success(request, 'Escala atualizada com sucesso!')
+            else:
+                messages.success(request, 'Escala criada com sucesso!')
+            return redirect('admin_schedules_list')
+        else:
+            messages.error(request, 'Corrija os erros no formulário.')
+    else:
+        form = ScheduleForm(instance=schedule)
+
+    context = {
+        'form': form,
+        'schedule': schedule,
+    }
+    return render(request, 'admin_panel/schedules/edit.html', context)
+
+
+@user_passes_test(is_admin)
+def schedule_delete_view(request, schedule_id):
+    """Deletar uma escala."""
+    schedule = get_object_or_404(Schedule, id=schedule_id)
+    if request.method == 'POST':
+        schedule.delete()
+        messages.success(request, 'Escala removida com sucesso!')
+        return redirect('admin_schedules_list')
+    return redirect('admin_schedules_list')
+
+
+@csrf_exempt
+@user_passes_test(is_admin)
+def schedule_check_conflict_api(request):
+    """API para verificar conflitos de escala via AJAX."""
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        member_id = data.get('member_id')
+        ministry_id = data.get('ministry_id')
+        scheduled_date = data.get('scheduled_date')
+        schedule_id = data.get('schedule_id')
+
+        if not all([member_id, ministry_id, scheduled_date]):
+            return JsonResponse({'has_conflict': False})
+
+        try:
+            conflicts = Schedule.objects.filter(
+                member_id=member_id,
+                scheduled_date=scheduled_date,
+            ).exclude(ministry_id=ministry_id)
+
+            if schedule_id:
+                conflicts = conflicts.exclude(pk=schedule_id)
+
+            if conflicts.exists():
+                conflict_list = [
+                    {
+                        'ministry': c.ministry.name,
+                        'member': c.member.name,
+                        'date': c.scheduled_date.strftime('%d/%m/%Y'),
+                    }
+                    for c in conflicts.select_related('ministry', 'member')
+                ]
+                return JsonResponse({
+                    'has_conflict': True,
+                    'conflicts': conflict_list,
+                })
+            return JsonResponse({'has_conflict': False})
+
+        except Exception as e:
+            return JsonResponse({'has_conflict': False, 'error': str(e)})
+
+    return JsonResponse({'has_conflict': False, 'error': 'Método não permitido'})

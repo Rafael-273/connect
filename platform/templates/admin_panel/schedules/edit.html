@@ -1,0 +1,338 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}
+{% if schedule %}Editar Escala{% else %}Nova Escala{% endif %} - Painel Administrativo
+{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+        padding-top: 80px;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        margin-top: 20px;
+    }
+    
+    .sidebar {
+        background: white;
+        min-height: calc(100vh - 80px);
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        position: fixed;
+        top: 80px;
+        left: 0;
+        width: 250px;
+        overflow-y: auto;
+    }
+    
+    .main-content {
+        margin-left: 250px;
+        padding: 20px;
+    }
+    
+    .sidebar-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .sidebar-item:hover, .sidebar-item.active {
+        background-color: #f1f5f9;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+        text-decoration: none;
+    }
+    
+    .sidebar-item ion-icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+    }
+    
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        transition: all 0.3s ease;
+    }
+    
+    .form-control:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.1);
+    }
+    
+    .btn-primary {
+        background-color: var(--color-primary);
+        color: white;
+        padding: 0.75rem 2rem;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-primary:hover {
+        background-color: var(--color-primary);
+        opacity: 0.9;
+        transform: translateY(-1px);
+    }
+
+    /* Modal de conflito */
+    .conflict-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    }
+
+    .conflict-modal {
+        background: white;
+        border-radius: 16px;
+        max-width: 500px;
+        width: 90%;
+        padding: 2rem;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        animation: modalFadeIn 0.3s ease-out;
+    }
+
+    @keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.95) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .conflict-icon {
+        width: 64px;
+        height: 64px;
+        background-color: #fef3c7;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+    }
+
+    .conflict-icon ion-icon {
+        font-size: 32px;
+        color: #f59e0b;
+    }
+
+    .conflict-list-item {
+        background-color: #fff7ed;
+        border-left: 4px solid #f59e0b;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        border-radius: 0 8px 8px 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <div class="admin-card">
+                <div class="p-6">
+                <!-- Header -->
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">
+                            {% if schedule %}Editar Escala{% else %}Nova Escala{% endif %}
+                        </h1>
+                        <p class="text-gray-600 mt-1">Configure os detalhes da escala</p>
+                    </div>
+                    <a href="{% url 'admin_schedules_list' %}" 
+                       class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition duration-300 flex items-center">
+                        <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
+                        Voltar
+                    </a>
+                </div>
+
+                <!-- Formulário -->
+                <form method="post" id="scheduleForm" class="space-y-6">
+                    {% csrf_token %}
+                    <input type="hidden" name="confirm_override" id="confirmOverride" value="0">
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="id_member">Membro</label>
+                        {{ form.member }}
+                        {% if form.member.errors %}
+                        <p class="text-red-500 text-sm mt-1">{{ form.member.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="id_ministry">Ministério</label>
+                        {{ form.ministry }}
+                        {% if form.ministry.errors %}
+                        <p class="text-red-500 text-sm mt-1">{{ form.ministry.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="id_scheduled_date">Data da Escala</label>
+                        {{ form.scheduled_date }}
+                        {% if form.scheduled_date.errors %}
+                        <p class="text-red-500 text-sm mt-1">{{ form.scheduled_date.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label" for="id_notes">Observações</label>
+                        {{ form.notes }}
+                    </div>
+
+                    <!-- Botões -->
+                    <div class="flex justify-end space-x-4">
+                        <a href="{% url 'admin_schedules_list' %}" 
+                           class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-300">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="btn-primary" id="submitBtn">
+                            {% if schedule %}Atualizar Escala{% else %}Criar Escala{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% include 'parciais/messages.html' %}
+
+<!-- Modal de Conflito (renderizado pelo servidor quando há conflito) -->
+{% if show_conflict_modal and conflicts %}
+<div class="conflict-modal-overlay" id="conflictModal">
+    <div class="conflict-modal">
+        <div class="conflict-icon">
+            <ion-icon name="warning"></ion-icon>
+        </div>
+        
+        <h2 class="text-xl font-bold text-gray-900 text-center mb-2">Conflito de Escala Detectado!</h2>
+        <p class="text-gray-600 text-center mb-4">
+            Este membro já está escalado em outro(s) ministério(s) na mesma data:
+        </p>
+        
+        <div class="mb-6">
+            {% for conflict in conflicts %}
+            <div class="conflict-list-item">
+                <p class="font-semibold text-gray-800">{{ conflict.ministry }}</p>
+                <p class="text-sm text-gray-600">Data: {{ conflict.date }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <p class="text-sm text-gray-500 text-center mb-6">
+            Deseja prosseguir mesmo assim? Esta ação será registrada como override.
+        </p>
+        
+        <div class="flex justify-center space-x-4">
+            <button onclick="cancelOverride()" 
+                    class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition font-medium">
+                <ion-icon name="close-outline" class="mr-1"></ion-icon>
+                Cancelar
+            </button>
+            <button onclick="confirmOverride()" 
+                    class="px-6 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition font-medium">
+                <ion-icon name="checkmark-outline" class="mr-1"></ion-icon>
+                Prosseguir com Override
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+/* Verificação de conflito via AJAX ao mudar campos */
+const memberSelect = document.getElementById('id_member');
+const ministrySelect = document.getElementById('id_ministry');
+const dateInput = document.getElementById('id_scheduled_date');
+
+function checkConflictAsync() {
+    const memberId = memberSelect ? memberSelect.value : '';
+    const ministryId = ministrySelect ? ministrySelect.value : '';
+    const scheduledDate = dateInput ? dateInput.value : '';
+
+    if (!memberId || !ministryId || !scheduledDate) return;
+
+    const scheduleId = '{{ schedule.id|default:"" }}';
+
+    fetch('{% url "admin_schedule_check_conflict_api" %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            member_id: memberId,
+            ministry_id: ministryId,
+            scheduled_date: scheduledDate,
+            schedule_id: scheduleId || null,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        const warningEl = document.getElementById('asyncConflictWarning');
+        if (data.has_conflict && data.conflicts && data.conflicts.length > 0) {
+            let html = '<div class="bg-amber-50 border border-amber-300 rounded-lg p-4 mt-4" id="asyncConflictWarning">';
+            html += '<div class="flex items-start"><ion-icon name="warning" class="text-amber-500 text-xl mr-2 mt-0.5"></ion-icon>';
+            html += '<div><p class="font-semibold text-amber-800">Atenção: Conflito detectado!</p>';
+            html += '<p class="text-sm text-amber-700 mt-1">Este membro já está escalado em:</p><ul class="mt-1 text-sm text-amber-700">';
+            data.conflicts.forEach(c => {
+                html += `<li>• <strong>${c.ministry}</strong> em ${c.date}</li>`;
+            });
+            html += '</ul><p class="text-xs text-amber-600 mt-2">Ao salvar, será solicitada confirmação de override.</p>';
+            html += '</div></div></div>';
+
+            if (warningEl) {
+                warningEl.outerHTML = html;
+            } else {
+                dateInput.closest('.form-group').insertAdjacentHTML('afterend', html);
+            }
+        } else if (warningEl) {
+            warningEl.remove();
+        }
+    })
+    .catch(() => {});
+}
+
+if (memberSelect) memberSelect.addEventListener('change', checkConflictAsync);
+if (ministrySelect) ministrySelect.addEventListener('change', checkConflictAsync);
+if (dateInput) dateInput.addEventListener('change', checkConflictAsync);
+
+/* Modal de conflito (server-rendered) */
+function cancelOverride() {
+    const modal = document.getElementById('conflictModal');
+    if (modal) modal.remove();
+}
+
+function confirmOverride() {
+    document.getElementById('confirmOverride').value = '1';
+    document.getElementById('scheduleForm').submit();
+}
+</script>
+{% endblock %}

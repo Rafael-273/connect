@@ -1,0 +1,215 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Escalas - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+    
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .sidebar {
+        background: white;
+        min-height: 100vh;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+    }
+    
+    .sidebar-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 20px;
+        color: #64748b;
+        text-decoration: none;
+        transition: all 0.3s ease;
+        border-left: 3px solid transparent;
+    }
+    
+    .sidebar-item:hover, .sidebar-item.active {
+        background-color: #f1f5f9;
+        color: var(--color-primary);
+        border-left-color: var(--color-primary);
+        text-decoration: none;
+    }
+    
+    .sidebar-item ion-icon {
+        font-size: 20px;
+        margin-right: 12px;
+    }
+
+    .override-badge {
+        background-color: #f59e0b;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <!-- Header -->
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">Escalas</h1>
+                    <p class="text-gray-600 mt-2">Gerenciar escalas dos ministérios</p>
+                </div>
+                <a href="{% url 'admin_schedule_create' %}" class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center">
+                    <ion-icon name="add" class="mr-2"></ion-icon>
+                    Nova Escala
+                </a>
+            </div>
+
+            <!-- Filtros -->
+            <div class="admin-card p-6 mb-6">
+                <form method="GET" class="flex gap-4 items-end flex-wrap">
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
+                        <input type="text" name="search" value="{{ search }}" 
+                               placeholder="Nome do membro ou ministério..." 
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Data</label>
+                        <input type="date" name="date" value="{{ date_filter }}" 
+                               class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Ministério</label>
+                        <select name="ministry" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                            <option value="">Todos</option>
+                            {% for m in ministries %}
+                            <option value="{{ m.id }}" {% if ministry_filter == m.id|stringformat:"d" %}selected{% endif %}>{{ m.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
+                        <ion-icon name="search" class="mr-2"></ion-icon>
+                        Filtrar
+                    </button>
+                    <a href="{% url 'admin_schedules_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
+                        Limpar
+                    </a>
+                </form>
+            </div>
+
+            <!-- Tabela -->
+            <div class="admin-card overflow-hidden">
+                <table class="w-full">
+                    <thead class="bg-gray-50 border-b">
+                        <tr>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-700">Membro</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-700">Ministério</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-700">Data</th>
+                            <th class="text-left px-6 py-4 text-sm font-semibold text-gray-700">Status</th>
+                            <th class="text-right px-6 py-4 text-sm font-semibold text-gray-700">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for schedule in schedules %}
+                        <tr class="border-b hover:bg-gray-50 transition">
+                            <td class="px-6 py-4">
+                                <span class="font-medium text-gray-900">{{ schedule.member.name }}</span>
+                            </td>
+                            <td class="px-6 py-4 text-gray-600">{{ schedule.ministry.name }}</td>
+                            <td class="px-6 py-4 text-gray-600">{{ schedule.scheduled_date|date:"d/m/Y" }}</td>
+                            <td class="px-6 py-4">
+                                {% if schedule.override_conflict %}
+                                <span class="override-badge" title="Override por {{ schedule.override_by }}">
+                                    <ion-icon name="warning-outline" class="text-xs"></ion-icon>
+                                    Override
+                                </span>
+                                {% else %}
+                                <span class="text-green-600 text-sm font-medium">✓ Normal</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-6 py-4 text-right">
+                                <a href="{% url 'admin_schedule_edit' schedule.id %}" 
+                                   class="text-blue-600 hover:text-blue-800 p-2 inline-block">
+                                    <ion-icon name="create" class="text-lg"></ion-icon>
+                                </a>
+                                <button onclick="deleteSchedule({{ schedule.id }}, '{{ schedule.member.name }}')" 
+                                        class="text-red-600 hover:text-red-800 p-2">
+                                    <ion-icon name="trash" class="text-lg"></ion-icon>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-12">
+                                <ion-icon name="calendar-number-outline" class="text-6xl text-gray-300 mb-4 block mx-auto"></ion-icon>
+                                <p class="text-gray-500 text-lg">Nenhuma escala encontrada.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Paginação -->
+            {% if schedules.has_other_pages %}
+            <div class="mt-8 flex justify-center">
+                <div class="flex space-x-2">
+                    {% if schedules.has_previous %}
+                    <a href="?page={{ schedules.previous_page_number }}&search={{ search }}&date={{ date_filter }}&ministry={{ ministry_filter }}" 
+                       class="px-3 py-2 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                        Anterior
+                    </a>
+                    {% endif %}
+                    
+                    {% for num in schedules.paginator.page_range %}
+                    {% if num == schedules.number %}
+                    <span class="px-3 py-2 bg-[var(--color-primary)] text-white rounded text-sm">{{ num }}</span>
+                    {% elif num > schedules.number|add:'-3' and num < schedules.number|add:'3' %}
+                    <a href="?page={{ num }}&search={{ search }}&date={{ date_filter }}&ministry={{ ministry_filter }}" 
+                       class="px-3 py-2 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                        {{ num }}
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                    
+                    {% if schedules.has_next %}
+                    <a href="?page={{ schedules.next_page_number }}&search={{ search }}&date={{ date_filter }}&ministry={{ ministry_filter }}" 
+                       class="px-3 py-2 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                        Próximo
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function deleteSchedule(scheduleId, memberName) {
+    if (confirm(`Tem certeza que deseja remover a escala de "${memberName}"?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/admin-panel/schedules/${scheduleId}/delete/`;
+        
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden';
+        csrf.name = 'csrfmiddlewaretoken';
+        csrf.value = '{{ csrf_token }}';
+        form.appendChild(csrf);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+</script>
+{% endblock %}

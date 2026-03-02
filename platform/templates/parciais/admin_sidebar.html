@@ -30,6 +30,10 @@
             <ion-icon name="library-outline"></ion-icon>
             Ministérios
         </a>
+        <a href="{% url 'admin_schedules_list' %}" class="sidebar-item {% if 'schedules' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="calendar-number-outline"></ion-icon>
+            Escalas
+        </a>
         <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="location-outline"></ion-icon>
             Bairros

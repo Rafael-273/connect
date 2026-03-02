@@ -11,7 +11,8 @@ from .views.admin_panel import (
     api_delete_item, ministry_create_edit_api, neighborhood_create_edit_api,
     member_detail_api, visitor_detail_api, member_edit_view, visitor_edit_view, event_edit_view,
     ministry_edit_view, neighborhood_edit_view, followup_list_view, followup_edit_view,
-    followup_delete_view, followup_report_view, followup_detail_view, profile_view
+    followup_delete_view, followup_report_view, followup_detail_view, profile_view,
+    schedules_list_view, schedule_edit_view, schedule_delete_view, schedule_check_conflict_api
 )
 
 urlpatterns = [
@@ -62,4 +63,11 @@ urlpatterns = [
     path('admin-panel/api/neighborhood/', neighborhood_create_edit_api, name='admin_neighborhood_api'),
     path('admin-panel/api/member/<int:member_id>/', member_detail_api, name='admin_member_detail_api'),
     path('admin-panel/api/visitor/<int:visitor_id>/', visitor_detail_api, name='admin_visitor_detail_api'),
+    path('admin-panel/api/schedule/check-conflict/', schedule_check_conflict_api, name='admin_schedule_check_conflict_api'),
+
+    # Schedule (Escalas) URLs
+    path('admin-panel/schedules/', schedules_list_view, name='admin_schedules_list'),
+    path('admin-panel/schedules/new/', schedule_edit_view, name='admin_schedule_create'),
+    path('admin-panel/schedules/<int:schedule_id>/edit/', schedule_edit_view, name='admin_schedule_edit'),
+    path('admin-panel/schedules/<int:schedule_id>/delete/', schedule_delete_view, name='admin_schedule_delete'),
 ]
