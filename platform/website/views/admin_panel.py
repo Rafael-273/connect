@@ -22,6 +22,7 @@ from ..models.ministry import Ministry
 from ..models.neighborhood import Neighborhood
 from ..models.evangelism import Evangelized
 from ..models.follow_up import FollowUp, FollowUpReport
+from ..models.escala import Escala
 from ..forms.ministry import MinistryForm
 from ..forms.neighborhood import NeighborhoodForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
@@ -104,6 +105,18 @@ def dashboard_view(request):
         event_date__gte=timezone.now().date()
     ).order_by('event_date')[:5]
     
+    # Check if user has escalas in their ministries
+    user_has_escalas = False
+    current_member = None
+    if request.user.is_authenticated:
+        try:
+            current_member = Member.objects.get(user=request.user)
+            # Check if user belongs to any ministry that has escalas
+            user_ministries = current_member.ministry.all()
+            user_has_escalas = Escala.objects.filter(ministry__in=user_ministries).exists()
+        except Member.DoesNotExist:
+            pass
+    
     context = {
         'total_members': total_members,
         'total_visitors': total_visitors,
@@ -119,6 +132,8 @@ def dashboard_view(request):
         'recent_visitors_list': recent_visitors_list,
         'recently_converted_members': recently_converted_members,
         'upcoming_events_list': upcoming_events_list,
+        'user_has_escalas': user_has_escalas,
+        'current_member': current_member,
     }
     
     return render(request, 'admin_panel/dashboard.html', context)
@@ -1280,3 +1295,70 @@ def profile_view(request):
     else:
         form = UserProfileForm(instance=user)
     return render(request, 'admin_panel/profile.html', {'form': form, 'user': user})
+
+
+@login_required
+def minhas_escalas_view(request):
+    """Página para visualizar escalas do usuário e do ministério"""
+    try:
+        current_member = Member.objects.get(user=request.user)
+    except Member.DoesNotExist:
+        messages.error(request, 'Usuário não encontrado como membro.')
+        return redirect('admin_dashboard')
+    
+    # Get user's ministries
+    user_ministries = current_member.ministry.all()
+    
+    if not user_ministries.exists():
+        messages.error(request, 'Você não pertence a nenhum ministério.')
+        return redirect('admin_dashboard')
+    
+    # Get filter from URL parameter (default: 'minhas')
+    filter_type = request.GET.get('filter', 'minhas')
+    
+    if filter_type == 'todas':
+        # All escalas from user's ministries
+        escalas = Escala.objects.filter(
+            ministry__in=user_ministries
+        ).select_related('ministry', 'member').order_by('-date', 'start_time')
+        title = "Todas as Escalas do Ministério"
+    else:
+        # Only user's escalas
+        escalas = Escala.objects.filter(
+            member=current_member
+        ).select_related('ministry', 'member').order_by('-date', 'start_time')
+        title = "Minhas Escalas"
+    
+    # Filter by date range if provided
+    date_filter = request.GET.get('date_filter', 'all')
+    if date_filter == 'upcoming':
+        escalas = escalas.filter(date__gte=timezone.now().date())
+    elif date_filter == 'past':
+        escalas = escalas.filter(date__lt=timezone.now().date())
+    
+    # Search functionality
+    search = request.GET.get('search', '')
+    if search:
+        escalas = escalas.filter(
+            Q(title__icontains=search) |
+            Q(description__icontains=search) |
+            Q(member__name__icontains=search)
+        )
+    
+    # Pagination
+    paginator = Paginator(escalas, 20)
+    page = request.GET.get('page')
+    escalas_page = paginator.get_page(page)
+    
+    context = {
+        'escalas': escalas_page,
+        'user_ministries': user_ministries,
+        'current_member': current_member,
+        'filter_type': filter_type,
+        'date_filter': date_filter,
+        'search': search,
+        'title': title,
+        'today': timezone.now().date(),
+    }
+    
+    return render(request, 'admin_panel/minhas_escalas.html', context)

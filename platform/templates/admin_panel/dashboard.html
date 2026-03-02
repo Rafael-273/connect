@@ -154,6 +154,29 @@
                 </div>
             </div>
 
+            <!-- Minhas Escalas Card (Only if user has escalas) -->
+            {% if user_has_escalas %}
+            <div class="mb-8">
+                <div class="admin-card p-6">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div class="bg-blue-100 p-3 rounded-full">
+                                <ion-icon name="calendar-outline" class="text-blue-600 text-2xl"></ion-icon>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-800">Minhas Escalas</h3>
+                                <p class="text-gray-600">Visualize suas escalas e as do seu ministério</p>
+                            </div>
+                        </div>
+                        <a href="{% url 'minhas_escalas' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors duration-200 flex items-center space-x-2">
+                            <ion-icon name="eye-outline"></ion-icon>
+                            <span>Ver Escalas</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Recent Activity -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <!-- Recent Visitors -->

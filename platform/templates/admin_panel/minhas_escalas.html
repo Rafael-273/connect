@@ -1,0 +1,303 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} - Igreja Filadélfia{% endblock %}
+
+{% block head %}
+<style>
+    .escala-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .escala-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    }
+    
+    .tab-button {
+        background: transparent;
+        color: #64748b;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .tab-button.active {
+        background: var(--color-primary);
+        color: white;
+    }
+    
+    .tab-button:hover {
+        background: var(--color-primary);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .date-filter-select {
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: white;
+    }
+    
+    .escalas-grid {
+        display: grid;
+        gap: 20px;
+    }
+    
+    @media (min-width: 768px) {
+        .escalas-grid {
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    <!-- Sidebar -->
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <!-- Main Content -->
+    <div class="flex-1 ml-64">
+        <div class="p-6 mt-24">
+            <!-- Header -->
+            <div class="mb-8">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h1 class="text-3xl font-bold text-gray-900">{{ title }}</h1>
+                        <p class="text-gray-600 mt-2">
+                            {% if filter_type == 'todas' %}
+                                Todas as escalas dos seus ministérios: 
+                                {% for ministry in user_ministries %}
+                                    <span class="text-blue-600">{{ ministry.name }}</span>{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                Suas escalas pessoais em todos os ministérios
+                            {% endif %}
+                        </p>
+                    </div>
+                    <a href="{% url 'admin_dashboard' %}" class="flex items-center space-x-2 text-gray-600 hover:text-gray-800">
+                        <ion-icon name="arrow-back-outline"></ion-icon>
+                        <span>Voltar ao Dashboard</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filters and Tabs -->
+            <div class="bg-white p-6 rounded-lg shadow-sm mb-8">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <!-- Tabs -->
+                    <div class="flex space-x-2">
+                        <a href="{% url 'minhas_escalas' %}?filter=minhas&date_filter={{ date_filter }}&search={{ search }}" 
+                           class="tab-button {% if filter_type == 'minhas' %}active{% endif %}">
+                            <ion-icon name="person-outline"></ion-icon>
+                            Minhas Escalas
+                        </a>
+                        <a href="{% url 'minhas_escalas' %}?filter=todas&date_filter={{ date_filter }}&search={{ search }}" 
+                           class="tab-button {% if filter_type == 'todas' %}active{% endif %}">
+                            <ion-icon name="people-outline"></ion-icon>
+                            Todas as Escalas
+                        </a>
+                    </div>
+                    
+                    <!-- Filters -->
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <!-- Search -->
+                        <form method="GET" class="flex items-center space-x-2">
+                            <input type="hidden" name="filter" value="{{ filter_type }}">
+                            <input type="hidden" name="date_filter" value="{{ date_filter }}">
+                            <div class="relative">
+                                <input type="text" 
+                                       name="search" 
+                                       value="{{ search }}" 
+                                       placeholder="Buscar escalas..."
+                                       class="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <ion-icon name="search-outline" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></ion-icon>
+                            </div>
+                            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                                Buscar
+                            </button>
+                        </form>
+                        
+                        <!-- Date Filter -->
+                        <form method="GET" class="flex items-center space-x-2">
+                            <input type="hidden" name="filter" value="{{ filter_type }}">
+                            <input type="hidden" name="search" value="{{ search }}">
+                            <select name="date_filter" onchange="this.form.submit()" class="date-filter-select">
+                                <option value="all" {% if date_filter == 'all' %}selected{% endif %}>Todas as datas</option>
+                                <option value="upcoming" {% if date_filter == 'upcoming' %}selected{% endif %}>Próximas</option>
+                                <option value="past" {% if date_filter == 'past' %}selected{% endif %}>Passadas</option>
+                            </select>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Escalas Grid -->
+            {% if escalas %}
+            <div class="escalas-grid">
+                {% for escala in escalas %}
+                <div class="escala-card p-6">
+                    <!-- Header da escala -->
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900 mb-1">{{ escala.title }}</h3>
+                            <div class="flex items-center space-x-2 text-sm text-gray-600 mb-2">
+                                <ion-icon name="business-outline"></ion-icon>
+                                <span>{{ escala.ministry.name }}</span>
+                            </div>
+                            <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                <ion-icon name="person-outline"></ion-icon>
+                                <span>{{ escala.member.name }}</span>
+                            </div>
+                        </div>
+                        {% if escala.is_confirmed %}
+                        <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                            <ion-icon name="checkmark-circle-outline" class="mr-1"></ion-icon>
+                            Confirmado
+                        </span>
+                        {% else %}
+                        <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs">
+                            <ion-icon name="time-outline" class="mr-1"></ion-icon>
+                            Pendente
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Data e horário -->
+                    <div class="bg-gray-50 rounded-lg p-4 mb-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <ion-icon name="calendar-outline" class="text-blue-600"></ion-icon>
+                                <span class="font-medium text-gray-900">{{ escala.date|date:"d/m/Y" }}</span>
+                                <span class="text-gray-600">({{ escala.date|date:"l" }})</span>
+                            </div>
+                            {% if escala.start_time or escala.end_time %}
+                            <div class="flex items-center space-x-2 text-sm text-gray-600">
+                                <ion-icon name="time-outline"></ion-icon>
+                                {% if escala.start_time %}
+                                <span>{{ escala.start_time }}</span>
+                                {% endif %}
+                                {% if escala.start_time and escala.end_time %}
+                                <span>-</span>
+                                {% endif %}
+                                {% if escala.end_time %}
+                                <span>{{ escala.end_time }}</span>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <!-- Descrição -->
+                    {% if escala.description %}
+                    <div class="mb-4">
+                        <p class="text-gray-700 text-sm">{{ escala.description }}</p>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Status indicator -->
+                    <div class="flex items-center justify-between pt-4 border-t border-gray-100">
+                        <div class="text-xs text-gray-500">
+                            {% if escala.date >= today %}
+                                {% if escala.date == today %}
+                                    <span class="text-blue-600 font-medium">Hoje</span>
+                                {% else %}
+                                    <span>Em {{ escala.date|timeuntil }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span>{{ escala.date|timesince }} atrás</span>
+                            {% endif %}
+                        </div>
+                        
+                        {% if escala.member == current_member %}
+                        <div class="flex items-center space-x-1 text-blue-600 text-xs">
+                            <ion-icon name="person"></ion-icon>
+                            <span>Você</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination -->
+            {% if escalas.has_other_pages %}
+            <div class="mt-8 flex justify-center">
+                <nav class="flex space-x-2">
+                    {% if escalas.has_previous %}
+                    <a href="?page={{ escalas.previous_page_number }}&filter={{ filter_type }}&date_filter={{ date_filter }}&search={{ search }}" 
+                       class="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                        Anterior
+                    </a>
+                    {% endif %}
+                    
+                    <span class="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md">
+                        Página {{ escalas.number }} de {{ escalas.paginator.num_pages }}
+                    </span>
+                    
+                    {% if escalas.has_next %}
+                    <a href="?page={{ escalas.next_page_number }}&filter={{ filter_type }}&date_filter={{ date_filter }}&search={{ search }}" 
+                       class="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50">
+                        Próxima
+                    </a>
+                    {% endif %}
+                </nav>
+            </div>
+            {% endif %}
+            {% else %}
+            <!-- Empty state -->
+            <div class="bg-white rounded-lg shadow-sm p-12 text-center">
+                <div class="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">
+                    <ion-icon name="calendar-outline" class="text-gray-400 text-4xl"></ion-icon>
+                </div>
+                <h3 class="text-xl font-semibold text-gray-900 mb-2">
+                    {% if filter_type == 'todas' %}
+                        Nenhuma escala encontrada
+                    {% else %}
+                        Você não tem escalas
+                    {% endif %}
+                </h3>
+                <p class="text-gray-600 mb-6">
+                    {% if filter_type == 'todas' %}
+                        Não há escalas cadastradas para os ministérios dos quais você faz parte.
+                    {% else %}
+                        Você ainda não foi escalado para nenhuma atividade.
+                    {% endif %}
+                </p>
+                {% if search or date_filter != 'all' %}
+                <a href="{% url 'minhas_escalas' %}?filter={{ filter_type }}" 
+                   class="inline-flex items-center space-x-2 text-blue-600 hover:text-blue-800">
+                    <ion-icon name="refresh-outline"></ion-icon>
+                    <span>Limpar filtros</span>
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-submit search form on enter
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.target.closest('form').submit();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -11,7 +11,7 @@ from .views.admin_panel import (
     api_delete_item, ministry_create_edit_api, neighborhood_create_edit_api,
     member_detail_api, visitor_detail_api, member_edit_view, visitor_edit_view, event_edit_view,
     ministry_edit_view, neighborhood_edit_view, followup_list_view, followup_edit_view,
-    followup_delete_view, followup_report_view, followup_detail_view, profile_view
+    followup_delete_view, followup_report_view, followup_detail_view, profile_view, minhas_escalas_view
 )
 
 urlpatterns = [
@@ -47,6 +47,9 @@ urlpatterns = [
     path('admin-panel/neighborhoods/new/', neighborhood_edit_view, name='admin_neighborhood_create'),
     path('admin-panel/neighborhoods/<int:neighborhood_id>/edit/', neighborhood_edit_view, name='admin_neighborhood_edit'),
     path('admin-panel/profile/', profile_view, name='admin_profile'),
+    
+    # Escalas URLs
+    path('minhas-escalas/', minhas_escalas_view, name='minhas_escalas'),
     
     # Follow-up URLs
     path('admin-panel/followups/', followup_list_view, name='admin_followups_list'),
