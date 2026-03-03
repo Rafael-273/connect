@@ -17,3 +17,4 @@ from .canteen import CanteenDebtor
 from .word_of_knowledge import WordOfKnowledge, Healing
 from .schedule import Team, MonthlySchedule, ScheduleDay
 from .music import Music
+from .prayer_request import PrayerRequest
