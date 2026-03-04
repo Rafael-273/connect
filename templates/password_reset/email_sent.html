@@ -1,35 +1,84 @@
-{% extends 'base.html' %}
+{% extends 'login_base.html' %}
+{% load static %}
 
-{% block title %}Email de Redefinição Enviado{% endblock %}
+{% block title %}E-mail Enviado - Igreja Filadélfia{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --church-primary: #C90905;
+        --church-secondary: #260200;
+    }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
+    }
+    .animate-fade-in-up { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-scale-in { animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-bounce-slow { animation: float 3s ease-in-out infinite; }
+    .text-gradient {
+        background: linear-gradient(45deg, white, rgba(255, 255, 255, 0.8));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    html, body { overflow-x: hidden; width: 100%; height: 100%; position: fixed; margin: 0; padding: 0; }
+    .login-wrapper { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
+    .login-card-container { height: 100vh; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+    .login-card-container::-webkit-scrollbar { display: none; }
+    @media (max-width: 640px) {
+        .text-gradient { -webkit-text-fill-color: white; background: none; }
+        .mobile-full-height { min-height: 100vh; }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container mt-5 mb-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <div class="card-body p-4 p-lg-5 text-center">
-                    <div class="mb-4">
-                        <i class="fas fa-envelope-open-text fa-4x text-success"></i>
+<body class="overflow-hidden" style="font-family: 'Giga Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div class="login-wrapper" style="background: linear-gradient(135deg, var(--church-primary) 0%, var(--church-secondary) 100%);">
+        <div class="login-card-container flex items-center justify-center p-0 sm:p-3 lg:p-8">
+            <div class="bg-white rounded-none sm:rounded-2xl lg:rounded-3xl shadow-none sm:shadow-2xl overflow-hidden w-full max-w-none sm:max-w-md mobile-full-height sm:min-h-0 animate-scale-in">
+                <div class="p-8 sm:p-10 flex flex-col items-center text-center">
+
+                    <!-- Ícone de email -->
+                    <div class="w-20 h-20 rounded-full flex items-center justify-center mb-6 animate-bounce-slow" style="background: linear-gradient(135deg, #fef3c7, #fde68a);">
+                        <svg class="w-10 h-10" style="color: #d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
                     </div>
-                    
-                    <h2 class="card-title mb-4">Email Enviado!</h2>
-                    
-                    <p class="text-muted mb-4">
-                        Enviamos um email com instruções para redefinir sua senha. 
-                        Se uma conta existir com o email que você forneceu, você receberá essas instruções em breve.
+
+                    <h2 class="text-2xl font-bold text-gray-900 mb-3 animate-fade-in-up" style="animation-delay: 0.1s; animation-fill-mode: both;">E-mail Enviado!</h2>
+
+                    <p class="text-gray-600 mb-4 leading-relaxed animate-fade-in-up" style="animation-delay: 0.2s; animation-fill-mode: both;">
+                        Enviamos as instruções de recuperação de senha para o seu e-mail.
+                        Verifique sua caixa de entrada e siga o link recebido.
                     </p>
-                    
-                    <p class="text-muted mb-4">
-                        Se você não receber um email, por favor verifique se o endereço fornecido está correto 
-                        e verifique sua pasta de spam.
+
+                    <p class="text-sm text-gray-400 mb-8 animate-fade-in-up" style="animation-delay: 0.3s; animation-fill-mode: both;">
+                        Não recebeu? Verifique a pasta de spam ou tente novamente com outro e-mail.
                     </p>
-                    
-                    <div class="mt-4">
-                        <a href="{% url 'admin_login' %}" class="btn btn-primary">Voltar ao Login</a>
+
+                    <div class="flex flex-col sm:flex-row gap-3 w-full animate-fade-in-up" style="animation-delay: 0.4s; animation-fill-mode: both;">
+                        <a href="{% url 'member_login' %}"
+                           class="flex-1 py-3 px-6 text-white rounded-xl font-semibold text-sm text-center transition-all duration-300 hover:shadow-lg transform hover:-translate-y-0.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800">
+                            Voltar ao Login
+                        </a>
+                        <a href="{% url 'password_reset_request' %}"
+                           class="flex-1 py-3 px-6 rounded-xl font-semibold text-sm text-center border-2 border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 transition-all duration-300">
+                            Tentar novamente
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+</body>
 {% endblock %}

@@ -316,6 +316,16 @@
                     </button>
                 </form>
                 
+                <!-- Esqueci a senha -->
+                <div class="text-center mt-4 animate-fade-in-left" style="animation-delay: 0.55s; animation-fill-mode: both;">
+                    <a href="{% url 'password_reset_request' %}" class="text-sm font-medium transition-colors duration-200 hover:underline"
+                       style="color: var(--church-primary);"
+                       onmouseover="this.style.color='var(--church-secondary)'"
+                       onmouseout="this.style.color='var(--church-primary)'">
+                        Esqueceu sua senha?
+                    </a>
+                </div>
+                
                 <!-- Footer -->
                 <div class="text-center mt-6 sm:mt-8 animate-fade-in-left" style="animation-delay: 0.6s; animation-fill-mode: both;">
                     <p class="text-sm sm:text-sm text-gray-600">

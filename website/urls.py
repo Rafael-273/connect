@@ -62,6 +62,25 @@ urlpatterns = [
     path('event/list', EventListView.as_view(), name='event_list'),
     path('event/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
     
+    # Password Reset URLs
+    path('password-reset/', auth_views.PasswordResetView.as_view(
+        template_name='password_reset/request.html',
+        email_template_name='password_reset/email.html',
+        html_email_template_name='password_reset/email_html.html',
+        subject_template_name='password_reset/email_subject.txt',
+        success_url='/password-reset/sent/',
+    ), name='password_reset_request'),
+    path('password-reset/sent/', auth_views.PasswordResetDoneView.as_view(
+        template_name='password_reset/email_sent.html',
+    ), name='password_reset_done'),
+    path('password-reset/confirm/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
+        template_name='password_reset/confirm.html',
+        success_url='/password-reset/complete/',
+    ), name='password_reset_confirm'),
+    path('password-reset/complete/', auth_views.PasswordResetCompleteView.as_view(
+        template_name='password_reset/complete.html',
+    ), name='password_reset_complete'),
+
     # Authentication URLs (Unified Login System)
     path('login/', MemberLoginView.as_view(), name='member_login'),
     path('admin-login/', MemberLoginView.as_view(), name='admin_login'),  # Redirect old admin login to unified login
