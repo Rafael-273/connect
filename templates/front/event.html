@@ -25,6 +25,10 @@
     .fade-in {
         animation: fadeInUp 0.8s ease-out;
     }
+
+    .footer-color {
+        background-color: var(--color-danger) !important;
+    }
     
     .event-banner {
         position: relative;
@@ -83,13 +87,14 @@
     .event-details-card {
         position: relative;
         overflow: hidden;
-        transition: all 0.3s ease;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         transform: translateY(0);
     }
     
     .event-details-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+        border-color: rgba(201, 9, 5, 0.15);
     }
     
     .gallery-title {
@@ -121,6 +126,7 @@
     .gallery-image:hover {
         transform: scale(1.03);
         box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+        border-color: rgba(201, 9, 5, 0.15);
     }
 </style>
 {% endblock %}

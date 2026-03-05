@@ -1,7 +1,7 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView
-from .views.home import HomeView
+from .views.home import HomeView, TestimonyListView, ContactView
 from .views.visitor import VisitorCreateView, VisitorListView
 from .views.member import (
     MemberCreateView, 
@@ -53,6 +53,8 @@ from .views.admin_panel import (
 
 urlpatterns = [
     path('', HomeView.as_view(), name='home'),
+    path('testemunhos/', TestimonyListView.as_view(), name='testemunhos'),
+    path('contato/', ContactView.as_view(), name='contato'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
     path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
     path('new_converts/list/', NewConvertsListView.as_view(), name='new_converts_list'),
