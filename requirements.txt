@@ -20,6 +20,7 @@ typing_extensions==4.12.2
 urllib3==2.3.0
 whitenoise==6.8.2
 channels==4.0.0
+daphne==4.0.0
 azure-cognitiveservices-speech==1.25.0
 googletrans==4.0.0-rc1
 azure-identity==1.12.0
