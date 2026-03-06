@@ -75,11 +75,12 @@ Testemunhos - Igreja Filadélfia
 
     .instagram-embed-container iframe {
         position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
+        top: -56px;
+        left: -2px;
+        width: calc(100% + 4px);
+        height: calc(100% + 112px);
         border: none;
+        pointer-events: auto;
     }
 
     .instagram-placeholder {
@@ -130,22 +131,22 @@ Testemunhos - Igreja Filadélfia
 
 {% block content %}
 <!-- Hero Section -->
-<div class="relative w-full min-h-[75vh] md:min-h-[65vh] overflow-hidden flex items-center justify-center pt-40 pb-16">
+<div class="relative w-full min-h-[75vh] md:min-h-[65vh] overflow-hidden flex items-center justify-center pt-28 sm:pt-40 pb-8 sm:pb-16">
     <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#C90905]/20 via-black/80 to-black z-10"></div>
     <div class="absolute inset-0 bg-black z-0"></div>
 
     <div class="relative z-20 flex flex-col justify-center items-center w-full h-full px-4 sm:px-8 text-center">
-        <div class="inline-block opacity-0 fade-in-up-visible mb-[-1.3rem]" style="animation-delay: 0.1s;">
+        <div class="inline-block opacity-0 fade-in-up-visible sm:mb-[-1.3rem]" style="animation-delay: 0.1s;">
             <span class="text-white font-semibold text-sm uppercase tracking-wider">Vidas Transformadas</span>
         </div>
-        <h1 class="text-white font-bold text-5xl sm:text-6xl lg:text-[7rem] tracking-tight opacity-0 fade-in-up-visible" style="animation-delay: 0.2s;">
+        <h1 class="text-white font-bold text-5xl sm:text-5xl lg:text-[7rem] tracking-tight opacity-0 fade-in-up-visible" style="animation-delay: 0.2s;">
             Nossos
         </h1>
-        <h1 class="font-bold text-[3.5rem] sm:text-6xl lg:text-[6rem] tracking-tight mt-[-0.8rem] opacity-0 fade-in-up-visible" style="color: var(--color-danger); animation-delay: 0.3s;">
+        <h1 class="font-bold text-4xl sm:text-5xl lg:text-[6rem] tracking-tight sm:mt-[-0.8rem] opacity-0 fade-in-up-visible" style="color: var(--color-danger); animation-delay: 0.3s;">
             Testemunhos
         </h1>
         <div class="section-divider mt-6 mb-4 opacity-0 fade-in-up-visible" style="animation-delay: 0.4s;"></div>
-        <p class="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto opacity-0 fade-in-up-visible" style="animation-delay: 0.5s;">
+        <p class="text-gray-400 text-base md:text-xl max-w-2xl mx-auto opacity-0 fade-in-up-visible" style="animation-delay: 0.5s;">
             Histórias reais de pessoas que experimentaram o poder e o amor de Deus
         </p>
     </div>
@@ -154,7 +155,7 @@ Testemunhos - Igreja Filadélfia
 </div>
 
 <!-- Filter Bar -->
-<div class="w-full px-4 md:px-8 py-6 flex flex-wrap gap-3 justify-center">
+<div class="w-full px-4 md:px-8 py-4 md:py-6 flex flex-wrap gap-2 md:gap-3 justify-center">
     <button class="filter-btn active" data-filter="all">Todos</button>
     <button class="filter-btn" data-filter="healing">Cura</button>
     <button class="filter-btn" data-filter="salvation">Salvação</button>
@@ -164,7 +165,7 @@ Testemunhos - Igreja Filadélfia
 </div>
 
 <!-- Testimonies Grid -->
-<div class="w-full px-4 md:px-8 lg:px-12 pb-20">
+<div class="w-full px-4 md:px-8 lg:px-12 pb-12 md:pb-20">
     {% if testimonies %}
     <div id="testimonies-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
         {% for testimony in testimonies %}
@@ -187,36 +188,19 @@ Testemunhos - Igreja Filadélfia
             </div>
             {% endif %}
 
-            <div class="p-6 flex flex-col gap-4">
-                <div class="flex items-center gap-4">
-                    {% if testimony.photo and testimony.instagram_url %}
-                    <div class="w-12 h-12 rounded-full overflow-hidden border-2 border-[#C90905]/30 flex-shrink-0">
-                        <img src="{{ testimony.photo.url }}" alt="{{ testimony.author_name }}" class="w-full h-full object-cover">
-                    </div>
-                    {% elif not testimony.photo %}
-                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-[#C90905]/20 to-[#C90905]/5 flex items-center justify-center flex-shrink-0 border-2 border-[#C90905]/30">
-                        <ion-icon name="person" class="text-2xl" style="color: #C90905;"></ion-icon>
-                    </div>
-                    {% endif %}
-                    <div>
-                        <h3 class="text-lg font-bold text-white group-hover:text-[#C90905] transition-colors">
-                            {{ testimony.author_name }}
-                        </h3>
-                        <span class="category-badge">{{ testimony.get_category_display }}</span>
-                    </div>
-                </div>
+            <div class="p-6 flex flex-col gap-3">
+                <span class="category-badge self-start">{{ testimony.get_category_display }}</span>
 
-                <p class="text-gray-300 text-base leading-relaxed">
-                    "{{ testimony.content|truncatewords:50 }}"
+                <p class="text-gray-300 text-base leading-relaxed font-medium">
+                    "{{ testimony.title }}"
                 </p>
 
-                {% if testimony.testimony_date %}
-                <div class="pt-3 border-t border-white/10">
-                    <span class="text-gray-500 text-sm flex items-center gap-2">
-                        <ion-icon name="calendar-outline" class="text-base"></ion-icon>
-                        {{ testimony.testimony_date|date:"d/m/Y" }}
-                    </span>
-                </div>
+                {% if testimony.instagram_url %}
+                <a href="{{ testimony.instagram_url }}" target="_blank" rel="noopener noreferrer"
+                   class="flex items-center gap-2 text-sm text-gray-500 hover:text-[#C90905] transition-colors mt-1 self-start">
+                    <ion-icon name="logo-instagram" class="text-base"></ion-icon>
+                    Ver no Instagram
+                </a>
                 {% endif %}
             </div>
         </div>

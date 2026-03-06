@@ -79,9 +79,15 @@ Contato - Igreja Filadélfia
     }
 
     #contact-map {
-        height: 450px;
+        height: 300px;
         border-radius: 1.5rem;
         overflow: hidden;
+    }
+
+    @media (min-width: 640px) {
+        #contact-map {
+            height: 450px;
+        }
     }
 
     .social-btn {
@@ -121,18 +127,18 @@ Contato - Igreja Filadélfia
 
 {% block content %}
 <!-- Hero Section -->
-<div class="relative w-full min-h-[75vh] md:min-h-[65vh] overflow-hidden flex items-center justify-center pt-40 pb-24">
+<div class="relative w-full min-h-[75vh] md:min-h-[65vh] overflow-hidden flex items-center justify-center pt-28 sm:pt-40 pb-12 sm:pb-24">
     <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#C90905]/20 via-black/80 to-black z-10"></div>
     <div class="absolute inset-0 bg-black z-0"></div>
 
     <div class="relative z-20 flex flex-col justify-center items-center w-full h-full px-4 sm:px-8 text-center">
-        <div class="inline-block mb-[-1.3rem] opacity-0 fade-in-up-visible" style="animation-delay: 0.1s;">
+        <div class="inline-block sm:mb-[-1.3rem] opacity-0 fade-in-up-visible" style="animation-delay: 0.1s;">
             <span class="text-[#C90905] font-semibold text-sm uppercase tracking-wider">Fale Conosco</span>
         </div>
-        <h1 class="text-white font-bold text-5xl sm:text-6xl lg:text-[7rem] tracking-tight opacity-0 fade-in-up-visible" style="animation-delay: 0.2s;">
+        <h1 class="text-white font-bold text-4xl sm:text-6xl lg:text-[7rem] tracking-tight opacity-0 fade-in-up-visible" style="animation-delay: 0.2s;">
             Entre em
         </h1>
-        <h1 class="font-bold text-[3.5rem] sm:text-6xl lg:text-[6rem] tracking-tight mt-[-0.8rem] opacity-0 fade-in-up-visible" style="color: var(--color-danger); animation-delay: 0.3s;">
+        <h1 class="font-bold text-3xl sm:text-6xl lg:text-[6rem] tracking-tight sm:mt-[-0.8rem] opacity-0 fade-in-up-visible" style="color: var(--color-danger); animation-delay: 0.3s;">
             Contato
         </h1>
         <div class="section-divider mt-6 mb-4 opacity-0 fade-in-up-visible" style="animation-delay: 0.4s;"></div>
@@ -145,7 +151,7 @@ Contato - Igreja Filadélfia
 </div>
 
 <!-- Contact Info Cards -->
-<section class="w-full px-4 md:px-8 lg:px-12 py-16 max-w-7xl mx-auto">
+<section class="w-full px-4 md:px-8 lg:px-12 py-8 md:py-16 max-w-7xl mx-auto">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
         <!-- Address -->
         <div class="glass-card p-8 rounded-3xl group">
@@ -174,8 +180,8 @@ Contato - Igreja Filadélfia
             <p class="text-gray-400 text-base leading-relaxed">
                 Ligue ou envie mensagem
             </p>
-            <a href="tel:+5521999999999" class="block mt-2 text-white text-lg font-semibold hover:text-[#C90905] transition-colors">
-                (21) 99999-9999
+            <a href="" class="block mt-2 text-white text-lg font-semibold hover:text-[#C90905] transition-colors">
+                (21) 97492-3166
             </a>
         </div>
 
@@ -189,19 +195,19 @@ Contato - Igreja Filadélfia
                 Envie-nos uma mensagem
             </p>
             <a href="mailto:contato@igrejafiladelfia.com.br" class="block mt-2 text-white text-lg font-semibold hover:text-[#C90905] transition-colors break-all">
-                contato@igrejafiladelfia.com.br
+                contatofiladelfiaitaipuacu@gmail.com
             </a>
         </div>
     </div>
 </section>
 
 <!-- Service Times -->
-<section class="w-full px-4 md:px-8 lg:px-12 py-16 max-w-7xl mx-auto">
-    <div class="text-center mb-12">
+<section id="horarios" class="w-full px-4 md:px-8 lg:px-12 py-8 md:py-16 max-w-7xl mx-auto">
+    <div class="text-center mb-8 md:mb-12">
         <div class="inline-block mb-4">
             <span class="text-[#C90905] font-semibold text-sm uppercase tracking-wider">Programação</span>
         </div>
-        <h2 class="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">
+        <h2 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-4 md:mb-6">
             Horários dos <span class="gradient-text">Cultos</span>
         </h2>
         <div class="section-divider mb-6"></div>
@@ -238,12 +244,12 @@ Contato - Igreja Filadélfia
 </section>
 
 <!-- Social Media -->
-<section class="w-full px-4 md:px-8 lg:px-12 py-16 max-w-4xl mx-auto">
-    <div class="text-center mb-12">
+<section class="w-full px-4 md:px-8 lg:px-12 py-8 md:py-16 max-w-4xl mx-auto">
+    <div class="text-center mb-8 md:mb-12">
         <div class="inline-block mb-4">
             <span class="text-[#C90905] font-semibold text-sm uppercase tracking-wider">Redes Sociais</span>
         </div>
-        <h2 class="text-4xl md:text-5xl lg:text-6xl font-black text-white mb-6">
+        <h2 class="text-3xl md:text-5xl lg:text-6xl font-black text-white mb-4 md:mb-6">
             Siga-nos nas <span class="gradient-text">Redes</span>
         </h2>
         <div class="section-divider mb-6"></div>
@@ -269,7 +275,7 @@ Contato - Igreja Filadélfia
 </section>
 
 <!-- Map Section -->
-<section class="w-full px-4 md:px-8 lg:px-12 py-16 max-w-7xl mx-auto">
+<section class="w-full px-4 md:px-8 lg:px-12 py-8 md:py-16 max-w-7xl mx-auto">
     <div class="glass-card p-6 md:p-8 rounded-3xl">
         <div class="text-center mb-8">
             <h3 class="text-3xl font-bold text-white mb-3">

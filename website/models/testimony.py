@@ -16,7 +16,9 @@ class Testimony(BaseModel):
 
     author_name = models.CharField(
         max_length=150,
-        verbose_name='Nome do Autor'
+        verbose_name='Nome do Autor',
+        blank=True,
+        default=''
     )
     member = models.ForeignKey(
         'Member',
@@ -32,7 +34,10 @@ class Testimony(BaseModel):
         null=True,
         verbose_name='Foto'
     )
-    content = models.TextField(verbose_name='Testemunho')
+    title = models.CharField(
+        max_length=255,
+        verbose_name='Título do Testemunho'
+    )
     category = models.CharField(
         max_length=20,
         choices=CATEGORY_CHOICES,
@@ -76,4 +81,4 @@ class Testimony(BaseModel):
         return ''
 
     def __str__(self):
-        return f"{self.author_name} - {self.get_category_display()}"
+        return f"{self.title} - {self.get_category_display()}"

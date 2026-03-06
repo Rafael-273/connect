@@ -48,7 +48,8 @@ from .views.admin_panel import (
     followup_delete_view, followup_report_view, followup_detail_view, profile_view,
     canteen_list_view, canteen_edit_view, canteen_detail_view, canteen_delete_view,
     canteen_toggle_paid, canteen_api, templates_view, reports_view,
-    template_create_view, template_edit_view, template_detail_view, template_delete_view
+    template_create_view, template_edit_view, template_detail_view, template_delete_view,
+    testimony_list_view, testimony_edit_view, testimony_delete_view, testimony_toggle_view
 )
 
 urlpatterns = [
@@ -197,6 +198,13 @@ urlpatterns = [
     path('admin-panel/cantina/<int:debtor_id>/toggle-paid/', canteen_toggle_paid, name='admin_cantina_toggle_paid'),
     path('admin-panel/api/cantina/', canteen_api, name='admin_cantina_api'),
     
+    # Testemunhos URLs
+    path('admin-panel/testimonies/', testimony_list_view, name='admin_testimonies_list'),
+    path('admin-panel/testimonies/new/', testimony_edit_view, name='admin_testimony_create'),
+    path('admin-panel/testimonies/<int:testimony_id>/edit/', testimony_edit_view, name='admin_testimony_edit'),
+    path('admin-panel/testimonies/<int:testimony_id>/delete/', testimony_delete_view, name='admin_testimony_delete'),
+    path('admin-panel/testimonies/<int:testimony_id>/toggle/', testimony_toggle_view, name='admin_testimony_toggle'),
+
     # APIs
     path('admin-panel/api/delete/', api_delete_item, name='admin_api_delete'),
     path('admin-panel/api/ministry/', ministry_create_edit_api, name='admin_ministry_api'),

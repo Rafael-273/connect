@@ -263,7 +263,7 @@ Igreja Filadélfia - Uma família que acolhe
 </section>
 
 <!-- About Section -->
-<section class="py-32 px-4 sm:px-6 lg:px-8 bg-black relative overflow-hidden">
+<section class="py-16 lg:py-32 px-4 sm:px-6 lg:px-8 bg-black relative overflow-hidden">
     <!-- Background decoration -->
     <div class="absolute inset-0 opacity-5">
         <div class="absolute top-20 left-10 w-72 h-72 bg-red-500 rounded-full blur-3xl"></div>
@@ -271,27 +271,27 @@ Igreja Filadélfia - Uma família que acolhe
     </div>
     
     <div class="container mx-auto max-w-7xl relative z-10">
-        <div class="text-center mb-20">
+        <div class="text-center mb-10 md:mb-20">
             <div class="inline-block mb-4">
                 <span class="text-red-500 font-semibold text-sm uppercase tracking-wider">Nossa Essência</span>
             </div>
-            <h2 class="text-5xl md:text-6xl lg:text-7xl font-black text-white mb-6">
+            <h2 class="text-4xl md:text-6xl lg:text-7xl font-black text-white mb-6">
                 Quem <span class="gradient-text">Somos</span>
             </h2>
             <div class="section-divider mb-6"></div>
             <p class="text-gray-400 text-xl max-w-2xl mx-auto">
-                Uma família movida pelo Espírito Santo, onde você pode ser e pertencer
+                Uma família para você ser e pertencer
             </p>
         </div>
         
-        <div class="grid lg:grid-cols-2 gap-16 items-center">
+        <div class="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
             <!-- Left Content -->
             <div class="space-y-8">
                 <div class="space-y-6">
-                    <p class="text-gray-300 text-xl leading-relaxed">
+                    <p class="text-gray-300 text-lg md:text-xl leading-relaxed">
                         A <strong class="text-white font-bold">Igreja Filadélfia</strong> é uma comunidade cristã vibrante que tem como fundamento o <strong class="text-red-500">amor de Cristo</strong> e o <strong class="text-red-500">mover do Espírito Santo</strong>.
                     </p>
-                    <p class="text-gray-400 text-lg leading-relaxed">
+                    <p class="text-gray-400 text-base md:text-lg leading-relaxed">
                         Somos uma <span class="text-white font-semibold">família profética</span> que busca o mover do Espírito, onde o <span class="text-white font-semibold">acolhimento sincero</span>, os <span class="text-white font-semibold">dons espirituais</span> e as <span class="text-white font-semibold">curas e milagres</span> fazem parte da nossa caminhada diária.
                     </p>
                 </div>
@@ -349,8 +349,8 @@ Igreja Filadélfia - Uma família que acolhe
             </div>
             
             <!-- Right Content - Image/Visual -->
-            <div class="relative">
-                <div class="aspect-square rounded-3xl overflow-hidden shadow-2xl relative group">
+            <div class="relative mt-6 lg:mt-0">
+                <div class="aspect-video lg:aspect-square rounded-3xl overflow-hidden shadow-2xl relative group">
                     <!-- Imagem de fundo -->
                     <img src="{% static 'assets/pastor.jpg' %}" alt="Pastor" class="absolute inset-0 w-full h-full object-cover z-0">
                     <div class="absolute inset-0 bg-gradient-to-br from-red-600/30 to-red-900/30 z-10 group-hover:opacity-50 transition-opacity"></div>
@@ -367,13 +367,13 @@ Igreja Filadélfia - Uma família que acolhe
 </section>
 
 <!-- Values Section -->
-<section class="px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-black via-neutral-950 to-black relative">
+<section class="py-16 lg:py-32 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-black via-neutral-950 to-black relative">
     <div class="container mx-auto max-w-7xl">
-        <div class="text-center mb-20">
+        <div class="text-center mb-10 md:mb-20">
             <div class="inline-block mb-4">
                 <span class="text-red-500 font-semibold text-sm uppercase tracking-wider">Nossa Identidade</span>
             </div>
-            <h2 class="text-5xl md:text-6xl lg:text-7xl font-black text-white mb-6">
+            <h2 class="text-4xl md:text-6xl lg:text-7xl font-black text-white mb-6">
                 O Que Nos <span class="gradient-text">Define</span>
             </h2>
             <div class="section-divider mb-6"></div>
@@ -465,18 +465,18 @@ Igreja Filadélfia - Uma família que acolhe
 </section>
 
 <!-- Testimonies Section -->
-<section class="py-32 px-4 sm:px-6 lg:px-8 bg-black relative overflow-hidden">
+<section class="py-16 lg:py-32 px-4 sm:px-6 lg:px-8 bg-black relative overflow-hidden">
     <div class="absolute inset-0 opacity-5">
         <div class="absolute top-20 right-10 w-72 h-72 bg-red-500 rounded-full blur-3xl"></div>
         <div class="absolute bottom-20 left-10 w-96 h-96 bg-red-600 rounded-full blur-3xl"></div>
     </div>
     
     <div class="container mx-auto max-w-7xl relative z-10">
-        <div class="text-center mb-20">
+        <div class="text-center mb-10 md:mb-20">
             <div class="inline-block mb-4">
                 <span class="text-red-500 font-semibold text-sm uppercase tracking-wider">Vidas Transformadas</span>
             </div>
-            <h2 class="text-5xl md:text-6xl lg:text-7xl font-black text-white mb-6">
+            <h2 class="text-4xl md:text-6xl lg:text-7xl font-black text-white mb-6">
                 Nossos <span class="gradient-text">Testemunhos</span>
             </h2>
             <div class="section-divider mb-6"></div>
@@ -488,42 +488,44 @@ Igreja Filadélfia - Uma família que acolhe
         {% if testimonies %}
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {% for testimony in testimonies %}
-            <div class="glass-card p-8 rounded-3xl group relative overflow-hidden">
-                <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-red-500/10 to-transparent rounded-bl-full"></div>
-                
-                <div class="flex items-center gap-4 mb-6">
-                    {% if testimony.photo %}
-                    <div class="w-16 h-16 rounded-full overflow-hidden border-2 border-red-500/30 flex-shrink-0">
-                        <img src="{{ testimony.photo.url }}" alt="{{ testimony.author_name }}" class="w-full h-full object-cover">
-                    </div>
-                    {% else %}
-                    <div class="w-16 h-16 rounded-full bg-gradient-to-br from-red-500/20 to-red-600/10 flex items-center justify-center flex-shrink-0 border-2 border-red-500/30">
-                        <ion-icon name="person" class="text-3xl text-red-500"></ion-icon>
-                    </div>
-                    {% endif %}
-                    <div>
-                        <h3 class="text-xl font-bold text-white group-hover:text-red-500 transition-colors">
-                            {{ testimony.author_name }}
-                        </h3>
-                        <span class="text-sm text-red-500 font-medium">{{ testimony.get_category_display }}</span>
-                    </div>
+            <div class="glass-card rounded-3xl group relative overflow-hidden flex flex-col">
+                {% if testimony.instagram_embed_url %}
+                <div style="position:relative;width:100%;padding-bottom:125%;overflow:hidden;background:#1a1a1a;">
+                    <iframe
+                        src="{{ testimony.instagram_embed_url }}"
+                        scrolling="no"
+                        allowtransparency="true"
+                        loading="lazy"
+                        style="position:absolute;top:-56px;left:-2px;width:calc(100% + 4px);height:calc(100% + 112px);border:none;"
+                    ></iframe>
                 </div>
-                
-                <div class="relative">
-                    <ion-icon name="chatbubble-ellipses" class="text-4xl text-red-500/10 absolute -top-2 -left-1"></ion-icon>
-                    <p class="text-gray-300 leading-relaxed text-lg pl-4">
-                        "{{ testimony.content|truncatewords:40 }}"
-                    </p>
-                </div>
-                
-                {% if testimony.testimony_date %}
-                <div class="mt-6 pt-4 border-t border-white/10">
-                    <span class="text-gray-500 text-sm flex items-center gap-2">
-                        <ion-icon name="calendar-outline" class="text-base"></ion-icon>
-                        {{ testimony.testimony_date|date:"d/m/Y" }}
-                    </span>
+                {% elif testimony.photo %}
+                <div class="w-full h-56 overflow-hidden">
+                    <img src="{{ testimony.photo.url }}" alt="" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
                 </div>
                 {% endif %}
+
+                <div class="p-6 flex flex-col gap-3 flex-1">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-red-500/10 to-transparent rounded-bl-full pointer-events-none"></div>
+                    <span class="text-xs font-semibold uppercase tracking-widest text-red-500 border border-red-500/30 bg-red-500/10 px-3 py-1 rounded-full self-start">{{ testimony.get_category_display }}</span>
+
+                    <div class="relative mt-1">
+                        <ion-icon name="chatbubble-ellipses" class="text-4xl text-red-500/10 absolute -top-2 -left-1"></ion-icon>
+                        <p class="text-gray-300 leading-relaxed text-base pl-4">
+                            "{{ testimony.title }}"
+                        </p>
+                    </div>
+
+                    {% if testimony.instagram_url %}
+                    <div class="mt-auto pt-3 border-t border-white/10">
+                        <a href="{{ testimony.instagram_url }}" target="_blank" rel="noopener noreferrer"
+                           class="flex items-center gap-2 text-sm text-gray-500 hover:text-red-500 transition-colors">
+                            <ion-icon name="logo-instagram" class="text-base"></ion-icon>
+                            Ver no Instagram
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -546,7 +548,7 @@ Igreja Filadélfia - Uma família que acolhe
 </section>
 
 <!-- CTA Section -->
-<section class="pt-32 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-black">
+<section class="pt-16 lg:pt-32 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-black">
     <!-- Animated background -->
     <div class="absolute inset-0">
         <div class="absolute inset-0 bg-gradient-to-br from-red-600/20 via-black to-red-900/20"></div>
@@ -555,23 +557,23 @@ Igreja Filadélfia - Uma família que acolhe
     </div>
     
     <div class="container mx-auto max-w-6xl relative z-10">
-        <div class="text-center mb-16">
+        <div class="text-center mb-10 md:mb-16">
             <div class="inline-block mb-6">
                 <span class="px-6 py-2 bg-red-500/10 border border-red-500/30 rounded-full text-red-500 font-semibold text-sm uppercase tracking-wider">
                     Junte-se a nós
                 </span>
             </div>
-            <h2 class="text-5xl md:text-6xl lg:text-7xl font-black text-white mb-8 leading-tight">
+            <h2 class="text-4xl md:text-6xl lg:text-7xl font-black text-white mb-6 md:mb-8 leading-tight">
                 Venha <span class="gradient-text">Pertencer!</span>
             </h2>
-            <p class="text-2xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
+            <p class="text-lg md:text-2xl text-gray-300 mb-8 md:mb-12 max-w-3xl mx-auto leading-relaxed">
                 Aqui você encontra uma <strong class="text-white font-bold">família para ser e pertencer</strong>. <br/>
                 Venha experimentar o amor de Deus e o mover do Espírito Santo conosco!
             </p>
         </div>
         
         <!-- Info Cards -->
-        <div class="grid md:grid-cols-2 gap-8 mb-16 max-w-4xl mx-auto">
+        <div class="grid md:grid-cols-2 gap-4 md:gap-8 mb-10 md:mb-16 max-w-4xl mx-auto">
             <div class="glass-card p-8 rounded-3xl group hover:scale-105 transition-all">
                 <div class="flex items-start gap-6">
                     <div class="flex-shrink-0">
@@ -588,7 +590,7 @@ Igreja Filadélfia - Uma família que acolhe
                 </div>
             </div>
             
-            <div class="glass-card p-8 rounded-3xl group hover:scale-105 transition-all">
+            <a href="{% url 'contato' %}#horarios" class="glass-card p-8 rounded-3xl group hover:scale-105 transition-all block">
                 <div class="flex items-start gap-6">
                     <div class="flex-shrink-0">
                         <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-red-500/30 to-red-600/10 flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -602,11 +604,11 @@ Igreja Filadélfia - Uma família que acolhe
                         </p>
                     </div>
                 </div>
-            </div>
+            </a>
         </div>
         
         <!-- Map Section -->
-        <div id="localizacao" class="mb-16 max-w-6xl mx-auto">
+        <div id="localizacao" class="mb-8 md:mb-16 max-w-6xl mx-auto">
             <div class="glass-card p-8 rounded-3xl">
                 <div class="text-center mb-8">
                     <h3 class="text-3xl font-bold text-white mb-3">

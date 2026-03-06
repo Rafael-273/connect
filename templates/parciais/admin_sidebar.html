@@ -69,7 +69,15 @@
                 Eventos
             </a>
             {% endif %}
-            
+
+            {% if user.user_type == 'admin' or user.is_superuser %}
+            <!-- Testemunhos só para admin -->
+            <a href="{% url 'admin_testimonies_list' %}" class="sidebar-item {% if 'testimonies' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
+                Testemunhos
+            </a>
+            {% endif %}
+
             {% if user.user_type == 'admin' or user.is_superuser %}
             <!-- Ministérios só para admin -->
             <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
@@ -234,7 +242,15 @@
                 Eventos
             </a>
             {% endif %}
-            
+
+            {% if user.user_type == 'admin' or user.is_superuser %}
+            <!-- Testemunhos só para admin -->
+            <a href="{% url 'admin_testimonies_list' %}" class="sidebar-item {% if 'testimonies' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
+                Testemunhos
+            </a>
+            {% endif %}
+
         {% if user.user_type == 'admin' or user.is_superuser %}
         
         <!-- Ministérios só para admin -->

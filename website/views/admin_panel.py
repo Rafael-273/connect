@@ -23,6 +23,7 @@ from ..models.neighborhood import Neighborhood
 from ..models.evangelism import Evangelized
 from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate, FollowUpTemplateStep
 from ..models.canteen import CanteenDebtor
+from ..models.testimony import Testimony
 from ..forms.ministry import MinistryForm
 from ..forms.neighborhood import NeighborhoodForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
@@ -341,6 +342,8 @@ def api_delete_item(request):
                 item = get_object_or_404(Ministry, id=item_id)
             elif model_name == 'neighborhood':
                 item = get_object_or_404(Neighborhood, id=item_id)
+            elif model_name == 'testimony':
+                item = get_object_or_404(Testimony, id=item_id)
             else:
                 return JsonResponse({'success': False, 'error': 'Modelo inválido'})
             
@@ -1827,3 +1830,128 @@ def reports_view(request):
         'template_stats': template_stats,
     }
     return render(request, 'admin_panel/reports.html', context)
+
+
+# === TESTIMONY VIEWS ===
+
+@user_passes_test(is_admin)
+def testimony_list_view(request):
+    """Lista de testemunhos com filtros"""
+    testimonies = Testimony.objects.select_related('member').order_by('-created_at')
+
+    search = request.GET.get('search', '').strip()
+    category = request.GET.get('category', '')
+    approved = request.GET.get('approved', '')
+
+    if search:
+        testimonies = testimonies.filter(
+            Q(title__icontains=search)
+        )
+    if category:
+        testimonies = testimonies.filter(category=category)
+    if approved == 'true':
+        testimonies = testimonies.filter(is_approved=True)
+    elif approved == 'false':
+        testimonies = testimonies.filter(is_approved=False)
+
+    paginator = Paginator(testimonies, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'testimonies': page_obj,
+        'page_obj': page_obj,
+        'category_choices': Testimony.CATEGORY_CHOICES,
+        'total': testimonies.count(),
+        'total_approved': Testimony.objects.filter(is_approved=True).count(),
+        'total_pending': Testimony.objects.filter(is_approved=False).count(),
+    }
+    return render(request, 'admin_panel/testimonies/list.html', context)
+
+
+@user_passes_test(is_admin)
+def testimony_edit_view(request, testimony_id=None):
+    """Criar ou editar testemunho"""
+    testimony = None
+    if testimony_id:
+        testimony = get_object_or_404(Testimony, id=testimony_id)
+
+    if request.method == 'GET':
+        storage = messages.get_messages(request)
+        storage.used = True
+
+    if request.method == 'POST':
+        try:
+            title = request.POST.get('title', '').strip()
+            category = request.POST.get('category', 'other')
+            is_approved = request.POST.get('is_approved') == 'on'
+            show_on_home = request.POST.get('show_on_home') == 'on'
+            instagram_url = request.POST.get('instagram_url', '').strip() or None
+
+            if not title:
+                messages.error(request, 'O título do testemunho é obrigatório.')
+                return render(request, 'admin_panel/testimonies/edit.html', {
+                    'testimony': testimony,
+                    'category_choices': Testimony.CATEGORY_CHOICES,
+                })
+
+            if testimony:
+                testimony.title = title
+                testimony.category = category
+                testimony.is_approved = is_approved
+                testimony.show_on_home = show_on_home
+                testimony.instagram_url = instagram_url
+                testimony.save()
+                messages.success(request, 'Testemunho atualizado com sucesso!')
+            else:
+                testimony = Testimony.objects.create(
+                    author_name='',
+                    title=title,
+                    category=category,
+                    is_approved=is_approved,
+                    show_on_home=show_on_home,
+                    instagram_url=instagram_url,
+                )
+                messages.success(request, 'Testemunho cadastrado com sucesso!')
+
+            return redirect('admin_testimonies_list')
+
+        except Exception as e:
+            messages.error(request, f'Erro ao salvar testemunho: {str(e)}')
+
+    context = {
+        'testimony': testimony,
+        'category_choices': Testimony.CATEGORY_CHOICES,
+    }
+    return render(request, 'admin_panel/testimonies/edit.html', context)
+
+
+@user_passes_test(is_admin)
+def testimony_delete_view(request, testimony_id):
+    """Deletar testemunho"""
+    testimony = get_object_or_404(Testimony, id=testimony_id)
+    if request.method == 'POST':
+        name = testimony.title
+        testimony.delete()
+        messages.success(request, f'Testemunho "{name}" excluído com sucesso!')
+        return redirect('admin_testimonies_list')
+    return render(request, 'admin_panel/testimonies/delete.html', {'testimony': testimony})
+
+
+@csrf_exempt
+@user_passes_test(is_admin)
+def testimony_toggle_view(request, testimony_id):
+    """Alterna aprovação ou exibição na home via AJAX"""
+    if request.method == 'POST':
+        testimony = get_object_or_404(Testimony, id=testimony_id)
+        data = json.loads(request.body)
+        field = data.get('field')  # 'is_approved' or 'show_on_home'
+        if field == 'is_approved':
+            testimony.is_approved = not testimony.is_approved
+            testimony.save(update_fields=['is_approved'])
+            return JsonResponse({'success': True, 'value': testimony.is_approved})
+        elif field == 'show_on_home':
+            testimony.show_on_home = not testimony.show_on_home
+            testimony.save(update_fields=['show_on_home'])
+            return JsonResponse({'success': True, 'value': testimony.show_on_home})
+    return JsonResponse({'success': False, 'error': 'Requisição inválida'})
