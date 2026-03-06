@@ -12,7 +12,7 @@ class EventListView(ListView):
     def get_queryset(self):
         query = self.request.GET.get('q', '')
         queryset = Event.objects.all().order_by('-event_date')
-
+        # No obvious related fields to optimize, but if there are, add select_related/prefetch_related here
         if query:
             queryset = queryset.filter(
                 Q(title__icontains=query) |

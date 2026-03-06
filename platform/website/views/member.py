@@ -42,6 +42,7 @@ class NewConvertsListView(ListView):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        queryset = queryset.select_related('user', 'neighborhood').prefetch_related('ministry', 'partner')
         queryset = queryset.order_by('-created_at')
         query = self.request.GET.get('q', '')
         queryset = queryset.filter(conversion='new_convert')
