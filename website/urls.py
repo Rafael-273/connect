@@ -6,49 +6,53 @@ from .views.visitor import VisitorCreateView, VisitorListView
 from .views.member import (
     MemberCreateView, 
     NewConvertsListView,
-    member_consolidation_list,
-    member_consolidation_detail,
-    member_consolidation_report,
-    consolidator_guide,
-    consolidator_assignments,
-    request_consolidation
+    MemberConsolidationListView,
+    MemberConsolidationDetailView,
+    MemberConsolidationReportView,
+    ConsolidatorGuideView,
+    ConsolidatorAssignmentsView,
+    RequestConsolidationView,
 )
 from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
-from .views.member_auth import MemberLoginView, MemberDashboardView, member_logout_view, member_profile_view, member_consolidation_view, member_approve_word, member_reject_word, redirect_after_login
-from .views.user_management import user_management_view, reset_user_password, change_password_view
+from .views.member_auth import (
+    MemberLoginView, MemberDashboardView, MemberLogoutView, MemberProfileView,
+    MemberConsolidationView, MemberApproveWordView, MemberRejectWordView,
+    RedirectAfterLoginView,
+)
+from .views.user_management import UserManagementView, ResetUserPasswordView, ChangePasswordView
 from .views.word_of_knowledge import (
-    word_of_knowledge_list, word_of_knowledge_create, healing_create,
-    service_words_view, mark_word_as_healed
+    WordOfKnowledgeListView, WordOfKnowledgeCreateView, HealingCreateView,
+    ServiceWordsView, MarkWordAsHealedView
 )
 from .views.ministration_admin import (
     MinistrationWordsListView, MinistrationHealingsListView, MinistrationMembersListView,
-    ministration_add_member, ministration_remove_member, ministration_toggle_approver
+    MinistrationAddMemberView, MinistrationRemoveMemberView, MinistrationToggleApproverView
 )
 from .views.ministry import (
     MinistryListView, MinistryCreateView, MinistryUpdateView, MinistryDeleteView,
-    MinistryMembersView, ministry_add_member, ministry_remove_member,
-    ministry_toggle_role, ministry_toggle_status
+    MinistryMembersView, MinistryAddMemberView, MinistryRemoveMemberView,
+    MinistryToggleRoleView, MinistryToggleStatusView
 )
-from .views.ministration_dashboard import ministration_dashboard
-from .views.word_approval import pending_words_list, approve_word, reject_word
+from .views.ministration_dashboard import MinistrationDashboardView
+from .views.word_approval import PendingWordsListView, ApproveWordView, RejectWordView
 from .views.schedules import (
-    team_list_view, team_create_view, team_edit_view, team_delete_view,
-    schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
-    schedule_delete_view, schedule_export_pdf_view,
-    schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
-    schedule_day_toggle_cancel_view
+    TeamListView, TeamCreateView, TeamEditView, TeamDeleteView,
+    ScheduleListView, ScheduleCreateView, ScheduleEditView, ScheduleDetailView,
+    ScheduleDeleteView, ScheduleExportPDFView,
+    ScheduleDayCreateView, ScheduleDayEditView, ScheduleDayDeleteView,
+    ScheduleDayToggleCancelView,
 )
 from .views.admin_panel import (
-    dashboard_view, members_list_view, visitors_list_view,
-    events_list_view, ministries_list_view, neighborhoods_list_view,
-    api_delete_item, ministry_create_edit_api, neighborhood_create_edit_api,
-    member_detail_api, visitor_detail_api, member_edit_view, visitor_edit_view, event_edit_view,
-    ministry_edit_view, neighborhood_edit_view, followup_list_view, followup_edit_view,
-    followup_delete_view, followup_report_view, followup_detail_view, profile_view,
-    canteen_list_view, canteen_edit_view, canteen_detail_view, canteen_delete_view,
-    canteen_toggle_paid, canteen_api, templates_view, reports_view,
-    template_create_view, template_edit_view, template_detail_view, template_delete_view
+    DashboardView, MembersListView, VisitorsListView,
+    EventsListView, MinistriesListView, NeighborhoodsListView,
+    ApiDeleteItemView, MinistryCreateEditApiView, NeighborhoodCreateEditApiView,
+    MemberDetailApiView, VisitorDetailApiView, MemberEditView, VisitorEditView, EventEditView,
+    MinistryEditView, NeighborhoodEditView, FollowUpListView, FollowUpEditView,
+    FollowUpDeleteView, FollowUpReportView, FollowUpDetailView, ProfileView,
+    CanteenListView, CanteenEditView, CanteenDetailView, CanteenDeleteView,
+    CanteenTogglePaidView, CanteenApiView, TemplatesListView, ReportsView,
+    TemplateCreateView, TemplateEditView, TemplateDetailView, TemplateDeleteView,
 )
 
 urlpatterns = [
@@ -65,99 +69,99 @@ urlpatterns = [
     # Authentication URLs (Unified Login System)
     path('login/', MemberLoginView.as_view(), name='member_login'),
     path('admin-login/', MemberLoginView.as_view(), name='admin_login'),  # Redirect old admin login to unified login
-    path('redirect-after-login/', redirect_after_login, name='redirect_after_login'),  # Smart redirect
+    path('redirect-after-login/', RedirectAfterLoginView.as_view(), name='redirect_after_login'),
     path('dashboard/', MemberDashboardView.as_view(), name='member_dashboard'),
-    path('logout/', member_logout_view, name='member_logout'),
-    path('admin-logout/', member_logout_view, name='admin_logout'),  # Redirect old admin logout to unified logout
-    path('profile/', member_profile_view, name='member_profile'),
+    path('logout/', MemberLogoutView.as_view(), name='member_logout'),
+    path('admin-logout/', MemberLogoutView.as_view(), name='admin_logout'),
+    path('profile/', MemberProfileView.as_view(), name='member_profile'),
     
     # Member Word Approval URLs
-    path('words/approve/<int:word_id>/', member_approve_word, name='member_approve_word'),
-    path('words/reject/<int:word_id>/', member_reject_word, name='member_reject_word'),
+    path('words/approve/<int:word_id>/', MemberApproveWordView.as_view(), name='member_approve_word'),
+    path('words/reject/<int:word_id>/', MemberRejectWordView.as_view(), name='member_reject_word'),
     
     # Member Consolidation URLs
-    path('consolidation/', member_consolidation_list, name='member_consolidation'),
-    path('consolidation/<int:followup_id>/', member_consolidation_detail, name='member_consolidation_detail'),
-    path('consolidation/<int:followup_id>/report/', member_consolidation_report, name='member_consolidation_report'),
-    path('consolidation/guide/', consolidator_guide, name='consolidator_guide'),
-    path('consolidation/assignments/', consolidator_assignments, name='consolidator_assignments'),
-    path('consolidation/request/<int:person_id>/', request_consolidation, name='request_consolidation'),
+    path('consolidation/', MemberConsolidationListView.as_view(), name='member_consolidation'),
+    path('consolidation/<int:followup_id>/', MemberConsolidationDetailView.as_view(), name='member_consolidation_detail'),
+    path('consolidation/<int:followup_id>/report/', MemberConsolidationReportView.as_view(), name='member_consolidation_report'),
+    path('consolidation/guide/', ConsolidatorGuideView.as_view(), name='consolidator_guide'),
+    path('consolidation/assignments/', ConsolidatorAssignmentsView.as_view(), name='consolidator_assignments'),
+    path('consolidation/request/<int:person_id>/', RequestConsolidationView.as_view(), name='request_consolidation'),
     
     # Words of Knowledge URLs
-    path('words/', word_of_knowledge_list, name='word_of_knowledge_list'),
-    path('words/create/', word_of_knowledge_create, name='word_of_knowledge_create'),
-    path('words/healing/create/', healing_create, name='healing_create'),
-    path('words/service/', service_words_view, name='service_words_view'),
-    path('words/<int:word_id>/mark-healed/', mark_word_as_healed, name='mark_word_as_healed'),
+    path('words/', WordOfKnowledgeListView.as_view(), name='word_of_knowledge_list'),
+    path('words/create/', WordOfKnowledgeCreateView.as_view(), name='word_of_knowledge_create'),
+    path('words/healing/create/', HealingCreateView.as_view(), name='healing_create'),
+    path('words/service/', ServiceWordsView.as_view(), name='service_words_view'),
+    path('words/<int:word_id>/mark-healed/', MarkWordAsHealedView.as_view(), name='mark_word_as_healed'),
     
     # Ministration URLs
-    path('admin-panel/ministration/', ministration_dashboard, name='ministration_dashboard'),
+    path('admin-panel/ministration/', MinistrationDashboardView.as_view(), name='ministration_dashboard'),
     path('admin-panel/ministration/words/', MinistrationWordsListView.as_view(), name='ministration_words_list'),
-    path('admin-panel/ministration/words/pending/', pending_words_list, name='pending_words_list'),
-    path('admin-panel/ministration/words/approve/<int:word_id>/', approve_word, name='approve_word'),
-    path('admin-panel/ministration/words/reject/<int:word_id>/', reject_word, name='reject_word'),
+    path('admin-panel/ministration/words/pending/', PendingWordsListView.as_view(), name='pending_words_list'),
+    path('admin-panel/ministration/words/approve/<int:word_id>/', ApproveWordView.as_view(), name='approve_word'),
+    path('admin-panel/ministration/words/reject/<int:word_id>/', RejectWordView.as_view(), name='reject_word'),
     path('admin-panel/ministration/healings/', MinistrationHealingsListView.as_view(), name='ministration_healings_list'),
     path('admin-panel/ministration/members/', MinistrationMembersListView.as_view(), name='ministration_members_list'),
-    path('admin-panel/ministration/members/<int:member_id>/add/', ministration_add_member, name='ministration_add_member'),
-    path('admin-panel/ministration/members/<int:member_id>/remove/', ministration_remove_member, name='ministration_remove_member'),
-    path('admin-panel/ministration/members/<int:member_id>/toggle-approver/', ministration_toggle_approver, name='ministration_toggle_approver'),
+    path('admin-panel/ministration/members/<int:member_id>/add/', MinistrationAddMemberView.as_view(), name='ministration_add_member'),
+    path('admin-panel/ministration/members/<int:member_id>/remove/', MinistrationRemoveMemberView.as_view(), name='ministration_remove_member'),
+    path('admin-panel/ministration/members/<int:member_id>/toggle-approver/', MinistrationToggleApproverView.as_view(), name='ministration_toggle_approver'),
     
     # Schedule URLs - Sistema de Escalas
-    path('admin-panel/schedules/', schedule_list_view, name='schedule_list'),
-    path('admin-panel/schedules/new/', schedule_create_view, name='schedule_create'),
-    path('admin-panel/schedules/<int:schedule_id>/', schedule_detail_view, name='schedule_detail'),
-    path('admin-panel/schedules/<int:schedule_id>/edit/', schedule_edit_view, name='schedule_edit'),
-    path('admin-panel/schedules/<int:schedule_id>/delete/', schedule_delete_view, name='schedule_delete'),
+    path('admin-panel/schedules/', ScheduleListView.as_view(), name='schedule_list'),
+    path('admin-panel/schedules/new/', ScheduleCreateView.as_view(), name='schedule_create'),
+    path('admin-panel/schedules/<int:schedule_id>/', ScheduleDetailView.as_view(), name='schedule_detail'),
+    path('admin-panel/schedules/<int:schedule_id>/edit/', ScheduleEditView.as_view(), name='schedule_edit'),
+    path('admin-panel/schedules/<int:schedule_id>/delete/', ScheduleDeleteView.as_view(), name='schedule_delete'),
     # publish/unpublish removed — schedule for current month is always active
-    path('admin-panel/schedules/<int:schedule_id>/export-pdf/', schedule_export_pdf_view, name='schedule_export_pdf'),
+    path('admin-panel/schedules/<int:schedule_id>/export-pdf/', ScheduleExportPDFView.as_view(), name='schedule_export_pdf'),
     
     # Schedule Days URLs
-    path('admin-panel/schedules/<int:schedule_id>/days/new/', schedule_day_create_view, name='schedule_day_create'),
-    path('admin-panel/schedules/days/<int:day_id>/edit/', schedule_day_edit_view, name='schedule_day_edit'),
-    path('admin-panel/schedules/days/<int:day_id>/delete/', schedule_day_delete_view, name='schedule_day_delete'),
-    path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', schedule_day_toggle_cancel_view, name='schedule_day_toggle_cancel'),
+    path('admin-panel/schedules/<int:schedule_id>/days/new/', ScheduleDayCreateView.as_view(), name='schedule_day_create'),
+    path('admin-panel/schedules/days/<int:day_id>/edit/', ScheduleDayEditView.as_view(), name='schedule_day_edit'),
+    path('admin-panel/schedules/days/<int:day_id>/delete/', ScheduleDayDeleteView.as_view(), name='schedule_day_delete'),
+    path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', ScheduleDayToggleCancelView.as_view(), name='schedule_day_toggle_cancel'),
     
     # Team URLs
-    path('admin-panel/teams/', team_list_view, name='team_list'),
-    path('admin-panel/teams/new/', team_create_view, name='team_create'),
-    path('admin-panel/teams/<int:team_id>/edit/', team_edit_view, name='team_edit'),
-    path('admin-panel/teams/<int:team_id>/delete/', team_delete_view, name='team_delete'),
+    path('admin-panel/teams/', TeamListView.as_view(), name='team_list'),
+    path('admin-panel/teams/new/', TeamCreateView.as_view(), name='team_create'),
+    path('admin-panel/teams/<int:team_id>/edit/', TeamEditView.as_view(), name='team_edit'),
+    path('admin-panel/teams/<int:team_id>/delete/', TeamDeleteView.as_view(), name='team_delete'),
     
     # Admin Panel URLs
-    path('admin-panel/', dashboard_view, name='admin_dashboard'),
-    path('admin-panel/members/', members_list_view, name='admin_members_list'),
-    path('admin-panel/members/new/', member_edit_view, name='admin_member_create'),
-    path('admin-panel/members/<int:member_id>/edit/', member_edit_view, name='admin_member_edit'),
-    path('admin-panel/visitors/', visitors_list_view, name='admin_visitors_list'),
-    path('admin-panel/visitors/new/', visitor_edit_view, name='admin_visitor_create'),
-    path('admin-panel/visitors/<int:visitor_id>/edit/', visitor_edit_view, name='admin_visitor_edit'),
-    path('admin-panel/events/', events_list_view, name='admin_events_list'),
-    path('admin-panel/events/new/', event_edit_view, name='admin_event_create'),
-    path('admin-panel/events/<int:event_id>/edit/', event_edit_view, name='admin_event_edit'),
+    path('admin-panel/', DashboardView.as_view(), name='admin_dashboard'),
+    path('admin-panel/members/', MembersListView.as_view(), name='admin_members_list'),
+    path('admin-panel/members/new/', MemberEditView.as_view(), name='admin_member_create'),
+    path('admin-panel/members/<int:member_id>/edit/', MemberEditView.as_view(), name='admin_member_edit'),
+    path('admin-panel/visitors/', VisitorsListView.as_view(), name='admin_visitors_list'),
+    path('admin-panel/visitors/new/', VisitorEditView.as_view(), name='admin_visitor_create'),
+    path('admin-panel/visitors/<int:visitor_id>/edit/', VisitorEditView.as_view(), name='admin_visitor_edit'),
+    path('admin-panel/events/', EventsListView.as_view(), name='admin_events_list'),
+    path('admin-panel/events/new/', EventEditView.as_view(), name='admin_event_create'),
+    path('admin-panel/events/<int:event_id>/edit/', EventEditView.as_view(), name='admin_event_edit'),
     path('admin-panel/music/', MusicListView.as_view(), name='admin_music_list'),
     path('admin-panel/music/new/', MusicCreateView.as_view(), name='admin_music_create'),
     path('admin-panel/music/edit/<int:pk>/', MusicUpdateView.as_view(), name='admin_music_edit'),
     path('admin-panel/music/delete/<int:pk>/', MusicDeleteView.as_view(), name='admin_music_delete'),
-    path('admin-panel/ministries/', ministries_list_view, name='admin_ministries_list'),
-    path('admin-panel/ministries/new/', ministry_edit_view, name='admin_ministry_create'),
-    path('admin-panel/ministries/<int:ministry_id>/edit/', ministry_edit_view, name='admin_ministry_edit'),
-    path('admin-panel/neighborhoods/', neighborhoods_list_view, name='admin_neighborhoods_list'),
-    path('admin-panel/neighborhoods/new/', neighborhood_edit_view, name='admin_neighborhood_create'),
-    path('admin-panel/neighborhoods/<int:neighborhood_id>/edit/', neighborhood_edit_view, name='admin_neighborhood_edit'),
-    path('admin-panel/profile/', profile_view, name='admin_profile'),
+    path('admin-panel/ministries/', MinistriesListView.as_view(), name='admin_ministries_list'),
+    path('admin-panel/ministries/new/', MinistryEditView.as_view(), name='admin_ministry_create'),
+    path('admin-panel/ministries/<int:ministry_id>/edit/', MinistryEditView.as_view(), name='admin_ministry_edit'),
+    path('admin-panel/neighborhoods/', NeighborhoodsListView.as_view(), name='admin_neighborhoods_list'),
+    path('admin-panel/neighborhoods/new/', NeighborhoodEditView.as_view(), name='admin_neighborhood_create'),
+    path('admin-panel/neighborhoods/<int:neighborhood_id>/edit/', NeighborhoodEditView.as_view(), name='admin_neighborhood_edit'),
+    path('admin-panel/profile/', ProfileView.as_view(), name='admin_profile'),
     
     # User Management URLs
-    path('admin-panel/users/', user_management_view, name='admin_user_management'),
-    path('admin-panel/users/<int:user_id>/reset-password/', reset_user_password, name='admin_reset_user_password'),
-    path('admin-panel/change-password/', change_password_view, name='admin_change_password'),
+    path('admin-panel/users/', UserManagementView.as_view(), name='admin_user_management'),
+    path('admin-panel/users/<int:user_id>/reset-password/', ResetUserPasswordView.as_view(), name='admin_reset_user_password'),
+    path('admin-panel/change-password/', ChangePasswordView.as_view(), name='admin_change_password'),
     
     # Follow-up URLs
-    path('admin-panel/followups/', followup_list_view, name='admin_followups_list'),
-    path('admin-panel/followups/new/', followup_edit_view, name='admin_followup_create'),
-    path('admin-panel/followups/<int:followup_id>/edit/', followup_edit_view, name='admin_followup_edit'),
-    path('admin-panel/followups/<int:followup_id>/detail/', followup_detail_view, name='admin_followup_detail'),
-    path('admin-panel/followups/<int:followup_id>/report/', followup_report_view, name='admin_followup_report'),
-    path('admin-panel/followups/<int:followup_id>/delete/', followup_delete_view, name='admin_followup_delete'),
+    path('admin-panel/followups/', FollowUpListView.as_view(), name='admin_followups_list'),
+    path('admin-panel/followups/new/', FollowUpEditView.as_view(), name='admin_followup_create'),
+    path('admin-panel/followups/<int:followup_id>/edit/', FollowUpEditView.as_view(), name='admin_followup_edit'),
+    path('admin-panel/followups/<int:followup_id>/detail/', FollowUpDetailView.as_view(), name='admin_followup_detail'),
+    path('admin-panel/followups/<int:followup_id>/report/', FollowUpReportView.as_view(), name='admin_followup_report'),
+    path('admin-panel/followups/<int:followup_id>/delete/', FollowUpDeleteView.as_view(), name='admin_followup_delete'),
     
     # TODO: Implementar as views abaixo
     # Follow-up Templates URLs
@@ -179,28 +183,28 @@ urlpatterns = [
     # path('admin-panel/followup-reports/', followup_reports_view, name='admin_followup_reports'),
     
     # Templates e Relatórios URLs
-    path('admin-panel/templates/', templates_view, name='admin_templates'),
-    path('admin-panel/templates/new/', template_create_view, name='admin_template_create'),
-    path('admin-panel/templates/<int:template_id>/edit/', template_edit_view, name='admin_template_edit'),
-    path('admin-panel/templates/<int:template_id>/', template_detail_view, name='admin_template_detail'),
-    path('admin-panel/templates/<int:template_id>/delete/', template_delete_view, name='admin_template_delete'),
-    path('admin-panel/reports/', reports_view, name='admin_reports'),
+    path('admin-panel/templates/', TemplatesListView.as_view(), name='admin_templates'),
+    path('admin-panel/templates/new/', TemplateCreateView.as_view(), name='admin_template_create'),
+    path('admin-panel/templates/<int:template_id>/edit/', TemplateEditView.as_view(), name='admin_template_edit'),
+    path('admin-panel/templates/<int:template_id>/', TemplateDetailView.as_view(), name='admin_template_detail'),
+    path('admin-panel/templates/<int:template_id>/delete/', TemplateDeleteView.as_view(), name='admin_template_delete'),
+    path('admin-panel/reports/', ReportsView.as_view(), name='admin_reports'),
     
     # Cantina URLs
-    path('admin-panel/cantina/', canteen_list_view, name='admin_cantina_list'),
-    path('admin-panel/cantina/new/', canteen_edit_view, name='admin_cantina_create'),
-    path('admin-panel/cantina/<int:debtor_id>/edit/', canteen_edit_view, name='admin_cantina_edit'),
-    path('admin-panel/cantina/<int:debtor_id>/', canteen_detail_view, name='admin_cantina_detail'),
-    path('admin-panel/cantina/<int:debtor_id>/delete/', canteen_delete_view, name='admin_cantina_delete'),
-    path('admin-panel/cantina/<int:debtor_id>/toggle-paid/', canteen_toggle_paid, name='admin_cantina_toggle_paid'),
-    path('admin-panel/api/cantina/', canteen_api, name='admin_cantina_api'),
+    path('admin-panel/cantina/', CanteenListView.as_view(), name='admin_cantina_list'),
+    path('admin-panel/cantina/new/', CanteenEditView.as_view(), name='admin_cantina_create'),
+    path('admin-panel/cantina/<int:debtor_id>/edit/', CanteenEditView.as_view(), name='admin_cantina_edit'),
+    path('admin-panel/cantina/<int:debtor_id>/', CanteenDetailView.as_view(), name='admin_cantina_detail'),
+    path('admin-panel/cantina/<int:debtor_id>/delete/', CanteenDeleteView.as_view(), name='admin_cantina_delete'),
+    path('admin-panel/cantina/<int:debtor_id>/toggle-paid/', CanteenTogglePaidView.as_view(), name='admin_cantina_toggle_paid'),
+    path('admin-panel/api/cantina/', CanteenApiView.as_view(), name='admin_cantina_api'),
     
     # APIs
-    path('admin-panel/api/delete/', api_delete_item, name='admin_api_delete'),
-    path('admin-panel/api/ministry/', ministry_create_edit_api, name='admin_ministry_api'),
-    path('admin-panel/api/neighborhood/', neighborhood_create_edit_api, name='admin_neighborhood_api'),
-    path('admin-panel/api/member/<int:member_id>/', member_detail_api, name='admin_member_detail_api'),
-    path('admin-panel/api/visitor/<int:visitor_id>/', visitor_detail_api, name='admin_visitor_detail_api'),
+    path('admin-panel/api/delete/', ApiDeleteItemView.as_view(), name='admin_api_delete'),
+    path('admin-panel/api/ministry/', MinistryCreateEditApiView.as_view(), name='admin_ministry_api'),
+    path('admin-panel/api/neighborhood/', NeighborhoodCreateEditApiView.as_view(), name='admin_neighborhood_api'),
+    path('admin-panel/api/member/<int:member_id>/', MemberDetailApiView.as_view(), name='admin_member_detail_api'),
+    path('admin-panel/api/visitor/<int:visitor_id>/', VisitorDetailApiView.as_view(), name='admin_visitor_detail_api'),
     
     # Ministérios - Nova Gestão Escalável
     path('admin-panel/ministries/', MinistryListView.as_view(), name='ministry_list'),
@@ -208,8 +212,8 @@ urlpatterns = [
     path('admin-panel/ministries/<int:pk>/edit/', MinistryUpdateView.as_view(), name='ministry_edit'),
     path('admin-panel/ministries/<int:pk>/delete/', MinistryDeleteView.as_view(), name='ministry_delete'),
     path('admin-panel/ministries/<int:pk>/members/', MinistryMembersView.as_view(), name='ministry_members'),
-    path('admin-panel/ministries/<int:ministry_id>/members/add/<int:member_id>/', ministry_add_member, name='ministry_add_member'),
-    path('admin-panel/ministries/<int:ministry_id>/members/remove/<int:member_id>/', ministry_remove_member, name='ministry_remove_member'),
-    path('admin-panel/ministries/<int:ministry_id>/members/toggle-role/<int:member_id>/', ministry_toggle_role, name='ministry_toggle_role'),
-    path('admin-panel/ministries/<int:ministry_id>/members/toggle-status/<int:member_id>/', ministry_toggle_status, name='ministry_toggle_status'),
+    path('admin-panel/ministries/<int:ministry_id>/members/add/<int:member_id>/', MinistryAddMemberView.as_view(), name='ministry_add_member'),
+    path('admin-panel/ministries/<int:ministry_id>/members/remove/<int:member_id>/', MinistryRemoveMemberView.as_view(), name='ministry_remove_member'),
+    path('admin-panel/ministries/<int:ministry_id>/members/toggle-role/<int:member_id>/', MinistryToggleRoleView.as_view(), name='ministry_toggle_role'),
+    path('admin-panel/ministries/<int:ministry_id>/members/toggle-status/<int:member_id>/', MinistryToggleStatusView.as_view(), name='ministry_toggle_status'),
 ]

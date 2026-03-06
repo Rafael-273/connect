@@ -1,24 +1,13 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.shortcuts import redirect, get_object_or_404
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView
-from django.urls import reverse_lazy
-from django.db.models import Q, Count
-from datetime import datetime, timedelta
+from django.views import View
+from django.views.generic import ListView
+from django.db.models import Q
 
 from website.models import WordOfKnowledge, Healing, Member, Ministry
 from website.models.ministry_membership import MinistryMembership
-from website.forms.word_of_knowledge import WordOfKnowledgeForm, HealingForm
-
-
-class StaffRequiredMixin(UserPassesTestMixin):
-    """Mixin para verificar se o usuário é staff"""
-    def test_func(self):
-        return self.request.user.is_staff or self.request.user.user_type == 'admin'
-    
-    def handle_no_permission(self):
-        messages.error(self.request, 'Você não tem permissão para acessar esta página.')
-        return redirect('admin_dashboard')
+from .mixins import StaffRequiredMixin
 
 
 class MinistrationWordsListView(LoginRequiredMixin, StaffRequiredMixin, ListView):
@@ -193,63 +182,62 @@ class MinistrationMembersListView(LoginRequiredMixin, StaffRequiredMixin, ListVi
         return context
 
 
-def ministration_add_member(request, member_id):
+class MinistrationAddMemberView(LoginRequiredMixin, StaffRequiredMixin, View):
     """Adiciona um membro ao ministério de ministração"""
-    if not request.user.is_staff and request.user.user_type != 'admin':
-        messages.error(request, 'Você não tem permissão para realizar esta ação.')
-        return redirect('admin_dashboard')
-    
-    member = get_object_or_404(Member, id=member_id)
-    ministry = Ministry.objects.filter(name__icontains='ministração').first()
-    
-    if not ministry:
-        # Criar ministério se não existir
-        ministry = Ministry.objects.create(
-            name='Ministração',
-            description='Ministério de Ministração - Palavras de Conhecimento e Cura'
-        )
-        messages.success(request, f'Ministério de Ministração criado com sucesso!')
-    
-    # Adicionar membro ao ministério (ManyToMany)
-    member.ministry.add(ministry)
-    
-    messages.success(request, f'{member.name} adicionado(a) ao Ministério de Ministração!')
-    return redirect('ministration_members_list')
+
+    def post(self, request, member_id):
+        member = get_object_or_404(Member, id=member_id)
+        ministry = Ministry.objects.filter(name__icontains='ministração').first()
+
+        if not ministry:
+            ministry = Ministry.objects.create(
+                name='Ministração',
+                description='Ministério de Ministração - Palavras de Conhecimento e Cura'
+            )
+            messages.success(request, 'Ministério de Ministração criado com sucesso!')
+
+        member.ministry.add(ministry)
+
+        messages.success(request, f'{member.name} adicionado(a) ao Ministério de Ministração!')
+        return redirect('ministration_members_list')
+
+    def get(self, request, member_id):
+        return self.post(request, member_id)
 
 
-def ministration_remove_member(request, member_id):
+class MinistrationRemoveMemberView(LoginRequiredMixin, StaffRequiredMixin, View):
     """Remove um membro do ministério de ministração"""
-    if not request.user.is_staff and request.user.user_type != 'admin':
-        messages.error(request, 'Você não tem permissão para realizar esta ação.')
-        return redirect('admin_dashboard')
-    
-    member = get_object_or_404(Member, id=member_id)
-    ministry = Ministry.objects.filter(name__icontains='ministração').first()
-    
-    if ministry:
-        # Remover membro do ministério (ManyToMany)
-        member.ministry.remove(ministry)
-    
-    messages.success(request, f'{member.name} removido(a) do Ministério de Ministração!')
-    return redirect('ministration_members_list')
+
+    def post(self, request, member_id):
+        member = get_object_or_404(Member, id=member_id)
+        ministry = Ministry.objects.filter(name__icontains='ministração').first()
+
+        if ministry:
+            member.ministry.remove(ministry)
+
+        messages.success(request, f'{member.name} removido(a) do Ministério de Ministração!')
+        return redirect('ministration_members_list')
+
+    def get(self, request, member_id):
+        return self.post(request, member_id)
 
 
-def ministration_toggle_approver(request, member_id):
+class MinistrationToggleApproverView(LoginRequiredMixin, StaffRequiredMixin, View):
     """Alterna o status de aprovador de um membro do ministério"""
-    if not request.user.is_staff and request.user.user_type != 'admin':
-        messages.error(request, 'Você não tem permissão para realizar esta ação.')
-        return redirect('admin_dashboard')
-    
-    member = get_object_or_404(Member, id=member_id)
-    
-    # Alternar status de aprovador
-    member.is_approver = not member.is_approver
-    member.save()
-    
-    if member.is_approver:
-        messages.success(request, f'{member.name} agora é um aprovador de palavras de conhecimento!')
-    else:
-        messages.success(request, f'{member.name} não é mais um aprovador de palavras de conhecimento.')
-    
-    return redirect('ministration_members_list')
+
+    def post(self, request, member_id):
+        member = get_object_or_404(Member, id=member_id)
+
+        member.is_approver = not member.is_approver
+        member.save()
+
+        if member.is_approver:
+            messages.success(request, f'{member.name} agora é um aprovador de palavras de conhecimento!')
+        else:
+            messages.success(request, f'{member.name} não é mais um aprovador de palavras de conhecimento.')
+
+        return redirect('ministration_members_list')
+
+    def get(self, request, member_id):
+        return self.post(request, member_id)
 
