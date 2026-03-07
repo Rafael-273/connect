@@ -22,13 +22,12 @@ from ..models.ministry import Ministry
 from ..models.neighborhood import Neighborhood
 from ..models.evangelism import Evangelized
 from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate, FollowUpTemplateStep
-from ..models.canteen import CanteenDebtor
+from ..models.testimony import Testimony
 from ..forms.ministry import MinistryForm
 from ..forms.neighborhood import NeighborhoodForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
 from ..forms.template import FollowUpTemplateForm, FollowUpTemplateStepFormSet, FollowUpTemplateStepFormSetForCreate
 from ..forms.user import UserProfileForm
-from ..forms.canteen import CanteenDebtorForm
 
 User = get_user_model()
 
@@ -341,6 +340,8 @@ def api_delete_item(request):
                 item = get_object_or_404(Ministry, id=item_id)
             elif model_name == 'neighborhood':
                 item = get_object_or_404(Neighborhood, id=item_id)
+            elif model_name == 'testimony':
+                item = get_object_or_404(Testimony, id=item_id)
             else:
                 return JsonResponse({'success': False, 'error': 'Modelo inválido'})
             
@@ -1393,184 +1394,7 @@ def profile_view(request):
         form = UserProfileForm(instance=user)
     return render(request, 'admin_panel/profile.html', {'form': form, 'user': user})
 
-# Canteen Views
-@user_passes_test(has_module_permission('canteen'))
-def canteen_list_view(request):
-    """Lista todos os fiados registrados na cantina"""
-    search = request.GET.get('search', '')
-    status_filter = request.GET.get('status', '')
-    
-    debtors = CanteenDebtor.objects.all()
-    
-    # Filtrar por nome, se tiver busca
-    if search:
-        debtors = debtors.filter(
-            Q(name__icontains=search) | 
-            Q(phone__icontains=search) |
-            Q(description__icontains=search)
-        )
-    
-    # Filtrar por status de pagamento
-    if status_filter:
-        if status_filter == 'paid':
-            debtors = debtors.filter(paid=True)
-        elif status_filter == 'unpaid':
-            debtors = debtors.filter(paid=False)
-    
-    # Ordenar por data de compra mais recente primeiro
-    debtors = debtors.order_by('-purchase_date')
-    
-    # Paginação
-    paginator = Paginator(debtors, 10)
-    page_number = request.GET.get('page', 1)
-    debtors_page = paginator.get_page(page_number)
-    
-    context = {
-        'debtors': debtors_page,
-        'search': search,
-        'status_filter': status_filter,
-        # Estatísticas para o resumo
-        'total_debtors': CanteenDebtor.objects.count(),
-        'total_unpaid': CanteenDebtor.objects.filter(paid=False).count(),
-        'total_amount_unpaid': CanteenDebtor.objects.filter(paid=False).aggregate(total=Sum('amount'))['total'] or 0,
-        'total_amount_paid': CanteenDebtor.objects.filter(paid=True).aggregate(total=Sum('amount'))['total'] or 0,
-        'avg_debt_amount': CanteenDebtor.objects.aggregate(avg=Avg('amount'))['avg'] or 0,
-        'recent_payments': CanteenDebtor.objects.filter(
-            paid=True, 
-            paid_date__gte=timezone.now() - timedelta(days=30)
-        ).count(),
-    }
-    
-    return render(request, 'admin_panel/cantina/list.html', context)
 
-@user_passes_test(has_module_permission('canteen'))
-def canteen_edit_view(request, debtor_id=None):
-    """Cria ou edita um registro de fiado da cantina"""
-    debtor = None
-    if debtor_id:
-        debtor = get_object_or_404(CanteenDebtor, id=debtor_id)
-    
-    if request.method == 'POST':
-        form = CanteenDebtorForm(request.POST, instance=debtor)
-        if form.is_valid():
-            form.save()
-            action = 'atualizado' if debtor_id else 'criado'
-            messages.success(request, f'Registro de fiado {action} com sucesso!')
-            return redirect('admin_cantina_list')
-    else:
-        form = CanteenDebtorForm(instance=debtor)
-    
-    context = {
-        'form': form,
-        'debtor': debtor,
-        'is_edit': debtor_id is not None
-    }
-    
-    return render(request, 'admin_panel/cantina/edit.html', context)
-
-@user_passes_test(is_admin)
-def canteen_detail_view(request, debtor_id):
-    """Exibe os detalhes de um registro de fiado da cantina"""
-    debtor = get_object_or_404(CanteenDebtor, id=debtor_id)
-    
-    context = {
-        'debtor': debtor
-    }
-    
-    return render(request, 'admin_panel/cantina/detail.html', context)
-
-@user_passes_test(is_admin)
-def canteen_delete_view(request, debtor_id):
-    """Exclui um registro de fiado da cantina"""
-    debtor = get_object_or_404(CanteenDebtor, id=debtor_id)
-    
-    if request.method == 'POST':
-        debtor.delete()
-        messages.success(request, 'Registro de fiado excluído com sucesso!')
-        return redirect('admin_cantina_list')
-    
-    context = {
-        'debtor': debtor
-    }
-    
-    return render(request, 'admin_panel/cantina/delete.html', context)
-
-@user_passes_test(is_admin)
-def canteen_toggle_paid(request, debtor_id):
-    """Toggle do status de pagamento de um fiado"""
-    if request.method == 'POST':
-        debtor = get_object_or_404(CanteenDebtor, id=debtor_id)
-        debtor.paid = not debtor.paid
-        
-        if debtor.paid:
-            debtor.paid_date = timezone.now().date()
-        else:
-            debtor.paid_date = None
-            
-        debtor.save()
-        
-        status = 'pago' if debtor.paid else 'não pago'
-        messages.success(request, f'Status alterado para {status} com sucesso!')
-    
-    return redirect('admin_cantina_list')
-
-@csrf_exempt
-def canteen_api(request):
-    """API para operações CRUD da cantina via AJAX"""
-    if request.method != 'POST':
-        return JsonResponse({'error': 'Método não permitido'}, status=405)
-    
-    try:
-        data = json.loads(request.body)
-        
-        # Se tem ID, é uma edição
-        if 'id' in data:
-            debtor = get_object_or_404(CanteenDebtor, id=data['id'])
-            
-            # Atualizar campos
-            for field in ['name', 'phone', 'purchase_date', 'amount', 'description', 'paid', 'notes']:
-                if field in data:
-                    setattr(debtor, field, data[field])
-            
-            # Tratar paid_date
-            if 'paid' in data:
-                debtor.paid = data['paid']
-                if debtor.paid:
-                    debtor.paid_date = timezone.now().date()
-                else:
-                    debtor.paid_date = None
-            
-            debtor.save()
-            message = 'Registro atualizado com sucesso!'
-        else:
-            # Criar novo registro
-            debtor = CanteenDebtor.objects.create(
-                name=data.get('name'),
-                phone=data.get('phone'),
-                purchase_date=data.get('purchase_date', timezone.now().date()),
-                amount=data.get('amount'),
-                description=data.get('description', ''),
-                paid=data.get('paid', False),
-                notes=data.get('notes', '')
-            )
-            
-            if debtor.paid:
-                debtor.paid_date = timezone.now().date()
-                debtor.save()
-                
-            message = 'Novo registro criado com sucesso!'
-        
-        return JsonResponse({
-            'success': True,
-            'message': message,
-            'id': debtor.id
-        })
-        
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        })
 
 
 # Views temporárias para Templates e Relatórios
@@ -1827,3 +1651,128 @@ def reports_view(request):
         'template_stats': template_stats,
     }
     return render(request, 'admin_panel/reports.html', context)
+
+
+# === TESTIMONY VIEWS ===
+
+@user_passes_test(is_admin)
+def testimony_list_view(request):
+    """Lista de testemunhos com filtros"""
+    testimonies = Testimony.objects.select_related('member').order_by('-created_at')
+
+    search = request.GET.get('search', '').strip()
+    category = request.GET.get('category', '')
+    approved = request.GET.get('approved', '')
+
+    if search:
+        testimonies = testimonies.filter(
+            Q(title__icontains=search)
+        )
+    if category:
+        testimonies = testimonies.filter(category=category)
+    if approved == 'true':
+        testimonies = testimonies.filter(is_approved=True)
+    elif approved == 'false':
+        testimonies = testimonies.filter(is_approved=False)
+
+    paginator = Paginator(testimonies, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'testimonies': page_obj,
+        'page_obj': page_obj,
+        'category_choices': Testimony.CATEGORY_CHOICES,
+        'total': testimonies.count(),
+        'total_approved': Testimony.objects.filter(is_approved=True).count(),
+        'total_pending': Testimony.objects.filter(is_approved=False).count(),
+    }
+    return render(request, 'admin_panel/testimonies/list.html', context)
+
+
+@user_passes_test(is_admin)
+def testimony_edit_view(request, testimony_id=None):
+    """Criar ou editar testemunho"""
+    testimony = None
+    if testimony_id:
+        testimony = get_object_or_404(Testimony, id=testimony_id)
+
+    if request.method == 'GET':
+        storage = messages.get_messages(request)
+        storage.used = True
+
+    if request.method == 'POST':
+        try:
+            title = request.POST.get('title', '').strip()
+            category = request.POST.get('category', 'other')
+            is_approved = request.POST.get('is_approved') == 'on'
+            show_on_home = request.POST.get('show_on_home') == 'on'
+            instagram_url = request.POST.get('instagram_url', '').strip() or None
+
+            if not title:
+                messages.error(request, 'O título do testemunho é obrigatório.')
+                return render(request, 'admin_panel/testimonies/edit.html', {
+                    'testimony': testimony,
+                    'category_choices': Testimony.CATEGORY_CHOICES,
+                })
+
+            if testimony:
+                testimony.title = title
+                testimony.category = category
+                testimony.is_approved = is_approved
+                testimony.show_on_home = show_on_home
+                testimony.instagram_url = instagram_url
+                testimony.save()
+                messages.success(request, 'Testemunho atualizado com sucesso!')
+            else:
+                testimony = Testimony.objects.create(
+                    author_name='',
+                    title=title,
+                    category=category,
+                    is_approved=is_approved,
+                    show_on_home=show_on_home,
+                    instagram_url=instagram_url,
+                )
+                messages.success(request, 'Testemunho cadastrado com sucesso!')
+
+            return redirect('admin_testimonies_list')
+
+        except Exception as e:
+            messages.error(request, f'Erro ao salvar testemunho: {str(e)}')
+
+    context = {
+        'testimony': testimony,
+        'category_choices': Testimony.CATEGORY_CHOICES,
+    }
+    return render(request, 'admin_panel/testimonies/edit.html', context)
+
+
+@user_passes_test(is_admin)
+def testimony_delete_view(request, testimony_id):
+    """Deletar testemunho"""
+    testimony = get_object_or_404(Testimony, id=testimony_id)
+    if request.method == 'POST':
+        name = testimony.title
+        testimony.delete()
+        messages.success(request, f'Testemunho "{name}" excluído com sucesso!')
+        return redirect('admin_testimonies_list')
+    return render(request, 'admin_panel/testimonies/delete.html', {'testimony': testimony})
+
+
+@csrf_exempt
+@user_passes_test(is_admin)
+def testimony_toggle_view(request, testimony_id):
+    """Alterna aprovação ou exibição na home via AJAX"""
+    if request.method == 'POST':
+        testimony = get_object_or_404(Testimony, id=testimony_id)
+        data = json.loads(request.body)
+        field = data.get('field')  # 'is_approved' or 'show_on_home'
+        if field == 'is_approved':
+            testimony.is_approved = not testimony.is_approved
+            testimony.save(update_fields=['is_approved'])
+            return JsonResponse({'success': True, 'value': testimony.is_approved})
+        elif field == 'show_on_home':
+            testimony.show_on_home = not testimony.show_on_home
+            testimony.save(update_fields=['show_on_home'])
+            return JsonResponse({'success': True, 'value': testimony.show_on_home})
+    return JsonResponse({'success': False, 'error': 'Requisição inválida'})
