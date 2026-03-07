@@ -144,12 +144,7 @@
                 <ion-icon name="location-outline"></ion-icon>
                 Bairros
             </a>
-            {% endif %}        {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'canteen' %}
-        <a href="{% url 'admin_cantina_list' %}" class="sidebar-item {% if 'cantina' in request.resolver_match.url_name %}active{% endif %}">
-            <ion-icon name="cafe-outline"></ion-icon>
-            Cantina
-        </a>
-        {% endif %}
+            {% endif %}
         {% if user.user_type == 'admin' %}
         <a href="{% url 'admin_user_management' %}" class="sidebar-item {% if 'user_management' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="shield-outline"></ion-icon>
@@ -308,13 +303,7 @@
             <ion-icon name="location-outline"></ion-icon>
             Bairros
         </a>
-        {% endif %}            {% if user.user_type == 'admin' or user.is_superuser or user.user_type == 'canteen' %}
-            <!-- Cantina só para admin e usuários do tipo canteen -->
-            <a href="{% url 'admin_cantina_list' %}" class="sidebar-item {% if 'cantina' in request.resolver_match.url_name %}active{% endif %}">
-                <ion-icon name="cafe-outline"></ion-icon>
-                Cantina
-            </a>
-            {% endif %}
+        {% endif %}
             
             {% if user.user_type == 'admin' %}
             <!-- Usuários só para admin -->

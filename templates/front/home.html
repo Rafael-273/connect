@@ -693,12 +693,28 @@ Igreja Filadélfia - Uma família que acolhe
             nav.classList.add('header-transparent');
         }
         
+        // Remove transparent class when mobile menu opens
+        const mobileMenu = document.getElementById('mobile-menu');
+        if (mobileMenu) {
+            new MutationObserver(function() {
+                const menuOpen = !mobileMenu.classList.contains('hidden');
+                if (menuOpen) {
+                    if (header) header.classList.remove('header-transparent');
+                    if (nav) nav.classList.remove('header-transparent');
+                } else if ((window.pageYOffset || document.documentElement.scrollTop) <= 100) {
+                    if (header) header.classList.add('header-transparent');
+                    if (nav) nav.classList.add('header-transparent');
+                }
+            }).observe(mobileMenu, { attributes: true, attributeFilter: ['class'] });
+        }
+        
         // Handle scroll
         window.addEventListener('scroll', function() {
             const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            const mobileMenuOpen = !document.getElementById('mobile-menu')?.classList.contains('hidden');
             
-            // Show header background when scrolling down past 100px
-            if (scrollTop > 100) {
+            // Show header background when scrolling down past 100px or when mobile menu is open
+            if (scrollTop > 100 || mobileMenuOpen) {
                 if (header) {
                     header.classList.remove('header-transparent');
                 }
