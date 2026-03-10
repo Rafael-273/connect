@@ -6,6 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Escala - {{ schedule.ministry.name }} - {{ schedule.title }}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+        /* ===== Design Tokens ===== */
+        :root {
+            --bg: #f6f7fb;
+            --card: #ffffff;
+            --ink: #0f172a;
+            --muted: #475569;
+            --primary: #c90905;
+            --primary-dark: #991b1b;
+            --accent: #f59e0b;
+            --border: #e2e8f0;
+            --soft: #fef2f2;
+            --shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+        }
+
         /* ===== Reset & Base ===== */
         *, *::before, *::after {
             box-sizing: border-box;
@@ -14,74 +30,85 @@
         }
 
         body {
-            font-family: Arial, Helvetica, sans-serif;
-            color: #1f2937;
-            line-height: 1.6;
+            font-family: 'Poppins', 'Helvetica Neue', Arial, sans-serif;
+            color: var(--ink);
+            line-height: 1.7;
             font-size: 11pt;
-            background-color: #f3f4f6;
+            background: radial-gradient(circle at 20% 20%, #ffeaea 0%, transparent 35%),
+                        radial-gradient(circle at 80% 0%, #fff6d9 0%, transparent 32%),
+                        var(--bg);
         }
 
         /* ===== Screen-only wrapper ===== */
         .print-page {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 40px 48px;
+            max-width: 880px;
+            margin: 0 auto 32px;
+            background: var(--card);
+            padding: 44px 52px;
+            border-radius: 24px;
+            box-shadow: var(--shadow);
         }
 
         /* ===== Toolbar (hidden on print) ===== */
         .toolbar {
-            background: #1f2937;
+            background: #0f172a;
             color: white;
-            padding: 12px 24px;
+            padding: 14px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             position: sticky;
             top: 0;
             z-index: 100;
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
         }
 
         .toolbar a {
-            color: #d1d5db;
+            color: #e2e8f0;
             text-decoration: none;
             font-size: 14px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
         }
 
         .toolbar a:hover {
-            color: white;
+            color: #ffffff;
         }
 
         .btn-print {
-            background: #dc2626;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
             border: none;
-            padding: 10px 24px;
-            border-radius: 8px;
+            padding: 10px 20px;
+            border-radius: 12px;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 8px;
+            box-shadow: 0 12px 24px rgba(201, 9, 5, 0.25);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
 
         .btn-print:hover {
-            background: #b91c1c;
+            transform: translateY(-1px);
+            box-shadow: 0 16px 28px rgba(201, 9, 5, 0.32);
         }
 
         /* ===== Logo ===== */
         .logo-container {
             text-align: center;
-            margin-bottom: 16px;
+            margin-bottom: 18px;
         }
 
         .logo-container img {
-            width: 100px;
+            width: 110px;
             height: auto;
+            filter: drop-shadow(0 6px 14px rgba(0,0,0,0.08));
         }
 
         /* ===== Header ===== */
@@ -89,152 +116,220 @@
             text-align: center;
             margin-bottom: 28px;
             padding-bottom: 16px;
-            border-bottom: 4px solid #C90905;
+            border-bottom: 3px solid var(--border);
         }
 
         .header h1 {
-            color: #C90905;
+            color: var(--primary);
             font-size: 22pt;
-            margin: 5px 0;
-            font-weight: bold;
+            margin: 6px 0 4px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
         }
 
         .header h2 {
-            color: #8B0000;
-            font-size: 14pt;
-            margin: 5px 0;
-            font-weight: normal;
+            color: var(--muted);
+            font-size: 13pt;
+            margin: 0;
+            font-weight: 500;
         }
 
         /* ===== Info Box ===== */
         .info-box {
-            background-color: #FFF5F5;
-            border: 2px solid #FCA5A5;
-            margin: 20px 0;
+            background: linear-gradient(135deg, #fff7f7 0%, #fff8ed 100%);
+            border: 1px solid #fde2e2;
+            margin: 22px 0;
+            border-radius: 16px;
+            overflow: hidden;
         }
 
         .info-header {
-            background-color: #C90905;
+            background: var(--primary);
             color: white;
-            padding: 10px 15px;
-            font-weight: bold;
+            padding: 12px 18px;
+            font-weight: 700;
             font-size: 11pt;
+            letter-spacing: 0.01em;
         }
 
         .info-body {
-            padding: 16px 20px;
+            padding: 18px 20px 16px;
         }
 
-        .info-body p {
-            margin: 8px 0;
-            line-height: 1.6;
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px 16px;
         }
 
-        .info-body strong {
-            color: #C90905;
+        .meta-item {
+            padding: 12px 14px;
+            background: rgba(255,255,255,0.65);
+            border: 1px solid #f1f5f9;
+            border-radius: 12px;
+        }
+
+        .meta-label {
+            font-size: 10pt;
+            color: var(--muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .meta-value {
+            font-size: 11pt;
+            font-weight: 700;
+            color: var(--ink);
+            margin-top: 4px;
         }
 
         .guidelines-section {
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 2px dashed #FCA5A5;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px dashed #f8c4c4;
         }
 
         .guidelines-title {
-            color: #C90905;
-            font-weight: bold;
+            color: var(--primary);
+            font-weight: 700;
             font-size: 10pt;
             margin-bottom: 8px;
         }
 
         .guidelines-content {
-            color: #4B5563;
+            color: var(--muted);
             line-height: 1.7;
-            padding-left: 8px;
+            padding-left: 6px;
         }
 
         /* ===== Section Title ===== */
         .section-title {
-            color: #C90905;
+            color: var(--ink);
             font-size: 15pt;
-            font-weight: bold;
-            margin: 28px 0 16px 0;
-            padding-bottom: 10px;
-            border-bottom: 3px solid #C90905;
+            font-weight: 700;
+            margin: 28px 0 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            letter-spacing: -0.01em;
         }
 
         /* ===== Day Cards ===== */
         .day-card {
-            margin: 16px 0;
-            border: 2px solid #FCA5A5;
+            margin: 18px 0;
+            border: 1px solid #f1f5f9;
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--card);
+            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
             break-inside: avoid;
         }
 
         .day-card.cancelled {
-            border-color: #DC2626;
-            background-color: #FEF2F2;
+            border-color: #fecdd3;
+            background-color: #fff5f5;
         }
 
         .day-header {
-            background-color: #C90905;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
             color: white;
-            padding: 12px 16px;
-            font-weight: bold;
+            padding: 14px 18px;
+            font-weight: 700;
             font-size: 11pt;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .day-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .day-badge {
+            padding: 4px 10px;
+            background: rgba(255,255,255,0.16);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 999px;
+            font-size: 9pt;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+
+        .day-badge.cancelled {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.25);
         }
 
         .day-card.cancelled .day-header {
-            background-color: #991B1B;
+            background: linear-gradient(135deg, #b91c1c, #7f1d1d);
         }
 
         .day-body {
-            padding: 16px 18px;
+            padding: 16px 18px 18px;
+        }
+
+        .assignment-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
         }
 
         .team-box {
-            background-color: #FFF5F5;
+            background: #f8fafc;
             padding: 12px 14px;
-            border-left: 4px solid #C90905;
-            margin: 8px 0;
-            font-weight: 600;
-            color: #1F2937;
+            border: 1px solid #e2e8f0;
+            border-left: 5px solid var(--primary);
+            border-radius: 12px;
+            font-weight: 700;
+            color: var(--ink);
+            min-width: 220px;
         }
 
         .member-item {
-            background-color: #FFF5F5;
-            border: 1px solid #FCA5A5;
-            padding: 8px 14px;
-            margin: 4px 4px 4px 0;
-            display: inline-block;
+            background: #fff7f7;
+            border: 1px solid #fde2e2;
+            padding: 8px 12px;
+            border-radius: 999px;
             font-size: 10pt;
+            font-weight: 600;
+            color: var(--primary-dark);
         }
 
         .notes-box {
-            background-color: #FEF3C7;
-            border-left: 4px solid #F59E0B;
+            background: #fffaf0;
+            border: 1px solid #fdecc8;
+            border-left: 5px solid var(--accent);
             padding: 12px 14px;
             margin: 14px 0 0 0;
             font-size: 10pt;
-            color: #78350F;
-            line-height: 1.5;
+            color: #92400e;
+            line-height: 1.6;
+            border-radius: 12px;
         }
 
         .notes-box strong {
-            color: #92400E;
+            color: #b45309;
         }
 
         .cancellation-box {
-            background-color: #FEE2E2;
-            border-left: 4px solid #991B1B;
+            background: #fff1f2;
+            border: 1px solid #fecdd3;
+            border-left: 5px solid #b91c1c;
             padding: 12px 14px;
             margin: 10px 0;
             font-size: 10pt;
-            color: #7F1D1D;
-            font-weight: 600;
+            color: #7f1d1d;
+            font-weight: 700;
+            border-radius: 12px;
         }
 
         .no-assignment {
-            color: #9CA3AF;
+            color: var(--muted);
             font-style: italic;
             font-size: 10pt;
         }
@@ -242,10 +337,11 @@
         .empty-state {
             text-align: center;
             padding: 50px 30px;
-            color: #9CA3AF;
+            color: var(--muted);
             font-style: italic;
-            background-color: #FFF5F5;
-            border: 2px dashed #FCA5A5;
+            background: #fff7f7;
+            border: 1px dashed #fde2e2;
+            border-radius: 16px;
         }
 
         /* ===== Footer ===== */
@@ -253,9 +349,20 @@
             text-align: center;
             margin-top: 40px;
             padding-top: 16px;
-            border-top: 2px solid #FCA5A5;
-            color: #6B7280;
+            border-top: 1px solid #e2e8f0;
+            color: var(--muted);
             font-size: 9pt;
+            letter-spacing: 0.01em;
+        }
+
+        .footer-brand {
+            margin: 1rem 0;
+        }
+
+        .footer-brand img {
+            width: 90px;
+            height: auto;
+            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.08));
         }
 
         /* ===== Print Styles ===== */
@@ -288,45 +395,45 @@
             }
 
             .header {
-                border-bottom-color: #C90905 !important;
+                border-bottom-color: var(--primary) !important;
             }
 
             .day-header {
-                background-color: #C90905 !important;
+                background: var(--primary) !important;
                 color: white !important;
             }
 
             .day-card.cancelled .day-header {
-                background-color: #991B1B !important;
+                background: var(--primary-dark) !important;
             }
 
             .info-header {
-                background-color: #C90905 !important;
+                background: var(--primary) !important;
                 color: white !important;
             }
 
             .info-box {
-                background-color: #FFF5F5 !important;
+                background-color: #fff7f7 !important;
             }
 
             .team-box {
-                background-color: #FFF5F5 !important;
-                border-left-color: #C90905 !important;
+                background-color: #f8fafc !important;
+                border-left-color: var(--primary) !important;
             }
 
             .member-item {
-                background-color: #FFF5F5 !important;
-                border-color: #FCA5A5 !important;
+                background-color: #fff7f7 !important;
+                border-color: #fde2e2 !important;
             }
 
             .notes-box {
-                background-color: #FEF3C7 !important;
-                border-left-color: #F59E0B !important;
+                background-color: #fffaf0 !important;
+                border-left-color: var(--accent) !important;
             }
 
             .cancellation-box {
-                background-color: #FEE2E2 !important;
-                border-left-color: #991B1B !important;
+                background-color: #fff1f2 !important;
+                border-left-color: var(--primary-dark) !important;
             }
         }
     </style>
@@ -338,17 +445,12 @@
             ← Voltar para a escala
         </a>
         <button class="btn-print" onclick="window.print()">
-            🖨️ Imprimir / Salvar PDF
+            Exportar PDF
         </button>
     </div>
 
     <!-- Printable Content -->
     <div class="print-page">
-        <!-- Logo -->
-        <div class="logo-container">
-            <img src="{% static 'assets/red_logo.png' %}" alt="Logo Igreja Filadélfia">
-        </div>
-
         <!-- Header -->
         <div class="header">
             <h1>{{ schedule.ministry.name }} - {{ schedule.title }}</h1>
@@ -377,20 +479,22 @@
         </div>
 
         <!-- Schedule Days -->
-        <h3 class="section-title">📅 Cronograma do Mês</h3>
+        <h3 class="section-title">📅 Escala do Mês</h3>
 
         {% if days %}
             {% for day in days %}
             <div class="day-card {% if day.is_cancelled %}cancelled{% endif %}">
                 <div class="day-header">
-                    <span>{{ day.date_str }} - {{ day.day_name }}</span>
-                    {% if day.is_cancelled %}
-                        <span> - ❌ CANCELADO</span>
-                    {% else %}
-                        {% if day.description %}
-                            <span> - {{ day.description }}</span>
+                    <div class="day-title">
+                        <span>{{ day.date_str }} - {{ day.day_name }}</span>
+                    </div>
+                    <div class="day-meta">
+                        {% if day.is_cancelled %}
+                            <span class="day-badge cancelled">❌ Cancelado</span>
+                        {% elif day.description %}
+                            <span class="day-badge">{{ day.description }}</span>
                         {% endif %}
-                    {% endif %}
+                    </div>
                 </div>
 
                 <div class="day-body">
@@ -436,6 +540,9 @@
 
         <!-- Footer -->
         <div class="footer">
+            <div class="footer-brand">
+                <img src="{% static 'assets/red_logo.png' %}" alt="Logo Igreja Filadélfia">
+            </div>
             <p>Documento gerado em {{ generated_at }} • Igreja Filadélfia</p>
         </div>
     </div>

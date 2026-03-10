@@ -118,7 +118,7 @@ urlpatterns = [
     path('admin-panel/schedules/<int:schedule_id>/delete/', schedule_delete_view, name='schedule_delete'),
     # publish/unpublish removed — schedule for current month is always active
     path('admin-panel/schedules/<int:schedule_id>/export-pdf/', schedule_export_pdf_view, name='schedule_export_pdf'),
-    path('admin-panel/schedules/<int:schedule_id>/imprimir/', schedule_print_view, name='schedule_print'),
+    path('admin-panel/schedules/<int:schedule_id>/export/', schedule_print_view, name='schedule_export'),
     
     # Schedule Days URLs
     path('admin-panel/schedules/<int:schedule_id>/days/new/', schedule_day_create_view, name='schedule_day_create'),
