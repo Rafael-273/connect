@@ -18,6 +18,7 @@ class Evangelized(BaseModel):
     conversion = models.CharField(max_length=20, choices=CONVERSION_CHOICES)
     prayer_request = models.TextField(blank=True, null=True)
     profile_notes = models.TextField(blank=True, null=True)
+    wants_peace_house = models.BooleanField(default=False, verbose_name='Deseja casa de paz?')
 
     def __str__(self):
         return self.name

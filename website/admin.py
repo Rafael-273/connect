@@ -2,7 +2,6 @@ from django.contrib import admin
 from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, testimony, prayer_request
 
 admin.site.register(ministry.Ministry)
-admin.site.register(evangelism.Evangelized)
 admin.site.register(follow_up.FollowUp)
 admin.site.register(follow_up.FollowUpReport)
 admin.site.register(member.Member)
@@ -16,6 +15,15 @@ class PrayerRequestAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at')
     search_fields = ('name', 'content')
     readonly_fields = ('created_at',)
+
+
+@admin.register(evangelism.Evangelized)
+class EvangelizedAdmin(admin.ModelAdmin):
+    list_display = ('name', 'gender', 'phone', 'neighborhood', 'evangelism_date', 'evangelized_by', 'conversion')
+    list_filter = ('conversion', 'gender', 'evangelism_date', 'neighborhood')
+    search_fields = ('name', 'phone', 'address')
+    date_hierarchy = 'evangelism_date'
+    readonly_fields = ('evangelism_date',)
 
 @admin.register(event.Event)
 class EventAdmin(admin.ModelAdmin):

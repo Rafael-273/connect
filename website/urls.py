@@ -3,6 +3,7 @@ from django.contrib.auth import views as auth_views
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView
 from .views.home import HomeView, TestimonyListView, ContactView
 from .views.visitor import VisitorCreateView, VisitorListView
+from .views.evangelism import EvangelismCreateView, EvangelismListView
 from .views.member import (
     MemberCreateView, 
     NewConvertsListView,
@@ -60,6 +61,8 @@ urlpatterns = [
     path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
     path('prayer-request/', PrayerRequestCreateView.as_view(), name='prayer_request_create'),
     path('prayer-request/list', PrayerRequestListView.as_view(), name='prayer_request_list'),
+    path('evangelism/', EvangelismCreateView.as_view(), name='evangelism'),
+    path('evangelism/list/', EvangelismListView.as_view(), name='evangelism_list'),
     path('new_converts/list/', NewConvertsListView.as_view(), name='new_converts_list'),
     path('member/register/', MemberCreateView.as_view(), name='member_register'),
     path('translator/recorder/', AudioRecorderView.as_view(), name='audio_recorder'),
