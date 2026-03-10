@@ -39,6 +39,7 @@ from .views.schedules import (
     schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
     schedule_day_toggle_cancel_view
 )
+from .views.prayer_request import PrayerRequestCreateView, PrayerRequestListView
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
     events_list_view, ministries_list_view, neighborhoods_list_view,
@@ -57,6 +58,8 @@ urlpatterns = [
     path('contato/', ContactView.as_view(), name='contato'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
     path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
+    path('prayer-request/', PrayerRequestCreateView.as_view(), name='prayer_request_create'),
+    path('prayer-request/list', PrayerRequestListView.as_view(), name='prayer_request_list'),
     path('new_converts/list/', NewConvertsListView.as_view(), name='new_converts_list'),
     path('member/register/', MemberCreateView.as_view(), name='member_register'),
     path('translator/recorder/', AudioRecorderView.as_view(), name='audio_recorder'),
