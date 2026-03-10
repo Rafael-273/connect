@@ -1,8 +1,18 @@
 from django import forms
+import re
 from ..models.visitor import Visitor
 
 
+SPAM_PATTERNS = re.compile(
+    r'(https?://|www\.|\.(com|net|org|info|xyz|ru|cn|tk)|casino|poker|viagra|cialis|crypto|bitcoin|loan|prize|winner|click here|free money)',
+    re.IGNORECASE
+)
+
+
 class VisitorForm(forms.ModelForm):
+    # Honeypot — deve ficar em branco
+    website = forms.CharField(required=False, widget=forms.HiddenInput)
+
     class Meta:
         model = Visitor
         fields = ['name', 'phone', 'address', 'neighborhood', 'prayer_request', 'wants_home_prayer']
@@ -38,6 +48,23 @@ class VisitorForm(forms.ModelForm):
                 'placeholder': 'Seu pedido de oração...'
             }),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        if cleaned_data.get('website'):
+            raise forms.ValidationError('Submissão inválida.')
+
+        for field in ('name', 'address', 'prayer_request'):
+            value = cleaned_data.get(field, '') or ''
+            if SPAM_PATTERNS.search(value):
+                raise forms.ValidationError('Conteúdo inválido detectado. Revise as informações.')
+
+        name = cleaned_data.get('name', '')
+        if name and len(name.strip()) < 3:
+            self.add_error('name', 'Por favor, informe seu nome completo.')
+
+        return cleaned_data
 
 
 class VisitorAdminForm(forms.ModelForm):
