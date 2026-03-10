@@ -1,0 +1,187 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{% if testimony %}Editar Testemunho{% else %}Novo Testemunho{% endif %} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .form-group { margin-bottom: 1.5rem; }
+
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .form-control, .form-select {
+        width: 100%;
+        padding: 0.625rem 0.875rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        color: #111827;
+        background: white;
+        transition: border-color .2s, box-shadow .2s;
+    }
+    .form-control:focus, .form-select:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(201,9,5,.08);
+    }
+
+    .toggle-switch { position: relative; display: inline-block; width: 52px; height: 26px; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+        position: absolute; cursor: pointer;
+        top:0; left:0; right:0; bottom:0;
+        background: #d1d5db; border-radius: 34px; transition:.3s;
+    }
+    .slider::before {
+        content:''; position:absolute;
+        width:18px; height:18px;
+        left:4px; bottom:4px;
+        background:white; border-radius:50%; transition:.3s;
+    }
+    input:checked + .slider { background: var(--color-primary); }
+    input:checked + .slider::before { transform: translateX(26px); }
+
+    .section-title {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: #9ca3af;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid #f3f4f6;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
+            <div class="max-w-3xl mx-auto">
+                <div class="admin-card p-6">
+
+                    <!-- Header -->
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-3">
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900">
+                                {% if testimony %}Editar Testemunho{% else %}Novo Testemunho{% endif %}
+                            </h1>
+                            <p class="text-gray-500 text-sm mt-1">
+                                {% if testimony %}Atualize as informações do testemunho{% else %}Cadastre um novo testemunho para o site{% endif %}
+                            </p>
+                        </div>
+                        <a href="{% url 'admin_testimonies_list' %}"
+                           class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition text-sm flex items-center gap-2">
+                            <ion-icon name="arrow-back-outline"></ion-icon> Voltar
+                        </a>
+                    </div>
+
+                    <form method="post" class="space-y-0">
+                        {% csrf_token %}
+
+                        <!-- SEÇÃO: Conteúdo do Testemunho -->
+                        <div class="section-title">Conteúdo</div>
+
+                        <div class="form-group mb-6">
+                            <label class="form-label">Categoria</label>
+                            <select name="category" class="form-select">
+                                {% for value, label in category_choices %}
+                                <option value="{{ value }}"
+                                    {% if testimony and testimony.category == value %}selected{% elif not testimony and value == 'other' %}selected{% endif %}>
+                                    {{ label }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-group mb-6">
+                            <label class="form-label">Título do Testemunho <span class="text-red-500">*</span></label>
+                            <input type="text" name="title" required class="form-control"
+                                   value="{% if testimony %}{{ testimony.title }}{% endif %}"
+                                   placeholder="Ex: Deus me curou de uma doença incurável">
+                        </div>
+
+                        <!-- SEÇÃO: Instagram -->
+                        <div class="section-title">Instagram (opcional)</div>
+
+                        <div class="form-group mb-6">
+                            <label class="form-label">URL do post/reel do Instagram</label>
+                            <input type="url" name="instagram_url"
+                                   value="{% if testimony %}{{ testimony.instagram_url|default:'' }}{% endif %}"
+                                   placeholder="https://www.instagram.com/p/..."
+                                   class="form-control">
+                            <p class="text-gray-400 text-xs mt-1">Cole a URL completa do post ou reel para embed automático no site.</p>
+                        </div>
+
+                        <!-- SEÇÃO: Publicação -->
+                        <div class="section-title">Publicação</div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                                <div>
+                                    <p class="font-semibold text-gray-800 text-sm">Aprovado</p>
+                                    <p class="text-gray-500 text-xs mt-0.5">Testemunho visível no site</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="is_approved"
+                                           {% if testimony and testimony.is_approved %}checked{% endif %}>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                                <div>
+                                    <p class="font-semibold text-gray-800 text-sm">Exibir na Home</p>
+                                    <p class="text-gray-500 text-xs mt-0.5">Destaque na página inicial</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" name="show_on_home"
+                                           {% if testimony and testimony.show_on_home %}checked{% endif %}>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-100">
+                            <button type="submit"
+                                    class="flex-1 bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:opacity-90 transition font-semibold flex items-center justify-center gap-2">
+                                <ion-icon name="save-outline" class="text-lg"></ion-icon>
+                                {% if testimony %}Salvar Alterações{% else %}Cadastrar Testemunho{% endif %}
+                            </button>
+                            <a href="{% url 'admin_testimonies_list' %}"
+                               class="flex-1 sm:flex-none bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 transition font-medium flex items-center justify-center gap-2 text-center">
+                                Cancelar
+                            </a>
+                            {% if testimony %}
+                            <a href="{% url 'admin_testimony_delete' testimony.id %}"
+                               class="flex-1 sm:flex-none bg-red-50 text-red-600 px-6 py-3 rounded-lg hover:bg-red-100 transition font-medium flex items-center justify-center gap-2">
+                                <ion-icon name="trash-outline"></ion-icon> Excluir
+                            </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
