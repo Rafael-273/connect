@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, prayer_request
+from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, testimony, prayer_request
 
 admin.site.register(ministry.Ministry)
 admin.site.register(evangelism.Evangelized)
@@ -37,5 +37,25 @@ class EventAdmin(admin.ModelAdmin):
             'fields': ('is_recurring', 'recurrence_pattern', 'recurrence_description'),
             'classes': ('collapse',),
             'description': 'Configure aqui se o evento se repete regularmente'
+        }),
+    )
+
+
+@admin.register(testimony.Testimony)
+class TestimonyAdmin(admin.ModelAdmin):
+    list_display = ('author_name', 'category', 'is_approved', 'show_on_home', 'created_at')
+    list_filter = ('is_approved', 'show_on_home', 'category')
+    search_fields = ('author_name', 'content')
+    list_editable = ('is_approved', 'show_on_home')
+    fieldsets = (
+        ('Informações do Testemunho', {
+            'fields': ('author_name', 'member', 'photo', 'content', 'category', 'testimony_date')
+        }),
+        ('Instagram', {
+            'fields': ('instagram_url',),
+            'description': 'Cole a URL de um post ou reel do Instagram para exibir o vídeo na página de testemunhos'
+        }),
+        ('Exibição', {
+            'fields': ('is_approved', 'show_on_home')
         }),
     )
