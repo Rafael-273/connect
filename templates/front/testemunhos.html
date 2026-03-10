@@ -1,0 +1,286 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+Testemunhos - Igreja Filadélfia
+{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #000000 !important;
+    }
+
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(50px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .fade-in-up {
+        animation: fadeInUp 1s ease-out;
+    }
+
+    .fade-in-up-visible {
+        animation: fadeInUp 0.8s ease-out forwards;
+    }
+
+    .footer-color {
+        background-color: var(--color-danger) !important;
+    }
+
+    .glass-card {
+        background: rgba(13, 13, 13, 0.8);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .glass-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 20px 40px rgba(201, 9, 5, 0.2);
+        border-color: rgba(201, 9, 5, 0.4);
+        background: rgba(13, 13, 13, 0.95);
+    }
+
+    .section-divider {
+        width: 80px;
+        height: 4px;
+        background: linear-gradient(90deg, transparent, #C90905, transparent);
+        margin: 0 auto;
+    }
+
+    .gradient-text {
+        color: #C90905;
+    }
+
+    .instagram-embed-container {
+        position: relative;
+        width: 100%;
+        padding-bottom: 125%;
+        overflow: hidden;
+        border-radius: 12px;
+        background: #1a1a1a;
+    }
+
+    .instagram-embed-container iframe {
+        position: absolute;
+        top: -56px;
+        left: -2px;
+        width: calc(100% + 4px);
+        height: calc(100% + 112px);
+        border: none;
+        pointer-events: auto;
+    }
+
+    .instagram-placeholder {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #666;
+        background: #1a1a1a;
+    }
+
+    .category-badge {
+        background: rgba(201, 9, 5, 0.15);
+        border: 1px solid rgba(201, 9, 5, 0.3);
+        color: #C90905;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .filter-btn {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #ccc;
+        padding: 8px 20px;
+        border-radius: 25px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        font-size: 0.9rem;
+    }
+
+    .filter-btn:hover,
+    .filter-btn.active {
+        background: rgba(201, 9, 5, 0.2);
+        border-color: rgba(201, 9, 5, 0.5);
+        color: #fff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="relative w-full min-h-[75vh] md:min-h-[65vh] overflow-hidden flex items-center justify-center pt-28 sm:pt-40 pb-8 sm:pb-16">
+    <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-[#C90905]/20 via-black/80 to-black z-10"></div>
+    <div class="absolute inset-0 bg-black z-0"></div>
+
+    <div class="relative z-20 flex flex-col justify-center items-center w-full h-full px-4 sm:px-8 text-center">
+        <div class="inline-block opacity-0 fade-in-up-visible mb-[-1.8rem] sm:mb-[-1.3rem]" style="animation-delay: 0.1s;">
+            <span class="text-white font-semibold text-sm uppercase tracking-wider">Vidas Transformadas</span>
+        </div>
+        <h1 class="text-white font-bold text-[4.1rem] sm:text-5xl lg:text-[7rem] tracking-tight opacity-0 fade-in-up-visible" style="animation-delay: 0.2s;">
+            Nossos
+        </h1>
+        <h1 class="font-bold text-4xl sm:text-5xl lg:text-[6rem] tracking-tight mt-[-1rem] sm:mt-[-0.8rem] opacity-0 fade-in-up-visible" style="color: var(--color-danger); animation-delay: 0.3s;">
+            Testemunhos
+        </h1>
+        <div class="section-divider mt-6 mb-4 opacity-0 fade-in-up-visible" style="animation-delay: 0.4s;"></div>
+        <p class="text-gray-400 text-base md:text-xl max-w-2xl mx-auto opacity-0 fade-in-up-visible" style="animation-delay: 0.5s;">
+            Histórias reais de pessoas que<br class="sm:hidden"> experimentaram o poder<br class="sm:hidden"> e o amor de Deus
+        </p>
+    </div>
+
+    <div class="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-b from-transparent to-black z-20 pointer-events-none"></div>
+</div>
+
+<!-- Filter Bar -->
+<div class="w-full px-4 md:px-8 py-4 md:py-6 flex flex-wrap gap-2 md:gap-3 justify-center">
+    <button class="filter-btn active" data-filter="all">Todos</button>
+    <button class="filter-btn" data-filter="healing">Cura</button>
+    <button class="filter-btn" data-filter="salvation">Salvação</button>
+    <button class="filter-btn" data-filter="deliverance">Libertação</button>
+    <button class="filter-btn" data-filter="provision">Provisão</button>
+    <button class="filter-btn" data-filter="restoration">Restauração</button>
+</div>
+
+<!-- Testimonies Grid -->
+<div class="w-full px-4 md:px-8 lg:px-12 pb-12 md:pb-20">
+    {% if testimonies %}
+    <div id="testimonies-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+        {% for testimony in testimonies %}
+        <div class="testimony-card glass-card rounded-3xl overflow-hidden group" data-category="{{ testimony.category }}">
+            {% if testimony.instagram_url %}
+            <!-- Instagram Embed -->
+            <div class="instagram-embed-container">
+                <iframe 
+                    src="{{ testimony.instagram_embed_url }}" 
+                    scrolling="no" 
+                    allowtransparency="true"
+                    loading="lazy"
+                    onerror="this.parentElement.innerHTML='<div class=\'instagram-placeholder\'><ion-icon name=\'logo-instagram\' class=\'text-5xl mb-3 text-gray-500\'></ion-icon><p class=\'text-sm\'>Não foi possível carregar o vídeo</p></div>'"
+                ></iframe>
+            </div>
+            {% elif testimony.photo %}
+            <div class="w-full h-64 overflow-hidden">
+                <img src="{{ testimony.photo.url }}" alt="{{ testimony.author_name }}" 
+                     class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">
+            </div>
+            {% endif %}
+
+            <div class="p-6 flex flex-col gap-3">
+                <span class="category-badge self-start">{{ testimony.get_category_display }}</span>
+
+                <p class="text-gray-300 text-base leading-relaxed font-medium">
+                    "{{ testimony.title }}"
+                </p>
+
+                {% if testimony.instagram_url %}
+                <a href="{{ testimony.instagram_url }}" target="_blank" rel="noopener noreferrer"
+                   class="flex items-center gap-2 text-sm text-gray-500 hover:text-[#C90905] transition-colors mt-1 self-start">
+                    <ion-icon name="logo-instagram" class="text-base"></ion-icon>
+                    Ver no Instagram
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-20">
+        <div class="w-24 h-24 rounded-full bg-gradient-to-br from-[#C90905]/20 to-[#C90905]/5 flex items-center justify-center mx-auto mb-6">
+            <ion-icon name="chatbubbles" class="text-5xl" style="color: #C90905;"></ion-icon>
+        </div>
+        <p class="text-gray-400 text-xl">Em breve compartilharemos testemunhos incríveis!</p>
+        <p class="text-gray-500 text-base mt-2">Volte em breve para conferir histórias de transformação.</p>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Category filter
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const cards = document.querySelectorAll('.testimony-card');
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+
+            const filter = this.dataset.filter;
+
+            cards.forEach(card => {
+                if (filter === 'all' || card.dataset.category === filter) {
+                    card.style.display = '';
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(20px)';
+                    setTimeout(() => {
+                        card.style.transition = 'all 0.5s ease';
+                        card.style.opacity = '1';
+                        card.style.transform = 'translateY(0)';
+                    }, 50);
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    });
+
+    // Scroll animation for cards
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+
+    const observer = new IntersectionObserver(function(entries) {
+        entries.forEach((entry, index) => {
+            if (entry.isIntersecting) {
+                setTimeout(() => {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }, index * 80);
+                observer.unobserve(entry.target);
+            }
+        });
+    }, observerOptions);
+
+    cards.forEach(card => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        card.style.transition = 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+        observer.observe(card);
+    });
+
+    // Fix Instagram embed URLs
+    document.querySelectorAll('.instagram-embed-container iframe').forEach(iframe => {
+        let src = iframe.getAttribute('src');
+        if (src && !src.includes('/embed')) {
+            // Ensure URL ends with /embed/
+            src = src.replace(/\/?$/, '/embed/');
+            iframe.setAttribute('src', src);
+        }
+    });
+});
+</script>
+{% endblock %}

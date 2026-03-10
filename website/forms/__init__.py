@@ -1,4 +1,3 @@
-from .canteen import CanteenDebtorForm
 from .evangelism import EvangelizedForm
 from .follow_up import FollowUpForm, FollowUpReportForm
 from .member import MemberForm
@@ -10,7 +9,6 @@ from .visitor import VisitorForm, VisitorAdminForm
 from .word_of_knowledge import WordOfKnowledgeForm, HealingForm
 
 __all__ = [
-    'CanteenDebtorForm',
     'EvangelizedForm',
     'FollowUpForm',
     'FollowUpReportForm',

@@ -18,6 +18,8 @@
             <ul class="hidden md:flex items-center space-x-8">
                 <li><a href="{% url 'home' %}" class="font-semibold text-[0.95rem] hover:text-white/80 transition duration-300" style="color: var(--text-color-on-primary);">Início</a></li>
                 <li><a href="{% url 'event_list' %}" class="font-semibold text-[0.95rem] hover:text-white/80 transition duration-300" style="color: var(--text-color-on-primary);">Eventos</a></li>
+                <li><a href="{% url 'testemunhos' %}" class="font-semibold text-[0.95rem] hover:text-white/80 transition duration-300" style="color: var(--text-color-on-primary);">Testemunhos</a></li>
+                <li><a href="{% url 'contato' %}" class="font-semibold text-[0.95rem] hover:text-white/80 transition duration-300" style="color: var(--text-color-on-primary);">Contato</a></li>
             </ul>
             {% endif %}
         </div>
@@ -47,6 +49,12 @@
         </li>
         <li class="w-full text-center">
             <a href="{% url 'event_list' %}" class="block py-3 text-[0.95rem] font-medium hover:bg-white/10 transition duration-300" style="color: var(--text-color-on-primary);">Eventos</a>
+        </li>
+        <li class="w-full text-center">
+            <a href="{% url 'testemunhos' %}" class="block py-3 text-[0.95rem] font-medium hover:bg-white/10 transition duration-300" style="color: var(--text-color-on-primary);">Testemunhos</a>
+        </li>
+        <li class="w-full text-center">
+            <a href="{% url 'contato' %}" class="block py-3 text-[0.95rem] font-medium hover:bg-white/10 transition duration-300" style="color: var(--text-color-on-primary);">Contato</a>
         </li>
         <li class="w-full px-4">
             <a href="{% url 'member_login' %}" class="block py-3 px-5 bg-white/10 border border-white/20 rounded-lg text-center font-semibold text-[0.95rem] hover:bg-white/20 transition-all duration-300" style="color: var(--text-color-on-primary);">
