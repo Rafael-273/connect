@@ -38,7 +38,8 @@ from .views.schedules import (
     schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
     schedule_delete_view, schedule_export_pdf_view, schedule_print_view,
     schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
-    schedule_day_toggle_cancel_view
+    schedule_day_toggle_cancel_view,
+    check_schedule_conflict_view
 )
 from .views.prayer_request import PrayerRequestCreateView, PrayerRequestListView
 from .views.admin_panel import (
@@ -125,6 +126,7 @@ urlpatterns = [
     path('admin-panel/schedules/days/<int:day_id>/edit/', schedule_day_edit_view, name='schedule_day_edit'),
     path('admin-panel/schedules/days/<int:day_id>/delete/', schedule_day_delete_view, name='schedule_day_delete'),
     path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', schedule_day_toggle_cancel_view, name='schedule_day_toggle_cancel'),
+    path('admin-panel/schedules/check-conflict/', check_schedule_conflict_view, name='schedule_check_conflict'),
     
     # Team URLs
     path('admin-panel/teams/', team_list_view, name='team_list'),

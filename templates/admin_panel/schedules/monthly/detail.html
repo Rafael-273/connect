@@ -529,6 +529,42 @@ document.getElementById('dayForm').addEventListener('submit', function(e) {
             }).then(() => {
                 window.location.reload();
             });
+        } else if (data.conflict) {
+            // Conflito detectado — perguntar se deseja sobrescrever
+            let conflictHtml = '<div class="text-left"><ul class="list-disc pl-5 space-y-1">';
+            (data.conflict_details || []).forEach(c => {
+                conflictHtml += `<li>${c}</li>`;
+            });
+            conflictHtml += '</ul></div>';
+            Swal.fire({
+                icon: 'warning',
+                title: 'Conflito de Escala!',
+                html: conflictHtml,
+                showCancelButton: true,
+                confirmButtonColor: '#f97316',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Continuar mesmo assim',
+                cancelButtonText: 'Cancelar',
+                width: '600px'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    formData.append('override_conflict', 'true');
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                        body: formData
+                    })
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.success) {
+                            Swal.fire('Sucesso!', 'Dia salvo com sucesso.', 'success').then(() => window.location.reload());
+                        } else {
+                            Swal.fire('Erro!', d.error || 'Erro ao salvar', 'error');
+                        }
+                    })
+                    .catch(() => Swal.fire('Erro!', 'Erro ao salvar o dia.', 'error'));
+                }
+            });
         } else {
             Swal.fire('Erro!', data.error || 'Erro ao salvar', 'error');
         }
@@ -797,13 +833,6 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
     const date = formData.get('date');
     const dayId = formData.get('dayId');
     
-    // If it's an existing day (already saved), add to pending for batch update
-    if (dayId) {
-        // store existing day id so saveAllDays knows to call edit endpoint
-        pendingDays[date] = pendingDays[date] || {};
-        pendingDays[date].existingId = dayId;
-    }
-    
     // Validate
     if (useTeamRotation) {
         if (!formData.get('team')) {
@@ -828,10 +857,70 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         }
     }
     
+    // Verificar conflitos de escala antes de prosseguir
+    if (!useTeamRotation) {
+        const conflictData = new FormData();
+        conflictData.append('date', date);
+        conflictData.append('schedule_id', scheduleId);
+        formData.getAll('members').forEach(id => conflictData.append('members', id));
+        
+        fetch('/admin-panel/schedules/check-conflict/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: conflictData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.has_conflict) {
+                // Montar lista de conflitos para exibir
+                let conflictHtml = '<div class="text-left"><p class="mb-2 font-semibold text-red-600">Os seguintes membros já estão escalados nesta data:</p><ul class="list-disc pl-5 space-y-1">';
+                data.conflicts.forEach(c => {
+                    conflictHtml += `<li><strong>${c.member_name}</strong> — ${c.ministry_name} - ${c.schedule_title} (${c.date})</li>`;
+                });
+                conflictHtml += '</ul></div>';
+                
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Conflito de Escala!',
+                    html: conflictHtml,
+                    showCancelButton: true,
+                    confirmButtonColor: '#f97316',
+                    cancelButtonColor: '#6b7280',
+                    confirmButtonText: 'Continuar mesmo assim',
+                    cancelButtonText: 'Cancelar',
+                    width: '600px'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        saveDayToPending(formData, date, dayId, true);
+                    }
+                });
+            } else {
+                saveDayToPending(formData, date, dayId, false);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao verificar conflitos:', error);
+            // Em caso de falha na verificação, prosseguir normalmente
+            saveDayToPending(formData, date, dayId, false);
+        });
+    } else {
+        saveDayToPending(formData, date, dayId, false);
+    }
+});
+
+function saveDayToPending(formData, date, dayId, overrideConflict) {
+    // If it's an existing day (already saved), add to pending for batch update
+    if (dayId) {
+        // store existing day id so saveAllDays knows to call edit endpoint
+        pendingDays[date] = pendingDays[date] || {};
+        pendingDays[date].existingId = dayId;
+    }
+    
     // Save to pending (merge with existing pending entry if present)
     pendingDays[date] = Object.assign(pendingDays[date] || {}, {
         description: formData.get('description') || '',
-        notes: formData.get('notes') || ''
+        notes: formData.get('notes') || '',
+        overrideConflict: overrideConflict
     });
     
     if (useTeamRotation) {
@@ -855,7 +944,7 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         timer: 2000,
         showConfirmButton: false
     });
-});
+}
 
 // Update pending days list in sidebar
 function updatePendingList() {
@@ -999,6 +1088,11 @@ function saveAllDays() {
                 formData.append('description', day.description);
                 formData.append('notes', day.notes);
                 
+                // Enviar flag de override se o usuário já confirmou o conflito
+                if (day.overrideConflict) {
+                    formData.append('override_conflict', 'true');
+                }
+                
                 if (useTeamRotation) {
                     formData.append('team', day.teamId);
                 } else {
@@ -1021,10 +1115,21 @@ function saveAllDays() {
                 .then(results => {
                     const errors = results.filter(r => !r.success);
                     if (errors.length > 0) {
+                        const conflictErrors = errors.filter(r => r.conflict);
+                        let errorHtml = `<p>${savedCount - errors.length} dias salvos, ${errors.length} com erro.</p>`;
+                        if (conflictErrors.length > 0) {
+                            errorHtml += '<div class="text-left mt-3"><p class="font-semibold text-red-600">Conflitos detectados:</p><ul class="list-disc pl-5 space-y-1 text-sm">';
+                            conflictErrors.forEach(e => {
+                                (e.conflict_details || []).forEach(c => {
+                                    errorHtml += `<li>${c}</li>`;
+                                });
+                            });
+                            errorHtml += '</ul></div>';
+                        }
                         Swal.fire({
                             icon: 'warning',
                             title: 'Parcialmente salvo',
-                            text: `${savedCount - errors.length} dias salvos, ${errors.length} com erro`,
+                            html: errorHtml,
                             confirmButtonColor: '#f97316'
                         }).then(() => {
                             window.location.reload();
