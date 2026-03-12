@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.http import JsonResponse, HttpResponse
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Prefetch
 from django.db import IntegrityError
 from django.template.loader import get_template
 from datetime import datetime
@@ -9,6 +9,7 @@ from calendar import monthrange
 from django.conf import settings
 import os
 from ..models import MonthlySchedule, ScheduleDay, Team, Ministry, Member
+from ..models.schedule import ScaleDivision, DivisionMember
 from ..models.ministry_membership import MinistryMembership
 from xhtml2pdf import pisa
 
@@ -257,12 +258,11 @@ def schedule_create_view(request):
         title = request.POST.get('title')
         month = request.POST.get('month')
         year = request.POST.get('year')
-        # removed optional name/color fields
         use_team_rotation = request.POST.get('use_team_rotation') == 'true'
         guidelines = request.POST.get('guidelines') or None
-        
+
         ministry = get_object_or_404(Ministry, id=ministry_id)
-        
+
         schedule = MonthlySchedule.objects.create(
             ministry=ministry,
             title=title,
@@ -271,13 +271,18 @@ def schedule_create_view(request):
             use_team_rotation=use_team_rotation,
             guidelines=guidelines
         )
-        
+
+        # Criar divisões enviadas no formulário
+        division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
+        for i, name in enumerate(division_names):
+            ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
+
         return redirect('schedule_detail', schedule_id=schedule.id)
-    
+
     ministries = Ministry.objects.filter(deleted__isnull=True).order_by('name')
     current_year = datetime.now().year
     years = range(current_year, current_year + 2)
-    
+
     context = {
         'ministries': ministries,
         'years': years,
@@ -285,7 +290,7 @@ def schedule_create_view(request):
         'current_month': datetime.now().month,
         'current_year': current_year
     }
-    
+
     return render(request, 'admin_panel/schedules/monthly/form.html', context)
 
 
@@ -293,31 +298,44 @@ def schedule_create_view(request):
 def schedule_edit_view(request, schedule_id):
     """Edita uma escala mensal"""
     schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
-    
+
     if request.method == 'POST':
         schedule.ministry_id = request.POST.get('ministry')
         schedule.title = request.POST.get('title')
         schedule.month = int(request.POST.get('month'))
         schedule.year = int(request.POST.get('year'))
-        # removed optional name/color assignments
         schedule.use_team_rotation = request.POST.get('use_team_rotation') == 'true'
         schedule.guidelines = request.POST.get('guidelines') or None
-        
+
         schedule.save()
-        
+
+        # Sincronizar divisões: apagar as existentes e recriar
+        ScaleDivision.objects.filter(schedule=schedule, deleted__isnull=True).delete()
+        division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
+        for i, name in enumerate(division_names):
+            ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
+
         return redirect('schedule_detail', schedule_id=schedule.id)
-    
+
     ministries = Ministry.objects.filter(deleted__isnull=True).order_by('name')
     current_year = datetime.now().year
     years = range(current_year - 1, current_year + 2)
-    
+
+    # Divisões existentes desta escala
+    existing_divisions = list(
+        ScaleDivision.objects.filter(
+            schedule=schedule, deleted__isnull=True
+        ).order_by('order', 'name').values_list('name', flat=True)
+    )
+
     context = {
         'schedule': schedule,
         'ministries': ministries,
         'years': years,
-        'months': MonthlySchedule.MONTH_CHOICES
+        'months': MonthlySchedule.MONTH_CHOICES,
+        'existing_divisions': existing_divisions,
     }
-    
+
     return render(request, 'admin_panel/schedules/monthly/form.html', context)
 
 
@@ -326,11 +344,19 @@ def schedule_detail_view(request, schedule_id):
     """Visualiza detalhes de uma escala mensal"""
     schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
     
-    # Buscar todos os dias da escala
+    # Buscar todos os dias da escala com prefetch de divisões
     days = ScheduleDay.objects.filter(
         schedule=schedule,
         deleted__isnull=True
-    ).select_related('team').prefetch_related('members').order_by('date')
+    ).select_related('team').prefetch_related(
+        'members',
+        Prefetch(
+            'division_assignments',
+            queryset=DivisionMember.objects.filter(
+                deleted__isnull=True
+            ).select_related('division', 'member').order_by('division__order', 'member__name')
+        )
+    ).order_by('date')
     
     # Buscar equipes do ministério
     teams = Team.objects.filter(
@@ -338,6 +364,13 @@ def schedule_detail_view(request, schedule_id):
         is_active=True,
         deleted__isnull=True
     ).prefetch_related('members')
+    
+    # Buscar divisões do ministério (hierarquia)
+    divisions = ScaleDivision.objects.filter(
+        schedule=schedule,
+        is_active=True,
+        deleted__isnull=True
+    ).select_related('parent').order_by('order', 'name')
     
     # Buscar membros do ministério (sistema antigo e novo - híbrido)
     # Membros do sistema antigo
@@ -365,7 +398,7 @@ def schedule_detail_view(request, schedule_id):
         deleted__isnull=True
     ).order_by('name')
     
-    # Organizar dias por semana
+    # Organizar dias por semana e agrupar divisões por dia
     weeks = {}
     for day in days:
         # attach Portuguese weekday name for template use
@@ -373,6 +406,19 @@ def schedule_detail_view(request, schedule_id):
             day.pt_weekday = WEEKDAYS_PT[day.date.weekday()]
         except Exception:
             day.pt_weekday = ''
+        
+        # Agrupar atribuições de divisões por divisão
+        divisions_map = {}
+        for assignment in day.division_assignments.all():
+            div_id = assignment.division_id
+            if div_id not in divisions_map:
+                divisions_map[div_id] = {
+                    'division': assignment.division,
+                    'members': []
+                }
+            divisions_map[div_id]['members'].append(assignment.member)
+        day.grouped_divisions = list(divisions_map.values())
+        
         week_num = day.get_week_number()
         if week_num not in weeks:
             weeks[week_num] = []
@@ -383,7 +429,8 @@ def schedule_detail_view(request, schedule_id):
         'days': days,
         'weeks': weeks,
         'teams': teams,
-        'members': members
+        'members': members,
+        'divisions': divisions,
     }
     
     return render(request, 'admin_panel/schedules/monthly/detail.html', context)
@@ -669,7 +716,19 @@ def schedule_print_view(request, schedule_id):
     days = ScheduleDay.objects.filter(
         schedule=schedule,
         deleted__isnull=True
-    ).select_related('team').prefetch_related('members').order_by('date')
+    ).select_related('team').prefetch_related(
+        'members',
+        'division_assignments',
+        'division_assignments__division',
+        'division_assignments__member',
+    ).order_by('date')
+
+    # Flat ordered list of all divisions for this schedule (for table columns)
+    divisions = list(ScaleDivision.objects.filter(
+        schedule=schedule,
+        deleted__isnull=True,
+        is_active=True,
+    ).order_by('order', 'name'))
 
     month_names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
                    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
@@ -678,6 +737,14 @@ def schedule_print_view(request, schedule_id):
 
     processed_days = []
     for day in days:
+        # Build division → members map for this day
+        div_members_map = {}  # division_id: [member, ...]
+        for assignment in day.division_assignments.all():
+            did = assignment.division_id
+            if did not in div_members_map:
+                div_members_map[did] = []
+            div_members_map[did].append(assignment.member)
+
         day_data = {
             'date': day.date,
             'date_str': day.date.strftime('%d/%m/%Y'),
@@ -686,6 +753,7 @@ def schedule_print_view(request, schedule_id):
             'notes': day.notes,
             'is_cancelled': day.is_cancelled,
             'cancellation_reason': day.cancellation_reason,
+            'div_members_map': div_members_map,
         }
 
         if schedule.use_team_rotation:
@@ -698,6 +766,7 @@ def schedule_print_view(request, schedule_id):
     context = {
         'schedule': schedule,
         'days': processed_days,
+        'divisions': divisions,
         'month_name': month_names[schedule.month - 1],
         'generated_at': datetime.now().strftime('%d/%m/%Y às %H:%M'),
         'use_team_rotation': schedule.use_team_rotation,
@@ -762,3 +831,159 @@ def check_schedule_conflict_view(request):
         'has_conflict': len(conflicts) > 0,
         'conflicts': conflicts
     })
+
+
+# ==================== DIVISION VIEWS ====================
+
+@user_passes_test(is_admin)
+def division_list_view(request, ministry_id):
+    """Redireciona para listagem de escalas (divisões agora são por escala)"""
+    return redirect('schedule_list')
+
+
+@user_passes_test(is_admin)
+def division_create_view(request, schedule_id):
+    """Cria uma nova divisão para uma escala (AJAX)"""
+    schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+
+    if request.method == 'POST':
+        name = request.POST.get('name', '').strip()
+        parent_id = request.POST.get('parent') or None
+        order = request.POST.get('order', 0)
+
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Nome obrigatório'}, status=400)
+
+        try:
+            division = ScaleDivision(
+                name=name,
+                schedule=schedule,
+                parent_id=parent_id,
+                order=int(order)
+            )
+            division.save()
+            return JsonResponse({
+                'success': True,
+                'division_id': division.id,
+                'name': division.name
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+    return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+
+
+@user_passes_test(is_admin)
+def division_edit_view(request, division_id):
+    """Edita uma divisão (AJAX)"""
+    division = get_object_or_404(ScaleDivision, id=division_id, deleted__isnull=True)
+
+    if request.method == 'POST':
+        division.name = request.POST.get('name', '').strip()
+        parent_id = request.POST.get('parent')
+        division.parent_id = parent_id if parent_id else None
+        division.order = int(request.POST.get('order', 0))
+        division.is_active = request.POST.get('is_active') == 'true'
+
+        try:
+            division.save()
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+    return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+
+
+@user_passes_test(is_admin)
+def division_delete_view(request, division_id):
+    """Deleta uma divisão"""
+    if request.method == 'POST':
+        division = get_object_or_404(ScaleDivision, id=division_id, deleted__isnull=True)
+        division.delete()
+        return JsonResponse({'success': True})
+
+    return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+
+
+# ==================== DIVISION MEMBER ASSIGNMENT VIEWS ====================
+
+@user_passes_test(is_admin)
+def schedule_day_division_assign_view(request, day_id):
+    """Atribui membros a divisões em um dia de escala"""
+    day = get_object_or_404(ScheduleDay, id=day_id, deleted__isnull=True)
+    
+    if request.method == 'POST':
+        import json
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'success': False, 'error': 'JSON inválido'}, status=400)
+        
+        assignments = data.get('assignments', [])
+        
+        # Limpar atribuições existentes para este dia
+        DivisionMember.objects.filter(
+            schedule_day=day,
+            deleted__isnull=True
+        ).delete()
+        
+        # Criar novas atribuições
+        created = []
+        for item in assignments:
+            division_id = item.get('division_id')
+            member_ids = item.get('member_ids', [])
+            
+            division = get_object_or_404(
+                ScaleDivision, id=division_id, deleted__isnull=True
+            )
+            
+            for member_id in member_ids:
+                dm = DivisionMember.objects.create(
+                    division=division,
+                    schedule_day=day,
+                    member_id=member_id
+                )
+                created.append(dm.id)
+        
+        return JsonResponse({
+            'success': True,
+            'created_count': len(created)
+        })
+    
+    # GET: return current assignments
+    assignments = DivisionMember.objects.filter(
+        schedule_day=day,
+        deleted__isnull=True
+    ).select_related('division', 'member').order_by('division__order', 'member__name')
+    
+    divisions = ScaleDivision.objects.filter(
+        schedule=day.schedule,
+        is_active=True,
+        deleted__isnull=True
+    ).order_by('order', 'name')
+    
+    data = {
+        'day_id': day.id,
+        'date': day.date.strftime('%d/%m/%Y'),
+        'divisions': [
+            {
+                'id': d.id,
+                'name': d.name,
+                'parent_id': d.parent_id,
+                'order': d.order,
+            }
+            for d in divisions
+        ],
+        'assignments': [
+            {
+                'id': a.id,
+                'division_id': a.division_id,
+                'division_name': a.division.name,
+                'member_id': a.member_id,
+                'member_name': a.member.name,
+            }
+            for a in assignments
+        ]
+    }
+    
+    return JsonResponse(data)

@@ -1,0 +1,44 @@
+{% load static %}
+{# Recursive tree node for division hierarchy #}
+
+<div class="border rounded-lg {% if depth == 0 %}border-gray-200{% else %}border-gray-100 ml-6{% endif %} {% if not node.division.is_active %}opacity-50{% endif %}">
+    <div class="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition">
+        <div class="flex items-center gap-3">
+            {% if node.children %}
+                <ion-icon name="git-branch-outline" class="text-orange-500 text-lg"></ion-icon>
+            {% else %}
+                <ion-icon name="remove-outline" class="text-gray-400 text-lg"></ion-icon>
+            {% endif %}
+            
+            <div>
+                <span class="font-medium text-gray-800">{{ node.division.name }}</span>
+                {% if not node.division.is_active %}
+                    <span class="ml-2 text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Inativa</span>
+                {% endif %}
+                {% if node.division.parent %}
+                    <span class="ml-2 text-xs text-gray-400">↳ {{ node.division.parent.name }}</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400 mr-2">Ordem: {{ node.division.order }}</span>
+            <button onclick="openEditModal({{ node.division.id }}, '{{ node.division.name|escapejs }}', '{{ node.division.parent_id|default_if_none:"" }}', {{ node.division.order }}, {{ node.division.is_active|yesno:"true,false" }})"
+                    class="text-blue-600 hover:text-blue-800 p-1 rounded hover:bg-blue-50 transition" title="Editar">
+                <ion-icon name="create-outline" class="text-lg"></ion-icon>
+            </button>
+            <button onclick="openDeleteModal({{ node.division.id }})"
+                    class="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 transition" title="Excluir">
+                <ion-icon name="trash-outline" class="text-lg"></ion-icon>
+            </button>
+        </div>
+    </div>
+    
+    {% if node.children %}
+        <div class="border-t border-gray-100">
+            {% for child in node.children %}
+                {% include 'admin_panel/schedules/divisions/tree_node.html' with node=child depth=depth|add:"1" %}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>

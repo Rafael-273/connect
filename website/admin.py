@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, testimony, prayer_request
+from .models.schedule import ScaleDivision, DivisionMember
 
 admin.site.register(ministry.Ministry)
 admin.site.register(follow_up.FollowUp)
@@ -47,6 +48,45 @@ class EventAdmin(admin.ModelAdmin):
             'description': 'Configure aqui se o evento se repete regularmente'
         }),
     )
+
+
+class ScaleDivisionInline(admin.TabularInline):
+    model = ScaleDivision
+    fk_name = 'parent'
+    extra = 0
+    fields = ('name', 'order', 'is_active')
+    verbose_name = 'Subdivisão'
+    verbose_name_plural = 'Subdivisões'
+
+
+@admin.register(ScaleDivision)
+class ScaleDivisionAdmin(admin.ModelAdmin):
+    list_display = ('name', 'schedule', 'parent', 'order', 'is_active')
+    list_filter = ('schedule', 'is_active')
+    search_fields = ('name', 'schedule__title')
+    list_editable = ('order', 'is_active')
+    inlines = [ScaleDivisionInline]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('schedule', 'parent')
+
+
+class DivisionMemberInline(admin.TabularInline):
+    model = DivisionMember
+    extra = 0
+    autocomplete_fields = ['member']
+
+
+@admin.register(DivisionMember)
+class DivisionMemberAdmin(admin.ModelAdmin):
+    list_display = ('member', 'division', 'schedule_day')
+    list_filter = ('division__schedule', 'division')
+    search_fields = ('member__name', 'division__name')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            'member', 'division', 'division__schedule', 'schedule_day'
+        )
 
 
 @admin.register(testimony.Testimony)
