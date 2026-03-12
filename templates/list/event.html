@@ -34,11 +34,19 @@ Eventos
     .footer-color {
         background-color: var(--color-danger) !important;
     }
+
+    .section-divider {
+        width: 80px;
+        height: 4px;
+        background: linear-gradient(90deg, transparent, var(--color-danger), transparent);
+        margin: 0 auto;
+    }
     
     .event {
         position: relative;
         overflow: hidden;
-        transition: all 0.3s ease;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid rgba(255,255,255,0.05);
     }
     
     .event::before {
@@ -55,6 +63,11 @@ Eventos
     .event:hover::before {
         height: 100%;
     }
+
+    .event:hover {
+        border-color: rgba(201, 9, 5, 0.2);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+    }
     
     .date-badge {
         background: linear-gradient(135deg, rgba(var(--color-danger-rgb), 0.15), rgba(var(--color-danger-rgb), 0.05));
@@ -69,6 +82,7 @@ Eventos
     .saiba-mais-btn:hover {
         background: linear-gradient(to right, var(--color-danger), #ff4d4d);
         transform: translateX(5px);
+        box-shadow: 0 6px 20px rgba(201, 9, 5, 0.3);
     }
     
     .action-btn {
@@ -86,7 +100,9 @@ Eventos
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        min-height: 450px; /* Aumentando a altura mínima do card */
+        min-height: 450px;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid rgba(255,255,255,0.05);
     }
     
     .recurring-event::before {
@@ -96,7 +112,7 @@ Eventos
         left: 0;
         height: 100%;
         width: 4px;
-        background: var(--color-primary); /* Alterado de gradiente roxo para cor primária */
+        background: var(--color-primary);
         transform: scaleY(0);
         transform-origin: top;
         transition: transform 0.4s ease;
@@ -104,6 +120,11 @@ Eventos
     
     .recurring-event:hover::before {
         transform: scaleY(1);
+    }
+
+    .recurring-event:hover {
+        border-color: rgba(201, 9, 5, 0.2);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
     }
     
     .event-section-title {
@@ -123,6 +144,18 @@ Eventos
     .fixed-events {
         margin-bottom: 40px;
     }
+
+    .search-input {
+        background-color: #181818;
+        border: 1px solid rgba(255,255,255,0.08);
+        transition: all 0.3s ease;
+    }
+
+    .search-input:focus {
+        border-color: rgba(201, 9, 5, 0.4);
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
+        outline: none;
+    }
 </style>
 
 {% endblock %}
@@ -138,17 +171,18 @@ Eventos
     <div class="absolute top-0 left-0 w-full h-full bg-[var(--primary-color)] opacity-5 z-10"></div>
 
     <div class="relative z-20 flex flex-col justify-center items-start w-full h-full md:px-4 min-h-[100vh] md:min-h-[90vh] sm:px-8 lg:px-16">
-        <div class="flex flex-col md:ml-12 md:gap-2 text-center sm:text-left fade-in-up md:px-0 px-2">
+        <div class="flex flex-col md:ml-12 md:gap-2 text-center sm:text-left md:px-0 px-2">
             <div class="flex flex-col">
-                <h1 class="text-white font-bold text-5xl sm:text-6xl lg:text-[8.6rem] w-full sm:w-4/5 lg:w-2/3 tracking-tight">
+                <h1 class="text-white font-bold text-5xl sm:text-6xl lg:text-[8.6rem] w-full sm:w-4/5 lg:w-2/3 tracking-tight opacity-0 fade-in-up-visible" style="animation-delay: 0.1s;">
                     Nossos
                 </h1>
-                <h1 class="font-bold text-[4rem] sm:text-6xl lg:text-[7.5rem] w-full sm:w-4/5 lg:w-2/3 tracking-tight mt-[-1.3rem]" style="color: var(--color-danger);">
+                <h1 class="font-bold text-[4rem] sm:text-6xl lg:text-[7.5rem] w-full sm:w-4/5 lg:w-2/3 tracking-tight mt-[-1.3rem] opacity-0 fade-in-up-visible" style="color: var(--color-danger); animation-delay: 0.2s;">
                     Eventos
                 </h1>
             </div>
-            <div class="flex flex-col gap-2 md:gap-3 max-w-lg sm:max-w-xl lg:max-w-2xl md:mt-0 mt-[-0.5rem]">
-                <p class="text-white text-sm sm:text-lg lg:text-xl leading-relaxed">
+            <div class="section-divider mt-4 mb-4 sm:mx-0 sm:ml-0 opacity-0 fade-in-up-visible" style="animation-delay: 0.3s; margin-left: 0; margin-right: auto;"></div>
+            <div class="flex flex-col gap-2 md:gap-3 max-w-lg sm:max-w-xl lg:max-w-2xl md:mt-0 mt-[-0.5rem] opacity-0 fade-in-up-visible" style="animation-delay: 0.4s;">
+                <p class="text-white/90 text-sm sm:text-lg lg:text-xl leading-relaxed">
                     Aqui você encontra todas as informações sobre os eventos da nossa Família — conferências, retiros, encontros e muito mais. Acompanhe as datas, horários e detalhes de cada programação para participar conosco e viver momentos de comunhão, fé e crescimento espiritual.
                 </p>
             </div>
@@ -204,8 +238,7 @@ Eventos
                 name="q" 
                 placeholder="Buscar Eventos" 
                 value="{{ query }}" 
-                class="p-2 px-4 border border-gray-300 rounded-md w-full text-white"
-                style="background-color: #181818; border: none;"
+                class="search-input p-2 px-4 rounded-md w-full text-white"
             >
 
             <button type="submit" class="hidden md:block px-4 py-2 rounded-md" style="background-color: #181818; color: white;">
@@ -229,7 +262,7 @@ Eventos
     
     {% for event in events %}
         {% if event.is_visible %}
-            <div class="event p-5 rounded-xl shadow-lg flex flex-col md:flex-row gap-4 h-auto md:h-[25rem] transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-xl" style="background-color: #0d0d0d; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="event p-5 rounded-xl shadow-lg flex flex-col md:flex-row gap-4 h-auto md:h-[25rem] transform transition-all duration-300 hover:translate-y-[-5px]" style="background-color: #0d0d0d;">
                 <div class="cover-event w-full md:w-1/2 flex-shrink-0 overflow-hidden rounded-lg">
                     <a href="{% url 'event_detail' slug=event.slug %}" class="block h-full">
                         {% if event.banner %}
@@ -309,8 +342,8 @@ Eventos
     
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {% for event in recurring_events %}
-            <div class="recurring-event p-5 rounded-xl shadow-lg flex flex-col transform transition-all duration-300 hover:translate-y-[-5px] hover:shadow-xl" 
-                 style="background-color: #0d0d0d; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="recurring-event p-5 rounded-xl shadow-lg flex flex-col transform transition-all duration-300 hover:translate-y-[-5px]" 
+                 style="background-color: #0d0d0d;">
                 <div class="cover-event w-full h-[250px] flex-shrink-0 overflow-hidden rounded-lg mb-4">
                     <a href="{% url 'event_detail' slug=event.slug %}" class="block h-full">
                         {% if event.banner %}
@@ -360,9 +393,12 @@ Eventos
 <!-- Mensagem quando não há eventos recorrentes também -->
 {% if not events %}
 <div class="flex flex-col w-full py-8 px-4 md:px-6 md:px-12">
-    <div class="text-center py-12">
-        <ion-icon name="calendar-outline" class="text-5xl text-gray-500 mb-4"></ion-icon>
-        <p class="text-gray-400 text-lg">Nenhum evento encontrado.</p>
+    <div class="text-center py-16">
+        <div class="w-24 h-24 rounded-full bg-gradient-to-br mx-auto mb-6 flex items-center justify-center" style="background: rgba(var(--color-danger-rgb), 0.1);">
+            <ion-icon name="calendar-outline" class="text-5xl" style="color: var(--color-danger);"></ion-icon>
+        </div>
+        <p class="text-gray-300 text-xl font-semibold mb-2">Nenhum evento encontrado</p>
+        <p class="text-gray-500 text-base">Tente ajustar os filtros ou volte em breve para novidades.</p>
     </div>
 </div>
 {% endif %}
@@ -393,6 +429,33 @@ Eventos
 
         $(window).on('scroll resize', checkVisibility);
         checkVisibility();
+    });
+
+    // Scroll reveal animation for event cards
+    document.addEventListener('DOMContentLoaded', function() {
+        var observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry, index) {
+                if (entry.isIntersecting) {
+                    setTimeout(function() {
+                        entry.target.style.opacity = '1';
+                        entry.target.style.transform = 'translateY(0)';
+                    }, index * 100);
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.event, .recurring-event').forEach(function(card) {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(30px)';
+            card.style.transition = 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)';
+            observer.observe(card);
+        });
     });
 
     function updateNavbarColor() {

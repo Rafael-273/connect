@@ -25,3 +25,18 @@ def pt_weekday(value):
         return WEEKDAYS_PT[weekday]
     except Exception:
         return ''
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Template filter for dict lookup by variable key.
+
+    Usage: {{ my_dict|get_item:some_variable }}
+    Returns the value for the given key, or None if not found.
+    """
+    if dictionary is None:
+        return None
+    try:
+        return dictionary.get(key)
+    except (AttributeError, TypeError):
+        return None

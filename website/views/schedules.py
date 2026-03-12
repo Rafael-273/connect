@@ -258,12 +258,11 @@ def schedule_create_view(request):
         title = request.POST.get('title')
         month = request.POST.get('month')
         year = request.POST.get('year')
-        # removed optional name/color fields
         use_team_rotation = request.POST.get('use_team_rotation') == 'true'
         guidelines = request.POST.get('guidelines') or None
-        
+
         ministry = get_object_or_404(Ministry, id=ministry_id)
-        
+
         schedule = MonthlySchedule.objects.create(
             ministry=ministry,
             title=title,
@@ -272,13 +271,18 @@ def schedule_create_view(request):
             use_team_rotation=use_team_rotation,
             guidelines=guidelines
         )
-        
+
+        # Criar divisões enviadas no formulário
+        division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
+        for i, name in enumerate(division_names):
+            ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
+
         return redirect('schedule_detail', schedule_id=schedule.id)
-    
+
     ministries = Ministry.objects.filter(deleted__isnull=True).order_by('name')
     current_year = datetime.now().year
     years = range(current_year, current_year + 2)
-    
+
     context = {
         'ministries': ministries,
         'years': years,
@@ -286,7 +290,7 @@ def schedule_create_view(request):
         'current_month': datetime.now().month,
         'current_year': current_year
     }
-    
+
     return render(request, 'admin_panel/schedules/monthly/form.html', context)
 
 
@@ -294,31 +298,44 @@ def schedule_create_view(request):
 def schedule_edit_view(request, schedule_id):
     """Edita uma escala mensal"""
     schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
-    
+
     if request.method == 'POST':
         schedule.ministry_id = request.POST.get('ministry')
         schedule.title = request.POST.get('title')
         schedule.month = int(request.POST.get('month'))
         schedule.year = int(request.POST.get('year'))
-        # removed optional name/color assignments
         schedule.use_team_rotation = request.POST.get('use_team_rotation') == 'true'
         schedule.guidelines = request.POST.get('guidelines') or None
-        
+
         schedule.save()
-        
+
+        # Sincronizar divisões: apagar as existentes e recriar
+        ScaleDivision.objects.filter(schedule=schedule, deleted__isnull=True).delete()
+        division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
+        for i, name in enumerate(division_names):
+            ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
+
         return redirect('schedule_detail', schedule_id=schedule.id)
-    
+
     ministries = Ministry.objects.filter(deleted__isnull=True).order_by('name')
     current_year = datetime.now().year
     years = range(current_year - 1, current_year + 2)
-    
+
+    # Divisões existentes desta escala
+    existing_divisions = list(
+        ScaleDivision.objects.filter(
+            schedule=schedule, deleted__isnull=True
+        ).order_by('order', 'name').values_list('name', flat=True)
+    )
+
     context = {
         'schedule': schedule,
         'ministries': ministries,
         'years': years,
-        'months': MonthlySchedule.MONTH_CHOICES
+        'months': MonthlySchedule.MONTH_CHOICES,
+        'existing_divisions': existing_divisions,
     }
-    
+
     return render(request, 'admin_panel/schedules/monthly/form.html', context)
 
 
@@ -350,7 +367,7 @@ def schedule_detail_view(request, schedule_id):
     
     # Buscar divisões do ministério (hierarquia)
     divisions = ScaleDivision.objects.filter(
-        ministry=schedule.ministry,
+        schedule=schedule,
         is_active=True,
         deleted__isnull=True
     ).select_related('parent').order_by('order', 'name')
@@ -451,6 +468,36 @@ def schedule_day_create_view(request, schedule_id):
         member_ids = request.POST.getlist('members')
         description = request.POST.get('description') or None
         notes = request.POST.get('notes') or None
+        override_conflict = request.POST.get('override_conflict') == 'true'
+        
+        # Validação de conflito de escala no servidor
+        if member_ids and not override_conflict:
+            int_member_ids = [int(mid) for mid in member_ids if mid]
+            if int_member_ids:
+                conflicting_days = ScheduleDay.objects.filter(
+                    date=date,
+                    members__id__in=int_member_ids,
+                    is_cancelled=False,
+                    deleted__isnull=True,
+                    schedule__deleted__isnull=True
+                ).exclude(schedule_id=schedule.id).select_related('schedule', 'schedule__ministry')
+                
+                if conflicting_days.exists():
+                    conflicts = []
+                    seen = set()
+                    for cd in conflicting_days:
+                        for member in cd.members.filter(id__in=int_member_ids):
+                            key = (member.id, cd.schedule.id)
+                            if key not in seen:
+                                seen.add(key)
+                                conflicts.append(f'{member.name} → {cd.schedule.ministry.name} - {cd.schedule.title}')
+                    if conflicts:
+                        return JsonResponse({
+                            'success': False,
+                            'conflict': True,
+                            'error': 'Conflito de escala detectado',
+                            'conflict_details': conflicts
+                        }, status=409)
         
         # Verifica se já existe um dia ATIVO para esta data nesta escala
         existing_active_day = ScheduleDay.objects.filter(
@@ -514,6 +561,36 @@ def schedule_day_edit_view(request, day_id):
         member_ids = request.POST.getlist('members')
         description = request.POST.get('description') or None
         notes = request.POST.get('notes') or None
+        override_conflict = request.POST.get('override_conflict') == 'true'
+        
+        # Validação de conflito de escala no servidor
+        if member_ids and not override_conflict:
+            int_member_ids = [int(mid) for mid in member_ids if mid]
+            if int_member_ids:
+                conflicting_days = ScheduleDay.objects.filter(
+                    date=day.date,
+                    members__id__in=int_member_ids,
+                    is_cancelled=False,
+                    deleted__isnull=True,
+                    schedule__deleted__isnull=True
+                ).exclude(schedule_id=day.schedule_id).select_related('schedule', 'schedule__ministry')
+                
+                if conflicting_days.exists():
+                    conflicts = []
+                    seen = set()
+                    for cd in conflicting_days:
+                        for member in cd.members.filter(id__in=int_member_ids):
+                            key = (member.id, cd.schedule.id)
+                            if key not in seen:
+                                seen.add(key)
+                                conflicts.append(f'{member.name} → {cd.schedule.ministry.name} - {cd.schedule.title}')
+                    if conflicts:
+                        return JsonResponse({
+                            'success': False,
+                            'conflict': True,
+                            'error': 'Conflito de escala detectado',
+                            'conflict_details': conflicts
+                        }, status=409)
         
         day.team_id = team_id if team_id else None
         day.description = description
@@ -632,128 +709,189 @@ def schedule_export_pdf_view(request, schedule_id):
     return response
 
 
+@user_passes_test(is_admin)
+def schedule_print_view(request, schedule_id):
+    """Exibe a escala em formato printável para impressão nativa do navegador"""
+    schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+    days = ScheduleDay.objects.filter(
+        schedule=schedule,
+        deleted__isnull=True
+    ).select_related('team').prefetch_related(
+        'members',
+        'division_assignments',
+        'division_assignments__division',
+        'division_assignments__member',
+    ).order_by('date')
+
+    # Flat ordered list of all divisions for this schedule (for table columns)
+    divisions = list(ScaleDivision.objects.filter(
+        schedule=schedule,
+        deleted__isnull=True,
+        is_active=True,
+    ).order_by('order', 'name'))
+
+    month_names = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+
+    day_names = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
+
+    processed_days = []
+    for day in days:
+        # Build division → members map for this day
+        div_members_map = {}  # division_id: [member, ...]
+        for assignment in day.division_assignments.all():
+            did = assignment.division_id
+            if did not in div_members_map:
+                div_members_map[did] = []
+            div_members_map[did].append(assignment.member)
+
+        day_data = {
+            'date': day.date,
+            'date_str': day.date.strftime('%d/%m/%Y'),
+            'day_name': day_names[day.date.weekday()],
+            'description': day.description,
+            'notes': day.notes,
+            'is_cancelled': day.is_cancelled,
+            'cancellation_reason': day.cancellation_reason,
+            'div_members_map': div_members_map,
+        }
+
+        if schedule.use_team_rotation:
+            day_data['team'] = day.team
+        else:
+            day_data['members'] = list(day.members.all())
+
+        processed_days.append(day_data)
+
+    context = {
+        'schedule': schedule,
+        'days': processed_days,
+        'divisions': divisions,
+        'month_name': month_names[schedule.month - 1],
+        'generated_at': datetime.now().strftime('%d/%m/%Y às %H:%M'),
+        'use_team_rotation': schedule.use_team_rotation,
+    }
+
+    return render(request, 'admin_panel/schedules/monthly/print.html', context)
+
+
+# ==================== SCHEDULE CONFLICT CHECK ====================
+
+@user_passes_test(is_admin)
+def check_schedule_conflict_view(request):
+    """Verifica se membros já estão escalados em outra escala na mesma data"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+
+    date_str = request.POST.get('date')
+    member_ids = request.POST.getlist('members')
+    schedule_id = request.POST.get('schedule_id')
+
+    if not date_str or not member_ids:
+        return JsonResponse({'has_conflict': False, 'conflicts': []})
+
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        return JsonResponse({'has_conflict': False, 'conflicts': []})
+
+    member_ids = [int(mid) for mid in member_ids if mid]
+    if not member_ids:
+        return JsonResponse({'has_conflict': False, 'conflicts': []})
+
+    # Buscar dias de escala na mesma data que contenham algum dos membros selecionados
+    conflicting_days = ScheduleDay.objects.filter(
+        date=date,
+        members__id__in=member_ids,
+        is_cancelled=False,
+        deleted__isnull=True,
+        schedule__deleted__isnull=True
+    ).select_related('schedule', 'schedule__ministry')
+
+    # Excluir dias da escala atual (não é conflito consigo mesma)
+    if schedule_id:
+        conflicting_days = conflicting_days.exclude(schedule_id=int(schedule_id))
+
+    conflicts = []
+    seen = set()
+    for day in conflicting_days:
+        for member in day.members.filter(id__in=member_ids):
+            key = (member.id, day.schedule.id)
+            if key not in seen:
+                seen.add(key)
+                conflicts.append({
+                    'member_id': member.id,
+                    'member_name': member.name,
+                    'schedule_title': day.schedule.title,
+                    'ministry_name': day.schedule.ministry.name,
+                    'date': day.date.strftime('%d/%m/%Y'),
+                })
+
+    return JsonResponse({
+        'has_conflict': len(conflicts) > 0,
+        'conflicts': conflicts
+    })
+
+
 # ==================== DIVISION VIEWS ====================
 
 @user_passes_test(is_admin)
 def division_list_view(request, ministry_id):
-    """Lista todas as divisões de um ministério em hierarquia"""
-    ministry = get_object_or_404(Ministry, id=ministry_id, deleted__isnull=True)
-    
-    divisions = ScaleDivision.objects.filter(
-        ministry=ministry,
-        deleted__isnull=True
-    ).select_related('parent').order_by('order', 'name')
-    
-    # Construir hierarquia em árvore
-    root_divisions = [d for d in divisions if d.parent_id is None]
-    
-    def build_tree(parent_div):
-        children = [d for d in divisions if d.parent_id == parent_div.id]
-        return {
-            'division': parent_div,
-            'children': [build_tree(c) for c in children]
-        }
-    
-    division_tree = [build_tree(d) for d in root_divisions]
-    
-    context = {
-        'ministry': ministry,
-        'divisions': divisions,
-        'division_tree': division_tree,
-    }
-    
-    return render(request, 'admin_panel/schedules/divisions/list.html', context)
+    """Redireciona para listagem de escalas (divisões agora são por escala)"""
+    return redirect('schedule_list')
 
 
 @user_passes_test(is_admin)
-def division_create_view(request, ministry_id):
-    """Cria uma nova divisão"""
-    ministry = get_object_or_404(Ministry, id=ministry_id, deleted__isnull=True)
-    
+def division_create_view(request, schedule_id):
+    """Cria uma nova divisão para uma escala (AJAX)"""
+    schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+
     if request.method == 'POST':
-        name = request.POST.get('name')
-        parent_id = request.POST.get('parent')
+        name = request.POST.get('name', '').strip()
+        parent_id = request.POST.get('parent') or None
         order = request.POST.get('order', 0)
-        
+
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Nome obrigatório'}, status=400)
+
         try:
             division = ScaleDivision(
                 name=name,
-                ministry=ministry,
-                parent_id=parent_id if parent_id else None,
+                schedule=schedule,
+                parent_id=parent_id,
                 order=int(order)
             )
             division.save()
-            
             return JsonResponse({
                 'success': True,
                 'division_id': division.id,
                 'name': division.name
             })
         except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            }, status=400)
-    
-    # GET: render form
-    parent_divisions = ScaleDivision.objects.filter(
-        ministry=ministry,
-        deleted__isnull=True,
-        is_active=True
-    ).select_related('parent').order_by('order', 'name')
-    
-    # Filtrar divisões que podem ser pai (profundidade < MAX_DEPTH - 1)
-    eligible_parents = [d for d in parent_divisions if d.get_depth() < ScaleDivision.MAX_DEPTH - 1]
-    
-    context = {
-        'ministry': ministry,
-        'eligible_parents': eligible_parents,
-    }
-    
-    return render(request, 'admin_panel/schedules/divisions/form.html', context)
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+    return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
 @user_passes_test(is_admin)
 def division_edit_view(request, division_id):
-    """Edita uma divisão"""
+    """Edita uma divisão (AJAX)"""
     division = get_object_or_404(ScaleDivision, id=division_id, deleted__isnull=True)
-    
+
     if request.method == 'POST':
-        division.name = request.POST.get('name')
+        division.name = request.POST.get('name', '').strip()
         parent_id = request.POST.get('parent')
         division.parent_id = parent_id if parent_id else None
         division.order = int(request.POST.get('order', 0))
         division.is_active = request.POST.get('is_active') == 'true'
-        
+
         try:
             division.save()
             return JsonResponse({'success': True})
         except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            }, status=400)
-    
-    parent_divisions = ScaleDivision.objects.filter(
-        ministry=division.ministry,
-        deleted__isnull=True,
-        is_active=True
-    ).exclude(id=division.id).select_related('parent').order_by('order', 'name')
-    
-    # Excluir descendentes como possíveis pais (evitar ciclos)
-    descendant_ids = {d.id for d in division.get_descendants()}
-    eligible_parents = [
-        d for d in parent_divisions
-        if d.id not in descendant_ids and d.get_depth() < ScaleDivision.MAX_DEPTH - 1
-    ]
-    
-    context = {
-        'division': division,
-        'ministry': division.ministry,
-        'eligible_parents': eligible_parents,
-    }
-    
-    return render(request, 'admin_panel/schedules/divisions/form.html', context)
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)
+
+    return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
 @user_passes_test(is_admin)
@@ -763,7 +901,7 @@ def division_delete_view(request, division_id):
         division = get_object_or_404(ScaleDivision, id=division_id, deleted__isnull=True)
         division.delete()
         return JsonResponse({'success': True})
-    
+
     return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
@@ -819,7 +957,7 @@ def schedule_day_division_assign_view(request, day_id):
     ).select_related('division', 'member').order_by('division__order', 'member__name')
     
     divisions = ScaleDivision.objects.filter(
-        ministry=day.schedule.ministry,
+        schedule=day.schedule,
         is_active=True,
         deleted__isnull=True
     ).order_by('order', 'name')

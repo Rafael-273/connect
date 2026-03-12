@@ -242,8 +242,8 @@ class ScheduleDay(BaseModel):
 
 
 class ScaleDivision(BaseModel):
-    """Subdivisão hierárquica dentro de um ministério para organizar escalas.
-    Ex: Ministério de Música → 'Ministro', 'Back Vocal', 'Músicos'
+    """Subdivisão hierárquica dentro de uma escala mensal para organizar os dias.
+    Ex: Escala de Louvor → 'Ministro', 'Back Vocal', 'Músicos'
     Profundidade máxima: 3 níveis.
     """
 
@@ -253,11 +253,11 @@ class ScaleDivision(BaseModel):
         max_length=100,
         verbose_name='Nome da Divisão'
     )
-    ministry = models.ForeignKey(
-        'Ministry',
+    schedule = models.ForeignKey(
+        MonthlySchedule,
         on_delete=models.CASCADE,
         related_name='divisions',
-        verbose_name='Ministério'
+        verbose_name='Escala'
     )
     parent = models.ForeignKey(
         'self',
@@ -281,13 +281,13 @@ class ScaleDivision(BaseModel):
     class Meta:
         verbose_name = 'Divisão de Escala'
         verbose_name_plural = 'Divisões de Escala'
-        ordering = ['ministry', 'order', 'name']
-        unique_together = [['ministry', 'name', 'parent']]
+        ordering = ['schedule', 'order', 'name']
+        unique_together = [['schedule', 'name', 'parent']]
 
     def __str__(self):
         if self.parent:
-            return f"{self.ministry.name} → {self.parent.name} → {self.name}"
-        return f"{self.ministry.name} → {self.name}"
+            return f"{self.schedule.title} → {self.parent.name} → {self.name}"
+        return f"{self.schedule.title} → {self.name}"
 
     def get_depth(self):
         """Retorna a profundidade na hierarquia (0 = raiz)"""
@@ -300,9 +300,9 @@ class ScaleDivision(BaseModel):
 
     def clean(self):
         super().clean()
-        if self.parent and self.parent.ministry_id != self.ministry_id:
+        if self.parent and self.parent.schedule_id != self.schedule_id:
             raise ValidationError(
-                'A divisão pai deve pertencer ao mesmo ministério.'
+                'A divisão pai deve pertencer à mesma escala.'
             )
         if self.get_depth() >= self.MAX_DEPTH:
             raise ValidationError(
