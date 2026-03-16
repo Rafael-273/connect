@@ -1,6 +1,6 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView
+from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView, MusicUserListView
 from .views.home import HomeView
 from .views.visitor import VisitorCreateView, VisitorListView
 from .views.member import (
@@ -138,6 +138,7 @@ urlpatterns = [
     path('admin-panel/music/new/', MusicCreateView.as_view(), name='admin_music_create'),
     path('admin-panel/music/edit/<int:pk>/', MusicUpdateView.as_view(), name='admin_music_edit'),
     path('admin-panel/music/delete/<int:pk>/', MusicDeleteView.as_view(), name='admin_music_delete'),
+    path('ministerio-louvor/', MusicUserListView.as_view(), name='music_user_list'),
     path('admin-panel/ministries/', ministries_list_view, name='admin_ministries_list'),
     path('admin-panel/ministries/new/', ministry_edit_view, name='admin_ministry_create'),
     path('admin-panel/ministries/<int:ministry_id>/edit/', ministry_edit_view, name='admin_ministry_edit'),

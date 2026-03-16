@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views import View
 from django.views.generic import UpdateView
 from django.contrib import messages
+from django.db.models import Q
 
 
 class MusicListView(LoginRequiredMixin, ListView):
@@ -14,6 +15,23 @@ class MusicListView(LoginRequiredMixin, ListView):
     template_name = 'admin_panel/music/list.html'
     context_object_name = 'musics'
     ordering = ['name']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.GET.get('search', '').strip()
+
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(singer__icontains=search)
+            )
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search'] = self.request.GET.get('search', '')
+        return context
 
 
 class MusicCreateView(LoginRequiredMixin, CreateView):
@@ -45,6 +63,26 @@ class MusicUpdateView(LoginRequiredMixin, UpdateView):
     def form_valid(self, form):
         messages.success(self.request, 'Música atualizada com sucesso!')
         return super().form_valid(form)
+    
+
+class MusicUserListView(LoginRequiredMixin, ListView):
+    model = Music
+    template_name = 'list/music_list.html'
+    context_object_name = 'musics'
+    ordering = ['name']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        search = self.request.GET.get('search')
+
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+            Q(singer__icontains=search)
+        )
+
+        return queryset
+
 
     
     

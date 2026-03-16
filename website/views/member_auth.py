@@ -101,6 +101,12 @@ class MemberDashboardView(LoginRequiredMixin, View):
             ministry__name__icontains='ministração',
             is_active=True
         ).exists()
+
+        music_member = MinistryMembership.objects.filter(
+            member=member,
+            ministry__name__icontains='louvor',
+            is_active=True
+        ).exists()
         
         is_ministration_member = is_ministration_old or is_ministration_new
         
@@ -110,6 +116,7 @@ class MemberDashboardView(LoginRequiredMixin, View):
             'ministries': member.ministry.all(),
             'can_consolidate': member.is_available_to_consolidate,
             'can_disciple': member.is_available_to_disciple,
+            'can_music_member': music_member,
             'is_scheduled_this_week': is_scheduled,
             'is_approver': member.is_approver,
             'is_ministration_member': is_ministration_member,
