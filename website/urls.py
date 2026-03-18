@@ -1,5 +1,6 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
+from django.conf import settings
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView
 from .views.home import HomeView
 from .views.visitor import VisitorCreateView, VisitorListView
@@ -69,6 +70,7 @@ urlpatterns = [
         html_email_template_name='password_reset/email_html.html',
         subject_template_name='password_reset/email_subject.txt',
         success_url='/password-reset/sent/',
+        extra_email_context={'site_domain': settings.SITE_DOMAIN},
     ), name='password_reset_request'),
     path('password-reset/sent/', auth_views.PasswordResetDoneView.as_view(
         template_name='password_reset/email_sent.html',

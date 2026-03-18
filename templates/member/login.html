@@ -285,11 +285,15 @@
                             <input type="password" 
                                    id="password" 
                                    name="password" 
-                                   class="w-full pl-12 pr-4 py-4 sm:py-4 border-2 border-gray-200 rounded-xl text-base sm:text-base bg-white 
+                                   class="w-full pl-12 pr-12 py-4 sm:py-4 border-2 border-gray-200 rounded-xl text-base sm:text-base bg-white 
                                           transition-all duration-300 hover:border-gray-300 focus:border-red-400 focus:outline-none focus:ring-4 focus:ring-red-50
                                           transform hover:-translate-y-0.5 focus:-translate-y-1 shadow-sm hover:shadow-md focus:shadow-lg" 
                                    placeholder="Digite sua senha"
                                    required>
+                            <button type="button" onclick="togglePassword('password', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                <svg class="w-5 h-5 eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                <svg class="w-5 h-5 eye-closed hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.97 9.97 0 012.01-3.426M6.343 6.343A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.97 9.97 0 01-1.357 2.572M6.343 6.343L3 3m3.343 3.343l11.314 11.314M17.657 17.657L21 21"/></svg>
+                            </button>
                         </div>
                     </div>
                     
@@ -344,6 +348,21 @@
     </div>
 
     <script>
+        function togglePassword(fieldId, btn) {
+            const input = document.getElementById(fieldId);
+            const eyeOpen = btn.querySelector('.eye-open');
+            const eyeClosed = btn.querySelector('.eye-closed');
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeOpen.classList.add('hidden');
+                eyeClosed.classList.remove('hidden');
+            } else {
+                input.type = 'password';
+                eyeOpen.classList.remove('hidden');
+                eyeClosed.classList.add('hidden');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('loginForm');
             const btn = document.getElementById('loginBtn');
