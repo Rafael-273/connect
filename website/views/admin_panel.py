@@ -30,6 +30,14 @@ from ..models.member import Member
 from ..models.ministry import Ministry
 from ..models.neighborhood import Neighborhood
 from ..models.visitor import Visitor
+from ..models.evangelism import Evangelized
+from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate, FollowUpTemplateStep
+from ..models.testimony import Testimony
+from ..forms.ministry import MinistryForm
+from ..forms.neighborhood import NeighborhoodForm
+from ..forms.follow_up import FollowUpForm, FollowUpReportForm
+from ..forms.template import FollowUpTemplateForm, FollowUpTemplateStepFormSet, FollowUpTemplateStepFormSetForCreate
+from ..forms.user import UserProfileForm
 
 User = get_user_model()
 
@@ -1321,6 +1329,10 @@ class TemplatesListView(LoginRequiredMixin, ConsolidationPermissionMixin, View):
         })
 
 
+# FBV alias — mantido para compatibilidade com urls.py
+templates_view = TemplatesListView.as_view()
+
+
 class TemplateCreateView(LoginRequiredMixin, ConsolidationPermissionMixin, View):
     """Criar novo template de consolidação"""
 
@@ -1391,6 +1403,10 @@ class TemplateCreateView(LoginRequiredMixin, ConsolidationPermissionMixin, View)
         })
 
 
+# FBV alias — mantido para compatibilidade com urls.py
+template_create_view = TemplateCreateView.as_view()
+
+
 class TemplateEditView(LoginRequiredMixin, ConsolidationPermissionMixin, View):
     """Editar template de consolidação"""
 
@@ -1435,6 +1451,10 @@ class TemplateDetailView(LoginRequiredMixin, ConsolidationPermissionMixin, View)
         })
 
 
+# FBV alias — mantido para compatibilidade com urls.py
+template_detail_view = TemplateDetailView.as_view()
+
+
 class TemplateDeleteView(LoginRequiredMixin, ConsolidationPermissionMixin, View):
     """Excluir template de consolidação"""
 
@@ -1451,6 +1471,11 @@ class TemplateDeleteView(LoginRequiredMixin, ConsolidationPermissionMixin, View)
         template.delete()
         messages.success(request, f'Template "{template_name}" excluído com sucesso!')
         return redirect('admin_templates')
+
+
+# FBV alias — mantido para compatibilidade com urls.py
+template_edit_view = TemplateEditView.as_view()
+template_delete_view = TemplateDeleteView.as_view()
 
 
 # ---------------------------------------------------------------------------
@@ -1501,3 +1526,131 @@ class ReportsView(LoginRequiredMixin, ConsolidationPermissionMixin, View):
             'recent_followups': recent_followups,
             'template_stats': template_stats,
         })
+
+
+# FBV alias — mantido para compatibilidade com urls.py
+reports_view = ReportsView.as_view()
+
+
+# === TESTIMONY VIEWS ===
+
+
+class TestimonyListView(LoginRequiredMixin, AdminRequiredMixin, View):
+    """Lista de testemunhos com filtros"""
+
+    def get(self, request):
+        testimonies = Testimony.objects.select_related('member').order_by('-created_at')
+
+        search = request.GET.get('search', '').strip()
+        category = request.GET.get('category', '')
+        approved = request.GET.get('approved', '')
+
+        if search:
+            testimonies = testimonies.filter(Q(title__icontains=search))
+        if category:
+            testimonies = testimonies.filter(category=category)
+        if approved == 'true':
+            testimonies = testimonies.filter(is_approved=True)
+        elif approved == 'false':
+            testimonies = testimonies.filter(is_approved=False)
+
+        paginator = Paginator(testimonies, 12)
+        page_obj = paginator.get_page(request.GET.get('page'))
+
+        return render(request, 'admin_panel/testimonies/list.html', {
+            'testimonies': page_obj,
+            'page_obj': page_obj,
+            'category_choices': Testimony.CATEGORY_CHOICES,
+            'total': testimonies.count(),
+            'total_approved': Testimony.objects.filter(is_approved=True).count(),
+            'total_pending': Testimony.objects.filter(is_approved=False).count(),
+        })
+
+
+class TestimonyEditView(LoginRequiredMixin, AdminRequiredMixin, View):
+    """Criar ou editar testemunho"""
+
+    def _get_context(self, testimony=None):
+        return {
+            'testimony': testimony,
+            'category_choices': Testimony.CATEGORY_CHOICES,
+        }
+
+    def get(self, request, testimony_id=None):
+        testimony = get_object_or_404(Testimony, id=testimony_id) if testimony_id else None
+        storage = messages.get_messages(request)
+        storage.used = True
+        return render(request, 'admin_panel/testimonies/edit.html', self._get_context(testimony))
+
+    def post(self, request, testimony_id=None):
+        testimony = get_object_or_404(Testimony, id=testimony_id) if testimony_id else None
+        try:
+            title = request.POST.get('title', '').strip()
+            category = request.POST.get('category', 'other')
+            is_approved = request.POST.get('is_approved') == 'on'
+            show_on_home = request.POST.get('show_on_home') == 'on'
+            instagram_url = request.POST.get('instagram_url', '').strip() or None
+
+            if not title:
+                messages.error(request, 'O título do testemunho é obrigatório.')
+                return render(request, 'admin_panel/testimonies/edit.html', self._get_context(testimony))
+
+            if testimony:
+                testimony.title = title
+                testimony.category = category
+                testimony.is_approved = is_approved
+                testimony.show_on_home = show_on_home
+                testimony.instagram_url = instagram_url
+                testimony.save()
+                messages.success(request, 'Testemunho atualizado com sucesso!')
+            else:
+                Testimony.objects.create(
+                    author_name='',
+                    title=title,
+                    category=category,
+                    is_approved=is_approved,
+                    show_on_home=show_on_home,
+                    instagram_url=instagram_url,
+                )
+                messages.success(request, 'Testemunho cadastrado com sucesso!')
+
+            return redirect('admin_testimonies_list')
+
+        except Exception as e:
+            messages.error(request, f'Erro ao salvar testemunho: {str(e)}')
+
+        return render(request, 'admin_panel/testimonies/edit.html', self._get_context(testimony))
+
+
+class TestimonyDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
+    """Deletar testemunho"""
+
+    def get(self, request, testimony_id):
+        testimony = get_object_or_404(Testimony, id=testimony_id)
+        return render(request, 'admin_panel/testimonies/delete.html', {'testimony': testimony})
+
+    def post(self, request, testimony_id):
+        testimony = get_object_or_404(Testimony, id=testimony_id)
+        name = testimony.title
+        testimony.delete()
+        messages.success(request, f'Testemunho "{name}" excluído com sucesso!')
+        return redirect('admin_testimonies_list')
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class TestimonyToggleView(LoginRequiredMixin, AdminRequiredMixin, View):
+    """Alterna aprovação ou exibição na home via AJAX"""
+
+    def post(self, request, testimony_id):
+        testimony = get_object_or_404(Testimony, id=testimony_id)
+        data = json.loads(request.body)
+        field = data.get('field')  # 'is_approved' or 'show_on_home'
+        if field == 'is_approved':
+            testimony.is_approved = not testimony.is_approved
+            testimony.save(update_fields=['is_approved'])
+            return JsonResponse({'success': True, 'value': testimony.is_approved})
+        elif field == 'show_on_home':
+            testimony.show_on_home = not testimony.show_on_home
+            testimony.save(update_fields=['show_on_home'])
+            return JsonResponse({'success': True, 'value': testimony.show_on_home})
+        return JsonResponse({'success': False, 'error': 'Requisição inválida'})

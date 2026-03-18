@@ -1,60 +1,222 @@
-{% extends 'base.html' %}
+{% extends 'member_base.html' %}
+{% load static %}
 
-{% block title %}Redefinir Senha{% endblock %}
+{% block title %}Nova Senha - Igreja Filadélfia{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --church-primary: #C90905;
+        --church-secondary: #260200;
+    }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeInLeft {
+        from { opacity: 0; transform: translateX(-20px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes float {
+        0%, 100% { transform: translateY(0px) rotate(0deg); }
+        50% { transform: translateY(-10px) rotate(180deg); }
+    }
+    .animate-fade-in-up { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-fade-in-left { animation: fadeInLeft 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-scale-in { animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .text-gradient {
+        background: linear-gradient(45deg, white, rgba(255, 255, 255, 0.8));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .bg-pattern::before {
+        content: '';
+        position: absolute;
+        top: -50%; left: -50%;
+        width: 200%; height: 200%;
+        background-image: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+        background-size: 40px 40px;
+        pointer-events: none;
+        z-index: 1;
+        animation: float 25s ease-in-out infinite;
+    }
+    html, body { overflow-x: hidden; width: 100%; height: 100%; position: fixed; margin: 0; padding: 0; }
+    .login-wrapper { position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
+    .login-card-container { height: 100vh; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; -ms-overflow-style: none; }
+    .login-card-container::-webkit-scrollbar { display: none; }
+    @media (max-width: 640px) {
+        .text-gradient { -webkit-text-fill-color: white; background: none; }
+        .mobile-full-height { min-height: 100vh; }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="container mt-5 mb-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <div class="card-body p-4 p-lg-5">
-                    <h2 class="card-title text-center mb-4">Redefinir Senha</h2>
-                    
-                    {% include 'parciais/messages.html' %}
-                    
-                    {% if validlink %}
-                        <p class="text-muted mb-4">
-                            Digite sua nova senha abaixo.
+<body class="overflow-hidden" style="font-family: 'Giga Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div class="login-wrapper bg-pattern" style="background: linear-gradient(135deg, var(--church-primary) 0%, var(--church-secondary) 100%);">
+        <div class="login-card-container flex items-center justify-center p-0 sm:p-3 lg:p-8">
+            <div class="bg-white rounded-none sm:rounded-2xl lg:rounded-3xl shadow-none sm:shadow-2xl overflow-hidden w-full max-w-none sm:max-w-lg lg:max-w-5xl grid grid-cols-1 lg:grid-cols-2 mobile-full-height sm:min-h-[500px] lg:min-h-[600px] animate-scale-in">
+
+                <!-- Seção esquerda -->
+                <div class="text-white p-8 sm:p-8 lg:p-12 flex flex-col items-center justify-center text-center relative overflow-hidden order-1 lg:order-1" style="background: linear-gradient(135deg, var(--church-secondary) 0%, #1a0000 100%);">
+                    <div class="absolute -top-10 -right-10 w-40 h-40 bg-white opacity-5 rounded-full blur-2xl"></div>
+                    <div class="absolute -bottom-10 -left-10 w-32 h-32 bg-white opacity-5 rounded-full blur-xl"></div>
+
+                    <div class="w-24 h-24 sm:w-24 sm:h-24 lg:w-32 lg:h-32 bg-white rounded-full flex items-center justify-center mb-4 sm:mb-6 lg:mb-8 shadow-xl overflow-hidden z-10 animate-fade-in-up" style="animation-delay: 0.2s; animation-fill-mode: both;">
+                        <img src="{% static 'assets/logotype.jpg' %}" alt="Igreja Filadelfia" class="w-full h-full object-cover" onerror="this.style.display='none'">
+                    </div>
+
+                    <div class="mb-5 lg:mb-8 z-10">
+                        <h1 class="font-bold text-4xl sm:text-3xl lg:text-4xl xl:text-5xl sm:mb-3 text-gradient animate-fade-in-up leading-tight" style="animation-delay: 0.3s; animation-fill-mode: both; font-family: 'Tusker', 'Giga Sans', sans-serif;">
+                            Nova Senha
+                        </h1>
+                        <p class="text-base sm:text-base lg:text-lg opacity-90 leading-relaxed max-w-xs mx-auto sm:max-w-sm animate-fade-in-up px-2" style="animation-delay: 0.4s; animation-fill-mode: both;">
+                            Escolha uma senha forte para proteger sua conta
                         </p>
-                        
-                        <form method="post">
+                    </div>
+                </div>
+
+                <!-- Seção do formulário -->
+                <div class="p-6 sm:p-8 lg:p-12 xl:p-16 flex flex-col justify-center order-2 lg:order-2" style="background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);">
+                    <div class="text-center mb-2 animate-fade-in-left" style="animation-delay: 0.3s; animation-fill-mode: both;">
+                        <h2 class="text-2xl sm:text-4xl font-bold text-gray-900" style="font-family: 'Tusker', 'Giga Sans', sans-serif;">Redefinir Senha</h2>
+                        <p class="text-gray-500 text-sm mt-2">Digite sua nova senha abaixo para acessar sua conta.</p>
+                    </div>
+
+                    {% include 'parciais/messages.html' %}
+
+                    {% if validlink %}
+                        <form method="post" id="confirmForm" class="space-y-5 sm:space-y-6 animate-fade-in-left" style="animation-delay: 0.5s; animation-fill-mode: both;">
                             {% csrf_token %}
-                            <div class="mb-3">
-                                <label for="new_password1" class="form-label">Nova Senha</label>
-                                <input type="password" class="form-control" id="new_password1" name="new_password1" required>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="new_password2" class="form-label">Confirmar Nova Senha</label>
-                                <input type="password" class="form-control" id="new_password2" name="new_password2" required>
-                                <div class="form-text">
-                                    As senhas devem ser iguais.
+
+                            {% if form.errors %}
+                                <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
+                                    {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+                                    {% for field in form %}{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}{% endfor %}
+                                </div>
+                            {% endif %}
+
+                            <div>
+                                <label for="new_password1" class="block text-sm font-semibold text-gray-800 mb-2 tracking-wide">Nova Senha</label>
+                                <div class="relative">
+                                    <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                        </svg>
+                                    </div>
+                                    <input type="password"
+                                           id="new_password1"
+                                           name="new_password1"
+                                           class="w-full pl-12 pr-12 py-4 border-2 border-gray-200 rounded-xl text-base bg-white transition-all duration-300 hover:border-gray-300 focus:border-red-400 focus:outline-none focus:ring-4 focus:ring-red-50 transform hover:-translate-y-0.5 focus:-translate-y-1 shadow-sm hover:shadow-md focus:shadow-lg"
+                                           placeholder="Mínimo 6 caracteres"
+                                           required>
+                                    <button type="button" onclick="togglePassword('new_password1', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                        <svg class="w-5 h-5 eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        <svg class="w-5 h-5 eye-closed hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.97 9.97 0 012.01-3.426M6.343 6.343A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.97 9.97 0 01-1.357 2.572M6.343 6.343L3 3m3.343 3.343l11.314 11.314M17.657 17.657L21 21"/></svg>
+                                    </button>
                                 </div>
                             </div>
-                            
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary btn-lg">Redefinir Senha</button>
+
+                            <div>
+                                <label for="new_password2" class="block text-sm font-semibold text-gray-800 mb-2 tracking-wide">Confirmar Nova Senha</label>
+                                <div class="relative">
+                                    <div class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                                        </svg>
+                                    </div>
+                                    <input type="password"
+                                           id="new_password2"
+                                           name="new_password2"
+                                           class="w-full pl-12 pr-12 py-4 border-2 border-gray-200 rounded-xl text-base bg-white transition-all duration-300 hover:border-gray-300 focus:border-red-400 focus:outline-none focus:ring-4 focus:ring-red-50 transform hover:-translate-y-0.5 focus:-translate-y-1 shadow-sm hover:shadow-md focus:shadow-lg"
+                                           placeholder="Repita a nova senha"
+                                           required>
+                                    <button type="button" onclick="togglePassword('new_password2', this)" class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none">
+                                        <svg class="w-5 h-5 eye-open" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        <svg class="w-5 h-5 eye-closed hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.97 9.97 0 012.01-3.426M6.343 6.343A9.956 9.956 0 0112 5c4.477 0 8.268 2.943 9.542 7a9.97 9.97 0 01-1.357 2.572M6.343 6.343L3 3m3.343 3.343l11.314 11.314M17.657 17.657L21 21"/></svg>
+                                    </button>
+                                </div>
                             </div>
+
+                            <button type="submit"
+                                    id="submitBtn"
+                                    class="w-full py-4 sm:py-5 px-4 sm:px-6 text-white rounded-xl font-bold text-base transition-all duration-300 active:scale-95 focus:outline-none focus:ring-4 focus:ring-red-100 disabled:opacity-75 disabled:cursor-not-allowed relative overflow-hidden shadow-lg hover:shadow-2xl transform hover:-translate-y-1 hover:shadow-red-500/50 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 group"
+                                    style="margin-top: 1.5rem;">
+                                <span class="absolute inset-0 bg-gradient-to-r from-red-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+                                <span id="submitBtnText" class="relative flex items-center justify-center gap-2 transition-opacity duration-300">
+                                    <span>Redefinir Senha</span>
+                                    <svg class="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                                    </svg>
+                                </span>
+                                <div id="submitBtnSpinner" class="hidden absolute inset-0 flex items-center justify-center">
+                                    <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                </div>
+                            </button>
                         </form>
                     {% else %}
-                        <div class="alert alert-danger">
-                            O link de redefinição de senha é inválido, possivelmente porque já foi usado.
-                            Por favor solicite uma nova redefinição de senha.
+                        <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm mb-6 animate-fade-in-left" style="animation-delay: 0.4s; animation-fill-mode: both;">
+                            <p class="font-semibold mb-1">Link inválido ou expirado</p>
+                            <p>Este link de redefinição de senha não é mais válido. Por favor, solicite um novo.</p>
                         </div>
-                        
-                        <div class="d-grid mt-4">
-                            <a href="{% url 'password_reset_request' %}" class="btn btn-primary btn-lg">
-                                Solicitar Nova Redefinição
-                            </a>
-                        </div>
+                        <a href="{% url 'password_reset_request' %}"
+                           class="w-full py-4 px-6 text-white rounded-xl font-bold text-base text-center transition-all duration-300 hover:shadow-lg transform hover:-translate-y-1 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 animate-fade-in-left"
+                           style="animation-delay: 0.5s; animation-fill-mode: both;">
+                            Solicitar Novo Link
+                        </a>
                     {% endif %}
-                    
-                    <div class="mt-4 text-center">
-                        <a href="{% url 'admin_login' %}" class="text-decoration-none">Voltar ao Login</a>
+
+                    <div class="text-center mt-6 sm:mt-8 animate-fade-in-left" style="animation-delay: 0.6s; animation-fill-mode: both;">
+                        <p class="text-sm text-gray-600">
+                            <a href="{% url 'member_login' %}" class="font-semibold transition-colors duration-200 hover:underline" style="color: var(--church-primary);" onmouseover="this.style.color='var(--church-secondary)'" onmouseout="this.style.color='var(--church-primary)'">
+                                Voltar ao login
+                            </a>
+                        </p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
+
+    <script>
+        function togglePassword(fieldId, btn) {
+            const input = document.getElementById(fieldId);
+            const eyeOpen = btn.querySelector('.eye-open');
+            const eyeClosed = btn.querySelector('.eye-closed');
+            if (input.type === 'password') {
+                input.type = 'text';
+                eyeOpen.classList.add('hidden');
+                eyeClosed.classList.remove('hidden');
+            } else {
+                input.type = 'password';
+                eyeOpen.classList.remove('hidden');
+                eyeClosed.classList.add('hidden');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('confirmForm');
+            if (!form) return;
+            const btn = document.getElementById('submitBtn');
+            const btnText = document.getElementById('submitBtnText');
+            const btnSpinner = document.getElementById('submitBtnSpinner');
+
+            form.addEventListener('submit', function() {
+                btn.disabled = true;
+                btnText.style.opacity = '0';
+                btnSpinner.classList.remove('hidden');
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btnText.style.opacity = '1';
+                    btnSpinner.classList.add('hidden');
+                }, 5000);
+            });
+        });
+    </script>
+</body>
 {% endblock %}

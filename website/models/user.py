@@ -26,7 +26,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     USER_TYPE_CHOICES = (
         ('member', 'Membro (Sem acesso ao painel)'),
         ('admin', 'Administrador (Acesso total)'),
-        ('canteen', 'Cantina (Gerencia fiados)'),
         ('visitors', 'Visitantes (Gerencia visitantes)'),
         ('consolidation', 'Consolidação (Gerencia acompanhamentos)'),
         ('events', 'Eventos (Gerencia eventos)'),
@@ -55,7 +54,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def has_admin_access(self):
         """Verifica se o usuário tem acesso ao painel de administração"""
-        return self.is_staff or self.user_type in ['admin', 'canteen', 'visitors', 'consolidation', 'events']
+        return self.is_staff or self.user_type in ['admin', 'visitors', 'consolidation', 'events']
     
     def has_module_permission(self, module):
         """Verifica se o usuário tem permissão para acessar um módulo específico"""
@@ -63,7 +62,6 @@ class User(AbstractBaseUser, PermissionsMixin):
             return True
             
         module_permissions = {
-            'canteen': ['canteen'],
             'visitors': ['visitors'],
             'consolidation': ['consolidation', 'followup'],
             'events': ['events'],

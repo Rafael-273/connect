@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.exceptions import ValidationError
 from datetime import datetime
 from calendar import monthrange
 from ._base import BaseModel
@@ -238,4 +239,129 @@ class ScheduleDay(BaseModel):
     def get_week_number(self):
         """Retorna o número da semana no mês (1-5)"""
         return (self.date.day - 1) // 7 + 1
+
+
+class ScaleDivision(BaseModel):
+    """Subdivisão hierárquica dentro de uma escala mensal para organizar os dias.
+    Ex: Escala de Louvor → 'Ministro', 'Back Vocal', 'Músicos'
+    Profundidade máxima: 3 níveis.
+    """
+
+    MAX_DEPTH = 3
+
+    name = models.CharField(
+        max_length=100,
+        verbose_name='Nome da Divisão'
+    )
+    schedule = models.ForeignKey(
+        MonthlySchedule,
+        on_delete=models.CASCADE,
+        related_name='divisions',
+        verbose_name='Escala'
+    )
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='children',
+        verbose_name='Divisão Pai',
+        help_text='Deixe vazio para divisão de nível raiz'
+    )
+    order = models.IntegerField(
+        default=0,
+        verbose_name='Ordem',
+        help_text='Ordem de exibição (menor = primeiro)'
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='Ativa'
+    )
+
+    class Meta:
+        verbose_name = 'Divisão de Escala'
+        verbose_name_plural = 'Divisões de Escala'
+        ordering = ['schedule', 'order', 'name']
+        unique_together = [['schedule', 'name', 'parent']]
+
+    def __str__(self):
+        if self.parent:
+            return f"{self.schedule.title} → {self.parent.name} → {self.name}"
+        return f"{self.schedule.title} → {self.name}"
+
+    def get_depth(self):
+        """Retorna a profundidade na hierarquia (0 = raiz)"""
+        depth = 0
+        current = self
+        while current.parent_id:
+            depth += 1
+            current = current.parent
+        return depth
+
+    def clean(self):
+        super().clean()
+        if self.parent and self.parent.schedule_id != self.schedule_id:
+            raise ValidationError(
+                'A divisão pai deve pertencer à mesma escala.'
+            )
+        if self.get_depth() >= self.MAX_DEPTH:
+            raise ValidationError(
+                f'Profundidade máxima de {self.MAX_DEPTH} níveis atingida.'
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def get_descendants(self):
+        """Retorna todas as subdivisões descendentes (filhos, netos, etc.)"""
+        descendants = []
+        children = ScaleDivision.objects.filter(
+            parent=self, deleted__isnull=True
+        )
+        for child in children:
+            descendants.append(child)
+            descendants.extend(child.get_descendants())
+        return descendants
+
+    def get_ancestors(self):
+        """Retorna todos os ancestrais da divisão"""
+        ancestors = []
+        current = self
+        while current.parent_id:
+            current = current.parent
+            ancestors.append(current)
+        return ancestors
+
+
+class DivisionMember(BaseModel):
+    """Atribuição de um membro a uma divisão em um dia específico de escala."""
+
+    division = models.ForeignKey(
+        ScaleDivision,
+        on_delete=models.CASCADE,
+        related_name='division_members',
+        verbose_name='Divisão'
+    )
+    schedule_day = models.ForeignKey(
+        ScheduleDay,
+        on_delete=models.CASCADE,
+        related_name='division_assignments',
+        verbose_name='Dia de Escala'
+    )
+    member = models.ForeignKey(
+        'Member',
+        on_delete=models.CASCADE,
+        related_name='division_assignments',
+        verbose_name='Membro'
+    )
+
+    class Meta:
+        verbose_name = 'Membro da Divisão'
+        verbose_name_plural = 'Membros das Divisões'
+        unique_together = [['division', 'schedule_day', 'member']]
+        ordering = ['division__order', 'member__name']
+
+    def __str__(self):
+        return f"{self.member.name} - {self.division.name} ({self.schedule_day.date.strftime('%d/%m/%Y')})"
 

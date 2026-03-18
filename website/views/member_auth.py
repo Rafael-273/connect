@@ -13,98 +13,113 @@ from .mixins import MemberRequiredMixin, ApproverRequiredMixin, MinistrationCont
 
 
 class MemberLoginView(View):
-    """View de login unificada para membros e administradores"""
-    
     def get(self, request):
         if request.user.is_authenticated:
             return redirect('member_dashboard')
         return render(request, 'member/login.html')
-    
+
     def post(self, request):
+        if request.user.is_authenticated:
+            return redirect('member_dashboard')
+
         email = request.POST.get('email', '').strip()
-        password = request.POST.get('password', '').strip()
-        
+        password = request.POST.get('password', '')
+
         if not email or not password:
             messages.error(request, 'Por favor, preencha todos os campos.')
-            return render(request, 'member/login.html')
-        
+            return render(request, 'member/login.html', {'email': email})
+
         user = authenticate(request, username=email, password=password)
-        
-        if user is not None:
-            login(request, user)
-            
-            try:
-                member = user.member
-                messages.success(request, f'Bem-vindo(a), {member.name}!')
-            except Member.DoesNotExist:
-                messages.success(request, f'Bem-vindo(a)!')
-            
-            next_url = request.GET.get('next', 'member_dashboard')
-            return redirect(next_url)
-        else:
+
+        if user is None:
             messages.error(request, 'Email ou senha incorretos.')
-        
-        return render(request, 'member/login.html')
+            return render(request, 'member/login.html', {'email': email})
+
+        login(request, user)
+
+        member = getattr(user, 'member', None)
+        name = member.name if member else user.email
+        messages.success(request, f'Bem-vindo(a), {name}!')
+
+        from django.utils.http import url_has_allowed_host_and_scheme
+        next_url = request.POST.get('next') or request.GET.get('next', '')
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+            return redirect(next_url)
+        return redirect('member_dashboard')
 
 
 class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
-    """Dashboard principal para membros logados"""
-    
+
     def get(self, request):
-        from datetime import datetime, timedelta
-        from django.db.models import Q
-        from website.models import WordOfKnowledge, Ministry
-        from website.models.schedule import ScheduleDay, Team
-        
         member = self.member
-        
-        today = datetime.now().date()
+        context = self._build_base_context(member)
+        self._add_approver_context(member, context)
+        self._add_followup_context(member, context)
+        return render(request, 'member/dashboard.html', context)
+
+    def _build_base_context(self, member):
+        has_ministries = member.ministry.exists()
+        is_approver = member.is_approver
+        can_consolidate = member.is_available_to_consolidate
+        is_scheduled = self._is_scheduled_this_week(member)
+        is_ministration = self.get_ministration_status(member)
+
+        return {
+            'member': member,
+            'can_consolidate': can_consolidate,
+            'is_scheduled_this_week': is_scheduled,
+            'is_approver': is_approver,
+            'is_ministration_member': is_ministration,
+            'is_new_member': not any([has_ministries, is_approver, can_consolidate, is_scheduled]),
+        }
+
+    def _is_scheduled_this_week(self, member):
+        from datetime import timedelta
+        from django.db.models import Q
+        from website.models.schedule import ScheduleDay
+
+        today = timezone.localdate()
         week_start = today - timedelta(days=today.weekday())
         week_end = week_start + timedelta(days=6)
-        
-        is_scheduled = ScheduleDay.objects.filter(
-            date__gte=week_start,
-            date__lte=week_end,
+
+        return ScheduleDay.objects.filter(
+            date__range=(week_start, week_end),
             is_cancelled=False,
-            schedule__ministry__name__icontains='ministração'
+            deleted__isnull=True,
+            schedule__ministry__name__icontains='ministração',
         ).filter(
-            Q(members=member) |
-            Q(team__members=member)
+            Q(members=member) | Q(team__members=member)
         ).exists()
-        
-        context = {
-            'member': member,
-            'ministries': member.ministry.all(),
-            'can_consolidate': member.is_available_to_consolidate,
-            'can_disciple': member.is_available_to_disciple,
-            'is_scheduled_this_week': is_scheduled,
-            'is_approver': member.is_approver,
-            'is_ministration_member': self.get_ministration_status(member),
-        }
-        
-        if member.is_approver:
-            pending_words = WordOfKnowledge.objects.filter(
-                is_approved=False
-            ).select_related('member').order_by('service_date', 'recorded_at')
-            context['pending_words'] = pending_words
-            context['pending_words_count'] = pending_words.count()
-        
+
+    def _add_approver_context(self, member, context):
+        if not member.is_approver:
+            return
+        from website.models import WordOfKnowledge
+        pending = list(
+            WordOfKnowledge.objects
+            .filter(is_approved=False)
+            .select_related('member')
+            .order_by('service_date', 'recorded_at')
+        )
+        context['pending_words'] = pending
+        context['pending_words_count'] = len(pending)
+
+    def _add_followup_context(self, member, context):
         if hasattr(member, 'performed_followups'):
-            context['followups_responsible'] = member.performed_followups.filter(
-                end_date__isnull=True
-            ).select_related('accompanied')[:5]
-        
+            context['followups_responsible'] = (
+                member.performed_followups
+                .filter(end_date__isnull=True)
+                .select_related('accompanied')[:5]
+            )
         if hasattr(member, 'received_followups'):
-            context['followups_received'] = member.received_followups.filter(
-                end_date__isnull=True
-            ).select_related('responsible')[:5]
-        
-        return render(request, 'member/dashboard.html', context)
+            context['followups_received'] = (
+                member.received_followups
+                .filter(end_date__isnull=True)
+                .select_related('responsible')[:5]
+            )
 
 
 class MemberLogoutView(View):
-    """Logout unificado para membros e administradores"""
-
     def get(self, request):
         if request.user.is_authenticated:
             user_name = request.user.member.name if hasattr(request.user, 'member') else request.user.email
@@ -117,94 +132,80 @@ class MemberLogoutView(View):
 
 
 class MemberProfileView(MemberRequiredMixin, MinistrationContextMixin, View):
-    """Visualização e edição do perfil do membro"""
+    MAX_AVATAR_SIZE = 5 * 1024 * 1024
+    ALLOWED_IMAGE_TYPES = frozenset(['image/jpeg', 'image/png', 'image/gif'])
 
     def get(self, request):
-        member = self.member
-        from website.models import Neighborhood
-        neighborhoods = Neighborhood.objects.all().order_by('name')
+        return render(request, 'member/profile.html', self._build_context(self.member))
 
-        context = {
+    def _build_context(self, member, profile_form=None, password_form=None):
+        from website.forms.member import MemberProfileForm, MemberPasswordChangeForm
+        return {
             'member': member,
-            'ministries': member.ministry.all(),
+            'profile_form': profile_form or MemberProfileForm(instance=member),
+            'password_form': password_form or MemberPasswordChangeForm(user=self.request.user),
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(member),
-            'neighborhoods': neighborhoods,
         }
-        return render(request, 'member/profile.html', context)
 
     def post(self, request):
         member = self.member
         form_type = request.POST.get('form_type')
 
         if form_type == 'personal_info':
-            self._handle_personal_info(request, member)
+            return self._handle_personal_info(request, member)
         elif form_type == 'change_password':
             return self._handle_change_password(request, member)
 
         return redirect('member_profile')
 
     def _handle_personal_info(self, request, member):
-        member.name = request.POST.get('name', member.name)
-        member.phone = request.POST.get('phone', member.phone)
-        member.address = request.POST.get('address', member.address)
-        member.testimony = request.POST.get('testimony', member.testimony)
+        from website.forms.member import MemberProfileForm
+        form = MemberProfileForm(request.POST, instance=member)
 
-        birth_date = request.POST.get('birth_date')
-        if birth_date:
-            member.birth_date = birth_date
+        if not form.is_valid():
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
+            return render(request, 'member/profile.html', self._build_context(member, profile_form=form))
 
-        neighborhood_id = request.POST.get('neighborhood')
-        if neighborhood_id:
-            from website.models import Neighborhood
-            try:
-                member.neighborhood = Neighborhood.objects.get(id=neighborhood_id)
-            except Neighborhood.DoesNotExist:
-                pass
-        else:
-            member.neighborhood = None
+        instance = form.save(commit=False)
 
-        if 'profile_picture' in request.FILES:
-            profile_picture = request.FILES['profile_picture']
-            if profile_picture.size > 5 * 1024 * 1024:
-                messages.error(request, 'O arquivo é muito grande. Tamanho máximo: 5MB.')
-                return
-            allowed_types = ['image/jpeg', 'image/png', 'image/gif']
-            if profile_picture.content_type not in allowed_types:
-                messages.error(request, 'Formato de arquivo não suportado. Use JPG, PNG ou GIF.')
-                return
-            member.profile_picture = profile_picture
+        if not self._update_profile_picture(request, instance):
+            return render(request, 'member/profile.html', self._build_context(member, profile_form=form))
 
         try:
-            member.save()
+            instance.save()
             messages.success(request, 'Informações pessoais atualizadas com sucesso!')
         except Exception as e:
             messages.error(request, f'Erro ao atualizar informações: {str(e)}')
 
+        return redirect('member_profile')
+
+    def _update_profile_picture(self, request, member):
+        if 'profile_picture' not in request.FILES:
+            return True
+
+        picture = request.FILES['profile_picture']
+
+        if picture.size > self.MAX_AVATAR_SIZE:
+            messages.error(request, 'O arquivo é muito grande. Tamanho máximo: 5MB.')
+            return False
+
+        if picture.content_type not in self.ALLOWED_IMAGE_TYPES:
+            messages.error(request, 'Formato de arquivo não suportado. Use JPG, PNG ou GIF.')
+            return False
+
+        member.profile_picture = picture
+        return True
+
     def _handle_change_password(self, request, member):
-        current_password = request.POST.get('current_password')
-        new_password = request.POST.get('new_password')
-        confirm_password = request.POST.get('confirm_password')
+        from website.forms.member import MemberPasswordChangeForm
+        form = MemberPasswordChangeForm(user=request.user, data=request.POST)
 
-        if not current_password or not new_password or not confirm_password:
-            messages.error(request, 'Todos os campos de senha são obrigatórios.')
-            return redirect('member_profile')
-
-        if not request.user.check_password(current_password):
-            messages.error(request, 'Senha atual incorreta.')
-            return redirect('member_profile')
-
-        if new_password != confirm_password:
-            messages.error(request, 'As senhas não coincidem.')
-            return redirect('member_profile')
-
-        if len(new_password) < 6:
-            messages.error(request, 'A nova senha deve ter pelo menos 6 caracteres.')
-            return redirect('member_profile')
+        if not form.is_valid():
+            return render(request, 'member/profile.html', self._build_context(member, password_form=form))
 
         try:
-            request.user.set_password(new_password)
-            request.user.save()
+            form.save()
             messages.success(request, 'Senha alterada com sucesso! Faça login novamente.')
             logout(request)
             return redirect('member_login')
@@ -215,8 +216,6 @@ class MemberProfileView(MemberRequiredMixin, MinistrationContextMixin, View):
 
 
 class MemberConsolidationView(MemberRequiredMixin, MinistrationContextMixin, View):
-    """View para listar consolidados do membro logado"""
-
     def get(self, request):
         member = self.member
         consolidations = member.performed_followups.select_related(
@@ -224,12 +223,10 @@ class MemberConsolidationView(MemberRequiredMixin, MinistrationContextMixin, Vie
         ).prefetch_related('reports').all()
 
         context = {
-            'member': member,
             'consolidations': consolidations,
             'total_consolidations': consolidations.count(),
             'active_consolidations': consolidations.filter(end_date__isnull=True).count(),
             'completed_consolidations': consolidations.filter(end_date__isnull=False).count(),
-            'can_consolidate': member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(member),
         }
         return render(request, 'member/consolidation.html', context)

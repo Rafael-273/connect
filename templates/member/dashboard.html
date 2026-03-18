@@ -1,4 +1,4 @@
-{% extends "login_base.html" %}
+{% extends "member_base.html" %}
 {% load static %}
 
 {% block title %}Filadélfia Connect{% endblock %}
@@ -170,7 +170,6 @@
         }
     }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 {% endblock %}
 
 {% block content %}
@@ -242,7 +241,7 @@
     <main class="px-4 md:px-8 pt-2 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400" style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
         
         <!-- Seção de Boas-Vindas para Novos Membros (sem vínculos) -->
-        {% if not is_scheduled_this_week and not is_approver and not can_consolidate and not ministries %}
+        {% if is_new_member %}
         <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(135deg, #ffffff 0%, #fef7ed 50%, #ffffff 100%); border-color: rgba(201, 9, 5, 0.2);">
             <!-- Elementos Decorativos -->
             <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3), transparent);"></div>
@@ -515,46 +514,7 @@
         {% endif %}
     </main>
 
-    <!-- Bottom Navigation -->
-    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out {% if can_consolidate and is_ministration_member %}w-[90%] max-w-lg justify-around{% elif can_consolidate or is_ministration_member %}w-auto gap-2 justify-center{% else %}w-auto gap-2 justify-center{% endif %}" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
-        <!-- Home -->
-        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
-            <div class="relative">
-                <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #C90905;">
-                    <i class="fas fa-home text-white text-lg"></i>
-                </div>
-            </div>
-            <span style="color: #C90905;">Home</span>
-        </a>
-        
-        <!-- Consolidação (somente se disponível) -->
-        {% if can_consolidate %}
-        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
-                <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Consolidar</span>
-        </a>
-        {% endif %}
-        
-        <!-- Curas (somente para membros do ministério de ministração) -->
-        {% if is_ministration_member %}
-        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
-                <i class="fas fa-heart-pulse text-lg transition-transform group-hover:scale-110" style="color: #C90905;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Curas</span>
-        </a>
-        {% endif %}
-        
-        <!-- Perfil -->
-        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-[11px] sm:text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(230, 57, 70, 0.05); border-color: rgba(230, 57, 70, 0.15);">
-                <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #E63946;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Perfil</span>
-        </a>
-    </nav>
+    {% include 'parciais/member_bottom_nav.html' with nav_active='home' %}
 
     <script>
         // Flag para prevenir múltiplas submissões
@@ -600,62 +560,6 @@
             });
         });
         
-        // Script para ocultar/mostrar menu inferior ao rolar
-        let lastScrollTop = 0;
-        const nav = document.getElementById('bottomNav');
-        const scrollThreshold = 50; // Pixels mínimos para detectar scroll
-
-        window.addEventListener('scroll', function() {
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-            const windowHeight = window.innerHeight;
-            const documentHeight = document.documentElement.scrollHeight;
-            
-            // Se estiver no topo da página, sempre mostra o menu
-            if (scrollTop <= 100) {
-                nav.classList.remove('nav-hidden');
-                nav.classList.add('nav-visible');
-                lastScrollTop = scrollTop;
-                return;
-            }
-
-            // Se estiver no final da página (últimos 100px), oculta o menu
-            if (scrollTop + windowHeight >= documentHeight - 100) {
-                nav.classList.add('nav-hidden');
-                nav.classList.remove('nav-visible');
-                lastScrollTop = scrollTop;
-                return;
-            }
-
-            // Detecta direção do scroll
-            if (Math.abs(scrollTop - lastScrollTop) > scrollThreshold) {
-                if (scrollTop > lastScrollTop) {
-                    // Scrolling para baixo - Oculta o menu
-                    nav.classList.add('nav-hidden');
-                    nav.classList.remove('nav-visible');
-                } else {
-                    // Scrolling para cima - Mostra o menu
-                    nav.classList.remove('nav-hidden');
-                    nav.classList.add('nav-visible');
-                }
-                lastScrollTop = scrollTop;
-            }
-        }, false);
-
-        // Mostra o menu quando passar o mouse próximo à parte inferior (apenas desktop)
-        document.addEventListener('mousemove', function(e) {
-            // Detecta se é mobile
-            if (window.innerWidth <= 768) return;
-            
-            const windowHeight = window.innerHeight;
-            const mouseY = e.clientY;
-            
-            // Se o mouse estiver próximo dos últimos 150px da tela
-            if (windowHeight - mouseY < 150) {
-                nav.classList.remove('nav-hidden');
-                nav.classList.add('nav-visible');
-            }
-        });
-
         // PWA Install Prompt (apenas mobile)
         let deferredPrompt;
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;

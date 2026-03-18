@@ -18,12 +18,22 @@ class StaffRequiredMixin(UserPassesTestMixin):
 
 class MemberRequiredMixin(LoginRequiredMixin):
     """Mixin that requires user to have an associated Member profile."""
+    login_url = 'member_login'
     member = None
 
     def dispatch(self, request, *args, **kwargs):
+        # LoginRequiredMixin handles unauthenticated users first
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
         if not hasattr(request.user, 'member'):
+            if request.user.is_superuser:
+                return redirect('admin_dashboard')
+            from django.contrib.auth import logout
             messages.error(request, 'Você precisa estar cadastrado como membro para acessar esta área.')
+            logout(request)
             return redirect('member_login')
+
         self.member = request.user.member
         return super().dispatch(request, *args, **kwargs)
 

@@ -1,9 +1,7 @@
-import uuid
 from datetime import date
 from django.contrib.auth import get_user_model
-from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic.edit import CreateView
-from django.views.generic import ListView, DetailView, View
+from django.views.generic import ListView, View
 from django.urls import reverse_lazy
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -12,11 +10,9 @@ from django.http import JsonResponse
 from django.core.files.base import ContentFile
 import base64
 from ..models.member import Member
-from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate
-from ..models.ministry_membership import MinistryMembership
+from ..models.follow_up import FollowUp, FollowUpTemplate
 from ..forms.member import MemberForm
 from ..forms.follow_up import FollowUpReportForm
-from ..models.user import User
 from .mixins import MemberRequiredMixin, MinistrationContextMixin
 
 User = get_user_model()
@@ -31,50 +27,46 @@ class MemberCreateView(CreateView):
     def form_valid(self, form):
         email = form.cleaned_data.get('email')
         password = form.cleaned_data.get('password')
-        
-        # Validar se o email já existe
-        if email and User.objects.filter(email=email).exists():
-            messages.error(self.request, 'Este e-mail já está cadastrado no sistema. Por favor, use outro e-mail.')
-            return self.form_invalid(form)
-        
-        if not email:
-            messages.error(self.request, 'O e-mail é obrigatório.')
+
+        error = self._validate_email(email)
+        if error:
+            messages.error(self.request, error)
             return self.form_invalid(form)
 
         try:
-            # Criar usuário com a senha fornecida
-            user = User.objects.create_user(
-                email=email,
-                password=password
-            )
-
+            user = self._create_user(email, password)
             member = form.save(commit=False)
             member.user = user
-            
-            # Processar imagem cropada em base64
-            cropped_image_data = self.request.POST.get('cropped_image_data')
-            if cropped_image_data:
-                # Remove o prefixo "data:image/jpeg;base64," se existir
-                if ',' in cropped_image_data:
-                    format, imgstr = cropped_image_data.split(';base64,')
-                    ext = format.split('/')[-1]
-                else:
-                    imgstr = cropped_image_data
-                    ext = 'jpg'
-                
-                # Decodifica a imagem base64
-                data = ContentFile(base64.b64decode(imgstr), name=f'profile_{user.id}.{ext}')
-                member.profile_picture = data
-            
+            member.profile_picture = self._decode_cropped_image(self.request.POST.get('cropped_image_data'), user.id)
             member.save()
-
             self.object = member
             messages.success(self.request, 'Cadastro realizado com sucesso! Você já pode fazer login.')
             return super().form_valid(form)
-            
         except Exception as e:
             messages.error(self.request, f'Erro ao realizar cadastro: {str(e)}')
             return self.form_invalid(form)
+
+    def _validate_email(self, email):
+        """Returns an error message string or None."""
+        if not email:
+            return 'O e-mail é obrigatório.'
+        if User.objects.filter(email=email).exists():
+            return 'Este e-mail já está cadastrado no sistema. Por favor, use outro e-mail.'
+        return None
+
+    def _create_user(self, email, password):
+        return User.objects.create_user(email=email, password=password)
+
+    def _decode_cropped_image(self, raw_data, user_id):
+        """Decodes a base64 data-URL into a ContentFile, or returns None."""
+        if not raw_data:
+            return None
+        if ',' in raw_data:
+            header, imgstr = raw_data.split(';base64,')
+            ext = header.split('/')[-1]
+        else:
+            imgstr, ext = raw_data, 'jpg'
+        return ContentFile(base64.b64decode(imgstr), name=f'profile_{user_id}.{ext}')
     
 
 class NewConvertsListView(ListView):
@@ -83,32 +75,33 @@ class NewConvertsListView(ListView):
     context_object_name = 'members'
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        queryset = queryset.order_by('-created_at')
-        query = self.request.GET.get('q', '')
-        queryset = queryset.filter(conversion__in=['new_convert', 'reconciliation'])
+        queryset = (
+            super().get_queryset()
+            .filter(conversion__in=['new_convert', 'reconciliation'])
+            .order_by('-created_at')
+        )
+        query = self._get_search_query()
         if query:
             queryset = queryset.filter(
-                Q(name__icontains=query) |
-                Q(phone__icontains=query)
+                Q(name__icontains=query) | Q(phone__icontains=query)
             )
         return queryset
 
-    def normalize_phone_number(self, phone, default_ddd='21'):
-        import re
-        raw_phone = re.sub(r'\D', '', phone or '')
-        if len(raw_phone) == 8 or len(raw_phone) == 9:
-            return default_ddd + raw_phone
-        elif len(raw_phone) == 10 or len(raw_phone) == 11:
-            return raw_phone
-        elif raw_phone.startswith('55') and len(raw_phone) >= 12:
-            return raw_phone[2:]
-        else:
-            return raw_phone
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['members'] = self._enrich_members(context['members'])
+        context['query'] = self._get_search_query()
+        return context
 
-    def clean_members(self, members):
+    # ── Helpers ────────────────────────────────────────────────────────
+
+    def _get_search_query(self):
+        return self.request.GET.get('q', '')
+
+    def _enrich_members(self, members):
+        """Annotates each member with cleaned_phone and first_name in place."""
         for member in members:
-            member.cleaned_phone = self.normalize_phone_number(member.phone)
+            member.cleaned_phone = self._normalize_phone(member.phone)
             if member.name:
                 member.name = member.name.title()
                 member.first_name = member.name.split()[0]
@@ -116,34 +109,40 @@ class NewConvertsListView(ListView):
                 member.first_name = ''
         return members
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        members = context['members']
-        for member in members:
-            member.cleaned_phone = self.normalize_phone_number(member.phone)
-        context['members'] = self.clean_members(members)
-        context['query'] = self.request.GET.get('q', '')
-        return context
+    @staticmethod
+    def _normalize_phone(phone, default_ddd='21'):
+        import re
+        raw = re.sub(r'\D', '', phone or '')
+        if len(raw) in (8, 9):
+            return default_ddd + raw
+        if len(raw) in (10, 11):
+            return raw
+        if raw.startswith('55') and len(raw) >= 12:
+            return raw[2:]
+        return raw
 
-
-# ==================== VIEWS DE CONSOLIDAÇÃO ====================
 
 class MemberConsolidationListView(MemberRequiredMixin, MinistrationContextMixin, View):
-    """Lista todos os consolidados do membro logado"""
-
     def get(self, request):
         member = self.member
-        followups = FollowUp.objects.filter(
-            responsible=member,
-            is_active=True
-        ).select_related('accompanied', 'template').prefetch_related('reports').order_by('-created_at')
+        followups = self._get_followups(member)
+        return render(request, 'member/consolidation_list.html', self._build_context(member, followups))
 
-        context = {
+    def _get_followups(self, member):
+        return (
+            FollowUp.objects
+            .filter(responsible=member, is_active=True)
+            .select_related('accompanied', 'template')
+            .prefetch_related('reports')
+            .order_by('-created_at')
+        )
+
+    def _build_context(self, member, followups):
+        return {
             'followups': followups,
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(member),
         }
-        return render(request, 'member/consolidation_list.html', context)
 
 
 class MemberConsolidationDetailView(MemberRequiredMixin, MinistrationContextMixin, View):
@@ -220,79 +219,72 @@ class MemberConsolidationReportView(MemberRequiredMixin, MinistrationContextMixi
 
 
 class ConsolidatorGuideView(MemberRequiredMixin, MinistrationContextMixin, View):
-    """Página com guia e materiais para consolidadores"""
-
     def get(self, request):
         member = self.member
         context = {
             'member': member,
-            'is_ministration_member': self.get_ministration_status(member),
         }
         return render(request, 'member/consolidator_guide.html', context)
 
 
 class ConsolidatorAssignmentsView(MemberRequiredMixin, MinistrationContextMixin, View):
-    """Página onde consolidadores escolhem quem consolidar"""
-
     def get(self, request):
         member = self.member
+        age = self._get_member_age(member)
+        available = self._get_available_people(member, age)
+        my_count = FollowUp.objects.filter(responsible=member, is_active=True).count()
+        return render(request, 'member/consolidator_assignments.html',
+                      self._build_context(member, available, my_count, age))
 
-        my_consolidations = FollowUp.objects.filter(
-            responsible=member,
-            is_active=True
-        ).count()
-
-        consolidator_age = None
+    @staticmethod
+    def _get_member_age(member):
+        if not member.birth_date:
+            return None
         today = date.today()
-        if member.birth_date:
-            consolidator_age = today.year - member.birth_date.year - (
-                (today.month, today.day) < (member.birth_date.month, member.birth_date.day)
-            )
-
-        # Filtros base: tem conversão, não está consolidado, não tem consolidação ativa
-        available_people = Member.objects.filter(
-            conversion__in=['new_convert', 'reconciled'],
-            is_consolidated=False,
-            is_active=True
-        ).exclude(
-            id=member.id
+        return today.year - member.birth_date.year - (
+            (today.month, today.day) < (member.birth_date.month, member.birth_date.day)
         )
 
-        people_with_active_followup = FollowUp.objects.filter(
+    def _get_available_people(self, member, age):
+        """Returns people eligible to be consolidated by this member."""
+        already_accompanied = FollowUp.objects.filter(
             is_active=True
         ).values_list('accompanied_id', flat=True)
 
-        available_people = available_people.exclude(
-            id__in=people_with_active_followup
+        qs = (
+            Member.objects
+            .filter(conversion__in=['new_convert', 'reconciled'], is_consolidated=False, is_active=True)
+            .exclude(id=member.id)
+            .exclude(id__in=already_accompanied)
         )
 
         if member.gender:
-            available_people = available_people.filter(gender=member.gender)
+            qs = qs.filter(gender=member.gender)
 
-        if consolidator_age:
-            if consolidator_age >= 50:
-                available_people = available_people.filter(
-                    birth_date__lte=date(today.year - 40, today.month, today.day)
-                )
-            else:
-                min_birth_year = today.year - (consolidator_age + 10)
-                max_birth_year = today.year - (consolidator_age - 10)
-                available_people = available_people.filter(
-                    birth_date__year__gte=min_birth_year,
-                    birth_date__year__lte=max_birth_year
-                )
+        qs = self._apply_age_filter(qs, age)
 
-        available_people = available_people.distinct().order_by('-conversion_date', '-created_at')
+        return qs.distinct().order_by('-conversion_date', '-created_at')
 
-        context = {
-            'member': member,
+    @staticmethod
+    def _apply_age_filter(qs, age):
+        """Filters queryset to people within an appropriate age range."""
+        if not age:
+            return qs
+        today = date.today()
+        if age >= 50:
+            return qs.filter(birth_date__lte=date(today.year - 40, today.month, today.day))
+        return qs.filter(
+            birth_date__year__gte=today.year - (age + 10),
+            birth_date__year__lte=today.year - (age - 10),
+        )
+
+    def _build_context(self, member, available_people, my_count, age):
+        return {
             'available_people': available_people,
-            'my_consolidations_count': my_consolidations,
+            'my_consolidations_count': my_count,
             'can_consolidate': member.is_available_to_consolidate,
-            'consolidator_age': consolidator_age,
-            'is_ministration_member': self.get_ministration_status(member),
+            'consolidator_age': age,
         }
-        return render(request, 'member/consolidator_assignments.html', context)
 
 
 class RequestConsolidationView(MemberRequiredMixin, View):
@@ -300,34 +292,40 @@ class RequestConsolidationView(MemberRequiredMixin, View):
 
     def post(self, request, person_id):
         member = self.member
-
-        if not member.is_available_to_consolidate:
-            return JsonResponse({
-                'error': 'Você não está disponível para consolidar no momento.'
-            }, status=403)
-
         person = get_object_or_404(Member, id=person_id)
 
-        if FollowUp.objects.filter(accompanied=person, is_active=True).exists():
-            return JsonResponse({
-                'error': 'Esta pessoa já está sendo consolidada.'
-            }, status=400)
+        error = self._validate_request(member, person)
+        if error:
+            return JsonResponse({'error': error['message']}, status=error['status'])
 
-        last_template = FollowUpTemplate.objects.order_by('-created_at').first()
-
-        followup = FollowUp.objects.create(
-            responsible=member,
-            accompanied=person,
-            template=last_template,
-            is_active=True,
-            profile_notes=f'Consolidação iniciada em {date.today().strftime("%d/%m/%Y")}'
-        )
-
+        followup = self._create_followup(member, person)
         return JsonResponse({
             'success': True,
             'message': 'Consolidação iniciada com sucesso!',
-            'followup_id': followup.id
+            'followup_id': followup.id,
         })
 
     def http_method_not_allowed(self, request, *args, **kwargs):
         return JsonResponse({'error': 'Método não permitido'}, status=405)
+
+    # ── Helpers ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_request(member, person):
+        """Returns a dict with 'message' and 'status', or None if valid."""
+        if not member.is_available_to_consolidate:
+            return {'message': 'Você não está disponível para consolidar no momento.', 'status': 403}
+        if FollowUp.objects.filter(accompanied=person, is_active=True).exists():
+            return {'message': 'Esta pessoa já está sendo consolidada.', 'status': 400}
+        return None
+
+    @staticmethod
+    def _create_followup(member, person):
+        template = FollowUpTemplate.objects.order_by('-created_at').first()
+        return FollowUp.objects.create(
+            responsible=member,
+            accompanied=person,
+            template=template,
+            is_active=True,
+            profile_notes=f'Consolidação iniciada em {date.today().strftime("%d/%m/%Y")}',
+        )

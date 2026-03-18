@@ -1,8 +1,10 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
+from django.conf import settings
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView
-from .views.home import HomeView
+from .views.home import HomeView, TestimonyListView, ContactView
 from .views.visitor import VisitorCreateView, VisitorListView
+from .views.evangelism import EvangelismCreateView, EvangelismListView
 from .views.member import (
     MemberCreateView, 
     NewConvertsListView,
@@ -42,7 +44,16 @@ from .views.schedules import (
     ScheduleDeleteView, ScheduleExportPDFView,
     ScheduleDayCreateView, ScheduleDayEditView, ScheduleDayDeleteView,
     ScheduleDayToggleCancelView,
+    team_list_view, team_create_view, team_edit_view, team_delete_view,
+    schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
+    schedule_delete_view, schedule_export_pdf_view, schedule_print_view,
+    schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
+    schedule_day_toggle_cancel_view,
+    check_schedule_conflict_view,
+    division_list_view, division_create_view, division_edit_view, division_delete_view,
+    schedule_day_division_assign_view
 )
+from .views.prayer_request import PrayerRequestCreateView, PrayerRequestListView
 from .views.admin_panel import (
     DashboardView, MembersListView, VisitorsListView,
     EventsListView, MinistriesListView, NeighborhoodsListView,
@@ -52,13 +63,21 @@ from .views.admin_panel import (
     FollowUpDeleteView, FollowUpReportView, FollowUpDetailView, ProfileView,
     CanteenListView, CanteenEditView, CanteenDetailView, CanteenDeleteView,
     CanteenTogglePaidView, CanteenApiView, TemplatesListView, ReportsView,
-    TemplateCreateView, TemplateEditView, TemplateDetailView, TemplateDeleteView,
+    TemplateCreateView, TemplateEditView, TemplateDetailView, TemplateDeleteView, templates_view, reports_view,
+    template_create_view, template_edit_view, template_detail_view, template_delete_view,
+    TestimonyListView as AdminTestimonyListView, TestimonyEditView, TestimonyDeleteView, TestimonyToggleView
 )
 
 urlpatterns = [
     path('', HomeView.as_view(), name='home'),
+    path('testemunhos/', TestimonyListView.as_view(), name='testemunhos'),
+    path('contato/', ContactView.as_view(), name='contato'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
     path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
+    path('prayer-request/', PrayerRequestCreateView.as_view(), name='prayer_request_create'),
+    path('prayer-request/list', PrayerRequestListView.as_view(), name='prayer_request_list'),
+    path('evangelism/', EvangelismCreateView.as_view(), name='evangelism'),
+    path('evangelism/list/', EvangelismListView.as_view(), name='evangelism_list'),
     path('new_converts/list/', NewConvertsListView.as_view(), name='new_converts_list'),
     path('member/register/', MemberCreateView.as_view(), name='member_register'),
     path('translator/recorder/', AudioRecorderView.as_view(), name='audio_recorder'),
@@ -66,7 +85,25 @@ urlpatterns = [
     path('event/list', EventListView.as_view(), name='event_list'),
     path('event/<slug:slug>/', EventDetailView.as_view(), name='event_detail'),
     
-    # Authentication URLs (Unified Login System)
+    path('password-reset/', auth_views.PasswordResetView.as_view(
+        template_name='password_reset/request.html',
+        email_template_name='password_reset/email.html',
+        html_email_template_name='password_reset/email_html.html',
+        subject_template_name='password_reset/email_subject.txt',
+        success_url='/password-reset/sent/',
+        extra_email_context={'site_domain': settings.SITE_DOMAIN},
+    ), name='password_reset_request'),
+    path('password-reset/sent/', auth_views.PasswordResetDoneView.as_view(
+        template_name='password_reset/email_sent.html',
+    ), name='password_reset_done'),
+    path('password-reset/confirm/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
+        template_name='password_reset/confirm.html',
+        success_url='/password-reset/complete/',
+    ), name='password_reset_confirm'),
+    path('password-reset/complete/', auth_views.PasswordResetCompleteView.as_view(
+        template_name='password_reset/complete.html',
+    ), name='password_reset_complete'),
+
     path('login/', MemberLoginView.as_view(), name='member_login'),
     path('admin-login/', MemberLoginView.as_view(), name='admin_login'),  # Redirect old admin login to unified login
     path('redirect-after-login/', RedirectAfterLoginView.as_view(), name='redirect_after_login'),
@@ -120,6 +157,18 @@ urlpatterns = [
     path('admin-panel/schedules/days/<int:day_id>/edit/', ScheduleDayEditView.as_view(), name='schedule_day_edit'),
     path('admin-panel/schedules/days/<int:day_id>/delete/', ScheduleDayDeleteView.as_view(), name='schedule_day_delete'),
     path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', ScheduleDayToggleCancelView.as_view(), name='schedule_day_toggle_cancel'),
+    path('admin-panel/schedules/<int:schedule_id>/days/new/', schedule_day_create_view, name='schedule_day_create'),
+    path('admin-panel/schedules/days/<int:day_id>/edit/', schedule_day_edit_view, name='schedule_day_edit'),
+    path('admin-panel/schedules/days/<int:day_id>/delete/', schedule_day_delete_view, name='schedule_day_delete'),
+    path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', schedule_day_toggle_cancel_view, name='schedule_day_toggle_cancel'),
+    path('admin-panel/schedules/check-conflict/', check_schedule_conflict_view, name='schedule_check_conflict'),
+    
+    # Division URLs - Subdivisões de Escala (gerenciadas inline no form da escala)
+    path('admin-panel/ministries/<int:ministry_id>/divisions/', division_list_view, name='division_list'),
+    path('admin-panel/schedules/<int:schedule_id>/divisions/new/', division_create_view, name='division_create'),
+    path('admin-panel/divisions/<int:division_id>/edit/', division_edit_view, name='division_edit'),
+    path('admin-panel/divisions/<int:division_id>/delete/', division_delete_view, name='division_delete'),
+    path('admin-panel/schedules/days/<int:day_id>/divisions/', schedule_day_division_assign_view, name='schedule_day_division_assign'),
     
     # Team URLs
     path('admin-panel/teams/', TeamListView.as_view(), name='team_list'),
@@ -199,6 +248,13 @@ urlpatterns = [
     path('admin-panel/cantina/<int:debtor_id>/toggle-paid/', CanteenTogglePaidView.as_view(), name='admin_cantina_toggle_paid'),
     path('admin-panel/api/cantina/', CanteenApiView.as_view(), name='admin_cantina_api'),
     
+    # Testemunhos URLs
+    path('admin-panel/testimonies/', AdminTestimonyListView.as_view(), name='admin_testimonies_list'),
+    path('admin-panel/testimonies/new/', TestimonyEditView.as_view(), name='admin_testimony_create'),
+    path('admin-panel/testimonies/<int:testimony_id>/edit/', TestimonyEditView.as_view(), name='admin_testimony_edit'),
+    path('admin-panel/testimonies/<int:testimony_id>/delete/', TestimonyDeleteView.as_view(), name='admin_testimony_delete'),
+    path('admin-panel/testimonies/<int:testimony_id>/toggle/', TestimonyToggleView.as_view(), name='admin_testimony_toggle'),
+
     # APIs
     path('admin-panel/api/delete/', ApiDeleteItemView.as_view(), name='admin_api_delete'),
     path('admin-panel/api/ministry/', MinistryCreateEditApiView.as_view(), name='admin_ministry_api'),

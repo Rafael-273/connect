@@ -4,6 +4,7 @@
 <html lang="pt-br">
 <head>
     {% block head %}{% endblock %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     {% include 'parciais/head.html' %}
     <link rel="stylesheet" href="{% static 'user_base.css' %}">
     <title>{% block title %}{% endblock %}</title>
@@ -63,9 +64,17 @@
             flex-shrink: 0;
             margin: 0;
         }
+
+        .nav-hidden {
+            transform: translate(-50%, 120%) !important;
+            opacity: 0.7 !important;
+        }
+        .nav-visible {
+            transform: translate(-50%, 0) !important;
+            opacity: 1 !important;
+        }
     </style>
     
-    <!-- SweetAlert2 -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 
@@ -76,9 +85,5 @@
 
 {% endblock %}
 </div>
-
-<script>
-    // Qualquer script global pode ir aqui
-</script>
 </body>
 </html>

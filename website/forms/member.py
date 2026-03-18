@@ -1,6 +1,108 @@
 from django import forms
 from ..models.member import Member
 
+
+_INPUT = (
+    'w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 '
+    'focus:bg-white focus:border-gray-300 focus:outline-none transition-all'
+)
+_TEXTAREA = _INPUT + ' resize-none'
+
+
+class MemberProfileForm(forms.ModelForm):
+    """Form for member self-service profile editing (member area)."""
+
+    class Meta:
+        model = Member
+        fields = ['name', 'birth_date', 'phone', 'address', 'neighborhood', 'testimony']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': _INPUT,
+                'placeholder': 'Seu nome completo',
+            }),
+            'birth_date': forms.DateInput(attrs={
+                'type': 'date',
+                'class': _INPUT,
+            }),
+            'phone': forms.TextInput(attrs={
+                'type': 'tel',
+                'class': _INPUT,
+                'placeholder': '(11) 99999-9999',
+            }),
+            'address': forms.Textarea(attrs={
+                'rows': 3,
+                'class': _TEXTAREA,
+                'placeholder': 'Seu endereço completo',
+            }),
+            'neighborhood': forms.Select(attrs={
+                'class': _INPUT,
+            }),
+            'testimony': forms.Textarea(attrs={
+                'rows': 5,
+                'class': _TEXTAREA,
+                'placeholder': 'Compartilhe sua história de fé e como Deus tem transformado sua vida...',
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['neighborhood'].empty_label = 'Selecione seu bairro'
+        for field in ('birth_date', 'phone', 'address', 'neighborhood', 'testimony'):
+            self.fields[field].required = False
+
+
+class MemberPasswordChangeForm(forms.Form):
+    """Form for member self-service password change."""
+
+    current_password = forms.CharField(
+        label='Senha Atual',
+        widget=forms.PasswordInput(attrs={
+            'class': _INPUT,
+            'placeholder': 'Digite sua senha atual',
+            'autocomplete': 'current-password',
+        }),
+    )
+    new_password = forms.CharField(
+        label='Nova Senha',
+        min_length=6,
+        widget=forms.PasswordInput(attrs={
+            'class': _INPUT,
+            'placeholder': 'Digite sua nova senha',
+            'autocomplete': 'new-password',
+        }),
+    )
+    confirm_password = forms.CharField(
+        label='Confirmar Nova Senha',
+        widget=forms.PasswordInput(attrs={
+            'class': _INPUT,
+            'placeholder': 'Confirme sua nova senha',
+            'autocomplete': 'new-password',
+        }),
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        current = self.cleaned_data.get('current_password')
+        if not self.user.check_password(current):
+            raise forms.ValidationError('Senha atual incorreta.')
+        return current
+
+    def clean(self):
+        cleaned_data = super().clean()
+        new = cleaned_data.get('new_password')
+        confirm = cleaned_data.get('confirm_password')
+        if new and confirm and new != confirm:
+            self.add_error('confirm_password', 'As senhas não coincidem.')
+        return cleaned_data
+
+    def save(self):
+        self.user.set_password(self.cleaned_data['new_password'])
+        self.user.save()
+
+
 class MemberForm(forms.ModelForm):
     class Meta:
         model = Member
