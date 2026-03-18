@@ -7,9 +7,21 @@ from django.utils.timezone import make_aware
 from datetime import timedelta, datetime
 from django.urls import reverse_lazy
 from django.utils import timezone
+from django.core.cache import cache
+from django.http import HttpResponseForbidden
 from ..models.visitor import Visitor
 from ..forms.visitor import VisitorForm
 from ..models.member import Member
+
+RATE_LIMIT_MAX = 5
+RATE_LIMIT_WINDOW = 60 * 60  # 1 hora
+
+
+def _get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0].strip()
+    return request.META.get('REMOTE_ADDR', '')
 
 
 class VisitorCreateView(CreateView):
@@ -19,6 +31,12 @@ class VisitorCreateView(CreateView):
     success_url = reverse_lazy('home')
 
     def form_valid(self, form):
+        ip = _get_client_ip(self.request)
+        cache_key = f'visitor_rate_{ip}'
+        count = cache.get(cache_key, 0)
+        if count >= RATE_LIMIT_MAX:
+            return HttpResponseForbidden('Muitas submissões. Tente novamente mais tarde.')
+        cache.set(cache_key, count + 1, RATE_LIMIT_WINDOW)
         form.instance.visit_date = timezone.now()
         return super().form_valid(form)
 

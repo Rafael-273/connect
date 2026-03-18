@@ -344,7 +344,6 @@ $(document).ready(function() {
                                 <select name="user_type" class="form-select text-sm sm:text-base">
                                     <option value="member" {% if member.user.user_type == 'member' or not member %}selected{% endif %}>Membro (Sem acesso ao painel)</option>
                                     <option value="admin" {% if member.user.user_type == 'admin' %}selected{% endif %}>Administrador (Acesso total)</option>
-                                    <option value="canteen" {% if member.user.user_type == 'canteen' %}selected{% endif %}>Cantina (Gerencia fiados)</option>
                                     <option value="visitors" {% if member.user.user_type == 'visitors' %}selected{% endif %}>Visitantes (Gerencia visitantes)</option>
                                     <option value="consolidation" {% if member.user.user_type == 'consolidation' %}selected{% endif %}>Consolidação (Gerencia acompanhamentos)</option>
                                     <option value="events" {% if member.user.user_type == 'events' %}selected{% endif %}>Eventos (Gerencia eventos)</option>

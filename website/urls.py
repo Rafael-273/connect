@@ -2,8 +2,9 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from django.conf import settings
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView
-from .views.home import HomeView
+from .views.home import HomeView, TestimonyListView, ContactView
 from .views.visitor import VisitorCreateView, VisitorListView
+from .views.evangelism import EvangelismCreateView, EvangelismListView
 from .views.member import (
     MemberCreateView, 
     NewConvertsListView,
@@ -36,10 +37,14 @@ from .views.word_approval import pending_words_list, approve_word, reject_word
 from .views.schedules import (
     team_list_view, team_create_view, team_edit_view, team_delete_view,
     schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
-    schedule_delete_view, schedule_export_pdf_view,
+    schedule_delete_view, schedule_export_pdf_view, schedule_print_view,
     schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
-    schedule_day_toggle_cancel_view
+    schedule_day_toggle_cancel_view,
+    check_schedule_conflict_view,
+    division_list_view, division_create_view, division_edit_view, division_delete_view,
+    schedule_day_division_assign_view
 )
+from .views.prayer_request import PrayerRequestCreateView, PrayerRequestListView
 from .views.admin_panel import (
     dashboard_view, members_list_view, visitors_list_view,
     events_list_view, ministries_list_view, neighborhoods_list_view,
@@ -47,15 +52,21 @@ from .views.admin_panel import (
     member_detail_api, visitor_detail_api, member_edit_view, visitor_edit_view, event_edit_view,
     ministry_edit_view, neighborhood_edit_view, followup_list_view, followup_edit_view,
     followup_delete_view, followup_report_view, followup_detail_view, profile_view,
-    canteen_list_view, canteen_edit_view, canteen_detail_view, canteen_delete_view,
-    canteen_toggle_paid, canteen_api, templates_view, reports_view,
-    template_create_view, template_edit_view, template_detail_view, template_delete_view
+    templates_view, reports_view,
+    template_create_view, template_edit_view, template_detail_view, template_delete_view,
+    testimony_list_view, testimony_edit_view, testimony_delete_view, testimony_toggle_view
 )
 
 urlpatterns = [
     path('', HomeView.as_view(), name='home'),
+    path('testemunhos/', TestimonyListView.as_view(), name='testemunhos'),
+    path('contato/', ContactView.as_view(), name='contato'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
     path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
+    path('prayer-request/', PrayerRequestCreateView.as_view(), name='prayer_request_create'),
+    path('prayer-request/list', PrayerRequestListView.as_view(), name='prayer_request_list'),
+    path('evangelism/', EvangelismCreateView.as_view(), name='evangelism'),
+    path('evangelism/list/', EvangelismListView.as_view(), name='evangelism_list'),
     path('new_converts/list/', NewConvertsListView.as_view(), name='new_converts_list'),
     path('member/register/', MemberCreateView.as_view(), name='member_register'),
     path('translator/recorder/', AudioRecorderView.as_view(), name='audio_recorder'),
@@ -131,12 +142,21 @@ urlpatterns = [
     path('admin-panel/schedules/<int:schedule_id>/delete/', schedule_delete_view, name='schedule_delete'),
     # publish/unpublish removed — schedule for current month is always active
     path('admin-panel/schedules/<int:schedule_id>/export-pdf/', schedule_export_pdf_view, name='schedule_export_pdf'),
+    path('admin-panel/schedules/<int:schedule_id>/export/', schedule_print_view, name='schedule_export'),
     
     # Schedule Days URLs
     path('admin-panel/schedules/<int:schedule_id>/days/new/', schedule_day_create_view, name='schedule_day_create'),
     path('admin-panel/schedules/days/<int:day_id>/edit/', schedule_day_edit_view, name='schedule_day_edit'),
     path('admin-panel/schedules/days/<int:day_id>/delete/', schedule_day_delete_view, name='schedule_day_delete'),
     path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', schedule_day_toggle_cancel_view, name='schedule_day_toggle_cancel'),
+    path('admin-panel/schedules/check-conflict/', check_schedule_conflict_view, name='schedule_check_conflict'),
+    
+    # Division URLs - Subdivisões de Escala (gerenciadas inline no form da escala)
+    path('admin-panel/ministries/<int:ministry_id>/divisions/', division_list_view, name='division_list'),
+    path('admin-panel/schedules/<int:schedule_id>/divisions/new/', division_create_view, name='division_create'),
+    path('admin-panel/divisions/<int:division_id>/edit/', division_edit_view, name='division_edit'),
+    path('admin-panel/divisions/<int:division_id>/delete/', division_delete_view, name='division_delete'),
+    path('admin-panel/schedules/days/<int:day_id>/divisions/', schedule_day_division_assign_view, name='schedule_day_division_assign'),
     
     # Team URLs
     path('admin-panel/teams/', team_list_view, name='team_list'),
@@ -207,15 +227,13 @@ urlpatterns = [
     path('admin-panel/templates/<int:template_id>/delete/', template_delete_view, name='admin_template_delete'),
     path('admin-panel/reports/', reports_view, name='admin_reports'),
     
-    # Cantina URLs
-    path('admin-panel/cantina/', canteen_list_view, name='admin_cantina_list'),
-    path('admin-panel/cantina/new/', canteen_edit_view, name='admin_cantina_create'),
-    path('admin-panel/cantina/<int:debtor_id>/edit/', canteen_edit_view, name='admin_cantina_edit'),
-    path('admin-panel/cantina/<int:debtor_id>/', canteen_detail_view, name='admin_cantina_detail'),
-    path('admin-panel/cantina/<int:debtor_id>/delete/', canteen_delete_view, name='admin_cantina_delete'),
-    path('admin-panel/cantina/<int:debtor_id>/toggle-paid/', canteen_toggle_paid, name='admin_cantina_toggle_paid'),
-    path('admin-panel/api/cantina/', canteen_api, name='admin_cantina_api'),
-    
+    # Testemunhos URLs
+    path('admin-panel/testimonies/', testimony_list_view, name='admin_testimonies_list'),
+    path('admin-panel/testimonies/new/', testimony_edit_view, name='admin_testimony_create'),
+    path('admin-panel/testimonies/<int:testimony_id>/edit/', testimony_edit_view, name='admin_testimony_edit'),
+    path('admin-panel/testimonies/<int:testimony_id>/delete/', testimony_delete_view, name='admin_testimony_delete'),
+    path('admin-panel/testimonies/<int:testimony_id>/toggle/', testimony_toggle_view, name='admin_testimony_toggle'),
+
     # APIs
     path('admin-panel/api/delete/', api_delete_item, name='admin_api_delete'),
     path('admin-panel/api/ministry/', ministry_create_edit_api, name='admin_ministry_api'),

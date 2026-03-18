@@ -46,10 +46,10 @@
             </button>
             
             <div class="flex gap-2">
-                <a href="{% url 'schedule_export_pdf' schedule.id %}" 
+                     <a href="{% url 'schedule_export' schedule.id %}" 
                    target="_blank"
                    class="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg transition text-sm flex items-center justify-center gap-2">
-                    <ion-icon name="download-outline" class="text-base"></ion-icon>
+                    <ion-icon name="print-outline" class="text-base"></ion-icon>
                     <span class="hidden sm:inline">Exportar PDF</span>
                     <span class="sm:hidden">PDF</span>
                 </a>
@@ -144,6 +144,28 @@
                                 {% endif %}
                             </div>
 
+                            <!-- Division Assignments -->
+                            {% if day.grouped_divisions %}
+                            <div class="mt-3 space-y-2">
+                                {% for group in day.grouped_divisions %}
+                                <div class="bg-gradient-to-r from-orange-50 to-white border border-orange-200 rounded-lg p-2.5 sm:p-3">
+                                    <div class="flex items-center gap-2 mb-1.5">
+                                        <ion-icon name="git-branch-outline" class="text-orange-500 text-sm"></ion-icon>
+                                        <span class="text-xs sm:text-sm font-semibold text-orange-800">{{ group.division.name }}</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5 ml-5">
+                                        {% for member in group.members %}
+                                        <span class="inline-flex items-center gap-1 bg-white px-2 py-1 rounded border border-orange-100 text-xs text-gray-700">
+                                            <ion-icon name="person-outline" class="text-orange-400"></ion-icon>
+                                            {{ member.name }}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
                             <!-- Notes -->
                             {% if day.notes %}
                             <div class="mt-3 bg-blue-50 border-l-4 border-blue-400 p-2.5 sm:p-3 rounded-r-lg">
@@ -182,6 +204,11 @@
                             <button onclick="editDay({{ day.id }})" title="Editar" class="group/btn flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md hover:shadow-xl hover:scale-110">
                                 <ion-icon name="create-outline" class="text-2xl"></ion-icon>
                             </button>
+                            {% if divisions %}
+                            <button onclick="openDivisionModal({{ day.id }})" title="Atribuir Divisões" class="group/btn flex items-center justify-center w-12 h-12 rounded-xl text-white transition-all duration-200 shadow-md hover:shadow-xl hover:scale-110" style="background: linear-gradient(135deg,#C90905,#8C0910);">
+                                <ion-icon name="git-branch-outline" class="text-2xl"></ion-icon>
+                            </button>
+                            {% endif %}
                             <button onclick="deleteDay({{ day.id }})" title="Remover" class="group/btn flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-md hover:shadow-xl hover:scale-110">
                                 <ion-icon name="trash-outline" class="text-2xl"></ion-icon>
                             </button>
@@ -205,6 +232,39 @@
         </button>
     </div>
     {% endif %}
+</div>
+
+<!-- Division Assignment Modal -->
+<div id="divisionAssignModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800">
+                    <ion-icon name="git-branch-outline" class="mr-1" style="color:#C90905;"></ion-icon>
+                    Atribuir Divisões
+                </h2>
+                <button onclick="closeDivisionModal()" class="text-gray-400 hover:text-gray-600">
+                    <ion-icon name="close-outline" class="text-2xl"></ion-icon>
+                </button>
+            </div>
+            <p id="divisionModalDate" class="text-sm text-gray-600 mb-4"></p>
+            
+            <div id="divisionAssignContent" class="space-y-4">
+                <!-- Dynamically populated -->
+            </div>
+            
+            <div class="flex justify-end gap-3 mt-6 pt-4 border-t">
+                <button onclick="closeDivisionModal()" 
+                        class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition">
+                    Cancelar
+                </button>
+                <button onclick="saveDivisionAssignments()" 
+                        class="px-4 py-2 text-white rounded-lg transition" style="background:#C90905;">
+                    Salvar Atribuições
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Calendar Modal -->
@@ -239,7 +299,7 @@
                             <button onclick="quickSelectDays('wednesdays')" class="bg-green-100 hover:bg-green-200 text-green-800 px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium">
                                 <span class="hidden xs:inline">Selecionar </span>Quartas
                             </button>
-                            <button onclick="quickSelectDays('weekends')" class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium">
+                            <button onclick="quickSelectDays('weekends')" class="hover:opacity-90 text-white px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium" style="background:#C90905;">
                                 <span class="hidden xs:inline">Finais de </span>Semana
                             </button>
                             <button onclick="clearPendingDays()" class="bg-red-100 hover:bg-red-200 text-red-800 px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium">
@@ -323,7 +383,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                {% else %}
+                {% elif not divisions %}
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Membros *</label>
                     <select id="assignmentMembers" 
@@ -339,7 +399,21 @@
                     <p class="text-sm text-gray-500 mt-1">Segure Ctrl/Cmd para selecionar múltiplos membros</p>
                 </div>
                 {% endif %}
-                
+
+                {% if divisions %}
+                <!-- Divisions section — always visible, styled -->
+                <div id="assignmentDivisionsWrapper" class="rounded-xl overflow-hidden shadow-sm" style="border: 2px solid #fca5a5;">
+                    <div class="flex items-center gap-2.5 px-4 py-3" style="background: linear-gradient(135deg,#C90905,#8C0910);">
+                        <ion-icon name="git-branch-outline" class="text-white text-xl flex-shrink-0"></ion-icon>
+                        <span class="font-bold text-white text-sm">Atribuição por Divisões</span>
+                        <span id="divisionsSummaryText" class="ml-auto text-xs bg-white/25 text-white px-2.5 py-1 rounded-full font-semibold"></span>
+                    </div>
+                    <div id="assignmentDivisionsContent" class="px-4 pb-4 pt-3 space-y-3" style="background:#fff8f8;">
+                        <!-- Dynamically populated by JS -->
+                    </div>
+                </div>
+                {% endif %}
+
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Observações</label>
                     <textarea id="assignmentNotes" 
@@ -455,10 +529,85 @@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<style>
+/* ===== Select2 Custom Styling ===== */
+.select2-container--default .select2-selection--multiple {
+    border: 1.5px solid #e5e7eb !important;
+    border-radius: 0.625rem !important;
+    background: #f9fafb !important;
+    min-height: 44px !important;
+    padding: 4px 6px !important;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.select2-container--default.select2-container--focus .select2-selection--multiple {
+    border-color: #C90905 !important;
+    box-shadow: 0 0 0 3px rgba(201,9,5,.15) !important;
+    background: #fff !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__rendered {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    padding: 2px 2px !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    background: #C90905 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 2px 10px 2px 8px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: rgba(255,255,255,.7) !important;
+    font-size: 14px !important;
+    margin-right: 2px !important;
+    order: -1;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+    color: #fff !important;
+    background: transparent !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__placeholder {
+    color: #9ca3af !important;
+    font-size: 13px !important;
+}
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #C90905 !important;
+}
+.select2-container--default .select2-results__option[aria-selected=true] {
+    background-color: #fff1f1 !important;
+    color: #8C0910 !important;
+    font-weight: 600 !important;
+}
+.select2-dropdown {
+    border: 1.5px solid #e5e7eb !important;
+    border-radius: 0.625rem !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,.10) !important;
+    overflow: hidden;
+}
+.select2-search--dropdown .select2-search__field {
+    border: 1.5px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+}
+.select2-results__option {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+}
+</style>
 
 <script>
 const scheduleId = {{ schedule.id }};
 let editingDayId = null;
+let assignmentDivisionsExpanded = false;
 
 function getCookie(name) {
     let cookieValue = null;
@@ -528,6 +677,42 @@ document.getElementById('dayForm').addEventListener('submit', function(e) {
                 confirmButtonColor: 'var(--church-secondary)'
             }).then(() => {
                 window.location.reload();
+            });
+        } else if (data.conflict) {
+            // Conflito detectado — perguntar se deseja sobrescrever
+            let conflictHtml = '<div class="text-left"><ul class="list-disc pl-5 space-y-1">';
+            (data.conflict_details || []).forEach(c => {
+                conflictHtml += `<li>${c}</li>`;
+            });
+            conflictHtml += '</ul></div>';
+            Swal.fire({
+                icon: 'warning',
+                title: 'Conflito de Escala!',
+                html: conflictHtml,
+                showCancelButton: true,
+                confirmButtonColor: '#f97316',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Continuar mesmo assim',
+                cancelButtonText: 'Cancelar',
+                width: '600px'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    formData.append('override_conflict', 'true');
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                        body: formData
+                    })
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.success) {
+                            Swal.fire('Sucesso!', 'Dia salvo com sucesso.', 'success').then(() => window.location.reload());
+                        } else {
+                            Swal.fire('Erro!', d.error || 'Erro ao salvar', 'error');
+                        }
+                    })
+                    .catch(() => Swal.fire('Erro!', 'Erro ao salvar o dia.', 'error'));
+                }
             });
         } else {
             Swal.fire('Erro!', data.error || 'Erro ao salvar', 'error');
@@ -676,7 +861,8 @@ function loadScheduleDays() {
         memberIds: [{% for member in day.members.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
         memberNames: [{% for member in day.members.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
         {% endif %}
-        notes: '{{ day.notes|default:""|escapejs }}'
+        notes: '{{ day.notes|default:""|escapejs }}',
+        divisionAssignments: Object.fromEntries([{% for group in day.grouped_divisions %}[{{ group.division.id }}, [{% for m in group.members %}{{ m.id }}{% if not forloop.last %},{% endif %}{% endfor %}]]{% if not forloop.last %},{% endif %}{% endfor %}])
     };
     {% endfor %}
     renderCalendar();
@@ -776,15 +962,31 @@ function openDayAssignment(dateStr) {
         document.getElementById('assignmentTeam').value = dayData ? dayData.teamId : '';
     } else {
         const memberSelect = document.getElementById('assignmentMembers');
-        Array.from(memberSelect.options).forEach(option => {
-            option.selected = dayData && dayData.memberIds && dayData.memberIds.includes(parseInt(option.value));
-        });
+        if (memberSelect) {
+            Array.from(memberSelect.options).forEach(option => {
+                option.selected = dayData && dayData.memberIds && dayData.memberIds.includes(parseInt(option.value));
+            });
+        }
+    }
+
+    // Populate division assignments section — always visible
+    if (availableDivisions.length > 0) {
+        const divAssignments = (dayData && dayData.divisionAssignments) ? dayData.divisionAssignments : {};
+        assignmentDivisionsExpanded = true;
+        renderAssignmentDivisions(divAssignments);
+        // Init Select2 + cross-exclusivity after render
+        setTimeout(() => {
+            initAssignmentDivisionSelects();
+            enforceDivisionMemberExclusivity();
+        }, 50);
     }
     
     document.getElementById('dayAssignmentModal').classList.remove('hidden');
 }
 
 function closeDayAssignmentModal() {
+    destroyAssignmentDivisionSelects();
+    assignmentDivisionsExpanded = false;
     document.getElementById('dayAssignmentModal').classList.add('hidden');
     document.getElementById('dayAssignmentForm').reset();
 }
@@ -797,13 +999,6 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
     const date = formData.get('date');
     const dayId = formData.get('dayId');
     
-    // If it's an existing day (already saved), add to pending for batch update
-    if (dayId) {
-        // store existing day id so saveAllDays knows to call edit endpoint
-        pendingDays[date] = pendingDays[date] || {};
-        pendingDays[date].existingId = dayId;
-    }
-    
     // Validate
     if (useTeamRotation) {
         if (!formData.get('team')) {
@@ -815,7 +1010,8 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
             });
             return;
         }
-    } else {
+    } else if (availableDivisions.length === 0) {
+        // Only require direct member selection when there are no divisions
         const members = formData.getAll('members');
         if (members.length === 0) {
             Swal.fire({
@@ -827,11 +1023,98 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
             return;
         }
     }
+
+    // Validate no member is assigned to more than one division
+    if (availableDivisions.length > 0) {
+        const divisionData = getAssignmentDivisionData();
+        const memberDivisionMap = {}; // member_id -> division name
+        let divConflictLines = [];
+        availableDivisions.forEach(div => {
+            const memberIds = divisionData[div.id] || [];
+            memberIds.forEach(memberId => {
+                if (memberDivisionMap[memberId] !== undefined) {
+                    const memberName = (availableMembers.find(m => m.id === memberId) || {}).name || String(memberId);
+                    divConflictLines.push(`<li><strong>${memberName}</strong>: ${memberDivisionMap[memberId]} e ${div.name}</li>`);
+                } else {
+                    memberDivisionMap[memberId] = div.name;
+                }
+            });
+        });
+        if (divConflictLines.length > 0) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Membro em duas divisões!',
+                html: `<div class="text-left"><p class="mb-2">Os membros abaixo estão atribuídos em mais de uma divisão no mesmo dia:</p><ul class="list-disc pl-5 space-y-1 text-sm">${divConflictLines.join('')}</ul></div>`,
+                confirmButtonColor: '#f97316'
+            });
+            return;
+        }
+    }
+
+    // Verificar conflitos de escala antes de prosseguir
+    if (!useTeamRotation) {
+        const conflictData = new FormData();
+        conflictData.append('date', date);
+        conflictData.append('schedule_id', scheduleId);
+        formData.getAll('members').forEach(id => conflictData.append('members', id));
+        
+        fetch('/admin-panel/schedules/check-conflict/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: conflictData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.has_conflict) {
+                // Montar lista de conflitos para exibir
+                let conflictHtml = '<div class="text-left"><p class="mb-2 font-semibold text-red-600">Os seguintes membros já estão escalados nesta data:</p><ul class="list-disc pl-5 space-y-1">';
+                data.conflicts.forEach(c => {
+                    conflictHtml += `<li><strong>${c.member_name}</strong> — ${c.ministry_name} - ${c.schedule_title} (${c.date})</li>`;
+                });
+                conflictHtml += '</ul></div>';
+                
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Conflito de Escala!',
+                    html: conflictHtml,
+                    showCancelButton: true,
+                    confirmButtonColor: '#f97316',
+                    cancelButtonColor: '#6b7280',
+                    confirmButtonText: 'Continuar mesmo assim',
+                    cancelButtonText: 'Cancelar',
+                    width: '600px'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        saveDayToPending(formData, date, dayId, true);
+                    }
+                });
+            } else {
+                saveDayToPending(formData, date, dayId, false);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao verificar conflitos:', error);
+            // Em caso de falha na verificação, prosseguir normalmente
+            saveDayToPending(formData, date, dayId, false);
+        });
+    } else {
+        saveDayToPending(formData, date, dayId, false);
+    }
+});
+
+function saveDayToPending(formData, date, dayId, overrideConflict) {
+    // If it's an existing day (already saved), add to pending for batch update
+    if (dayId) {
+        // store existing day id so saveAllDays knows to call edit endpoint
+        pendingDays[date] = pendingDays[date] || {};
+        pendingDays[date].existingId = dayId;
+    }
     
     // Save to pending (merge with existing pending entry if present)
     pendingDays[date] = Object.assign(pendingDays[date] || {}, {
         description: formData.get('description') || '',
-        notes: formData.get('notes') || ''
+        notes: formData.get('notes') || '',
+        overrideConflict: overrideConflict
     });
     
     if (useTeamRotation) {
@@ -839,11 +1122,19 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         const teamSelect = document.getElementById('assignmentTeam');
         pendingDays[date].teamName = teamSelect.options[teamSelect.selectedIndex].text;
     } else {
-        pendingDays[date].memberIds = formData.getAll('members').map(id => parseInt(id));
         const memberSelect = document.getElementById('assignmentMembers');
-        pendingDays[date].memberNames = Array.from(memberSelect.selectedOptions).map(opt => opt.text);
+        if (memberSelect) {
+            pendingDays[date].memberIds = formData.getAll('members').map(id => parseInt(id));
+            pendingDays[date].memberNames = Array.from(memberSelect.selectedOptions).map(opt => opt.text);
+        } else {
+            pendingDays[date].memberIds = [];
+            pendingDays[date].memberNames = [];
+        }
     }
-    
+
+    // Collect division assignments
+    pendingDays[date].divisionAssignments = getAssignmentDivisionData();
+
     closeDayAssignmentModal();
     renderCalendar();
     updatePendingList();
@@ -855,7 +1146,7 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         timer: 2000,
         showConfirmButton: false
     });
-});
+}
 
 // Update pending days list in sidebar
 function updatePendingList() {
@@ -899,8 +1190,22 @@ function updatePendingList() {
         if (useTeamRotation) {
             assignmentText = day.teamName || 'Sem equipe';
         } else {
-            const count = day.memberIds ? day.memberIds.length : 0;
-            assignmentText = count > 0 ? `${count} membro${count > 1 ? 's' : ''}` : 'Sem membros';
+            // Count direct members first; if none, count across all division assignments
+            const directCount = day.memberIds ? day.memberIds.length : 0;
+            if (directCount > 0) {
+                assignmentText = `${directCount} membro${directCount > 1 ? 's' : ''}`;
+            } else if (day.divisionAssignments && Object.keys(day.divisionAssignments).length > 0) {
+                const divEntries = Object.values(day.divisionAssignments);
+                const totalDivMembers = divEntries.reduce((sum, ids) => sum + (ids ? ids.length : 0), 0);
+                const divCount = divEntries.filter(ids => ids && ids.length > 0).length;
+                if (totalDivMembers > 0) {
+                    assignmentText = `${divCount} div. / ${totalDivMembers} membro${totalDivMembers !== 1 ? 's' : ''}`;
+                } else {
+                    assignmentText = 'Sem membros';
+                }
+            } else {
+                assignmentText = 'Sem membros';
+            }
         }
         const pendingTypeBadge = day.existingId ? `<span class="text-xs bg-yellow-300 text-yellow-900 px-2 py-0.5 rounded ml-2">Atualizar</span>` : '';
 
@@ -999,6 +1304,11 @@ function saveAllDays() {
                 formData.append('description', day.description);
                 formData.append('notes', day.notes);
                 
+                // Enviar flag de override se o usuário já confirmou o conflito
+                if (day.overrideConflict) {
+                    formData.append('override_conflict', 'true');
+                }
+                
                 if (useTeamRotation) {
                     formData.append('team', day.teamId);
                 } else {
@@ -1014,6 +1324,26 @@ function saveAllDays() {
                     savedCount++;
                     document.getElementById('saveProgress').textContent = `${savedCount} de ${pendingCount}`;
                     return response.json();
+                }).then(data => {
+                    // After creating/editing the day, also save division assignments if any
+                    if (data.success && day.divisionAssignments && Object.keys(day.divisionAssignments).length > 0) {
+                        const dayId = data.day_id || day.existingId;
+                        if (dayId) {
+                            const assignments = Object.entries(day.divisionAssignments).map(([divId, memberIds]) => ({
+                                division_id: parseInt(divId),
+                                member_ids: memberIds
+                            }));
+                            return fetch(`/admin-panel/schedules/days/${dayId}/divisions/`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': getCookie('csrftoken')
+                                },
+                                body: JSON.stringify({ assignments })
+                            }).then(r => r.json()).then(() => data);
+                        }
+                    }
+                    return data;
                 });
             });
             
@@ -1021,10 +1351,21 @@ function saveAllDays() {
                 .then(results => {
                     const errors = results.filter(r => !r.success);
                     if (errors.length > 0) {
+                        const conflictErrors = errors.filter(r => r.conflict);
+                        let errorHtml = `<p>${savedCount - errors.length} dias salvos, ${errors.length} com erro.</p>`;
+                        if (conflictErrors.length > 0) {
+                            errorHtml += '<div class="text-left mt-3"><p class="font-semibold text-red-600">Conflitos detectados:</p><ul class="list-disc pl-5 space-y-1 text-sm">';
+                            conflictErrors.forEach(e => {
+                                (e.conflict_details || []).forEach(c => {
+                                    errorHtml += `<li>${c}</li>`;
+                                });
+                            });
+                            errorHtml += '</ul></div>';
+                        }
                         Swal.fire({
                             icon: 'warning',
                             title: 'Parcialmente salvo',
-                            text: `${savedCount - errors.length} dias salvos, ${errors.length} com erro`,
+                            html: errorHtml,
                             confirmButtonColor: '#f97316'
                         }).then(() => {
                             window.location.reload();
@@ -1260,6 +1601,380 @@ function refreshCalendar() {
 // Backwards-compatible alias used by some buttons
 function clearPendingDays() {
     clearAllPending();
+}
+
+// ==================== DIVISION MODAL HELPERS (for day assignment popup) ====================
+
+function toggleModalDivisions() {
+    // Divisions are always visible — toggle kept for backwards compat but no-op
+}
+
+// Color palette for division cards — all using the site's red brand color
+const divisionCardColors = [
+    { border: '#C90905', headerBg: 'linear-gradient(135deg,#C90905,#8C0910)', bodyBg: '#fff8f8', iconColor: '#C90905', cssIdx: 0 },
+    { border: '#C90905', headerBg: 'linear-gradient(135deg,#C90905,#8C0910)', bodyBg: '#fff8f8', iconColor: '#C90905', cssIdx: 0 },
+    { border: '#C90905', headerBg: 'linear-gradient(135deg,#C90905,#8C0910)', bodyBg: '#fff8f8', iconColor: '#C90905', cssIdx: 0 },
+    { border: '#C90905', headerBg: 'linear-gradient(135deg,#C90905,#8C0910)', bodyBg: '#fff8f8', iconColor: '#C90905', cssIdx: 0 },
+    { border: '#C90905', headerBg: 'linear-gradient(135deg,#C90905,#8C0910)', bodyBg: '#fff8f8', iconColor: '#C90905', cssIdx: 0 },
+    { border: '#C90905', headerBg: 'linear-gradient(135deg,#C90905,#8C0910)', bodyBg: '#fff8f8', iconColor: '#C90905', cssIdx: 0 },
+];
+
+function memberInitials(name) {
+    return name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+}
+
+function renderAssignmentDivisions(divisionAssignments) {
+    const container = document.getElementById('assignmentDivisionsContent');
+    if (!container || availableDivisions.length === 0) return;
+
+    const assignMap = divisionAssignments || {};
+
+    let html = '';
+    availableDivisions.forEach((div, idx) => {
+        const c = divisionCardColors[idx % divisionCardColors.length];
+        const selectedIds = assignMap[div.id] || [];
+        const selectedCount = selectedIds.length;
+        const marginLeft = div.parentId ? 'ml-4' : '';
+        html += `
+            <div class="${marginLeft} div-card-${c.cssIdx} rounded-2xl overflow-hidden"
+                 style="box-shadow: 0 2px 12px ${c.border}22; border: 1.5px solid ${c.border}44;">
+                <!-- Card Header -->
+                <div class="flex items-center gap-2.5 px-4 py-3" style="background: ${c.headerBg};">
+                    ${ div.parentId ? `<ion-icon name="return-down-forward-outline" class="text-white/70 text-sm flex-shrink-0"></ion-icon>` : '' }
+                    <div class="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <ion-icon name="git-branch-outline" class="text-white text-base"></ion-icon>
+                    </div>
+                    <span class="text-sm font-bold text-white flex-1 tracking-wide">${div.name}</span>
+                    <span id="assign_div_badge_${div.id}"
+                          class="text-xs font-bold px-2.5 py-1 rounded-full"
+                          style="background:rgba(255,255,255,.25); color:#fff; min-width:56px; text-align:center;">
+                        ${selectedCount > 0 ? selectedCount + ' membro' + (selectedCount !== 1 ? 's' : '') : 'Nenhum'}
+                    </span>
+                </div>
+                <!-- Card Body -->
+                <div class="px-4 py-3" style="background: ${c.bodyBg};">
+                    <p class="text-xs font-semibold mb-1.5" style="color:${c.iconColor};">
+                        <ion-icon name="people-outline" class="align-middle mr-1"></ion-icon>Selecione os membros
+                    </p>
+                    <select id="assign_div_${div.id}" multiple
+                            class="assign-division-select w-full"
+                            data-division-id="${div.id}"
+                            data-badge-id="assign_div_badge_${div.id}"
+                            data-badge-bg="rgba(255,255,255,.25)"
+                            data-badge-class=""
+                            data-color-idx="${c.cssIdx}">
+        `;
+        availableMembers.forEach(m => {
+            const sel = selectedIds.includes(m.id) ? 'selected' : '';
+            html += `<option value="${m.id}" ${sel}>${m.name}</option>`;
+        });
+        html += `</select></div></div>`;
+    });
+
+    container.innerHTML = html;
+    initAssignmentDivisionSelects();
+    updateDivisionsSummary(assignMap);
+}
+
+function initAssignmentDivisionSelects() {
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.assign-division-select').each(function() {
+            if (!$(this).hasClass('select2-hidden-accessible')) {
+                $(this).select2({
+                    placeholder: 'Clique para adicionar membros...',
+                    allowClear: true,
+                    width: '100%',
+                    dropdownParent: $('#dayAssignmentModal'),
+                    templateResult: function(state) {
+                        if (!state.id) return state.text;
+                        const initials = state.text.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+                        return $(`<span class="flex items-center gap-2">
+                            <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#fff1f1;color:#C90905;font-size:10px;font-weight:700;flex-shrink:0;">${initials}</span>
+                            <span>${state.text}</span>
+                        </span>`);
+                    }
+                });
+            }
+            // Bind real-time cross-division exclusivity + badge update
+            $(this).off('change.exclusivity').on('change.exclusivity', function() {
+                updateDivisionBadge(this);
+                enforceDivisionMemberExclusivity();
+                updateDivisionsSummary(getAssignmentDivisionData());
+            });
+        });
+    }
+}
+
+function updateDivisionBadge(selectEl) {
+    const badgeId = selectEl.dataset.badgeId;
+    if (!badgeId) return;
+    const badge = document.getElementById(badgeId);
+    if (!badge) return;
+    let count;
+    if (typeof $ !== 'undefined' && $(selectEl).data('select2')) {
+        const vals = $(selectEl).val();
+        count = vals ? vals.length : 0;
+    } else {
+        count = Array.from(selectEl.selectedOptions).length;
+    }
+    badge.textContent = count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum';
+}
+
+// Prevent the same member from appearing in more than one division at a time
+function enforceDivisionMemberExclusivity() {
+    // Collect current selections per division
+    const divisionSelections = {};
+    document.querySelectorAll('.assign-division-select').forEach(sel => {
+        const divId = parseInt(sel.dataset.divisionId);
+        let selectedIds;
+        if (typeof $ !== 'undefined' && $(sel).data('select2')) {
+            const vals = $(sel).val();
+            selectedIds = vals ? vals.map(v => parseInt(v)) : [];
+        } else {
+            selectedIds = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+        }
+        divisionSelections[divId] = selectedIds;
+    });
+
+    // For each select, disable options that are selected in OTHER divisions
+    document.querySelectorAll('.assign-division-select').forEach(sel => {
+        const thisDivId = parseInt(sel.dataset.divisionId);
+
+        const otherSelected = new Set();
+        Object.entries(divisionSelections).forEach(([divId, ids]) => {
+            if (parseInt(divId) !== thisDivId) {
+                ids.forEach(id => otherSelected.add(id));
+            }
+        });
+
+        Array.from(sel.options).forEach(opt => {
+            const memberId = parseInt(opt.value);
+            if (otherSelected.has(memberId)) {
+                opt.disabled = true;
+                opt.setAttribute('title', 'Já atribuído em outra divisão');
+            } else {
+                opt.disabled = false;
+                opt.removeAttribute('title');
+            }
+        });
+
+        // Refresh Select2 to reflect disabled state
+        if (typeof $ !== 'undefined' && $(sel).data('select2')) {
+            $(sel).trigger('change.select2');
+        }
+    });
+}
+
+function destroyAssignmentDivisionSelects() {
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.assign-division-select').each(function() {
+            if ($(this).hasClass('select2-hidden-accessible')) {
+                $(this).select2('destroy');
+            }
+        });
+    }
+}
+
+function getAssignmentDivisionData() {
+    const assignments = {};
+    document.querySelectorAll('.assign-division-select').forEach(sel => {
+        const divId = parseInt(sel.dataset.divisionId);
+        let memberIds;
+        if (typeof $ !== 'undefined' && $(sel).data('select2')) {
+            const vals = $(sel).val();
+            memberIds = vals ? vals.map(v => parseInt(v)) : [];
+        } else {
+            memberIds = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+        }
+        if (memberIds.length > 0) {
+            assignments[divId] = memberIds;
+        }
+    });
+    return assignments;
+}
+
+function updateDivisionsSummary(assignMap) {
+    const summaryEl = document.getElementById('divisionsSummaryText');
+    if (!summaryEl) return;
+    const totalMembers = Object.values(assignMap).reduce((sum, ids) => sum + ids.length, 0);
+    const divCount = Object.keys(assignMap).filter(k => (assignMap[k] || []).length > 0).length;
+    if (divCount > 0) {
+        summaryEl.textContent = `${divCount} div. / ${totalMembers} membro${totalMembers !== 1 ? 's' : ''}`;
+    } else {
+        summaryEl.textContent = '';
+    }
+}
+
+// ==================== DIVISION ASSIGNMENT FUNCTIONS ====================
+
+let currentDivisionDayId = null;
+
+// Available members for division assignment
+const availableMembers = [
+    {% for m in members %}
+    { id: {{ m.id }}, name: '{{ m.name|escapejs }}' }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+// Available divisions  
+const availableDivisions = [
+    {% for d in divisions %}
+    { id: {{ d.id }}, name: '{{ d.name|escapejs }}', parentId: {{ d.parent_id|default_if_none:"null" }}, order: {{ d.order }} }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+function openDivisionModal(dayId) {
+    currentDivisionDayId = dayId;
+    document.getElementById('divisionAssignModal').classList.remove('hidden');
+    
+    // Fetch current assignments for this day
+    fetch(`/admin-panel/schedules/days/${dayId}/divisions/`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('divisionModalDate').textContent = `Data: ${data.date}`;
+            renderDivisionForm(data.divisions, data.assignments);
+        })
+        .catch(() => {
+            document.getElementById('divisionAssignContent').innerHTML = 
+                '<p class="text-red-500">Erro ao carregar divisões</p>';
+        });
+}
+
+function closeDivisionModal() {
+    document.getElementById('divisionAssignModal').classList.add('hidden');
+    currentDivisionDayId = null;
+}
+
+function renderDivisionForm(divisions, currentAssignments) {
+    const container = document.getElementById('divisionAssignContent');
+    
+    if (!divisions || divisions.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style="background:#fff1f1;">
+                    <ion-icon name="git-branch-outline" class="text-3xl" style="color:#C90905;"></ion-icon>
+                </div>
+                <p class="text-gray-600 font-medium">Nenhuma divisão cadastrada</p>
+                <a href="/admin-panel/schedules/{{ schedule.id }}/edit/" 
+                   class="inline-flex items-center gap-1 text-sm mt-2 font-medium" style="color:#C90905;">
+                    <ion-icon name="add-circle-outline"></ion-icon>Adicionar divisões na escala
+                </a>
+            </div>
+        `;
+        return;
+    }
+    
+    // Group current assignments by division
+    const assignmentsByDiv = {};
+    currentAssignments.forEach(a => {
+        if (!assignmentsByDiv[a.division_id]) assignmentsByDiv[a.division_id] = [];
+        assignmentsByDiv[a.division_id].push(a.member_id);
+    });
+    
+    let html = '';
+    divisions.forEach((div, idx) => {
+        const c = divisionCardColors[idx % divisionCardColors.length];
+        const selectedMembers = assignmentsByDiv[div.id] || [];
+        const marginLeft = div.parent_id ? 'ml-4' : '';
+        const count = selectedMembers.length;
+        
+        html += `
+            <div class="${marginLeft} div-card-${c.cssIdx} rounded-2xl overflow-hidden"
+                 style="box-shadow: 0 2px 12px ${c.border}22; border: 1.5px solid ${c.border}44;">
+                <div class="flex items-center gap-2.5 px-4 py-3" style="background: ${c.headerBg};">
+                    ${ div.parent_id ? `<ion-icon name="return-down-forward-outline" class="text-white/70 text-sm flex-shrink-0"></ion-icon>` : '' }
+                    <div class="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <ion-icon name="git-branch-outline" class="text-white text-base"></ion-icon>
+                    </div>
+                    <span class="text-sm font-bold text-white flex-1 tracking-wide">${div.name}</span>
+                    <span id="div_badge_${div.id}"
+                          class="text-xs font-bold px-2.5 py-1 rounded-full"
+                          style="background:rgba(255,255,255,.25); color:#fff; min-width:56px; text-align:center;">
+                        ${count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum'}
+                    </span>
+                </div>
+                <div class="px-4 py-3" style="background: ${c.bodyBg};">
+                    <p class="text-xs font-semibold mb-1.5" style="color:${c.iconColor};">
+                        <ion-icon name="people-outline" class="align-middle mr-1"></ion-icon>Selecione os membros
+                    </p>
+                    <select id="div_members_${div.id}" multiple
+                            class="division-member-select w-full"
+                            data-division-id="${div.id}"
+                            data-badge-id="div_badge_${div.id}">
+        `;
+        
+        availableMembers.forEach(m => {
+            const selected = selectedMembers.includes(m.id) ? 'selected' : '';
+            html += `<option value="${m.id}" ${selected}>${m.name}</option>`;
+        });
+        
+        html += `</select></div></div>`;
+    });
+    
+    container.innerHTML = html;
+    
+    // Initialize select2 on the dropdowns
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.division-member-select').each(function() {
+            $(this).select2({
+                placeholder: 'Clique para adicionar membros...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $('#divisionAssignModal'),
+                templateResult: function(state) {
+                    if (!state.id) return state.text;
+                    const initials = state.text.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+                    return $(`<span class="flex items-center gap-2">
+                        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#fff1f1;color:#C90905;font-size:10px;font-weight:700;flex-shrink:0;">${initials}</span>
+                        <span>${state.text}</span>
+                    </span>`);
+                }
+            });
+            // Live badge update
+            $(this).on('change', function() {
+                const badgeId = this.dataset.badgeId;
+                if (!badgeId) return;
+                const badge = document.getElementById(badgeId);
+                if (!badge) return;
+                const count = $(this).val() ? $(this).val().length : 0;
+                badge.textContent = count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum';
+            });
+        });
+    }
+}
+
+function saveDivisionAssignments() {
+    if (!currentDivisionDayId) return;
+    
+    const assignments = [];
+    document.querySelectorAll('.division-member-select').forEach(select => {
+        const divId = parseInt(select.dataset.divisionId);
+        const memberIds = Array.from(select.selectedOptions).map(o => parseInt(o.value));
+        if (memberIds.length > 0) {
+            assignments.push({ division_id: divId, member_ids: memberIds });
+        }
+    });
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch(`/admin-panel/schedules/days/${currentDivisionDayId}/divisions/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ assignments })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            closeDivisionModal();
+            window.location.reload();
+        } else {
+            alert(data.error || 'Erro ao salvar atribuições');
+        }
+    })
+    .catch(() => alert('Erro de conexão'));
 }
 </script>
 </div>
