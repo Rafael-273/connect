@@ -30,14 +30,7 @@ from ..models.member import Member
 from ..models.ministry import Ministry
 from ..models.neighborhood import Neighborhood
 from ..models.visitor import Visitor
-from ..models.evangelism import Evangelized
-from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate, FollowUpTemplateStep
 from ..models.testimony import Testimony
-from ..forms.ministry import MinistryForm
-from ..forms.neighborhood import NeighborhoodForm
-from ..forms.follow_up import FollowUpForm, FollowUpReportForm
-from ..forms.template import FollowUpTemplateForm, FollowUpTemplateStepFormSet, FollowUpTemplateStepFormSetForCreate
-from ..forms.user import UserProfileForm
 
 User = get_user_model()
 
@@ -124,32 +117,25 @@ def convert_visitor_to_member(visitor):
 # ---------------------------------------------------------------------------
 
 class DashboardView(LoginRequiredMixin, AdminRequiredMixin, View):
-    """Dashboard principal com estatísticas e métricas importantes"""
+    def _get_totals(self):
+        return {
+            'total_members': Member.objects.filter(is_active=True).count(),
+            'total_visitors': Visitor.objects.count(),
+            'total_events': Event.objects.count(),
+        }
 
-    def get(self, request):
-        last_month = timezone.now() - timedelta(days=30)
-        next_month = timezone.now() + timedelta(days=30)
-
-        total_members = Member.objects.filter(is_active=True).count()
-        total_visitors = Visitor.objects.count()
-        total_events = Event.objects.count()
-        total_ministries = Ministry.objects.count()
-
-        recent_visitors = Visitor.objects.filter(visit_date__gte=last_month).count()
-        upcoming_events = Event.objects.filter(
-            event_date__gte=timezone.now().date(),
-            event_date__lte=next_month.date(),
-        ).count()
-
+    def _get_recent_stats(self, last_month):
         recent_visitor_conversions = Visitor.objects.filter(
             visit_date__gte=last_month, decision_for_jesus=True,
         ).count()
         recent_member_conversions = Member.objects.filter(
             conversion_date__gte=last_month.date(), conversion='new_convert',
         ).count()
-        recent_conversions = recent_visitor_conversions + recent_member_conversions
+        return {
+            'recent_conversions': recent_visitor_conversions + recent_member_conversions,
+        }
 
-        # Gráfico de visitantes por mês (últimos 6 meses)
+    def _get_visitors_chart_data(self):
         visitors_by_month = []
         for i in range(6):
             month_start = (timezone.now() - timedelta(days=30 * i)).replace(day=1)
@@ -159,43 +145,33 @@ class DashboardView(LoginRequiredMixin, AdminRequiredMixin, View):
             ).count()
             visitors_by_month.append({'month': month_start.strftime('%b/%Y'), 'count': count})
         visitors_by_month.reverse()
+        return json.dumps(visitors_by_month)
 
-        ministries_stats = Ministry.objects.annotate(
-            member_count=Count('member'),
-        ).order_by('-member_count')[:5]
-
-        recent_visitors_list = Visitor.objects.order_by('-visit_date')[:5]
-        recently_converted_members = Member.objects.filter(
-            conversion='new_convert',
-        ).order_by('-update_at')[:3]
-        upcoming_events_list = Event.objects.filter(
-            event_date__gte=timezone.now().date(),
-        ).order_by('event_date')[:5]
-
-        active_followups = FollowUp.objects.filter(is_active=True).count()
-        recent_followups = FollowUp.objects.filter(
-            created_at__gte=last_month,
-        ).order_by('-created_at')[:5]
-
-        context = {
-            'total_members': total_members,
-            'total_visitors': total_visitors,
-            'total_events': total_events,
-            'total_ministries': total_ministries,
-            'recent_visitors': recent_visitors,
-            'upcoming_events': upcoming_events,
-            'recent_conversions': recent_conversions,
-            'recent_visitor_conversions': recent_visitor_conversions,
-            'recent_member_conversions': recent_member_conversions,
-            'visitors_by_month_json': json.dumps(visitors_by_month),
-            'ministries_stats': ministries_stats,
-            'recent_visitors_list': recent_visitors_list,
-            'recently_converted_members': recently_converted_members,
-            'upcoming_events_list': upcoming_events_list,
-            'active_followups': active_followups,
-            'recent_followups': recent_followups,
+    def _get_lists(self):
+        return {
+            'ministries_stats': Ministry.objects.annotate(
+                member_count=Count('member'),
+            ).order_by('-member_count')[:5],
+            'recent_visitors_list': Visitor.objects.order_by('-visit_date')[:5],
+            'recently_converted_members': Member.objects.filter(
+                conversion='new_convert',
+            ).order_by('-update_at')[:3],
+            'upcoming_events_list': Event.objects.filter(
+                event_date__gte=timezone.now().date(),
+            ).order_by('event_date')[:5],
         }
-        return render(request, 'admin_panel/dashboard.html', context)
+
+    def _build_context(self):
+        last_month = timezone.now() - timedelta(days=30)
+        return {
+            **self._get_totals(),
+            **self._get_recent_stats(last_month),
+            'visitors_by_month_json': self._get_visitors_chart_data(),
+            **self._get_lists(),
+        }
+
+    def get(self, request):
+        return render(request, 'admin_panel/dashboard.html', self._build_context())
 
 
 # ---------------------------------------------------------------------------
@@ -203,45 +179,46 @@ class DashboardView(LoginRequiredMixin, AdminRequiredMixin, View):
 # ---------------------------------------------------------------------------
 
 class MembersListView(LoginRequiredMixin, AdminRequiredMixin, View):
-    """Lista de membros com filtros e busca"""
+    def _get_queryset(self):
+        return Member.objects.select_related('user', 'neighborhood', 'spouse').order_by('-id')
 
-    def get(self, request):
-        members = Member.objects.select_related('user', 'neighborhood', 'spouse').order_by('-id')
-
-        search = request.GET.get('search', '')
-        ministry_filter = request.GET.get('ministry', '')
-        status_filter = request.GET.get('status', '')
-
+    def _apply_filters(self, qs, search, ministry_filter, status_filter):
         if search:
-            members = members.filter(
+            qs = qs.filter(
                 Q(name__icontains=search)
                 | Q(user__email__icontains=search)
                 | Q(phone__icontains=search)
             )
         if ministry_filter:
-            members = members.filter(ministry_id=ministry_filter)
-        if status_filter:
-            if status_filter == 'active':
-                members = members.filter(is_active=True)
-            elif status_filter == 'inactive':
-                members = members.filter(is_active=False)
-            elif status_filter == 'new_convert':
-                members = members.filter(conversion='new_convert')
+            qs = qs.filter(ministry_memberships__ministry_id=ministry_filter).distinct()
+        if status_filter == 'active':
+            qs = qs.filter(is_active=True)
+        elif status_filter == 'inactive':
+            qs = qs.filter(is_active=False)
+        elif status_filter == 'new_convert':
+            qs = qs.filter(conversion='new_convert')
+        return qs
 
-        paginator = Paginator(members, 20)
-        members = paginator.get_page(request.GET.get('page'))
-        ministries = Ministry.objects.all()
+    def _build_context(self, request):
+        search = request.GET.get('search', '')
+        ministry_filter = request.GET.get('ministry', '')
+        status_filter = request.GET.get('status', '')
 
-        if 'member_success_message' in request.session:
-            messages.success(request, request.session.pop('member_success_message'))
+        qs = self._apply_filters(self._get_queryset(), search, ministry_filter, status_filter)
+        members = Paginator(qs, 20).get_page(request.GET.get('page'))
 
-        return render(request, 'admin_panel/members/list.html', {
+        return {
             'members': members,
-            'ministries': ministries,
+            'ministries': Ministry.objects.all(),
             'search': search,
             'ministry_filter': ministry_filter,
             'status_filter': status_filter,
-        })
+        }
+
+    def get(self, request):
+        if 'member_success_message' in request.session:
+            messages.success(request, request.session.pop('member_success_message'))
+        return render(request, 'admin_panel/members/list.html', self._build_context(request))
 
 
 class VisitorsListView(LoginRequiredMixin, ModulePermissionMixin, View):

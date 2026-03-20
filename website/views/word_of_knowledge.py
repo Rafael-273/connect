@@ -3,7 +3,6 @@ from itertools import chain
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.views import View
-from django.views.generic import ListView
 from datetime import datetime, timedelta
 
 from website.models import WordOfKnowledge, Healing
@@ -27,6 +26,8 @@ class WordOfKnowledgeListView(MemberRequiredMixin, MinistrationContextMixin, Vie
         return {
             'words': words,
             'healings': healings,
+            'can_consolidate': self.member.is_available_to_consolidate,
+            'is_ministration_member': self.get_ministration_status(self.member),
         }
 
 class WordOfKnowledgeCreateView(MemberRequiredMixin, View):
@@ -73,12 +74,10 @@ class WordOfKnowledgeCreateView(MemberRequiredMixin, View):
 
 
 class HealingCreateView(MemberRequiredMixin, View):
-    """Criar registro de cura"""
     template_name = 'words/create_healing.html'
 
     def get(self, request):
         context = {
-            'member': self.member,
             'form': HealingForm(),
             'preselected_word': self._get_word(request.GET.get('word_id'), self.member),
         }
@@ -108,66 +107,69 @@ class HealingCreateView(MemberRequiredMixin, View):
         if not word_id:
             return None
         try:
-            return WordOfKnowledge.objects.get(id=word_id, member=member, is_approved=True)
+            return WordOfKnowledge.objects.get(id=word_id, member=member)
         except WordOfKnowledge.DoesNotExist:
             return None
 
 
-class ServiceWordsView(MemberRequiredMixin, ListView):
-    """Visualizar palavras de conhecimento para o próximo culto"""
+class ServiceWordsView(MemberRequiredMixin, View):
     template_name = 'words/service_words.html'
-    context_object_name = 'words'
 
-    def get_queryset(self):
-        self._today = datetime.now().date()
-        self._service_type, self._start_date = self._resolve_service(
-            self.request.GET.get('service_type'), self._today
-        )
-        return WordOfKnowledge.objects.filter(
-            service_type=self._service_type,
-            recorded_at__date__gte=self._start_date,
-            recorded_at__date__lte=self._today,
-            is_approved=True,
-        ).select_related('member').order_by('recorded_at')
+    def get(self, request):
+        return render(request, self.template_name, self._build_context(request))
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        next_wednesday, next_sunday = self._get_next_services(self._today)
-        context.update({
+    def _build_context(self, request):
+        today = datetime.now().date()
+        week = self._get_week_dates(today)
+        service_type = self._resolve_service_type(request, today)
+        start_date, end_date = self._get_service_window(service_type, week)
+        words = self._get_words(service_type, start_date, end_date)
+        return {
+            'words': words,
             'member': self.member,
-            'service_type': self._service_type,
-            'service_type_display': 'Domingo' if self._service_type == 'sunday' else 'Quarta-feira',
-            'start_date': self._start_date,
-            'today': self._today,
-            'next_wednesday': next_wednesday,
-            'next_sunday': next_sunday,
-        })
-        return context
+            'service_type': service_type,
+            'service_type_display': 'Domingo' if service_type == 'sunday' else 'Quarta-feira',
+            'start_date': start_date,
+            'end_date': end_date,
+            'today': today,
+            'wednesday_date': week['wednesday'],
+            'sunday_date': week['sunday'],
+        }
 
     @staticmethod
-    def _resolve_service(service_type_param, today):
-        weekday = today.weekday()
-        if service_type_param:
-            service_type = service_type_param
-            if service_type == 'sunday':
-                start_date = today - timedelta(days=(weekday - 3) if weekday >= 3 else (weekday + 4))
-            else:
-                start_date = today - timedelta(days=weekday if weekday <= 2 else weekday)
-        else:
-            if weekday in [3, 4, 5, 6]:
-                service_type = 'sunday'
-                start_date = today - timedelta(days=(weekday - 3))
-            else:
-                service_type = 'wednesday'
-                start_date = today - timedelta(days=weekday)
-        return service_type, start_date
+    def _get_week_dates(today):
+        monday = today - timedelta(days=today.weekday())
+        return {
+            'monday': monday,
+            'wednesday': monday + timedelta(days=2),
+            'thursday': monday + timedelta(days=3),
+            'sunday': monday + timedelta(days=6),
+        }
 
     @staticmethod
-    def _get_next_services(today):
-        weekday = today.weekday()
-        days_wed = (2 - weekday) % 7 or 7
-        days_sun = (6 - weekday) % 7 or 7
-        return today + timedelta(days=days_wed), today + timedelta(days=days_sun)
+    def _resolve_service_type(request, today):
+        return request.GET.get('service_type') or (
+            'wednesday' if today.weekday() <= 2 else 'sunday'
+        )
+
+    @staticmethod
+    def _get_service_window(service_type, week):
+        if service_type == 'wednesday':
+            return week['monday'], week['wednesday']
+        return week['thursday'], week['sunday']
+
+    @staticmethod
+    def _get_words(service_type, start_date, end_date):
+        return (
+            WordOfKnowledge.objects
+            .filter(
+                service_type=service_type,
+                recorded_at__date__gte=start_date,
+                recorded_at__date__lte=end_date,
+            )
+            .select_related('member')
+            .order_by('recorded_at')
+        )
 
 
 class MarkWordAsHealedView(MemberRequiredMixin, View):

@@ -53,7 +53,6 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
     def get(self, request):
         member = self.member
         context = self._build_base_context(member)
-        self._add_approver_context(member, context)
         self._add_followup_context(member, context)
         return render(request, 'member/dashboard.html', context)
 
@@ -61,48 +60,15 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
         has_ministries = member.ministry.exists()
         is_approver = member.is_approver
         can_consolidate = member.is_available_to_consolidate
-        is_scheduled = self._is_scheduled_this_week(member)
         is_ministration = self.get_ministration_status(member)
 
         return {
             'member': member,
             'can_consolidate': can_consolidate,
-            'is_scheduled_this_week': is_scheduled,
             'is_approver': is_approver,
             'is_ministration_member': is_ministration,
-            'is_new_member': not any([has_ministries, is_approver, can_consolidate, is_scheduled]),
+            'is_new_member': not any([has_ministries, is_approver, can_consolidate]),
         }
-
-    def _is_scheduled_this_week(self, member):
-        from datetime import timedelta
-        from django.db.models import Q
-        from website.models.schedule import ScheduleDay
-
-        today = timezone.localdate()
-        week_start = today - timedelta(days=today.weekday())
-        week_end = week_start + timedelta(days=6)
-
-        return ScheduleDay.objects.filter(
-            date__range=(week_start, week_end),
-            is_cancelled=False,
-            deleted__isnull=True,
-            schedule__ministry__name__icontains='ministração',
-        ).filter(
-            Q(members=member) | Q(team__members=member)
-        ).exists()
-
-    def _add_approver_context(self, member, context):
-        if not member.is_approver:
-            return
-        from website.models import WordOfKnowledge
-        pending = list(
-            WordOfKnowledge.objects
-            .filter(is_approved=False)
-            .select_related('member')
-            .order_by('service_date', 'recorded_at')
-        )
-        context['pending_words'] = pending
-        context['pending_words_count'] = len(pending)
 
     def _add_followup_context(self, member, context):
         if hasattr(member, 'performed_followups'):

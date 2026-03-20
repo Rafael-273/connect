@@ -5,10 +5,6 @@ from .member import Member
 
 
 class MinistryMembership(BaseModel):
-    """
-    Modelo intermediário para relacionar membros e ministérios com papéis específicos.
-    Permite que um membro seja líder de um ministério e membro de outros.
-    """
     ROLE_CHOICES = [
         ('leader', 'Líder'),
         ('member', 'Membro'),

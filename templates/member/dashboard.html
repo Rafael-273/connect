@@ -134,6 +134,63 @@
         animation: spin 1s linear infinite;
     }
 
+    /* Accordion */
+    .accordion-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.4s ease, padding 0.3s ease;
+    }
+    .accordion-content.open {
+        max-height: 2000px;
+    }
+    .accordion-chevron {
+        transition: transform 0.3s ease;
+        flex-shrink: 0;
+    }
+    .accordion-chevron.open {
+        transform: rotate(180deg);
+    }
+    .accordion-header {
+        cursor: pointer;
+        transition: background 0.2s ease;
+    }
+    .accordion-header:hover .accordion-icon-wrap {
+        opacity: 0.85;
+    }
+
+    /* Ministry Tabs */
+    .ministry-tab-bar {
+        display: flex;
+        gap: 0.5rem;
+        overflow-x: auto;
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.75rem;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+    .ministry-tab-bar::-webkit-scrollbar { display: none; }
+    .ministry-tab-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 1rem;
+        border-radius: 0.75rem;
+        font-weight: 700;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+        border: 2px solid #E5E7EB;
+        background: white;
+        color: #6B7280;
+        flex-shrink: 0;
+        cursor: pointer;
+    }
+    .ministry-tab-btn.active {
+        background-color: #C90905;
+        color: white;
+        border-color: #C90905;
+    }
+
     /* PWA SweetAlert2 Custom Styles */
     .pwa-popup {
         border-radius: 1rem !important;
@@ -317,206 +374,195 @@
         </section>
         {% endif %}
         
-        <!-- DEBUG: Valores para depuração -->
-        <!-- is_ministration_member: {{ is_ministration_member }} | is_scheduled_this_week: {{ is_scheduled_this_week }} -->
         
-        <!-- Palavras de Conhecimento - APENAS SE FOR DO MINISTÉRIO DE MINISTRAÇÃO E ESTIVER ESCALADO -->
-        {% if is_ministration_member and is_scheduled_this_week %}
-        <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
-            <!-- Elementos Decorativos -->
-            <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-30" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.08), transparent);"></div>
-            <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-30" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.08), transparent);"></div>
-            
-            <div class="relative z-10 p-4 sm:p-6 md:p-8">
-                <div class="flex items-center justify-between mb-4 sm:mb-6">
+        <!-- Cards de Ministério -->
+        {% if is_ministration_member or can_consolidate %}
+        <div id="ministry-cards-container" class="space-y-3">
+
+            {% if is_ministration_member %}
+            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Palavras de Conhecimento" data-card-icon="lightbulb" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+                <!-- Header clicável -->
+                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
                     <div class="flex items-center gap-3 sm:gap-4">
-                        <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                            <i class="fas fa-lightbulb text-white text-lg sm:text-xl md:text-2xl"></i>
+                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                            <i class="fas fa-lightbulb text-white text-lg sm:text-xl"></i>
                         </div>
-                        <div>
-                            <h3 class="text-2xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
+                        <div class="text-left">
+                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
                                 Palavras de <span style="color: #C90905;">Conhecimento</span>
                             </h3>
-                            <p class="text-sm sm:text-sm text-gray-600 font-medium mt-1">Registre palavras e curas</p>
+                            <p class="text-sm text-gray-500 mt-0.5">Registre palavras e curas</p>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Formulário Rápido -->
-                <form method="post" action="{% url 'word_of_knowledge_create' %}" class="bg-white rounded-xl p-4 sm:p-5 border-2 mb-4" style="border-color: rgba(201, 9, 5, 0.3);" onsubmit="showLoadingOverlay(event)">
-                    {% csrf_token %}
-                    <div class="mb-3 sm:mb-2">
-                        <label class="block text-sm sm:text-sm font-bold text-gray-700 mb-2" style="color: #C90905;">
-                            <i class="fas fa-edit mr-2"></i>Registrar Nova Palavra
-                        </label>
-                        <textarea 
-                            name="word" 
-                            rows="5" 
-                            required
-                            class="w-full px-4 py-3 border-2 rounded-xl bg-gray-50 focus:bg-white focus:outline-none transition-all resize-none focus:border-red-600 text-sm sm:text-base sm:rows-3"
-                            style="border-color: rgba(201, 9, 5, 0.2); min-height: 10rem;"
-                            placeholder="Escreva a palavra de conhecimento aqui..."></textarea>
-                    </div>
-                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-0">
-                        <button type="submit" class="w-full sm:w-auto px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 order-1 sm:order-2 text-sm sm:text-base" style="background-color: #C90905;">
-                            <i class="fas fa-save mr-2"></i>Enviar
-                        </button>
-                    </div>
-                </form>
-                
-                <!-- Links Rápidos -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <a href="{% url 'word_of_knowledge_list' %}" class="group block bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
-                                    <i class="fas fa-list text-lg" style="color: #C90905;"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm sm:text-sm font-bold text-gray-900">Palavras e Curas</h4>
-                                    <p class="text-xs sm:text-xs text-gray-600">Ver histórico</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-arrow-right text-lg transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
-                        </div>
-                    </a>
-                    
-                    <a href="{% url 'service_words_view' %}" class="group block bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(230, 57, 70, 0.1);">
-                                    <i class="fas fa-calendar-alt text-lg" style="color: #E63946;"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm sm:text-sm font-bold text-gray-900">Próximo Culto</h4>
-                                    <p class="text-xs sm:text-xs text-gray-600">Ver palavras de conhecimento</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-arrow-right text-lg transition-transform group-hover:translate-x-2" style="color: #E63946;"></i>
-                        </div>
-                    </a>
-                </div>
-            </div>
-        </section>
-        {% endif %}
+                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+                </button>
 
-         {% if is_approver and pending_words_count > 0 %}
-        <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(147, 51, 234, 0.3);">
-            <!-- Elementos Decorativos -->
-            <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20" style="background: radial-gradient(circle, rgba(147, 51, 234, 0.15), transparent);"></div>
-            <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-20" style="background: radial-gradient(circle, rgba(168, 85, 247, 0.15), transparent);"></div>
-            
-            <div class="relative z-10 p-4 sm:p-6 md:p-8">
-                <div class="flex items-center justify-between mb-6">
-                    <div class="flex items-center gap-3 sm:gap-4">
-                        <div class="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #9333ea 0%, #a855f7 100%);">
-                            <i class="fas fa-crown text-white text-lg sm:text-xl md:text-2xl"></i>
-                        </div>
-                        <div>
-                            <h3 class="text-2xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">
-                                Aprovação de <span style="color: #9333ea;">Palavras</span>
-                            </h3>
-                            <p class="text-sm sm:text-sm text-gray-600 font-medium mt-1">
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold text-white" style="background-color: #9333ea;">
-                                    {{ pending_words_count }}
-                                </span>
-                                palavra{{ pending_words_count|pluralize }} aguardando aprovação
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="space-y-3">
-                    {% for word in pending_words|slice:":3" %}
-                    <div class="bg-white rounded-xl p-4 sm:p-5 border-2" style="border-color: rgba(147, 51, 234, 0.2);">
-                        <div class="flex items-start justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-3">
-                                <div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style="background: linear-gradient(135deg, #9333ea 0%, #a855f7 100%);">
-                                    {{ word.member.name|first }}
-                                </div>
-                                <div>
-                                    <h4 class="font-bold text-sm sm:text-sm text-gray-900">{{ word.member.name }}</h4>
-                                    <p class="text-xs sm:text-xs text-gray-600">
-                                        <i class="far fa-calendar mr-1"></i>
-                                        Culto: {{ word.service_date|date:"d/m/Y" }}
-                                    </p>
-                                </div>
+                <!-- Conteúdo colapsável -->
+                <div class="accordion-content">
+                    <div class="px-4 pb-4 sm:px-5 sm:pb-5">
+                        <!-- Formulário Rápido -->
+                        <form method="post" action="{% url 'word_of_knowledge_create' %}" class="bg-white rounded-xl p-4 sm:p-5 border-2 mb-4" style="border-color: rgba(201, 9, 5, 0.3);" onsubmit="showLoadingOverlay(event)">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="block text-sm font-bold mb-2" style="color: #C90905;">
+                                    <i class="fas fa-edit mr-2"></i>Registrar Nova Palavra
+                                </label>
+                                <textarea
+                                    name="word"
+                                    rows="5"
+                                    required
+                                    class="w-full px-4 py-3 border-2 rounded-xl bg-gray-50 focus:bg-white focus:outline-none transition-all resize-none focus:border-red-600 text-sm"
+                                    style="border-color: rgba(201, 9, 5, 0.2); min-height: 8rem;"
+                                    placeholder="Escreva a palavra de conhecimento aqui..."></textarea>
                             </div>
-                            <span class="px-3 py-1 rounded-full text-xs sm:text-xs font-bold text-white" style="background-color: #eab308;">
-                                Pendente
-                            </span>
-                        </div>
-                        
-                        <p class="text-sm sm:text-sm text-gray-700 mb-4 pl-13">{{ word.word|truncatewords:20 }}</p>
-                        
-                        <div class="flex gap-2">
-                            <form method="post" action="{% url 'member_approve_word' word.id %}" class="flex-1">
-                                {% csrf_token %}
-                                <button type="submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors text-sm">
-                                    <i class="fas fa-check mr-1"></i>Aprovar
-                                </button>
-                            </form>
-                            <form method="post" action="{% url 'member_reject_word' word.id %}" class="flex-1">
-                                {% csrf_token %}
-                                <button type="submit" class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors text-sm" onclick="return confirm('Tem certeza que deseja rejeitar esta palavra?')">
-                                    <i class="fas fa-times mr-1"></i>Rejeitar
-                                </button>
-                            </form>
+                            <button type="submit" class="w-full sm:w-auto px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 text-sm" style="background-color: #C90905;">
+                                <i class="fas fa-save mr-2"></i>Enviar
+                            </button>
+                        </form>
+
+                        <!-- Links Rápidos -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <a href="{% url 'word_of_knowledge_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
+                                        <i class="fas fa-list text-sm" style="color: #C90905;"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-gray-900">Palavras e Curas</h4>
+                                        <p class="text-xs text-gray-500">Ver histórico</p>
+                                    </div>
+                                </div>
+                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
+                            </a>
+                            <a href="{% url 'service_words_view' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(230, 57, 70, 0.1);">
+                                        <i class="fas fa-calendar-alt text-sm" style="color: #E63946;"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-gray-900">Próximo Culto</h4>
+                                        <p class="text-xs text-gray-500">Ver palavras do culto</p>
+                                    </div>
+                                </div>
+                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #E63946;"></i>
+                            </a>
                         </div>
                     </div>
-                    {% endfor %}
                 </div>
-                
-                {% if pending_words_count > 3 %}
-                <div class="mt-4 text-center">
-                    <p class="text-sm sm:text-sm text-gray-600">
-                        E mais {{ pending_words_count|add:"-3" }} palavra{{ pending_words_count|add:"-3"|pluralize }} aguardando aprovação
-                    </p>
-                </div>
-                {% endif %}
             </div>
-        </section>
-        {% endif %}
-        
-        {% if can_consolidate %}
-            <section class="relative overflow-hidden rounded-2xl border-2" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
-                <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-30" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.08), transparent);"></div>
-                <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-30" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.08), transparent);"></div>
-                
-                <div class="relative z-10 p-6 sm:p-8">
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-4">
-                            <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center" style="background-color: #C90905;">
-                                <i class="fas fa-user-graduate text-white text-xl sm:text-2xl"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-2xl sm:text-2xl md:text-3xl font-black text-gray-900">
-                                    Ministério de <span style="color: #C90905;">Consolidação</span>
-                                </h3>
-                                <p class="text-sm sm:text-sm text-gray-600 font-medium mt-1">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
-                            </div>
+            {% endif %}
+
+            {% if can_consolidate %}
+            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Consolidação" data-card-icon="user-graduate" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+                <!-- Header clicável -->
+                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                    <div class="flex items-center gap-3 sm:gap-4">
+                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                            <i class="fas fa-user-graduate text-white text-lg sm:text-xl"></i>
+                        </div>
+                        <div class="text-left">
+                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                                Ministério de <span style="color: #C90905;">Consolidação</span>
+                            </h3>
+                            <p class="text-sm text-gray-500 mt-0.5">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
                         </div>
                     </div>
-                    
-                    <a href="{% url 'member_consolidation' %}" class="group block bg-white rounded-xl p-6 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-4">
-                                <div>
-                                    <h4 class="text-base sm:text-lg font-black text-gray-900 mb-1">Ver Consolidados</h4>
-                                    <p class="text-sm sm:text-sm text-gray-600">Acesse todas informações sobre sua consolidação</p>
-                                </div>
+                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+                </button>
+
+                <!-- Conteúdo colapsável -->
+                <div class="accordion-content">
+                    <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                        <a href="{% url 'member_consolidation' %}" class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div>
+                                <h4 class="text-base font-black text-gray-900 mb-1">Ver Consolidados</h4>
+                                <p class="text-sm text-gray-500">Acesse todas as informações sobre sua consolidação</p>
                             </div>
-                            <i class="fas fa-arrow-right text-2xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
-                        </div>
-                    </a>
+                            <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
+                        </a>
+                    </div>
                 </div>
-            </section>
+            </div>
+            {% endif %}
+
+        </div>
         {% endif %}
     </main>
 
     {% include 'parciais/member_bottom_nav.html' with nav_active='home' %}
 
     <script>
+        // Ministry cards: flat (≤2) or tabs (≥3)
+        function initMinistryCards() {
+            const container = document.getElementById('ministry-cards-container');
+            if (!container) return;
+            const cards = Array.from(container.querySelectorAll('[data-ministry-card]'));
+            if (cards.length === 0) return;
+
+            if (cards.length <= 2) {
+                // Flat mode: expand all, remove toggle interaction
+                cards.forEach(card => {
+                    const content = card.querySelector('.accordion-content');
+                    const chevron = card.querySelector('.accordion-chevron');
+                    const btn = card.querySelector('.accordion-header');
+                    if (content) content.classList.add('open');
+                    if (chevron) chevron.style.display = 'none';
+                    if (btn) btn.style.pointerEvents = 'none';
+                });
+            } else {
+                // Tab mode
+                const tabBar = document.createElement('div');
+                tabBar.className = 'ministry-tab-bar';
+
+                cards.forEach((card, idx) => {
+                    const label = card.dataset.cardLabel || '';
+                    const icon = card.dataset.cardIcon || '';
+
+                    const tabBtn = document.createElement('button');
+                    tabBtn.type = 'button';
+                    tabBtn.className = 'ministry-tab-btn' + (idx === 0 ? ' active' : '');
+                    tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> ${label}`;
+                    tabBtn.addEventListener('click', () => switchMinistryTab(cards, tabBar, idx));
+                    tabBar.appendChild(tabBtn);
+
+                    // Hide header chevron & disable click
+                    const chevron = card.querySelector('.accordion-chevron');
+                    const headerBtn = card.querySelector('.accordion-header');
+                    if (chevron) chevron.style.display = 'none';
+                    if (headerBtn) headerBtn.style.pointerEvents = 'none';
+
+                    // Show first, hide rest
+                    const content = card.querySelector('.accordion-content');
+                    if (idx === 0) {
+                        card.style.display = '';
+                        if (content) content.classList.add('open');
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+
+                container.insertBefore(tabBar, container.firstChild);
+            }
+        }
+
+        function switchMinistryTab(cards, tabBar, activeIdx) {
+            cards.forEach((card, idx) => {
+                const content = card.querySelector('.accordion-content');
+                if (idx === activeIdx) {
+                    card.style.display = '';
+                    if (content) content.classList.add('open');
+                } else {
+                    card.style.display = 'none';
+                    if (content) content.classList.remove('open');
+                }
+            });
+            tabBar.querySelectorAll('.ministry-tab-btn').forEach((btn, idx) => {
+                btn.classList.toggle('active', idx === activeIdx);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', initMinistryCards);
+
         // Flag para prevenir múltiplas submissões
         let isSubmitting = false;
         

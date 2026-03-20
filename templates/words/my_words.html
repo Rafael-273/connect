@@ -157,16 +157,6 @@
                 <div class="flex items-start justify-between gap-3 mb-3">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-2 flex-wrap">
-                            {% if word.is_approved %}
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs sm:text-xs font-bold text-white" style="background-color: #16a34a;">
-                                    <i class="fas fa-check-circle mr-1"></i>Aprovada
-                                </span>
-                            {% else %}
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs sm:text-xs font-bold text-white" style="background-color: #eab308;">
-                                    <i class="fas fa-clock mr-1"></i>Aguardando Aprovação
-                                </span>
-                            {% endif %}
-                            
                             <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs sm:text-xs font-bold" style="background-color: rgba(147, 51, 234, 0.1); color: #9333ea;">
                                 <i class="fas fa-church mr-1"></i>{{ word.get_service_type_display }}
                             </span>
@@ -174,12 +164,10 @@
                         <p class="text-gray-800 leading-relaxed text-sm sm:text-base">{{ word.word }}</p>
                     </div>
                     
-                    {% if word.is_approved %}
                     <a href="{% url 'healing_create' %}?word_id={{ word.id }}" class="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-110 flex-shrink-0" 
                             style="{% if word.healings.exists %}background: rgba(201, 9, 5, 0.1); color: #C90905;{% else %}background: rgba(156, 163, 175, 0.1); color: #9ca3af;{% endif %}">
                         <i class="fas fa-heart"></i>
                     </a>
-                    {% endif %}
                 </div>
 
                 <div class="flex flex-wrap items-center gap-3 text-xs sm:text-xs text-gray-500">
@@ -189,13 +177,6 @@
                     </span>
                     <span>•</span>
                     <span>Registrado em {{ word.recorded_at|date:"d/m/Y H:i" }}</span>
-                    {% if word.is_approved and word.approved_by %}
-                        <span>•</span>
-                        <span class="text-green-600 font-semibold">
-                            <i class="fas fa-user-check mr-1"></i>
-                            Aprovada por {{ word.approved_by.name }}
-                        </span>
-                    {% endif %}
                 </div>
             </div>
             {% endfor %}
