@@ -193,12 +193,12 @@
             <button type="submit" 
                     class="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-6 py-4 rounded-lg transition font-semibold text-lg shadow-md flex items-center justify-center gap-2">
                 <ion-icon name="checkmark-circle-outline" class="text-2xl"></ion-icon>
-                <span>{% if schedule %}Atualizar Escala{% else %}Criar Escala{% endif %}</span>
+                <span class="mt-[0.15rem]">{% if schedule %}Atualizar Escala{% else %}Criar Escala{% endif %}</span>
             </button>
             <a href="{% url 'schedule_list' %}" 
                class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-4 rounded-lg transition font-semibold text-lg text-center flex items-center justify-center gap-2">
                 <ion-icon name="close-circle-outline" class="text-2xl"></ion-icon>
-                <span>Cancelar</span>
+                <span class="mt-[0.15rem]">Cancelar</span>
             </a>
         </div>
     </form>

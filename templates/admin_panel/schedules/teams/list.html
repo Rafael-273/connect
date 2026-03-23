@@ -11,31 +11,36 @@
 <div class="md:pl-64 pt-24">
     <div class="container mx-auto px-4 py-6">
         <!-- Header -->
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Equipes</h1>
-                <p class="text-gray-600 text-sm sm:text-base mt-1">Gerencie as equipes dos ministérios</p>
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <ion-icon name="people-circle" class="text-xl text-white"></ion-icon>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 leading-tight">Equipes</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">Gerencie as equipes dos ministérios</p>
+                </div>
             </div>
-            <a href="{% url 'team_create' %}" 
-               class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg transition flex items-center gap-2 whitespace-nowrap shadow-md font-medium">
-                <ion-icon name="add-outline" class="text-xl"></ion-icon>
-                <span>Nova Equipe</span>
+            <a href="{% url 'team_create' %}" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none">
+                <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
+                <span class="mt-[0.15rem]">Nova Equipe</span>
             </a>
         </div>
 
     <!-- Filters -->
     <div class="bg-white rounded-lg shadow-sm p-4 mb-6">
-        <form method="get" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <form method="get" id="filter-form" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
                 <input type="text" 
                        name="search" 
+                       id="search-input"
                        value="{{ search }}" 
                        placeholder="Buscar equipe..." 
                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] text-sm">
             </div>
             
             <div>
-                <select name="ministry" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] text-sm">
+                <select name="ministry" onchange="document.getElementById('filter-form').submit()" class="w-full px-3 pt-[0.65rem] pb-[0.35rem] border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] text-sm cursor-pointer">
                     <option value="">Todos os Ministérios</option>
                     {% for ministry in ministries %}
                     <option value="{{ ministry.id }}" {% if selected_ministry == ministry.id|slugify %}selected{% endif %}>
@@ -46,13 +51,8 @@
             </div>
             
             <div class="flex gap-2">
-                <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
-                    <ion-icon name="search-outline"></ion-icon>
-                    Filtrar
-                </button>
-                <a href="{% url 'team_list' %}" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition text-sm">
-                    <ion-icon name="close-outline"></ion-icon>
-                </a>
+                <button type="submit" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none"><ion-icon name="search-outline"></ion-icon><span class="mt-[0.15rem]">Buscar</span></button>
+                {% if request.GET %}<a href="{% url 'team_list' %}" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-red-100 hover:text-[var(--color-primary)] text-gray-400 transition-colors" title="Limpar filtros"><ion-icon name="close-circle-outline" style="font-size:1.25rem;"></ion-icon></a>{% endif %}
             </div>
         </form>
     </div>
@@ -78,13 +78,13 @@
             {% if team.leader %}
             <div class="flex items-center gap-2 text-sm text-gray-600 mb-3">
                 <ion-icon name="person-circle-outline"></ion-icon>
-                <span>Líder: {{ team.leader.name }}</span>
+                <span class="mt-[0.15rem]">Líder: {{ team.leader.name }}</span>
             </div>
             {% endif %}
             
             <div class="flex items-center gap-2 text-sm text-gray-600 mb-4">
                 <ion-icon name="people-outline"></ion-icon>
-                <span>{{ team.member_count }} membro{{ team.member_count|pluralize }}</span>
+                <span class="mt-[0.15rem]">{{ team.member_count }} membro{{ team.member_count|pluralize }}</span>
             </div>
             
             <div class="flex gap-2">
@@ -106,9 +106,9 @@
         <ion-icon name="people-circle-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
         <h3 class="text-xl font-semibold text-gray-800 mb-2">Nenhuma equipe encontrada</h3>
         <p class="text-gray-600 mb-6">Comece criando sua primeira equipe</p>
-        <a href="{% url 'team_create' %}" class="inline-block bg-[var(--church-secondary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition">
-            <ion-icon name="add-outline" class="align-middle"></ion-icon>
-            Criar Primeira Equipe
+        <a href="{% url 'team_create' %}" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none">
+            <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
+            <span class="mt-[0.15rem]">Criar Primeira Equipe</span>
         </a>
     </div>
     {% endif %}
@@ -194,6 +194,25 @@ function deleteTeam(teamId) {
         }
     });
 }
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 </div>
 {% endblock %}

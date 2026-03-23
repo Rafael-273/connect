@@ -11,31 +11,36 @@
 <div class="md:pl-64 pt-24">
     <div class="container mx-auto px-4 py-6">
         <!-- Header -->
-        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-bold text-gray-800">Escalas Mensais</h1>
-                <p class="text-gray-600 text-sm sm:text-base mt-1">Gerencie as escalas de todos os ministérios</p>
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <ion-icon name="calendar-number" class="text-xl text-white"></ion-icon>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 leading-tight">Escalas Mensais</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">Gerencie as escalas de todos os ministérios</p>
+                </div>
             </div>
-            <a href="{% url 'schedule_create' %}" 
-               class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg transition flex items-center gap-2 whitespace-nowrap shadow-md font-medium">
-                <ion-icon name="add-outline" class="text-xl"></ion-icon>
-                <span>Nova Escala</span>
+            <a href="{% url 'schedule_create' %}" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none">
+                <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
+                <span class="mt-[0.15rem]">Nova Escala</span>
             </a>
         </div>
 
     <!-- Filters -->
     <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
-        <form method="get" class="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-3">
+        <form method="get" id="filter-form" class="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-2 lg:grid-cols-5 sm:gap-3">
             <div>
                 <input type="text" 
                        name="search" 
+                       id="search-input"
                        value="{{ search }}" 
                        placeholder="Buscar escala..." 
                        class="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
             </div>
             
             <div>
-                <select name="ministry" class="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
+                <select name="ministry" onchange="document.getElementById('filter-form').submit()" class="w-full px-3 pt-[0.775rem] pb-[0.475rem] sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm cursor-pointer">
                     <option value="">Todos os Ministérios</option>
                     {% for ministry in ministries %}
                     <option value="{{ ministry.id }}" {% if selected_ministry == ministry.id|slugify %}selected{% endif %}>
@@ -46,7 +51,7 @@
             </div>
             
             <div>
-                <select name="year" class="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
+                <select name="year" onchange="document.getElementById('filter-form').submit()" class="w-full px-3 pt-[0.775rem] pb-[0.475rem] sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm cursor-pointer">
                     <option value="">Todos os Anos</option>
                     {% for year in years %}
                     <option value="{{ year }}" {% if selected_year == year|slugify %}selected{% endif %}>
@@ -57,7 +62,7 @@
             </div>
             
             <div>
-                <select name="month" class="w-full px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
+                <select name="month" onchange="document.getElementById('filter-form').submit()" class="w-full px-3 pt-[0.775rem] pb-[0.475rem] sm:py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm cursor-pointer">
                     <option value="">Todos os Meses</option>
                     {% for value, label in months %}
                     <option value="{{ value }}" {% if selected_month == value|slugify %}selected{% endif %}>
@@ -68,13 +73,8 @@
             </div>
             
             <div class="flex gap-2">
-                <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium flex items-center justify-center gap-2">
-                    <ion-icon name="search-outline" class="text-lg"></ion-icon>
-                    <span>Filtrar</span>
-                </button>
-                <a href="{% url 'schedule_list' %}" class="bg-gray-500 text-white px-3 py-2.5 sm:py-2 rounded-lg hover:bg-gray-600 transition text-sm flex items-center justify-center">
-                    <ion-icon name="close-outline" class="text-lg"></ion-icon>
-                </a>
+                <button type="submit" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none"><ion-icon name="search-outline"></ion-icon><span class="mt-[0.15rem]">Buscar</span></button>
+                {% if request.GET %}<a href="{% url 'schedule_list' %}" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-red-100 hover:text-[var(--color-primary)] text-gray-400 transition-colors" title="Limpar filtros"><ion-icon name="close-circle-outline" style="font-size:1.25rem;"></ion-icon></a>{% endif %}
             </div>
         </form>
     </div>
@@ -106,11 +106,11 @@
                 <div class="grid grid-cols-2 gap-2 text-xs sm:text-sm text-gray-600">
                     <div class="flex items-center gap-1.5">
                         <ion-icon name="calendar-outline" class="text-base flex-shrink-0"></ion-icon>
-                        <span>{{ schedule.get_month_display }}/{{ schedule.year }}</span>
+                        <span class="mt-[0.15rem]">{{ schedule.get_month_display }}/{{ schedule.year }}</span>
                     </div>
                     <div class="flex items-center gap-1.5">
                         <ion-icon name="list-outline" class="text-base flex-shrink-0"></ion-icon>
-                        <span>{{ schedule.days.count }} dia{{ schedule.days.count|pluralize }}</span>
+                        <span class="mt-[0.15rem]">{{ schedule.days.count }} dia{{ schedule.days.count|pluralize }}</span>
                     </div>
                     <div class="col-span-2 flex items-center gap-1.5">
                         <ion-icon name="{% if schedule.use_team_rotation %}people-circle-outline{% else %}person-outline{% endif %}" class="text-base flex-shrink-0"></ion-icon>
@@ -150,9 +150,9 @@
         <ion-icon name="calendar-outline" class="text-5xl sm:text-6xl text-gray-300 mb-3 sm:mb-4"></ion-icon>
         <h3 class="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Nenhuma escala encontrada</h3>
         <p class="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">Comece criando sua primeira escala mensal</p>
-        <a href="{% url 'schedule_create' %}" class="inline-block bg-orange-600 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-lg hover:bg-orange-700 transition font-medium text-sm sm:text-base">
-            <ion-icon name="add-outline" class="align-middle"></ion-icon>
-            Criar Primeira Escala
+        <a href="{% url 'schedule_create' %}" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none">
+            <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
+            <span class="mt-[0.15rem]">Criar Primeira Escala</span>
         </a>
     </div>
     {% endif %}
@@ -238,6 +238,25 @@ function deleteSchedule(scheduleId) {
         }
     });
 }
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 
 <style>

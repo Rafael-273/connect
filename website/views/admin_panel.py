@@ -225,52 +225,55 @@ class VisitorsListView(LoginRequiredMixin, ModulePermissionMixin, View):
     """Lista de visitantes com filtros e busca"""
     module_name = 'visitors'
 
-    def get(self, request):
-        visitors = Visitor.objects.select_related('neighborhood').order_by('-visit_date', '-id')
+    def _get_queryset(self):
+        return Visitor.objects.select_related('neighborhood').order_by('-visit_date', '-id')
 
-        search = request.GET.get('search', '')
-        period_filter = request.GET.get('period', '')
-        conversion_filter = request.GET.get('conversion', '')
-
+    def _apply_filters(self, qs, search, period_filter, conversion_filter):
         if search:
-            visitors = visitors.filter(
+            qs = qs.filter(
                 Q(name__icontains=search)
                 | Q(email__icontains=search)
                 | Q(phone__icontains=search)
             )
         if period_filter == '7_days':
-            visitors = visitors.filter(visit_date__gte=timezone.now() - timedelta(days=7))
+            qs = qs.filter(visit_date__gte=timezone.now() - timedelta(days=7))
         elif period_filter == '30_days':
-            visitors = visitors.filter(visit_date__gte=timezone.now() - timedelta(days=30))
-
+            qs = qs.filter(visit_date__gte=timezone.now() - timedelta(days=30))
         if conversion_filter == 'converted':
-            visitors = visitors.filter(decision_for_jesus=True)
+            qs = qs.filter(decision_for_jesus=True)
         elif conversion_filter == 'not_converted':
-            visitors = visitors.filter(decision_for_jesus=False)
+            qs = qs.filter(decision_for_jesus=False)
+        return qs
 
-        paginator = Paginator(visitors, 20)
-        visitors = paginator.get_page(request.GET.get('page'))
+    def _build_context(self, request):
+        search = request.GET.get('search', '')
+        period_filter = request.GET.get('period', '')
+        conversion_filter = request.GET.get('conversion', '')
 
-        return render(request, 'admin_panel/visitors/list.html', {
+        qs = self._apply_filters(self._get_queryset(), search, period_filter, conversion_filter)
+        visitors = Paginator(qs, 20).get_page(request.GET.get('page'))
+
+        return {
             'visitors': visitors,
             'search': search,
             'period_filter': period_filter,
             'conversion_filter': conversion_filter,
-        })
+        }
+
+    def get(self, request):
+        return render(request, 'admin_panel/visitors/list.html', self._build_context(request))
 
 
 class EventsListView(LoginRequiredMixin, ModulePermissionMixin, View):
     """Lista de eventos com filtros e busca"""
     module_name = 'events'
 
-    def get(self, request):
-        events = Event.objects.all()
+    def _get_queryset(self):
+        return Event.objects.all()
 
-        search = request.GET.get('search', '')
-        status_filter = request.GET.get('status', '')
-
+    def _apply_filters(self, qs, search, status_filter):
         if search:
-            events = events.filter(
+            qs = qs.filter(
                 Q(title__icontains=search)
                 | Q(description__icontains=search)
                 | Q(location__icontains=search)
@@ -278,57 +281,78 @@ class EventsListView(LoginRequiredMixin, ModulePermissionMixin, View):
         if status_filter:
             today = timezone.now().date()
             if status_filter == 'upcoming':
-                events = events.filter(event_date__gte=today)
+                qs = qs.filter(event_date__gte=today)
             elif status_filter == 'past':
-                events = events.filter(event_date__lt=today)
+                qs = qs.filter(event_date__lt=today)
+        return qs.order_by('-event_date')
 
-        events = events.order_by('-event_date')
-        paginator = Paginator(events, 20)
-        events = paginator.get_page(request.GET.get('page'))
+    def _build_context(self, request):
+        search = request.GET.get('search', '')
+        status_filter = request.GET.get('status', '')
 
-        return render(request, 'admin_panel/events/list.html', {
+        qs = self._apply_filters(self._get_queryset(), search, status_filter)
+        events = Paginator(qs, 20).get_page(request.GET.get('page'))
+
+        return {
             'events': events,
             'search': search,
             'status_filter': status_filter,
-        })
+        }
+
+    def get(self, request):
+        return render(request, 'admin_panel/events/list.html', self._build_context(request))
 
 
 class MinistriesListView(LoginRequiredMixin, AdminRequiredMixin, View):
     """Lista de ministérios"""
 
-    def get(self, request):
-        ministries = Ministry.objects.annotate(member_count=Count('member')).order_by('name')
+    def _get_queryset(self):
+        return Ministry.objects.annotate(member_count=Count('member')).order_by('name')
 
-        search = request.GET.get('search', '')
+    def _apply_filters(self, qs, search):
         if search:
-            ministries = ministries.filter(name__icontains=search)
+            qs = qs.filter(name__icontains=search)
+        return qs
 
-        paginator = Paginator(ministries, 20)
-        ministries = paginator.get_page(request.GET.get('page'))
+    def _build_context(self, request):
+        search = request.GET.get('search', '')
 
-        return render(request, 'admin_panel/ministries/list.html', {
+        qs = self._apply_filters(self._get_queryset(), search)
+        ministries = Paginator(qs, 20).get_page(request.GET.get('page'))
+
+        return {
             'ministries': ministries,
             'search': search,
-        })
+        }
+
+    def get(self, request):
+        return render(request, 'admin_panel/ministries/list.html', self._build_context(request))
 
 
 class NeighborhoodsListView(LoginRequiredMixin, AdminRequiredMixin, View):
     """Lista de bairros"""
 
-    def get(self, request):
-        neighborhoods = Neighborhood.objects.select_related('parent').order_by('name')
+    def _get_queryset(self):
+        return Neighborhood.objects.select_related('parent').order_by('name')
 
-        search = request.GET.get('search', '')
+    def _apply_filters(self, qs, search):
         if search:
-            neighborhoods = neighborhoods.filter(name__icontains=search)
+            qs = qs.filter(name__icontains=search)
+        return qs
 
-        paginator = Paginator(neighborhoods, 20)
-        neighborhoods = paginator.get_page(request.GET.get('page'))
+    def _build_context(self, request):
+        search = request.GET.get('search', '')
 
-        return render(request, 'admin_panel/neighborhoods/list.html', {
+        qs = self._apply_filters(self._get_queryset(), search)
+        neighborhoods = Paginator(qs, 20).get_page(request.GET.get('page'))
+
+        return {
             'neighborhoods': neighborhoods,
             'search': search,
-        })
+        }
+
+    def get(self, request):
+        return render(request, 'admin_panel/neighborhoods/list.html', self._build_context(request))
 
 
 # ---------------------------------------------------------------------------

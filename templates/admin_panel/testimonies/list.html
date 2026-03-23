@@ -67,15 +67,21 @@
         <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
 
             <!-- Header -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-                <div>
-                    <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">Testemunhos</h1>
-                    <p class="text-gray-500 text-sm mt-1">Gerencie os testemunhos exibidos no site</p>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="chatbubble-ellipses" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 leading-tight">Testemunhos</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {% if total %}{{ total }} testemunho{{ total|pluralize:"s" }}{% else %}Gerencie os testemunhos exibidos no site{% endif %}
+                        </p>
+                    </div>
                 </div>
-                <a href="{% url 'admin_testimony_create' %}"
-                   class="bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:opacity-90 transition font-medium flex items-center gap-2 shadow-sm text-sm justify-center">
+                <a href="{% url 'admin_testimony_create' %}" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none">
                     <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
-                    Novo Testemunho
+                    <span class="mt-[0.15rem]">Novo Testemunho</span>
                 </a>
             </div>
 
@@ -97,13 +103,14 @@
 
             <!-- Filtros -->
             <div class="admin-card p-4 mb-6">
-                <form method="GET" class="flex flex-col sm:flex-row gap-3">
-                    <input type="text" name="search" value="{{ request.GET.search }}"
+                <form method="GET" id="filter-form" class="flex flex-col sm:flex-row gap-3">
+                    <input type="text" name="search" id="search-input" value="{{ request.GET.search }}"
                            placeholder="Buscar por título..."
                            class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20">
 
                     <select name="category"
-                            class="w-full sm:w-44 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)]">
+                            onchange="document.getElementById('filter-form').submit()"
+                            class="w-full sm:w-44 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)] cursor-pointer">
                         <option value="">Todas as categorias</option>
                         {% for value, label in category_choices %}
                         <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>
@@ -111,21 +118,16 @@
                     </select>
 
                     <select name="approved"
-                            class="w-full sm:w-36 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)]">
+                            onchange="document.getElementById('filter-form').submit()"
+                            class="w-full sm:w-36 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)] cursor-pointer">
                         <option value="">Todos</option>
                         <option value="true"  {% if request.GET.approved == 'true' %}selected{% endif %}>Aprovados</option>
                         <option value="false" {% if request.GET.approved == 'false' %}selected{% endif %}>Pendentes</option>
                     </select>
 
                     <div class="flex gap-2">
-                        <button type="submit"
-                                class="flex-1 sm:flex-none bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:opacity-90 transition flex items-center justify-center gap-1">
-                            <ion-icon name="search-outline"></ion-icon> Buscar
-                        </button>
-                        <a href="{% url 'admin_testimonies_list' %}"
-                           class="flex-1 sm:flex-none bg-gray-500 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-600 transition flex items-center justify-center">
-                            Limpar
-                        </a>
+                        <button type="submit" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none"><ion-icon name="search-outline"></ion-icon><span class="mt-[0.15rem]">Buscar</span></button>
+                        {% if request.GET %}<a href="{% url 'admin_testimonies_list' %}" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-red-100 hover:text-[var(--color-primary)] text-gray-400 transition-colors" title="Limpar filtros"><ion-icon name="close-circle-outline" style="font-size:1.25rem;"></ion-icon></a>{% endif %}
                     </div>
                 </form>
             </div>
@@ -221,10 +223,9 @@
                 <ion-icon name="chatbubble-ellipses-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
                 <h3 class="text-xl font-semibold text-gray-500 mb-2">Nenhum testemunho encontrado</h3>
                 <p class="text-gray-400 mb-6">Cadastre o primeiro testemunho para exibir no site.</p>
-                <a href="{% url 'admin_testimony_create' %}"
-                   class="inline-flex items-center gap-2 bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:opacity-90 transition font-medium">
-                    <ion-icon name="add-circle-outline"></ion-icon>
-                    Cadastrar Testemunho
+                <a href="{% url 'admin_testimony_create' %}" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none">
+                    <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
+                    <span class="mt-[0.15rem]">Cadastrar Testemunho</span>
                 </a>
             </div>
             {% endif %}
@@ -256,5 +257,24 @@ function toggleField(id, field, checkbox) {
         alert('Erro de comunicação com o servidor.');
     });
 }
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 {% endblock %}

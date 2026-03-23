@@ -49,7 +49,6 @@ class MemberLoginView(View):
 
 
 class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
-
     def get(self, request):
         member = self.member
         context = self._build_base_context(member)

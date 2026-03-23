@@ -11,16 +11,22 @@
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
             <!-- Header -->
-            <div class="mb-4 sm:mb-6">
-                <div class="flex items-center gap-2 sm:gap-3 mb-3">
-                    <a href="{% url 'ministry_list' %}" class="text-gray-600 hover:text-gray-900 flex-shrink-0">
-                        <ion-icon name="arrow-back-outline" class="text-xl sm:text-2xl"></ion-icon>
-                    </a>
-                    <div class="flex-1 min-w-0">
-                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{{ ministry.name }}</h1>
-                        <p class="text-gray-600 text-xs sm:text-sm mt-1">Gerenciar membros e líderes</p>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="albums" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 leading-tight">{{ ministry.name }}</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {% if total_members %}{{ total_members }} membro{{ total_members|pluralize:"s" }}{% else %}Gerenciar membros e líderes{% endif %}
+                        </p>
                     </div>
                 </div>
+                <a href="{% url 'ministry_list' %}" class="flex items-center justify-center gap-2 bg-gray-100 text-gray-600 px-5 py-2.5 rounded-lg hover:bg-gray-200 transition font-medium text-sm leading-none">
+                    <ion-icon name="arrow-back-outline" class="text-lg"></ion-icon>
+                    <span class="mt-[0.15rem]">Voltar</span>
+                </a>
             </div>
 
             <!-- Estatísticas -->
@@ -41,30 +47,26 @@
 
             <!-- Filtros -->
             <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
-                <form method="GET" class="space-y-3 sm:space-y-0 sm:flex sm:gap-3">
-                    <input type="text" name="search" value="{{ request.GET.search }}" 
+                <form method="GET" id="filter-form" class="space-y-3 sm:space-y-0 sm:flex sm:gap-3">
+                    <input type="text" name="search" id="search-input" value="{{ request.GET.search }}" 
                            placeholder="Buscar membro..." 
                            class="w-full sm:flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
                     
-                    <select name="role" class="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
+                    <select name="role" onchange="document.getElementById('filter-form').submit()" class="w-full sm:w-auto px-4 pt-[0.775rem] pb-[0.475rem] border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm cursor-pointer">
                         <option value="">Todos os Papéis</option>
                         <option value="leader" {% if request.GET.role == 'leader' %}selected{% endif %}>Líderes</option>
                         <option value="member" {% if request.GET.role == 'member' %}selected{% endif %}>Membros</option>
                     </select>
                     
-                    <select name="status" class="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
+                    <select name="status" onchange="document.getElementById('filter-form').submit()" class="w-full sm:w-auto px-4 pt-[0.775rem] pb-[0.475rem] border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm cursor-pointer">
                         <option value="">Todos os Status</option>
                         <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Ativos</option>
                         <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inativos</option>
                     </select>
                     
                     <div class="flex gap-2">
-                        <button type="submit" class="flex-1 sm:flex-none bg-orange-600 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-orange-700 transition text-sm font-medium">
-                            Buscar
-                        </button>
-                        <a href="{% url 'ministry_members' ministry.id %}" class="flex-1 sm:flex-none bg-gray-500 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-gray-600 transition text-sm font-medium text-center">
-                            Limpar
-                        </a>
+                        <button type="submit" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none"><ion-icon name="search-outline"></ion-icon><span class="mt-[0.15rem]">Buscar</span></button>
+                        {% if request.GET %}<a href="{% url 'ministry_members' ministry.id %}" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-red-100 hover:text-[var(--color-primary)] text-gray-400 transition-colors" title="Limpar filtros"><ion-icon name="close-circle-outline" style="font-size:1.25rem;"></ion-icon></a>{% endif %}
                     </div>
                 </form>
             </div>
@@ -180,5 +182,24 @@
             }
         });
     }
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 {% endblock %}
