@@ -1,12 +1,124 @@
 from django import forms
 from ..models.member import Member
 
-
+# ── CSS tokens used by the self-service member area ──
 _INPUT = (
     'w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 '
     'focus:bg-white focus:border-gray-300 focus:outline-none transition-all'
 )
 _TEXTAREA = _INPUT + ' resize-none'
+
+# ── CSS tokens that match the admin edit.html <style> block ──
+_A_INPUT    = 'form-input'
+_A_SELECT   = 'form-select'
+_A_TEXTAREA = 'form-textarea'
+_A_CHECKBOX = (
+    'form-checkbox h-4 w-4 sm:h-5 sm:w-5 text-[var(--color-primary)] '
+    'rounded border-gray-300 focus:ring-[var(--color-primary)]'
+)
+
+_USER_TYPE_CHOICES = [
+    ('member',        'Membro (Sem acesso ao painel)'),
+    ('admin',         'Administrador (Acesso total)'),
+    ('visitors',      'Visitantes (Gerencia visitantes)'),
+    ('consolidation', 'Consolidação (Gerencia acompanhamentos)'),
+    ('events',        'Eventos (Gerencia eventos)'),
+]
+
+_OPTIONAL = [
+    'phone', 'birth_date', 'gender', 'marital_status', 'neighborhood',
+    'conversion', 'conversion_date', 'address', 'testimony',
+    'ministry', 'profile_picture', 'email',
+]
+
+
+class MemberAdminForm(forms.ModelForm):
+    """Full-featured form used by the admin panel to create/edit a Member."""
+
+    # Extra fields that belong to the linked User model, not Member directly
+    email = forms.EmailField(
+        label='Email',
+        required=False,
+        widget=forms.EmailInput(attrs={'class': _A_INPUT}),
+    )
+    user_type = forms.ChoiceField(
+        label='Tipo de Usuário',
+        choices=_USER_TYPE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': _A_SELECT}),
+    )
+
+    class Meta:
+        model = Member
+        fields = [
+            'name', 'phone', 'birth_date', 'gender', 'marital_status',
+            'ministry', 'neighborhood', 'conversion', 'conversion_date',
+            'address', 'profile_picture', 'testimony',
+            'is_active', 'is_available_to_consolidate',
+            'is_available_to_disciple', 'is_approver',
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': _A_INPUT,
+            }),
+            'phone': forms.TextInput(attrs={
+                'class': _A_INPUT,
+                'placeholder': '(11) 99999-9999',
+            }),
+            'birth_date': forms.DateInput(attrs={
+                'class': _A_INPUT,
+                'type': 'date',
+            }),
+            'gender': forms.Select(attrs={'class': _A_SELECT}),
+            'marital_status': forms.Select(attrs={'class': _A_SELECT}),
+            'ministry': forms.SelectMultiple(attrs={
+                # Keep id so the existing Select2 JS still binds correctly
+                'id': 'ministry-select',
+                'class': _A_SELECT,
+            }),
+            'neighborhood': forms.Select(attrs={'class': _A_SELECT}),
+            'conversion': forms.Select(attrs={'class': _A_SELECT}),
+            'conversion_date': forms.DateInput(attrs={
+                'class': _A_INPUT,
+                'type': 'date',
+            }),
+            'address': forms.TextInput(attrs={
+                'class': _A_INPUT,
+                'placeholder': 'Rua, número, bairro, cidade',
+            }),
+            'profile_picture': forms.ClearableFileInput(attrs={
+                'id': 'photo-input',
+                'accept': 'image/*',
+            }),
+            'testimony': forms.Textarea(attrs={
+                'class': _A_TEXTAREA,
+                'rows': 4,
+                'placeholder': 'Compartilhe o testemunho do membro...',
+            }),
+            'is_active':                   forms.CheckboxInput(attrs={'class': _A_CHECKBOX}),
+            'is_available_to_consolidate': forms.CheckboxInput(attrs={'class': _A_CHECKBOX}),
+            'is_available_to_disciple':    forms.CheckboxInput(attrs={'class': _A_CHECKBOX}),
+            'is_approver':                 forms.CheckboxInput(attrs={'class': _A_CHECKBOX}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Mark optional fields
+        for name in _OPTIONAL:
+            if name in self.fields:
+                self.fields[name].required = False
+
+        # Prepend blank option to CharField-with-choices selects
+        for name in ('gender', 'marital_status', 'conversion'):
+            self.fields[name].choices = [('', 'Selecionar...')] + list(self.fields[name].choices)
+
+        # ModelChoiceField uses empty_label instead
+        self.fields['neighborhood'].empty_label = 'Selecionar...'
+
+        # Default is_active = True for new members
+        if not self.instance.pk:
+            self.fields['is_active'].initial = True
 
 
 class MemberProfileForm(forms.ModelForm):

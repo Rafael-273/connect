@@ -66,23 +66,17 @@
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
 
-            <!-- Header -->
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
-                        <ion-icon name="chatbubble-ellipses" class="text-xl text-white"></ion-icon>
-                    </div>
-                    <div>
-                        <h1 class="text-2xl font-bold text-gray-900 leading-tight">Testemunhos</h1>
-                        <p class="text-sm text-gray-500 mt-0.5">
-                            {% if total %}{{ total }} testemunho{{ total|pluralize:"s" }}{% else %}Gerencie os testemunhos exibidos no site{% endif %}
-                        </p>
-                    </div>
+            <!-- Title -->
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <ion-icon name="chatbubble-ellipses" class="text-xl text-white"></ion-icon>
                 </div>
-                <a href="{% url 'admin_testimony_create' %}" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none">
-                    <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
-                    <span class="mt-[0.15rem]">Novo Testemunho</span>
-                </a>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 leading-tight">Testemunhos</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">
+                        {% if total %}{{ total }} testemunho{{ total|pluralize:"s" }}{% else %}Gerencie os testemunhos exibidos no site{% endif %}
+                    </p>
+                </div>
             </div>
 
             <!-- Stats -->
@@ -101,35 +95,81 @@
                 </div>
             </div>
 
-            <!-- Filtros -->
-            <div class="admin-card p-4 mb-6">
-                <form method="GET" id="filter-form" class="flex flex-col sm:flex-row gap-3">
-                    <input type="text" name="search" id="search-input" value="{{ request.GET.search }}"
-                           placeholder="Buscar por título..."
-                           class="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20">
+            <!-- Search + Filters + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="category" id="hidden-category" value="{{ request.GET.category }}">
+                    <input type="hidden" name="approved" id="hidden-approved" value="{{ request.GET.approved }}">
 
-                    <select name="category"
-                            onchange="document.getElementById('filter-form').submit()"
-                            class="w-full sm:w-44 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)] cursor-pointer">
-                        <option value="">Todas as categorias</option>
-                        {% for value, label in category_choices %}
-                        <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ request.GET.search }}"
+                               placeholder="Buscar por título..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
 
-                    <select name="approved"
-                            onchange="document.getElementById('filter-form').submit()"
-                            class="w-full sm:w-36 px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[var(--color-primary)] cursor-pointer">
-                        <option value="">Todos</option>
-                        <option value="true"  {% if request.GET.approved == 'true' %}selected{% endif %}>Aprovados</option>
-                        <option value="false" {% if request.GET.approved == 'false' %}selected{% endif %}>Pendentes</option>
-                    </select>
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
 
-                    <div class="flex gap-2">
-                        <button type="submit" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none"><ion-icon name="search-outline"></ion-icon><span class="mt-[0.15rem]">Buscar</span></button>
-                        {% if request.GET %}<a href="{% url 'admin_testimonies_list' %}" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-red-100 hover:text-[var(--color-primary)] text-gray-400 transition-colors" title="Limpar filtros"><ion-icon name="close-circle-outline" style="font-size:1.25rem;"></ion-icon></a>{% endif %}
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-testimonies"
+                                class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if request.GET.category or request.GET.approved %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                        <div id="filter-panel-testimonies"
+                             class="hidden absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Categoria</label>
+                                    <select id="panel-category" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todas as categorias</option>
+                                        {% for value, label in category_choices %}
+                                        <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Aprovação</label>
+                                    <select id="panel-approved" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos</option>
+                                        <option value="true"  {% if request.GET.approved == 'true' %}selected{% endif %}>Aprovados</option>
+                                        <option value="false" {% if request.GET.approved == 'false' %}selected{% endif %}>Pendentes</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                <a href="{% url 'admin_testimonies_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-testimonies"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </form>
+
+                <a href="{% url 'admin_testimony_create' %}"
+                   class="flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Novo Testemunho
+                </a>
             </div>
 
             <!-- Lista -->
@@ -257,6 +297,27 @@ function toggleField(id, field, checkbox) {
         alert('Erro de comunicação com o servidor.');
     });
 }
+
+    // Filter panel toggle
+    (function () {
+        var toggle   = document.getElementById('filter-toggle-testimonies');
+        var panel    = document.getElementById('filter-panel-testimonies');
+        var applyBtn = document.getElementById('apply-filters-testimonies');
+        var hiddenCategory = document.getElementById('hidden-category');
+        var hiddenApproved = document.getElementById('hidden-approved');
+        var panelCategory  = document.getElementById('panel-category');
+        var panelApproved  = document.getElementById('panel-approved');
+        if (!toggle || !panel) return;
+        toggle.addEventListener('click', function (e) { e.stopPropagation(); panel.classList.toggle('hidden'); });
+        document.addEventListener('click', function (e) { if (!panel.contains(e.target) && e.target !== toggle) panel.classList.add('hidden'); });
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                hiddenCategory.value = panelCategory.value;
+                hiddenApproved.value = panelApproved.value;
+                document.getElementById('filter-form').submit();
+            });
+        }
+    })();
 
     // Auto-filter with loading overlay
     (function () {

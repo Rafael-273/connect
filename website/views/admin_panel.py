@@ -18,6 +18,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .mixins import AdminRequiredMixin, ConsolidationPermissionMixin, ModulePermissionMixin
 from ..forms.canteen import CanteenDebtorForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
+from ..forms.member import MemberAdminForm
 from ..forms.template import (
     FollowUpTemplateForm, FollowUpTemplateStepFormSet,
     FollowUpTemplateStepFormSetForCreate,
@@ -486,136 +487,84 @@ class VisitorDetailApiView(LoginRequiredMixin, AdminRequiredMixin, View):
 # ---------------------------------------------------------------------------
 
 class MemberEditView(LoginRequiredMixin, AdminRequiredMixin, View):
-    """Criar ou editar membro"""
-
-    def _get_form_context(self, member=None):
-        return {
-            'member': member,
-            'ministries': Ministry.objects.all().order_by('name'),
-            'neighborhoods': Neighborhood.objects.all().order_by('name'),
-            'all_members': Member.objects.all().order_by('name'),
-        }
+    _TEMPLATE = 'admin_panel/members/edit.html'
 
     def get(self, request, member_id=None):
-        member = get_object_or_404(Member, id=member_id) if member_id else None
-        # Limpar mensagens antigas para evitar mensagens persistentes
-        storage = messages.get_messages(request)
-        storage.used = True
-        return render(request, 'admin_panel/members/edit.html', self._get_form_context(member))
+        messages.get_messages(request).used = True
+        member = self._get_member(member_id)
+        form = MemberAdminForm(instance=member, initial=self._user_initial(member))
+        return render(request, self._TEMPLATE, {'form': form, 'member': member})
 
     def post(self, request, member_id=None):
-        member = get_object_or_404(Member, id=member_id) if member_id else None
-
-        try:
-            name = request.POST.get('name')
-            email = request.POST.get('email') or None
-            phone = request.POST.get('phone') or None
-            address = request.POST.get('address') or None
-            birth_date = request.POST.get('birth_date') or None
-            gender = request.POST.get('gender') or None
-            marital_status = request.POST.get('marital_status') or None
-            ministry_ids = request.POST.getlist('ministry')
-            neighborhood_id = request.POST.get('neighborhood') or None
-            conversion = request.POST.get('conversion') or None
-            conversion_date = request.POST.get('conversion_date') or None
-            is_active = request.POST.get('is_active') == 'on'
-            testimony = request.POST.get('testimony') or None
-            interests = request.POST.get('interests') or None
-            tags = request.POST.get('tags') or None
-            spouse_id = request.POST.get('spouse') or None
-            personality_type = request.POST.get('personality_type') or None
-            initial_challenges = request.POST.get('initial_challenges') or None
-            available_days = request.POST.get('available_days') or None
-            is_available_to_consolidate = request.POST.get('is_available_to_consolidate') == 'on'
-            is_available_to_disciple = request.POST.get('is_available_to_disciple') == 'on'
-            is_approver = request.POST.get('is_approver') == 'on'
-            user_type = request.POST.get('user_type') or 'member'
-
-            if not name:
-                messages.error(request, 'Nome é obrigatório.')
-                raise ValueError('Nome é obrigatório')
-
-            ministries = list(Ministry.objects.filter(id__in=ministry_ids)) if ministry_ids else []
-            neighborhood = Neighborhood.objects.get(id=neighborhood_id) if neighborhood_id else None
-            spouse = Member.objects.get(id=spouse_id) if spouse_id else None
-
-            if member:
-                member.name = name
-                member.phone = phone
-                member.address = address
-                member.birth_date = birth_date
-                member.gender = gender
-                member.marital_status = marital_status
-                member.neighborhood = neighborhood
-                member.conversion = conversion
-                member.conversion_date = conversion_date
-                member.is_active = is_active
-                member.testimony = testimony
-                member.interests = interests
-                member.tags = tags
-                member.spouse = spouse
-                member.personality_type = personality_type
-                member.initial_challenges = initial_challenges
-                member.available_days = available_days
-                member.is_available_to_consolidate = is_available_to_consolidate
-                member.is_available_to_disciple = is_available_to_disciple
-                member.is_approver = is_approver
-
-                if email and member.user:
-                    member.user.email = email
-                    member.user.user_type = user_type
-                    member.user.is_staff = user_type != 'member'
-                    member.user.save()
-
-                if 'profile_picture' in request.FILES:
-                    member.profile_picture = request.FILES['profile_picture']
-
-                member.save()
-                member.ministry.set(ministries)
-                request.session['member_success_message'] = 'Membro atualizado com sucesso!'
-            else:
-                if not email:
-                    email = f"membro_{uuid.uuid4().hex[:8]}@autogerado.com"
-
-                user = User.objects.create_user(
-                    email=email, password='123',
-                    user_type=user_type, is_staff=user_type != 'member',
+        member = self._get_member(member_id)
+        form = MemberAdminForm(
+            request.POST, request.FILES,
+            instance=member,
+            initial=self._user_initial(member),
+        )
+        if form.is_valid():
+            try:
+                self._save_member(form, member)
+                request.session['member_success_message'] = (
+                    'Membro atualizado com sucesso!' if member else 'Membro criado com sucesso!'
                 )
+                return redirect('admin_members_list')
+            except Exception as exc:
+                self._handle_db_error(request, exc)
 
-                member = Member.objects.create(
-                    user=user, name=name, phone=phone, address=address,
-                    birth_date=birth_date, gender=gender, marital_status=marital_status,
-                    neighborhood=neighborhood, conversion=conversion,
-                    conversion_date=conversion_date,
-                    is_active=is_active if is_active is not None else True,
-                    testimony=testimony, interests=interests, tags=tags,
-                    spouse=spouse, personality_type=personality_type,
-                    initial_challenges=initial_challenges,
-                    available_days=available_days,
-                    is_available_to_consolidate=is_available_to_consolidate,
-                    is_available_to_disciple=is_available_to_disciple,
-                    is_approver=is_approver,
-                )
-                member.ministry.set(ministries)
+        return render(request, self._TEMPLATE, {'form': form, 'member': member})
 
-                if 'profile_picture' in request.FILES:
-                    member.profile_picture = request.FILES['profile_picture']
-                    member.save()
+    @staticmethod
+    def _get_member(member_id):
+        if not member_id:
+            return None
+        return get_object_or_404(
+            Member.objects.select_related('user'), id=member_id
+        )
 
-                request.session['member_success_message'] = 'Membro criado com sucesso!'
+    @staticmethod
+    def _user_initial(member):
+        if member and member.user:
+            return {'email': member.user.email, 'user_type': member.user.user_type}
+        return {'user_type': 'member'}
 
-            return redirect('admin_members_list')
+    @staticmethod
+    def _save_member(form, member):
+        email     = form.cleaned_data.get('email') or None
+        user_type = form.cleaned_data.get('user_type') or 'member'
 
-        except Exception as e:
-            error_msg = str(e)
-            if 'duplicate key value' in error_msg and 'email' in error_msg:
-                messages.error(request, 'Já existe um usuário com este email. Por favor, escolha outro email.')
-            elif 'duplicate key value' in error_msg:
-                messages.error(request, f'Erro de integridade: {error_msg}')
-            else:
-                messages.error(request, f'Erro ao salvar membro: {error_msg}')
+        if member is None:
+            if not email:
+                email = f"membro_{uuid.uuid4().hex[:8]}@autogerado.com"
+            user = User.objects.create_user(
+                email=email,
+                password='123',
+                user_type=user_type,
+                is_staff=user_type != 'member',
+            )
+            member = form.save(commit=False)
+            member.user = user
+            member.save()
+            form.save_m2m()
+        else:
+            if member.user and email:
+                member.user.email     = email
+                member.user.user_type = user_type
+                member.user.is_staff  = user_type != 'member'
+                member.user.save(update_fields=['email', 'user_type', 'is_staff'])
+            form.save()
 
-        return render(request, 'admin_panel/members/edit.html', self._get_form_context(member))
+        return member
+
+    @staticmethod
+    def _handle_db_error(request, exc):
+        msg = str(exc)
+        if 'duplicate key value' in msg and 'email' in msg:
+            messages.error(request, 'Já existe um usuário com este email. Por favor, escolha outro email.')
+        elif 'duplicate key value' in msg:
+            messages.error(request, f'Erro de integridade: {msg}')
+        else:
+            messages.error(request, f'Erro ao salvar membro: {msg}')
 
 
 class VisitorEditView(LoginRequiredMixin, ModulePermissionMixin, View):
