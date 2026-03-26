@@ -19,6 +19,7 @@ from .mixins import AdminRequiredMixin, ConsolidationPermissionMixin, ModulePerm
 from ..forms.canteen import CanteenDebtorForm
 from ..forms.follow_up import FollowUpForm, FollowUpReportForm
 from ..forms.member import MemberAdminForm
+from ..forms.visitor import VisitorAdminForm
 from ..forms.template import (
     FollowUpTemplateForm, FollowUpTemplateStepFormSet,
     FollowUpTemplateStepFormSetForCreate,
@@ -449,7 +450,7 @@ class MemberDetailApiView(LoginRequiredMixin, AdminRequiredMixin, View):
             'address': member.address,
             'birth_date': member.birth_date.strftime('%d/%m/%Y') if member.birth_date else None,
             'gender': member.get_gender_display() if member.gender else None,
-            'ministry': member.ministry.name if member.ministry else None,
+            'ministry': ', '.join(member.ministry.values_list('name', flat=True)) or None,
             'neighborhood': member.neighborhood.name if member.neighborhood else None,
             'marital_status': member.get_marital_status_display() if member.marital_status else None,
             'conversion': member.get_conversion_display() if member.conversion else None,
@@ -471,12 +472,15 @@ class VisitorDetailApiView(LoginRequiredMixin, AdminRequiredMixin, View):
             'name': visitor.name,
             'email': visitor.email,
             'phone': visitor.phone,
+            'birth_date': visitor.birth_date.strftime('%d/%m/%Y') if visitor.birth_date else None,
             'address': visitor.address,
             'gender': visitor.get_gender_display() if visitor.gender else None,
             'neighborhood': visitor.neighborhood.name if visitor.neighborhood else None,
             'visit_date': visitor.visit_date.strftime('%d/%m/%Y'),
             'decision_for_jesus': visitor.decision_for_jesus,
             'conversion': visitor.get_conversion_display() if visitor.conversion else None,
+            'wants_home_prayer': getattr(visitor, 'wants_home_prayer', False),
+            'is_member': '[CONVERTIDO]' in (visitor.profile_notes or ''),
             'prayer_request': visitor.prayer_request,
             'profile_notes': visitor.profile_notes,
         })
@@ -568,180 +572,140 @@ class MemberEditView(LoginRequiredMixin, AdminRequiredMixin, View):
 
 
 class VisitorEditView(LoginRequiredMixin, ModulePermissionMixin, View):
-    """Criar ou editar visitante"""
     module_name = 'visitors'
+    _TEMPLATE = 'admin_panel/visitors/edit.html'
 
     def get(self, request, visitor_id=None):
-        visitor = get_object_or_404(Visitor, id=visitor_id) if visitor_id else None
-        storage = messages.get_messages(request)
-        storage.used = True
-        return render(request, 'admin_panel/visitors/edit.html', {
+        messages.get_messages(request).used = True
+        visitor = self._get_visitor(visitor_id)
+        form = VisitorAdminForm(instance=visitor)
+        visit_date_value = visitor.visit_date.strftime('%Y-%m-%d') if visitor and visitor.visit_date else ''
+        return render(request, self._TEMPLATE, {
+            'form': form,
             'visitor': visitor,
-            'neighborhoods': Neighborhood.objects.all().order_by('name'),
+            'visit_date_value': visit_date_value,
             'email_warning': None,
         })
 
     def post(self, request, visitor_id=None):
-        visitor = get_object_or_404(Visitor, id=visitor_id) if visitor_id else None
+        visitor = self._get_visitor(visitor_id)
+        old_decision = visitor.decision_for_jesus if visitor else False
+        old_conversion = visitor.conversion if visitor else None
+
+        form = VisitorAdminForm(request.POST, instance=visitor)
         email_warning = None
+        visit_date = self._parse_visit_date(request)
 
-        try:
-            name = request.POST.get('name', '').strip()
-            email = request.POST.get('email', '').strip() or None
-            phone = request.POST.get('phone', '').strip() or None
-            address = request.POST.get('address', '').strip() or None
-            visit_date = request.POST.get('visit_date', '').strip()
-            gender = request.POST.get('gender', '').strip() or None
-            neighborhood_id = request.POST.get('neighborhood', '').strip() or None
-            decision_for_jesus = request.POST.get('decision_for_jesus') in ('true', 'on')
-            conversion = request.POST.get('conversion', '').strip() or None
-            prayer_request = request.POST.get('prayer_request', '').strip() or None
-            profile_notes = request.POST.get('profile_notes', '').strip() or None
-
-            if not name:
-                messages.error(request, 'Nome é obrigatório.')
-                raise ValueError('Nome é obrigatório')
-
-            if not visit_date:
-                messages.error(request, 'Data da visita é obrigatória.')
-                raise ValueError('Data da visita é obrigatória')
-
-            from datetime import datetime
+        if visit_date is None:
+            messages.error(request, 'Data da visita é obrigatória e deve estar no formato AAAA-MM-DD.')
+        elif form.is_valid():
             try:
-                datetime.strptime(visit_date, '%Y-%m-%d')
-            except ValueError:
-                messages.error(request, 'Formato de data inválido. Use AAAA-MM-DD.')
-                raise ValueError('Formato de data inválido')
+                email_warning = self._get_email_warning(form.cleaned_data.get('email'))
+                self._check_phone_duplicate(request, form.cleaned_data.get('phone'), visitor)
+                visitor = form.save(visit_date=visit_date)
+                self._handle_conversion(request, visitor, old_decision, old_conversion)
+                return redirect('admin_visitors_list')
+            except Exception as exc:
+                self._handle_db_error(request, exc)
 
-            # Validar email único para visitantes
-            if email:
-                existing_visitor = Visitor.objects.filter(email=email)
-                if visitor:
-                    existing_visitor = existing_visitor.exclude(id=visitor.id)
-                if existing_visitor.exists():
-                    messages.error(request, f'Já existe um visitante com o email "{email}". Por favor, use um email diferente.')
-                    raise ValueError('Email já existe')
-
-                existing_user = User.objects.filter(email=email).first()
-                if existing_user:
-                    try:
-                        existing_member = Member.objects.filter(user=existing_user).first()
-                        if existing_member:
-                            email_warning = {
-                                'type': 'member_conflict', 'email': email,
-                                'member_name': existing_member.name,
-                                'message': f'O email "{email}" já pertence ao membro "{existing_member.name}". Verifique se são a mesma pessoa.',
-                            }
-                        else:
-                            email_warning = {
-                                'type': 'user_conflict', 'email': email,
-                                'message': f'O email "{email}" já está registrado no sistema como usuário. Verifique possíveis duplicatas.',
-                            }
-                    except Exception:
-                        email_warning = {
-                            'type': 'general_conflict', 'email': email,
-                            'message': f'O email "{email}" já está registrado no sistema. Verifique possíveis duplicatas.',
-                        }
-
-            # Verificar telefone duplicado (aviso, não bloqueia)
-            if phone:
-                phone_clean = phone.replace('(', '').replace(')', '').replace('-', '').replace(' ', '')
-                existing_phone_qs = Visitor.objects.filter(phone__isnull=False)
-                if visitor:
-                    existing_phone_qs = existing_phone_qs.exclude(id=visitor.id)
-                for existing in existing_phone_qs:
-                    if existing.phone:
-                        existing_clean = existing.phone.replace('(', '').replace(')', '').replace('-', '').replace(' ', '')
-                        if existing_clean == phone_clean:
-                            messages.warning(request, f'O telefone "{phone}" já está cadastrado para o visitante "{existing.name}". Verifique se são a mesma pessoa.')
-                            break
-
-            neighborhood = Neighborhood.objects.get(id=neighborhood_id) if neighborhood_id else None
-
-            if visitor:
-                old_decision = visitor.decision_for_jesus
-                old_conversion = visitor.conversion
-
-                visitor.name = name
-                visitor.email = email
-                visitor.phone = phone
-                visitor.address = address
-                visitor.visit_date = visit_date
-                visitor.gender = gender
-                visitor.neighborhood = neighborhood
-                visitor.decision_for_jesus = decision_for_jesus
-                visitor.conversion = conversion
-                visitor.prayer_request = prayer_request
-                visitor.profile_notes = profile_notes
-
-                try:
-                    visitor.save()
-                except Exception as save_error:
-                    error_str = str(save_error).lower()
-                    if 'unique constraint' in error_str or 'duplicate key' in error_str:
-                        if 'email' in error_str:
-                            messages.error(request, f'Erro: O email "{email}" já está em uso. Por favor, use um email diferente.')
-                        else:
-                            messages.error(request, 'Erro: Dados duplicados detectados. Verifique se este visitante já existe.')
-                    else:
-                        messages.error(request, f'Erro ao salvar visitante: {save_error}')
-                    raise save_error
-
-                should_convert_now = should_convert_visitor_to_member(visitor)
-                was_convertible_before = old_decision or old_conversion
-
-                if should_convert_now:
-                    already_converted = '[CONVERTIDO]' in (visitor.profile_notes or '')
-                    if not was_convertible_before or not already_converted:
-                        member = convert_visitor_to_member(visitor)
-                        if member:
-                            messages.success(request, f'✅ Visitante atualizado e convertido para membro com sucesso! (Tipo: {member.conversion})')
-                        else:
-                            messages.warning(request, 'Visitante atualizado, mas houve erro na conversão para membro.')
-                    else:
-                        messages.success(request, 'Visitante atualizado com sucesso! (Já era convertido anteriormente)')
-                else:
-                    messages.success(request, 'Visitante atualizado com sucesso!')
-            else:
-                try:
-                    visitor = Visitor.objects.create(
-                        name=name, email=email, phone=phone, address=address,
-                        visit_date=visit_date, gender=gender,
-                        neighborhood=neighborhood,
-                        decision_for_jesus=decision_for_jesus,
-                        conversion=conversion, prayer_request=prayer_request,
-                        profile_notes=profile_notes,
-                    )
-                except Exception as create_error:
-                    error_str = str(create_error).lower()
-                    if 'unique constraint' in error_str or 'duplicate key' in error_str:
-                        if 'email' in error_str:
-                            messages.error(request, f'Erro: O email "{email}" já está em uso. Por favor, use um email diferente.')
-                        else:
-                            messages.error(request, 'Erro: Dados duplicados detectados. Verifique se este visitante já existe.')
-                    else:
-                        messages.error(request, f'Erro ao criar visitante: {create_error}')
-                    raise create_error
-
-                if should_convert_visitor_to_member(visitor):
-                    member = convert_visitor_to_member(visitor)
-                    if member:
-                        messages.success(request, f'Visitante criado e convertido para membro com sucesso! (Tipo: {member.conversion})')
-                    else:
-                        messages.warning(request, 'Visitante criado, mas houve erro na conversão para membro.')
-                else:
-                    messages.success(request, 'Visitante criado com sucesso!')
-
-            return redirect('admin_visitors_list')
-
-        except Exception as e:
-            messages.error(request, f'Erro ao salvar visitante: {e}')
-
-        return render(request, 'admin_panel/visitors/edit.html', {
+        return render(request, self._TEMPLATE, {
+            'form': form,
             'visitor': visitor,
-            'neighborhoods': Neighborhood.objects.all().order_by('name'),
+            'visit_date_value': request.POST.get('visit_date', '') or (visitor.visit_date.strftime('%Y-%m-%d') if visitor and visitor.visit_date else ''),
             'email_warning': json.dumps(email_warning) if email_warning else None,
         })
+
+    @staticmethod
+    def _get_visitor(visitor_id):
+        if not visitor_id:
+            return None
+        return get_object_or_404(Visitor, id=visitor_id)
+
+    @staticmethod
+    def _parse_visit_date(request):
+        from datetime import datetime
+        raw = request.POST.get('visit_date', '').strip()
+        if not raw:
+            return None
+        try:
+            return datetime.strptime(raw, '%Y-%m-%d').date()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _get_email_warning(email):
+        if not email:
+            return None
+        existing_user = User.objects.filter(email=email).first()
+        if not existing_user:
+            return None
+        try:
+            existing_member = Member.objects.filter(user=existing_user).first()
+            if existing_member:
+                return {
+                    'type': 'member_conflict',
+                    'email': email,
+                    'member_name': existing_member.name,
+                    'message': f'O email "{email}" já pertence ao membro "{existing_member.name}". Verifique se são a mesma pessoa.',
+                }
+            return {
+                'type': 'user_conflict',
+                'email': email,
+                'message': f'O email "{email}" já está registrado no sistema como usuário. Verifique possíveis duplicatas.',
+            }
+        except Exception:
+            return {
+                'type': 'general_conflict',
+                'email': email,
+                'message': f'O email "{email}" já está registrado no sistema. Verifique possíveis duplicatas.',
+            }
+
+    @staticmethod
+    def _check_phone_duplicate(request, phone, visitor):
+        if not phone:
+            return
+        phone_clean = phone.replace('(', '').replace(')', '').replace('-', '').replace(' ', '')
+        qs = Visitor.objects.filter(phone__isnull=False)
+        if visitor:
+            qs = qs.exclude(id=visitor.id)
+        for existing in qs:
+            if existing.phone:
+                existing_clean = existing.phone.replace('(', '').replace(')', '').replace('-', '').replace(' ', '')
+                if existing_clean == phone_clean:
+                    messages.warning(
+                        request,
+                        f'O telefone "{phone}" já está cadastrado para o visitante "{existing.name}". Verifique se são a mesma pessoa.',
+                    )
+                    break
+
+    @staticmethod
+    def _handle_conversion(request, visitor, old_decision, old_conversion):
+        """Converte visitante para membro quando aplicável e adiciona mensagem de sucesso."""
+        should_convert = should_convert_visitor_to_member(visitor)
+        was_convertible = old_decision or old_conversion
+
+        if should_convert:
+            already_converted = '[CONVERTIDO]' in (visitor.profile_notes or '')
+            if not was_convertible or not already_converted:
+                member = convert_visitor_to_member(visitor)
+                if member:
+                    messages.success(request, f'✅ Visitante convertido para membro com sucesso! (Tipo: {member.conversion})')
+                else:
+                    messages.warning(request, 'Visitante salvo, mas houve erro na conversão para membro.')
+            else:
+                messages.success(request, 'Visitante atualizado com sucesso! (Já era convertido anteriormente)')
+        else:
+            messages.success(request, 'Visitante salvo com sucesso!')
+
+    @staticmethod
+    def _handle_db_error(request, exc):
+        msg = str(exc)
+        if 'duplicate key value' in msg and 'email' in msg:
+            messages.error(request, 'Já existe um visitante com este email. Por favor, escolha outro email.')
+        elif 'duplicate key value' in msg:
+            messages.error(request, f'Erro de integridade: {msg}')
+        else:
+            messages.error(request, f'Erro ao salvar visitante: {msg}')
 
 
 class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
@@ -979,27 +943,20 @@ class FollowUpListView(LoginRequiredMixin, ModulePermissionMixin, View):
 
 
 class FollowUpEditView(LoginRequiredMixin, ModulePermissionMixin, View):
-    """Criar ou editar follow-up"""
     module_name = 'consolidation'
+    _TEMPLATE = 'admin_panel/followups/edit.html'
 
     def get(self, request, followup_id=None):
-        followup = get_object_or_404(FollowUp, id=followup_id) if followup_id else None
+        followup = self._get_followup(followup_id)
         form = FollowUpForm(instance=followup)
-        templates_data = list(
-            FollowUpTemplate.objects.annotate(
-                steps_count_val=Count('steps'),
-            ).values_list('id', 'name', 'description', 'steps_count_val')
-        )
-        templates_data = [
-            {'id': t[0], 'name': t[1], 'description': t[2] or 'Sem descrição', 'steps_count': t[3]}
-            for t in templates_data
-        ]
-        return render(request, 'admin_panel/followups/edit.html', {
-            'form': form, 'followup': followup, 'templates_data': templates_data,
+        return render(request, self._TEMPLATE, {
+            'form': form,
+            'followup': followup,
+            'templates_data': self._get_templates_data(),
         })
 
     def post(self, request, followup_id=None):
-        followup = get_object_or_404(FollowUp, id=followup_id) if followup_id else None
+        followup = self._get_followup(followup_id)
         form = FollowUpForm(request.POST, instance=followup)
         if form.is_valid():
             form.save()
@@ -1007,13 +964,27 @@ class FollowUpEditView(LoginRequiredMixin, ModulePermissionMixin, View):
             return redirect('admin_followups_list')
 
         messages.error(request, 'Erro ao salvar follow-up. Verifique os dados.')
-        templates_data = [
-            {'id': t.id, 'name': t.name, 'description': t.description or 'Sem descrição', 'steps_count': t.steps.count()}
-            for t in FollowUpTemplate.objects.all()
-        ]
-        return render(request, 'admin_panel/followups/edit.html', {
-            'form': form, 'followup': followup, 'templates_data': templates_data,
+        return render(request, self._TEMPLATE, {
+            'form': form,
+            'followup': followup,
+            'templates_data': self._get_templates_data(),
         })
+
+    @staticmethod
+    def _get_followup(followup_id):
+        if not followup_id:
+            return None
+        return get_object_or_404(FollowUp, id=followup_id)
+
+    @staticmethod
+    def _get_templates_data():
+        rows = FollowUpTemplate.objects.annotate(
+            steps_count_val=Count('steps'),
+        ).values_list('id', 'name', 'description', 'steps_count_val')
+        return [
+            {'id': t[0], 'name': t[1], 'description': t[2] or 'Sem descrição', 'steps_count': t[3]}
+            for t in rows
+        ]
 
 
 class FollowUpDeleteView(LoginRequiredMixin, ModulePermissionMixin, View):
@@ -1284,14 +1255,10 @@ templates_view = TemplatesListView.as_view()
 
 
 class TemplateCreateView(LoginRequiredMixin, ConsolidationPermissionMixin, View):
-    """Criar novo template de consolidação"""
+    _TEMPLATE = 'admin_panel/template_form.html'
 
     def get(self, request):
-        duplicate_from_id = request.GET.get('duplicate_from')
-        original_template = None
-        if duplicate_from_id:
-            original_template = FollowUpTemplate.objects.filter(id=duplicate_from_id).first()
-
+        original_template = self._get_original_template(request.GET.get('duplicate_from'))
         if original_template:
             form = FollowUpTemplateForm(initial={
                 'name': f'Cópia de {original_template.name}',
@@ -1299,58 +1266,64 @@ class TemplateCreateView(LoginRequiredMixin, ConsolidationPermissionMixin, View)
             })
         else:
             form = FollowUpTemplateForm()
-
         formset = FollowUpTemplateStepFormSetForCreate()
-        return render(request, 'admin_panel/template_form.html', {
-            'form': form, 'formset': formset,
-            'title': f'Duplicar Template: {original_template.name}' if original_template else 'Novo Template de Consolidação',
-            'original_template': original_template,
-        })
+        return render(request, self._TEMPLATE, self._build_context(form, formset, original_template))
 
     def post(self, request):
-        duplicate_from_id = request.POST.get('duplicate_from')
-        original_template = None
-        if duplicate_from_id:
-            original_template = FollowUpTemplate.objects.filter(id=duplicate_from_id).first()
+        original_template = self._get_original_template(request.POST.get('duplicate_from'))
+        form = FollowUpTemplateForm(request.POST)
 
         if original_template:
-            form = FollowUpTemplateForm(request.POST)
             if form.is_valid():
-                template = form.save(commit=False)
-                template.description = original_template.description
-                template.save()
-
-                for step in original_template.steps.all():
-                    FollowUpTemplateStep.objects.create(
-                        template=template, period=step.period,
-                        period_type=step.period_type, title=step.title,
-                        description=step.description,
-                    )
-
+                template = self._duplicate_template(form, original_template)
                 messages.success(request, f'Template "{template.name}" criado com sucesso a partir de "{original_template.name}"!')
                 return redirect('admin_template_detail', template_id=template.id)
-            else:
-                messages.error(request, 'Erro ao duplicar template. Verifique os dados informados.')
+            messages.error(request, 'Erro ao duplicar template. Verifique os dados informados.')
+            formset = FollowUpTemplateStepFormSetForCreate()
         else:
-            form = FollowUpTemplateForm(request.POST)
             formset = FollowUpTemplateStepFormSetForCreate(request.POST)
-
             if form.is_valid() and formset.is_valid():
-                template = form.save()
-                formset.instance = template
-                formset.save()
-
+                template = self._create_from_formset(form, formset)
                 messages.success(request, f'Template "{template.name}" criado com sucesso!')
                 return redirect('admin_template_detail', template_id=template.id)
-            else:
-                messages.error(request, 'Erro ao criar template. Verifique os dados informados.')
+            messages.error(request, 'Erro ao criar template. Verifique os dados informados.')
 
-        formset = FollowUpTemplateStepFormSetForCreate(request.POST) if not original_template else FollowUpTemplateStepFormSetForCreate()
-        return render(request, 'admin_panel/template_form.html', {
-            'form': form, 'formset': formset,
+        return render(request, self._TEMPLATE, self._build_context(form, formset, original_template))
+
+    @staticmethod
+    def _get_original_template(template_id):
+        if not template_id:
+            return None
+        return FollowUpTemplate.objects.filter(id=template_id).first()
+
+    @staticmethod
+    def _build_context(form, formset, original_template):
+        return {
+            'form': form,
+            'formset': formset,
             'title': f'Duplicar Template: {original_template.name}' if original_template else 'Novo Template de Consolidação',
             'original_template': original_template,
-        })
+        }
+
+    @staticmethod
+    def _duplicate_template(form, original_template):
+        template = form.save(commit=False)
+        template.description = original_template.description
+        template.save()
+        for step in original_template.steps.all():
+            FollowUpTemplateStep.objects.create(
+                template=template, period=step.period,
+                period_type=step.period_type, title=step.title,
+                description=step.description,
+            )
+        return template
+
+    @staticmethod
+    def _create_from_formset(form, formset):
+        template = form.save()
+        formset.instance = template
+        formset.save()
+        return template
 
 
 # FBV alias — mantido para compatibilidade com urls.py

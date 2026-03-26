@@ -333,7 +333,7 @@
                                         </div>
                                         {% endif %}
                                         <div>
-                                            <div class="text-sm font-semibold text-gray-900">{{ member.name }}</div>
+                                            <div class="text-sm text-gray-900">{{ member.name }}</div>
                                             {% if member.birth_date %}
                                             <div class="text-xs text-gray-400 mt-0.5">{{ member.birth_date|date:"d/m/Y" }}</div>
                                             {% endif %}
@@ -424,104 +424,135 @@
     </div>
 </div>
 
-<div id="memberModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-medium text-gray-900">Detalhes do Membro</h3>
-            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
-                <ion-icon name="close" class="text-xl"></ion-icon>
+<!-- ── View Member Modal ── -->
+<div id="memberModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[92vh]">
+        <!-- Modal header -->
+        <div id="memberModalHeader" class="flex items-center gap-4 p-5 border-b border-gray-100 flex-shrink-0">
+            <div id="memberModalAvatar" class="w-14 h-14 rounded-xl bg-[var(--color-primary)] flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 overflow-hidden"></div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h3 id="memberModalName" class="text-lg font-bold text-gray-900 leading-tight"></h3>
+                    <span id="memberModalBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"></span>
+                </div>
+                <p id="memberModalMinistry" class="text-sm text-gray-500 mt-0.5"></p>
+            </div>
+            <button onclick="closeModal()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition flex-shrink-0">
+                <ion-icon name="close" class="text-lg"></ion-icon>
             </button>
         </div>
-        <div id="memberDetails">
+        <!-- Modal body -->
+        <div id="memberDetails" class="overflow-y-auto flex-1 p-5 space-y-4"></div>
+        <!-- Modal footer -->
+        <div class="flex gap-2 justify-end p-4 border-t border-gray-100 flex-shrink-0">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Fechar</button>
+            <a id="memberModalEditBtn" href="#" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-lg transition" style="background:var(--color-primary);"><ion-icon name="create-outline"></ion-icon> Editar</a>
+        </div>
+    </div>
+</div>
+
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Membro</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
         </div>
     </div>
 </div>
 
 <script>
+    function infoRow(icon, label, value) {
+        if (!value) return '';
+        return `<div class="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+            <div class="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <ion-icon name="${icon}" style="font-size:0.95rem;color:#6b7280;"></ion-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs text-gray-400 font-medium uppercase tracking-wide leading-none mb-0.5">${label}</p>
+                <p class="text-sm text-gray-800 font-medium">${value}</p>
+            </div>
+        </div>`;
+    }
+
+    function sectionTitle(label) {
+        return `<p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 mt-2">${label}</p>`;
+    }
+
     function viewMember(memberId) {
+        const modal = document.getElementById('memberModal');
+        document.getElementById('memberDetails').innerHTML = '<div class="flex items-center justify-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2" style="border-color:var(--color-primary);"></div></div>';
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
         fetch(`/admin-panel/api/member/${memberId}/`)
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
-                const detailsHtml = `
-                    <div class="space-y-4">
-                        <div class="flex items-center space-x-4">
-                            ${data.profile_picture ? 
-                                `<img src="${data.profile_picture}" alt="${data.name}" class="w-16 h-16 rounded-full object-cover">` : 
-                                `<div class="w-16 h-16 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold text-xl">${data.name.charAt(0)}</div>`
-                            }
-                            <div>
-                                <h4 class="text-xl font-semibold text-gray-900">${data.name}</h4>
-                                <p class="text-gray-600">${data.ministry || 'Sem ministério'}</p>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <span class="font-medium text-gray-700">Email:</span>
-                                <p class="text-gray-900">${data.email || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Telefone:</span>
-                                <p class="text-gray-900">${data.phone || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Data de Nascimento:</span>
-                                <p class="text-gray-900">${data.birth_date || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Gênero:</span>
-                                <p class="text-gray-900">${data.gender || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Estado Civil:</span>
-                                <p class="text-gray-900">${data.marital_status || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Bairro:</span>
-                                <p class="text-gray-900">${data.neighborhood || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Conversão:</span>
-                                <p class="text-gray-900">${data.conversion || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Data da Conversão:</span>
-                                <p class="text-gray-900">${data.conversion_date || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Status:</span>
-                                <p class="text-gray-900">${data.is_active ? 'Ativo' : 'Inativo'}</p>
-                            </div>
-                        </div>
-                        
-                        ${data.address ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Endereço:</span>
-                                <p class="text-gray-900">${data.address}</p>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.testimony ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Testemunho:</span>
-                                <p class="text-gray-900">${data.testimony}</p>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.interests ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Interesses:</span>
-                                <p class="text-gray-900">${data.interests}</p>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-                
-                document.getElementById('memberDetails').innerHTML = detailsHtml;
-                document.getElementById('memberModal').classList.remove('hidden');
+                // Header
+                const avatarEl = document.getElementById('memberModalAvatar');
+                if (data.profile_picture) {
+                    avatarEl.innerHTML = `<img src="${data.profile_picture}" alt="${data.name}" class="w-full h-full object-cover">`;
+                } else {
+                    avatarEl.textContent = data.name.charAt(0).toUpperCase();
+                }
+                document.getElementById('memberModalName').textContent = data.name;
+                document.getElementById('memberModalMinistry').textContent = data.ministry || 'Sem ministério';
+                const badge = document.getElementById('memberModalBadge');
+                if (data.is_active) {
+                    badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700';
+                    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Ativo';
+                } else {
+                    badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500';
+                    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Inativo';
+                }
+                document.getElementById('memberModalEditBtn').href = `/admin-panel/members/${memberId}/edit/`;
+
+                // Body
+                let html = sectionTitle('Contato');
+                html += infoRow('mail-outline', 'Email', data.email);
+                html += infoRow('call-outline', 'Telefone', data.phone);
+                html += infoRow('logo-whatsapp', 'WhatsApp', data.phone);
+
+                html += sectionTitle('Informações Pessoais');
+                html += infoRow('calendar-outline', 'Nascimento', data.birth_date);
+                html += infoRow('person-outline', 'Gênero', data.gender);
+                html += infoRow('heart-outline', 'Estado Civil', data.marital_status);
+                html += infoRow('location-outline', 'Bairro', data.neighborhood);
+                html += infoRow('home-outline', 'Endereço', data.address);
+
+                const churchRows = [
+                    infoRow('star-outline', 'Ministério', data.ministry),
+                    infoRow('checkmark-circle-outline', 'Conversão', data.conversion),
+                    infoRow('calendar-outline', 'Data da Conversão', data.conversion_date),
+                ].join('');
+                if (churchRows) {
+                    html += sectionTitle('Igreja');
+                    html += churchRows;
+                }
+
+                if (data.testimony) {
+                    html += sectionTitle('Testemunho');
+                    html += `<p class="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-xl p-3">${data.testimony}</p>`;
+                }
+                if (data.interests) {
+                    html += sectionTitle('Interesses');
+                    html += `<p class="text-sm text-gray-700 leading-relaxed">${data.interests}</p>`;
+                }
+
+                document.getElementById('memberDetails').innerHTML = html;
             })
-            .catch(error => {
-                alert('Erro ao carregar detalhes do membro');
+            .catch(() => {
+                document.getElementById('memberDetails').innerHTML = '<p class="text-center text-red-500 text-sm py-6">Erro ao carregar detalhes.</p>';
             });
     }
     
@@ -529,35 +560,67 @@
         window.location.href = `/admin-panel/members/${memberId}/edit/`;
     }
     
+    let _deleteTargetId = null;
+
     function deleteMember(memberId, memberName) {
-        if (confirm(`Tem certeza que deseja excluir o membro "${memberName}"?`)) {
-            fetch('{% url "admin_api_delete" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'member',
-                    id: memberId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao excluir membro: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('Erro na comunicação com o servidor');
-            });
-        }
+        _deleteTargetId = memberId;
+        document.getElementById('deleteModalName').textContent = memberName;
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
     }
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteTargetId = null;
+    }
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteTargetId) return;
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        fetch('{% url "admin_api_delete" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'member', id: _deleteTargetId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+                alert('Erro ao excluir membro: ' + data.error);
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+            alert('Erro na comunicação com o servidor');
+        });
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
     
     function closeModal() {
-        document.getElementById('memberModal').classList.add('hidden');
+        const modal = document.getElementById('memberModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
     }
+
+    document.getElementById('memberModal').addEventListener('click', function (e) {
+        if (e.target === this) closeModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { closeModal(); closeDeleteModal(); }
+    });
 
     // Filter panel toggle
     (function () {
