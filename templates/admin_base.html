@@ -88,6 +88,7 @@
         $('#mobile-sidebar-toggle').on('click', function() {
             $('#mobile-admin-sidebar').removeClass('hidden').addClass('flex');
             $('#mobile-sidebar-content').removeClass('-translate-x-full').addClass('translate-x-0');
+            $('body').addClass('mobile-sidebar-open');
         });
         
         $('#close-mobile-sidebar').on('click', function() {
@@ -105,8 +106,15 @@
             $('#mobile-sidebar-content').removeClass('translate-x-0').addClass('-translate-x-full');
             setTimeout(function() {
                 $('#mobile-admin-sidebar').removeClass('flex').addClass('hidden');
-        }, 300);
-    }
+                $('body').removeClass('mobile-sidebar-open');
+            }, 300);
+        }
+
+        $(window).on('resize', function() {
+            if (window.innerWidth >= 768) {
+                closeMobileSidebar();
+            }
+        });
     
     // Inicializar submenus ativos baseado na página atual
     const activeSubmenuItems = document.querySelectorAll('.submenu-item.active');
@@ -125,14 +133,19 @@
     /* Desktop and Mobile admin styling */
     @media screen and (min-width: 769px) {
         .main-content-wrapper {
-            margin-left: 16rem !important; /* 64 * 0.25rem = 16rem */
+            margin-left: 18rem !important;
         }
+    }
+
+    .main-content-wrapper > .mt-24 {
+        margin-top: 0 !important;
     }
     
     @media (max-width: 768px) {
         .main-content-wrapper {
             margin-left: 0 !important;
             width: 100% !important;
+            padding-top: 5rem;
         }
         
         .admin-card {
@@ -187,122 +200,263 @@
     
     /* Sidebar styling */
     .sidebar {
-        background: white;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        box-shadow: 0 12px 32px rgba(15, 23, 42, 0.09);
+        border-right: 1px solid rgba(148, 163, 184, 0.24);
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .sidebar::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+        background-color: rgba(148, 163, 184, 0.45);
+        border-radius: 9999px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(100, 116, 139, 0.7);
+    }
+
+    .sidebar-scroll {
+        height: 100vh;
+    }
+
+    .sidebar-brand {
+        background: linear-gradient(135deg, rgba(201, 9, 5, 0.04), rgba(230, 57, 70, 0.015));
+        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .sidebar-nav {
+        padding-bottom: 1.25rem;
+    }
+
+    .member-area-link {
+        background: transparent;
+        color: #475569;
+        justify-content: flex-start;
+        font-weight: 500;
+        letter-spacing: 0;
+        border-left-color: transparent;
+        border-color: transparent;
+        box-shadow: none;
+        margin: 0.12rem 0.55rem;
+        border-radius: 10px;
+    }
+
+    .member-area-link:hover {
+        color: #111827;
+        transform: none;
+        border-left-color: transparent;
+        border-color: transparent;
+        background: #ffffff;
     }
     
     .sidebar-item {
         display: flex;
         align-items: center;
-        padding: 12px 20px;
-        color: #64748b;
+        gap: 0.75rem;
+        padding: 10px 14px;
+        margin: 0.12rem 0.55rem;
+        border-radius: 10px;
+        color: #475569;
+        font-weight: 500;
+        font-size: 0.98rem;
         text-decoration: none;
-        transition: all 0.3s ease;
-        border-left: 3px solid transparent;
+        transition: all 0.22s ease;
+        border: 1px solid transparent;
+        position: relative;
     }
-    
+
     .sidebar-item:hover, .sidebar-item.active {
-        background-color: #f1f5f9;
+        background-color: #ffffff;
         color: var(--color-primary);
-        border-left-color: var(--color-primary);
+        border-color: rgba(201, 9, 5, 0.16);
+        box-shadow: 0 5px 14px rgba(15, 23, 42, 0.07);
         text-decoration: none;
     }
-    
-    .sidebar-item ion-icon {
-        font-size: 20px;
-        margin-right: 12px;
+
+    .sidebar-item.active::before {
+        content: '';
+        position: absolute;
+        left: -6px;
+        top: 8px;
+        bottom: 8px;
+        width: 3px;
+        border-radius: 9999px;
+        background: var(--color-primary);
     }
-    
+
+    .sidebar-item ion-icon {
+        font-size: 19px;
+        min-width: 19px;
+        margin-right: 0;
+        opacity: 0.9;
+    }
+
     /* Submenu styling */
     .sidebar-group {
-        margin-bottom: 4px;
+        margin: 0.2rem 0;
     }
-    
+
     .sidebar-item-group {
         display: flex;
         align-items: center;
-        padding: 12px 20px;
-        color: #64748b;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 10px 14px;
+        margin: 0.12rem 0.55rem;
+        border-radius: 10px;
+        color: #475569;
+        font-size: 0.98rem;
+        font-weight: 500;
         text-decoration: none;
-        transition: all 0.3s ease;
-        border-left: 3px solid transparent;
+        transition: all 0.22s ease;
+        border: 1px solid transparent;
         cursor: pointer;
         user-select: none;
+        position: relative;
     }
-    
+
     .sidebar-item-group:hover, .sidebar-item-group.active {
-        background-color: #f1f5f9;
+        background-color: #ffffff;
         color: var(--color-primary);
-        border-left-color: var(--color-primary);
+        border-color: rgba(201, 9, 5, 0.16);
+        box-shadow: 0 5px 14px rgba(15, 23, 42, 0.07);
     }
-    
+
+    .sidebar-item-group.active::before {
+        content: '';
+        position: absolute;
+        left: -6px;
+        top: 8px;
+        bottom: 8px;
+        width: 3px;
+        border-radius: 9999px;
+        background: var(--color-primary);
+    }
+
     .sidebar-item-group ion-icon {
-        font-size: 20px;
-        margin-right: 12px;
+        font-size: 19px;
+        min-width: 19px;
+        margin-right: 0;
     }
-    
+
+    .sidebar-item-group-main {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+    }
+
     .submenu-arrow {
-        font-size: 18px;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        color: #94a3b8;
         margin-left: auto;
-        background: #f1f5f9;
+        font-size: 14px;
+        transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+        color: #6b7280;
+        background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+        border: 1px solid rgba(148, 163, 184, 0.28);
         border-radius: 50%;
         width: 24px;
         height: 24px;
+        padding: 1px;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        box-shadow: none;
     }
-    
+
     .sidebar-item-group:hover .submenu-arrow {
         color: var(--color-primary);
-        background: #fee2e2;
-        box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15);
-        transform: scale(1.05);
+        background: linear-gradient(180deg, #fff1f1 0%, #fee2e2 100%);
+        border-color: rgba(201, 9, 5, 0.3);
+        box-shadow: none;
+        transform: scale(1.03);
     }
-    
+
     .sidebar-item-group.active .submenu-arrow {
-        transform: rotate(180deg) scale(1.05);
-        color: var(--color-primary);
-        background: linear-gradient(135deg, #dc2626, #ef4444);
-        color: white;
-        box-shadow: 0 3px 8px rgba(220, 38, 38, 0.3);
+        transform: rotate(180deg) scale(1.03);
+        background: linear-gradient(180deg, #c90905 0%, #b20804 100%);
+        border-color: rgba(201, 9, 5, 0.75);
+        color: #ffffff;
+        box-shadow: none;
     }
-    
+
     .submenu {
         max-height: 0;
         overflow: hidden;
         transition: max-height 0.3s ease;
-        background-color: #f8fafc;
+        background-color: transparent;
+        margin: 0 0.55rem 0.4rem;
+        border-radius: 0;
     }
-    
+
     .submenu.active {
-        max-height: 300px;
+        max-height: 560px;
     }
-    
+
     .submenu-item {
         display: flex;
         align-items: center;
-        padding: 10px 20px 10px 45px;
+        gap: 0.6rem;
+        padding: 9px 12px 9px 34px;
         color: #64748b;
         text-decoration: none;
-        transition: all 0.3s ease;
-        border-left: 3px solid transparent;
+        transition: all 0.22s ease;
+        border: 1px solid transparent;
         font-size: 14px;
+        font-weight: 500;
+        border-radius: 8px;
+        margin: 0.12rem 0.1rem;
     }
-    
-    .submenu-item:hover, .submenu-item.active {
-        background-color: #e2e8f0;
-        color: var(--color-primary);
-        border-left-color: var(--color-primary);
-        text-decoration: none;
-    }
-    
+
     .submenu-item ion-icon {
         font-size: 16px;
-        margin-right: 10px;
+        margin-right: 0;
+    }
+
+    .submenu-item:hover, .submenu-item.active {
+        background-color: #f8fafc;
+        color: var(--color-primary);
+        border-color: rgba(201, 9, 5, 0.14);
+        text-decoration: none;
+    }
+
+    body.mobile-sidebar-open {
+        overflow: hidden;
+        touch-action: none;
+    }
+
+    #mobile-admin-sidebar {
+        backdrop-filter: blur(2px);
+    }
+
+    #mobile-sidebar-content {
+        max-width: 22rem;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        box-shadow: 12px 0 30px rgba(15, 23, 42, 0.2);
+    }
+
+    @media (max-width: 768px) {
+        .sidebar-item,
+        .sidebar-item-group {
+            padding: 11px 14px;
+            margin: 0.1rem 0.5rem;
+        }
+
+        .submenu-item {
+            padding: 10px 12px 10px 32px;
+        }
     }
 </style>
 </body>
