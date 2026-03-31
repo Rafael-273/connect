@@ -5,158 +5,127 @@
 
 {% block head %}
 <style>
-    body {
-        background-color: #f8f9fa !important;
-    }
-    
-    .admin-card {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    }
-    
-    .template-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 16px;
-        transition: all 0.3s ease;
-        background: white;
-    }
-    
-    .template-card:hover {
-        box-shadow: 0 6px 20px rgba(0,0,0,0.1);
-        transform: translateY(-2px);
-    }
-    
-    .step-badge {
-        background: linear-gradient(135deg, #ff6b35, #f7931e);
-        color: white;
-        padding: 4px 8px;
-        border-radius: 8px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-right: 8px;
-    }
-    
-    .btn-primary {
-        background: linear-gradient(135deg, #ff6b35, #f7931e);
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
         border: none;
-        border-radius: 10px;
-        padding: 12px 24px;
-        font-weight: 600;
+        cursor: pointer;
+        flex-shrink: 0;
     }
-    
-    .btn-primary:hover {
-        background: linear-gradient(135deg, #e55a2b, #e8831a);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
-    }
-    
-    .btn-outline-secondary {
-        border: 2px solid #6c757d;
-        color: #6c757d;
-        border-radius: 8px;
-        font-weight: 500;
-    }
-    
-    .btn-outline-secondary:hover {
-        background: #6c757d;
-        border-color: #6c757d;
-    }
+    .action-btn-view   { background: rgba(201,9,5,0.08); color: var(--color-primary); }
+    .action-btn-view:hover   { background: rgba(201,9,5,0.16); }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h2 class="fw-bold text-dark mb-1">Templates de Consolidação</h2>
-                    <p class="text-muted mb-0">Gerencie os planos padrão de consolidação</p>
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-3 md:p-6 mt-24">
+
+            <!-- Title -->
+            <div class="flex items-center justify-between gap-3 mb-6">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="clipboard-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Templates de Consolidação</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">Gerencie os planos padrão de consolidação</p>
+                    </div>
                 </div>
-                <a href="{% url 'admin_followup_template_create' %}" class="btn btn-primary">
-                    <i class="fas fa-plus me-2"></i>Novo Template
+                <a href="{% url 'admin_followup_template_create' %}"
+                   class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none flex-shrink-0">
+                    <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
+                    <span class="hidden sm:inline mt-[0.15rem]">Novo Template</span>
                 </a>
             </div>
-        </div>
-    </div>
 
-    <!-- Lista de Templates -->
-    <div class="row">
-        <div class="col-12">
+            <!-- Templates List -->
             {% if templates %}
-                {% for template in templates %}
-                <div class="template-card">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <div class="d-flex align-items-center mb-2">
-                                <h5 class="fw-bold mb-0 me-3">{{ template.name }}</h5>
-                                <span class="step-badge">
-                                    {{ template.steps.count }} etapa{{ template.steps.count|pluralize }}
-                                </span>
-                            </div>
-                            {% if template.description %}
-                                <p class="text-muted mb-2">{{ template.description }}</p>
-                            {% endif %}
-                            
-                            <!-- Preview das etapas -->
-                            <div class="mt-3">
-                                <small class="text-muted fw-semibold">Etapas:</small>
-                                <div class="mt-2">
+                <div class="space-y-3">
+                    {% for template in templates %}
+                    <div class="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-4 sm:p-5">
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-4">
+
+                            <!-- Info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex flex-wrap items-center gap-2 mb-1">
+                                    <h3 class="text-base font-bold text-gray-900">{{ template.name }}</h3>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">
+                                        <ion-icon name="list-outline" class="text-xs"></ion-icon>
+                                        {{ template.steps.count }} etapa{{ template.steps.count|pluralize }}
+                                    </span>
+                                </div>
+
+                                {% if template.description %}
+                                <p class="text-sm text-gray-500 mb-2">{{ template.description }}</p>
+                                {% endif %}
+
+                                <!-- Step preview -->
+                                {% if template.steps.count %}
+                                <div class="flex flex-wrap gap-1.5 mt-2">
                                     {% for step in template.steps.all|slice:":3" %}
-                                        <div class="d-inline-block me-3 mb-1">
-                                            <small class="badge bg-light text-dark">
-                                                Semana {{ step.week }}: {{ step.task|truncatechars:30 }}
-                                            </small>
-                                        </div>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full">
+                                        <span class="font-semibold text-gray-400">Sem. {{ step.week }}</span>
+                                        {{ step.task|truncatechars:28 }}
+                                    </span>
                                     {% endfor %}
                                     {% if template.steps.count > 3 %}
-                                        <small class="text-muted">... e mais {{ template.steps.count|add:"-3" }}</small>
+                                    <span class="text-xs text-gray-400 self-center">+{{ template.steps.count|add:"-3" }} mais</span>
                                     {% endif %}
                                 </div>
+                                {% endif %}
                             </div>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <div class="text-end">
-                                <small class="text-muted d-block mb-2">
-                                    Criado em {{ template.created_at|date:"d/m/Y" }}
-                                </small>
-                                <div class="btn-group">
-                                    <a href="{% url 'admin_followup_template_detail' template.id %}" 
-                                       class="btn btn-outline-secondary btn-sm">
-                                        <i class="fas fa-eye me-1"></i>Ver
+
+                            <!-- Meta + Actions -->
+                            <div class="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center gap-3 flex-shrink-0">
+                                <span class="text-xs text-gray-400">{{ template.created_at|date:"d/m/Y" }}</span>
+                                <div class="flex items-center gap-1.5">
+                                    <a href="{% url 'admin_followup_template_detail' template.id %}"
+                                       class="action-btn action-btn-view" title="Ver">
+                                        <ion-icon name="eye-outline"></ion-icon>
                                     </a>
-                                    <a href="{% url 'admin_followup_template_edit' template.id %}" 
-                                       class="btn btn-outline-secondary btn-sm">
-                                        <i class="fas fa-edit me-1"></i>Editar
+                                    <a href="{% url 'admin_followup_template_edit' template.id %}"
+                                       class="action-btn action-btn-edit" title="Editar">
+                                        <ion-icon name="create-outline"></ion-icon>
                                     </a>
-                                    <a href="{% url 'admin_followup_template_delete' template.id %}" 
-                                       class="btn btn-outline-danger btn-sm"
+                                    <a href="{% url 'admin_followup_template_delete' template.id %}"
+                                       class="action-btn action-btn-delete" title="Excluir"
                                        onclick="return confirm('Tem certeza que deseja excluir este template?')">
-                                        <i class="fas fa-trash me-1"></i>Excluir
+                                        <ion-icon name="trash-outline"></ion-icon>
                                     </a>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    {% endfor %}
                 </div>
-                {% endfor %}
+
             {% else %}
-                <div class="admin-card p-5 text-center">
-                    <div class="mb-4">
-                        <i class="fas fa-clipboard-list text-muted" style="font-size: 4rem;"></i>
-                    </div>
-                    <h4 class="text-muted mb-3">Nenhum template encontrado</h4>
-                    <p class="text-muted mb-4">Crie seu primeiro template de consolidação para começar</p>
-                    <a href="{% url 'admin_followup_template_create' %}" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>Criar Primeiro Template
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center py-16 px-6 text-center">
+                    <ion-icon name="clipboard-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
+                    <h3 class="text-lg font-semibold text-gray-600 mb-2">Nenhum template encontrado</h3>
+                    <p class="text-gray-400 text-sm mb-6">Crie seu primeiro template de consolidação para começar</p>
+                    <a href="{% url 'admin_followup_template_create' %}"
+                       class="flex items-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm">
+                        <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
+                        <span class="mt-[0.15rem]">Criar Primeiro Template</span>
                     </a>
                 </div>
             {% endif %}
+
         </div>
     </div>
 </div>
