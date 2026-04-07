@@ -5,7 +5,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 {% endblock %}
 
-
 {% block title %}Ministério de Louvor{% endblock %}
 
 {% block content %}
@@ -54,15 +53,20 @@
     <!-- LISTA -->
     <div id="lista-musicas" class="px-4 sm:px-6 space-y-4">
 
-        {% if musics %}
-    {% for music in musics %}
-            <div 
-                onclick="abrirPDF('{{ music.chord_sheet.url }}')"
-                class="bg-white rounded-2xl border-2 p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer"
-                style="border-color: rgba(201, 9, 5, 0.15);">
+        {% for music in musics %}
+
+            {% if music.chord_sheet %}
+                <div 
+                    onclick="abrirPDF('{{ music.chord_sheet.url }}')"
+                    class="bg-white rounded-2xl border-2 p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer"
+                    style="border-color: rgba(201, 9, 5, 0.15);">
+            {% else %}
+                <div 
+                    class="bg-white rounded-2xl border-2 p-4 shadow-sm opacity-60 cursor-not-allowed"
+                    style="border-color: rgba(201, 9, 5, 0.15);">
+            {% endif %}
 
                 <div class="flex items-start justify-between gap-3">
-
                     <div class="flex-1">
                         <h3 class="text-lg font-bold text-gray-900">
                             {{ music.name }}
@@ -71,24 +75,12 @@
                             {{ music.singer }}
                         </p>
                     </div>
-
-                    <div class="flex gap-2">
-
-                        {% if music.chord_sheet %}
-                    <a href="{{ music.chord_sheet.url }}" target="_blank"
-                        class="w-10 h-10 rounded-lg flex items-center justify-center transition-all hover:scale-110"
-                        style="background: rgba(201, 9, 5, 0.1); color: #C90905;">
-                            <i class="fas fa-file-pdf"></i>
-                        </a>
-                        {% endif %}
-
-                    </div>
-
                 </div>
 
             </div>
-            {% endfor %}
-        {% else %}
+
+        {% empty %}
+
             <div class="text-center py-16 bg-white rounded-2xl border-2"
                  style="border-color: rgba(201, 9, 5, 0.15);">
 
@@ -104,7 +96,8 @@
                     O repertório ainda não possui músicas disponíveis.
                 </p>
             </div>
-        {% endif %}
+
+        {% endfor %}
 
     </div>
 </div>
@@ -113,7 +106,6 @@
 <nav class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center gap-2 z-50"
      style="background: rgba(255,255,255,0.98); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
 
-    <!-- Home -->
     <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 p-2 px-3">
         <div class="py-2.5 px-4 rounded-xl mb-1.5 border-2 shadow-md transition transform hover:-translate-y-1 hover:scale-110"
      style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
@@ -122,7 +114,6 @@
         Home
     </a>
 
-    <!-- Músicas (ATIVO) -->
     <a href="#" class="flex flex-col items-center text-xs font-bold p-2 px-3">
         <div class="py-2.5 px-4 rounded-xl mb-1.5 transition transform hover:-translate-y-1 hover:scale-110"
      style="background-color:#C90905;">
@@ -131,11 +122,10 @@
         <span style="color:#C90905;">Músicas</span>
     </a>
 
-    <!-- Perfil -->
     <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 p-2 px-3">
         <div class="py-2.5 px-4 rounded-xl mb-1.5 border-2 shadow-md transition transform hover:-translate-y-1 hover:scale-110"
      style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
-    <i class="fas fa-user-circle text-lg" style="color:#E63946;"></i>
+            <i class="fas fa-user-circle text-lg" style="color:#E63946;"></i>
         </div>
         Perfil
     </a>
@@ -144,21 +134,16 @@
 
 <script>
 function buscarMusica() {
-
     const valor = document.querySelector('input[name="search"]').value;
 
     fetch(`/ministerio-louvor/?search=${valor}`)
         .then(response => response.text())
         .then(html => {
-
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, "text/html");
-
             const novaLista = doc.querySelector("#lista-musicas").innerHTML;
-
             document.querySelector("#lista-musicas").innerHTML = novaLista;
         });
-
 }
 </script>
 
