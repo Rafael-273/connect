@@ -1,0 +1,390 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Cursos{% endblock %}
+
+{% block head %}
+<style>
+    body {
+        background-color: #f8f9fa !important;
+    }
+
+    .admin-card {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2rem 0.65rem;
+        border-radius: 9999px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .status-active { background: #dcfce7; color: #166534; }
+    .status-inactive { background: #f3f4f6; color: #6b7280; }
+
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
+    }
+
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+
+    .data-table tbody td {
+        padding: 14px 24px;
+        vertical-align: middle;
+        border-bottom: 1px solid #f8fafc;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .action-btn-view {
+        background: rgba(201, 9, 5, 0.08);
+        color: var(--color-primary);
+    }
+
+    .action-btn-view:hover {
+        background: rgba(201, 9, 5, 0.16);
+    }
+
+    .action-btn-edit {
+        background: #eff6ff;
+        color: #2563eb;
+    }
+
+    .action-btn-edit:hover {
+        background: #dbeafe;
+    }
+
+    .data-table th:last-child,
+    .data-table td:last-child {
+        text-align: right;
+    }
+
+    .data-table tr.empty-row td:last-child {
+        text-align: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center shadow-sm">
+                        <ion-icon name="clipboard-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Cursos</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if courses.paginator.count %}{{ courses.paginator.count }} curso{{ courses.paginator.count|pluralize:"s" }} cadastrado{{ courses.paginator.count|pluralize:"s" }}{% else %}Gerencie cursos, presencas e conteudos futuros{% endif %}
+                        </p>
+                    </div>
+                </div>
+                <a href="{% url 'attendance_course_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Novo Curso">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
+            </div>
+
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="status" id="hidden-status" value="{{ status }}">
+
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar curso..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-attendance-courses"
+                            class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if status %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                            <div id="filter-panel-attendance-courses"
+                                class="hidden absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                               <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                                    <select id="panel-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os status</option>
+                                        <option value="active" {% if status == 'active' %}selected{% endif %}>Ativos</option>
+                                        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inativos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                <a href="{% url 'attendance_course_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-attendance-courses"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <a href="{% url 'attendance_course_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Novo Curso
+                </a>
+            </div>
+
+            <div class="block md:hidden space-y-4">
+                {% for course in courses %}
+                <div class="admin-card p-4 hover:shadow-lg transition-shadow">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex-1 min-w-0 pr-2">
+                            <h3 class="text-base font-bold text-gray-900 truncate">{{ course.name }}</h3>
+                            <p class="text-xs text-gray-500 mt-0.5 truncate">{{ course.description|default:'Sem descricao'|truncatechars:70 }}</p>
+                        </div>
+                        {% if course.is_active %}
+                        <span class="status-badge status-active">Ativo</span>
+                        {% else %}
+                        <span class="status-badge status-inactive">Inativo</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="space-y-2 mb-3 text-sm">
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="calendar-outline" class="text-gray-400"></ion-icon>
+                            <span class="text-gray-700">{{ course.start_date|date:'d/m/Y' }}{% if course.end_date %} ate {{ course.end_date|date:'d/m/Y' }}{% endif %}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="people-outline" class="text-gray-400"></ion-icon>
+                            <span class="text-gray-700">{{ course.participants_count }} participante{{ course.participants_count|pluralize:"s" }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="book-outline" class="text-gray-400"></ion-icon>
+                            <span class="text-gray-700">{{ course.lessons_count }} aula{{ course.lessons_count|pluralize:"s" }}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-3 border-t border-gray-100">
+                        <a href="{% url 'attendance_course_dashboard' course.id %}"
+                           class="flex-1 py-2 px-3 bg-[var(--color-primary)] text-white rounded-lg font-medium text-sm hover:bg-opacity-90 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="grid-outline"></ion-icon>
+                            Dashboard
+                        </a>
+                        <a href="{% url 'attendance_course_edit' course.id %}"
+                           class="py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center">
+                            <ion-icon name="create-outline"></ion-icon>
+                        </a>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="admin-card p-8 text-center text-gray-500">
+                    Nenhum curso encontrado.
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="admin-card overflow-hidden hidden md:block">
+                <div class="overflow-x-auto table-responsive">
+                    <table class="w-full data-table">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Curso</th>
+                                <th class="text-left">Periodo</th>
+                                <th class="text-left">Participantes</th>
+                                <th class="text-left">Aulas</th>
+                                <th class="text-left">Status</th>
+                                <th class="text-right">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
+                            {% for course in courses %}
+                            <tr>
+                                <td>
+                                    <div class="text-sm font-medium text-gray-900">{{ course.name }}</div>
+                                    <div class="text-xs text-gray-400 mt-0.5">{{ course.description|default:'Sem descricao'|truncatechars:80 }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">
+                                    {{ course.start_date|date:'d/m/Y' }}
+                                    {% if course.end_date %} ate {{ course.end_date|date:'d/m/Y' }}{% endif %}
+                                    </div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ course.participants_count }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ course.lessons_count }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    {% if course.is_active %}
+                                    <span class="status-badge status-active">Ativo</span>
+                                    {% else %}
+                                    <span class="status-badge status-inactive">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <a href="{% url 'attendance_course_dashboard' course.id %}" class="action-btn action-btn-view" title="Dashboard">
+                                            <ion-icon name="grid-outline"></ion-icon>
+                                        </a>
+                                        <a href="{% url 'attendance_course_edit' course.id %}" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr class="empty-row">
+                                <td colspan="6" class="px-6 py-10 text-center text-gray-500">Nenhum curso encontrado.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if courses.has_other_pages %}
+                <div class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
+                        Mostrando {{ courses.start_index }}-{{ courses.end_index }} de {{ courses.paginator.count }} cursos
+                    </div>
+                    <div class="flex items-center gap-1 order-1 sm:order-2">
+                        {% if courses.has_previous %}
+                        <a href="?page={{ courses.previous_page_number }}&search={{ search }}&status={{ status }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            <span class="hidden sm:inline">Anterior</span>
+                        </a>
+                        {% endif %}
+                        <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ courses.number }}</span>
+                        {% if courses.has_next %}
+                        <a href="?page={{ courses.next_page_number }}&search={{ search }}&status={{ status }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <span class="hidden sm:inline">Proxima</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if courses.has_other_pages %}
+            <div class="flex justify-center gap-2 mt-6 md:hidden">
+                {% if courses.has_previous %}
+                <a href="?page={{ courses.previous_page_number }}&search={{ search }}&status={{ status }}"
+                   class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition flex items-center">
+                    <ion-icon name="chevron-back-outline"></ion-icon>
+                </a>
+                {% endif %}
+                <span class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-medium">
+                    {{ courses.number }} / {{ courses.paginator.num_pages }}
+                </span>
+                {% if courses.has_next %}
+                <a href="?page={{ courses.next_page_number }}&search={{ search }}&status={{ status }}"
+                   class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition flex items-center">
+                    <ion-icon name="chevron-forward-outline"></ion-icon>
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var toggle = document.getElementById('filter-toggle-attendance-courses');
+    var panel = document.getElementById('filter-panel-attendance-courses');
+    var applyBtn = document.getElementById('apply-filters-attendance-courses');
+    var hiddenStatus = document.getElementById('hidden-status');
+    var panelStatus = document.getElementById('panel-status');
+    if (!toggle || !panel) return;
+
+    toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        panel.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!panel.contains(e.target) && e.target !== toggle) {
+            panel.classList.add('hidden');
+        }
+    });
+
+    if (applyBtn) {
+        applyBtn.addEventListener('click', function () {
+            hiddenStatus.value = panelStatus.value;
+            document.getElementById('filter-form').submit();
+        });
+    }
+})();
+
+(function () {
+    var ov = document.createElement('div');
+    ov.id = 'filter-loading-overlay';
+    ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    ov.style.display = 'none';
+    ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+    document.body.appendChild(ov);
+    var form = document.getElementById('filter-form');
+    if (form) form.addEventListener('submit', function () { ov.style.display = 'flex'; });
+})();
+</script>
+{% endblock %}

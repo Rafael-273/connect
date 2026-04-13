@@ -1,0 +1,283 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Lancar Presenca - {{ lesson.title }}{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(15, 23, 42, 0.05);
+    }
+
+    .page-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 8px 20px rgba(201, 9, 5, 0.18);
+    }
+
+    .summary-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.65rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .chip-neutral {
+        background: #f3f4f6;
+        color: #374151;
+    }
+
+    .chip-primary {
+        background: rgba(201, 9, 5, 0.12);
+        color: var(--color-primary);
+    }
+
+    .table-shell {
+        overflow-x: auto;
+        border: 1px solid #f1f5f9;
+        border-radius: 12px;
+        background: white;
+    }
+
+    .attendance-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 780px;
+    }
+
+    .attendance-table thead th {
+        text-align: left;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 0.85rem 0.65rem;
+        background: #f8fafc;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .attendance-table tbody td {
+        padding: 0.8rem 0.65rem;
+        border-bottom: 1px solid #f8fafc;
+        font-size: 0.875rem;
+        color: #1f2937;
+        vertical-align: middle;
+    }
+
+    .attendance-table tbody tr:hover {
+        background: #fafbff;
+    }
+
+    .row-present {
+        background: #f0fdf4;
+    }
+
+    .row-absent {
+        background: #fff7f7;
+    }
+
+    .row-excused {
+        background: #fffbeb;
+    }
+
+    .status-select {
+        width: 100%;
+        padding: 0.5rem 0.7rem;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 0.82rem;
+        background: white;
+    }
+
+    .status-select:focus, .notes-input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.09);
+    }
+
+    .notes-input {
+        width: 100%;
+        padding: 0.5rem 0.7rem;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 0.82rem;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        padding: 0.55rem 0.8rem;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        transition: all 0.18s;
+        white-space: nowrap;
+    }
+
+    .btn-primary {
+        background: var(--color-primary);
+        color: white;
+    }
+
+    .btn-primary:hover { opacity: 0.9; }
+
+    .btn-outline {
+        border: 1px solid #d1d5db;
+        background: white;
+        color: #4b5563;
+    }
+
+    .btn-outline:hover { background: #f9fafb; }
+
+    .btn-info {
+        background: #2563eb;
+        color: white;
+    }
+
+    .btn-info:hover { background: #1d4ed8; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="max-w-6xl mx-auto">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="page-icon">
+                            <ion-icon name="checkmark-done-outline" class="text-xl text-white"></ion-icon>
+                        </div>
+                        <div class="min-w-0">
+                            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">Lancar Presenca</h1>
+                            <p class="text-sm text-gray-500 truncate">{{ lesson.title }} • {{ lesson.course.name }} • {{ lesson.lesson_date|date:'d/m/Y' }}</p>
+                            <div class="flex flex-wrap items-center gap-2 mt-2">
+                                <span class="summary-chip chip-primary">{{ participant_rows|length }} participante{{ participant_rows|length|pluralize }}</span>
+                                <span class="summary-chip chip-neutral">Chamada da aula selecionada</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <a target="_blank" href="{% url 'attendance_lesson_report_print' lesson.id %}" class="action-btn btn-info">Gerar Relatorio PDF</a>
+                        <a href="{% url 'attendance_course_dashboard' lesson.course.id %}" class="action-btn btn-outline">Voltar</a>
+                    </div>
+                </div>
+
+                <form method="POST" class="admin-card p-4 sm:p-5">
+                    {% csrf_token %}
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <p class="text-sm text-gray-600">Dica: use os atalhos para agilizar a chamada e ajuste individualmente quando necessario.</p>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" id="mark-all-present" class="action-btn btn-outline">Marcar todos presentes</button>
+                            <button type="button" id="clear-all-status" class="action-btn btn-outline">Limpar marcacoes</button>
+                        </div>
+                    </div>
+
+                    <div class="table-shell">
+                        <table class="attendance-table">
+                            <thead>
+                                <tr>
+                                    <th>Participante</th>
+                                    <th>Status</th>
+                                    <th>Observacoes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in participant_rows %}
+                                <tr class="attendance-row">
+                                    <td>
+                                        <p class="font-semibold text-gray-900">{{ row.participant.full_name }}</p>
+                                        <p class="text-xs text-gray-500">{{ row.participant.phone|default:'' }}</p>
+                                    </td>
+                                    <td>
+                                        <select name="status_{{ row.participant.id }}" class="status-select">
+                                            <option value="">Nao marcado</option>
+                                            {% for value, label in status_choices %}
+                                            <option value="{{ value }}" {% if row.record and row.record.status == value %}selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="notes_{{ row.participant.id }}" value="{% if row.record %}{{ row.record.notes|default:'' }}{% endif %}" class="notes-input" placeholder="Opcional">
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="3" class="py-6 text-center text-gray-500">Nenhum participante cadastrado neste curso.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-4 flex flex-col sm:flex-row gap-3">
+                        <button class="flex-1 px-4 py-2.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold hover:bg-opacity-90">Salvar Presencas</button>
+                        <a href="{% url 'attendance_course_dashboard' lesson.course.id %}" class="flex-1 px-4 py-2.5 border border-gray-300 text-gray-600 rounded-lg text-sm font-semibold text-center hover:bg-gray-50">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var selects = Array.from(document.querySelectorAll('.status-select'));
+    var rows = Array.from(document.querySelectorAll('.attendance-row'));
+    var markAllPresentBtn = document.getElementById('mark-all-present');
+    var clearAllBtn = document.getElementById('clear-all-status');
+
+    function paintRow(row, status) {
+        row.classList.remove('row-present', 'row-absent', 'row-excused');
+        if (status === 'present') row.classList.add('row-present');
+        if (status === 'absent') row.classList.add('row-absent');
+        if (status === 'excused') row.classList.add('row-excused');
+    }
+
+    selects.forEach(function (select, index) {
+        paintRow(rows[index], select.value);
+        select.addEventListener('change', function () {
+            paintRow(rows[index], select.value);
+        });
+    });
+
+    if (markAllPresentBtn) {
+        markAllPresentBtn.addEventListener('click', function () {
+            selects.forEach(function (select, index) {
+                select.value = 'present';
+                paintRow(rows[index], 'present');
+            });
+        });
+    }
+
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', function () {
+            selects.forEach(function (select, index) {
+                select.value = '';
+                paintRow(rows[index], '');
+            });
+        });
+    }
+})();
+</script>
+{% endblock %}

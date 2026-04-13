@@ -8,42 +8,240 @@
     body {
         background-color: #f8f9fa !important;
     }
+
+    .header-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 8px 20px rgba(201, 9, 5, 0.22);
+    }
     
     .admin-card {
         background: white;
         border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     
     .admin-card:hover {
+        transform: translateY(-2px);
         box-shadow: 0 4px 20px rgba(0,0,0,0.12);
     }
     
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 2rem;
+    }
+
+    @media (min-width: 640px) {
+        .kpi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+    }
+
+    @media (min-width: 1280px) {
+        .kpi-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+    }
+
     .stat-card {
-        background: linear-gradient(135deg, var(--color-primary) 0%, #991b1b 100%);
+        background: linear-gradient(135deg, var(--color-primary), var(--color-danger));
         color: white;
         border-radius: 12px;
-        padding: 1.5rem;
+        min-height: 136px;
+        padding: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        text-align: left;
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 100%;
+        height: 100%;
+        background: rgba(255,255,255,0.1);
+        transform: rotate(45deg);
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(17, 24, 39, 0.18);
+    }
+
+    .stat-card--healings {
+        background: linear-gradient(135deg, var(--color-danger), var(--color-dark));
+    }
+
+    .stat-card--members {
+        background: linear-gradient(135deg, var(--color-light), var(--color-primary));
+    }
+
+    .kpi-label {
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        opacity: 0.85;
+        font-weight: 600;
+    }
+
+    .kpi-value {
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-top: 0.45rem;
+    }
+
+    .kpi-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.16);
+        border: 1px solid rgba(255,255,255,0.25);
+        font-size: 1.25rem;
+    }
+
+    .section-panel {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .section-head-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .section-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(201, 9, 5, 0.1);
+        color: var(--color-primary);
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .section-filter {
+        width: auto;
+        min-width: 110px;
+        padding: 0.45rem 2rem 0.45rem 0.75rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #374151;
+        background-color: white;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.55rem center;
+        background-size: 0.9rem;
+        cursor: pointer;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .section-filter:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
     }
     
     .action-card {
-        border: 2px solid var(--color-primary);
+        border: 1.5px solid #f1f5f9;
+        background: white;
         border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
+        padding: 1.1rem;
+        text-align: left;
         cursor: pointer;
-        transition: all 0.3s ease;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
     }
     
     .action-card:hover {
-        background-color: var(--color-primary);
-        color: white;
-        transform: translateY(-5px);
+        border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+        transform: translateY(-2px);
     }
     
-    .action-card:hover ion-icon {
-        color: white;
+    .action-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        background: #fff1f1;
+        color: var(--color-primary);
+        font-size: 1.15rem;
+    }
+
+    .metric-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        background: #fafafa;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 10px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .metric-row:hover {
+        transform: translateX(2px);
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+    }
+
+    .metric-track {
+        width: 8rem;
+        background: #e5e7eb;
+        border-radius: 9999px;
+        height: 0.5rem;
+        overflow: hidden;
+    }
+
+    .metric-fill {
+        height: 0.5rem;
+        border-radius: 9999px;
+        background: var(--color-primary);
+        transition: width 0.5s ease;
     }
 </style>
 {% endblock %}
@@ -56,69 +254,79 @@
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-4 md:p-6 mt-24">
             <!-- Header -->
-            <div class="mb-6 md:mb-8">
-                <h1 class="text-2xl md:text-3xl font-bold text-gray-900 page-title">Ministração</h1>
-                <p class="text-gray-600 mt-2">Painel de controle do Ministério de Ministração</p>
+            <div class="flex items-center gap-3 mb-6 md:mb-8">
+                <div class="header-icon">
+                    <ion-icon name="sparkles" class="text-xl text-white"></ion-icon>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Ministração</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">Painel de controle do Ministério de Ministração</p>
+                </div>
             </div>
 
             <!-- Estatísticas Principais -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+            <div class="kpi-grid">
                 <div class="stat-card">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-white/80 text-sm">Palavras de Conhecimento</p>
-                            <p class="text-3xl font-bold">{{ total_words }}</p>
-                        </div>
-                        <ion-icon name="book" class="text-5xl opacity-20"></ion-icon>
+                    <div class="relative z-10">
+                        <p class="kpi-label">Palavras de Conhecimento</p>
+                        <p class="kpi-value">{{ total_words }}</p>
                     </div>
+                    <div class="kpi-icon relative z-10"><ion-icon name="book"></ion-icon></div>
                 </div>
                 
-                <div class="stat-card">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-white/80 text-sm">Curas</p>
-                            <p class="text-3xl font-bold">{{ total_healings }}</p>
-                        </div>
-                        <ion-icon name="heart" class="text-5xl opacity-20"></ion-icon>
+                <div class="stat-card stat-card--healings">
+                    <div class="relative z-10">
+                        <p class="kpi-label">Curas</p>
+                        <p class="kpi-value">{{ total_healings }}</p>
                     </div>
+                    <div class="kpi-icon relative z-10"><ion-icon name="heart"></ion-icon></div>
                 </div>
                 
-                <div class="stat-card">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-white/80 text-sm">Membros Ativos</p>
-                            <p class="text-3xl font-bold">{{ active_ministry_members }}</p>
-                        </div>
-                        <ion-icon name="people" class="text-5xl opacity-20"></ion-icon>
+                <div class="stat-card stat-card--members">
+                    <div class="relative z-10">
+                        <p class="kpi-label">Membros Ativos</p>
+                        <p class="kpi-value">{{ active_ministry_members }}</p>
                     </div>
+                    <div class="kpi-icon relative z-10"><ion-icon name="people"></ion-icon></div>
                 </div>
             </div>
 
             <!-- Ações Rápidas -->
-            <div class="mb-8">
-                <h2 class="text-xl font-bold text-gray-900 mb-4">Ações Rápidas</h2>
+            <div class="section-panel p-5 sm:p-6 mb-8">
+                <div class="section-head">
+                    <div class="section-head-left">
+                        <div class="section-icon"><ion-icon name="flash-outline"></ion-icon></div>
+                        <h2 class="text-base sm:text-lg font-bold text-gray-900 leading-tight">Ações Rápidas</h2>
+                    </div>
+                </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <a href="{% url 'ministry_list' %}" class="action-card">
-                        <ion-icon name="people" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
-                        <h3 class="font-bold text-lg mb-2">Gerenciar Membros</h3>
-                        <p class="text-sm text-gray-600">Membros dos ministérios</p>
+                        <div class="action-icon"><ion-icon name="people"></ion-icon></div>
+                        <div>
+                            <h3 class="font-bold text-base text-gray-900 mb-1">Gerenciar Membros</h3>
+                            <p class="text-sm text-gray-500">Membros dos ministérios</p>
+                        </div>
                     </a>
                     
                     <a href="{% url 'ministration_words_list' %}" class="action-card">
-                        <ion-icon name="book" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
-                        <h3 class="font-bold text-lg mb-2">Palavras de Conhecimento</h3>
-                        <p class="text-sm text-gray-600">Ver todas as palavras</p>
+                        <div class="action-icon"><ion-icon name="book"></ion-icon></div>
+                        <div>
+                            <h3 class="font-bold text-base text-gray-900 mb-1">Palavras de Conhecimento</h3>
+                            <p class="text-sm text-gray-500">Ver todas as palavras</p>
+                        </div>
                     </a>
                     
                     <a href="{% url 'ministration_healings_list' %}" class="action-card">
-                        <ion-icon name="heart" class="text-5xl text-[var(--color-primary)] mb-3"></ion-icon>
-                        <h3 class="font-bold text-lg mb-2">Curas</h3>
-                        <p class="text-sm text-gray-600">Ver todos os testemunhos</p>
+                        <div class="action-icon"><ion-icon name="heart"></ion-icon></div>
+                        <div>
+                            <h3 class="font-bold text-base text-gray-900 mb-1">Curas</h3>
+                            <p class="text-sm text-gray-500">Ver todos os testemunhos</p>
+                        </div>
                     </a>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 gap-6">
                 <!-- Escala Atual -->
                 {% comment %}
                 <div class="admin-card p-6">
@@ -205,36 +413,42 @@
                 {% endcomment %}
 
                 <!-- Estatísticas de Curas -->
-                <div class="admin-card p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-2">
-                            <div class="bg-green-100 p-2 rounded-lg">
-                                <ion-icon name="stats-chart" class="text-green-600 text-xl"></ion-icon>
+                <div class="section-panel p-6">
+                    <div class="section-head mb-5">
+                        <div class="section-head-left">
+                            <div class="section-icon">
+                            <ion-icon name="stats-chart"></ion-icon>
                             </div>
-                            <h2 class="text-xl font-bold text-gray-900">Curas por Mês ({{ current_year }})</h2>
+                            <div class="min-w-0">
+                                <h2 class="text-base sm:text-lg font-bold text-gray-900 leading-tight">Curas por Mês</h2>
+                                <p class="text-xs text-gray-500 mt-0.5">Visualize o total por mês selecionado</p>
+                            </div>
+                        </div>
+                        <form method="get" class="flex-shrink-0 flex gap-2">
+                            <select name="month" class="section-filter" onchange="this.form.submit()">
+                                {% for month in available_months %}
+                                <option value="{{ month.value }}" {% if month.value == selected_month %}selected{% endif %}>{{ month.label }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="year" class="section-filter" onchange="this.form.submit()">
+                                {% for year in available_years %}
+                                <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </div>
+                    <div class="metric-row">
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">{{ selected_month_stat.month_name }} / {{ selected_year }}</p>
+                            <p class="text-xs text-gray-500 mt-0.5">Quantidade de curas registradas no mês</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div class="metric-track">
+                                <div class="metric-fill" style="width: {{ selected_month_stat.percentage }}%"></div>
+                            </div>
+                            <span class="text-sm font-bold w-7 text-right" style="color: var(--color-primary);">{{ selected_month_stat.count }}</span>
                         </div>
                     </div>
-                    
-                    {% if monthly_stats %}
-                        <div class="space-y-3">
-                            {% for stat in monthly_stats %}
-                                <div class="flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-white rounded-lg border border-green-100 hover:border-green-200 transition-colors">
-                                    <span class="text-sm font-medium text-gray-700">{{ stat.month_name }}</span>
-                                    <div class="flex items-center gap-3">
-                                        <div class="w-32 bg-gray-200 rounded-full h-2">
-                                            <div class="bg-green-500 h-2 rounded-full transition-all duration-500" style="width: {{ stat.percentage }}%"></div>
-                                        </div>
-                                        <span class="text-sm font-bold text-green-600 w-8 text-right">{{ stat.count }}</span>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <div class="text-center py-8">
-                            <ion-icon name="bar-chart-outline" class="text-5xl text-gray-300 mb-2"></ion-icon>
-                            <p class="text-gray-600">Nenhuma cura registrada este ano</p>
-                        </div>
-                    {% endif %}
                 </div>
             </div>
         </div>

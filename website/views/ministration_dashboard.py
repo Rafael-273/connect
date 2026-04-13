@@ -73,8 +73,28 @@ class MinistrationDashboardView(LoginRequiredMixin, StaffRequiredMixin, View):
         recent_healings = Healing.objects.select_related('member').order_by('-recorded_at')[:5]
 
         current_year = datetime.now().year
+        selected_year = request.GET.get('year')
+        if selected_year and str(selected_year).isdigit():
+            selected_year = int(selected_year)
+        else:
+            selected_year = current_year
+
+        selected_month = request.GET.get('month')
+        if selected_month and str(selected_month).isdigit() and 1 <= int(selected_month) <= 12:
+            selected_month = int(selected_month)
+        else:
+            selected_month = datetime.now().month
+
+        available_years = [
+            d.year for d in Healing.objects
+            .exclude(healing_date__isnull=True)
+            .dates('healing_date', 'year', order='DESC')
+        ]
+        if selected_year not in available_years:
+            available_years.insert(0, selected_year)
+
         healings_by_month = Healing.objects.filter(
-            healing_date__year=current_year
+            healing_date__year=selected_year
         ).extra(
             select={'month': 'EXTRACT(month FROM healing_date)'}
         ).values('month').annotate(
@@ -99,6 +119,19 @@ class MinistrationDashboardView(LoginRequiredMixin, StaffRequiredMixin, View):
                 'percentage': percentage
             })
 
+        selected_month_count = monthly_healings[selected_month]
+        selected_month_percentage = (selected_month_count / max_healings * 100) if max_healings > 0 else 0
+        selected_month_stat = {
+            'month_num': selected_month,
+            'month_name': month_names[selected_month - 1],
+            'count': selected_month_count,
+            'percentage': selected_month_percentage,
+        }
+        available_months = [
+            {'value': idx + 1, 'label': month_name}
+            for idx, month_name in enumerate(month_names)
+        ]
+
         context = {
             'title': 'Dashboard - Ministração',
             'ministry': ministry,
@@ -112,6 +145,11 @@ class MinistrationDashboardView(LoginRequiredMixin, StaffRequiredMixin, View):
             'recent_healings': recent_healings,
             'monthly_stats': monthly_stats,
             'current_year': current_year,
+            'selected_year': selected_year,
+            'available_years': available_years,
+            'selected_month': selected_month,
+            'available_months': available_months,
+            'selected_month_stat': selected_month_stat,
         }
 
         return render(request, self.template_name, context)

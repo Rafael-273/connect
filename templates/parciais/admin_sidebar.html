@@ -1,9 +1,16 @@
 {% load static %}
 
 <!-- Sidebar Admin -->
-<div id="admin-sidebar" class="sidebar sidebar-scroll w-72 fixed left-0 top-0 bottom-0 z-40 hidden md:block overflow-y-auto">
+<div id="admin-sidebar" class="sidebar sidebar-scroll w-72 fixed left-0 top-0 bottom-0 z-40 hidden md:block">
+    <button id="sidebar-collapse-toggle" type="button" class="sidebar-collapse-toggle" title="Minimizar menu" aria-label="Minimizar menu" aria-pressed="false">
+        <ion-icon name="chevron-back-outline" class="collapse-icon-expanded"></ion-icon>
+        <ion-icon name="chevron-forward-outline" class="collapse-icon-collapsed"></ion-icon>
+    </button>
+
+    <div class="sidebar-inner-scroll">
+
     <div class="sidebar-brand p-4 flex items-center justify-center">
-        <img src="{% static 'assets/red_icon.png' %}" alt="Igreja Filadélfia" class="h-10 w-auto object-contain">
+        <img src="{% static 'assets/red_icon.png' %}" alt="Igreja Filadélfia" class="sidebar-brand-logo h-10 w-auto object-contain">
     </div>
 
     <nav class="sidebar-nav pt-3">
@@ -115,6 +122,11 @@
                     </a>
                 </div>
             </div>
+
+            <a href="{% url 'attendance_course_list' %}" class="sidebar-item {% if 'attendance_course' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="clipboard-outline"></ion-icon>
+                Cursos
+            </a>
             
             <!-- Ministração com submenu só para admin -->
             <div class="sidebar-group">
@@ -155,15 +167,12 @@
             Usuários
         </a>
         {% endif %}
-        <a href="{% url 'admin_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}">
-            <ion-icon name="person-circle-outline"></ion-icon>
-            Meu Perfil
-        </a>
         <a href="{% url 'admin_logout' %}" class="sidebar-item">
             <ion-icon name="log-out-outline"></ion-icon>
             Sair
         </a>
     </nav>
+    </div>
 </div>
 
 <!-- Mobile Admin Topbar -->
@@ -308,6 +317,11 @@
                 </a>
             </div>
         </div>
+
+        <a href="{% url 'attendance_course_list' %}" class="sidebar-item {% if 'attendance_course' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="clipboard-outline"></ion-icon>
+            Cursos
+        </a>
         
         <!-- Bairros só para admin -->
         <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
@@ -323,12 +337,6 @@
                 Usuários
             </a>
             {% endif %}
-            
-            <!-- Perfil do usuário para todos -->
-            <a href="{% url 'admin_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_profile' %}active{% endif %}">
-                <ion-icon name="person-circle-outline"></ion-icon>
-                Meu Perfil
-            </a>
             
             <a href="{% url 'admin_logout' %}" class="sidebar-item">
                 <ion-icon name="log-out-outline"></ion-icon>

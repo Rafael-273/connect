@@ -1,20 +1,16 @@
 import json
-import os
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime
 
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError
 from django.db.models import Count, Prefetch, Q
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.template.loader import get_template
 from django.views import View
 from django.views.generic import ListView
-from xhtml2pdf import pisa
 
 from ..models import Member, Ministry, MonthlySchedule, ScheduleDay, Team
 from ..models.ministry_membership import MinistryMembership
@@ -287,11 +283,17 @@ class ScheduleEditView(LoginRequiredMixin, StaffRequiredMixin, View):
     def get(self, request, schedule_id):
         schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
         current_year = datetime.now().year
+        existing_divisions = list(
+            ScaleDivision.objects.filter(schedule=schedule, deleted__isnull=True)
+            .order_by('order', 'name')
+            .values_list('name', flat=True)
+        )
         context = {
             'schedule': schedule,
             'ministries': Ministry.objects.filter(deleted__isnull=True).order_by('name'),
             'years': range(current_year - 1, current_year + 2),
             'months': MonthlySchedule.MONTH_CHOICES,
+            'existing_divisions': existing_divisions,
         }
         return render(request, 'admin_panel/schedules/monthly/form.html', context)
 
@@ -368,12 +370,17 @@ class ScheduleDetailView(LoginRequiredMixin, StaffRequiredMixin, View):
             week_num = day.get_week_number()
             weeks.setdefault(week_num, []).append(day)
 
+        divisions = ScaleDivision.objects.filter(
+            schedule=schedule, deleted__isnull=True
+        ).order_by('order', 'name')
+
         context = {
             'schedule': schedule,
             'days': days,
             'weeks': weeks,
             'teams': teams,
             'members': members,
+            'divisions': divisions,
         }
         return render(request, 'admin_panel/schedules/monthly/detail.html', context)
 
@@ -608,81 +615,6 @@ class ScheduleDayToggleCancelView(LoginRequiredMixin, StaffRequiredMixin, View):
 
 # FBV alias — mantido para compatibilidade com urls.py
 schedule_day_toggle_cancel_view = ScheduleDayToggleCancelView.as_view()
-
-
-class ScheduleExportPDFView(LoginRequiredMixin, StaffRequiredMixin, View):
-    """Exporta a escala em PDF."""
-
-    MONTH_NAMES = [
-        'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-        'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
-    ]
-    DAY_NAMES = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-
-    def get(self, request, schedule_id):
-        schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
-        days = (
-            ScheduleDay.objects
-            .filter(schedule=schedule, deleted__isnull=True)
-            .select_related('team')
-            .prefetch_related('members')
-            .order_by('date')
-        )
-
-        processed_days = []
-        for day in days:
-            day_data = {
-                'date': day.date,
-                'date_str': day.date.strftime('%d/%m/%Y'),
-                'day_name': self.DAY_NAMES[day.date.weekday()],
-                'description': day.description,
-                'notes': day.notes,
-                'is_cancelled': day.is_cancelled,
-                'cancellation_reason': day.cancellation_reason,
-            }
-
-            if schedule.use_team_rotation:
-                day_data['team'] = day.team
-            else:
-                day_data['members'] = list(day.members.all())
-
-            processed_days.append(day_data)
-
-        logo_path = os.path.join(settings.BASE_DIR, 'static', 'assets', 'red_logo.png')
-        month_name = self.MONTH_NAMES[schedule.month - 1]
-
-        context = {
-            'schedule': schedule,
-            'days': processed_days,
-            'month_name': month_name,
-            'generated_at': datetime.now().strftime('%d/%m/%Y às %H:%M'),
-            'use_team_rotation': schedule.use_team_rotation,
-            'logo_path': logo_path,
-        }
-
-        template = get_template('admin_panel/schedules/monthly/pdf_template.html')
-        html = template.render(context)
-
-        response = HttpResponse(content_type='application/pdf')
-        filename = f"escala_{schedule.ministry.name.replace(' ', '_')}_{month_name}_{schedule.year}.pdf"
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-
-        pisa_status = pisa.CreatePDF(
-            html.encode('utf-8'),
-            dest=response,
-            encoding='utf-8',
-        )
-
-        if pisa_status.err:
-            return HttpResponse('Erro ao gerar PDF', status=500)
-
-        return response
-
-
-@login_required
-def schedule_export_pdf_view(request, schedule_id):
-    """Alias mantido para compatibilidade — delega para a CBV."""
-    return ScheduleExportPDFView.as_view()(request, schedule_id=schedule_id)
 
 
 @login_required

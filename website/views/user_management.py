@@ -68,4 +68,4 @@ class ChangePasswordView(LoginRequiredMixin, View):
         update_session_auth_hash(request, request.user)
 
         messages.success(request, 'Senha alterada com sucesso')
-        return redirect('admin_profile')
+        return redirect('admin_members_list')

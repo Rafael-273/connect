@@ -3,7 +3,7 @@ import uuid
 from datetime import timedelta
 
 from django.contrib import messages
-from django.contrib.auth import get_user_model, update_session_auth_hash
+from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, Q, Sum
@@ -24,7 +24,6 @@ from ..forms.template import (
     FollowUpTemplateForm, FollowUpTemplateStepFormSet,
     FollowUpTemplateStepFormSetForCreate,
 )
-from ..forms.user import UserProfileForm
 from ..models.canteen import CanteenDebtor
 from ..models.event import Event
 from ..models.follow_up import FollowUp, FollowUpReport, FollowUpTemplate, FollowUpTemplateStep
@@ -826,6 +825,8 @@ class MinistryEditView(LoginRequiredMixin, AdminRequiredMixin, View):
         try:
             name = request.POST.get('name', '').strip()
             description = request.POST.get('description', '').strip()
+            color = request.POST.get('color', '#F97316').strip() or '#F97316'
+            is_active = request.POST.get('is_active') == 'on'
 
             if not name:
                 messages.error(request, 'Nome do ministério é obrigatório.')
@@ -834,10 +835,17 @@ class MinistryEditView(LoginRequiredMixin, AdminRequiredMixin, View):
             if ministry:
                 ministry.name = name
                 ministry.description = description
+                ministry.color = color
+                ministry.is_active = is_active
                 ministry.save()
                 messages.success(request, 'Ministério atualizado com sucesso!')
             else:
-                Ministry.objects.create(name=name, description=description)
+                Ministry.objects.create(
+                    name=name,
+                    description=description,
+                    color=color,
+                    is_active=is_active,
+                )
                 messages.success(request, 'Ministério criado com sucesso!')
 
             return redirect('admin_ministries_list')
@@ -1046,27 +1054,6 @@ class FollowUpDetailView(LoginRequiredMixin, ModulePermissionMixin, View):
         return render(request, 'admin_panel/followups/detail.html', {
             'followup': followup, 'reports': reports,
         })
-
-
-# ---------------------------------------------------------------------------
-# Profile View
-# ---------------------------------------------------------------------------
-
-class ProfileView(LoginRequiredMixin, View):
-    """Perfil do usuário admin"""
-
-    def get(self, request):
-        form = UserProfileForm(instance=request.user)
-        return render(request, 'admin_panel/profile.html', {'form': form, 'user': request.user})
-
-    def post(self, request):
-        form = UserProfileForm(request.POST, request.FILES, instance=request.user)
-        if form.is_valid():
-            form.save()
-            update_session_auth_hash(request, request.user)
-            messages.success(request, 'Perfil atualizado com sucesso!')
-            return redirect('admin_profile')
-        return render(request, 'admin_panel/profile.html', {'form': form, 'user': request.user})
 
 
 # ---------------------------------------------------------------------------

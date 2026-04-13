@@ -1,58 +1,219 @@
-{% extends "admin_base.html" %}
+{% extends 'admin_base.html' %}
 {% load static %}
 
 {% block title %}{{ title }}{% endblock %}
 
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1.5px solid #f1f5f9;
+    }
+    .section-header .icon-wrap {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: var(--color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .section-header .icon-wrap ion-icon {
+        color: white;
+        font-size: 15px;
+    }
+    .section-header span {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.375rem;
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+    }
+
+    .form-input,
+    .form-select,
+    .form-textarea,
+    input[type='text'],
+    textarea,
+    select {
+        width: 100%;
+        padding: 0.6rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        background-color: #fafafa;
+        color: #111827;
+        transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
+        appearance: none;
+    }
+
+    .form-input:hover,
+    .form-select:hover,
+    .form-textarea:hover,
+    input[type='text']:hover,
+    textarea:hover,
+    select:hover {
+        border-color: #d1d5db;
+        background-color: white;
+    }
+
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus,
+    input[type='text']:focus,
+    textarea:focus,
+    select:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(201,9,5,0.09);
+    }
+
+    textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .checkbox-card {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.625rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: border-color 0.18s, background-color 0.18s;
+        background: #fafafa;
+    }
+    .checkbox-card:has(input:checked) {
+        border-color: var(--color-primary);
+        background-color: rgba(201,9,5,0.04);
+    }
+
+    input[type='checkbox'] {
+        width: 1.1rem;
+        height: 1.1rem;
+        border-radius: 5px;
+        border: 1.5px solid #d1d5db;
+        accent-color: var(--color-primary);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    input[type='color'] {
+        width: 72px;
+        height: 44px;
+        border: 1.5px solid #d1d5db;
+        border-radius: 10px;
+        cursor: pointer;
+        background: #fafafa;
+        padding: 0.2rem;
+    }
+
+    .color-preview {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        border: 1.5px solid #d1d5db;
+        background: #ffffff;
+    }
+
+    .status-help {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
+{% include 'parciais/messages.html' %}
+
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
-    {% include 'parciais/messages.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
-            <div class="max-w-2xl mx-auto">
-                <!-- Header -->
-                <div class="mb-4 sm:mb-6">
-                    <div class="flex items-center gap-2 sm:gap-3 mb-2">
-                        <a href="{% url 'ministry_list' %}" class="text-gray-600 hover:text-gray-900 flex-shrink-0">
-                            <ion-icon name="arrow-back-outline" class="text-xl sm:text-2xl"></ion-icon>
-                        </a>
-                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">{{ title }}</h1>
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="library-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+                            {% if action == 'create' %}Novo Ministério{% else %}Editar Ministério{% endif %}
+                        </h1>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {% if action == 'create' %}Preencha os dados para criar um novo ministério{% else %}Atualize as informações do ministério{% endif %}
+                        </p>
                     </div>
                 </div>
+                <a href="{% url 'ministry_list' %}" class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex-shrink-0 ml-3">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                    Voltar à Lista
+                </a>
+            </div>
 
-                <!-- Formulário -->
-                <div class="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-                    <form method="POST" class="space-y-4 sm:space-y-6">
-                        {% csrf_token %}
-                        
-                        <div>
-                            <label for="{{ form.name.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-2">
-                                Nome do Ministério *
-                            </label>
+            <div class="admin-card p-6 md:p-8">
+                <form method="POST">
+                    {% csrf_token %}
+
+                    <div class="section-header">
+                        <div class="icon-wrap"><ion-icon name="information-circle-outline"></ion-icon></div>
+                        <span>Informações do Ministério</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                        <div class="form-group md:col-span-2">
+                            <label for="{{ form.name.id_for_label }}" class="form-label">Nome do Ministério <span class="text-red-500">*</span></label>
                             {{ form.name }}
                             {% if form.name.errors %}
                             <p class="text-red-600 text-sm mt-1">{{ form.name.errors.0 }}</p>
                             {% endif %}
                         </div>
 
-                        <div>
-                            <label for="{{ form.description.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-2">
-                                Descrição
-                            </label>
+                        <div class="form-group md:col-span-2">
+                            <label for="{{ form.description.id_for_label }}" class="form-label">Descrição</label>
                             {{ form.description }}
                             {% if form.description.errors %}
                             <p class="text-red-600 text-sm mt-1">{{ form.description.errors.0 }}</p>
                             {% endif %}
                         </div>
+                    </div>
 
-                        <div>
-                            <label for="{{ form.color.id_for_label }}" class="block text-sm font-semibold text-gray-700 mb-2">
-                                Cor do Ministério
-                            </label>
+                    <div class="section-header mt-2">
+                        <div class="icon-wrap"><ion-icon name="color-palette-outline"></ion-icon></div>
+                        <span>Aparência e Status</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                        <div class="form-group mb-0">
+                            <label for="{{ form.color.id_for_label }}" class="form-label">Cor do Ministério</label>
                             <div class="flex items-center gap-3">
                                 {{ form.color }}
-                                <div id="colorPreview" class="w-12 h-12 rounded-lg border-2 border-gray-300"></div>
+                                <div id="colorPreview" class="color-preview"></div>
                             </div>
                             <p class="text-xs text-gray-500 mt-1">Escolha uma cor para identificar o ministério</p>
                             {% if form.color.errors %}
@@ -60,76 +221,51 @@
                             {% endif %}
                         </div>
 
-                        <div class="flex items-center gap-3">
-                            {{ form.is_active }}
-                            <label for="{{ form.is_active.id_for_label }}" class="text-sm font-medium text-gray-700">
-                                Ministério Ativo
+                        <div class="form-group mb-0">
+                            <label class="checkbox-card" for="{{ form.is_active.id_for_label }}">
+                                {{ form.is_active }}
+                                <div>
+                                    <p class="text-sm font-medium text-gray-700">Ministério Ativo</p>
+                                    <p class="status-help">Quando ativo, pode ser usado nos cadastros e escalas</p>
+                                </div>
                             </label>
+                            {% if form.is_active.errors %}
+                            <p class="text-red-600 text-sm mt-1">{{ form.is_active.errors.0 }}</p>
+                            {% endif %}
                         </div>
+                    </div>
 
-                        <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-                            <button type="submit" class="flex-1 bg-orange-600 text-white px-6 py-3 rounded-lg hover:bg-orange-700 transition font-semibold shadow-md">
-                                {% if action == 'create' %}Criar Ministério{% else %}Salvar Alterações{% endif %}
-                            </button>
-                            <a href="{% url 'ministry_list' %}" class="flex-1 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition font-semibold text-center">
-                                Cancelar
-                            </a>
-                        </div>
-                    </form>
-                </div>
+                    <div class="flex flex-col sm:flex-row gap-3 mt-8 pt-6 border-t border-gray-100">
+                        <a href="{% url 'ministry_list' %}" class="sm:hidden flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                            Voltar
+                        </a>
+                        <button type="submit" class="flex-1 flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-opacity-90 text-white px-6 py-3 rounded-xl transition font-semibold text-sm shadow-sm">
+                            <ion-icon name="checkmark-circle-outline" class="text-lg"></ion-icon>
+                            {% if action == 'create' %}Criar Ministério{% else %}Salvar Alterações{% endif %}
+                        </button>
+                        <a href="{% url 'ministry_list' %}" class="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-600 px-6 py-3 rounded-xl hover:bg-gray-50 transition font-semibold text-sm">
+                            <ion-icon name="close-circle-outline" class="text-lg"></ion-icon>
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    // Preview da cor
     const colorInput = document.querySelector('input[name="color"]');
     const colorPreview = document.getElementById('colorPreview');
-    
+
     if (colorInput && colorPreview) {
         function updatePreview() {
-            colorPreview.style.backgroundColor = colorInput.value || '#F97316';
+            colorPreview.style.backgroundColor = colorInput.value || '#C90905';
         }
-        
+
         colorInput.addEventListener('input', updatePreview);
         updatePreview();
     }
 </script>
-
-<style>
-    input[type="text"], textarea, select {
-        width: 100%;
-        padding: 0.75rem 1rem;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
-        font-size: 0.875rem;
-    }
-    
-    input[type="text"]:focus, textarea:focus, select:focus {
-        outline: none;
-        border-color: #f97316;
-        ring: 2px;
-        ring-color: #fed7aa;
-    }
-    
-    input[type="color"] {
-        width: 80px;
-        height: 48px;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
-        cursor: pointer;
-    }
-    
-    input[type="checkbox"] {
-        width: 1.25rem;
-        height: 1.25rem;
-        accent-color: #f97316;
-    }
-    
-    textarea {
-        resize: vertical;
-        min-height: 100px;
-    }
-</style>
 {% endblock %}

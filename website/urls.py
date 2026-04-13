@@ -37,16 +37,33 @@ from .views.ministry import (
     MinistryToggleRoleView, MinistryToggleStatusView
 )
 from .views.ministration_dashboard import MinistrationDashboardView
+from .views.course_attendance import (
+    AttendanceCourseListView,
+    AttendanceCourseEditView,
+    AttendanceCourseDashboardView,
+    AttendanceCourseAttendanceListView,
+    CourseParticipantListView,
+    CourseParticipantCreateView,
+    CourseParticipantDetailView,
+    CourseParticipantDeleteView,
+    CourseLessonListView,
+    CourseLessonCreateView,
+    CourseLessonDetailView,
+    CourseLessonAttendanceView,
+    AttendanceCourseReportExportView,
+    AttendanceCourseReportPrintView,
+    AttendanceLessonReportPrintView,
+)
 from .views.word_approval import PendingWordsListView, ApproveWordView, RejectWordView
 from .views.schedules import (
     TeamListView, TeamCreateView, TeamEditView, TeamDeleteView,
     ScheduleListView, ScheduleCreateView, ScheduleEditView, ScheduleDetailView,
-    ScheduleDeleteView, ScheduleExportPDFView,
+    ScheduleDeleteView,
     ScheduleDayCreateView, ScheduleDayEditView, ScheduleDayDeleteView,
     ScheduleDayToggleCancelView,
     team_list_view, team_create_view, team_edit_view, team_delete_view,
     schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
-    schedule_delete_view, schedule_export_pdf_view, schedule_print_view,
+    schedule_delete_view, schedule_print_view,
     schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
     schedule_day_toggle_cancel_view,
     check_schedule_conflict_view,
@@ -60,7 +77,7 @@ from .views.admin_panel import (
     ApiDeleteItemView, MinistryCreateEditApiView, NeighborhoodCreateEditApiView,
     MemberDetailApiView, VisitorDetailApiView, MemberEditView, VisitorEditView, EventEditView,
     MinistryEditView, NeighborhoodEditView, FollowUpListView, FollowUpEditView,
-    FollowUpDeleteView, FollowUpReportView, FollowUpDetailView, ProfileView,
+    FollowUpDeleteView, FollowUpReportView, FollowUpDetailView,
     CanteenListView, CanteenEditView, CanteenDetailView, CanteenDeleteView,
     CanteenTogglePaidView, CanteenApiView, TemplatesListView, ReportsView,
     TemplateCreateView, TemplateEditView, TemplateDetailView, TemplateDeleteView, templates_view, reports_view,
@@ -150,7 +167,7 @@ urlpatterns = [
     path('admin-panel/schedules/<int:schedule_id>/edit/', ScheduleEditView.as_view(), name='schedule_edit'),
     path('admin-panel/schedules/<int:schedule_id>/delete/', ScheduleDeleteView.as_view(), name='schedule_delete'),
     # publish/unpublish removed — schedule for current month is always active
-    path('admin-panel/schedules/<int:schedule_id>/export-pdf/', ScheduleExportPDFView.as_view(), name='schedule_export_pdf'),
+    path('admin-panel/schedules/<int:schedule_id>/print/', schedule_print_view, name='schedule_print'),
     
     # Schedule Days URLs
     path('admin-panel/schedules/<int:schedule_id>/days/new/', ScheduleDayCreateView.as_view(), name='schedule_day_create'),
@@ -197,8 +214,6 @@ urlpatterns = [
     path('admin-panel/neighborhoods/', NeighborhoodsListView.as_view(), name='admin_neighborhoods_list'),
     path('admin-panel/neighborhoods/new/', NeighborhoodEditView.as_view(), name='admin_neighborhood_create'),
     path('admin-panel/neighborhoods/<int:neighborhood_id>/edit/', NeighborhoodEditView.as_view(), name='admin_neighborhood_edit'),
-    path('admin-panel/profile/', ProfileView.as_view(), name='admin_profile'),
-    
     # User Management URLs
     path('admin-panel/users/', UserManagementView.as_view(), name='admin_user_management'),
     path('admin-panel/users/<int:user_id>/reset-password/', ResetUserPasswordView.as_view(), name='admin_reset_user_password'),
@@ -238,6 +253,26 @@ urlpatterns = [
     path('admin-panel/templates/<int:template_id>/', TemplateDetailView.as_view(), name='admin_template_detail'),
     path('admin-panel/templates/<int:template_id>/delete/', TemplateDeleteView.as_view(), name='admin_template_delete'),
     path('admin-panel/reports/', ReportsView.as_view(), name='admin_reports'),
+
+    # Listas de Presenca em Cursos
+    path('admin-panel/attendance-courses/', AttendanceCourseListView.as_view(), name='attendance_course_list'),
+    path('admin-panel/attendance-courses/new/', AttendanceCourseEditView.as_view(), name='attendance_course_create'),
+    path('admin-panel/attendance-courses/<int:course_id>/edit/', AttendanceCourseEditView.as_view(), name='attendance_course_edit'),
+    path('admin-panel/attendance-courses/<int:course_id>/', AttendanceCourseDashboardView.as_view(), name='attendance_course_dashboard'),
+    path('admin-panel/attendance-courses/<int:course_id>/participants/', CourseParticipantListView.as_view(), name='attendance_course_participant_list'),
+    path('admin-panel/attendance-courses/<int:course_id>/participants/new/', CourseParticipantCreateView.as_view(), name='attendance_course_participant_create'),
+    path('admin-panel/attendance-courses/<int:course_id>/participants/add/', CourseParticipantCreateView.as_view(), name='attendance_course_participant_add'),
+    path('admin-panel/attendance-courses/<int:course_id>/participants/<int:participant_id>/', CourseParticipantDetailView.as_view(), name='attendance_course_participant_detail'),
+    path('admin-panel/attendance-courses/<int:course_id>/participants/<int:participant_id>/delete/', CourseParticipantDeleteView.as_view(), name='attendance_course_participant_delete'),
+    path('admin-panel/attendance-courses/<int:course_id>/lessons/', CourseLessonListView.as_view(), name='attendance_course_lesson_list'),
+    path('admin-panel/attendance-courses/<int:course_id>/lessons/new/', CourseLessonCreateView.as_view(), name='attendance_course_lesson_create'),
+    path('admin-panel/attendance-courses/<int:course_id>/lessons/add/', CourseLessonCreateView.as_view(), name='attendance_course_lesson_add'),
+    path('admin-panel/attendance-courses/<int:course_id>/lessons/<int:lesson_id>/', CourseLessonDetailView.as_view(), name='attendance_course_lesson_detail'),
+    path('admin-panel/attendance-courses/<int:course_id>/attendance/', AttendanceCourseAttendanceListView.as_view(), name='attendance_course_attendance_list'),
+    path('admin-panel/attendance-courses/lessons/<int:lesson_id>/attendance/', CourseLessonAttendanceView.as_view(), name='attendance_course_lesson_attendance'),
+    path('admin-panel/attendance-courses/lessons/<int:lesson_id>/report/print/', AttendanceLessonReportPrintView.as_view(), name='attendance_lesson_report_print'),
+    path('admin-panel/attendance-courses/<int:course_id>/report/export/', AttendanceCourseReportExportView.as_view(), name='attendance_course_report_export'),
+    path('admin-panel/attendance-courses/<int:course_id>/report/print/', AttendanceCourseReportPrintView.as_view(), name='attendance_course_report_print'),
     
     # Cantina URLs
     path('admin-panel/cantina/', CanteenListView.as_view(), name='admin_cantina_list'),
