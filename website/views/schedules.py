@@ -40,9 +40,9 @@ class TeamFormContextMixin:
         all_members = Member.objects.filter(
             is_active=True,
             deleted__isnull=True,
-        ).prefetch_related('ministry').order_by('name')
+        ).order_by('name')
 
-        # Batch-fetch new-system memberships to avoid per-member queries
+        # Batch-fetch new-system memberships to avoid N+1 queries
         new_membership_qs = MinistryMembership.objects.filter(
             is_active=True,
         ).values_list('member_id', 'ministry_id')
@@ -51,19 +51,15 @@ class TeamFormContextMixin:
         for member_id, ministry_id in new_membership_qs:
             new_system_map[member_id].add(ministry_id)
 
-        members_with_ministries = []
-        for member in all_members:
-            # Uses prefetch cache (all() instead of values_list)
-            ministry_ids_old = {m.id for m in member.ministry.all()}
-            ministry_ids_new = new_system_map.get(member.id, set())
-            all_ministry_ids = ministry_ids_old | ministry_ids_new
-
-            if all_ministry_ids:
-                members_with_ministries.append({
-                    'id': member.id,
-                    'name': member.name,
-                    'ministry_ids': list(all_ministry_ids),
-                })
+        members_with_ministries = [
+            {
+                'id': member.id,
+                'name': member.name,
+                'ministry_ids': list(new_system_map[member.id]),
+            }
+            for member in all_members
+            if new_system_map[member.id]
+        ]
 
         return {
             'ministries': ministries,

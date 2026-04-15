@@ -1,4 +1,4 @@
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect, get_object_or_404, render
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.views import View
@@ -102,92 +102,110 @@ class MinistryMembersView(LoginRequiredMixin, StaffRequiredMixin, ListView):
     template_name = 'admin_panel/ministries/members.html'
     context_object_name = 'memberships'
     paginate_by = 50
-    
+
+    # ── queryset ──────────────────────────────────────────────────────────────
+
     def get_queryset(self):
         self.ministry = get_object_or_404(Ministry, pk=self.kwargs['pk'])
-        
-        # Buscar memberships do novo sistema
-        queryset = MinistryMembership.objects.filter(
-            ministry=self.ministry
+        base_qs = MinistryMembership.objects.filter(
+            ministry=self.ministry,
         ).select_related('member')
-        
-        # Filtros
-        search = self.request.GET.get('search')
-        role = self.request.GET.get('role')
-        status = self.request.GET.get('status')
-        
+        return self._apply_filters(base_qs)
+
+    def _apply_filters(self, qs):
+        """Apply search/role/status filters from request.GET."""
+        search = self.request.GET.get('search', '').strip()
+        role   = self.request.GET.get('role', '').strip()
+        status = self.request.GET.get('status', '').strip()
+
         if search:
-            queryset = queryset.filter(
+            qs = qs.filter(
                 Q(member__name__icontains=search) |
                 Q(member__phone__icontains=search)
             )
-        
         if role:
-            queryset = queryset.filter(role=role)
-        
+            qs = qs.filter(role=role)
         if status == 'active':
-            queryset = queryset.filter(is_active=True)
+            qs = qs.filter(is_active=True)
         elif status == 'inactive':
-            queryset = queryset.filter(is_active=False)
-        
-        return queryset.order_by('-role', 'member__name')
-    
+            qs = qs.filter(is_active=False)
+
+        # 'leader' < 'member' alphabetically → ascending puts leaders first
+        return qs.order_by('role', 'member__name')
+
+    # ── context helpers ───────────────────────────────────────────────────────
+
+    def _get_ministry_stats(self):
+        """Return total_members and total_leaders for the ministry."""
+        active_qs = MinistryMembership.objects.filter(
+            ministry=self.ministry,
+            is_active=True,
+        )
+        return {
+            'total_members': active_qs.count(),
+            'total_leaders': active_qs.filter(role='leader').count(),
+        }
+
+    # ── context ───────────────────────────────────────────────────────────────
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['ministry'] = self.ministry
         context['title'] = f'Membros - {self.ministry.name}'
-        
-        # Pegar memberships do novo sistema
-        new_memberships = list(context['memberships'])
-        
-        # Pegar membros do sistema antigo que não estão no novo
-        old_members = self.ministry.member_set.filter(is_active=True)
-        existing_member_ids = set(m.member.id for m in new_memberships)
-        
-        # Criar "fake memberships" para membros do sistema antigo
-        from collections import namedtuple
-        FakeMembership = namedtuple('FakeMembership', ['member', 'role', 'is_active'])
-        
-        for member in old_members:
-            if member.id not in existing_member_ids:
-                new_memberships.append(FakeMembership(
-                    member=member,
-                    role='member',
-                    is_active=True
-                ))
-        
-        context['memberships'] = new_memberships
-        
-        # Estatísticas - contar ambos os sistemas
-        total_new = MinistryMembership.objects.filter(
-            ministry=self.ministry,
-            is_active=True
-        ).count()
-        total_old = self.ministry.member_set.filter(is_active=True).count()
-        context['total_members'] = max(total_new, total_old)
-        
-        context['total_leaders'] = MinistryMembership.objects.filter(
-            ministry=self.ministry,
-            role='leader',
-            is_active=True
-        ).count()
-        
-        # Membros disponíveis para adicionar (não estão em nenhum dos sistemas)
-        existing_member_ids_new = MinistryMembership.objects.filter(
-            ministry=self.ministry
-        ).values_list('member_id', flat=True)
-        
-        existing_member_ids_old = self.ministry.member_set.values_list('id', flat=True)
-        
-        all_existing_ids = set(existing_member_ids_new) | set(existing_member_ids_old)
-        
-        context['available_members'] = Member.objects.filter(
-            is_active=True
-        ).exclude(
-            id__in=all_existing_ids
-        ).order_by('name')
-        
+        context.update(self._get_ministry_stats())
         return context
+
+
+class MinistryAddMembersPageView(LoginRequiredMixin, StaffRequiredMixin, View):
+    """Página dedicada para adicionar múltiplos membros ao ministério"""
+    template_name = 'admin_panel/ministries/add_members.html'
+
+    def _get_available(self, ministry, search=''):
+        existing_ids = MinistryMembership.objects.filter(
+            ministry=ministry,
+        ).values_list('member_id', flat=True)
+        qs = Member.objects.filter(is_active=True).exclude(id__in=existing_ids)
+        if search:
+            qs = qs.filter(Q(name__icontains=search) | Q(phone__icontains=search))
+        return qs.order_by('name')
+
+    def get(self, request, pk):
+        ministry = get_object_or_404(Ministry, pk=pk)
+        search = request.GET.get('search', '').strip()
+        return render(request, self.template_name, {
+            'ministry': ministry,
+            'available_members': self._get_available(ministry, search),
+            'title': f'Adicionar Membros — {ministry.name}',
+            'search': search,
+        })
+
+    def post(self, request, pk):
+        ministry = get_object_or_404(Ministry, pk=pk)
+        member_ids = request.POST.getlist('member_ids')
+        added = 0
+        for mid in member_ids:
+            member = Member.objects.filter(pk=mid, is_active=True).first()
+            if not member:
+                continue
+            _, created = MinistryMembership.objects.get_or_create(
+                ministry=ministry,
+                member=member,
+                defaults={'role': 'member', 'is_active': True},
+            )
+            if created:
+                added += 1
+            else:
+                MinistryMembership.objects.filter(
+                    ministry=ministry, member=member, is_active=False
+                ).update(is_active=True)
+        if added:
+            messages.success(
+                request,
+                f'{added} membro{"s" if added > 1 else ""} adicionado{"s" if added > 1 else ""} ao ministério {ministry.name}!',
+            )
+        else:
+            messages.info(request, 'Nenhum membro novo foi adicionado.')
+        return redirect('ministry_members', pk=pk)
 
 
 class MinistryAddMemberView(LoginRequiredMixin, StaffRequiredMixin, View):
@@ -219,8 +237,6 @@ class MinistryAddMemberView(LoginRequiredMixin, StaffRequiredMixin, View):
                 )
 
                 if created:
-                    if ministry in member.ministry.all():
-                        member.ministry.remove(ministry)
                     messages.success(request, f'{member.name} adicionado(a) ao ministério {ministry.name}!')
                 else:
                     if not membership.is_active:
@@ -228,14 +244,8 @@ class MinistryAddMemberView(LoginRequiredMixin, StaffRequiredMixin, View):
                         membership.save()
                         messages.success(request, f'{member.name} reativado(a) no ministério {ministry.name}!')
                     else:
-                        if ministry in member.ministry.all():
-                            member.ministry.remove(ministry)
-                            messages.success(request, f'{member.name} já estava no ministério (sistema migrado)!')
-                        else:
-                            messages.warning(request, f'{member.name} já faz parte do ministério {ministry.name}!')
+                        messages.warning(request, f'{member.name} já faz parte do ministério {ministry.name}!')
         except Exception:
-            if ministry in member.ministry.all():
-                member.ministry.remove(ministry)
             messages.warning(request, f'{member.name} já faz parte do ministério {ministry.name}!')
 
         return redirect('ministry_members', pk=ministry_id)
@@ -262,10 +272,6 @@ class MinistryRemoveMemberView(LoginRequiredMixin, StaffRequiredMixin, View):
             membership.delete(force_policy=HARD_DELETE)
             removed = True
 
-        if ministry in member.ministry.all():
-            member.ministry.remove(ministry)
-            removed = True
-
         if removed:
             messages.success(request, f'{member.name} removido(a) do ministério {ministry.name}!')
         else:
@@ -290,28 +296,14 @@ class MinistryToggleRoleView(LoginRequiredMixin, StaffRequiredMixin, View):
         ).first()
 
         if not membership:
-            if ministry in member.ministry.all():
-                try:
-                    membership, created = MinistryMembership.objects.get_or_create(
-                        ministry=ministry,
-                        member=member,
-                        defaults={
-                            'role': 'member',
-                            'is_active': True
-                        }
-                    )
-                    if created:
-                        member.ministry.remove(ministry)
-                except Exception:
-                    membership = MinistryMembership.objects.filter(
-                        ministry=ministry,
-                        member=member
-                    ).first()
-                    if not membership:
-                        messages.error(request, f'Erro ao processar {member.name}.')
-                        return redirect('ministry_members', pk=ministry_id)
-            else:
-                messages.error(request, f'{member.name} não faz parte do ministério {ministry.name}!')
+            try:
+                membership, _ = MinistryMembership.objects.get_or_create(
+                    ministry=ministry,
+                    member=member,
+                    defaults={'role': 'member', 'is_active': True},
+                )
+            except Exception:
+                messages.error(request, f'Erro ao processar {member.name}.')
                 return redirect('ministry_members', pk=ministry_id)
 
         if membership.role == 'leader':

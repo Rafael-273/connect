@@ -7,6 +7,28 @@
     {% include 'parciais/head.html' %}
     <link rel="stylesheet" href="{% static 'base.css' %}">
     <title>{% block title %}{% endblock %}</title>
+    <!-- Apply sidebar collapsed state before first paint to avoid open animation -->
+    <script>
+        (function(){
+            if (localStorage.getItem('admin_sidebar_collapsed') === '1') {
+                document.documentElement.classList.add('admin-sidebar-collapsed-preload');
+            }
+        })();
+    </script>
+    <!-- Suppress ALL transitions and animations until after first paint -->
+    <style id="no-transitions-preload">
+        *, *::before, *::after {
+            transition-duration: 0ms !important;
+            animation-duration: 0ms !important;
+        }
+    </style>
+    <style>
+        /* Suppress sidebar collapse transition during initial load */
+        html.admin-sidebar-collapsed-preload #admin-sidebar,
+        html.admin-sidebar-collapsed-preload .main-content-wrapper {
+            transition: none !important;
+        }
+    </style>
     <style>
         @font-face {
             font-family: "Giga Sans";
@@ -98,6 +120,14 @@
 
         const initialCollapsed = localStorage.getItem(sidebarCollapseKey) === '1';
         applySidebarState(initialCollapsed);
+        // Re-enable transitions after first paint (double-rAF ensures we wait for the frame to be drawn)
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() {
+                var noTrans = document.getElementById('no-transitions-preload');
+                if (noTrans) noTrans.parentNode.removeChild(noTrans);
+                document.documentElement.classList.remove('admin-sidebar-collapsed-preload');
+            });
+        });
 
         const sidebarToggleBtn = document.getElementById('sidebar-collapse-toggle');
         if (sidebarToggleBtn) {

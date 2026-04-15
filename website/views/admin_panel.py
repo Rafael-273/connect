@@ -151,7 +151,7 @@ class DashboardView(LoginRequiredMixin, AdminRequiredMixin, View):
     def _get_lists(self):
         return {
             'ministries_stats': Ministry.objects.annotate(
-                member_count=Count('member'),
+                member_count=Count('memberships'),
             ).order_by('-member_count')[:5],
             'recent_visitors_list': Visitor.objects.order_by('-visit_date')[:5],
             'recently_converted_members': Member.objects.filter(
@@ -308,7 +308,7 @@ class MinistriesListView(LoginRequiredMixin, AdminRequiredMixin, View):
     """Lista de ministérios"""
 
     def _get_queryset(self):
-        return Ministry.objects.annotate(member_count=Count('member')).order_by('name')
+        return Ministry.objects.annotate(member_count=Count('memberships')).order_by('name')
 
     def _apply_filters(self, qs, search):
         if search:
@@ -449,7 +449,11 @@ class MemberDetailApiView(LoginRequiredMixin, AdminRequiredMixin, View):
             'address': member.address,
             'birth_date': member.birth_date.strftime('%d/%m/%Y') if member.birth_date else None,
             'gender': member.get_gender_display() if member.gender else None,
-            'ministry': ', '.join(member.ministry.values_list('name', flat=True)) or None,
+            'ministry': ', '.join(
+                MinistryMembership.objects.filter(
+                    member=member, is_active=True
+                ).values_list('ministry__name', flat=True)
+            ) or None,
             'neighborhood': member.neighborhood.name if member.neighborhood else None,
             'marital_status': member.get_marital_status_display() if member.marital_status else None,
             'conversion': member.get_conversion_display() if member.conversion else None,

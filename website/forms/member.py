@@ -28,7 +28,7 @@ _USER_TYPE_CHOICES = [
 _OPTIONAL = [
     'phone', 'birth_date', 'gender', 'marital_status', 'neighborhood',
     'conversion', 'conversion_date', 'address', 'testimony',
-    'ministry', 'profile_picture', 'email',
+    'profile_picture', 'email',
 ]
 
 
@@ -52,7 +52,7 @@ class MemberAdminForm(forms.ModelForm):
         model = Member
         fields = [
             'name', 'phone', 'birth_date', 'gender', 'marital_status',
-            'ministry', 'neighborhood', 'conversion', 'conversion_date',
+            'neighborhood', 'conversion', 'conversion_date',
             'address', 'profile_picture', 'testimony',
             'is_active', 'is_available_to_consolidate',
             'is_available_to_disciple', 'is_approver',
@@ -71,11 +71,6 @@ class MemberAdminForm(forms.ModelForm):
             }),
             'gender': forms.Select(attrs={'class': _A_SELECT}),
             'marital_status': forms.Select(attrs={'class': _A_SELECT}),
-            'ministry': forms.SelectMultiple(attrs={
-                # Keep id so the existing Select2 JS still binds correctly
-                'id': 'ministry-select',
-                'class': _A_SELECT,
-            }),
             'neighborhood': forms.Select(attrs={'class': _A_SELECT}),
             'conversion': forms.Select(attrs={'class': _A_SELECT}),
             'conversion_date': forms.DateInput(attrs={

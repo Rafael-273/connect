@@ -101,22 +101,14 @@ class MinistrationMembersListView(LoginRequiredMixin, StaffRequiredMixin, ListVi
     paginate_by = 50
     
     def get_queryset(self):
-        # Buscar ministério de ministração
         ministry = Ministry.objects.filter(name__icontains='ministração').first()
-        
+
         if ministry:
-            # Membros do sistema antigo
-            member_ids_old = set(Member.objects.filter(ministry=ministry).values_list('id', flat=True))
-            
-            # Membros do sistema novo
-            member_ids_new = set(MinistryMembership.objects.filter(
+            member_ids = MinistryMembership.objects.filter(
                 ministry=ministry,
-                is_active=True
-            ).values_list('member_id', flat=True))
-            
-            # Combinar ambos
-            all_member_ids = member_ids_old | member_ids_new
-            queryset = Member.objects.filter(id__in=all_member_ids)
+                is_active=True,
+            ).values_list('member_id', flat=True)
+            queryset = Member.objects.filter(id__in=member_ids)
         else:
             queryset = Member.objects.none()
         
@@ -146,36 +138,26 @@ class MinistrationMembersListView(LoginRequiredMixin, StaffRequiredMixin, ListVi
         ministry = Ministry.objects.filter(name__icontains='ministração').first()
         if ministry:
             context['ministry'] = ministry
-            
-            # Contar membros do sistema antigo
-            members_old = set(Member.objects.filter(ministry=ministry).values_list('id', flat=True))
-            
-            # Contar membros do sistema novo
-            members_new = set(MinistryMembership.objects.filter(
+            member_ids = MinistryMembership.objects.filter(
                 ministry=ministry,
-                is_active=True
-            ).values_list('member_id', flat=True))
-            
-            # Total único
-            all_member_ids = members_old | members_new
-            context['total_members'] = len(all_member_ids)
-            
-            # Ativos
-            active_member_ids = Member.objects.filter(
-                id__in=all_member_ids,
-                is_active=True
-            ).values_list('id', flat=True)
-            context['active_members'] = len(active_member_ids)
+                is_active=True,
+            ).values_list('member_id', flat=True)
+            context['total_members'] = len(member_ids)
+            context['active_members'] = Member.objects.filter(
+                id__in=member_ids, is_active=True
+            ).count()
         else:
             context['ministry'] = None
             context['total_members'] = 0
             context['active_members'] = 0
-        
-        # Todos os membros ativos que NÃO estão no ministério (para adicionar)
+
         if ministry:
-            context['available_members'] = Member.objects.filter(is_active=True).exclude(
-                ministry=ministry
-            ).order_by('name')
+            existing_ids = MinistryMembership.objects.filter(
+                ministry=ministry,
+            ).values_list('member_id', flat=True)
+            context['available_members'] = Member.objects.filter(
+                is_active=True,
+            ).exclude(id__in=existing_ids).order_by('name')
         else:
             context['available_members'] = Member.objects.filter(is_active=True).order_by('name')
         
@@ -196,7 +178,14 @@ class MinistrationAddMemberView(LoginRequiredMixin, StaffRequiredMixin, View):
             )
             messages.success(request, 'Ministério de Ministração criado com sucesso!')
 
-        member.ministry.add(ministry)
+        membership, created = MinistryMembership.objects.get_or_create(
+            ministry=ministry,
+            member=member,
+            defaults={'role': 'member', 'is_active': True},
+        )
+        if not created and not membership.is_active:
+            membership.is_active = True
+            membership.save()
 
         messages.success(request, f'{member.name} adicionado(a) ao Ministério de Ministração!')
         return redirect('ministration_members_list')
@@ -213,7 +202,9 @@ class MinistrationRemoveMemberView(LoginRequiredMixin, StaffRequiredMixin, View)
         ministry = Ministry.objects.filter(name__icontains='ministração').first()
 
         if ministry:
-            member.ministry.remove(ministry)
+            MinistryMembership.objects.filter(
+                ministry=ministry, member=member
+            ).update(is_active=False)
 
         messages.success(request, f'{member.name} removido(a) do Ministério de Ministração!')
         return redirect('ministration_members_list')

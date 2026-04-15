@@ -90,10 +90,8 @@ class MinistrationContextMixin:
     """Mixin that adds ministration membership flag to context."""
 
     def get_ministration_status(self, member):
-        is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
-        is_ministration_new = MinistryMembership.objects.filter(
+        return MinistryMembership.objects.filter(
             member=member,
             ministry__name__icontains='ministração',
             is_active=True,
         ).exists()
-        return is_ministration_old or is_ministration_new

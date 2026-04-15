@@ -56,7 +56,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
         return render(request, 'member/dashboard.html', context)
 
     def _build_base_context(self, member):
-        has_ministries = member.ministry.exists()
+        has_ministries = member.ministry_memberships.filter(is_active=True).exists()
         is_approver = member.is_approver
         can_consolidate = member.is_available_to_consolidate
         is_ministration = self.get_ministration_status(member)

@@ -33,8 +33,8 @@ from .views.ministration_admin import (
 )
 from .views.ministry import (
     MinistryListView, MinistryCreateView, MinistryUpdateView, MinistryDeleteView,
-    MinistryMembersView, MinistryAddMemberView, MinistryRemoveMemberView,
-    MinistryToggleRoleView, MinistryToggleStatusView
+    MinistryMembersView, MinistryAddMembersPageView, MinistryAddMemberView,
+    MinistryRemoveMemberView, MinistryToggleRoleView, MinistryToggleStatusView
 )
 from .views.ministration_dashboard import MinistrationDashboardView
 from .views.course_attendance import (
@@ -303,6 +303,7 @@ urlpatterns = [
     path('admin-panel/ministries/<int:pk>/edit/', MinistryUpdateView.as_view(), name='ministry_edit'),
     path('admin-panel/ministries/<int:pk>/delete/', MinistryDeleteView.as_view(), name='ministry_delete'),
     path('admin-panel/ministries/<int:pk>/members/', MinistryMembersView.as_view(), name='ministry_members'),
+    path('admin-panel/ministries/<int:pk>/members/add/', MinistryAddMembersPageView.as_view(), name='ministry_add_members'),
     path('admin-panel/ministries/<int:ministry_id>/members/add/<int:member_id>/', MinistryAddMemberView.as_view(), name='ministry_add_member'),
     path('admin-panel/ministries/<int:ministry_id>/members/remove/<int:member_id>/', MinistryRemoveMemberView.as_view(), name='ministry_remove_member'),
     path('admin-panel/ministries/<int:ministry_id>/members/toggle-role/<int:member_id>/', MinistryToggleRoleView.as_view(), name='ministry_toggle_role'),

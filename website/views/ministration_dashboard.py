@@ -21,12 +21,11 @@ class MinistrationDashboardView(LoginRequiredMixin, StaffRequiredMixin, View):
         total_healings = Healing.objects.count()
 
         if ministry:
-            members_old = set(Member.objects.filter(ministry=ministry).values_list('id', flat=True))
             members_new = set(MinistryMembership.objects.filter(
                 ministry=ministry,
                 is_active=True
             ).values_list('member_id', flat=True))
-            all_member_ids = members_old | members_new
+            all_member_ids = members_new
             total_ministry_members = len(all_member_ids)
             active_ministry_members = Member.objects.filter(
                 id__in=all_member_ids,

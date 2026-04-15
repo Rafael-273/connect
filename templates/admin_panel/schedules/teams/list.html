@@ -253,6 +253,51 @@
 
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+/* ===== SweetAlert2 Custom Theme ===== */
+.swal2-popup.swal-custom { font-family: "Giga Sans", system-ui, sans-serif !important; border-radius: 20px !important; padding: 36px 28px 28px !important; max-width: 400px !important; box-shadow: 0 24px 60px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.04) !important; }
+.swal2-popup.swal-custom .swal2-header { padding: 0 !important; flex-direction: column !important; align-items: center !important; gap: 14px !important; margin-bottom: 4px !important; }
+.swal2-popup.swal-custom .swal2-icon { border: none !important; width: 56px !important; height: 56px !important; margin: 0 auto !important; border-radius: 50% !important; flex-shrink: 0 !important; }
+.swal2-popup.swal-custom .swal2-icon .swal2-icon-content { font-size: 1.75rem !important; font-weight: 900 !important; line-height: 1 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-warning, .swal2-popup.swal-custom .swal2-icon.swal2-question { background: #fee2e2 !important; border-color: transparent !important; color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-warning .swal2-icon-content, .swal2-popup.swal-custom .swal2-icon.swal2-question .swal2-icon-content { color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error { background: #fee2e2 !important; border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark { transform: scale(0.6) !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-left, .swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-right { background-color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success { background: #dcfce7 !important; border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-ring { border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success [class^='swal2-success-circular-line'], .swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-fix { background: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-tip, .swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-long { background-color: #16a34a !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-info { background: #dbeafe !important; border-color: transparent !important; color: #2563eb !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-info .swal2-icon-content { color: #2563eb !important; }
+.swal2-popup.swal-custom .swal2-title { font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 1.05rem !important; font-weight: 700 !important; color: #111827 !important; letter-spacing: -0.01em !important; line-height: 1.35 !important; padding: 0 !important; margin: 0 !important; text-align: center !important; }
+.swal2-popup.swal-custom .swal2-html-container { font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 0.875rem !important; color: #6b7280 !important; font-weight: 400 !important; text-align: center !important; padding: 0 !important; margin: 6px 0 0 !important; line-height: 1.65 !important; }
+.swal2-popup.swal-custom .swal2-actions { width: 100% !important; gap: 10px !important; flex-wrap: nowrap !important; justify-content: center !important; margin-top: 24px !important; }
+/* display sem !important — permite que o SweetAlert2 esconda botões inativos via style.display='none' */
+.swal-btn { flex: 0 1 auto !important; min-width: 120px !important; display: inline-flex; align-items: center !important; justify-content: center !important; padding: 11px 24px !important; border-radius: 10px !important; font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 0.875rem !important; font-weight: 600 !important; cursor: pointer !important; transition: background 0.15s, transform 0.1s !important; letter-spacing: 0.005em !important; white-space: nowrap !important; border: none !important; }
+.swal-btn:hover { transform: translateY(-1px) !important; }
+.swal-btn:active { transform: translateY(0) !important; }
+.swal-btn-confirm { background: var(--color-primary) !important; color: white !important; }
+.swal-btn-confirm:hover { background: #a80703 !important; }
+.swal-btn-cancel { background: #f3f4f6 !important; color: #4b5563 !important; }
+.swal-btn-cancel:hover { background: #e5e7eb !important; }
+.swal-btn-deny { background: #6b7280 !important; color: white !important; }
+.swal-btn-danger { background: #dc2626 !important; color: white !important; }
+.swal-btn-danger:hover { background: #b91c1c !important; }
+.swal2-popup.swal-custom .swal2-loader { border-color: var(--color-primary) transparent var(--color-primary) transparent !important; }
+</style>
+<script>
+window.Swal = Swal.mixin({
+    customClass: {
+        popup:         'swal-custom',
+        confirmButton: 'swal-btn swal-btn-confirm',
+        denyButton:    'swal-btn swal-btn-deny',
+        cancelButton:  'swal-btn swal-btn-cancel',
+    },
+    buttonsStyling: false,
+    backdrop: 'rgba(0,0,0,0.55)',
+});
+</script>
 <script>
 function getCookie(name) {
     let cookieValue = null;
@@ -275,10 +320,9 @@ function deleteTeam(teamId) {
         text: "Esta ação não pode ser desfeita!",
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#6b7280',
         confirmButtonText: 'Sim, deletar!',
-        cancelButtonText: 'Cancelar'
+        cancelButtonText: 'Cancelar',
+        customClass: { confirmButton: 'swal-btn swal-btn-danger' }
     }).then((result) => {
         if (result.isConfirmed) {
             Swal.fire({ title: 'Deletando...', text: 'Por favor, aguarde', allowOutsideClick: false, allowEscapeKey: false, didOpen: () => { Swal.showLoading(); } });
@@ -289,13 +333,13 @@ function deleteTeam(teamId) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    Swal.fire({ title: 'Deletado!', text: 'A equipe foi removida com sucesso.', icon: 'success', confirmButtonColor: 'var(--color-primary)' }).then(() => { window.location.reload(); });
+                    Swal.fire({ title: 'Deletado!', text: 'A equipe foi removida com sucesso.', icon: 'success' }).then(() => { window.location.reload(); });
                 } else {
-                    Swal.fire({ title: 'Erro!', text: data.error || 'Ocorreu um erro ao deletar a equipe.', icon: 'error', confirmButtonColor: 'var(--color-primary)' });
+                    Swal.fire({ title: 'Erro!', text: data.error || 'Ocorreu um erro ao deletar a equipe.', icon: 'error' });
                 }
             })
             .catch(() => {
-                Swal.fire({ title: 'Erro!', text: 'Ocorreu um erro ao deletar a equipe.', icon: 'error', confirmButtonColor: 'var(--color-primary)' });
+                Swal.fire({ title: 'Erro!', text: 'Ocorreu um erro ao deletar a equipe.', icon: 'error' });
             });
         }
     });
