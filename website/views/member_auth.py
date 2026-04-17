@@ -6,6 +6,8 @@ from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
 
+from django.db.models import Q
+
 from ..models.user import User
 from ..models.member import Member
 from ..models.ministry_membership import MinistryMembership
@@ -85,6 +87,8 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
 
     def _get_current_schedules(self, member):
         now = timezone.now()
+        next_month = now.month % 12 + 1
+        next_year = now.year + 1 if now.month == 12 else now.year
         ministry_ids = MinistryMembership.objects.filter(
             member=member, is_active=True
         ).values_list('ministry_id', flat=True)
@@ -92,11 +96,13 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             MonthlySchedule.objects
             .filter(
                 ministry_id__in=ministry_ids,
-                month=now.month,
-                year=now.year,
+            )
+            .filter(
+                Q(month=now.month, year=now.year) |
+                Q(month=next_month, year=next_year)
             )
             .select_related('ministry')
-            .order_by('ministry__name', 'title')
+            .order_by('year', 'month', 'ministry__name', 'title')
         )
 
     def _add_followup_context(self, member, context):

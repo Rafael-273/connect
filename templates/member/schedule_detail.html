@@ -86,15 +86,16 @@
                 {% else %}day-card-other{% endif %}">
 
                 <!-- Header do Dia -->
-                <div class="flex items-center justify-between gap-3 px-4 py-3 border-b"
+                <div class="flex flex-col gap-2 px-4 py-3 border-b"
                      style="border-color: {% if entry.is_member_assigned and not day.is_cancelled %}rgba(201,9,5,0.15){% else %}rgba(0,0,0,0.06){% endif %};">
+                    <!-- Linha 1: data + descrição -->
                     <div class="flex items-center gap-3">
                         <!-- Data -->
                         <div class="flex-shrink-0 text-center w-12">
                             <p class="text-2xl font-black leading-none {% if entry.is_member_assigned and not day.is_cancelled %}text-red-600{% else %}text-gray-800{% endif %}">{{ day.date|date:"d" }}</p>
                             <p class="text-xs font-medium text-gray-400 uppercase">{{ entry.pt_month_abbr }}</p>
                         </div>
-                        <div>
+                        <div class="min-w-0">
                             <p class="text-sm font-bold text-gray-800">{{ entry.pt_weekday }}</p>
                             {% if day.description %}
                             <p class="text-xs text-gray-500">{{ day.description }}</p>
@@ -102,7 +103,9 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-2 flex-shrink-0">
+                    <!-- Linha 2: badges -->
+                    {% if day.is_cancelled or entry.is_member_assigned or day.team %}
+                    <div class="flex flex-wrap items-center gap-2 ml-15">
                         {% if day.is_cancelled %}
                         <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-600">
                             <i class="fas fa-ban mr-1"></i>Cancelado
@@ -119,6 +122,7 @@
                         </span>
                         {% endif %}
                     </div>
+                    {% endif %}
                 </div>
 
                 <!-- Corpo do Dia -->
