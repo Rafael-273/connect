@@ -89,7 +89,7 @@
 
             {% if user.user_type == 'admin' or user.is_superuser %}
             <!-- Ministérios só para admin -->
-            <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
+            <a href="{% url 'ministry_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="library-outline"></ion-icon>
                 Ministérios
             </a>
@@ -267,7 +267,7 @@
         {% if user.user_type == 'admin' or user.is_superuser %}
         
         <!-- Ministérios só para admin -->
-        <a href="{% url 'admin_ministries_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
+        <a href="{% url 'ministry_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="library-outline"></ion-icon>
             Ministérios
         </a>

@@ -123,7 +123,7 @@
                         <tbody>
                             {% for music in musics %}
                             <tr>
-                                <td class="font-medium text-gray-900">{{ music.name }}</td>
+                                <td class="font-medium text-gray-900 row-link" data-row-href="{% url 'admin_music_edit' music.id %}">{{ music.name }}</td>
 
                                 <td class="text-gray-700">{{ music.singer|default:"—" }}</td>
 

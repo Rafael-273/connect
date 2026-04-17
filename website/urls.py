@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.conf import settings
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView
 from .views.home import HomeView, TestimonyListView, ContactView
-from .views.visitor import VisitorCreateView, VisitorListView
+from .views.visitor import VisitorCreateView, MemberVisitorCreateView, MemberVisitorListView
 from .views.evangelism import EvangelismCreateView, EvangelismListView
 from .views.member import (
     MemberCreateView, 
@@ -19,9 +19,10 @@ from .views.translator import AudioRecorderView, TranscriptionDisplayView
 from .views.event import EventDetailView, EventListView
 from .views.member_auth import (
     MemberLoginView, MemberDashboardView, MemberLogoutView, MemberProfileView,
-    MemberConsolidationView, MemberApproveWordView, MemberRejectWordView,
+    MemberApproveWordView, MemberRejectWordView,
     RedirectAfterLoginView,
 )
+from .views.member_schedule import MemberScheduleDetailView
 from .views.user_management import UserManagementView, ResetUserPasswordView, ChangePasswordView
 from .views.word_of_knowledge import (
     WordOfKnowledgeListView, WordOfKnowledgeCreateView, HealingCreateView,
@@ -61,11 +62,7 @@ from .views.schedules import (
     ScheduleDeleteView,
     ScheduleDayCreateView, ScheduleDayEditView, ScheduleDayDeleteView,
     ScheduleDayToggleCancelView,
-    team_list_view, team_create_view, team_edit_view, team_delete_view,
-    schedule_list_view, schedule_create_view, schedule_edit_view, schedule_detail_view,
-    schedule_delete_view, schedule_print_view,
-    schedule_day_create_view, schedule_day_edit_view, schedule_day_delete_view,
-    schedule_day_toggle_cancel_view,
+    schedule_print_view,
     check_schedule_conflict_view,
     division_list_view, division_create_view, division_edit_view, division_delete_view,
     schedule_day_division_assign_view
@@ -73,15 +70,14 @@ from .views.schedules import (
 from .views.prayer_request import PrayerRequestCreateView, PrayerRequestListView
 from .views.admin_panel import (
     DashboardView, MembersListView, VisitorsListView,
-    EventsListView, MinistriesListView, NeighborhoodsListView,
+    EventsListView, NeighborhoodsListView,
     ApiDeleteItemView, MinistryCreateEditApiView, NeighborhoodCreateEditApiView,
     MemberDetailApiView, VisitorDetailApiView, MemberEditView, VisitorEditView, EventEditView,
-    MinistryEditView, NeighborhoodEditView, FollowUpListView, FollowUpEditView,
+    NeighborhoodEditView, FollowUpListView, FollowUpEditView,
     FollowUpDeleteView, FollowUpReportView, FollowUpDetailView,
     CanteenListView, CanteenEditView, CanteenDetailView, CanteenDeleteView,
     CanteenTogglePaidView, CanteenApiView, TemplatesListView, ReportsView,
-    TemplateCreateView, TemplateEditView, TemplateDetailView, TemplateDeleteView, templates_view, reports_view,
-    template_create_view, template_edit_view, template_detail_view, template_delete_view,
+    TemplateCreateView, TemplateEditView, TemplateDetailView, TemplateDeleteView,
     TestimonyListView as AdminTestimonyListView, TestimonyEditView, TestimonyDeleteView, TestimonyToggleView
 )
 
@@ -90,7 +86,6 @@ urlpatterns = [
     path('testemunhos/', TestimonyListView.as_view(), name='testemunhos'),
     path('contato/', ContactView.as_view(), name='contato'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
-    path('visitor/list/', VisitorListView.as_view(), name='visitor_list'),
     path('prayer-request/', PrayerRequestCreateView.as_view(), name='prayer_request_create'),
     path('prayer-request/list', PrayerRequestListView.as_view(), name='prayer_request_list'),
     path('evangelism/', EvangelismCreateView.as_view(), name='evangelism'),
@@ -140,6 +135,13 @@ urlpatterns = [
     path('consolidation/guide/', ConsolidatorGuideView.as_view(), name='consolidator_guide'),
     path('consolidation/assignments/', ConsolidatorAssignmentsView.as_view(), name='consolidator_assignments'),
     path('consolidation/request/<int:person_id>/', RequestConsolidationView.as_view(), name='request_consolidation'),
+
+    # Boas Vindas - member visitor registration & list
+    path('register-visitor/', MemberVisitorCreateView.as_view(), name='member_visitor_create'),
+    path('visitors/', MemberVisitorListView.as_view(), name='member_visitor_list'),
+
+    # Member Schedules
+    path('schedule/<int:schedule_id>/', MemberScheduleDetailView.as_view(), name='member_schedule_detail'),
     
     # Words of Knowledge URLs
     path('words/', WordOfKnowledgeListView.as_view(), name='word_of_knowledge_list'),
@@ -174,10 +176,6 @@ urlpatterns = [
     path('admin-panel/schedules/days/<int:day_id>/edit/', ScheduleDayEditView.as_view(), name='schedule_day_edit'),
     path('admin-panel/schedules/days/<int:day_id>/delete/', ScheduleDayDeleteView.as_view(), name='schedule_day_delete'),
     path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', ScheduleDayToggleCancelView.as_view(), name='schedule_day_toggle_cancel'),
-    path('admin-panel/schedules/<int:schedule_id>/days/new/', schedule_day_create_view, name='schedule_day_create'),
-    path('admin-panel/schedules/days/<int:day_id>/edit/', schedule_day_edit_view, name='schedule_day_edit'),
-    path('admin-panel/schedules/days/<int:day_id>/delete/', schedule_day_delete_view, name='schedule_day_delete'),
-    path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', schedule_day_toggle_cancel_view, name='schedule_day_toggle_cancel'),
     path('admin-panel/schedules/check-conflict/', check_schedule_conflict_view, name='schedule_check_conflict'),
     
     # Division URLs - Subdivisões de Escala (gerenciadas inline no form da escala)
@@ -208,9 +206,6 @@ urlpatterns = [
     path('admin-panel/music/new/', MusicCreateView.as_view(), name='admin_music_create'),
     path('admin-panel/music/edit/<int:pk>/', MusicUpdateView.as_view(), name='admin_music_edit'),
     path('admin-panel/music/delete/<int:pk>/', MusicDeleteView.as_view(), name='admin_music_delete'),
-    path('admin-panel/ministries/', MinistriesListView.as_view(), name='admin_ministries_list'),
-    path('admin-panel/ministries/new/', MinistryEditView.as_view(), name='admin_ministry_create'),
-    path('admin-panel/ministries/<int:ministry_id>/edit/', MinistryEditView.as_view(), name='admin_ministry_edit'),
     path('admin-panel/neighborhoods/', NeighborhoodsListView.as_view(), name='admin_neighborhoods_list'),
     path('admin-panel/neighborhoods/new/', NeighborhoodEditView.as_view(), name='admin_neighborhood_create'),
     path('admin-panel/neighborhoods/<int:neighborhood_id>/edit/', NeighborhoodEditView.as_view(), name='admin_neighborhood_edit'),
@@ -274,14 +269,14 @@ urlpatterns = [
     path('admin-panel/attendance-courses/<int:course_id>/report/export/', AttendanceCourseReportExportView.as_view(), name='attendance_course_report_export'),
     path('admin-panel/attendance-courses/<int:course_id>/report/print/', AttendanceCourseReportPrintView.as_view(), name='attendance_course_report_print'),
     
-    # Cantina URLs
-    path('admin-panel/cantina/', CanteenListView.as_view(), name='admin_cantina_list'),
-    path('admin-panel/cantina/new/', CanteenEditView.as_view(), name='admin_cantina_create'),
-    path('admin-panel/cantina/<int:debtor_id>/edit/', CanteenEditView.as_view(), name='admin_cantina_edit'),
-    path('admin-panel/cantina/<int:debtor_id>/', CanteenDetailView.as_view(), name='admin_cantina_detail'),
-    path('admin-panel/cantina/<int:debtor_id>/delete/', CanteenDeleteView.as_view(), name='admin_cantina_delete'),
-    path('admin-panel/cantina/<int:debtor_id>/toggle-paid/', CanteenTogglePaidView.as_view(), name='admin_cantina_toggle_paid'),
-    path('admin-panel/api/cantina/', CanteenApiView.as_view(), name='admin_cantina_api'),
+    # Cantina URLs — TODO: templates em admin_panel/cantina/*.html ainda não foram criados
+    # path('admin-panel/cantina/', CanteenListView.as_view(), name='admin_cantina_list'),
+    # path('admin-panel/cantina/new/', CanteenEditView.as_view(), name='admin_cantina_create'),
+    # path('admin-panel/cantina/<int:debtor_id>/edit/', CanteenEditView.as_view(), name='admin_cantina_edit'),
+    # path('admin-panel/cantina/<int:debtor_id>/', CanteenDetailView.as_view(), name='admin_cantina_detail'),
+    # path('admin-panel/cantina/<int:debtor_id>/delete/', CanteenDeleteView.as_view(), name='admin_cantina_delete'),
+    # path('admin-panel/cantina/<int:debtor_id>/toggle-paid/', CanteenTogglePaidView.as_view(), name='admin_cantina_toggle_paid'),
+    # path('admin-panel/api/cantina/', CanteenApiView.as_view(), name='admin_cantina_api'),
     
     # Testemunhos URLs
     path('admin-panel/testimonies/', AdminTestimonyListView.as_view(), name='admin_testimonies_list'),

@@ -9,6 +9,7 @@ from django.utils import timezone
 from ..models.user import User
 from ..models.member import Member
 from ..models.ministry_membership import MinistryMembership
+from ..models.schedule import MonthlySchedule
 from .mixins import MemberRequiredMixin, ApproverRequiredMixin, MinistrationContextMixin
 
 
@@ -56,18 +57,47 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
         return render(request, 'member/dashboard.html', context)
 
     def _build_base_context(self, member):
-        has_ministries = member.ministry_memberships.filter(is_active=True).exists()
-        is_approver = member.is_approver
-        can_consolidate = member.is_available_to_consolidate
-        is_ministration = self.get_ministration_status(member)
+        flags = self._get_ministry_flags(member)
+        member_schedules = self._get_current_schedules(member)
 
         return {
             'member': member,
-            'can_consolidate': can_consolidate,
-            'is_approver': is_approver,
-            'is_ministration_member': is_ministration,
-            'is_new_member': not any([has_ministries, is_approver, can_consolidate]),
+            'can_consolidate': flags['can_consolidate'],
+            'is_approver': flags['is_approver'],
+            'is_ministration_member': flags['is_ministration'],
+            'is_boas_vindas_member': flags['is_boas_vindas'],
+            'member_schedules': member_schedules,
+            'is_new_member': not any([flags['has_ministries'], flags['is_approver'], flags['can_consolidate']]),
         }
+
+    def _get_ministry_flags(self, member):
+        return {
+            'has_ministries': member.ministry_memberships.filter(is_active=True).exists(),
+            'is_approver': member.is_approver,
+            'can_consolidate': member.is_available_to_consolidate,
+            'is_ministration': self.get_ministration_status(member),
+            'is_boas_vindas': MinistryMembership.objects.filter(
+                member=member,
+                is_active=True,
+                ministry__name__icontains='boas vindas',
+            ).exists(),
+        }
+
+    def _get_current_schedules(self, member):
+        now = timezone.now()
+        ministry_ids = MinistryMembership.objects.filter(
+            member=member, is_active=True
+        ).values_list('ministry_id', flat=True)
+        return list(
+            MonthlySchedule.objects
+            .filter(
+                ministry_id__in=ministry_ids,
+                month=now.month,
+                year=now.year,
+            )
+            .select_related('ministry')
+            .order_by('ministry__name', 'title')
+        )
 
     def _add_followup_context(self, member, context):
         if hasattr(member, 'performed_followups'):

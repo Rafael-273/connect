@@ -220,7 +220,7 @@
                         <tbody class="bg-white">
                             {% for schedule in schedules %}
                             <tr>
-                                <td>
+                                <td class="row-link" data-row-href="{% url 'schedule_detail' schedule.id %}">
                                     <p class="font-semibold text-gray-900 text-sm">{{ schedule.title }}</p>
                                     {% if schedule.guidelines %}
                                     <p class="text-xs text-gray-400 truncate max-w-xs">{{ schedule.guidelines|truncatechars:60 }}</p>

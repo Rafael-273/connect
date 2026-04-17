@@ -138,7 +138,7 @@
                         <tbody>
                             {% for user in users %}
                             <tr>
-                                <td class="text-sm text-gray-900">{{ user.email }}</td>
+                                <td class="text-sm text-gray-900{% if user.member %} row-link{% endif %}"{% if user.member %} data-row-href="{% url 'admin_member_edit' user.member.id %}"{% endif %}>{{ user.email }}</td>
                                 <td class="text-sm text-gray-900">
                                     {% if user.member %}{{ user.member.name }}{% else %}{{ user.first_name }} {{ user.last_name }}{% endif %}
                                 </td>

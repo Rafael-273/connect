@@ -256,7 +256,7 @@
                         <tbody class="bg-white">
                             {% for course in courses %}
                             <tr>
-                                <td>
+                                <td class="row-link" data-row-href="{% url 'attendance_course_dashboard' course.id %}">
                                     <div class="text-sm font-medium text-gray-900">{{ course.name }}</div>
                                     <div class="text-xs text-gray-400 mt-0.5">{{ course.description|default:'Sem descricao'|truncatechars:80 }}</div>
                                 </td>

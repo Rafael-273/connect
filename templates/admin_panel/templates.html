@@ -277,7 +277,7 @@
                         <tbody class="bg-white">
                             {% for template in templates %}
                             <tr>
-                                <td>
+                                <td class="row-link" data-row-href="{% url 'admin_template_detail' template.id %}">
                                     <div class="text-sm font-medium text-gray-900">{{ template.name }}</div>
                                     {% if template.description %}
                                     <div class="text-xs text-gray-400 mt-0.5 max-w-xs truncate">{{ template.description|truncatechars:60 }}</div>

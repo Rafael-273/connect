@@ -615,6 +615,25 @@
             padding: 10px 12px 10px 32px;
         }
     }
+
+    /* Row link — primeira coluna clicável nas listagens */
+    td.row-link {
+        cursor: pointer;
+    }
+    td.row-link:hover {
+        background-color: rgba(0, 0, 0, 0.025);
+    }
 </style>
+<script>
+    // Row link — clicar na primeira coluna abre o detalhe do item
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('td[data-row-href]').forEach(function(td) {
+            td.addEventListener('click', function(e) {
+                if (e.target.closest('a, button, input, select, textarea')) return;
+                window.location.href = td.dataset.rowHref;
+            });
+        });
+    });
+</script>
 </body>
 </html>

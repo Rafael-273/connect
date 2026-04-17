@@ -220,11 +220,6 @@
                         <p class="text-gray-600 text-lg">Gerencie as escalas semanais de ministradores para quarta e domingo</p>
                     </div>
                     <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto">
-                        <button onclick="openExportModal()" 
-                           class="bg-white text-gray-700 border-2 border-gray-300 px-8 py-4 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm hover:shadow-md flex items-center justify-center font-semibold">
-                            <ion-icon name="download" class="mr-2 text-xl"></ion-icon>
-                            Exportar PDF
-                        </button>
                         <a href="{% url 'ministration_schedule_create' %}" 
                            class="bg-gradient-to-r from-red-600 to-red-700 text-white px-8 py-4 rounded-xl hover:from-red-700 hover:to-red-800 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center justify-center font-semibold">
                             <ion-icon name="add-circle" class="mr-2 text-xl"></ion-icon>
@@ -332,78 +327,4 @@
     </div>
 </div>
 
-<!-- Modal de Exportação -->
-<div id="exportModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" style="display: none;">
-    <div class="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl transform transition-all">
-        <div class="flex justify-between items-center mb-6">
-            <h3 class="text-2xl font-bold text-gray-900">
-                <ion-icon name="download" class="text-red-600 text-3xl"></ion-icon>
-                Exportar PDF
-            </h3>
-            <button onclick="closeExportModal()" class="text-gray-400 hover:text-gray-600 text-3xl">
-                <ion-icon name="close"></ion-icon>
-            </button>
-        </div>
-        
-        <form id="exportForm" method="get" action="{% url 'export_monthly_schedule_pdf' %}">
-            <div class="mb-6">
-                <label for="month" class="block text-sm font-semibold text-gray-700 mb-2">Mês</label>
-                <select id="month" name="month" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:outline-none">
-                    <option value="1">Janeiro</option>
-                    <option value="2">Fevereiro</option>
-                    <option value="3">Março</option>
-                    <option value="4">Abril</option>
-                    <option value="5">Maio</option>
-                    <option value="6">Junho</option>
-                    <option value="7">Julho</option>
-                    <option value="8">Agosto</option>
-                    <option value="9">Setembro</option>
-                    <option value="10">Outubro</option>
-                    <option value="11">Novembro</option>
-                    <option value="12">Dezembro</option>
-                </select>
-            </div>
-            
-            <div class="mb-8">
-                <label for="year" class="block text-sm font-semibold text-gray-700 mb-2">Ano</label>
-                <input type="number" id="year" name="year" class="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-red-500 focus:outline-none" min="2020" max="2030">
-            </div>
-            
-            <div class="flex gap-3">
-                <button type="button" onclick="closeExportModal()" class="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 font-semibold transition">
-                    Cancelar
-                </button>
-                <button type="submit" class="flex-1 px-6 py-3 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg hover:from-red-700 hover:to-red-800 font-semibold transition shadow-lg">
-                    <ion-icon name="download-outline" class="mr-2"></ion-icon>
-                    Exportar
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<script>
-    // Definir mês e ano atuais
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-    
-    document.getElementById('month').value = currentMonth;
-    document.getElementById('year').value = currentYear;
-    
-    function openExportModal() {
-        document.getElementById('exportModal').style.display = 'flex';
-    }
-    
-    function closeExportModal() {
-        document.getElementById('exportModal').style.display = 'none';
-    }
-    
-    // Fechar modal ao clicar fora
-    document.getElementById('exportModal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            closeExportModal();
-        }
-    });
-</script>
 {% endblock %}

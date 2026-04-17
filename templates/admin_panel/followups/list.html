@@ -325,7 +325,7 @@ window.Swal = Swal.mixin({
                         <tbody class="bg-white">
                             {% for followup in followups %}
                             <tr>
-                                <td class="whitespace-nowrap">
+                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_followup_detail' followup.id %}">
                                     <div class="flex items-center gap-3">
                                         <div class="followup-avatar bg-[var(--color-primary)] flex items-center justify-center text-white">
                                             {{ followup.accompanied.name|first }}

@@ -262,7 +262,7 @@
                         <tbody class="bg-white">
                             {% for event in events %}
                             <tr>
-                                <td>
+                                <td class="row-link" data-row-href="{% url 'admin_event_edit' event.id %}">
                                     <div class="flex items-center gap-3">
                                         {% if event.banner %}
                                         <img class="event-banner" src="{{ event.banner.url }}" alt="{{ event.title }}">

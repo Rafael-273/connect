@@ -258,7 +258,7 @@
                         <tbody class="bg-white">
                             {% for t in testimonies %}
                             <tr>
-                                <td>
+                                <td class="row-link" data-row-href="{% url 'admin_testimony_edit' t.id %}">
                                     <div class="text-sm font-medium text-gray-900">{{ t.title }}</div>
                                 </td>
                                 <td class="whitespace-nowrap">

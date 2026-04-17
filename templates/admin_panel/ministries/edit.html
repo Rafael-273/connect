@@ -123,7 +123,7 @@
                         </p>
                     </div>
                 </div>
-                <a href="{% url 'admin_ministries_list' %}" class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex-shrink-0 ml-3">
+                <a href="{% url 'ministry_list' %}" class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex-shrink-0 ml-3">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                     Voltar à Lista
                 </a>
@@ -175,7 +175,7 @@
                 </div>
 
                 <div class="flex flex-col sm:flex-row gap-3 mt-8 pt-6 border-t border-gray-100">
-                    <a href="{% url 'admin_ministries_list' %}" class="sm:hidden flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                    <a href="{% url 'ministry_list' %}" class="sm:hidden flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                         Voltar
                     </a>
@@ -183,7 +183,7 @@
                         <ion-icon name="checkmark-circle-outline" class="text-lg"></ion-icon>
                         {% if ministry %}Atualizar Ministério{% else %}Criar Ministério{% endif %}
                     </button>
-                    <a href="{% url 'admin_ministries_list' %}" class="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-600 px-6 py-3 rounded-xl hover:bg-gray-50 transition font-semibold text-sm">
+                    <a href="{% url 'ministry_list' %}" class="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-600 px-6 py-3 rounded-xl hover:bg-gray-50 transition font-semibold text-sm">
                         <ion-icon name="close-circle-outline" class="text-lg"></ion-icon>
                         Cancelar
                     </a>

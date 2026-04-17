@@ -99,7 +99,7 @@
                         <tbody class="bg-white">
                             {% for neighborhood in neighborhoods %}
                             <tr>
-                                <td class="whitespace-nowrap">
+                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_neighborhood_edit' neighborhood.id %}">
                                     <div class="flex items-center gap-3">
                                         <div class="w-9 h-9 bg-[var(--color-primary)] rounded-lg flex items-center justify-center text-white flex-shrink-0">
                                             <ion-icon name="location"></ion-icon>

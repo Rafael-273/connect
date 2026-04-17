@@ -323,7 +323,7 @@
                         <tbody class="bg-white">
                             {% for member in members %}
                             <tr>
-                                <td class="whitespace-nowrap">
+                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_member_edit' member.id %}">
                                     <div class="flex items-center gap-3">
                                         {% if member.profile_picture %}
                                         <img class="member-avatar" src="{{ member.profile_picture.url }}" alt="{{ member.name }}">

@@ -206,7 +206,7 @@
                         <tbody class="bg-white">
                             {% for ministry in ministries %}
                             <tr>
-                                <td>
+                                <td class="row-link" data-row-href="{% url 'ministry_members' ministry.id %}">
                                     <div class="flex items-center gap-3">
                                         <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
                                              style="background-color: color-mix(in srgb, var(--color-primary) 12%, transparent); border: 2px solid var(--color-primary);">

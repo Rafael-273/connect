@@ -296,7 +296,7 @@
                         <tbody class="bg-white">
                             {% for visitor in visitors %}
                             <tr>
-                                <td class="whitespace-nowrap">
+                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_visitor_edit' visitor.id %}">
                                     <div class="flex items-center gap-3">
                                         <div class="visitor-avatar bg-[var(--color-primary)] flex items-center justify-center text-white">
                                             {{ visitor.name|first }}
