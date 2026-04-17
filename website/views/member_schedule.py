@@ -36,7 +36,11 @@ class MemberScheduleDetailView(MemberRequiredMixin, View):
 
         days = (
             ScheduleDay.objects
-            .filter(schedule=schedule, deleted__isnull=True)
+            .filter(
+                schedule=schedule,
+                date__month=schedule.month,
+                date__year=schedule.year,
+            )
             .select_related('team')
             .prefetch_related(
                 'members',
