@@ -1,0 +1,184 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}{{ schedule.title }} - {{ month_name }}/{{ schedule.year }}{% endblock %}
+
+{% block head %}
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(16px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade { animation: fadeIn 0.6s ease-out; }
+
+    .day-card-mine {
+        border-color: #C90905 !important;
+        background: linear-gradient(to right, rgba(201,9,5,0.05), white) !important;
+    }
+    .day-badge-mine {
+        background: rgba(201,9,5,0.1);
+        color: #C90905;
+    }
+    .day-card-other {
+        border-color: rgba(0,0,0,0.08);
+        background: white;
+    }
+    .day-card-cancelled {
+        opacity: 0.55;
+        border-color: rgba(0,0,0,0.08);
+        background: #f9fafb;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-24" style="background: #ffffff;">
+
+    <!-- Header -->
+    <div class="px-4 sm:px-6 md:px-8 py-6 border-b-2" style="border-color: rgba(201, 9, 5, 0.2);">
+        <div class="flex gap-4 items-start">
+            <a href="{% url 'member_dashboard' %}" class="mt-0.5 w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs font-bold uppercase tracking-widest mb-1" style="color: #C90905;">{{ schedule.ministry.name }}</p>
+                <h1 class="text-2xl sm:text-3xl font-black text-gray-900 leading-tight">{{ schedule.title }}</h1>
+                <p class="text-sm text-gray-500 mt-1">{{ month_name }} / {{ schedule.year }}</p>
+            </div>
+        </div>
+
+        <!-- Resumo do membro -->
+        {% if member_day_count > 0 %}
+        <div class="mt-4 flex items-center gap-3 px-4 py-3 rounded-xl" style="background: rgba(201,9,5,0.06); border: 2px solid rgba(201,9,5,0.15);">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                <i class="fas fa-star text-white text-sm"></i>
+            </div>
+            <div>
+                <p class="text-sm font-black" style="color: #C90905;">Você está escalado {{ member_day_count|pluralize:" em,em" }} {{ member_day_count }} dia{{ member_day_count|pluralize:"s" }} neste mês!</p>
+                <p class="text-xs text-gray-500">Os dias marcados com borda vermelha são seus.</p>
+            </div>
+        </div>
+        {% else %}
+        <div class="mt-4 flex items-center gap-3 px-4 py-3 rounded-xl" style="background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.08);">
+            <i class="fas fa-info-circle text-gray-400"></i>
+            <p class="text-sm text-gray-500">Você não está escalado neste mês nesta escala.</p>
+        </div>
+        {% endif %}
+
+        {% if schedule.guidelines %}
+        <div class="mt-3 px-4 py-3 rounded-xl text-sm" style="background: rgba(245,158,11,0.06); border: 2px solid rgba(245,158,11,0.2);">
+            <p class="font-bold text-xs uppercase tracking-wide mb-1" style="color: #B45309;">
+                <i class="fas fa-circle-info mr-1"></i>Orientações
+            </p>
+            <p class="text-gray-700 leading-relaxed">{{ schedule.guidelines }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Lista de Dias -->
+    <div class="px-4 sm:px-6 md:px-8 py-5 space-y-3 animate-fade">
+        {% if days %}
+            {% for entry in days %}
+            {% with day=entry.day %}
+            <div class="rounded-2xl border-2 overflow-hidden shadow-sm transition-all duration-200
+                {% if day.is_cancelled %}day-card-cancelled
+                {% elif entry.is_member_assigned %}day-card-mine
+                {% else %}day-card-other{% endif %}">
+
+                <!-- Header do Dia -->
+                <div class="flex items-center justify-between gap-3 px-4 py-3 border-b"
+                     style="border-color: {% if entry.is_member_assigned and not day.is_cancelled %}rgba(201,9,5,0.15){% else %}rgba(0,0,0,0.06){% endif %};">
+                    <div class="flex items-center gap-3">
+                        <!-- Data -->
+                        <div class="flex-shrink-0 text-center w-12">
+                            <p class="text-2xl font-black leading-none {% if entry.is_member_assigned and not day.is_cancelled %}text-red-600{% else %}text-gray-800{% endif %}">{{ day.date|date:"d" }}</p>
+                            <p class="text-xs font-medium text-gray-400 uppercase">{{ entry.pt_month_abbr }}</p>
+                        </div>
+                        <div>
+                            <p class="text-sm font-bold text-gray-800">{{ entry.pt_weekday }}</p>
+                            {% if day.description %}
+                            <p class="text-xs text-gray-500">{{ day.description }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        {% if day.is_cancelled %}
+                        <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-600">
+                            <i class="fas fa-ban mr-1"></i>Cancelado
+                        </span>
+                        {% elif entry.is_member_assigned %}
+                        <span class="px-2.5 py-1 text-xs font-bold rounded-full day-badge-mine">
+                            <i class="fas fa-check mr-1"></i>Você está escalado
+                        </span>
+                        {% endif %}
+
+                        {% if day.team %}
+                        <span class="px-2.5 py-1 text-xs font-bold rounded-full" style="background: rgba(59,130,246,0.1); color: #1D4ED8;">
+                            <i class="fas fa-users mr-1"></i>{{ day.team.name }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Corpo do Dia -->
+                {% if entry.div_map or entry.members %}
+                <div class="px-4 py-3 space-y-3 text-sm">
+                    {% if entry.div_map %}
+                        {% for div_name, div_members in entry.div_map.items %}
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1.5">{{ div_name }}</p>
+                            <div class="flex flex-wrap gap-2">
+                                {% for m in div_members %}
+                                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
+                                    {% if m.id == member.id %}text-white{% else %}text-gray-700 bg-gray-100{% endif %}"
+                                    {% if m.id == member.id %}style="background-color: #C90905;"{% endif %}>
+                                    {% if m.id == member.id %}<i class="fas fa-star text-xs"></i>{% endif %}
+                                    {{ m.name }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% elif entry.members %}
+                        <div class="flex flex-wrap gap-2">
+                            {% for m in entry.members %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
+                                {% if m.id == member.id %}text-white{% else %}text-gray-700 bg-gray-100{% endif %}"
+                                {% if m.id == member.id %}style="background-color: #C90905;"{% endif %}>
+                                {% if m.id == member.id %}<i class="fas fa-star text-xs"></i>{% endif %}
+                                {{ m.name }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    {% if day.is_cancelled and day.cancellation_reason %}
+                    <p class="text-xs text-red-500 italic">{{ day.cancellation_reason }}</p>
+                    {% elif day.notes %}
+                    <p class="text-xs text-gray-500 italic">{{ day.notes }}</p>
+                    {% endif %}
+                </div>
+                {% elif day.notes %}
+                <div class="px-4 py-3">
+                    <p class="text-xs text-gray-500 italic">{{ day.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+            {% endwith %}
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-16 px-4">
+                <div class="w-24 h-24 mx-auto mb-6 rounded-3xl flex items-center justify-center shadow-xl" style="background: linear-gradient(135deg, rgba(201,9,5,0.08), rgba(230,57,70,0.06));">
+                    <i class="fas fa-calendar-xmark text-4xl" style="color: #C90905;"></i>
+                </div>
+                <h3 class="text-xl font-black text-gray-800 mb-2">Nenhum dia cadastrado</h3>
+                <p class="text-gray-500 text-sm">Esta escala ainda não tem dias registrados.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% include 'parciais/member_bottom_nav.html' with nav_active='home' %}
+
+{% endblock %}

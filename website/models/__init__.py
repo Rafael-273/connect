@@ -18,3 +18,5 @@ from .schedule import Team, MonthlySchedule, ScheduleDay, ScaleDivision, Divisio
 from .music import Music
 from .testimony import Testimony
 from .prayer_request import PrayerRequest
+from .canteen import CanteenDebtor
+from .course_attendance import AttendanceCourse, CourseParticipant, CourseLesson, CourseAttendance

@@ -7,11 +7,11 @@ class FollowUpTemplateForm(forms.ModelForm):
         fields = ['name', 'description']
         widgets = {
             'name': forms.TextInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+                'class': 'form-input',
                 'placeholder': 'Nome do template (ex: Consolidação Básica - 4 Semanas)'
             }),
             'description': forms.Textarea(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+                'class': 'form-textarea',
                 'rows': 4,
                 'placeholder': 'Descreva o propósito e características deste template...'
             })
@@ -23,17 +23,17 @@ class FollowUpTemplateStepForm(forms.ModelForm):
         fields = ['week', 'title', 'description']
         widgets = {
             'week': forms.NumberInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+                'class': 'form-input',
                 'min': 1,
                 'max': 52,
-                'placeholder': 'Ex: 1, 2, 3...'
+                'placeholder': 'Ex: 1'
             }),
             'title': forms.TextInput(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+                'class': 'form-input',
                 'placeholder': 'Título da semana (ex: Acolhimento, Fundamentos...)'
             }),
             'description': forms.Textarea(attrs={
-                'class': 'w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
+                'class': 'form-textarea',
                 'rows': 3,
                 'placeholder': 'Dicas e orientações para esta semana...'
             })

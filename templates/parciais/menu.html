@@ -1,5 +1,6 @@
 {% load static %}
 
+{% if '/admin-panel/' not in request.path and '/admin_panel/' not in request.path %}
 <header class="w-full transition duration-800 ease-in-out fixed left-0 z-50 {% if navbar_transparent %}bg-transparent{% else %}bg-[var(--color-primary)]{% endif %}" id="navbar" style="top: -2px;">
     <nav class="container mx-auto flex justify-between items-center px-4 py-8">
         {% if '/admin-panel/' not in request.path %}
@@ -112,3 +113,4 @@
     });
 
 </script>
+{% endif %}

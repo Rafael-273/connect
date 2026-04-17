@@ -3,6 +3,62 @@
 
 {% block title %}Músicas - Painel Administrativo{% endblock %}
 
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    /* Table improvements */
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
+    }
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+    .data-table tbody td {
+        padding: 14px 24px;
+        vertical-align: middle;
+    }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .action-btn-view   { background: rgba(201,9,5,0.08); color: var(--color-primary); }
+    .action-btn-view:hover   { background: rgba(201,9,5,0.16); }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
+</style>
+{% endblock %}
+
 {% block content %}
 {% include 'parciais/messages.html' %}
 
@@ -12,121 +68,101 @@
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-3 md:p-6 mt-24">
 
-            <!-- Cabeçalho -->
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                <div class="mb-4 sm:mb-0">
-                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Músicas</h1>
-                    <p class="text-gray-600 mt-2">Gerenciar cifras e repertório</p>
+            <!-- Title -->
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <ion-icon name="musical-notes" class="text-xl text-white"></ion-icon>
                 </div>
-
-                <a href="{% url 'admin_music_create' %}"
-   class="inline-flex items-center gap-2 
-          bg-red-600 hover:bg-red-700 
-          text-white font-semibold 
-          px-5 py-2.5 
-          rounded-xl 
-          shadow-md hover:shadow-lg 
-          transition-all duration-200">
-    
-    <ion-icon name="add" class="text-xl"></ion-icon>
-    Nova Música
-                </a>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 leading-tight">Músicas</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">
+                        {% if musics %}{{ musics|length }} música{{ musics|length|pluralize:"s" }}{% else %}Gerenciar cifras e repertório{% endif %}
+                    </p>
+                </div>
             </div>
 
-            <!-- Filtro -->
-            <div class="admin-card p-4 sm:p-6 mb-6">
-                <form method="GET" class="flex flex-col sm:flex-row gap-4">
-                    <input type="text" name="search" value="{{ search }}"
-                           placeholder="Buscar por nome da música ou cantor..."
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
-
-                    <div class="flex gap-2">
-                        <button type="submit"
-                                class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition flex items-center">
-                            <ion-icon name="search" class="mr-2"></ion-icon>
-                            Buscar
-                        </button>
-
-                        <a href="{% url 'admin_music_list' %}"
-                           class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
-                            Limpar
-                        </a>
+            <!-- Search + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar por nome da música ou cantor..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
                     </div>
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
                 </form>
+
+                <a href="{% url 'admin_music_create' %}"
+                   class="flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Nova Música
+                </a>
             </div>
 
             <!-- Tabela -->
             <div class="admin-card overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
+                    <table class="data-table w-full">
+                        <thead>
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Música
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Cantor
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Cifra (PDF)
-                                </th>
-                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                                    Ações
-                                </th>
+                                <th>Música</th>
+                                <th>Cantor</th>
+                                <th>Cifra (PDF)</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
 
-                        <tbody class="bg-white divide-y divide-gray-200">
+                        <tbody>
                             {% for music in musics %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 font-medium text-gray-900">
-                                    {{ music.name }}
-                                </td>
+                            <tr>
+                                <td class="font-medium text-gray-900 row-link" data-row-href="{% url 'admin_music_edit' music.id %}">{{ music.name }}</td>
 
-                                <td class="px-6 py-4 text-gray-700">
-                                    {{ music.singer|default:"—" }}
-                                </td>
+                                <td class="text-gray-700">{{ music.singer|default:"—" }}</td>
 
-                                <td class="px-6 py-4">
+                                <td>
                                     {% if music.chord_sheet %}
-                                        <a href="{{ music.chord_sheet.url }}"
-                                           target="_blank"
-                                           class="text-[var(--color-primary)] hover:underline flex items-center">
-                                            <ion-icon name="document-text-outline" class="mr-1"></ion-icon>
+                                        <a href="{{ music.chord_sheet.url }}" target="_blank"
+                                           class="text-[var(--color-primary)] hover:underline flex items-center gap-1 text-sm">
+                                            <ion-icon name="document-text-outline"></ion-icon>
                                             Ver PDF
                                         </a>
                                     {% else %}
-                                        <span class="text-gray-400">Não enviado</span>
+                                        <span class="text-gray-400 text-sm">Não enviado</span>
                                     {% endif %}
                                 </td>
 
-                                <td class="px-6 py-4 text-center">
-                                    <div class="flex justify-center gap-3">
+                                <td>
+                                    <div class="flex justify-end gap-1">
                                         {% if music.chord_sheet %}
                                         <a href="{{ music.chord_sheet.url }}" target="_blank"
-                                           class="text-[var(--color-primary)] hover:text-opacity-80">
-                                            <ion-icon name="eye"></ion-icon>
+                                           class="action-btn action-btn-view" title="Ver PDF">
+                                            <ion-icon name="eye-outline"></ion-icon>
                                         </a>
                                         {% endif %}
-
                                         <a href="{% url 'admin_music_edit' music.id %}"
-                                                class="text-blue-600 hover:text-blue-800"
-                                                title="Editar música">
-                                            <ion-icon name="create"></ion-icon>
+                                           class="action-btn action-btn-edit" title="Editar música">
+                                            <ion-icon name="create-outline"></ion-icon>
                                         </a>
-                                        
                                         <button onclick="deleteMusic({{ music.id }}, '{{ music.name }}')"
-                                                class="text-red-600 hover:text-red-800">
-                                            <ion-icon name="trash"></ion-icon>
+                                                class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="4" class="px-6 py-8 text-center text-gray-500">
-                                    <ion-icon name="musical-notes-outline" class="text-4xl mb-2"></ion-icon>
-                                    <p>Nenhuma música cadastrada.</p>
+                                <td colspan="4" class="text-center py-8 text-gray-500">
+                                    <ion-icon name="musical-notes-outline" class="text-4xl mb-2 block mx-auto"></ion-icon>
+                                    Nenhuma música cadastrada.
                                 </td>
                             </tr>
                             {% endfor %}
@@ -145,25 +181,63 @@
 
 <!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+/* ===== SweetAlert2 Custom Theme ===== */
+.swal2-popup.swal-custom { font-family: "Giga Sans", system-ui, sans-serif !important; border-radius: 20px !important; padding: 36px 28px 28px !important; max-width: 400px !important; box-shadow: 0 24px 60px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.04) !important; }
+.swal2-popup.swal-custom .swal2-header { padding: 0 !important; flex-direction: column !important; align-items: center !important; gap: 14px !important; margin-bottom: 4px !important; }
+.swal2-popup.swal-custom .swal2-icon { border: none !important; width: 56px !important; height: 56px !important; margin: 0 auto !important; border-radius: 50% !important; flex-shrink: 0 !important; }
+.swal2-popup.swal-custom .swal2-icon .swal2-icon-content { font-size: 1.75rem !important; font-weight: 900 !important; line-height: 1 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-warning, .swal2-popup.swal-custom .swal2-icon.swal2-question { background: #fee2e2 !important; border-color: transparent !important; color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-warning .swal2-icon-content, .swal2-popup.swal-custom .swal2-icon.swal2-question .swal2-icon-content { color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error { background: #fee2e2 !important; border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark { transform: scale(0.6) !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-left, .swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-right { background-color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success { background: #dcfce7 !important; border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-ring { border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success [class^='swal2-success-circular-line'], .swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-fix { background: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-tip, .swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-long { background-color: #16a34a !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-info { background: #dbeafe !important; border-color: transparent !important; color: #2563eb !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-info .swal2-icon-content { color: #2563eb !important; }
+.swal2-popup.swal-custom .swal2-title { font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 1.05rem !important; font-weight: 700 !important; color: #111827 !important; letter-spacing: -0.01em !important; line-height: 1.35 !important; padding: 0 !important; margin: 0 !important; text-align: center !important; }
+.swal2-popup.swal-custom .swal2-html-container { font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 0.875rem !important; color: #6b7280 !important; font-weight: 400 !important; text-align: center !important; padding: 0 !important; margin: 6px 0 0 !important; line-height: 1.65 !important; }
+.swal2-popup.swal-custom .swal2-actions { width: 100% !important; gap: 10px !important; flex-wrap: nowrap !important; justify-content: center !important; margin-top: 24px !important; }
+/* display sem !important — permite que o SweetAlert2 esconda botões inativos via style.display='none' */
+.swal-btn { flex: 0 1 auto !important; min-width: 120px !important; display: inline-flex; align-items: center !important; justify-content: center !important; padding: 11px 24px !important; border-radius: 10px !important; font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 0.875rem !important; font-weight: 600 !important; cursor: pointer !important; transition: background 0.15s, transform 0.1s !important; letter-spacing: 0.005em !important; white-space: nowrap !important; border: none !important; }
+.swal-btn:hover { transform: translateY(-1px) !important; }
+.swal-btn:active { transform: translateY(0) !important; }
+.swal-btn-confirm { background: var(--color-primary) !important; color: white !important; }
+.swal-btn-confirm:hover { background: #a80703 !important; }
+.swal-btn-cancel { background: #f3f4f6 !important; color: #4b5563 !important; }
+.swal-btn-cancel:hover { background: #e5e7eb !important; }
+.swal-btn-deny { background: #6b7280 !important; color: white !important; }
+.swal-btn-danger { background: #dc2626 !important; color: white !important; }
+.swal-btn-danger:hover { background: #b91c1c !important; }
+.swal2-popup.swal-custom .swal2-loader { border-color: var(--color-primary) transparent var(--color-primary) transparent !important; }
+</style>
+<script>
+window.Swal = Swal.mixin({
+    customClass: {
+        popup:         'swal-custom',
+        confirmButton: 'swal-btn swal-btn-confirm',
+        denyButton:    'swal-btn swal-btn-deny',
+        cancelButton:  'swal-btn swal-btn-cancel',
+    },
+    buttonsStyling: false,
+    backdrop: 'rgba(0,0,0,0.55)',
+});
+</script>
 
 <script>
 function deleteMusic(musicId, musicName) {
     Swal.fire({
-        title: '⚠️ Confirmar Exclusão',
-        html: `Tem certeza que deseja deletar a partitura <strong>${musicName}</strong>?<br><br>
-               <span class="text-red-600">Esta ação não pode ser desfeita!</span>`,
+        title: 'Confirmar Exclusão',
+        html: `Tem certeza que deseja deletar a partitura <strong>${musicName}</strong>?<br>Esta ação não pode ser desfeita.`,
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#DC2626',
-        cancelButtonColor: '#6B7280',
-        confirmButtonText: '<i class="fas fa-trash mr-2"></i>Sim, deletar!',
-        cancelButtonText: '<i class="fas fa-times mr-2"></i>Cancelar',
+        confirmButtonText: 'Sim, deletar!',
+        cancelButtonText: 'Cancelar',
         reverseButtons: true,
-        customClass: {
-            popup: 'rounded-2xl',
-            confirmButton: 'rounded-xl px-6 py-3 font-bold',
-            cancelButton: 'rounded-xl px-6 py-3 font-bold'
-        }
+        customClass: { confirmButton: 'swal-btn swal-btn-danger' }
     }).then((result) => {
         if (result.isConfirmed) {
 
@@ -193,48 +267,52 @@ function deleteMusic(musicId, musicName) {
             .then(data => {
                 if (data.success) {
                     Swal.fire({
-                        title: '✅ Deletado!',
+                        title: 'Deletado!',
                         text: 'A partitura foi deletada com sucesso.',
                         icon: 'success',
-                        confirmButtonColor: '#10B981',
-                        confirmButtonText: '<i class="fas fa-check mr-2"></i>OK',
-                        customClass: {
-                            popup: 'rounded-2xl',
-                            confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                        }
+                        confirmButtonText: 'OK'
                     }).then(() => {
                         window.location.reload();
                     });
                 } else {
                     Swal.fire({
-                        title: '❌ Erro',
+                        title: 'Erro',
                         text: data.error || 'Ocorreu um erro ao deletar a partitura.',
                         icon: 'error',
-                        confirmButtonColor: '#EF4444',
-                        confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
-                        customClass: {
-                            popup: 'rounded-2xl',
-                            confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                        }
+                        confirmButtonText: 'Fechar'
                     });
                 }
             })
             .catch(error => {
                 console.error('Erro:', error);
                 Swal.fire({
-                    title: '❌ Erro',
+                    title: 'Erro',
                     text: 'Ocorreu um erro ao processar a solicitação.',
                     icon: 'error',
-                    confirmButtonColor: '#EF4444',
-                    confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
-                    customClass: {
-                        popup: 'rounded-2xl',
-                        confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                    }
+                    confirmButtonText: 'Fechar'
                 });
             });
         }
     });
 }
+
+// Auto-filter with loading overlay
+(function () {
+    if (!document.getElementById('filter-loading-overlay')) {
+        var ov = document.createElement('div');
+        ov.id = 'filter-loading-overlay';
+        ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        ov.style.display = 'none';
+        ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+        document.body.appendChild(ov);
+    }
+    var overlay = document.getElementById('filter-loading-overlay');
+    var form = document.getElementById('filter-form');
+    if (!form) return;
+    form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+    form.querySelectorAll('input[type="date"]').forEach(function(input) {
+        input.addEventListener('change', function () { form.submit(); });
+    });
+})();
 </script>
 {% endblock %}

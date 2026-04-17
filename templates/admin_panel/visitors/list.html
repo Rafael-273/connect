@@ -8,13 +8,23 @@
     body {
         background-color: #f8f9fa !important;
     }
-    
+
     .admin-card {
         background: white;
         border-radius: 12px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     }
-    
+
+    .visitor-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid var(--color-accent);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 1.15rem;
+    }
+
     .conversion-badge {
         padding: 4px 12px;
         border-radius: 20px;
@@ -24,123 +34,201 @@
         align-items: center;
         gap: 4px;
     }
-    
-    .conversion-yes {
-        background-color: #dcfce7;
-        color: #166534;
+
+    .conversion-yes    { background-color: #dcfce7; color: #166534; }
+    .conversion-member { background-color: #dbeafe; color: #1e40af; }
+    .conversion-no     { background-color: #fef2f2; color: #991b1b; }
+
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
     }
-    
-    .conversion-partial {
-        background-color: #fef3c7;
-        color: #92400e;
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
     }
-    
-    .conversion-member {
-        background-color: #dbeafe;
-        color: #1e40af;
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
     }
-    
-    .conversion-no {
-        background-color: #fef2f2;
-        color: #991b1b;
+    .data-table tbody td {
+        padding: 14px 24px;
+        vertical-align: middle;
     }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .action-btn-view   { background: rgba(201,9,5,0.08); color: var(--color-primary); }
+    .action-btn-view:hover   { background: rgba(201,9,5,0.16); }
+    .action-btn-wa     { background: #f0fdf4; color: #16a34a; }
+    .action-btn-wa:hover     { background: #dcfce7; }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
 </style>
 {% endblock %}
 
 {% block content %}
+{% include 'parciais/messages.html' %}
+
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
 
-    <!-- Main Content -->
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-4 md:p-6 mt-24">
-            <div class="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 gap-4">
-                <div>
-                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900 page-title">Visitantes</h1>
-                    <p class="text-gray-600 mt-2">Gerenciar visitantes da igreja</p>
+        <div class="p-4 sm:p-6 mt-24">
+
+            <!-- Title -->
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="person-add" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Visitantes</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if visitors.paginator.count %}{{ visitors.paginator.count }} visitante{{ visitors.paginator.count|pluralize:"s" }} cadastrado{{ visitors.paginator.count|pluralize:"s" }}{% else %}Gerenciar visitantes da igreja{% endif %}
+                        </p>
+                    </div>
                 </div>
-                <a href="{% url 'admin_visitor_create' %}" class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center w-full md:w-auto">
-                    <ion-icon name="add" class="mr-2"></ion-icon>
+                <!-- Mobile: Novo Visitante (icon only) -->
+                <a href="{% url 'admin_visitor_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Novo Visitante">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Search + Filters + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="period"     id="hidden-period"     value="{{ period_filter }}">
+                    <input type="hidden" name="conversion" id="hidden-conversion" value="{{ conversion_filter }}">
+
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar por nome, email ou telefone..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-visitors"
+                            class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if period_filter or conversion_filter %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                            <div id="filter-panel-visitors"
+                                class="hidden absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                               <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Período da Visita</label>
+                                    <select id="panel-period" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Qualquer período</option>
+                                        <option value="7_days"  {% if period_filter == '7_days' %}selected{% endif %}>Últimos 7 dias</option>
+                                        <option value="30_days" {% if period_filter == '30_days' %}selected{% endif %}>Últimos 30 dias</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Conversão</label>
+                                    <select id="panel-conversion" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todas as Conversões</option>
+                                        <option value="converted"     {% if conversion_filter == 'converted' %}selected{% endif %}>Convertidos</option>
+                                        <option value="not_converted" {% if conversion_filter == 'not_converted' %}selected{% endif %}>Não Convertidos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                <a href="{% url 'admin_visitors_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-visitors"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Desktop: Novo Visitante -->
+                <a href="{% url 'admin_visitor_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
                     Novo Visitante
                 </a>
             </div>
 
-            <!-- Filters -->
-            <div class="admin-card p-6 mb-6">
-                <form method="GET" class="flex flex-col md:flex-row flex-wrap gap-4 items-start md:items-center">
-                    <div class="w-full md:flex-1 min-w-64">
-                        <input type="text" name="search" value="{{ search }}" 
-                               placeholder="Buscar por nome, email ou telefone..." 
-                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
-                    </div>
-                    
-                    <div class="w-full md:w-auto">
-                        <select name="period" class="w-full md:w-[13rem] px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
-                            <option value="">Período da Visita</option>
-                            <option value="7_days" {% if period_filter == '7_days' %}selected{% endif %}>Últimos 7 dias</option>
-                            <option value="30_days" {% if period_filter == '30_days' %}selected{% endif %}>Últimos 30 dias</option>
-                        </select>
-                    </div>
-                    
-                    <div class="w-full md:w-auto">
-                        <select name="conversion" class="w-full md:w-[15rem] px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
-                            <option value="">Todas as Conversões</option>
-                            <option value="converted" {% if conversion_filter == 'converted' %}selected{% endif %}>Convertidos</option>
-                            <option value="not_converted" {% if conversion_filter == 'not_converted' %}selected{% endif %}>Não Convertidos</option>
-                        </select>
-                    </div>
-                    
-                    <div class="flex flex-wrap gap-2 w-full md:w-auto">
-                        <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition w-full md:w-auto">
-                            <ion-icon name="search" class="mr-2"></ion-icon>
-                            Buscar
-                        </button>
-                        
-                        <a href="{% url 'admin_visitors_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition text-center w-full md:w-auto">
-                            Limpar
-                        </a>
-                </form>
-            </div>
-
             <!-- Versão Mobile: Cards -->
-            <div class="block md:hidden space-y-4 py-6">
+            <div class="block md:hidden space-y-4">
                 {% for visitor in visitors %}
                 <div class="admin-card p-4 hover:shadow-lg transition-shadow">
-                    <div class="flex items-start justify-between mb-3 gap-2">
+                    <div class="flex items-start justify-between mb-3">
                         <div class="flex items-center gap-3 flex-1 min-w-0">
-                            <div class="w-12 h-12 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                            <div class="visitor-avatar bg-[var(--color-primary)] flex items-center justify-center text-white flex-shrink-0">
                                 {{ visitor.name|first }}
                             </div>
                             <div class="flex-1 min-w-0">
                                 <h3 class="text-base font-bold text-gray-900 truncate">{{ visitor.name }}</h3>
-                                {% if visitor.gender %}
-                                <p class="text-xs text-gray-500">
-                                    {% if visitor.gender == 'male' %}Masculino{% else %}Feminino{% endif %}
-                                </p>
+                                {% if visitor.birth_date %}
+                                <p class="text-xs text-gray-500">{{ visitor.birth_date|date:"d/m/Y" }}</p>
                                 {% endif %}
                             </div>
                         </div>
                         {% if visitor.profile_notes and '[CONVERTIDO]' in visitor.profile_notes %}
-                        <span class="conversion-badge conversion-member text-xs flex-shrink-0">
-                            <ion-icon name="person-add" class="text-xs"></ion-icon>
-                            <span class="hidden sm:inline">Membro</span>
-                            <span class="sm:hidden">M</span>
+                        <span class="conversion-badge conversion-member">
+                            <ion-icon name="person-add-outline"></ion-icon>
+                            Membro
                         </span>
                         {% elif visitor.decision_for_jesus or visitor.conversion %}
-                        <span class="conversion-badge conversion-yes text-xs flex-shrink-0">
-                            <ion-icon name="checkmark-circle" class="text-xs"></ion-icon>
-                            <span class="hidden sm:inline">Convertido</span>
-                            <span class="sm:hidden">C</span>
+                        <span class="conversion-badge conversion-yes">
+                            <ion-icon name="checkmark-circle-outline"></ion-icon>
+                            Convertido
                         </span>
                         {% else %}
-                        <span class="conversion-badge conversion-no text-xs flex-shrink-0">
-                            <ion-icon name="close-circle" class="text-xs"></ion-icon>
-                            <span class="hidden sm:inline">Aguardando</span>
-                            <span class="sm:hidden">A</span>
+                        <span class="conversion-badge conversion-no">
+                            <ion-icon name="close-circle-outline"></ion-icon>
+                            Aguardando
                         </span>
                         {% endif %}
                     </div>
-                    
+
                     <div class="space-y-2 mb-3 text-sm">
                         <div class="flex items-center gap-2">
                             <ion-icon name="mail" class="text-gray-400"></ion-icon>
@@ -167,28 +255,21 @@
                         </div>
                         {% endif %}
                     </div>
-                    
-                    <div class="flex flex-wrap gap-2 pt-3 border-t border-gray-100">
-                        <button onclick="viewVisitor({{ visitor.id }})" 
-                                class="flex-1 min-w-[80px] py-2 px-2 bg-[var(--color-primary)] bg-opacity-10 text-white rounded-lg font-medium text-xs sm:text-sm hover:bg-opacity-20 transition flex items-center justify-center gap-1">
-                            <ion-icon name="eye" class="text-base"></ion-icon>
-                            <span class="hidden xs:inline">Ver</span>
+
+                    <div class="flex gap-2 pt-3 border-t border-gray-100">
+                        <button onclick="viewVisitor({{ visitor.id }})"
+                                class="flex-1 py-2 px-3 bg-[var(--color-primary)] text-white rounded-lg font-medium text-sm hover:bg-opacity-90 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="eye-outline"></ion-icon>
+                            Ver
                         </button>
-                        {% if visitor.phone %}
-                        <a href="https://wa.me/55{{ visitor.phone|default:'' }}?text=Olá {{ visitor.name|urlencode }}, tudo bem? Eu sou da Igreja Filadélfia!" 
-                           target="_blank" 
-                           class="flex-1 min-w-[80px] py-2 px-2 bg-green-50 text-green-600 rounded-lg font-medium text-xs sm:text-sm hover:bg-green-100 transition flex items-center justify-center gap-1">
-                            <ion-icon name="logo-whatsapp" class="text-base"></ion-icon>
-                            <span class="hidden xs:inline">WhatsApp</span>
-                        </a>
-                        {% endif %}
-                        <button onclick="editVisitor({{ visitor.id }})" 
-                                class="py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-xs sm:text-sm hover:bg-blue-100 transition flex items-center justify-center">
-                            <ion-icon name="create" class="text-base"></ion-icon>
+                        <button onclick="editVisitor({{ visitor.id }})"
+                                class="flex-1 py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="create-outline"></ion-icon>
+                            Editar
                         </button>
-                        <button onclick="deleteVisitor({{ visitor.id }}, '{{ visitor.name }}')" 
-                                class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-xs sm:text-sm hover:bg-red-100 transition flex items-center justify-center">
-                            <ion-icon name="trash" class="text-base"></ion-icon>
+                        <button onclick="deleteVisitor({{ visitor.id }}, '{{ visitor.name }}')"
+                                class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-sm hover:bg-red-100 transition flex items-center justify-center">
+                            <ion-icon name="trash-outline"></ion-icon>
                         </button>
                     </div>
                 </div>
@@ -202,58 +283,54 @@
             <!-- Versão Desktop: Tabela -->
             <div class="admin-card overflow-hidden hidden md:block">
                 <div class="overflow-x-auto table-responsive">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
+                    <table class="w-full data-table">
+                        <thead>
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Visitante</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contato</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data da Visita</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conversão</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                <th class="text-left">Visitante</th>
+                                <th class="text-left">Contato</th>
+                                <th class="text-left">Data da Visita</th>
+                                <th class="text-left">Conversão</th>
+                                <th class="text-left">Ações</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
+                        <tbody class="bg-white">
                             {% for visitor in visitors %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <div class="w-10 h-10 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold">
+                            <tr>
+                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_visitor_edit' visitor.id %}">
+                                    <div class="flex items-center gap-3">
+                                        <div class="visitor-avatar bg-[var(--color-primary)] flex items-center justify-center text-white">
                                             {{ visitor.name|first }}
                                         </div>
-                                        <div class="ml-4">
-                                            <div class="text-sm font-medium text-gray-900">{{ visitor.name }}</div>
-                                            {% if visitor.gender %}
-                                            <div class="text-sm text-gray-500">
-                                                {% if visitor.gender == 'male' %}Masculino{% else %}Feminino{% endif %}
-                                            </div>
+                                        <div>
+                                            <div class="text-sm text-gray-900">{{ visitor.name }}</div>
+                                            {% if visitor.birth_date %}
+                                            <div class="text-xs text-gray-400 mt-0.5">{{ visitor.birth_date|date:"d/m/Y" }}</div>
                                             {% endif %}
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900">{{ visitor.email|default:"--" }}</div>
-                                    <div class="text-sm text-gray-500">{{ visitor.phone|default:"--" }}</div>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ visitor.email|default:"--" }}</div>
+                                    <div class="text-xs text-gray-400 mt-0.5">{{ visitor.phone|default:"--" }}</div>
                                     {% if visitor.wants_home_prayer %}
-                                        <div class="text-xs text-green-700 mt-1">🏠 Deseja oração na casa</div>
+                                    <div class="text-xs text-green-700 mt-0.5">🏠 Oração na casa</div>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900">{{ visitor.visit_date|date:"d/m/Y" }}</div>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ visitor.visit_date|date:"d/m/Y" }}</div>
                                     {% if visitor.neighborhood %}
-                                    <div class="text-sm text-gray-500">{{ visitor.neighborhood.name }}</div>
+                                    <div class="text-xs text-gray-400 mt-0.5">{{ visitor.neighborhood.name }}</div>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="whitespace-nowrap">
                                     {% if visitor.profile_notes and '[CONVERTIDO]' in visitor.profile_notes %}
-                                    <!-- Já foi convertido para membro -->
                                     <span class="conversion-badge conversion-member">
-                                        <ion-icon name="person-add"></ion-icon>
+                                        <ion-icon name="person-add-outline"></ion-icon>
                                         Já é Membro
                                     </span>
                                     {% elif visitor.decision_for_jesus or visitor.conversion %}
-                                    <!-- Convertido mas ainda não migrado -->
                                     <span class="conversion-badge conversion-yes">
-                                        <ion-icon name="checkmark-circle"></ion-icon>
+                                        <ion-icon name="checkmark-circle-outline"></ion-icon>
                                         {% if visitor.decision_for_jesus and visitor.conversion %}
                                             Convertido ({{ visitor.get_conversion_display }})
                                         {% elif visitor.decision_for_jesus %}
@@ -263,40 +340,39 @@
                                         {% endif %}
                                     </span>
                                     {% else %}
-                                    <!-- Não convertido -->
                                     <span class="conversion-badge conversion-no">
-                                        <ion-icon name="close-circle"></ion-icon>
-                                        Aguardando Conversão
+                                        <ion-icon name="close-circle-outline"></ion-icon>
+                                        Aguardando
                                     </span>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex space-x-2">
-                                        <button onclick="viewVisitor({{ visitor.id }})" 
-                                                class="text-[var(--color-primary)] hover:text-opacity-80">
-                                            <ion-icon name="eye" class="text-lg"></ion-icon>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button onclick="viewVisitor({{ visitor.id }})" class="action-btn action-btn-view" title="Ver">
+                                            <ion-icon name="eye-outline"></ion-icon>
                                         </button>
                                         {% if visitor.phone %}
-                                        <a href="https://wa.me/55{{ visitor.phone|default:'' }}?text=Olá {{ visitor.name|urlencode }}, tudo bem? Eu sou da Igreja Filadélfia!" 
-                                           target="_blank" class="text-green-600 hover:text-green-800">
-                                            <ion-icon name="logo-whatsapp" class="text-lg"></ion-icon>
+                                        <a href="https://wa.me/55{{ visitor.phone|default:'' }}?text=Olá {{ visitor.name|urlencode }}, tudo bem? Eu sou da Igreja Filadélfia!"
+                                           target="_blank" class="action-btn action-btn-wa" title="WhatsApp">
+                                            <ion-icon name="logo-whatsapp"></ion-icon>
                                         </a>
                                         {% endif %}
-                                        <button onclick="editVisitor({{ visitor.id }})" 
-                                                class="text-blue-600 hover:text-blue-800">
-                                            <ion-icon name="create" class="text-lg"></ion-icon>
+                                        <button onclick="editVisitor({{ visitor.id }})" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
                                         </button>
-                                        <button onclick="deleteVisitor({{ visitor.id }}, '{{ visitor.name }}')" 
-                                                class="text-red-600 hover:text-red-800">
-                                            <ion-icon name="trash" class="text-lg"></ion-icon>
+                                        <button onclick="deleteVisitor({{ visitor.id }}, '{{ visitor.name }}')" class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
-                                    Nenhum visitante encontrado.
+                                <td colspan="5" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center gap-2 text-gray-400">
+                                        <ion-icon name="people-outline" style="font-size:2rem;"></ion-icon>
+                                        <span class="text-sm">Nenhum visitante encontrado.</span>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -305,192 +381,297 @@
                 </div>
             </div>
 
-                <!-- Pagination -->
-                {% if visitors.has_other_pages %}
-                <div class="px-4 md:px-6 py-3 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-3">
-                    <div class="text-xs md:text-sm text-gray-500 text-center md:text-left">
-                        Mostrando {{ visitors.start_index }} a {{ visitors.end_index }} de {{ visitors.paginator.count }} visitantes
-                    </div>
-                    <div class="flex flex-wrap justify-center gap-2">
-                        {% if visitors.has_previous %}
-                        <a href="?page={{ visitors.previous_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                            Anterior
-                        </a>
-                        {% endif %}
-                        
-                        {% for num in visitors.paginator.page_range %}
-                        {% if num == visitors.number %}
-                        <span class="px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm">{{ num }}</span>
-                        {% elif num > visitors.number|add:'-3' and num < visitors.number|add:'3' %}
-                        <a href="?page={{ num }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                            {{ num }}
-                        </a>
-                        {% endif %}
-                        {% endfor %}
-                        
-                        {% if visitors.has_next %}
-                        <a href="?page={{ visitors.next_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                            Próximo
-                        </a>
-                        {% endif %}
-                    </div>
+            {% if visitors.has_other_pages %}
+            <div class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
+                    Mostrando {{ visitors.start_index }}–{{ visitors.end_index }} de {{ visitors.paginator.count }} visitantes
                 </div>
-                {% endif %}
+                <div class="flex items-center gap-1 order-1 sm:order-2 flex-wrap justify-center">
+                    {% if visitors.has_previous %}
+                    <a href="?page={{ visitors.previous_page_number }}&{{ request.GET.urlencode }}"
+                       class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        <span class="hidden sm:inline">Anterior</span>
+                    </a>
+                    {% endif %}
+                    {% for num in visitors.paginator.page_range %}
+                    {% if num == visitors.number %}
+                    <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ num }}</span>
+                    {% elif num > visitors.number|add:'-3' and num < visitors.number|add:'3' %}
+                    <a href="?page={{ num }}&{{ request.GET.urlencode }}"
+                       class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition min-w-[2rem] text-center">
+                        {{ num }}
+                    </a>
+                    {% endif %}
+                    {% endfor %}
+                    {% if visitors.has_next %}
+                    <a href="?page={{ visitors.next_page_number }}&{{ request.GET.urlencode }}"
+                       class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                        <span class="hidden sm:inline">Próximo</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </a>
+                    {% endif %}
+                </div>
             </div>
+            {% endif %}
+
         </div>
     </div>
 </div>
 
-<!-- Modal para visualizar visitante -->
-<div id="visitorModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-medium text-gray-900">Detalhes do Visitante</h3>
-            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
-                <ion-icon name="close" class="text-xl"></ion-icon>
+<!-- ── View Visitor Modal ── -->
+<div id="visitorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[92vh]">
+        <!-- Header -->
+        <div class="flex items-center gap-4 p-5 border-b border-gray-100 flex-shrink-0">
+            <div id="visitorModalAvatar" class="w-14 h-14 rounded-xl bg-[var(--color-primary)] flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 overflow-hidden"></div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h3 id="visitorModalName" class="text-lg font-bold text-gray-900 leading-tight"></h3>
+                    <span id="visitorModalBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"></span>
+                </div>
+                <p id="visitorModalSub" class="text-sm text-gray-500 mt-0.5"></p>
+            </div>
+            <button onclick="closeVisitorModal()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition flex-shrink-0">
+                <ion-icon name="close" class="text-lg"></ion-icon>
             </button>
         </div>
-        <div id="visitorDetails">
-            <!-- Conteúdo será carregado via AJAX -->
+        <!-- Body -->
+        <div id="visitorDetails" class="overflow-y-auto flex-1 p-5 space-y-4"></div>
+        <!-- Footer -->
+        <div class="flex gap-2 justify-end p-4 border-t border-gray-100 flex-shrink-0">
+            <button onclick="closeVisitorModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Fechar</button>
+            <a id="visitorModalEditBtn" href="#" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-lg transition" style="background:var(--color-primary);"><ion-icon name="create-outline"></ion-icon> Editar</a>
+        </div>
+    </div>
+</div>
+
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteVisitorModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Visitante</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteVisitorModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteVisitorModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteVisitorModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
         </div>
     </div>
 </div>
 
 <script>
+    function vInfoRow(icon, label, value) {
+        if (!value && value !== 0) return '';
+        return `<div class="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+            <div class="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <ion-icon name="${icon}" style="font-size:0.95rem;color:#6b7280;"></ion-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs text-gray-400 font-medium uppercase tracking-wide leading-none mb-0.5">${label}</p>
+                <p class="text-sm text-gray-800 font-medium">${value}</p>
+            </div>
+        </div>`;
+    }
+    function vSectionTitle(label) {
+        return `<p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 mt-2">${label}</p>`;
+    }
+
     function viewVisitor(visitorId) {
+        const modal = document.getElementById('visitorModal');
+        document.getElementById('visitorDetails').innerHTML = '<div class="flex items-center justify-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2" style="border-color:var(--color-primary);"></div></div>';
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
         fetch(`/admin-panel/api/visitor/${visitorId}/`)
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
-                const detailsHtml = `
-                    <div class="space-y-4">
-                        <div class="flex items-center space-x-4">
-                            <div class="w-16 h-16 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold text-xl">
-                                ${data.name.charAt(0)}
-                            </div>
-                            <div>
-                                <h4 class="text-xl font-semibold text-gray-900 break-words">${data.name}</h4>
-                                <p class="text-gray-600">Visitante da igreja</p>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 gap-4 text-sm">
-                            <div>
-                                <span class="font-medium text-gray-700">Email:</span>
-                                <p class="text-gray-900 break-words">${data.email || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Telefone:</span>
-                                <p class="text-gray-900">${data.phone || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Data da Visita:</span>
-                                <p class="text-gray-900">${data.visit_date}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Gênero:</span>
-                                <p class="text-gray-900">${data.gender || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Bairro:</span>
-                                <p class="text-gray-900">${data.neighborhood || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Decisão por Jesus:</span>
-                                <p class="text-gray-900">${data.decision_for_jesus ? 'Sim' : 'Não'}</p>
-                            </div>
-                        </div>
-                        
-                        ${data.conversion ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Tipo de Conversão:</span>
-                                <p class="text-gray-900">${data.conversion}</p>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.address ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Endereço:</span>
-                                <p class="text-gray-900">${data.address}</p>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.prayer_request ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Pedido de Oração:</span>
-                                <p class="text-gray-900">${data.prayer_request}</p>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.wants_home_prayer ? `
-                            <div>
-                                <span class="font-medium text-green-700">🏠 Deseja oração na casa:</span>
-                                <span class="text-green-700 font-semibold ml-1">Sim</span>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.profile_notes ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Observações:</span>
-                                <p class="text-gray-900">${data.profile_notes}</p>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.phone ? `
-                            <div class="mt-6">
-                                <a href="https://wa.me/55${data.phone}?text=Olá ${encodeURIComponent(data.name)}, tudo bem? Eu sou da Igreja Filadélfia!" 
-                                   target="_blank" 
-                                   class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                                    <ion-icon name="logo-whatsapp" class="mr-2"></ion-icon>
-                                    Entrar em contato via WhatsApp
-                                </a>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-                
-                document.getElementById('visitorDetails').innerHTML = detailsHtml;
-                document.getElementById('visitorModal').classList.remove('hidden');
+                // Header
+                document.getElementById('visitorModalAvatar').textContent = data.name.charAt(0).toUpperCase();
+                document.getElementById('visitorModalName').textContent = data.name;
+                document.getElementById('visitorModalSub').textContent = `Visita em ${data.visit_date}`;
+                document.getElementById('visitorModalEditBtn').href = `/admin-panel/visitors/${visitorId}/edit/`;
+
+                const badge = document.getElementById('visitorModalBadge');
+                if (data.is_member) {
+                    badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700';
+                    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span> Membro';
+                } else if (data.decision_for_jesus || data.conversion) {
+                    badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700';
+                    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Convertido';
+                } else {
+                    badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500';
+                    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Aguardando';
+                }
+
+                // Body
+                let html = vSectionTitle('Contato');
+                html += vInfoRow('mail-outline', 'Email', data.email);
+                html += vInfoRow('call-outline', 'Telefone', data.phone);
+
+                const personalRows = [
+                    vInfoRow('calendar-outline', 'Nascimento', data.birth_date),
+                    vInfoRow('person-outline', 'Gênero', data.gender),
+                    vInfoRow('location-outline', 'Bairro', data.neighborhood),
+                    vInfoRow('home-outline', 'Endereço', data.address),
+                ].join('');
+                if (personalRows) {
+                    html += vSectionTitle('Informações Pessoais');
+                    html += personalRows;
+                }
+
+                const faithRows = [
+                    vInfoRow('checkmark-circle-outline', 'Decisão por Jesus', data.decision_for_jesus ? 'Sim' : null),
+                    vInfoRow('star-outline', 'Tipo de Conversão', data.conversion),
+                ].join('');
+                if (faithRows) {
+                    html += vSectionTitle('Fé');
+                    html += faithRows;
+                }
+
+                if (data.wants_home_prayer) {
+                    html += `<div class="flex items-center gap-2 py-2 px-3 bg-green-50 rounded-xl">
+                        <ion-icon name="home-outline" style="color:#16a34a;font-size:1rem;"></ion-icon>
+                        <span class="text-sm font-medium text-green-700">Deseja oração na casa</span>
+                    </div>`;
+                }
+
+                if (data.prayer_request) {
+                    html += vSectionTitle('Pedido de Oração');
+                    html += `<p class="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-xl p-3">${data.prayer_request}</p>`;
+                }
+                if (data.profile_notes) {
+                    html += vSectionTitle('Observações');
+                    html += `<p class="text-sm text-gray-700 leading-relaxed">${data.profile_notes}</p>`;
+                }
+
+                if (data.phone) {
+                    html += `<a href="https://wa.me/55${data.phone}?text=${encodeURIComponent('Olá ' + data.name + ', tudo bem? Eu sou da Igreja Filadélfia!')}" target="_blank"
+                        class="flex items-center justify-center gap-2 w-full py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl hover:bg-green-700 transition mt-1">
+                        <ion-icon name="logo-whatsapp"></ion-icon> Contatar via WhatsApp
+                    </a>`;
+                }
+
+                document.getElementById('visitorDetails').innerHTML = html;
             })
-            .catch(error => {
-                alert('Erro ao carregar detalhes do visitante');
+            .catch(() => {
+                document.getElementById('visitorDetails').innerHTML = '<p class="text-center text-red-500 text-sm py-6">Erro ao carregar detalhes.</p>';
             });
     }
-    
+
     function editVisitor(visitorId) {
         window.location.href = `/admin-panel/visitors/${visitorId}/edit/`;
     }
-    
+
+    let _deleteVisitorTargetId = null;
+
     function deleteVisitor(visitorId, visitorName) {
-        if (confirm(`Tem certeza que deseja excluir o visitante "${visitorName}"?`)) {
-            fetch('{% url "admin_api_delete" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'visitor',
-                    id: visitorId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao excluir visitante: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('Erro na comunicação com o servidor');
+        _deleteVisitorTargetId = visitorId;
+        document.getElementById('deleteVisitorModalName').textContent = visitorName;
+        const modal = document.getElementById('deleteVisitorModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeDeleteVisitorModal() {
+        const modal = document.getElementById('deleteVisitorModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteVisitorTargetId = null;
+    }
+
+    document.getElementById('deleteVisitorModalConfirm').addEventListener('click', function () {
+        if (!_deleteVisitorTargetId) return;
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        fetch('{% url "admin_api_delete" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'visitor', id: _deleteVisitorTargetId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+                alert('Erro ao excluir visitante: ' + data.error);
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+            alert('Erro na comunicação com o servidor');
+        });
+    });
+
+    document.getElementById('deleteVisitorModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteVisitorModal();
+    });
+
+    function closeVisitorModal() {
+        const modal = document.getElementById('visitorModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }
+
+    // Legacy alias used nowhere, safe to keep
+    function closeModal() { closeVisitorModal(); }
+
+    document.getElementById('visitorModal').addEventListener('click', function (e) {
+        if (e.target === this) closeVisitorModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { closeVisitorModal(); closeDeleteVisitorModal(); }
+    });
+
+    // Filter panel toggle
+    (function () {
+        var toggle   = document.getElementById('filter-toggle-visitors');
+        var panel    = document.getElementById('filter-panel-visitors');
+        var applyBtn = document.getElementById('apply-filters-visitors');
+        var hiddenPeriod     = document.getElementById('hidden-period');
+        var hiddenConversion = document.getElementById('hidden-conversion');
+        var panelPeriod      = document.getElementById('panel-period');
+        var panelConversion  = document.getElementById('panel-conversion');
+        if (!toggle || !panel) return;
+        toggle.addEventListener('click', function (e) { e.stopPropagation(); panel.classList.toggle('hidden'); });
+        document.addEventListener('click', function (e) { if (!panel.contains(e.target) && e.target !== toggle) panel.classList.add('hidden'); });
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                hiddenPeriod.value     = panelPeriod.value;
+                hiddenConversion.value = panelConversion.value;
+                document.getElementById('filter-form').submit();
             });
         }
-    }
-    
-    function closeModal() {
-        document.getElementById('visitorModal').classList.add('hidden');
-    }
+    })();
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 {% endblock %}

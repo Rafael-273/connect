@@ -1,0 +1,218 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Visitantes{% endblock %}
+
+{% block head %}
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade { animation: fadeIn 0.6s ease-out; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+    <!-- Header -->
+    <div class="px-4 sm:px-6 md:px-8 py-6 border-b-2" style="border-color: rgba(201, 9, 5, 0.2);">
+        <div class="flex gap-4 items-center justify-between">
+            <div class="flex gap-4 items-center">
+                <a href="{% url 'member_dashboard' %}" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
+                    <i class="fas fa-arrow-left"></i>
+                </a>
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-black text-gray-900">Lista de <span style="color: #C90905;">Visitantes</span></h1>
+                    <p class="text-sm text-gray-600 font-medium mt-1">Ministério de Boas Vindas · {{ total }} visitante{{ total|pluralize:"s" }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Busca e Filtro -->
+    <div class="px-4 sm:px-6 md:px-8 py-4 border-b" style="border-color: rgba(0,0,0,0.06);">
+        <form method="get" id="visitor-filter-form" class="flex items-center gap-2">
+            <input type="hidden" name="period" id="hidden-period" value="{{ period }}">
+
+            <!-- Campo de busca -->
+            <div class="relative flex-1 min-w-0">
+                <input
+                    type="text"
+                    name="q"
+                    id="search-input"
+                    value="{{ query }}"
+                    placeholder="Buscar por nome ou telefone…"
+                    class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none bg-white text-sm"
+                    style="focus-border-color: #C90905;"
+                >
+            </div>
+
+            <!-- Botão buscar -->
+            <button type="submit"
+                    class="flex-shrink-0 p-2.5 text-white rounded-lg transition-all duration-200 flex items-center justify-center"
+                    style="background-color: #C90905;"
+                    title="Buscar">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+            </button>
+
+            <!-- Botão Filtros -->
+            <div class="relative flex-shrink-0">
+                <button type="button" id="filter-toggle"
+                        class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                    </svg>
+                    Filtros
+                    {% if period != 'all' %}
+                    <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: #C90905;"></span>
+                    {% endif %}
+                </button>
+
+                <!-- Painel de filtros -->
+                <div id="filter-panel" class="hidden absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-700 mb-1">Período da Visita</label>
+                        <select id="panel-period" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm bg-white cursor-pointer">
+                            <option value="all"     {% if period == 'all'     %}selected{% endif %}>Qualquer período</option>
+                            <option value="7_days"  {% if period == '7_days'  %}selected{% endif %}>Últimos 7 dias</option>
+                            <option value="30_days" {% if period == '30_days' %}selected{% endif %}>Últimos 30 dias</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                        <a href="{% url 'member_visitor_list' %}"
+                           class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                            Limpar
+                        </a>
+                        <button type="button" id="apply-filters"
+                                class="flex-1 px-3 py-2 text-sm text-white rounded-lg transition-all"
+                                style="background-color: #C90905;">
+                            Aplicar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Lista de Visitantes -->
+    <div class="px-4 sm:px-6 md:px-8 py-4 space-y-3 animate-fade">
+        {% if visitors %}
+            {% for visitor in visitors %}
+            <div class="bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md" style="border-color: rgba(201, 9, 5, 0.12);">
+
+                <!-- Header do Card -->
+                <div class="flex items-center justify-between gap-3 px-5 py-4 border-b" style="border-color: rgba(201, 9, 5, 0.08); background: linear-gradient(to right, rgba(201,9,5,0.03), white);">
+                    <div class="flex items-center gap-3 flex-1 min-w-0">
+                        <!-- Avatar -->
+                        <div class="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-white text-lg font-black shadow" style="background: linear-gradient(135deg, #C90905, #E63946);">
+                            {{ visitor.name|slice:":1"|upper }}
+                        </div>
+                        <div class="min-w-0">
+                            <h3 class="text-lg font-black text-gray-900 truncate">{{ visitor.name }}</h3>
+                            <p class="text-xs text-gray-500 flex items-center gap-1.5">
+                                <i class="far fa-calendar-alt flex-shrink-0" style="color: #C90905;"></i>
+                                {{ visitor.visit_date|date:"d/m/Y" }}
+                            </p>
+                        </div>
+                    </div>
+
+                    {% if visitor.wants_home_prayer %}
+                    <span class="flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-bold" style="background: rgba(201,9,5,0.08); color: #C90905;">
+                        <i class="fas fa-home mr-1"></i>Oração em casa
+                    </span>
+                    {% endif %}
+                </div>
+
+                <!-- Corpo do Card -->
+                <div class="px-5 py-4 space-y-2 text-sm text-gray-700">
+                    {% if visitor.phone %}
+                    <p class="flex items-center gap-2">
+                        <i class="fas fa-phone w-4 text-center flex-shrink-0" style="color: #C90905;"></i>
+                        <span>{{ visitor.phone }}</span>
+                    </p>
+                    {% endif %}
+                    {% if visitor.address %}
+                    <p class="flex items-center gap-2">
+                        <i class="fas fa-map-marker-alt w-4 text-center flex-shrink-0" style="color: #C90905;"></i>
+                        <span class="truncate">{{ visitor.address }}</span>
+                    </p>
+                    {% endif %}
+                    {% if visitor.neighborhood %}
+                    <p class="flex items-center gap-2">
+                        <i class="fas fa-map w-4 text-center flex-shrink-0" style="color: #C90905;"></i>
+                        <span>{{ visitor.neighborhood.name }}</span>
+                    </p>
+                    {% endif %}
+                    {% if visitor.prayer_request %}
+                    <div class="mt-3 p-3 rounded-xl text-sm" style="background: rgba(201,9,5,0.04); border: 1px solid rgba(201,9,5,0.1);">
+                        <p class="font-bold mb-1 text-xs uppercase tracking-wide" style="color: #C90905;">
+                            <i class="fas fa-hands-praying mr-1"></i>Pedido de Oração
+                        </p>
+                        <p class="text-gray-700 leading-relaxed">{{ visitor.prayer_request }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if visitor.phone %}
+                    <a href="https://wa.me/55{{ visitor.cleaned_phone }}?text=Ol%C3%A1%20{{ visitor.first_name|urlencode }}%2C%20tudo%20bem%3F%20Sou%20da%20Igreja%20Filad%C3%A9lfia%21%20Ficamos%20muito%20felizes%20em%20receber%20voc%C3%AA%21"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       class="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all hover:-translate-y-0.5"
+                       style="color: #16a34a; border-color: rgba(22,163,74,0.25); background: rgba(22,163,74,0.05);">
+                        <i class="fab fa-whatsapp"></i>
+                        Contato pelo WhatsApp
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-16 px-4">
+                <div class="w-24 h-24 mx-auto mb-6 rounded-3xl flex items-center justify-center shadow-xl" style="background: linear-gradient(135deg, rgba(201,9,5,0.1), rgba(230,57,70,0.1));">
+                    <i class="fas fa-users text-4xl" style="color: #C90905;"></i>
+                </div>
+                <h3 class="text-2xl font-black text-gray-800 mb-3">Nenhum visitante encontrado</h3>
+                <p class="text-gray-600 mb-8 max-w-md mx-auto">
+                    {% if query or period != 'all' %}
+                        Tente ajustar os filtros de busca.
+                    {% else %}
+                        Ainda não há visitantes cadastrados. Comece cadastrando o primeiro!
+                    {% endif %}
+                </p>
+                <a href="{% url 'member_visitor_create' %}" class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl shadow-xl transition-all hover:-translate-y-1" style="background: linear-gradient(135deg, #C90905 0%, #E63946 100%);">
+                    <i class="fas fa-user-plus"></i>
+                    Cadastrar Visitante
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+    {% include 'parciais/member_bottom_nav.html' with nav_active='home' %}
+
+<script>
+    // Toggle filtros
+    const filterToggle = document.getElementById('filter-toggle');
+    const filterPanel  = document.getElementById('filter-panel');
+
+    filterToggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        filterPanel.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!filterPanel.contains(e.target) && e.target !== filterToggle) {
+            filterPanel.classList.add('hidden');
+        }
+    });
+
+    // Aplicar filtros
+    document.getElementById('apply-filters').addEventListener('click', function() {
+        document.getElementById('hidden-period').value = document.getElementById('panel-period').value;
+        document.getElementById('visitor-filter-form').submit();
+    });
+</script>
+
+{% endblock %}

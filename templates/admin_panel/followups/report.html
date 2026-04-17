@@ -54,24 +54,28 @@
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-6 mt-24">
             <!-- Header -->
-            <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900 page-title">Relatórios de Follow-up</h1>
-                    <p class="text-gray-600 mt-2">Estatísticas e análises dos acompanhamentos</p>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="stats-chart" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 leading-tight">Relatórios</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">Estatísticas e análises dos acompanhamentos</p>
+                    </div>
                 </div>
-                <a href="{% url 'admin_followups_list' %}" 
-                   class="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center w-full md:w-auto">
-                    <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
-                    Voltar à Lista
+                <a href="{% url 'admin_followups_list' %}" class="flex items-center justify-center gap-2 bg-gray-100 text-gray-600 px-5 py-2.5 rounded-lg hover:bg-gray-200 transition font-medium text-sm leading-none">
+                    <ion-icon name="arrow-back-outline" class="text-lg"></ion-icon>
+                    <span class="mt-[0.15rem]">Voltar</span>
                 </a>
             </div>
 
             <!-- Filtros -->
-            <div class="admin-card p-6 mb-6">
-                <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="admin-card p-4 mb-6">
+                <form method="GET" id="filter-form" class="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Período</label>
-                        <select name="period" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                        <select name="period" onchange="document.getElementById('filter-form').submit()" class="w-full px-3 pt-[0.65rem] pb-[0.35rem] border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm cursor-pointer">
                             <option value="30" {% if period == '30' %}selected{% endif %}>Últimos 30 dias</option>
                             <option value="90" {% if period == '90' %}selected{% endif %}>Últimos 3 meses</option>
                             <option value="180" {% if period == '180' %}selected{% endif %}>Últimos 6 meses</option>
@@ -81,7 +85,7 @@
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-                        <select name="type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                        <select name="type" onchange="document.getElementById('filter-form').submit()" class="w-full px-3 pt-[0.65rem] pb-[0.35rem] border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm cursor-pointer">
                             <option value="">Todos os tipos</option>
                             <option value="consolidacao" {% if type_filter == 'consolidacao' %}selected{% endif %}>Consolidação</option>
                             <option value="discipulado" {% if type_filter == 'discipulado' %}selected{% endif %}>Discipulado</option>
@@ -91,7 +95,7 @@
                     
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                        <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                        <select name="status" onchange="document.getElementById('filter-form').submit()" class="w-full px-3 pt-[0.65rem] pb-[0.35rem] border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm cursor-pointer">
                             <option value="">Todos os status</option>
                             <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Ativo</option>
                             <option value="finished" {% if status_filter == 'finished' %}selected{% endif %}>Finalizado</option>
@@ -99,10 +103,7 @@
                     </div>
                     
                     <div class="flex items-end">
-                        <button type="submit" class="w-full bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition duration-300">
-                            <ion-icon name="funnel-outline" class="mr-2"></ion-icon>
-                            Filtrar
-                        </button>
+                        <button type="submit" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none"><ion-icon name="search-outline"></ion-icon><span class="mt-[0.15rem]">Buscar</span></button>
                     </div>
                 </form>
             </div>
@@ -268,5 +269,24 @@
             }
         }
     });
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 {% endblock %}

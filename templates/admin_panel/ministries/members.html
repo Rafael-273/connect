@@ -1,7 +1,62 @@
 {% extends "admin_base.html" %}
 {% load static %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ ministry.name }} — Membros{% endblock %}
+
+{% block head %}
+<style>
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .member-avatar {
+        width: 44px; height: 44px;
+        border-radius: 50%; object-fit: cover;
+        font-size: 1.1rem;
+    }
+    .role-badge {
+        display: inline-flex; align-items: center; padding: 0.2rem 0.65rem;
+        border-radius: 9999px; font-size: 0.7rem; font-weight: 600; gap: 0.25rem;
+    }
+    .role-leader   { background: #ffedd5; color: #c2410c; }
+    .role-member   { background: #dbeafe; color: #1e40af; }
+    .status-active   { background: #dcfce7; color: #166534; }
+    .status-inactive { background: #f3f4f6; color: #6b7280; }
+
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 0.07em;
+        text-transform: uppercase; color: #6b7280;
+        border-bottom: 2px solid #f1f5f9; padding: 14px 24px;
+    }
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+    .data-table tbody td { padding: 14px 24px; vertical-align: middle; }
+    .data-table th:last-child, .data-table td:last-child { text-align: right; }
+
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px; border-radius: 9px;
+        font-size: 1.1rem; transition: all 0.15s;
+        border: none; cursor: pointer; flex-shrink: 0; text-decoration: none;
+    }
+    .action-btn-star   { background: #ffedd5; color: #c2410c; }
+    .action-btn-star:hover { background: #fed7aa; }
+    .action-btn-unstar { background: #f3f4f6; color: #6b7280; }
+    .action-btn-unstar:hover { background: #e5e7eb; }
+    .action-btn-add    { background: #f0fdf4; color: #16a34a; }
+    .action-btn-add:hover  { background: #dcfce7; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="flex min-h-screen bg-gray-50">
@@ -9,171 +64,323 @@
     {% include 'parciais/messages.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
+        <div class="p-4 sm:p-6 mt-24">
+
             <!-- Header -->
-            <div class="mb-4 sm:mb-6">
-                <div class="flex items-center gap-2 sm:gap-3 mb-3">
-                    <a href="{% url 'ministry_list' %}" class="text-gray-600 hover:text-gray-900 flex-shrink-0">
-                        <ion-icon name="arrow-back-outline" class="text-xl sm:text-2xl"></ion-icon>
-                    </a>
-                    <div class="flex-1 min-w-0">
-                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">{{ ministry.name }}</h1>
-                        <p class="text-gray-600 text-xs sm:text-sm mt-1">Gerenciar membros e líderes</p>
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="people" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">{{ ministry.name }}</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {% if total_members %}{{ total_members }} membro{{ total_members|pluralize:"s" }}{% else %}Gerenciar membros e líderes{% endif %}
+                        </p>
                     </div>
                 </div>
             </div>
 
-            <!-- Estatísticas -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-                <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4">
-                    <div class="flex flex-col">
-                        <p class="text-gray-600 text-xs sm:text-sm truncate">Total Membros</p>
-                        <p class="text-2xl sm:text-3xl font-bold text-gray-900">{{ total_members }}</p>
-                    </div>
+            <!-- Stats -->
+            <div class="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
+                <div class="admin-card p-4">
+                    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Total Membros</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ total_members }}</p>
                 </div>
-                <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4">
-                    <div class="flex flex-col">
-                        <p class="text-gray-600 text-xs sm:text-sm truncate">Líderes</p>
-                        <p class="text-2xl sm:text-3xl font-bold text-orange-600">{{ total_leaders }}</p>
-                    </div>
+                <div class="admin-card p-4">
+                    <p class="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Líderes</p>
+                    <p class="text-3xl font-bold text-orange-600">{{ total_leaders }}</p>
                 </div>
             </div>
 
-            <!-- Filtros -->
-            <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
-                <form method="GET" class="space-y-3 sm:space-y-0 sm:flex sm:gap-3">
-                    <input type="text" name="search" value="{{ request.GET.search }}" 
-                           placeholder="Buscar membro..." 
-                           class="w-full sm:flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
-                    
-                    <select name="role" class="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
-                        <option value="">Todos os Papéis</option>
-                        <option value="leader" {% if request.GET.role == 'leader' %}selected{% endif %}>Líderes</option>
-                        <option value="member" {% if request.GET.role == 'member' %}selected{% endif %}>Membros</option>
-                    </select>
-                    
-                    <select name="status" class="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 text-sm">
-                        <option value="">Todos os Status</option>
-                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Ativos</option>
-                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inativos</option>
-                    </select>
-                    
-                    <div class="flex gap-2">
-                        <button type="submit" class="flex-1 sm:flex-none bg-orange-600 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-orange-700 transition text-sm font-medium">
-                            Buscar
+            <!-- Search + Filters -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="role"   id="hidden-role"   value="{{ request.GET.role }}">
+                    <input type="hidden" name="status" id="hidden-status" value="{{ request.GET.status }}">
+
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ request.GET.search }}"
+                               placeholder="Buscar membro..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle"
+                                class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if request.GET.role or request.GET.status %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
                         </button>
-                        <a href="{% url 'ministry_members' ministry.id %}" class="flex-1 sm:flex-none bg-gray-500 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-gray-600 transition text-sm font-medium text-center">
-                            Limpar
-                        </a>
-                    </div>
-                </form>
-            </div>
 
-            <!-- Membros Atuais -->
-            {% if memberships %}
-            <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
-                <h2 class="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Membros Atuais</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    {% for membership in memberships %}
-                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
-                        <div class="flex items-start justify-between mb-3">
-                            <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                                <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg flex-shrink-0" 
-                                     style="background-color: {{ ministry.color }};">
-                                    {{ membership.member.name|first }}
+                        <div id="filter-panel"
+                             class="hidden absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Papel</label>
+                                    <select id="panel-role" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os Papéis</option>
+                                        <option value="leader" {% if request.GET.role == 'leader' %}selected{% endif %}>Líderes</option>
+                                        <option value="member" {% if request.GET.role == 'member' %}selected{% endif %}>Membros</option>
+                                    </select>
                                 </div>
-                                <div class="flex-1 min-w-0">
-                                    <h3 class="font-semibold text-gray-900 text-sm sm:text-base truncate">{{ membership.member.name }}</h3>
-                                    <p class="text-xs sm:text-sm text-gray-600 truncate">{{ membership.member.phone|default:"Sem telefone" }}</p>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                                    <select id="panel-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os Status</option>
+                                        <option value="active"   {% if request.GET.status == 'active' %}selected{% endif %}>Ativos</option>
+                                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inativos</option>
+                                    </select>
                                 </div>
                             </div>
-                            <div class="flex flex-col gap-1 items-end flex-shrink-0 ml-2">
-                                {% if membership.role == 'leader' %}
-                                <span class="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap">Líder</span>
-                                {% else %}
-                                <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap">Membro</span>
-                                {% endif %}
-                                {% if membership.is_active %}
-                                <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap">Ativo</span>
-                                {% else %}
-                                <span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs font-semibold whitespace-nowrap">Inativo</span>
-                                {% endif %}
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                <a href="{% url 'ministry_members' ministry.id %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition">
+                                    Limpar
+                                </a>
+                                <button type="button" id="apply-filters"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition">
+                                    Aplicar
+                                </button>
                             </div>
                         </div>
-                        
-                        <div class="grid grid-cols-2 gap-2">
-                            <a href="{% url 'ministry_toggle_role' ministry.id membership.member.id %}" 
-                               class="text-center {% if membership.role == 'leader' %}bg-gray-500 hover:bg-gray-600{% else %}bg-orange-600 hover:bg-orange-700{% endif %} text-white px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors font-medium">
-                                <ion-icon name="{% if membership.role == 'leader' %}star{% else %}star-outline{% endif %}" class="text-sm sm:text-base"></ion-icon>
-                                <span class="hidden sm:inline">{% if membership.role == 'leader' %}Remover Líder{% else %}Tornar Líder{% endif %}</span>
-                                <span class="sm:hidden">{% if membership.role == 'leader' %}Membro{% else %}Líder{% endif %}</span>
+                    </div>
+                </form>
+
+                <!-- Adicionar Membros -->
+                <a href="{% url 'ministry_add_members' ministry.id %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Adicionar Membros
+                </a>
+            </div>
+
+            <!-- ── Membros Atuais ── -->
+            {% if not memberships %}
+            <div class="admin-card p-16 text-center">
+                <ion-icon name="people-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
+                <h3 class="text-xl font-semibold text-gray-500 mb-2">Nenhum membro encontrado</h3>
+                <p class="text-gray-400 mb-4">
+                    {% if request.GET.search or request.GET.role or request.GET.status %}
+                    Tente ajustar os filtros ou <a href="{% url 'ministry_members' ministry.id %}" class="text-[var(--color-primary)] underline">limpe a pesquisa</a>.
+                    {% else %}
+                    Este ministério ainda não tem membros. <a href="{% url 'ministry_add_members' ministry.id %}" class="text-[var(--color-primary)] underline">Adicione membros</a>.
+                    {% endif %}
+                </p>
+            </div>
+            {% else %}
+            <div class="admin-card overflow-hidden mb-6">
+                <div class="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <h2 class="text-base font-bold text-gray-900">Membros Atuais</h2>
+                    <span class="text-xs text-gray-400 font-medium">{{ memberships|length }} membro{{ memberships|length|pluralize:"s" }}</span>
+                </div>
+
+                <!-- Mobile cards -->
+                <div class="block md:hidden divide-y divide-gray-50">
+                    {% for membership in memberships %}
+                    <div class="p-4">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="member-avatar bg-[var(--color-primary)] flex items-center justify-center text-white font-bold flex-shrink-0"
+                                 style="{% if ministry.color %}background-color: {{ ministry.color }};{% endif %}">
+                                {{ membership.member.name|first }}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-gray-900 text-sm truncate">{{ membership.member.name }}</p>
+                                <p class="text-xs text-gray-500 truncate">{{ membership.member.phone|default:"Sem telefone" }}</p>
+                            </div>
+                            <div class="flex flex-col gap-1 items-end flex-shrink-0">
+                                <span class="role-badge {% if membership.role == 'leader' %}role-leader{% else %}role-member{% endif %}">
+                                    {{ membership.role|capfirst }}
+                                </span>
+                                <span class="role-badge {% if membership.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                    {% if membership.is_active %}Ativo{% else %}Inativo{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <a href="{% url 'ministry_toggle_role' ministry.id membership.member.id %}"
+                               class="flex-1 flex items-center justify-center gap-1.5 {% if membership.role == 'leader' %}bg-gray-100 text-gray-600 hover:bg-gray-200{% else %}bg-orange-50 text-orange-700 hover:bg-orange-100{% endif %} px-3 py-2 rounded-lg text-xs font-medium transition">
+                                <ion-icon name="{% if membership.role == 'leader' %}star{% else %}star-outline{% endif %}"></ion-icon>
+                                {% if membership.role == 'leader' %}Remover Líder{% else %}Tornar Líder{% endif %}
                             </a>
                             <button type="button"
-                               class="text-center bg-red-600 hover:bg-red-700 text-white px-2 sm:px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors font-medium"
-                               onclick="confirmRemoveMember('{{ membership.member.name }}', '{% url 'ministry_remove_member' ministry.id membership.member.id %}')">
-                                <ion-icon name="trash-outline" class="text-sm sm:text-base"></ion-icon>
-                                <span class="hidden sm:inline">Remover</span>
+                                    onclick="confirmRemoveMember('{{ membership.member.name }}', '{% url 'ministry_remove_member' ministry.id membership.member.id %}')"
+                                    class="flex items-center justify-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg text-xs font-medium transition">
+                                <ion-icon name="trash-outline"></ion-icon>
+                                Remover
                             </button>
                         </div>
                     </div>
                     {% endfor %}
                 </div>
+
+                <!-- Desktop table -->
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full data-table">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Membro</th>
+                                <th class="text-left">Contato</th>
+                                <th class="text-left">Papel</th>
+                                <th class="text-left">Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
+                            {% for membership in memberships %}
+                            <tr>
+                                <td>
+                                    <div class="flex items-center gap-3">
+                                        <div class="member-avatar flex items-center justify-center text-white font-bold flex-shrink-0"
+                                             style="background-color: {% if ministry.color %}{{ ministry.color }}{% else %}var(--color-primary){% endif %};">
+                                            {{ membership.member.name|first }}
+                                        </div>
+                                        <p class="font-semibold text-gray-900 text-sm">{{ membership.member.name }}</p>
+                                    </div>
+                                </td>
+                                <td class="text-sm text-gray-600">{{ membership.member.phone|default:"—" }}</td>
+                                <td>
+                                    <span class="role-badge {% if membership.role == 'leader' %}role-leader{% else %}role-member{% endif %}">
+                                        {% if membership.role == 'leader' %}Líder{% else %}Membro{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="role-badge {% if membership.is_active %}status-active{% else %}status-inactive{% endif %}">
+                                        {% if membership.is_active %}Ativo{% else %}Inativo{% endif %}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <a href="{% url 'ministry_toggle_role' ministry.id membership.member.id %}"
+                                           class="flex items-center gap-1.5 {% if membership.role == 'leader' %}bg-gray-100 text-gray-600 hover:bg-gray-200{% else %}bg-orange-50 text-orange-700 hover:bg-orange-100{% endif %} px-3 py-1.5 rounded-lg text-xs font-medium transition whitespace-nowrap">
+                                            <ion-icon name="{% if membership.role == 'leader' %}star{% else %}star-outline{% endif %}"></ion-icon>
+                                            {% if membership.role == 'leader' %}Remover Líder{% else %}Tornar Líder{% endif %}
+                                        </a>
+                                        <button type="button"
+                                                onclick="confirmRemoveMember('{{ membership.member.name }}', '{% url 'ministry_remove_member' ministry.id membership.member.id %}')"
+                                                class="action-btn action-btn-delete" title="Remover">
+                                            <ion-icon name="trash-outline"></ion-icon>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
             {% endif %}
 
-            <!-- Adicionar Membros -->
-            {% if available_members %}
-            <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4">
-                <h2 class="text-base sm:text-lg font-bold text-gray-900 mb-3 sm:mb-4">Adicionar Membros</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    {% for member in available_members %}
-                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4">
-                        <div class="flex items-center gap-2 sm:gap-3 mb-3">
-                            <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-400 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg flex-shrink-0">
-                                {{ member.name|first }}
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <h3 class="font-semibold text-gray-900 text-sm sm:text-base truncate">{{ member.name }}</h3>
-                                <p class="text-xs sm:text-sm text-gray-600 truncate">{{ member.phone|default:"Sem telefone" }}</p>
-                            </div>
-                        </div>
-                        <a href="{% url 'ministry_add_member' ministry.id member.id %}" 
-                           class="block w-full text-center bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition-colors font-medium">
-                            <ion-icon name="add-circle-outline" class="text-sm sm:text-base"></ion-icon>
-                            <span class="hidden sm:inline">Adicionar ao Ministério</span>
-                            <span class="sm:hidden">Adicionar</span>
-                        </a>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% else %}
-            {% if not memberships %}
-            <div class="bg-white rounded-lg shadow-sm p-8 sm:p-12 text-center">
-                <ion-icon name="people-outline" class="text-5xl sm:text-6xl text-gray-300 mb-3 sm:mb-4"></ion-icon>
-                <h3 class="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Nenhum membro disponível</h3>
-                <p class="text-sm sm:text-base text-gray-600">Todos os membros já fazem parte deste ministério.</p>
-            </div>
-            {% endif %}
-            {% endif %}
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+/* ===== SweetAlert2 Custom Theme ===== */
+.swal2-popup.swal-custom { font-family: "Giga Sans", system-ui, sans-serif !important; border-radius: 20px !important; padding: 36px 28px 28px !important; max-width: 400px !important; box-shadow: 0 24px 60px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.04) !important; }
+.swal2-popup.swal-custom .swal2-header { padding: 0 !important; flex-direction: column !important; align-items: center !important; gap: 14px !important; margin-bottom: 4px !important; }
+.swal2-popup.swal-custom .swal2-icon { border: none !important; width: 56px !important; height: 56px !important; margin: 0 auto !important; border-radius: 50% !important; flex-shrink: 0 !important; }
+.swal2-popup.swal-custom .swal2-icon .swal2-icon-content { font-size: 1.75rem !important; font-weight: 900 !important; line-height: 1 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-warning, .swal2-popup.swal-custom .swal2-icon.swal2-question { background: #fee2e2 !important; border-color: transparent !important; color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-warning .swal2-icon-content, .swal2-popup.swal-custom .swal2-icon.swal2-question .swal2-icon-content { color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error { background: #fee2e2 !important; border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark { transform: scale(0.6) !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-left, .swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-right { background-color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success { background: #dcfce7 !important; border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-ring { border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success [class^='swal2-success-circular-line'], .swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-fix { background: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-tip, .swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-long { background-color: #16a34a !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-info { background: #dbeafe !important; border-color: transparent !important; color: #2563eb !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-info .swal2-icon-content { color: #2563eb !important; }
+.swal2-popup.swal-custom .swal2-title { font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 1.05rem !important; font-weight: 700 !important; color: #111827 !important; letter-spacing: -0.01em !important; line-height: 1.35 !important; padding: 0 !important; margin: 0 !important; text-align: center !important; }
+.swal2-popup.swal-custom .swal2-html-container { font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 0.875rem !important; color: #6b7280 !important; font-weight: 400 !important; text-align: center !important; padding: 0 !important; margin: 6px 0 0 !important; line-height: 1.65 !important; }
+.swal2-popup.swal-custom .swal2-actions { width: 100% !important; gap: 10px !important; flex-wrap: nowrap !important; justify-content: center !important; margin-top: 24px !important; }
+/* display sem !important — permite que o SweetAlert2 esconda botões inativos via style.display='none' */
+.swal-btn { flex: 0 1 auto !important; min-width: 120px !important; display: inline-flex; align-items: center !important; justify-content: center !important; padding: 11px 24px !important; border-radius: 10px !important; font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 0.875rem !important; font-weight: 600 !important; cursor: pointer !important; transition: background 0.15s, transform 0.1s !important; letter-spacing: 0.005em !important; white-space: nowrap !important; border: none !important; }
+.swal-btn:hover { transform: translateY(-1px) !important; }
+.swal-btn:active { transform: translateY(0) !important; }
+.swal-btn-confirm { background: var(--color-primary) !important; color: white !important; }
+.swal-btn-confirm:hover { background: #a80703 !important; }
+.swal-btn-cancel { background: #f3f4f6 !important; color: #4b5563 !important; }
+.swal-btn-cancel:hover { background: #e5e7eb !important; }
+.swal-btn-deny { background: #6b7280 !important; color: white !important; }
+.swal-btn-danger { background: #dc2626 !important; color: white !important; }
+.swal-btn-danger:hover { background: #b91c1c !important; }
+.swal2-popup.swal-custom .swal2-loader { border-color: var(--color-primary) transparent var(--color-primary) transparent !important; }
+</style>
 <script>
+window.Swal = Swal.mixin({
+    customClass: {
+        popup:         'swal-custom',
+        confirmButton: 'swal-btn swal-btn-confirm',
+        denyButton:    'swal-btn swal-btn-deny',
+        cancelButton:  'swal-btn swal-btn-cancel',
+    },
+    buttonsStyling: false,
+    backdrop: 'rgba(0,0,0,0.55)',
+});
+</script>
+<script>
+    // Filter panel toggle
+    (function () {
+        var toggle   = document.getElementById('filter-toggle');
+        var panel    = document.getElementById('filter-panel');
+        var applyBtn = document.getElementById('apply-filters');
+        var hiddenRole   = document.getElementById('hidden-role');
+        var hiddenStatus = document.getElementById('hidden-status');
+        var panelRole    = document.getElementById('panel-role');
+        var panelStatus  = document.getElementById('panel-status');
+        if (!toggle || !panel) return;
+        toggle.addEventListener('click', function (e) { e.stopPropagation(); panel.classList.toggle('hidden'); });
+        document.addEventListener('click', function (e) { if (!panel.contains(e.target) && e.target !== toggle) panel.classList.add('hidden'); });
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                hiddenRole.value   = panelRole.value;
+                hiddenStatus.value = panelStatus.value;
+                document.getElementById('filter-form').submit();
+            });
+        }
+    })();
+
+    // Loading overlay
+    (function () {
+        var ov = document.createElement('div');
+        ov.id = 'filter-loading-overlay';
+        ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        ov.style.display = 'none';
+        ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+        document.body.appendChild(ov);
+        var form = document.getElementById('filter-form');
+        if (form) form.addEventListener('submit', function () { ov.style.display = 'flex'; });
+    })();
+
     function confirmRemoveMember(memberName, removeUrl) {
         Swal.fire({
-            title: '🗑️ Remover Membro?',
+            title: 'Remover Membro?',
             html: `Tem certeza que deseja remover <strong>${memberName}</strong> deste ministério?<br><br>Esta ação pode ser desfeita adicionando o membro novamente.`,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#dc2626',
-            cancelButtonColor: '#6b7280',
-            confirmButtonText: '✓ Sim, remover',
-            cancelButtonText: '✗ Cancelar',
+            confirmButtonText: 'Sim, remover',
+            cancelButtonText: 'Cancelar',
             reverseButtons: true,
-            focusCancel: true
+            focusCancel: true,
+            customClass: { confirmButton: 'swal-btn swal-btn-danger' }
         }).then((result) => {
             if (result.isConfirmed) {
                 window.location.href = removeUrl;

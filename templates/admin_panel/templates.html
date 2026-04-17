@@ -8,215 +8,364 @@
     body {
         background-color: #f8f9fa !important;
     }
-    
+
     .admin-card {
         background: white;
         border-radius: 12px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     }
-    
-    .template-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 12px;
-        transition: all 0.3s ease;
-        cursor: pointer;
-    }
-    
-    .template-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        transform: translateY(-2px);
-    }
-    
+
     .status-badge {
         padding: 4px 12px;
         border-radius: 20px;
-        font-size: 0.75rem;
+        font-size: 12px;
         font-weight: 600;
+    }
+    .status-active   { background-color: #dcfce7; color: #166534; }
+    .status-inactive { background-color: #f3f4f6; color: #374151; }
+
+    /* Table */
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
         text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
     }
-    
-    .status-active {
-        background-color: #dcfce7;
-        color: #166534;
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
     }
-    
-    .status-inactive {
-        background-color: #f3f4f6;
-        color: #374151;
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
     }
-    
-    /* Modal para exclusão */
+    .data-table tbody td {
+        padding: 14px 24px;
+        vertical-align: middle;
+    }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .action-btn-view   { background: rgba(201,9,5,0.08); color: var(--color-primary); }
+    .action-btn-view:hover   { background: rgba(201,9,5,0.16); }
+    .action-btn-use    { background: #f0fdf4; color: #16a34a; }
+    .action-btn-use:hover    { background: #dcfce7; }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
+
+    /* Modal */
     .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
         background: rgba(0,0,0,0.5);
         z-index: 9999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        opacity: 0;
-        visibility: hidden;
+        display: flex; align-items: center; justify-content: center;
+        opacity: 0; visibility: hidden;
         transition: all 0.3s ease;
     }
-    
-    .modal-overlay.active {
-        opacity: 1;
-        visibility: visible;
-    }
-    
+    .modal-overlay.active { opacity: 1; visibility: visible; }
     .modal-content {
-        background: white;
-        padding: 32px;
-        border-radius: 12px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        max-width: 500px;
-        width: 90%;
-        transform: scale(0.9);
-        transition: transform 0.3s ease;
+        background: white; padding: 32px; border-radius: 16px;
+        box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+        max-width: 480px; width: 90%;
+        transform: scale(0.9); transition: transform 0.3s ease;
     }
-    
-    .modal-overlay.active .modal-content {
-        transform: scale(1);
-    }
+    .modal-overlay.active .modal-content { transform: scale(1); }
 </style>
 {% endblock %}
 
 {% block content %}
+{% include 'parciais/messages.html' %}
+
 <div class="flex min-h-screen bg-gray-50">
-    {% include 'parciais/messages.html' %}
     {% include 'parciais/admin_sidebar.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-6 mt-24">
-            <div class="admin-card">
-                <div class="p-6">
-                <!-- Header -->
-                <div class="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 gap-4">
-                    <div>
-                        <h1 class="text-2xl font-bold text-gray-900 text-center md:text-left">Templates</h1>
-                        <p class="text-gray-600 mt-1 text-center md:text-left">Gerencie templates de consolidação</p>
+        <div class="p-4 sm:p-6 mt-24">
+
+            <!-- Title -->
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="document-text" class="text-xl text-white"></ion-icon>
                     </div>
-                    <a href="{% url 'admin_template_create' %}" 
-                       class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 flex items-center justify-center w-full md:w-auto">
-                        <ion-icon name="add-outline" class="mr-2"></ion-icon>
-                        Novo Template
-                    </a>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Templates</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if templates.paginator.count %}{{ templates.paginator.count }} template{{ templates.paginator.count|pluralize:"s" }} cadastrado{{ templates.paginator.count|pluralize:"s" }}{% else %}Gerenciar templates de consolidação{% endif %}
+                        </p>
+                    </div>
                 </div>
+                <!-- Mobile: Novo Template (icon only) -->
+                <a href="{% url 'admin_template_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Novo Template">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
+            </div>
 
-                <!-- Filtros -->
-                <div class="bg-gray-50 p-4 rounded-lg mb-6">
-                    <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
-                            <input type="text" name="search" value="{{ search }}" 
-                                   placeholder="Nome do template..."
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-                            <select name="category" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
-                                <option value="">Todas</option>
-                                <option value="basic" {% if category_filter == 'basic' %}selected{% endif %}>Básico</option>
-                                <option value="advanced" {% if category_filter == 'advanced' %}selected{% endif %}>Avançado</option>
-                                <option value="youth" {% if category_filter == 'youth' %}selected{% endif %}>Jovens</option>
-                                <option value="custom" {% if category_filter == 'custom' %}selected{% endif %}>Personalizado</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                            <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
-                                <option value="">Todos</option>
-                                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Ativo</option>
-                                <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inativo</option>
-                            </select>
-                        </div>
-                        <div class="flex items-end md:flex-col lg:flex-row gap-2">
-                            <button type="submit" 
-                                    class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-300 w-full">
-                                Filtrar
-                            </button>
-                            <a href="{% url 'admin_templates' %}" 
-                               class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-300 w-full text-center">
-                                Limpar
-                            </a>
-                        </div>
-                    </form>
-                </div>
+            <!-- Search + Filters + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="category" id="hidden-category" value="{{ category_filter }}">
+                    <input type="hidden" name="status"   id="hidden-status"   value="{{ status_filter }}">
 
-                <!-- Lista de Templates -->
-                <div class="space-y-4">
-                    {% for template in templates %}
-                    <div class="template-card" data-url="{% url 'admin_template_detail' template.id %}" onclick="window.location.href = this.dataset.url;">
-                        <div class="flex flex-col md:flex-row justify-between items-start gap-3">
-                            <div class="flex-1 w-full">
-                                <div class="flex flex-col md:flex-row md:items-center gap-2 md:space-x-3 mb-2">
-                                    <h3 class="font-semibold text-lg text-gray-900 break-words">{{ template.name }}</h3>
-                                    <span class="status-badge {% if template.usage_count > 0 %}status-active{% else %}status-inactive{% endif %} inline-block">
-                                        {% if template.usage_count > 0 %}Em Uso{% else %}Inativo{% endif %}
-                                    </span>
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar por nome do template..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-templates"
+                                class="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if category_filter or status_filter %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                        <div id="filter-panel-templates"
+                             class="hidden absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
+                                    <select id="panel-category" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white dark:bg-gray-800 cursor-pointer">
+                                        <option value="">Todas</option>
+                                        <option value="basic"    {% if category_filter == 'basic' %}selected{% endif %}>Básico</option>
+                                        <option value="advanced" {% if category_filter == 'advanced' %}selected{% endif %}>Avançado</option>
+                                        <option value="youth"    {% if category_filter == 'youth' %}selected{% endif %}>Jovens</option>
+                                        <option value="custom"   {% if category_filter == 'custom' %}selected{% endif %}>Personalizado</option>
+                                    </select>
                                 </div>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-600">
-                                    <div>
-                                        <span class="font-medium">Etapas:</span> {{ template.steps_count }} atividade{{ template.steps_count|pluralize }}
-                                    </div>
-                                    <div>
-                                        <span class="font-medium">Usos:</span> {{ template.usage_count }} consolidaç{{ template.usage_count|pluralize:"ão,ões" }}
-                                    </div>
-                                    <div>
-                                        <span class="font-medium">Criado em:</span> {{ template.created_at|date:"d/m/Y" }}
-                                    </div>
-                                    <div>
-                                        <span class="font-medium">Atualizado:</span> {{ template.update_at|date:"d/m/Y" }}
-                                    </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                                    <select id="panel-status" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white dark:bg-gray-800 cursor-pointer">
+                                        <option value="">Todos</option>
+                                        <option value="active"   {% if status_filter == 'active' %}selected{% endif %}>Em Uso</option>
+                                        <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inativo</option>
+                                    </select>
                                 </div>
-                                {% if template.description %}
-                                    <p class="text-gray-700 text-sm mt-2 break-words">{{ template.description|truncatechars:100 }}</p>
-                                {% endif %}
                             </div>
-                            <div class="flex space-x-2 mt-2 md:mt-0">
-                                <a href="{% url 'admin_template_detail' template.id %}" 
-                                   class="text-blue-600 hover:text-blue-800 p-1"
-                                   onclick="event.stopPropagation();" title="Visualizar">
-                                    <ion-icon name="eye-outline"></ion-icon>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                <a href="{% url 'admin_templates' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all">
+                                    Limpar filtros
                                 </a>
-                                <a href="{% url 'admin_followup_create' %}?template={{ template.id }}" 
-                                   class="text-green-600 hover:text-green-800 p-1"
-                                   onclick="event.stopPropagation();" title="Usar Template">
-                                    <ion-icon name="play-outline"></ion-icon>
-                                </a>
-                                <a href="{% url 'admin_template_edit' template.id %}" 
-                                   class="text-gray-600 hover:text-gray-800 p-1"
-                                   onclick="event.stopPropagation();" title="Editar">
-                                    <ion-icon name="create-outline"></ion-icon>
-                                </a>
-                                <button type="button"
-                                        onclick="openDeleteModal('{{ template.id }}', '{{ template.name }}', '{{ template.usage_count }}')"
-                                        class="text-red-600 hover:text-red-800 p-1"
-                                        title="Excluir">
-                                    <ion-icon name="trash-outline"></ion-icon>
+                                <button type="button" id="apply-filters-templates"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
                                 </button>
                             </div>
                         </div>
                     </div>
-                    {% empty %}
-                    <div class="text-center py-12">
-                        <ion-icon name="document-text-outline" class="text-6xl text-gray-400 mb-4"></ion-icon>
-                        <h3 class="text-lg font-medium text-gray-900 mb-2">Nenhum template encontrado</h3>
-                        <p class="text-gray-600 mb-4 px-4">Comece criando seu primeiro template de consolidação.</p>
-                        <a href="{% url 'admin_template_create' %}" 
-                           class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 inline-block">
-                            <ion-icon name="add-outline" class="mr-2"></ion-icon>
-                            Criar Template
-                        </a>
-                    </div>
-                    {% endfor %}
-                </div>
+                </form>
+
+                <!-- Desktop: Novo Template -->
+                <a href="{% url 'admin_template_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Novo Template
+                </a>
             </div>
+
+            <!-- Versão Mobile: Cards -->
+            <div class="block md:hidden space-y-4">
+                {% for template in templates %}
+                <div class="admin-card p-4 hover:shadow-lg transition-shadow">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex-1 min-w-0 pr-2">
+                            <h3 class="text-base font-bold text-gray-900 truncate">{{ template.name }}</h3>
+                            {% if template.description %}
+                            <p class="text-xs text-gray-500 mt-0.5 truncate">{{ template.description|truncatechars:60 }}</p>
+                            {% endif %}
+                        </div>
+                        <span class="status-badge {% if template.usage_count > 0 %}status-active{% else %}status-inactive{% endif %} flex-shrink-0">
+                            {% if template.usage_count > 0 %}Em Uso{% else %}Inativo{% endif %}
+                        </span>
+                    </div>
+
+                    <div class="space-y-2 mb-3 text-sm">
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="list-outline" class="text-gray-400 flex-shrink-0"></ion-icon>
+                            <span class="text-gray-700">{{ template.steps_count }} etapa{{ template.steps_count|pluralize:"s" }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="people-outline" class="text-gray-400 flex-shrink-0"></ion-icon>
+                            <span class="text-gray-700">{{ template.usage_count }} uso{{ template.usage_count|pluralize:"s" }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="calendar-outline" class="text-gray-400 flex-shrink-0"></ion-icon>
+                            <span class="text-gray-700">Atualizado em {{ template.update_at|date:"d/m/Y" }}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 pt-3 border-t border-gray-100">
+                        <a href="{% url 'admin_template_detail' template.id %}"
+                           class="flex-1 py-2 px-3 bg-[var(--color-primary)] text-white rounded-lg font-medium text-sm hover:bg-opacity-90 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="eye-outline"></ion-icon>
+                            Ver
+                        </a>
+                        <a href="{% url 'admin_followup_create' %}?template={{ template.id }}"
+                           class="flex-1 py-2 px-3 bg-green-50 text-green-600 rounded-lg font-medium text-sm hover:bg-green-100 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="play-outline"></ion-icon>
+                            Usar
+                        </a>
+                        <a href="{% url 'admin_template_edit' template.id %}"
+                           class="py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center">
+                            <ion-icon name="create-outline"></ion-icon>
+                        </a>
+                        <button type="button" onclick="openDeleteModal('{{ template.id }}', '{{ template.name }}', '{{ template.usage_count }}')"
+                                class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-sm hover:bg-red-100 transition flex items-center justify-center">
+                            <ion-icon name="trash-outline"></ion-icon>
+                        </button>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="admin-card p-8 text-center text-gray-500">
+                    Nenhum template encontrado.
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Versão Desktop: Tabela -->
+            <div class="admin-card overflow-hidden hidden md:block">
+                <div class="overflow-x-auto table-responsive">
+                    <table class="w-full data-table">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Template</th>
+                                <th class="text-left">Etapas</th>
+                                <th class="text-left">Usos</th>
+                                <th class="text-left">Atualizado</th>
+                                <th class="text-left">Status</th>
+                                <th class="text-left">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
+                            {% for template in templates %}
+                            <tr>
+                                <td class="row-link" data-row-href="{% url 'admin_template_detail' template.id %}">
+                                    <div class="text-sm font-medium text-gray-900">{{ template.name }}</div>
+                                    {% if template.description %}
+                                    <div class="text-xs text-gray-400 mt-0.5 max-w-xs truncate">{{ template.description|truncatechars:60 }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ template.steps_count }} etapa{{ template.steps_count|pluralize:"s" }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ template.usage_count }} uso{{ template.usage_count|pluralize:"s" }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ template.update_at|date:"d/m/Y" }}</div>
+                                    <div class="text-xs text-gray-400 mt-0.5">Criado: {{ template.created_at|date:"d/m/Y" }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <span class="status-badge {% if template.usage_count > 0 %}status-active{% else %}status-inactive{% endif %}">
+                                        {% if template.usage_count > 0 %}Em Uso{% else %}Inativo{% endif %}
+                                    </span>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <a href="{% url 'admin_template_detail' template.id %}" class="action-btn action-btn-view" title="Ver">
+                                            <ion-icon name="eye-outline"></ion-icon>
+                                        </a>
+                                        <a href="{% url 'admin_followup_create' %}?template={{ template.id }}" class="action-btn action-btn-use" title="Usar Template">
+                                            <ion-icon name="play-outline"></ion-icon>
+                                        </a>
+                                        <a href="{% url 'admin_template_edit' template.id %}" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
+                                        </a>
+                                        <button type="button"
+                                                onclick="openDeleteModal('{{ template.id }}', '{{ template.name }}', '{{ template.usage_count }}')"
+                                                class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center gap-2 text-gray-400">
+                                        <ion-icon name="document-text-outline" style="font-size:2rem;"></ion-icon>
+                                        <span class="text-sm">Nenhum template encontrado.</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if templates.has_other_pages %}
+                <div class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
+                        Mostrando {{ templates.start_index }}–{{ templates.end_index }} de {{ templates.paginator.count }} templates
+                    </div>
+                    <div class="flex items-center gap-1 order-1 sm:order-2 flex-wrap justify-center">
+                        {% if templates.has_previous %}
+                        <a href="?page={{ templates.previous_page_number }}&{{ request.GET.urlencode }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            <span class="hidden sm:inline">Anterior</span>
+                        </a>
+                        {% endif %}
+                        {% for num in templates.paginator.page_range %}
+                        {% if num == templates.number %}
+                        <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ num }}</span>
+                        {% elif num > templates.number|add:'-3' and num < templates.number|add:'3' %}
+                        <a href="?page={{ num }}&{{ request.GET.urlencode }}"
+                           class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition min-w-[2rem] text-center">
+                            {{ num }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                        {% if templates.has_next %}
+                        <a href="?page={{ templates.next_page_number }}&{{ request.GET.urlencode }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <span class="hidden sm:inline">Próximo</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
         </div>
     </div>
 </div>
@@ -232,10 +381,9 @@
             <p class="text-sm text-gray-500 mb-4">
                 Deseja realmente excluir o template "<strong id="templateName"></strong>"?
             </p>
-            
-            <!-- Alerta para templates em uso -->
+
             <div id="usageWarning" class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4" style="display: none;">
-                <div class="flex items-start">
+                <div class="flex items-start text-left">
                     <ion-icon name="warning-outline" class="text-yellow-600 text-lg mr-2 mt-0.5 flex-shrink-0"></ion-icon>
                     <div class="text-sm text-yellow-800">
                         <p class="font-medium mb-1">Atenção!</p>
@@ -243,24 +391,20 @@
                     </div>
                 </div>
             </div>
-            
-            <p class="text-sm text-red-600 font-medium mb-6">
-                Esta ação não pode ser desfeita.
-            </p>
+
+            <p class="text-sm text-red-600 font-medium mb-6">Esta ação não pode ser desfeita.</p>
         </div>
-        
+
         <form id="deleteForm" method="POST">
             {% csrf_token %}
-            <input type="hidden" name="_method" value="DELETE">
-            <div class="flex gap-3 justify-center">
-                <button type="button" 
-                        onclick="closeDeleteModal()"
-                        class="px-4 py-2 w-full text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+            <div class="flex gap-3">
+                <button type="button" onclick="closeDeleteModal()"
+                        class="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 transition">
                     Cancelar
                 </button>
                 <button type="submit"
-                        class="px-4 py-2 w-full text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                    <ion-icon name="trash-outline" class="mr-1"></ion-icon>
+                        class="flex-1 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition flex items-center justify-center gap-1.5">
+                    <ion-icon name="trash-outline"></ion-icon>
                     Excluir Template
                 </button>
             </div>
@@ -272,83 +416,82 @@
 let currentTemplateId = null;
 
 function openDeleteModal(templateId, templateName, usageCount) {
-    event.stopPropagation(); // Evitar propagação para o clique do card
-    
+    event.stopPropagation();
     currentTemplateId = templateId;
-    const modal = document.getElementById('deleteModal');
-    const nameElement = document.getElementById('templateName');
-    const warningElement = document.getElementById('usageWarning');
-    const usageElement = document.getElementById('usageCount');
-    const deleteForm = document.getElementById('deleteForm');
-    
-    // Atualizar dados do modal
-    nameElement.textContent = templateName;
-    
-    // Criar URL usando Django template tag com valor placeholder e depois substituir
-    const deleteUrl = `/admin-panel/templates/${templateId}/delete/`;
-    deleteForm.action = deleteUrl;
-    
-    console.log('Delete URL:', deleteUrl); // Debug
-    
-    // Mostrar/esconder aviso de uso
+    document.getElementById('templateName').textContent = templateName;
+    document.getElementById('deleteForm').action = `/admin-panel/templates/${templateId}/delete/`;
+    const warning = document.getElementById('usageWarning');
     if (parseInt(usageCount) > 0) {
-        usageElement.textContent = usageCount;
-        warningElement.style.display = 'block';
+        document.getElementById('usageCount').textContent = usageCount;
+        warning.style.display = 'block';
     } else {
-        warningElement.style.display = 'none';
+        warning.style.display = 'none';
     }
-    
-    // Mostrar modal
-    modal.classList.add('active');
+    document.getElementById('deleteModal').classList.add('active');
 }
 
 function closeDeleteModal() {
-    const modal = document.getElementById('deleteModal');
-    modal.classList.remove('active');
+    document.getElementById('deleteModal').classList.remove('active');
     currentTemplateId = null;
 }
 
-// Fechar modal ao clicar no overlay
 document.getElementById('deleteModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeDeleteModal();
-    }
+    if (e.target === this) closeDeleteModal();
 });
-
-// Fechar modal com ESC
 document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && currentTemplateId) {
-        closeDeleteModal();
-    }
+    if (e.key === 'Escape' && currentTemplateId) closeDeleteModal();
 });
 
-// Submeter formulário e mostrar loading
 document.getElementById('deleteForm').addEventListener('submit', function(e) {
-    e.preventDefault(); // Prevenir submit padrão
-    
-    const submitBtn = this.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    
-    // Mostrar loading
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<ion-icon name="hourglass-outline" class="mr-1"></ion-icon> Excluindo...';
-    
-    // Criar formulário e submeter manualmente
+    e.preventDefault();
+    const btn = this.querySelector('button[type="submit"]');
+    btn.disabled = true;
+    btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = this.action;
-    
-    // Adicionar CSRF token
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    const csrfInput = document.createElement('input');
-    csrfInput.type = 'hidden';
-    csrfInput.name = 'csrfmiddlewaretoken';
-    csrfInput.value = csrfToken;
-    form.appendChild(csrfInput);
-    
-    // Adicionar ao DOM e submeter
+    const csrf = document.createElement('input');
+    csrf.type = 'hidden';
+    csrf.name = 'csrfmiddlewaretoken';
+    csrf.value = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    form.appendChild(csrf);
     document.body.appendChild(form);
     form.submit();
 });
+
+// Filter panel toggle
+(function () {
+    var toggle   = document.getElementById('filter-toggle-templates');
+    var panel    = document.getElementById('filter-panel-templates');
+    var applyBtn = document.getElementById('apply-filters-templates');
+    var hiddenCategory = document.getElementById('hidden-category');
+    var hiddenStatus   = document.getElementById('hidden-status');
+    var panelCategory  = document.getElementById('panel-category');
+    var panelStatus    = document.getElementById('panel-status');
+    if (!toggle || !panel) return;
+    toggle.addEventListener('click', function(e) { e.stopPropagation(); panel.classList.toggle('hidden'); });
+    document.addEventListener('click', function(e) {
+        if (!panel.contains(e.target) && e.target !== toggle) panel.classList.add('hidden');
+    });
+    if (applyBtn) {
+        applyBtn.addEventListener('click', function() {
+            hiddenCategory.value = panelCategory.value;
+            hiddenStatus.value   = panelStatus.value;
+            document.getElementById('filter-form').submit();
+        });
+    }
+})();
+
+// Loading overlay on submit
+(function () {
+    var ov = document.createElement('div');
+    ov.id = 'filter-loading-overlay';
+    ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    ov.style.display = 'none';
+    ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+    document.body.appendChild(ov);
+    var form = document.getElementById('filter-form');
+    if (form) form.addEventListener('submit', function() { ov.style.display = 'flex'; });
+})();
 </script>
 {% endblock %}

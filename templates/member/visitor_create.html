@@ -1,0 +1,190 @@
+{% extends 'member_base.html' %}
+{% load static %}
+
+{% block title %}Cadastrar Visitante{% endblock %}
+
+{% block head %}
+<style>
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-slide-down { animation: slideDown 0.5s ease-out forwards; }
+
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+    .loading-overlay.active { display: flex; }
+
+    @keyframes spin {
+        0%   { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid #C90905;
+        border-radius: 50%;
+        width: 50px; height: 50px;
+        animation: spin 1s linear infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen" style="background: #ffffff;">
+
+    <!-- Header Moderno -->
+    <div class="px-4 sm:px-6 md:px-8 py-6 border-b-2 animate-slide-down" style="border-color: rgba(201, 9, 5, 0.2);">
+        <div class="flex gap-4 items-center">
+            <a href="{% url 'member_dashboard' %}" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-black text-gray-900">Cadastrar <span style="color: #C90905;">Visitante</span></h1>
+                <p class="text-sm text-gray-600 font-medium mt-1">Ministério de Boas Vindas</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="text-center">
+            <div class="spinner mx-auto mb-4"></div>
+            <p class="text-white font-bold text-lg">Salvando visitante...</p>
+        </div>
+    </div>
+
+    <!-- Formulário -->
+    <div class="px-4 sm:px-6 md:px-8 py-6">
+        <form method="POST" id="visitorForm" onsubmit="showLoadingOverlay(event)">
+            {% csrf_token %}
+
+            <!-- Card do Formulário -->
+            <div class="bg-white rounded-2xl border-2 mb-6 p-6 sm:p-8 shadow-sm animate-slide-down" style="border-color: rgba(201, 9, 5, 0.15); animation-delay: 0.1s;">
+
+                <!-- Nome -->
+                <div class="mb-6">
+                    <label for="{{ form.name.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-user mr-2" style="color: #C90905;"></i>{{ form.name.label }}
+                    </label>
+                    <div class="relative">
+                        {{ form.name }}
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <i class="fas fa-user-circle text-gray-400"></i>
+                        </div>
+                    </div>
+                    {% if form.name.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Telefone -->
+                <div class="mb-6">
+                    <label for="{{ form.phone.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-phone mr-2" style="color: #C90905;"></i>{{ form.phone.label }}
+                    </label>
+                    <div class="relative">
+                        {{ form.phone }}
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                            <i class="fas fa-mobile-alt text-gray-400"></i>
+                        </div>
+                    </div>
+                    {% if form.phone.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.phone.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Endereço -->
+                <div class="mb-6">
+                    <label for="{{ form.address.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-map-marker-alt mr-2" style="color: #C90905;"></i>{{ form.address.label }}
+                    </label>
+                    {{ form.address }}
+                    {% if form.address.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.address.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Bairro -->
+                <div class="mb-6">
+                    <label for="{{ form.neighborhood.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-map mr-2" style="color: #C90905;"></i>{{ form.neighborhood.label }}
+                    </label>
+                    {{ form.neighborhood }}
+                    {% if form.neighborhood.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.neighborhood.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Pedido de Oração -->
+                <div class="mb-6">
+                    <label for="{{ form.prayer_request.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-hands-praying mr-2" style="color: #C90905;"></i>{{ form.prayer_request.label }}
+                    </label>
+                    {{ form.prayer_request }}
+                    {% if form.prayer_request.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.prayer_request.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <!-- Oração em Casa -->
+                <div class="flex items-center gap-3 p-4 rounded-xl" style="background: rgba(201, 9, 5, 0.04); border: 2px solid rgba(201, 9, 5, 0.12);">
+                    {{ form.wants_home_prayer }}
+                    <label for="{{ form.wants_home_prayer.id_for_label }}" class="text-sm font-medium text-gray-700 cursor-pointer">
+                        <i class="fas fa-home mr-2" style="color: #C90905;"></i>{{ form.wants_home_prayer.label }}
+                    </label>
+                    {% if form.wants_home_prayer.errors %}
+                        <p class="text-sm font-bold" style="color: #C90905;">{{ form.wants_home_prayer.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                {% if form.non_field_errors %}
+                <div class="mt-4">
+                    <p class="text-sm font-bold" style="color: #C90905;">{{ form.non_field_errors.0 }}</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Botões de Ação -->
+            <div class="flex flex-col sm:flex-row gap-3 animate-slide-down" style="animation-delay: 0.2s;">
+                <a href="{% url 'member_dashboard' %}" class="flex-1 px-6 py-4 rounded-xl font-bold transition-all hover:-translate-y-0.5 text-center border-2 shadow-sm text-sm sm:text-base" style="background-color: white; color: #6b7280; border-color: rgba(156, 163, 175, 0.3);">
+                    <i class="fas fa-times mr-2"></i>Cancelar
+                </a>
+                <button type="submit" class="flex-1 px-6 py-4 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 shadow-lg text-sm sm:text-base" style="background: linear-gradient(135deg, #C90905 0%, #E63946 100%);">
+                    <i class="fas fa-hand-holding-heart mr-2"></i>Cadastrar Visitante
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+    $(document).ready(function(){
+        $('#id_telephone').mask('(00) 00000-0000');
+    });
+
+    let isSubmitting = false;
+
+    function showLoadingOverlay(event) {
+        if (isSubmitting) {
+            event.preventDefault();
+            return false;
+        }
+        const form = event.target;
+        if (form.checkValidity()) {
+            isSubmitting = true;
+            document.getElementById('loadingOverlay').classList.add('active');
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) submitButton.disabled = true;
+        }
+    }
+</script>
+{% endblock %}

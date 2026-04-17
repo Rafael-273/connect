@@ -1,0 +1,89 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    {% block head %}{% endblock %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    {% include 'parciais/head.html' %}
+    <link rel="stylesheet" href="{% static 'user_base.css' %}">
+    <title>{% block title %}{% endblock %}</title>
+    <style>
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansRegular.otf' %}") format("truetype");
+            font-style: normal;
+        }
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansMedium.otf' %}") format("truetype");
+            font-style: medium;
+        }
+        @font-face {
+            font-family: "Giga Sans";
+            src: url("{% static 'fonts/GigaSansLight.otf' %}") format("truetype");
+            font-style: light;
+        }
+        @font-face {
+            font-family: "Tusker";
+            src: url("{% static 'fonts/TuskerGrotesk.ttf' %}") format("truetype");
+        }
+        @font-face {
+            font-family: "Integral";
+            src: url("{% static 'fonts/Integral.otf' %}") format("truetype");
+        }
+        
+        :root {
+            --color-primary: #C90905;
+            --color-accent: #FDDEB9;
+            --color-dark: #260200;
+            --color-danger: #8C0910;
+            --color-light: #F66F03;
+            --text-color-primary: #0e0e0e;
+            --text-color-on-primary: #FFFFFF;
+        }
+        
+        /* Sticky footer */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        
+        .content-wrapper {
+            flex: 1 0 auto;
+        }
+        
+        footer {
+            flex-shrink: 0;
+            margin: 0;
+        }
+
+        .nav-hidden {
+            transform: translate(-50%, 120%) !important;
+            opacity: 0.7 !important;
+        }
+        .nav-visible {
+            transform: translate(-50%, 0) !important;
+            opacity: 1 !important;
+        }
+    </style>
+    
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+
+<body class="{% block body_class %}{% endblock %}">
+
+<div class="content-wrapper">
+{% block content %}
+
+{% endblock %}
+</div>
+</body>
+</html>

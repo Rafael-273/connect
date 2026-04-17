@@ -1,0 +1,211 @@
+{% extends "admin_base.html" %}
+{% load static %}
+
+{% block title %}Adicionar Membros — {{ ministry.name }}{% endblock %}
+
+{% block head %}
+<style>
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .member-avatar {
+        width: 44px; height: 44px;
+        border-radius: 50%; object-fit: cover;
+        font-size: 1.1rem;
+    }
+    .member-row {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 20px;
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s;
+        cursor: pointer;
+    }
+    .member-row:last-child { border-bottom: none; }
+    .member-row:hover, .member-row.selected { background: #fafbff; }
+    .member-row.selected { box-shadow: inset 3px 0 0 var(--color-primary); }
+
+    .member-checkbox {
+        width: 18px; height: 18px; flex-shrink: 0;
+        accent-color: var(--color-primary); cursor: pointer;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 mb-6">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="person-add" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">Adicionar Membros</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">{{ ministry.name }}</p>
+                    </div>
+                </div>
+                <a href="{% url 'ministry_members' ministry.id %}"
+                   class="flex-shrink-0 flex items-center gap-2 bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 transition font-medium text-sm">
+                    <ion-icon name="arrow-back-outline"></ion-icon>
+                    <span class="hidden sm:inline">Voltar</span>
+                </a>
+            </div>
+
+            <!-- Search -->
+            <form method="GET" id="search-form" class="mb-4">
+                <div class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar por nome ou telefone..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+                    {% if search %}
+                    <a href="{% url 'ministry_add_members' ministry.id %}"
+                       class="flex-shrink-0 p-2.5 border border-gray-300 text-gray-500 rounded-lg hover:bg-gray-50 transition flex items-center justify-center"
+                       title="Limpar busca">
+                        <ion-icon name="close-outline" class="text-lg"></ion-icon>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+
+            {% if available_members %}
+            <form method="POST" id="add-form">
+                {% csrf_token %}
+
+                <!-- Toolbar: select all + counter + add button -->
+                <div class="flex items-center justify-between gap-3 mb-3 px-1">
+                    <div class="flex items-center gap-3">
+                        <label class="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700 select-none">
+                            <input type="checkbox" id="select-all" class="member-checkbox">
+                            Selecionar todos
+                        </label>
+                        <span id="selected-count" class="text-sm text-gray-400 hidden">
+                            <span id="count-num">0</span> selecionado<span id="count-plural">s</span>
+                        </span>
+                    </div>
+                    <button type="submit" id="add-btn"
+                            class="flex items-center gap-2 bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition font-semibold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                            disabled>
+                        <ion-icon name="add-outline"></ion-icon>
+                        Adicionar Selecionados
+                    </button>
+                </div>
+
+                <!-- Member list -->
+                <div class="admin-card overflow-hidden">
+                    <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                        <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Disponíveis</h2>
+                        <span class="text-xs text-gray-400 font-medium">{{ available_members|length }} membro{{ available_members|length|pluralize:"s" }}</span>
+                    </div>
+
+                    <div id="member-list">
+                        {% for member in available_members %}
+                        <label class="member-row" data-id="{{ member.id }}">
+                            <input type="checkbox" name="member_ids" value="{{ member.id }}"
+                                   class="member-checkbox item-checkbox">
+                            <div class="member-avatar bg-gray-300 flex items-center justify-center text-white font-bold flex-shrink-0"
+                                 style="{% if ministry.color %}background-color: {{ ministry.color }};{% endif %}">
+                                {{ member.name|first }}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="font-semibold text-gray-900 text-sm truncate">{{ member.name }}</p>
+                                <p class="text-xs text-gray-500 truncate">{{ member.phone|default:"Sem telefone" }}</p>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </form>
+
+            {% else %}
+            <div class="admin-card p-16 text-center">
+                <ion-icon name="checkmark-circle-outline" class="text-6xl text-green-300 mb-4"></ion-icon>
+                <h3 class="text-xl font-semibold text-gray-500 mb-2">
+                    {% if search %}Nenhum membro encontrado{% else %}Todos os membros já estão no ministério{% endif %}
+                </h3>
+                <p class="text-gray-400">
+                    {% if search %}Tente outra busca ou <a href="{% url 'ministry_add_members' ministry.id %}" class="text-[var(--color-primary)] underline">limpe o filtro</a>.{% else %}Não há membros disponíveis para adicionar.{% endif %}
+                </p>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var selectAll   = document.getElementById('select-all');
+    var addBtn      = document.getElementById('add-btn');
+    var countEl     = document.getElementById('selected-count');
+    var countNum    = document.getElementById('count-num');
+    var countPlural = document.getElementById('count-plural');
+    var checkboxes  = document.querySelectorAll('.item-checkbox');
+    var rows        = document.querySelectorAll('.member-row');
+
+    function updateUI() {
+        var checked = document.querySelectorAll('.item-checkbox:checked').length;
+        addBtn.disabled = checked === 0;
+        if (checked > 0) {
+            countEl.classList.remove('hidden');
+            countNum.textContent = checked;
+            countPlural.textContent = checked === 1 ? '' : 's';
+        } else {
+            countEl.classList.add('hidden');
+        }
+        selectAll.indeterminate = checked > 0 && checked < checkboxes.length;
+        selectAll.checked = checked === checkboxes.length && checkboxes.length > 0;
+    }
+
+    checkboxes.forEach(function (cb) {
+        cb.addEventListener('change', updateUI);
+    });
+
+    rows.forEach(function (row) {
+        row.addEventListener('click', function (e) {
+            // Don't double-toggle when clicking directly on the checkbox
+            if (e.target.type === 'checkbox') return;
+            var cb = row.querySelector('.item-checkbox');
+            cb.checked = !cb.checked;
+            updateUI();
+        });
+    });
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            checkboxes.forEach(function (cb) { cb.checked = selectAll.checked; });
+            rows.forEach(function (row) {
+                row.classList.toggle('selected', selectAll.checked);
+            });
+            updateUI();
+        });
+    }
+
+    // Highlight selected rows on individual change
+    checkboxes.forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            var row = cb.closest('.member-row');
+            if (row) row.classList.toggle('selected', cb.checked);
+        });
+    });
+
+    updateUI();
+})();
+</script>
+{% endblock %}

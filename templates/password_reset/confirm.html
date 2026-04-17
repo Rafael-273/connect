@@ -1,4 +1,4 @@
-{% extends 'login_base.html' %}
+{% extends 'member_base.html' %}
 {% load static %}
 
 {% block title %}Nova Senha - Igreja Filadélfia{% endblock %}
@@ -83,8 +83,9 @@
 
                 <!-- Seção do formulário -->
                 <div class="p-6 sm:p-8 lg:p-12 xl:p-16 flex flex-col justify-center order-2 lg:order-2" style="background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);">
-                    <div class="text-center mb-6 sm:mb-8 animate-fade-in-left" style="animation-delay: 0.3s; animation-fill-mode: both;">
-                        <h2 class="text-2xl sm:text-2xl font-bold text-gray-900">Redefinir Senha</h2>
+                    <div class="text-center mb-2 animate-fade-in-left" style="animation-delay: 0.3s; animation-fill-mode: both;">
+                        <h2 class="text-2xl sm:text-4xl font-bold text-gray-900" style="font-family: 'Tusker', 'Giga Sans', sans-serif;">Redefinir Senha</h2>
+                        <p class="text-gray-500 text-sm mt-2">Digite sua nova senha abaixo para acessar sua conta.</p>
                     </div>
 
                     {% include 'parciais/messages.html' %}

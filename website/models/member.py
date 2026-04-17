@@ -3,7 +3,6 @@ from PIL import Image
 from io import BytesIO
 from django.core.files.base import ContentFile
 from ._base import BaseModel
-from .ministry import Ministry
 from .neighborhood import Neighborhood
 
 
@@ -53,7 +52,6 @@ class Member(BaseModel):
     testimony = models.TextField(blank=True, null=True)
     initial_challenges = models.TextField(blank=True, null=True)
 
-    ministry = models.ManyToManyField(Ministry, blank=True)
     is_active = models.BooleanField(default=True)
     is_approver = models.BooleanField(
         default=False,

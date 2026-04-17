@@ -1,405 +1,288 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from django.views import View
-from django.utils.decorators import method_decorator
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.utils import timezone
 
 from ..models.user import User
 from ..models.member import Member
 from ..models.ministry_membership import MinistryMembership
+from ..models.schedule import MonthlySchedule
+from .mixins import MemberRequiredMixin, ApproverRequiredMixin, MinistrationContextMixin
 
 
 class MemberLoginView(View):
-    """View de login unificada para membros e administradores"""
-    
     def get(self, request):
-        # Se o usuário já estiver logado, redireciona para dashboard de membros
         if request.user.is_authenticated:
             return redirect('member_dashboard')
-            
         return render(request, 'member/login.html')
-    
+
     def post(self, request):
+        if request.user.is_authenticated:
+            return redirect('member_dashboard')
+
         email = request.POST.get('email', '').strip()
-        password = request.POST.get('password', '').strip()
-        
+        password = request.POST.get('password', '')
+
         if not email or not password:
             messages.error(request, 'Por favor, preencha todos os campos.')
-            return render(request, 'member/login.html')
-        
-        # Autentica o usuário
+            return render(request, 'member/login.html', {'email': email})
+
         user = authenticate(request, username=email, password=password)
-        
-        if user is not None:
-            login(request, user)
-            
-            # Sempre redireciona para o dashboard de membros
-            try:
-                member = user.member
-                messages.success(request, f'Bem-vindo(a), {member.name}!')
-            except Member.DoesNotExist:
-                messages.success(request, f'Bem-vindo(a)!')
-            
-            next_url = request.GET.get('next', 'member_dashboard')
-            return redirect(next_url)
-        else:
+
+        if user is None:
             messages.error(request, 'Email ou senha incorretos.')
-        
-        return render(request, 'member/login.html')
+            return render(request, 'member/login.html', {'email': email})
+
+        login(request, user)
+
+        member = getattr(user, 'member', None)
+        name = member.name if member else user.email
+        messages.success(request, f'Bem-vindo(a), {name}!')
+
+        from django.utils.http import url_has_allowed_host_and_scheme
+        next_url = request.POST.get('next') or request.GET.get('next', '')
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+            return redirect(next_url)
+        return redirect('member_dashboard')
 
 
-class MemberDashboardView(LoginRequiredMixin, View):
-    """Dashboard principal para membros logados"""
-    
-    def dispatch(self, request, *args, **kwargs):
-        # Verifica se o usuário é um membro
-        if not hasattr(request.user, 'member'):
-            messages.error(request, 'Acesso negado. Você precisa estar cadastrado como membro.')
-            return redirect('member_login')
-        
-        return super().dispatch(request, *args, **kwargs)
-    
+class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
     def get(self, request):
-        from datetime import datetime, timedelta
-        from django.db.models import Q
-        from website.models import WordOfKnowledge, Ministry
-        from website.models.schedule import ScheduleDay, Team
-        
-        member = request.user.member
-        
-        # Verifica se o membro está escalado na semana atual (segunda a domingo)
-        today = datetime.now().date()
-        
-        # Calcula o início e fim da semana atual
-        week_start = today - timedelta(days=today.weekday())  # Segunda
-        week_end = week_start + timedelta(days=6)  # Domingo
-        
-        # Verifica se o membro está escalado em algum dia desta semana
-        # Pode estar diretamente em ScheduleDay.members OU em uma Team escalada
-        # IMPORTANTE: Apenas para o ministério de ministração
-        is_scheduled = ScheduleDay.objects.filter(
-            date__gte=week_start,
-            date__lte=week_end,
-            is_cancelled=False,
-            schedule__ministry__name__icontains='ministração'  # Apenas ministério de ministração
-        ).filter(
-            Q(members=member) |  # Escalado diretamente
-            Q(team__members=member)  # Ou na equipe escalada
-        ).exists()
-        
-        # Verifica se o membro está no ministério de ministração
-        # Buscar no sistema antigo (member.ministry) E no novo sistema (MinistryMembership)
-        from website.models import MinistryMembership
-        
-        is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
-        is_ministration_new = MinistryMembership.objects.filter(
-            member=member,
-            ministry__name__icontains='ministração',
-            is_active=True
-        ).exists()
-        
-        is_ministration_member = is_ministration_old or is_ministration_new
-        
-        # Busca informações relevantes para o dashboard
-        context = {
-            'member': member,
-            'ministries': member.ministry.all(),
-            'can_consolidate': member.is_available_to_consolidate,
-            'can_disciple': member.is_available_to_disciple,
-            'is_scheduled_this_week': is_scheduled,
-            'is_approver': member.is_approver,
-            'is_ministration_member': is_ministration_member,
-        }
-        
-        # Se for aprovador, busca palavras pendentes de aprovação
-        if member.is_approver:
-            pending_words = WordOfKnowledge.objects.filter(
-                is_approved=False
-            ).select_related('member').order_by('service_date', 'recorded_at')
-            context['pending_words'] = pending_words
-            context['pending_words_count'] = pending_words.count()
-        
-        # Busca acompanhamentos onde o membro é responsável
-        if hasattr(member, 'performed_followups'):
-            context['followups_responsible'] = member.performed_followups.filter(
-                end_date__isnull=True
-            ).select_related('accompanied')[:5]
-        
-        # Busca acompanhamentos onde o membro está sendo acompanhado
-        if hasattr(member, 'received_followups'):
-            context['followups_received'] = member.received_followups.filter(
-                end_date__isnull=True
-            ).select_related('responsible')[:5]
-        
+        member = self.member
+        context = self._build_base_context(member)
+        self._add_followup_context(member, context)
         return render(request, 'member/dashboard.html', context)
 
+    def _build_base_context(self, member):
+        flags = self._get_ministry_flags(member)
+        member_schedules = self._get_current_schedules(member)
 
-def member_logout_view(request):
-    """Logout unificado para membros e administradores"""
-    if request.user.is_authenticated:
-        user_name = request.user.member.name if hasattr(request.user, 'member') else request.user.email
-        logout(request)
-        messages.success(request, f'Até logo, {user_name}! Volte sempre.')
-    
-    return redirect('member_login')
+        return {
+            'member': member,
+            'can_consolidate': flags['can_consolidate'],
+            'is_approver': flags['is_approver'],
+            'is_ministration_member': flags['is_ministration'],
+            'is_boas_vindas_member': flags['is_boas_vindas'],
+            'member_schedules': member_schedules,
+            'is_new_member': not any([flags['has_ministries'], flags['is_approver'], flags['can_consolidate']]),
+        }
+
+    def _get_ministry_flags(self, member):
+        return {
+            'has_ministries': member.ministry_memberships.filter(is_active=True).exists(),
+            'is_approver': member.is_approver,
+            'can_consolidate': member.is_available_to_consolidate,
+            'is_ministration': self.get_ministration_status(member),
+            'is_boas_vindas': MinistryMembership.objects.filter(
+                member=member,
+                is_active=True,
+                ministry__name__icontains='boas vindas',
+            ).exists(),
+        }
+
+    def _get_current_schedules(self, member):
+        now = timezone.now()
+        ministry_ids = MinistryMembership.objects.filter(
+            member=member, is_active=True
+        ).values_list('ministry_id', flat=True)
+        return list(
+            MonthlySchedule.objects
+            .filter(
+                ministry_id__in=ministry_ids,
+                month=now.month,
+                year=now.year,
+            )
+            .select_related('ministry')
+            .order_by('ministry__name', 'title')
+        )
+
+    def _add_followup_context(self, member, context):
+        if hasattr(member, 'performed_followups'):
+            context['followups_responsible'] = (
+                member.performed_followups
+                .filter(end_date__isnull=True)
+                .select_related('accompanied')[:5]
+            )
+        if hasattr(member, 'received_followups'):
+            context['followups_received'] = (
+                member.received_followups
+                .filter(end_date__isnull=True)
+                .select_related('responsible')[:5]
+            )
 
 
-@login_required
-def member_profile_view(request):
-    """Visualização e edição do perfil do membro"""
-    if not hasattr(request.user, 'member'):
-        messages.error(request, 'Acesso negado.')
+class MemberLogoutView(View):
+    def get(self, request):
+        if request.user.is_authenticated:
+            user_name = request.user.member.name if hasattr(request.user, 'member') else request.user.email
+            logout(request)
+            messages.success(request, f'Até logo, {user_name}! Volte sempre.')
         return redirect('member_login')
-    
-    member = request.user.member
-    
-    if request.method == 'POST':
+
+    def post(self, request):
+        return self.get(request)
+
+
+class MemberProfileView(MemberRequiredMixin, MinistrationContextMixin, View):
+    MAX_AVATAR_SIZE = 5 * 1024 * 1024
+    ALLOWED_IMAGE_TYPES = frozenset(['image/jpeg', 'image/png', 'image/gif'])
+
+    def get(self, request):
+        return render(request, 'member/profile.html', self._build_context(self.member))
+
+    def _build_context(self, member, profile_form=None, password_form=None):
+        from website.forms.member import MemberProfileForm, MemberPasswordChangeForm
+        return {
+            'member': member,
+            'profile_form': profile_form or MemberProfileForm(instance=member),
+            'password_form': password_form or MemberPasswordChangeForm(user=self.request.user),
+            'can_consolidate': member.is_available_to_consolidate,
+            'is_ministration_member': self.get_ministration_status(member),
+        }
+
+    def post(self, request):
+        member = self.member
         form_type = request.POST.get('form_type')
-        
+
         if form_type == 'personal_info':
-            # Atualização de informações pessoais
-            member.name = request.POST.get('name', member.name)
-            member.phone = request.POST.get('phone', member.phone)
-            member.address = request.POST.get('address', member.address)
-            member.testimony = request.POST.get('testimony', member.testimony)
-            
-            # Data de nascimento
-            birth_date = request.POST.get('birth_date')
-            if birth_date:
-                member.birth_date = birth_date
-            
-            # Bairro
-            neighborhood_id = request.POST.get('neighborhood')
-            if neighborhood_id:
-                from website.models import Neighborhood
-                try:
-                    member.neighborhood = Neighborhood.objects.get(id=neighborhood_id)
-                except Neighborhood.DoesNotExist:
-                    pass
-            else:
-                member.neighborhood = None
-            
-            # Upload de foto de perfil
-            neighborhood_id = request.POST.get('neighborhood')
-            if neighborhood_id:
-                from website.models import Neighborhood
-                try:
-                    member.neighborhood = Neighborhood.objects.get(id=neighborhood_id)
-                except Neighborhood.DoesNotExist:
-                    pass
-            else:
-                member.neighborhood = None
-            
-            # Upload de foto de perfil
-            if 'profile_picture' in request.FILES:
-                profile_picture = request.FILES['profile_picture']
-                # Validação do arquivo
-                if profile_picture.size > 5 * 1024 * 1024:  # 5MB
-                    messages.error(request, 'O arquivo é muito grande. Tamanho máximo: 5MB.')
-                    return redirect('member_profile')
-                
-                allowed_types = ['image/jpeg', 'image/png', 'image/gif']
-                if profile_picture.content_type not in allowed_types:
-                    messages.error(request, 'Formato de arquivo não suportado. Use JPG, PNG ou GIF.')
-                    return redirect('member_profile')
-                
-                member.profile_picture = profile_picture
-            
-            try:
-                member.save()
-                messages.success(request, 'Informações pessoais atualizadas com sucesso!')
-            except Exception as e:
-                messages.error(request, f'Erro ao atualizar informações: {str(e)}')
-                
+            return self._handle_personal_info(request, member)
         elif form_type == 'change_password':
-            # Alteração de senha
-            current_password = request.POST.get('current_password')
-            new_password = request.POST.get('new_password')
-            confirm_password = request.POST.get('confirm_password')
-            
-            # Validações
-            if not current_password or not new_password or not confirm_password:
-                messages.error(request, 'Todos os campos de senha são obrigatórios.')
-                return redirect('member_profile')
-            
-            if not request.user.check_password(current_password):
-                messages.error(request, 'Senha atual incorreta.')
-                return redirect('member_profile')
-            
-            if new_password != confirm_password:
-                messages.error(request, 'As senhas não coincidem.')
-                return redirect('member_profile')
-            
-            if len(new_password) < 6:
-                messages.error(request, 'A nova senha deve ter pelo menos 6 caracteres.')
-                return redirect('member_profile')
-            
-            try:
-                request.user.set_password(new_password)
-                request.user.save()
-                messages.success(request, 'Senha alterada com sucesso! Faça login novamente.')
-                logout(request)
-                return redirect('member_login')
-            except Exception as e:
-                messages.error(request, f'Erro ao alterar senha: {str(e)}')
-        
+            return self._handle_change_password(request, member)
+
         return redirect('member_profile')
-    
-    # Verificar se pode consolidar (para o menu)
-    can_consolidate = member.is_available_to_consolidate
-    
-    # Obter todos os bairros
-    from website.models import Neighborhood
-    neighborhoods = Neighborhood.objects.all().order_by('name')
-    
-    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
-    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
-    is_ministration_new = MinistryMembership.objects.filter(
-        member=member,
-        ministry__name__icontains='ministração',
-        is_active=True
-    ).exists()
-    is_ministration_member = is_ministration_old or is_ministration_new
-    
-    context = {
-        'member': member,
-        'ministries': member.ministry.all(),
-        'can_consolidate': can_consolidate,
-        'is_ministration_member': is_ministration_member,
-        'neighborhoods': neighborhoods,
-    }
-    
-    return render(request, 'member/profile.html', context)
+
+    def _handle_personal_info(self, request, member):
+        from website.forms.member import MemberProfileForm
+        form = MemberProfileForm(request.POST, instance=member)
+
+        if not form.is_valid():
+            messages.error(request, 'Por favor, corrija os erros abaixo.')
+            return render(request, 'member/profile.html', self._build_context(member, profile_form=form))
+
+        instance = form.save(commit=False)
+
+        if not self._update_profile_picture(request, instance):
+            return render(request, 'member/profile.html', self._build_context(member, profile_form=form))
+
+        try:
+            instance.save()
+            messages.success(request, 'Informações pessoais atualizadas com sucesso!')
+        except Exception as e:
+            messages.error(request, f'Erro ao atualizar informações: {str(e)}')
+
+        return redirect('member_profile')
+
+    def _update_profile_picture(self, request, member):
+        if 'profile_picture' not in request.FILES:
+            return True
+
+        picture = request.FILES['profile_picture']
+
+        if picture.size > self.MAX_AVATAR_SIZE:
+            messages.error(request, 'O arquivo é muito grande. Tamanho máximo: 5MB.')
+            return False
+
+        if picture.content_type not in self.ALLOWED_IMAGE_TYPES:
+            messages.error(request, 'Formato de arquivo não suportado. Use JPG, PNG ou GIF.')
+            return False
+
+        member.profile_picture = picture
+        return True
+
+    def _handle_change_password(self, request, member):
+        from website.forms.member import MemberPasswordChangeForm
+        form = MemberPasswordChangeForm(user=request.user, data=request.POST)
+
+        if not form.is_valid():
+            return render(request, 'member/profile.html', self._build_context(member, password_form=form))
+
+        try:
+            form.save()
+            messages.success(request, 'Senha alterada com sucesso! Faça login novamente.')
+            logout(request)
+            return redirect('member_login')
+        except Exception as e:
+            messages.error(request, f'Erro ao alterar senha: {str(e)}')
+
+        return redirect('member_profile')
 
 
-@login_required
-def member_consolidation_view(request):
-    """View para listar consolidados do membro logado"""
-    member = request.user.member
-    
-    consolidations = member.performed_followups.select_related('accompanied').prefetch_related('reports').all()
-    
-    total_consolidations = consolidations.count()
-    active_consolidations = consolidations.filter(end_date__isnull=True).count()
-    completed_consolidations = consolidations.filter(end_date__isnull=False).count()
-    
-    # Verifica se o membro está no ministério de ministração (sistema antigo e novo)
-    is_ministration_old = member.ministry.filter(name__icontains='ministração').exists()
-    is_ministration_new = MinistryMembership.objects.filter(
-        member=member,
-        ministry__name__icontains='ministração',
-        is_active=True
-    ).exists()
-    is_ministration_member = is_ministration_old or is_ministration_new
-    
-    context = {
-        'member': member,
-        'consolidations': consolidations,
-        'total_consolidations': total_consolidations,
-        'active_consolidations': active_consolidations,
-        'completed_consolidations': completed_consolidations,
-        'can_consolidate': member.is_available_to_consolidate,
-        'is_ministration_member': is_ministration_member,
-    }
-    
-    return render(request, 'member/consolidation.html', context)
+class MemberConsolidationView(MemberRequiredMixin, MinistrationContextMixin, View):
+    def get(self, request):
+        member = self.member
+        consolidations = member.performed_followups.select_related(
+            'accompanied'
+        ).prefetch_related('reports').all()
+
+        context = {
+            'consolidations': consolidations,
+            'total_consolidations': consolidations.count(),
+            'active_consolidations': consolidations.filter(end_date__isnull=True).count(),
+            'completed_consolidations': consolidations.filter(end_date__isnull=False).count(),
+            'is_ministration_member': self.get_ministration_status(member),
+        }
+        return render(request, 'member/consolidation.html', context)
 
 
-@login_required
-def member_approve_word(request, word_id):
+class MemberApproveWordView(ApproverRequiredMixin, View):
     """Permite que um membro aprovador aprove uma palavra de conhecimento"""
-    if request.method != 'POST':
-        messages.error(request, 'Método não permitido.')
+
+    def post(self, request, word_id):
+        from website.models import WordOfKnowledge
+
+        word = get_object_or_404(WordOfKnowledge, id=word_id)
+        word.is_approved = True
+        word.approved_by = self.member
+        word.approved_at = timezone.now()
+        word.save()
+
+        messages.success(request, f'Palavra de {word.member.name} aprovada com sucesso!')
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': True,
+                'message': 'Palavra aprovada com sucesso!'
+            })
+
         return redirect('member_dashboard')
-    
-    # Verificar se o membro é aprovador
-    try:
-        member = request.user.member
-        if not member.is_approver:
-            messages.error(request, 'Você não tem permissão para aprovar palavras.')
-            return redirect('member_dashboard')
-    except:
-        messages.error(request, 'Acesso negado.')
-        return redirect('member_login')
-    
-    from website.models import WordOfKnowledge
-    from django.utils import timezone
-    from django.shortcuts import get_object_or_404
-    
-    word = get_object_or_404(WordOfKnowledge, id=word_id)
-    
-    # Aprovar a palavra
-    word.is_approved = True
-    word.approved_by = member
-    word.approved_at = timezone.now()
-    word.save()
-    
-    messages.success(request, f'Palavra de {word.member.name} aprovada com sucesso!')
-    
-    # Se for requisição AJAX, retorna JSON
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({
-            'success': True,
-            'message': 'Palavra aprovada com sucesso!'
-        })
-    
-    return redirect('member_dashboard')
 
 
-@login_required
-def member_reject_word(request, word_id):
+class MemberRejectWordView(ApproverRequiredMixin, View):
     """Permite que um membro aprovador rejeite uma palavra de conhecimento"""
-    if request.method != 'POST':
-        messages.error(request, 'Método não permitido.')
+
+    def post(self, request, word_id):
+        from website.models import WordOfKnowledge
+
+        word = get_object_or_404(WordOfKnowledge, id=word_id)
+        member_name = word.member.name
+        word.delete()
+
+        messages.warning(request, f'Palavra de {member_name} foi rejeitada e removida.')
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': True,
+                'message': 'Palavra rejeitada com sucesso!'
+            })
+
         return redirect('member_dashboard')
-    
-    # Verificar se o membro é aprovador
-    try:
-        member = request.user.member
-        if not member.is_approver:
-            messages.error(request, 'Você não tem permissão para rejeitar palavras.')
-            return redirect('member_dashboard')
-    except:
-        messages.error(request, 'Acesso negado.')
-        return redirect('member_login')
-    
-    from website.models import WordOfKnowledge
-    from django.shortcuts import get_object_or_404
-    
-    word = get_object_or_404(WordOfKnowledge, id=word_id)
-    member_name = word.member.name
-    word.delete()
-    
-    messages.warning(request, f'Palavra de {member_name} foi rejeitada e removida.')
-    
-    # Se for requisição AJAX, retorna JSON
-    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({
-            'success': True,
-            'message': 'Palavra rejeitada com sucesso!'
-        })
-    
-    return redirect('member_dashboard')
 
 
-@login_required
-def redirect_after_login(request):
+class RedirectAfterLoginView(LoginRequiredMixin, View):
     """Redireciona o usuário para a página apropriada após login"""
-    user = request.user
-    
-    # Se é admin ou tem acesso ao painel, vai para admin-panel
-    if user.has_admin_access():
-        return redirect('admin_dashboard')
-    
-    # Se é membro, vai para dashboard de membros
-    if hasattr(user, 'member'):
-        return redirect('member_dashboard')
-    
-    # Se não tem nenhum dos dois, mostra mensagem de erro
-    messages.error(request, 'Acesso negado. Você precisa estar cadastrado como membro ou ter permissões de administrador.')
-    logout(request)
-    return redirect('member_login')
+
+    def get(self, request):
+        user = request.user
+
+        if user.has_admin_access():
+            return redirect('admin_dashboard')
+
+        if hasattr(user, 'member'):
+            return redirect('member_dashboard')
+
+        messages.error(request, 'Acesso negado. Você precisa estar cadastrado como membro ou ter permissões de administrador.')
+        logout(request)
+        return redirect('member_login')

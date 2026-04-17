@@ -1,4 +1,4 @@
-{% extends "login_base.html" %}
+{% extends "member_base.html" %}
 {% load static %}
 
 {% block title %}Meu Perfil - {{ member.name }}{% endblock %}
@@ -103,7 +103,6 @@
         object-fit: contain;
     }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
 {% endblock %}
 
@@ -114,10 +113,6 @@
             <!-- Botão voltar elegante -->
             <div class="hidden sm:flex justify-between items-center my-2">
                 <h1 class="text-2xl font-bold text-gray-800">Meu <b>Perfil</b></h1>
-                <a href="{% url 'member_dashboard' %}" class="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition-all duration-300">
-                    <i class="fas fa-arrow-left text-sm"></i>
-                    <span class="text-sm font-medium">Voltar</span>
-                </a>
             </div>
 
             <!-- Card de perfil moderno -->
@@ -156,18 +151,6 @@
                 
                 <h2 class="text-xl font-bold text-gray-800 mb-2">{{ member.name }}</h2>
                 <p class="text-gray-500 text-sm mb-4">Membro Filadélfia</p>
-                
-                <!-- Info compacta -->
-                {% if member.neighborhood or ministries %}
-                <div class="flex justify-center gap-6 text-sm text-gray-600">
-                    {% if member.neighborhood %}
-                    <div class="flex items-center gap-1">
-                        <i class="fas fa-map-marker-alt text-gray-400"></i>
-                        <span>{{ member.neighborhood.name }}</span>
-                    </div>
-                    {% endif %}
-                </div>
-                {% endif %}
             </div>
         </div>
     </section>
@@ -189,7 +172,6 @@
 
     <!-- Conteúdo principal -->
     <main class="px-6 pb-24 space-y-6">
-        
         <!-- Formulário de Informações Pessoais -->
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100">
             <div class="p-6 border-b border-gray-100">
@@ -204,73 +186,67 @@
                 <input type="hidden" name="form_type" value="personal_info">
                 
                 <div class="space-y-5">
-                    <!-- Nome -->
                     <div>
-                        <label for="name" class="block text-sm font-medium text-gray-700 mb-3">
+                        <label for="{{ profile_form.name.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
                             <i class="fas fa-user text-gray-400 mr-2"></i>Nome Completo
                         </label>
-                        <input type="text" id="name" name="name" value="{{ member.name|default:'' }}"
-                               class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
-                               placeholder="Seu nome completo">
+                        {{ profile_form.name }}
+                        {% if profile_form.name.errors %}
+                        <p class="text-xs text-red-500 mt-1">{{ profile_form.name.errors.0 }}</p>
+                        {% endif %}
                     </div>
 
-                    <!-- Data de Nascimento -->
                     <div>
-                        <label for="birth_date" class="block text-sm font-medium text-gray-700 mb-3">
+                        <label for="{{ profile_form.birth_date.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
                             <i class="fas fa-birthday-cake text-gray-400 mr-2"></i>Data de Nascimento
                         </label>
-                        <input type="date" id="birth_date" name="birth_date" value="{{ member.birth_date|date:'Y-m-d'|default:'' }}"
-                               class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all">
+                        {{ profile_form.birth_date }}
+                        {% if profile_form.birth_date.errors %}
+                        <p class="text-xs text-red-500 mt-1">{{ profile_form.birth_date.errors.0 }}</p>
+                        {% endif %}
                     </div>
-                    
-                    <!-- Telefone -->
+
                     <div>
-                        <label for="phone" class="block text-sm font-medium text-gray-700 mb-3">
+                        <label for="{{ profile_form.phone.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
                             <i class="fas fa-phone text-gray-400 mr-2"></i>Telefone
                         </label>
-                        <input type="tel" id="phone" name="phone" value="{{ member.phone|default:'' }}"
-                               class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
-                               placeholder="(11) 99999-9999">
+                        {{ profile_form.phone }}
+                        {% if profile_form.phone.errors %}
+                        <p class="text-xs text-red-500 mt-1">{{ profile_form.phone.errors.0 }}</p>
+                        {% endif %}
                     </div>
-                    
-                    <!-- Endereço -->
+
                     <div>
-                        <label for="address" class="block text-sm font-medium text-gray-700 mb-3">
+                        <label for="{{ profile_form.address.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
                             <i class="fas fa-map-marker-alt text-gray-400 mr-2"></i>Endereço
                         </label>
-                        <textarea id="address" name="address" rows="3"
-                                  class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all resize-none"
-                                  placeholder="Seu endereço completo">{{ member.address|default:'' }}</textarea>
+                        {{ profile_form.address }}
+                        {% if profile_form.address.errors %}
+                        <p class="text-xs text-red-500 mt-1">{{ profile_form.address.errors.0 }}</p>
+                        {% endif %}
                     </div>
 
-                    <!-- Bairro -->
                     <div>
-                        <label for="neighborhood" class="block text-sm font-medium text-gray-700 mb-3">
+                        <label for="{{ profile_form.neighborhood.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
                             <i class="fas fa-map-pin text-gray-400 mr-2"></i>Bairro
                         </label>
-                        <select id="neighborhood" name="neighborhood"
-                                class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all">
-                            <option value="">Selecione seu bairro</option>
-                            {% for neighborhood in neighborhoods %}
-                            <option value="{{ neighborhood.id }}" {% if member.neighborhood and member.neighborhood.id == neighborhood.id %}selected{% endif %}>
-                                {{ neighborhood.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
+                        {{ profile_form.neighborhood }}
+                        {% if profile_form.neighborhood.errors %}
+                        <p class="text-xs text-red-500 mt-1">{{ profile_form.neighborhood.errors.0 }}</p>
+                        {% endif %}
                     </div>
 
-                    <!-- Testemunho -->
                     <div>
-                        <label for="testimony" class="block text-sm font-medium text-gray-700 mb-3">
+                        <label for="{{ profile_form.testimony.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
                             <i class="fas fa-book-open text-gray-400 mr-2"></i>Seu Testemunho
                         </label>
-                        <textarea id="testimony" name="testimony" rows="5"
-                                  class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all resize-none"
-                                  placeholder="Compartilhe sua história de fé e como Deus tem transformado sua vida...">{{ member.testimony|default:'' }}</textarea>
+                        {{ profile_form.testimony }}
+                        {% if profile_form.testimony.errors %}
+                        <p class="text-xs text-red-500 mt-1">{{ profile_form.testimony.errors.0 }}</p>
+                        {% endif %}
                         <p class="text-xs text-gray-500 mt-2">Seu testemunho pode inspirar e encorajar outros irmãos</p>
                     </div>
-                    
-                    <!-- Email (somente leitura) -->
+
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-3">
                             <i class="fas fa-envelope text-gray-400 mr-2"></i>Email
@@ -280,7 +256,7 @@
                         <p class="text-xs text-gray-500 mt-2">Entre em contato com a administração para alterar</p>
                     </div>
                 </div>
-                
+
                 <div class="mt-8 flex justify-end">
                     <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl transition-all duration-300 shadow-sm hover:shadow-md">
                         <i class="fas fa-save mr-2"></i>Salvar Alterações
@@ -289,7 +265,6 @@
             </form>
         </div>
 
-        <!-- Formulário de Alteração de Senha (Colapsável) -->
         <div class="bg-white rounded-2xl shadow-sm border border-gray-100">
             <button type="button" onclick="togglePasswordForm()" class="w-full p-6 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors">
                 <h3 class="text-lg font-semibold text-gray-800 flex items-center justify-between">
@@ -305,36 +280,39 @@
                 <form method="post" class="p-6">
                     {% csrf_token %}
                     <input type="hidden" name="form_type" value="change_password">
-                    
+
                     <div class="space-y-5">
                         <div>
-                            <label for="current_password" class="block text-sm font-medium text-gray-700 mb-3">
-                                <i class="fas fa-lock text-gray-400 mr-2"></i>Senha Atual
+                            <label for="{{ password_form.current_password.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
+                                <i class="fas fa-lock text-gray-400 mr-2"></i>{{ password_form.current_password.label }}
                             </label>
-                            <input type="password" id="current_password" name="current_password" required
-                                   class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
-                                   placeholder="Digite sua senha atual">
+                            {{ password_form.current_password }}
+                            {% if password_form.current_password.errors %}
+                            <p class="text-xs text-red-500 mt-1">{{ password_form.current_password.errors.0 }}</p>
+                            {% endif %}
                         </div>
-                        
+
                         <div>
-                            <label for="new_password" class="block text-sm font-medium text-gray-700 mb-3">
-                                <i class="fas fa-key text-gray-400 mr-2"></i>Nova Senha
+                            <label for="{{ password_form.new_password.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
+                                <i class="fas fa-key text-gray-400 mr-2"></i>{{ password_form.new_password.label }}
                             </label>
-                            <input type="password" id="new_password" name="new_password" required
-                                   class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
-                                   placeholder="Digite sua nova senha">
+                            {{ password_form.new_password }}
+                            {% if password_form.new_password.errors %}
+                            <p class="text-xs text-red-500 mt-1">{{ password_form.new_password.errors.0 }}</p>
+                            {% endif %}
                         </div>
-                        
+
                         <div>
-                            <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-3">
-                                <i class="fas fa-check-circle text-gray-400 mr-2"></i>Confirmar Nova Senha
+                            <label for="{{ password_form.confirm_password.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-3">
+                                <i class="fas fa-check-circle text-gray-400 mr-2"></i>{{ password_form.confirm_password.label }}
                             </label>
-                            <input type="password" id="confirm_password" name="confirm_password" required
-                                   class="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:border-gray-300 focus:outline-none transition-all"
-                                   placeholder="Confirme sua nova senha">
+                            {{ password_form.confirm_password }}
+                            {% if password_form.confirm_password.errors %}
+                            <p class="text-xs text-red-500 mt-1">{{ password_form.confirm_password.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
-                    
+
                     <div class="mt-8 flex justify-end">
                         <button type="submit" class="px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl transition-all duration-300 shadow-sm hover:shadow-md">
                             <i class="fas fa-shield-alt mr-2"></i>Alterar Senha
@@ -463,46 +441,7 @@
         </div>
     </div>
 
-    <!-- Bottom Navigation -->
-    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out {% if can_consolidate and is_ministration_member %}w-[90%] max-w-lg justify-around{% elif can_consolidate or is_ministration_member %}w-auto gap-2 justify-center{% else %}w-auto gap-2 justify-center{% endif %}" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(156, 163, 175, 0.2);">
-        <!-- Home -->
-        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(107, 114, 128, 0.05); border-color: rgba(107, 114, 128, 0.15);">
-                <i class="fas fa-home text-lg transition-transform group-hover:scale-110" style="color: #6B7280;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Home</span>
-        </a>
-        
-        <!-- Consolidação (somente se disponível) -->
-        {% if can_consolidate %}
-        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(107, 114, 128, 0.05); border-color: rgba(107, 114, 128, 0.15);">
-                <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110" style="color: #6B7280;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Consolidar</span>
-        </a>
-        {% endif %}
-        
-        <!-- Curas (somente para membros do ministério de ministração) -->
-        {% if is_ministration_member %}
-        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(107, 114, 128, 0.05); border-color: rgba(107, 114, 128, 0.15);">
-                <i class="fas fa-heart-pulse text-lg transition-transform group-hover:scale-110" style="color: #6B7280;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Curas</span>
-        </a>
-        {% endif %}
-        
-        <!-- Perfil (Ativo) -->
-        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
-            <div class="relative">
-                <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #6366F1;">
-                    <i class="fas fa-user-circle text-white text-lg"></i>
-                </div>
-            </div>
-            <span style="color: #6366F1;">Perfil</span>
-        </a>
-    </nav>
+    {% include 'parciais/member_bottom_nav.html' with nav_active='profile' %}
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script>
@@ -522,6 +461,16 @@
                 icon.classList.remove('rotate-180');
             }
         }
+
+        {% if password_form.errors %}
+        // Auto-open the password section when there are validation errors
+        document.addEventListener('DOMContentLoaded', function () {
+            const form = document.getElementById('passwordForm');
+            const icon = document.getElementById('passwordToggleIcon');
+            form.classList.remove('hidden');
+            if (icon) icon.classList.add('rotate-180');
+        });
+        {% endif %}
 
         function openCropModal(file) {
             selectedFile = file;
@@ -652,7 +601,7 @@
             });
 
             // Formatação do telefone
-            const phoneInput = document.getElementById('phone');
+            const phoneInput = document.getElementById('id_phone');
             if (phoneInput) {
                 phoneInput.addEventListener('input', function(e) {
                     let value = e.target.value.replace(/\D/g, '');
@@ -684,51 +633,6 @@
 
             newPassword?.addEventListener('input', validatePasswords);
             confirmPassword?.addEventListener('input', validatePasswords);
-
-            // Script para ocultar/mostrar menu inferior ao rolar
-            let lastScrollTop = 0;
-            let isScrolling;
-            const nav = document.getElementById('bottomNav');
-            const scrollThreshold = 50;
-
-            window.addEventListener('scroll', function() {
-                clearTimeout(isScrolling);
-                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                
-                if (scrollTop <= 100) {
-                    nav.classList.remove('nav-hidden');
-                    nav.classList.add('nav-visible');
-                    lastScrollTop = scrollTop;
-                    return;
-                }
-
-                if (Math.abs(scrollTop - lastScrollTop) > scrollThreshold) {
-                    if (scrollTop > lastScrollTop) {
-                        nav.classList.add('nav-hidden');
-                        nav.classList.remove('nav-visible');
-                    } else {
-                        nav.classList.remove('nav-hidden');
-                        nav.classList.add('nav-visible');
-                    }
-                    lastScrollTop = scrollTop;
-                }
-
-                isScrolling = setTimeout(function() {
-                    nav.classList.remove('nav-hidden');
-                    nav.classList.add('nav-visible');
-                }, 1000);
-            }, false);
-
-            // Mostra o menu quando passar o mouse próximo à parte inferior
-            document.addEventListener('mousemove', function(e) {
-                const windowHeight = window.innerHeight;
-                const mouseY = e.clientY;
-                
-                if (windowHeight - mouseY < 150) {
-                    nav.classList.remove('nav-hidden');
-                    nav.classList.add('nav-visible');
-                }
-            });
 
             // Fechar modal ao clicar fora
             document.getElementById('cropModal')?.addEventListener('click', function(e) {

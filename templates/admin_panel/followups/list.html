@@ -4,183 +4,423 @@
 {% block title %}Consolidação e Discipulado - Painel Administrativo{% endblock %}
 
 {% block head %}
-<!-- SweetAlert2 for better alerts -->
+<!-- SweetAlert2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+/* ===== SweetAlert2 Custom Theme ===== */
+.swal2-popup.swal-custom { font-family: "Giga Sans", system-ui, sans-serif !important; border-radius: 20px !important; padding: 36px 28px 28px !important; max-width: 400px !important; box-shadow: 0 24px 60px rgba(0,0,0,0.13), 0 0 0 1px rgba(0,0,0,0.04) !important; }
+.swal2-popup.swal-custom .swal2-header { padding: 0 !important; flex-direction: column !important; align-items: center !important; gap: 14px !important; margin-bottom: 4px !important; }
+.swal2-popup.swal-custom .swal2-icon { border: none !important; width: 56px !important; height: 56px !important; margin: 0 auto !important; border-radius: 50% !important; flex-shrink: 0 !important; }
+.swal2-popup.swal-custom .swal2-icon .swal2-icon-content { font-size: 1.75rem !important; font-weight: 900 !important; line-height: 1 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-warning, .swal2-popup.swal-custom .swal2-icon.swal2-question { background: #fee2e2 !important; border-color: transparent !important; color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-warning .swal2-icon-content, .swal2-popup.swal-custom .swal2-icon.swal2-question .swal2-icon-content { color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error { background: #fee2e2 !important; border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark { transform: scale(0.6) !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-left, .swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-right { background-color: #dc2626 !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success { background: #dcfce7 !important; border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-ring { border-color: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success [class^='swal2-success-circular-line'], .swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-fix { background: transparent !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-tip, .swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-long { background-color: #16a34a !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-info { background: #dbeafe !important; border-color: transparent !important; color: #2563eb !important; }
+.swal2-popup.swal-custom .swal2-icon.swal2-info .swal2-icon-content { color: #2563eb !important; }
+.swal2-popup.swal-custom .swal2-title { font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 1.05rem !important; font-weight: 700 !important; color: #111827 !important; letter-spacing: -0.01em !important; line-height: 1.35 !important; padding: 0 !important; margin: 0 !important; text-align: center !important; }
+.swal2-popup.swal-custom .swal2-html-container { font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 0.875rem !important; color: #6b7280 !important; font-weight: 400 !important; text-align: center !important; padding: 0 !important; margin: 6px 0 0 !important; line-height: 1.65 !important; }
+.swal2-popup.swal-custom .swal2-actions { width: 100% !important; gap: 10px !important; flex-wrap: nowrap !important; justify-content: center !important; margin-top: 24px !important; }
+/* display sem !important — permite que o SweetAlert2 esconda botões inativos via style.display='none' */
+.swal-btn { flex: 0 1 auto !important; min-width: 120px !important; display: inline-flex; align-items: center !important; justify-content: center !important; padding: 11px 24px !important; border-radius: 10px !important; font-family: "Giga Sans", system-ui, sans-serif !important; font-size: 0.875rem !important; font-weight: 600 !important; cursor: pointer !important; transition: background 0.15s, transform 0.1s !important; letter-spacing: 0.005em !important; white-space: nowrap !important; border: none !important; }
+.swal-btn:hover { transform: translateY(-1px) !important; }
+.swal-btn:active { transform: translateY(0) !important; }
+.swal-btn-confirm { background: var(--color-primary) !important; color: white !important; }
+.swal-btn-confirm:hover { background: #a80703 !important; }
+.swal-btn-cancel { background: #f3f4f6 !important; color: #4b5563 !important; }
+.swal-btn-cancel:hover { background: #e5e7eb !important; }
+.swal-btn-deny { background: #6b7280 !important; color: white !important; }
+.swal-btn-danger { background: #dc2626 !important; color: white !important; }
+.swal-btn-danger:hover { background: #b91c1c !important; }
+.swal2-popup.swal-custom .swal2-loader { border-color: var(--color-primary) transparent var(--color-primary) transparent !important; }
+</style>
+<script>
+window.Swal = Swal.mixin({
+    customClass: {
+        popup:         'swal-custom',
+        confirmButton: 'swal-btn swal-btn-confirm',
+        denyButton:    'swal-btn swal-btn-deny',
+        cancelButton:  'swal-btn swal-btn-cancel',
+    },
+    buttonsStyling: false,
+    backdrop: 'rgba(0,0,0,0.55)',
+});
+</script>
 
 <style>
     body {
         background-color: #f8f9fa !important;
     }
-    
+
     .admin-card {
         background: white;
         border-radius: 12px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     }
-    
-    .followup-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 12px;
-        transition: all 0.3s ease;
-        cursor: pointer;
+
+    .followup-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid var(--color-accent);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 1.15rem;
     }
-    
-    .followup-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        transform: translateY(-2px);
-    }
-    
+
     .status-badge {
         padding: 4px 12px;
         border-radius: 20px;
-        font-size: 0.75rem;
+        font-size: 12px;
         font-weight: 600;
+    }
+
+    .status-active   { background-color: #dcfce7; color: #166534; }
+    .status-finished { background-color: #f3f4f6; color: #374151; }
+
+    /* Table */
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
         text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
     }
-    
-    .status-active {
-        background-color: #dcfce7;
-        color: #166534;
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
     }
-    
-    .status-finished {
-        background-color: #f3f4f6;
-        color: #374151;
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
     }
+    .data-table tbody td {
+        padding: 14px 24px;
+        vertical-align: middle;
+    }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .action-btn-view   { background: rgba(201,9,5,0.08); color: var(--color-primary); }
+    .action-btn-view:hover   { background: rgba(201,9,5,0.16); }
+    .action-btn-report { background: #f0fdf4; color: #16a34a; }
+    .action-btn-report:hover { background: #dcfce7; }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
 </style>
 {% endblock %}
 
 {% block content %}
+{% include 'parciais/messages.html' %}
+
 <div class="flex min-h-screen bg-gray-50">
-    {% include 'parciais/messages.html' %}
     {% include 'parciais/admin_sidebar.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-6 mt-24">
-            <div class="admin-card">
-                <div class="p-6">
-                <!-- Header -->
-                <div class="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 gap-4">
-                    <div>
-                        <h1 class="text-2xl font-bold text-gray-900 text-center md:text-left">Consolidação</h1>
-                        <p class="text-gray-600 mt-1 text-center md:text-left">Gerencie consolidações</p>
+        <div class="p-4 sm:p-6 mt-24">
+
+            <!-- Title -->
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="heart-circle" class="text-xl text-white"></ion-icon>
                     </div>
-                    <a href="{% url 'admin_followup_create' %}" 
-                       class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 flex items-center justify-center w-full md:w-auto">
-                        <ion-icon name="add-outline" class="mr-2"></ion-icon>
-                        Nova Consolidação
-                    </a>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Consolidação</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if followups.paginator.count %}{{ followups.paginator.count }} consolidação{{ followups.paginator.count|pluralize:"ões" }} cadastrada{{ followups.paginator.count|pluralize:"s" }}{% else %}Gerenciar consolidações{% endif %}
+                        </p>
+                    </div>
                 </div>
+                <!-- Mobile: Nova Consolidação (icon only) -->
+                <a href="{% url 'admin_followup_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Nova Consolidação">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
+            </div>
 
-                <!-- Filtros -->
-                <div class="bg-gray-50 p-4 rounded-lg mb-6">
-                    <form method="GET" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Buscar</label>
-                            <input type="text" name="search" value="{{ search }}" 
-                                   placeholder="Nome do membro..."
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Responsável</label>
-                            <select name="responsible" class="w-full px-3 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]" style="height: 42px; display: flex; align-items: center;">
-                                <option value="">Todos</option>
-                                {% for responsible in responsibles %}
-                                    <option value="{{ responsible.id }}" {% if responsible_filter == responsible.id|stringformat:"s" %}selected{% endif %}>
-                                        {{ responsible.name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                            <select name="status" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]">
-                                <option value="">Todos</option>
-                                <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Ativos</option>
-                                <option value="finished" {% if status_filter == 'finished' %}selected{% endif %}>Finalizados</option>
-                            </select>
-                        </div>
-                        <div class="flex items-end md:flex-col lg:flex-row gap-2">
-                            <button type="submit" 
-                                    class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition duration-300 w-full">
-                                Filtrar
-                            </button>
-                            <a href="{% url 'admin_followups_list' %}" 
-                               class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-300 w-full text-center">
-                                Limpar
-                            </a>
-                        </div>
-                    </form>
-                </div>
+            <!-- Search + Filters + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="responsible" id="hidden-responsible" value="{{ responsible_filter }}">
+                    <input type="hidden" name="status"      id="hidden-status"      value="{{ status_filter }}">
 
-                <!-- Lista de Follow-ups -->
-                <div class="space-y-4">
-                    {% for followup in followups %}
-                        <div class="followup-card" onclick="window.location.href='{% url 'admin_followup_detail' followup.id %}'">
-                            <div class="flex flex-col md:flex-row justify-between items-start gap-3">
-                                <div class="flex-1 w-full">
-                                    <div class="flex flex-col md:flex-row md:items-center gap-2 md:space-x-3 mb-2">
-                                        <h3 class="font-semibold text-lg text-gray-900 break-words">{{ followup.accompanied.name }}</h3>
-                                        <span class="status-badge {% if followup.end_date %}status-finished{% else %}status-active{% endif %} inline-block">
-                                            {% if followup.end_date %}Finalizado{% else %}Ativo{% endif %}
-                                        </span>
-                                    </div>
-                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-600">
-                                        <div>
-                                            <span class="font-medium">Responsável:</span> {{ followup.responsible.name }}
-                                        </div>
-                                        <div>
-                                            <span class="font-medium">Início:</span> {{ followup.created_at|date:"d/m/Y" }}
-                                        </div>
-                                        {% if followup.end_date %}
-                                        <div>
-                                            <span class="font-medium">Fim:</span> {{ followup.end_date|date:"d/m/Y" }}
-                                        </div>
-                                        {% endif %}
-                                        <div>
-                                            <span class="font-medium">Relatórios:</span> {{ followup.reports.count }}
-                                        </div>
-                                    </div>
-                                    {% if followup.profile_notes %}
-                                        <p class="text-gray-700 text-sm mt-2 break-words">{{ followup.profile_notes|truncatechars:100 }}</p>
-                                    {% endif %}
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar por nome do membro..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-followups"
+                                class="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if responsible_filter or status_filter %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                        <div id="filter-panel-followups"
+                             class="hidden absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Responsável</label>
+                                    <select id="panel-responsible" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white dark:bg-gray-800 cursor-pointer">
+                                        <option value="">Todos</option>
+                                        {% for responsible in responsibles %}
+                                        <option value="{{ responsible.id }}" {% if responsible_filter == responsible.id|stringformat:"s" %}selected{% endif %}>{{ responsible.name }}</option>
+                                        {% endfor %}
+                                    </select>
                                 </div>
-                                <div class="flex space-x-2 mt-2 md:mt-0">
-                                    <a href="{% url 'admin_followup_edit' followup.id %}" 
-                                       class="text-blue-600 hover:text-blue-800 p-1"
-                                       onclick="event.stopPropagation();"
-                                       title="Editar">
-                                        <ion-icon name="create-outline" class="text-xl"></ion-icon>
-                                    </a>
-                                    <a href="{% url 'admin_followup_report' followup.id %}" 
-                                       class="text-green-600 hover:text-green-800 p-1"
-                                       onclick="event.stopPropagation();"
-                                       title="Adicionar Relatório">
-                                        <ion-icon name="add-circle-outline" class="text-xl"></ion-icon>
-                                    </a>
-                                    <button onclick="deleteFollowup({{ followup.id }}, '{{ followup.accompanied.name }}'); event.stopPropagation();" 
-                                       class="text-red-600 hover:text-red-800 p-1"
-                                       title="Deletar">
-                                        <ion-icon name="trash-outline" class="text-xl"></ion-icon>
-                                    </button>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                                    <select id="panel-status" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white dark:bg-gray-800 cursor-pointer">
+                                        <option value="">Todos</option>
+                                        <option value="active"   {% if status_filter == 'active' %}selected{% endif %}>Ativos</option>
+                                        <option value="finished" {% if status_filter == 'finished' %}selected{% endif %}>Finalizados</option>
+                                    </select>
                                 </div>
                             </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                <a href="{% url 'admin_followups_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-followups"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
                         </div>
-                    {% empty %}
-                        <div class="text-center py-12">
-                            <ion-icon name="chatbubbles-outline" class="text-6xl text-gray-400 mb-4"></ion-icon>
-                            <h3 class="text-lg font-medium text-gray-900 mb-2">Nenhuma consolidação encontrado</h3>
-                            <p class="text-gray-600 mb-4 px-4">Comece criando sua primeira consolidação.</p>
-                            <a href="{% url 'admin_followup_create' %}" 
-                               class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 inline-block">
-                                Criar Consolidação
-                            </a>
-                        </div>
-                    {% endfor %}
-                </div>
+                    </div>
+                </form>
+
+                <!-- Desktop: Nova Consolidação -->
+                <a href="{% url 'admin_followup_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Nova Consolidação
+                </a>
             </div>
+
+            <!-- Versão Mobile: Cards -->
+            <div class="block md:hidden space-y-4">
+                {% for followup in followups %}
+                <div class="admin-card p-4 hover:shadow-lg transition-shadow">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="followup-avatar bg-[var(--color-primary)] flex items-center justify-center text-white flex-shrink-0">
+                                {{ followup.accompanied.name|first }}
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h3 class="text-base font-bold text-gray-900 truncate">{{ followup.accompanied.name }}</h3>
+                                <p class="text-xs text-gray-500">{{ followup.created_at|date:"d/m/Y" }}</p>
+                            </div>
+                        </div>
+                        <span class="status-badge {% if followup.end_date %}status-finished{% else %}status-active{% endif %} flex-shrink-0">
+                            {% if followup.end_date %}Finalizado{% else %}Ativo{% endif %}
+                        </span>
+                    </div>
+
+                    <div class="space-y-2 mb-3 text-sm">
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="person-outline" class="text-gray-400 flex-shrink-0"></ion-icon>
+                            <span class="text-gray-700 truncate">{{ followup.responsible.name }}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="document-text-outline" class="text-gray-400 flex-shrink-0"></ion-icon>
+                            <span class="text-gray-700">{{ followup.reports.count }} relatório{{ followup.reports.count|pluralize:"s" }}</span>
+                        </div>
+                        {% if followup.end_date %}
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="calendar-outline" class="text-gray-400 flex-shrink-0"></ion-icon>
+                            <span class="text-gray-700">Encerrado em {{ followup.end_date|date:"d/m/Y" }}</span>
+                        </div>
+                        {% endif %}
+                        {% if followup.profile_notes %}
+                        <p class="text-gray-500 text-xs truncate">{{ followup.profile_notes|truncatechars:80 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex gap-2 pt-3 border-t border-gray-100">
+                        <a href="{% url 'admin_followup_detail' followup.id %}"
+                           class="flex-1 py-2 px-3 bg-[var(--color-primary)] text-white rounded-lg font-medium text-sm hover:bg-opacity-90 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="eye-outline"></ion-icon>
+                            Ver
+                        </a>
+                        <a href="{% url 'admin_followup_report' followup.id %}"
+                           class="flex-1 py-2 px-3 bg-green-50 text-green-600 rounded-lg font-medium text-sm hover:bg-green-100 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="add-circle-outline"></ion-icon>
+                            Relatório
+                        </a>
+                        <a href="{% url 'admin_followup_edit' followup.id %}"
+                           class="py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center">
+                            <ion-icon name="create-outline"></ion-icon>
+                        </a>
+                        <button onclick="deleteFollowup({{ followup.id }}, '{{ followup.accompanied.name }}')"
+                                class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-sm hover:bg-red-100 transition flex items-center justify-center">
+                            <ion-icon name="trash-outline"></ion-icon>
+                        </button>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="admin-card p-8 text-center text-gray-500">
+                    Nenhuma consolidação encontrada.
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Versão Desktop: Tabela -->
+            <div class="admin-card overflow-hidden hidden md:block">
+                <div class="overflow-x-auto table-responsive">
+                    <table class="w-full data-table">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Acompanhado</th>
+                                <th class="text-left">Responsável</th>
+                                <th class="text-left">Início</th>
+                                <th class="text-left">Relatórios</th>
+                                <th class="text-left">Status</th>
+                                <th class="text-left">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
+                            {% for followup in followups %}
+                            <tr>
+                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_followup_detail' followup.id %}">
+                                    <div class="flex items-center gap-3">
+                                        <div class="followup-avatar bg-[var(--color-primary)] flex items-center justify-center text-white">
+                                            {{ followup.accompanied.name|first }}
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-900">{{ followup.accompanied.name }}</div>
+                                            {% if followup.profile_notes %}
+                                            <div class="text-xs text-gray-400 mt-0.5 max-w-xs truncate">{{ followup.profile_notes|truncatechars:50 }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ followup.responsible.name }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ followup.created_at|date:"d/m/Y" }}</div>
+                                    {% if followup.end_date %}
+                                    <div class="text-xs text-gray-400 mt-0.5">Fim: {{ followup.end_date|date:"d/m/Y" }}</div>
+                                    {% endif %}
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ followup.reports.count }} relatório{{ followup.reports.count|pluralize:"s" }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <span class="status-badge {% if followup.end_date %}status-finished{% else %}status-active{% endif %}">
+                                        {% if followup.end_date %}Finalizado{% else %}Ativo{% endif %}
+                                    </span>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <a href="{% url 'admin_followup_detail' followup.id %}" class="action-btn action-btn-view" title="Ver">
+                                            <ion-icon name="eye-outline"></ion-icon>
+                                        </a>
+                                        <a href="{% url 'admin_followup_report' followup.id %}" class="action-btn action-btn-report" title="Adicionar Relatório">
+                                            <ion-icon name="add-circle-outline"></ion-icon>
+                                        </a>
+                                        <a href="{% url 'admin_followup_edit' followup.id %}" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
+                                        </a>
+                                        <button onclick="deleteFollowup({{ followup.id }}, '{{ followup.accompanied.name }}')" class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center gap-2 text-gray-400">
+                                        <ion-icon name="heart-circle-outline" style="font-size:2rem;"></ion-icon>
+                                        <span class="text-sm">Nenhuma consolidação encontrada.</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if followups.has_other_pages %}
+                <div class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
+                        Mostrando {{ followups.start_index }}–{{ followups.end_index }} de {{ followups.paginator.count }} consolidações
+                    </div>
+                    <div class="flex items-center gap-1 order-1 sm:order-2 flex-wrap justify-center">
+                        {% if followups.has_previous %}
+                        <a href="?page={{ followups.previous_page_number }}&{{ request.GET.urlencode }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            <span class="hidden sm:inline">Anterior</span>
+                        </a>
+                        {% endif %}
+                        {% for num in followups.paginator.page_range %}
+                        {% if num == followups.number %}
+                        <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ num }}</span>
+                        {% elif num > followups.number|add:'-3' and num < followups.number|add:'3' %}
+                        <a href="?page={{ num }}&{{ request.GET.urlencode }}"
+                           class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition min-w-[2rem] text-center">
+                            {{ num }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                        {% if followups.has_next %}
+                        <a href="?page={{ followups.next_page_number }}&{{ request.GET.urlencode }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <span class="hidden sm:inline">Próximo</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
         </div>
     </div>
 </div>
@@ -188,20 +428,14 @@
 <script>
     function deleteFollowup(followupId, personName) {
         Swal.fire({
-            title: '⚠️ Confirmar Exclusão',
-            html: `Tem certeza que deseja deletar a consolidação de <strong>${personName}</strong>?<br><br><span class="text-red-600">Esta ação não pode ser desfeita!</span>`,
+            title: 'Confirmar Exclusão',
+            html: `Tem certeza que deseja deletar a consolidação de <strong>${personName}</strong>?<br>Esta ação não pode ser desfeita.`,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#DC2626',
-            cancelButtonColor: '#6B7280',
-            confirmButtonText: '<i class="fas fa-trash mr-2"></i>Sim, deletar!',
-            cancelButtonText: '<i class="fas fa-times mr-2"></i>Cancelar',
+            confirmButtonText: 'Sim, deletar!',
+            cancelButtonText: 'Cancelar',
             reverseButtons: true,
-            customClass: {
-                popup: 'rounded-2xl',
-                confirmButton: 'rounded-xl px-6 py-3 font-bold',
-                cancelButton: 'rounded-xl px-6 py-3 font-bold'
-            }
+            customClass: { confirmButton: 'swal-btn swal-btn-danger' }
         }).then((result) => {
             if (result.isConfirmed) {
                 // Mostrar loading
@@ -229,45 +463,30 @@
                 .then(data => {
                     if (data.success) {
                         Swal.fire({
-                            title: '✅ Deletado!',
+                            title: 'Deletado!',
                             text: 'A consolidação foi deletada com sucesso.',
                             icon: 'success',
-                            confirmButtonColor: '#10B981',
-                            confirmButtonText: '<i class="fas fa-check mr-2"></i>OK',
-                            customClass: {
-                                popup: 'rounded-2xl',
-                                confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                            }
+                            confirmButtonText: 'OK'
                         }).then(() => {
                             // Recarregar a página
                             window.location.reload();
                         });
                     } else {
                         Swal.fire({
-                            title: '❌ Erro',
+                            title: 'Erro',
                             text: data.error || 'Ocorreu um erro ao deletar a consolidação.',
                             icon: 'error',
-                            confirmButtonColor: '#EF4444',
-                            confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
-                            customClass: {
-                                popup: 'rounded-2xl',
-                                confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                            }
+                            confirmButtonText: 'Fechar'
                         });
                     }
                 })
                 .catch(error => {
                     console.error('Erro:', error);
                     Swal.fire({
-                        title: '❌ Erro',
+                        title: 'Erro',
                         text: 'Ocorreu um erro ao processar a solicitação.',
                         icon: 'error',
-                        confirmButtonColor: '#EF4444',
-                        confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
-                        customClass: {
-                            popup: 'rounded-2xl',
-                            confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                        }
+                        confirmButtonText: 'Fechar'
                     });
                 });
             }
@@ -288,5 +507,52 @@
         }
         return cookieValue;
     }
+
+    // Filter panel toggle
+    (function () {
+        var toggle   = document.getElementById('filter-toggle-followups');
+        var panel    = document.getElementById('filter-panel-followups');
+        var applyBtn = document.getElementById('apply-filters-followups');
+        var hiddenResponsible = document.getElementById('hidden-responsible');
+        var hiddenStatus      = document.getElementById('hidden-status');
+        var panelResponsible  = document.getElementById('panel-responsible');
+        var panelStatus       = document.getElementById('panel-status');
+        if (!toggle || !panel) return;
+        toggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            panel.classList.toggle('hidden');
+        });
+        document.addEventListener('click', function (e) {
+            if (!panel.contains(e.target) && e.target !== toggle) {
+                panel.classList.add('hidden');
+            }
+        });
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                hiddenResponsible.value = panelResponsible.value;
+                hiddenStatus.value      = panelStatus.value;
+                document.getElementById('filter-form').submit();
+            });
+        }
+    })();
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 {% endblock %}

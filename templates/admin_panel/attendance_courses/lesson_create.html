@@ -1,0 +1,203 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Nova Aula - {{ course.name }}{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1.5px solid #f1f5f9;
+    }
+
+    .section-header .icon-wrap {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: var(--color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .section-header .icon-wrap ion-icon { color: white; font-size: 15px; }
+
+    .section-header span {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.375rem;
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+    }
+
+    .form-input,
+    .form-textarea {
+        width: 100%;
+        padding: 0.6rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        background-color: #fafafa;
+        color: #111827;
+        transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
+        appearance: none;
+    }
+
+    .form-input:hover,
+    .form-textarea:hover {
+        border-color: #d1d5db;
+        background-color: white;
+    }
+
+    .form-input:focus,
+    .form-textarea:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(201,9,5,0.09);
+    }
+
+    .form-textarea { resize: vertical; min-height: 90px; }
+
+    .form-checkbox {
+        width: 1.1rem;
+        height: 1.1rem;
+        border-radius: 5px;
+        border: 1.5px solid #d1d5db;
+        accent-color: var(--color-primary);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .checkbox-card {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.625rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: border-color 0.18s, background-color 0.18s;
+        background: #fafafa;
+    }
+
+    .checkbox-card:has(input:checked) {
+        border-color: var(--color-primary);
+        background-color: rgba(201,9,5,0.04);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+                <div class="flex items-center justify-between mb-4 sm:mb-6">
+                    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                            <ion-icon name="book-outline" class="text-xl text-white"></ion-icon>
+                        </div>
+                        <div class="min-w-0">
+                            <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">Nova Aula</h1>
+                            <p class="text-sm text-gray-500 mt-0.5 truncate">Preencha os dados para cadastrar uma nova aula em {{ course.name }}</p>
+                        </div>
+                    </div>
+                    <a href="{% url 'attendance_course_lesson_list' course.id %}" class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                        <ion-icon name="arrow-back-outline"></ion-icon>
+                        Voltar a Lista
+                    </a>
+                </div>
+
+                <div class="admin-card p-6 md:p-8">
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
+
+                        <div class="section-header">
+                            <div class="icon-wrap"><ion-icon name="calendar-outline"></ion-icon></div>
+                            <span>Informacoes da Aula</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="{{ form.title.id_for_label }}">Titulo da aula</label>
+                            {{ form.title }}
+                            {% if form.title.errors %}<p class="text-red-600 text-xs mt-1">{{ form.title.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="{{ form.lesson_date.id_for_label }}">Data da aula</label>
+                            {{ form.lesson_date }}
+                            {% if form.lesson_date.errors %}<p class="text-red-600 text-xs mt-1">{{ form.lesson_date.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="{{ form.notes.id_for_label }}">Observacoes</label>
+                            {{ form.notes }}
+                            {% if form.notes.errors %}<p class="text-red-600 text-xs mt-1">{{ form.notes.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="section-header mt-2">
+                            <div class="icon-wrap"><ion-icon name="checkmark-circle-outline"></ion-icon></div>
+                            <span>Status da Aula</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="checkbox-card" for="{{ form.was_held.id_for_label }}">
+                                {{ form.was_held }}
+                                <div>
+                                    <p class="text-sm font-medium text-gray-700">Houve aula nesta data</p>
+                                    <p class="text-xs text-gray-500 mt-0.5">Desmarque quando a data for cancelada ou sem encontro.</p>
+                                </div>
+                            </label>
+                            {% if form.was_held.errors %}<p class="text-red-600 text-xs mt-1">{{ form.was_held.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row gap-3 mt-8 pt-6 border-t border-gray-100">
+                            <button type="submit"
+                                    class="flex-1 flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-opacity-90 text-white px-6 py-3 rounded-xl transition font-semibold text-sm shadow-sm">
+                                <ion-icon name="checkmark-circle-outline" class="text-lg"></ion-icon>
+                                Salvar Aula
+                            </button>
+                            <a href="{% url 'attendance_course_lesson_list' course.id %}"
+                               class="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-600 px-6 py-3 rounded-xl hover:bg-gray-50 transition font-semibold text-sm">
+                                <ion-icon name="close-circle-outline" class="text-lg"></ion-icon>
+                                Cancelar
+                            </a>
+                        </div>
+
+                        <div class="sm:hidden mt-3">
+                            <a href="{% url 'attendance_course_lesson_list' course.id %}" class="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                                <ion-icon name="arrow-back-outline"></ion-icon>
+                                Voltar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

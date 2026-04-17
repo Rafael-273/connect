@@ -5,136 +5,174 @@
 
 {% block head %}
 <style>
-    body {
-        background-color: #f8f9fa !important;
-    }
-    
+    body { background-color: #f8f9fa !important; }
+
     .admin-card {
         background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        border-radius: 14px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
     }
-    
-    .form-group {
-        margin-bottom: 1.5rem;
+    .section-header {
+        display: flex; align-items: center; gap: 0.625rem;
+        padding-bottom: 0.75rem; margin-bottom: 1.25rem;
+        border-bottom: 1.5px solid #f1f5f9;
     }
-    
+    .section-header .icon-wrap {
+        width: 32px; height: 32px; border-radius: 8px;
+        background: var(--color-primary);
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .section-header .icon-wrap ion-icon { color: white; font-size: 15px; }
+    .section-header span {
+        font-size: 0.85rem; font-weight: 700; color: #374151;
+        text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .form-group { margin-bottom: 1.25rem; }
     .form-label {
-        display: block;
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 0.5rem;
+        display: block; font-weight: 600; color: #374151;
+        margin-bottom: 0.375rem; font-size: 0.8rem; letter-spacing: 0.02em;
+    }
+    /* Style Django-rendered form widgets */
+    .form-group select,
+    .form-group input[type="date"],
+    .form-group textarea {
+        width: 100%; padding: 0.6rem 0.875rem;
+        border: 1.5px solid #e5e7eb; border-radius: 10px;
+        font-size: 0.875rem; background-color: #fafafa; color: #111827;
+        transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
+        appearance: none;
+    }
+    .form-group select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 1rem; padding-right: 2.25rem;
+    }
+    .form-group textarea { resize: vertical; min-height: 90px; }
+    .form-group select:hover, .form-group input[type="date"]:hover, .form-group textarea:hover { border-color: #d1d5db; background-color: white; }
+    .form-group select:focus, .form-group input[type="date"]:focus, .form-group textarea:focus {
+        outline: none; border-color: var(--color-primary);
+        background-color: white; box-shadow: 0 0 0 3px rgba(201,9,5,0.09);
     }
 </style>
 {% endblock %}
 
 {% block content %}
 {% include 'parciais/messages.html' %}
+
+<div id="submit-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color: var(--color-primary);"></div>
+        <p class="text-gray-700 text-base font-semibold">Salvando...</p>
+    </div>
+</div>
+
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
-
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-6 mt-24">
-            <div class="admin-card">
-                <div class="p-6">
-                <!-- Header -->
-                <div class="flex justify-between items-center mb-6">
-                    <div>
-                        <h1 class="text-2xl font-bold text-gray-900">
+
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="heart-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">
                             {% if followup %}Editar Consolidação{% else %}Nova Consolidação{% endif %}
                         </h1>
-                        <p class="text-gray-600 mt-1">Configure o acompanhamento de consolidação</p>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">Configure o acompanhamento de consolidação</p>
                     </div>
-                    <a href="{% url 'admin_followups_list' %}" 
-                       class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition duration-300 flex items-center">
-                        <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
-                        Voltar
-                    </a>
                 </div>
+                <a href="{% url 'admin_followups_list' %}" class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex-shrink-0 ml-3">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                    Voltar à Lista
+                </a>
+            </div>
 
-                <!-- Formulário -->
-                <form method="post" class="space-y-6">
-                    {% csrf_token %}
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <!-- Membro Acompanhado -->
+            <form id="edit-form" method="POST">
+                {% csrf_token %}
+
+                <!-- Participantes -->
+                <div class="admin-card p-6 md:p-8 mb-4">
+                    <div class="section-header">
+                        <div class="icon-wrap"><ion-icon name="people-outline"></ion-icon></div>
+                        <span>Participantes</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="form-group">
                             <label class="form-label">{{ form.accompanied.label }}</label>
                             {{ form.accompanied }}
-                            {% if form.accompanied.errors %}
-                                <div class="text-red-600 text-sm mt-1">{{ form.accompanied.errors.0 }}</div>
-                            {% endif %}
+                            {% if form.accompanied.errors %}<p class="text-red-600 text-xs mt-1">{{ form.accompanied.errors.0 }}</p>{% endif %}
                         </div>
-
-                        <!-- Responsável -->
                         <div class="form-group">
                             <label class="form-label">{{ form.responsible.label }}</label>
                             {{ form.responsible }}
-                            {% if form.responsible.errors %}
-                                <div class="text-red-600 text-sm mt-1">{{ form.responsible.errors.0 }}</div>
-                            {% endif %}
+                            {% if form.responsible.errors %}<p class="text-red-600 text-xs mt-1">{{ form.responsible.errors.0 }}</p>{% endif %}
                         </div>
                     </div>
+                </div>
 
-                    <!-- Template de Consolidação -->
+                <!-- Template & Datas -->
+                <div class="admin-card p-6 md:p-8 mb-4">
+                    <div class="section-header">
+                        <div class="icon-wrap"><ion-icon name="document-text-outline"></ion-icon></div>
+                        <span>Template & Encerramento</span>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">{{ form.template.label }}</label>
                         {{ form.template }}
-                        <div id="template-info" class="mt-2" style="display: none;">
-                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                <div class="flex items-start">
-                                    <ion-icon name="information-circle-outline" class="text-blue-500 text-lg mr-2 mt-0.5 flex-shrink-0"></ion-icon>
-                                    <div class="text-sm text-blue-800">
-                                        <p class="font-bold mb-1">Informações do Template:</p>
-                                        <p id="template-description" class="mb-1"></p>
-                                        <p id="template-steps"></p>
-                                    </div>
+                        <div id="template-info" class="mt-2 hidden">
+                            <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2">
+                                <ion-icon name="information-circle-outline" class="text-blue-500 text-lg flex-shrink-0 mt-0.5"></ion-icon>
+                                <div class="text-sm text-blue-800">
+                                    <p class="font-bold mb-1">Informações do Template:</p>
+                                    <p id="template-description" class="mb-1"></p>
+                                    <p id="template-steps"></p>
                                 </div>
                             </div>
                         </div>
-                        {% if form.template.errors %}
-                            <div class="text-red-600 text-sm mt-1">{{ form.template.errors.0 }}</div>
-                        {% endif %}
+                        {% if form.template.errors %}<p class="text-red-600 text-xs mt-1">{{ form.template.errors.0 }}</p>{% endif %}
                     </div>
-
-                    <!-- Data de Encerramento -->
                     <div class="form-group">
                         <label class="form-label">{{ form.end_date.label }}</label>
                         {{ form.end_date }}
-                        <p class="text-sm text-gray-500 mt-1">Deixe em branco se o follow-up ainda estiver ativo</p>
-                        {% if form.end_date.errors %}
-                            <div class="text-red-600 text-sm mt-1">{{ form.end_date.errors.0 }}</div>
-                        {% endif %}
+                        <p class="text-gray-400 text-xs mt-1">Deixe em branco se o follow-up ainda estiver ativo</p>
+                        {% if form.end_date.errors %}<p class="text-red-600 text-xs mt-1">{{ form.end_date.errors.0 }}</p>{% endif %}
                     </div>
+                </div>
 
-                    <!-- Observações -->
+                <!-- Observações -->
+                <div class="admin-card p-6 md:p-8 mb-4">
+                    <div class="section-header">
+                        <div class="icon-wrap"><ion-icon name="create-outline"></ion-icon></div>
+                        <span>Observações</span>
+                    </div>
                     <div class="form-group">
                         <label class="form-label">{{ form.profile_notes.label }}</label>
                         {{ form.profile_notes }}
-                        {% if form.profile_notes.errors %}
-                            <div class="text-red-600 text-sm mt-1">{{ form.profile_notes.errors.0 }}</div>
-                        {% endif %}
+                        {% if form.profile_notes.errors %}<p class="text-red-600 text-xs mt-1">{{ form.profile_notes.errors.0 }}</p>{% endif %}
                     </div>
+                </div>
 
-                    <!-- Botões -->
-                    <div class="flex justify-end space-x-4 flex-wrap gap-2">
-                        <a href="{% url 'admin_followups_list' %}" 
-                           class="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-300 w-full md:w-auto text-center">
-                            Cancelar
-                        </a>
-                        <button type="submit" 
-                                class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 w-full md:w-auto">
+                <!-- Buttons -->
+                <div class="flex items-center justify-between mt-6">
+                    <a href="{% url 'admin_followups_list' %}" class="sm:hidden flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                        Voltar
+                    </a>
+                    <div class="flex gap-3 ml-auto">
+                        <a href="{% url 'admin_followups_list' %}" class="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">Cancelar</a>
+                        <button type="submit" class="px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold">
                             {% if followup %}Atualizar Follow-up{% else %}Criar Follow-up{% endif %}
                         </button>
                     </div>
-                </form>
-            </div>
+                </div>
+            </form>
+
         </div>
     </div>
 </div>
 
 <script>
-// Dados dos templates para JavaScript
 const templatesData = {
     {% for template in templates_data %}
     {{ template.id }}: {
@@ -149,25 +187,25 @@ function updateTemplateInfo(templateId) {
     const infoDiv = document.getElementById('template-info');
     const descriptionP = document.getElementById('template-description');
     const stepsP = document.getElementById('template-steps');
-    
     if (templateId && templatesData[templateId]) {
-        const template = templatesData[templateId];
-        
-        descriptionP.textContent = template.description;
-        stepsP.textContent = `Este template possui ${template.steps_count} etapa${template.steps_count !== 1 ? 's' : ''} de consolidação.`;
-        
-        infoDiv.style.display = 'block';
+        const t = templatesData[templateId];
+        descriptionP.textContent = t.description;
+        stepsP.textContent = `Este template possui ${t.steps_count} etapa${t.steps_count !== 1 ? 's' : ''} de consolidação.`;
+        infoDiv.classList.remove('hidden');
     } else {
-        infoDiv.style.display = 'none';
+        infoDiv.classList.add('hidden');
     }
 }
 
-// Mostrar informações do template ao carregar a página se já houver um selecionado
 document.addEventListener('DOMContentLoaded', function() {
     const templateSelect = document.querySelector('select[name="template"]');
-    if (templateSelect && templateSelect.value) {
-        updateTemplateInfo(templateSelect.value);
+    if (templateSelect) {
+        if (templateSelect.value) updateTemplateInfo(templateSelect.value);
+        templateSelect.addEventListener('change', e => updateTemplateInfo(e.target.value));
     }
 });
+
+document.getElementById('edit-form').addEventListener('submit', () =>
+    document.getElementById('submit-overlay').classList.remove('hidden'));
 </script>
 {% endblock %}

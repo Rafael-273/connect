@@ -68,95 +68,98 @@ class VisitorForm(forms.ModelForm):
 
 
 class VisitorAdminForm(forms.ModelForm):
-    """Formulário administrativo para visitantes com campos de conversão"""
+    """Formulário administrativo para criar/editar visitantes no painel.
     
+    Nota: visit_date é auto_now_add=True (não-editável), por isso é
+    tratado separadamente no view e não faz parte deste formulário.
+    """
+
     class Meta:
         model = Visitor
         fields = [
-            'name', 'email', 'phone', 'gender', 'address', 'neighborhood', 
-            'decision_for_jesus', 'conversion', 
-            'prayer_request', 'profile_notes'
+            'name', 'email', 'phone', 'birth_date', 'gender', 'address', 'neighborhood',
+            'decision_for_jesus', 'wants_home_prayer',
+            'conversion', 'prayer_request', 'profile_notes',
         ]
         labels = {
-            'name': 'Nome Completo',
-            'email': 'Email',
-            'phone': 'Telefone',
-            'gender': 'Gênero',
-            'address': 'Endereço Completo',
-            'neighborhood': 'Bairro',
-            'visit_date': 'Data da Visita (automática)',
+            'name':               'Nome Completo',
+            'email':              'Email',
+            'phone':              'Telefone',
+            'birth_date':         'Data de Nascimento',
+            'gender':             'Gênero',
+            'address':            'Endereço Completo',
+            'neighborhood':       'Bairro',
             'decision_for_jesus': 'Fez decisão por Jesus?',
-            'conversion': 'Tipo de Conversão',
-            'prayer_request': 'Pedido de Oração',
-            'profile_notes': 'Observações/Anotações',
+            'wants_home_prayer':  'Deseja oração na sua casa?',
+            'conversion':         'Tipo de Conversão',
+            'prayer_request':     'Pedido de Oração',
+            'profile_notes':      'Observações/Anotações',
         }
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-input',
-                'placeholder': 'Nome completo do visitante'
+                'placeholder': 'Nome completo do visitante',
             }),
             'email': forms.EmailInput(attrs={
                 'class': 'form-input',
-                'placeholder': 'email@exemplo.com'
+                'placeholder': 'email@exemplo.com',
             }),
             'phone': forms.TextInput(attrs={
                 'class': 'form-input',
-                'placeholder': '(11) 99999-9999'
+                'placeholder': '(11) 99999-9999',
             }),
-            'gender': forms.Select(attrs={
-                'class': 'form-select'
+            'birth_date': forms.DateInput(attrs={
+                'class': 'form-input',
+                'type': 'date',
             }),
+            'gender': forms.Select(attrs={'class': 'form-select'}),
             'address': forms.TextInput(attrs={
                 'class': 'form-input',
-                'placeholder': 'Rua, número, bairro, cidade'
+                'placeholder': 'Rua, número, bairro, cidade',
             }),
-            'neighborhood': forms.Select(attrs={
-                'class': 'form-select'
-            }),
-            'decision_for_jesus': forms.CheckboxInput(attrs={
-                'class': 'checkbox-input'
-            }),
-            'conversion': forms.Select(attrs={
-                'class': 'form-select'
-            }),
+            'neighborhood':       forms.Select(attrs={'class': 'form-select'}),
+            'decision_for_jesus': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'wants_home_prayer':  forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'conversion': forms.Select(attrs={'class': 'form-select'}),
             'prayer_request': forms.Textarea(attrs={
                 'rows': 4,
                 'class': 'form-textarea',
-                'placeholder': 'Descreva o pedido de oração do visitante...'
+                'placeholder': 'Descreva o pedido de oração do visitante...',
             }),
             'profile_notes': forms.Textarea(attrs={
                 'rows': 4,
                 'class': 'form-textarea',
-                'placeholder': 'Adicione observações sobre o visitante...'
+                'placeholder': 'Adicione observações sobre o visitante...',
             }),
         }
-    
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Tornar campos obrigatórios
-        self.fields['name'].required = True
-        
-        # Adicionar classes CSS aos campos
-        for field_name, field in self.fields.items():
-            if field.widget.__class__.__name__ == 'TextInput':
-                field.widget.attrs['class'] = 'form-input'
-            elif field.widget.__class__.__name__ == 'EmailInput':
-                field.widget.attrs['class'] = 'form-input'
-            elif field.widget.__class__.__name__ == 'Select':
-                field.widget.attrs['class'] = 'form-select'
-            elif field.widget.__class__.__name__ == 'Textarea':
-                field.widget.attrs['class'] = 'form-textarea'
-            elif field.widget.__class__.__name__ == 'CheckboxInput':
-                field.widget.attrs['class'] = 'checkbox-input'
+
+    def clean_email(self):
+        """Garante unicidade de email entre visitantes."""
+        email = self.cleaned_data.get('email') or None
+        if email:
+            qs = Visitor.objects.filter(email=email)
+            if self.instance and self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError(
+                    f'Já existe um visitante com o email "{email}". Por favor, use um email diferente.'
+                )
+        return email
 
     def clean(self):
         cleaned_data = super().clean()
-        decision_for_jesus = cleaned_data.get('decision_for_jesus')
-        conversion = cleaned_data.get('conversion')
-        
-        # Validação: Se tem decisão por Jesus ou conversão, deve ser consistente
-        if decision_for_jesus and not conversion:
-            # Se fez decisão mas não tem tipo, assume novo convertido
+        # Se fez decisão por Jesus mas não informou tipo, assume novo convertido
+        if cleaned_data.get('decision_for_jesus') and not cleaned_data.get('conversion'):
             cleaned_data['conversion'] = 'new_convert'
-        
         return cleaned_data
+
+    def save(self, commit=True, visit_date=None):
+        instance = super().save(commit=False)
+        if commit:
+            instance.save()
+            # auto_now_add=True substitui visit_date no INSERT;
+            # usamos UPDATE para persistir o valor informado.
+            if visit_date:
+                Visitor.objects.filter(pk=instance.pk).update(visit_date=visit_date)
+                instance.visit_date = visit_date
+        return instance

@@ -1,0 +1,135 @@
+{% comment %}
+  Member bottom navigation bar.
+
+  Required context:
+    - can_consolidate       : bool — show the "Consolidar" link
+    - is_ministration_member: bool — show the "Curas" link
+    - nav_active            : str  — which item is active: 'home' | 'consolidation' | 'curas' | 'profile'
+
+  Color scheme: all buttons (active and inactive) use the current page's accent
+  color. Active = solid fill; inactive = translucent bg + border.
+    home          → red     #C90905  rgb(201,9,5)
+    consolidation → amber   #F59E0B  rgb(245,158,11)
+    curas         → red     #C90905  rgb(201,9,5)
+    profile       → indigo  #6366F1  rgb(99,102,241)
+{% endcomment %}
+
+<nav id="bottomNav"
+     class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out
+            {% if can_consolidate and is_ministration_member %}w-[90%] max-w-lg justify-around{% else %}w-auto gap-2 justify-center{% endif %}"
+     style="--accent: {% if nav_active == 'consolidation' %}#F59E0B{% elif nav_active == 'profile' %}#6366F1{% else %}#C90905{% endif %};
+            --ar: {% if nav_active == 'consolidation' %}245{% elif nav_active == 'profile' %}99{% else %}201{% endif %};
+            --ag: {% if nav_active == 'consolidation' %}158{% elif nav_active == 'profile' %}102{% else %}9{% endif %};
+            --ab: {% if nav_active == 'consolidation' %}11{% elif nav_active == 'profile' %}241{% else %}5{% endif %};
+            background: linear-gradient(to bottom right, rgba(255,255,255,0.98), rgba(249,250,251,0.98));
+            backdrop-filter: blur(20px);
+            border-color: rgba(var(--ar),var(--ag),var(--ab),0.2);">
+
+    <!-- Home -->
+    <a href="{% url 'member_dashboard' %}"
+       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
+              {% if nav_active == 'home' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
+        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300
+                    {% if nav_active == 'home' %}{% else %}border-2 shadow-md{% endif %}"
+             style="{% if nav_active == 'home' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
+            <i class="fas fa-home text-lg transition-transform group-hover:scale-110
+                      {% if nav_active == 'home' %}text-white{% endif %}"
+               {% if nav_active != 'home' %}style="color: var(--accent);"{% endif %}></i>
+        </div>
+        <span class="{% if nav_active == 'home' %}{% else %}group-hover:font-bold{% endif %} transition-all"
+              {% if nav_active == 'home' %}style="color: var(--accent);"{% endif %}>Home</span>
+    </a>
+
+    <!-- Consolidação -->
+    {% if can_consolidate %}
+    <a href="{% url 'member_consolidation' %}"
+       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
+              {% if nav_active == 'consolidation' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
+        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300
+                    {% if nav_active == 'consolidation' %}{% else %}border-2 shadow-md{% endif %}"
+             style="{% if nav_active == 'consolidation' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
+            <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110
+                      {% if nav_active == 'consolidation' %}text-white{% endif %}"
+               {% if nav_active != 'consolidation' %}style="color: var(--accent);"{% endif %}></i>
+        </div>
+        <span class="{% if nav_active == 'consolidation' %}{% else %}group-hover:font-bold{% endif %} transition-all"
+              {% if nav_active == 'consolidation' %}style="color: var(--accent);"{% endif %}>Consolidar</span>
+    </a>
+    {% endif %}
+
+    <!-- Curas -->
+    {% if is_ministration_member %}
+    <a href="{% url 'word_of_knowledge_list' %}"
+       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
+              {% if nav_active == 'curas' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
+        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300
+                    {% if nav_active == 'curas' %}{% else %}border-2 shadow-md{% endif %}"
+             style="{% if nav_active == 'curas' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
+            <i class="fas fa-heart-pulse text-lg transition-transform group-hover:scale-110
+                      {% if nav_active == 'curas' %}text-white{% endif %}"
+               {% if nav_active != 'curas' %}style="color: var(--accent);"{% endif %}></i>
+        </div>
+        <span class="{% if nav_active == 'curas' %}{% else %}group-hover:font-bold{% endif %} transition-all"
+              {% if nav_active == 'curas' %}style="color: var(--accent);"{% endif %}>Curas</span>
+    </a>
+    {% endif %}
+
+    <!-- Perfil -->
+    <a href="{% url 'member_profile' %}"
+       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
+              {% if nav_active == 'profile' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
+        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300
+                    {% if nav_active == 'profile' %}{% else %}border-2 shadow-md{% endif %}"
+             style="{% if nav_active == 'profile' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
+            <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110
+                      {% if nav_active == 'profile' %}text-white{% endif %}"
+               {% if nav_active != 'profile' %}style="color: var(--accent);"{% endif %}></i>
+        </div>
+        <span class="{% if nav_active == 'profile' %}{% else %}group-hover:font-bold{% endif %} transition-all"
+              {% if nav_active == 'profile' %}style="color: var(--accent);"{% endif %}>Perfil</span>
+    </a>
+</nav>
+
+<script>
+    (function () {
+        let lastScrollTop = 0;
+        let isScrolling;
+        const nav = document.getElementById('bottomNav');
+        const scrollThreshold = 50;
+
+        window.addEventListener('scroll', function () {
+            clearTimeout(isScrolling);
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+            if (scrollTop <= 100) {
+                nav.classList.remove('nav-hidden');
+                nav.classList.add('nav-visible');
+                lastScrollTop = scrollTop;
+                return;
+            }
+
+            if (Math.abs(scrollTop - lastScrollTop) > scrollThreshold) {
+                if (scrollTop > lastScrollTop) {
+                    nav.classList.add('nav-hidden');
+                    nav.classList.remove('nav-visible');
+                } else {
+                    nav.classList.remove('nav-hidden');
+                    nav.classList.add('nav-visible');
+                }
+                lastScrollTop = scrollTop;
+            }
+
+            isScrolling = setTimeout(function () {
+                nav.classList.remove('nav-hidden');
+                nav.classList.add('nav-visible');
+            }, 1000);
+        }, false);
+
+        document.addEventListener('mousemove', function (e) {
+            if (window.innerHeight - e.clientY < 150) {
+                nav.classList.remove('nav-hidden');
+                nav.classList.add('nav-visible');
+            }
+        });
+    })();
+</script>

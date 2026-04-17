@@ -1,0 +1,336 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Lista de Presencas - {{ course.name }}{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        border: 1px solid rgba(15, 23, 42, 0.04);
+    }
+
+    .page-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 8px 20px rgba(201, 9, 5, 0.18);
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 0.6rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        background-color: #fafafa;
+        color: #111827;
+        transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
+        appearance: none;
+    }
+
+    .form-input:hover { border-color: #d1d5db; background-color: white; }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.09);
+    }
+
+    .status-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .s-present { background: #dcfce7; color: #166534; }
+    .s-absent { background: #fee2e2; color: #991b1b; }
+    .s-excused { background: #fef3c7; color: #92400e; }
+
+    .lesson-row {
+        border: 1px solid #f1f5f9;
+        border-radius: 10px;
+        padding: 0.85rem;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        transition: all 0.18s;
+    }
+
+    .lesson-row:hover {
+        background: #fafbff;
+        border-color: #e5e7eb;
+    }
+
+    .table-shell { overflow-x: auto; }
+
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 760px;
+    }
+
+    .data-table thead th {
+        text-align: left;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 0.85rem 0.65rem;
+        background: #f8fafc;
+    }
+
+    .data-table tbody td {
+        padding: 0.8rem 0.65rem;
+        border-bottom: 1px solid #f8fafc;
+        font-size: 0.875rem;
+        color: #1f2937;
+        vertical-align: middle;
+    }
+
+    .data-table tbody tr:hover { background: #fafbff; }
+
+    .chip-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.5rem 0.8rem;
+        border-radius: 0.55rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        transition: all 0.18s;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="page-icon">
+                        <ion-icon name="checkbox-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">Lista de Presencas</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {{ course.name }}{% if lessons.count %} • {{ lessons.count }} aula{{ lessons.count|pluralize }} disponível{{ lessons.count|pluralize }}{% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="hidden sm:flex items-center gap-2">
+                    <a href="{% url 'attendance_course_lesson_create' course.id %}" class="chip-btn bg-[var(--color-primary)] text-white hover:bg-opacity-90">
+                        <ion-icon name="add-outline"></ion-icon>
+                        Nova Aula
+                    </a>
+                    <a href="{% url 'attendance_course_dashboard' course.id %}" class="chip-btn border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+                        <ion-icon name="arrow-back-outline"></ion-icon>
+                        Voltar
+                    </a>
+                </div>
+            </div>
+
+            <div class="admin-card p-4 sm:p-5 mb-5">
+                <div class="flex items-center gap-2 mb-4">
+                    <form method="GET" id="lesson-filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                        <input type="hidden" name="lesson_start_date" id="hidden-lesson-start-date" value="{{ lessons_start_date }}">
+                        <input type="hidden" name="lesson_end_date" id="hidden-lesson-end-date" value="{{ lessons_end_date }}">
+                        <input type="hidden" name="lesson_progress" id="hidden-lesson-progress" value="{{ lessons_progress }}">
+
+                        <div class="relative flex-1 min-w-0">
+                            <input type="text" name="search" id="lesson-search-input" value="{{ lessons_search }}"
+                                   placeholder="Buscar aulas..."
+                                   class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                        </div>
+
+                        <button type="submit"
+                                class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                                title="Buscar">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                        </button>
+
+                        <div class="relative flex-shrink-0">
+                            <button type="button" id="filter-toggle-lessons"
+                                    class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                                </svg>
+                                Filtros
+                                {% if lessons_start_date or lessons_end_date or lessons_progress %}
+                                <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                                {% endif %}
+                            </button>
+
+                            <div id="filter-panel-lessons"
+                                 class="hidden absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros de Aulas</p>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Data inicial</label>
+                                        <input type="date" id="panel-lesson-start-date" value="{{ lessons_start_date }}"
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Data final</label>
+                                        <input type="date" id="panel-lesson-end-date" value="{{ lessons_end_date }}"
+                                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Progresso da chamada</label>
+                                        <select id="panel-lesson-progress"
+                                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                            <option value="" {% if not lessons_progress %}selected{% endif %}>Todos</option>
+                                            <option value="with_records" {% if lessons_progress == 'with_records' %}selected{% endif %}>Com registros</option>
+                                            <option value="without_records" {% if lessons_progress == 'without_records' %}selected{% endif %}>Sem registros</option>
+                                            <option value="complete" {% if lessons_progress == 'complete' %}selected{% endif %}>Chamada completa</option>
+                                            <option value="incomplete" {% if lessons_progress == 'incomplete' %}selected{% endif %}>Chamada incompleta</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                    <a href="{% url 'attendance_course_attendance_list' course.id %}"
+                                       class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                        Limpar filtros
+                                    </a>
+                                    <button type="button" id="apply-filters-lessons"
+                                            class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                        Aplicar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+
+                </div>
+
+                <div class="block md:hidden space-y-3">
+                    {% for lesson in lessons %}
+                    <div class="lesson-row">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-semibold text-gray-900 truncate">{{ lesson.title }}</p>
+                            <p class="text-xs text-gray-500 mt-0.5">{{ lesson.lesson_date|date:'d/m/Y' }}</p>
+                            <p class="text-xs text-gray-500 mt-0.5">{{ lesson.records_count }} de {{ participants_count }} aluno{{ participants_count|pluralize }} com presença</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <a href="{% url 'attendance_course_lesson_detail' course.id lesson.id %}" class="text-xs px-2.5 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition">Detalhes</a>
+                            <a href="{% url 'attendance_course_lesson_attendance' lesson.id %}" class="text-xs px-2.5 py-1.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition">Lançar</a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg px-3 py-5 text-center">
+                        Nenhuma aula disponível para presença.
+                        <div class="mt-3">
+                            <a href="{% url 'attendance_course_lesson_create' course.id %}" class="inline-flex items-center gap-1 px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-xs font-semibold hover:bg-opacity-90 transition">
+                                <ion-icon name="add-outline"></ion-icon>
+                                Criar primeira aula
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="hidden md:block table-shell">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Aula</th>
+                                <th>Data</th>
+                                <th>Progresso da Chamada</th>
+                                <th class="text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lesson in lessons %}
+                            <tr>
+                                <td>
+                                    <p class="text-sm font-semibold text-gray-900">{{ lesson.title }}</p>
+                                </td>
+                                <td>{{ lesson.lesson_date|date:'d/m/Y' }}</td>
+                                <td>{{ lesson.records_count }} de {{ participants_count }} aluno{{ participants_count|pluralize }} com presença</td>
+                                <td class="text-right whitespace-nowrap">
+                                    <a href="{% url 'attendance_course_lesson_detail' course.id lesson.id %}" class="inline-flex items-center px-2.5 py-1.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition text-xs mr-1">Detalhes</a>
+                                    <a href="{% url 'attendance_course_lesson_attendance' lesson.id %}" class="inline-flex items-center px-2.5 py-1.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-xs">Lançar presença</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="py-8 text-center text-gray-500">
+                                    Nenhuma aula disponível para presença.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="sm:hidden flex items-center gap-2 mt-5">
+                <a href="{% url 'attendance_course_lesson_create' course.id %}" class="flex-1 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm font-medium text-center">Nova Aula</a>
+                <a href="{% url 'attendance_course_dashboard' course.id %}" class="flex-1 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium text-center">Dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var filterToggle = document.getElementById('filter-toggle-lessons');
+    var filterPanel = document.getElementById('filter-panel-lessons');
+    var applyBtn = document.getElementById('apply-filters-lessons');
+    var form = document.getElementById('lesson-filter-form');
+
+    var hiddenStart = document.getElementById('hidden-lesson-start-date');
+    var hiddenEnd = document.getElementById('hidden-lesson-end-date');
+    var hiddenProgress = document.getElementById('hidden-lesson-progress');
+
+    var panelStart = document.getElementById('panel-lesson-start-date');
+    var panelEnd = document.getElementById('panel-lesson-end-date');
+    var panelProgress = document.getElementById('panel-lesson-progress');
+
+    if (!filterToggle || !filterPanel || !applyBtn || !form) return;
+
+    filterToggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        filterPanel.classList.toggle('hidden');
+    });
+
+    applyBtn.addEventListener('click', function () {
+        if (hiddenStart && panelStart) hiddenStart.value = panelStart.value || '';
+        if (hiddenEnd && panelEnd) hiddenEnd.value = panelEnd.value || '';
+        if (hiddenProgress && panelProgress) hiddenProgress.value = panelProgress.value || '';
+        form.submit();
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!filterPanel.classList.contains('hidden') && !filterPanel.contains(e.target) && !filterToggle.contains(e.target)) {
+            filterPanel.classList.add('hidden');
+        }
+    });
+})();
+</script>
+{% endblock %}
