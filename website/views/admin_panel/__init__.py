@@ -21,6 +21,10 @@ from .reports import ReportsView
 from .testimonies import (
     TestimonyListView, TestimonyEditView, TestimonyDeleteView, TestimonyToggleView,
 )
+from .roteiro import (
+    RoteiroView, AnuncioCreateView, AnuncioEditView, AnuncioDeleteView,
+    AnuncioReorderView, RoteiroPrintView,
+)
 
 __all__ = [
     'DashboardView',
@@ -38,4 +42,6 @@ __all__ = [
     'TemplateDetailView', 'TemplateDeleteView',
     'ReportsView',
     'TestimonyListView', 'TestimonyEditView', 'TestimonyDeleteView', 'TestimonyToggleView',
+    'RoteiroView', 'AnuncioCreateView', 'AnuncioEditView', 'AnuncioDeleteView',
+    'AnuncioReorderView', 'RoteiroPrintView',
 ]

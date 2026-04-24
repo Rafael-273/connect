@@ -1,36 +1,29 @@
 {% load static %}
 
 <!-- Sidebar Admin -->
-<div id="admin-sidebar" class="sidebar sidebar-scroll w-72 fixed left-0 top-0 bottom-0 z-40 hidden md:block">
-    <button id="sidebar-collapse-toggle" type="button" class="sidebar-collapse-toggle" title="Minimizar menu" aria-label="Minimizar menu" aria-pressed="false">
-        <ion-icon name="chevron-back-outline" class="collapse-icon-expanded"></ion-icon>
-        <ion-icon name="chevron-forward-outline" class="collapse-icon-collapsed"></ion-icon>
-    </button>
-
-    <div class="sidebar-inner-scroll">
-
+<div id="admin-sidebar" class="sidebar sidebar-scroll w-72 fixed left-0 top-0 bottom-0 z-40 hidden md:block overflow-y-auto">
     <div class="sidebar-brand p-4 flex items-center justify-center">
-        <img src="{% static 'assets/red_icon.png' %}" alt="Igreja Filadélfia" class="sidebar-brand-logo h-10 w-auto object-contain">
+        <img src="{% static 'assets/red_icon.png' %}" alt="Igreja Filadélfia" class="h-10 w-auto object-contain">
     </div>
 
     <nav class="sidebar-nav pt-3">
         <!-- Botão Área de Membros -->
         <a href="{% url 'member_dashboard' %}" class="sidebar-item member-area-link">
             <ion-icon name="home-outline"></ion-icon>
-            <span>Área de Membros</span>
+           <span class="mt-1">Área de Membros</span>
         </a>
         
         {% if user.user_type == 'admin' or user.is_superuser %}
         <!-- Dashboard só para admin -->
         <a href="{% url 'admin_dashboard' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
             <ion-icon name="analytics-outline"></ion-icon>
-            Dashboard
+            <span class="mt-1">Dashboard</span>
         </a>
         
         <!-- Gerenciamento de Membros só para admin -->
         <a href="{% url 'admin_members_list' %}" class="sidebar-item {% if 'members' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="people-outline"></ion-icon>
-            Membros
+            <span class="mt-1">Membros</span>
         </a>
         {% endif %}
         
@@ -38,7 +31,7 @@
         <!-- Visitantes só para admin e usuários do tipo visitors -->
         <a href="{% url 'admin_visitors_list' %}" class="sidebar-item {% if 'visitors' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="person-add-outline"></ion-icon>
-            Visitantes
+            <span class="mt-1">Visitantes</span>
         </a>
         {% endif %}
         
@@ -49,23 +42,23 @@
                  onclick="toggleSubmenu('consolidation-submenu')" style="cursor: pointer;">
                 <div class="sidebar-item-group-main">
                     <ion-icon name="chatbubbles-outline"></ion-icon>
-                    <span>Consolidação</span>
+                   <span class="mt-1">Consolidação</span>
                 </div>
                 <ion-icon name="chevron-down-outline" class="submenu-arrow"></ion-icon>
-            </div>
+                </div>
             
             <div id="consolidation-submenu" class="submenu {% if 'followup' in request.resolver_match.url_name %}active{% endif %}">
                 <a href="{% url 'admin_followups_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_followups_list' %}active{% endif %}">
                     <ion-icon name="list-outline"></ion-icon>
-                    Consolidações
+                    <span class="mt-1">Consolidações</span>
                 </a>
                 <a href="{% url 'admin_templates' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_templates' %}active{% endif %}" title="Templates de consolidação">
                     <ion-icon name="clipboard-outline"></ion-icon>
-                    Templates
+                    <span class="mt-1">Templates</span>
                 </a>
                 <a href="{% url 'admin_reports' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_reports' %}active{% endif %}" title="Relatórios de consolidação">
                     <ion-icon name="analytics-outline"></ion-icon>
-                    Relatórios
+                    <span class="mt-1">Relatórios</span>
                 </a>
             </div>
         </div>
@@ -75,7 +68,7 @@
             <!-- Eventos só para admin e usuários do tipo events -->
             <a href="{% url 'admin_events_list' %}" class="sidebar-item {% if 'events' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="calendar-outline"></ion-icon>
-                Eventos
+                <span class="mt-1">Eventos</span>
             </a>
             {% endif %}
 
@@ -83,7 +76,15 @@
             <!-- Testemunhos só para admin -->
             <a href="{% url 'admin_testimonies_list' %}" class="sidebar-item {% if 'testimonies' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
-                Testemunhos
+                <span class="mt-1">Testemunhos</span>
+            </a>
+            {% endif %}
+
+            {% if user.user_type == 'admin' or user.is_superuser %}
+            <!-- Roteiro de Culto só para admin -->
+            <a href="{% url 'roteiro_view' %}" class="sidebar-item {% if 'roteiro' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="document-text-outline"></ion-icon>
+                <span class="mt-1">Roteiro de Culto</span>
             </a>
             {% endif %}
 
@@ -91,13 +92,13 @@
             <!-- Ministérios só para admin -->
             <a href="{% url 'ministry_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="library-outline"></ion-icon>
-                Ministérios
+                <span class="mt-1">Ministérios</span>
             </a>
 
             <a href="{% url 'admin_music_list' %}" 
                 class="sidebar-item {% if 'music' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="musical-notes-outline"></ion-icon>
-                Música
+                <span class="mt-1">Música</span>
             </a>
 
             <!-- Escalas com submenu só para admin -->
@@ -106,7 +107,7 @@
                      onclick="toggleSubmenu('mobile-schedules-submenu')" style="cursor: pointer;">
                     <div class="sidebar-item-group-main">
                         <ion-icon name="calendar-number-outline"></ion-icon>
-                        <span>Escalas</span>
+                       <span class="mt-1">Escalas</span>
                     </div>
                     <ion-icon name="chevron-down-outline" class="submenu-arrow"></ion-icon>
                 </div>
@@ -114,19 +115,14 @@
                 <div id="mobile-schedules-submenu" class="submenu {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}">
                     <a href="{% url 'schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
                         <ion-icon name="calendar-outline"></ion-icon>
-                        Escalas Mensais
+                        <span class="mt-1">Escalas Mensais</span>
                     </a>
                     <a href="{% url 'team_list' %}" class="submenu-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
                         <ion-icon name="people-circle-outline"></ion-icon>
-                        Equipes
+                        <span class="mt-1">Equipes</span>
                     </a>
                 </div>
             </div>
-
-            <a href="{% url 'attendance_course_list' %}" class="sidebar-item {% if 'attendance_course' in request.resolver_match.url_name %}active{% endif %}">
-                <ion-icon name="clipboard-outline"></ion-icon>
-                Cursos
-            </a>
             
             <!-- Ministração com submenu só para admin -->
             <div class="sidebar-group">
@@ -134,7 +130,7 @@
                      onclick="toggleSubmenu('mobile-ministration-submenu')" style="cursor: pointer;">
                     <div class="sidebar-item-group-main">
                         <ion-icon name="hand-right-outline"></ion-icon>
-                        <span>Ministração</span>
+                       <span class="mt-1">Ministração</span>
                     </div>
                     <ion-icon name="chevron-down-outline" class="submenu-arrow"></ion-icon>
                 </div>
@@ -142,15 +138,15 @@
                 <div id="mobile-ministration-submenu" class="submenu {% if 'ministration' in request.resolver_match.url_name %}active{% endif %}">
                     <a href="{% url 'ministration_dashboard' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_dashboard' %}active{% endif %}">
                         <ion-icon name="grid-outline"></ion-icon>
-                        Dashboard
+                        <span class="mt-1">Dashboard</span>
                     </a>
                     <a href="{% url 'ministration_words_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_words_list' %}active{% endif %}">
                         <ion-icon name="book-outline"></ion-icon>
-                        Palavras de Conhecimento
+                        <span class="mt-1">Palavras de Conhecimento</span>
                     </a>
                     <a href="{% url 'ministration_healings_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_healings_list' %}active{% endif %}">
                         <ion-icon name="heart-outline"></ion-icon>
-                        Curas
+                        <span class="mt-1">Curas</span>
                     </a>
                 </div>
             </div>
@@ -158,21 +154,24 @@
             <!-- Bairros só para admin -->
             <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="location-outline"></ion-icon>
-                Bairros
+                <span class="mt-1">Bairros</span>
             </a>
             {% endif %}
         {% if user.user_type == 'admin' %}
         <a href="{% url 'admin_user_management' %}" class="sidebar-item {% if 'user_management' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="shield-outline"></ion-icon>
-            Usuários
+            <span class="mt-1">Usuários</span>
         </a>
         {% endif %}
+        <a href="{% url 'member_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'member_profile' %}active{% endif %}">
+            <ion-icon name="person-circle-outline"></ion-icon>
+            <span class="mt-1">Meu Perfil</span>
+        </a>
         <a href="{% url 'admin_logout' %}" class="sidebar-item">
             <ion-icon name="log-out-outline"></ion-icon>
-            Sair
+            <span class="mt-1">Sair</span>
         </a>
     </nav>
-    </div>
 </div>
 
 <!-- Mobile Admin Topbar -->
@@ -197,23 +196,17 @@
         </button>
         
         <nav class="sidebar-nav pt-2">
-            <!-- Botão Área de Membros -->
-            <a href="{% url 'member_dashboard' %}" class="sidebar-item member-area-link">
-                <ion-icon name="home-outline"></ion-icon>
-                <span>Área de Membros</span>
-            </a>
-
             {% if user.user_type == 'admin' or user.is_superuser %}
             <!-- Dashboard só para admin -->
             <a href="{% url 'admin_dashboard' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
                 <ion-icon name="analytics-outline"></ion-icon>
-                Dashboard
+                <span class="mt-1">Dashboard</span>
             </a>
             
             <!-- Gerenciamento de Membros só para admin -->
             <a href="{% url 'admin_members_list' %}" class="sidebar-item {% if 'members' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="people-outline"></ion-icon>
-                Membros
+                <span class="mt-1">Membros</span>
             </a>
             {% endif %}
             
@@ -221,7 +214,7 @@
             <!-- Visitantes só para admin e usuários do tipo visitors -->
             <a href="{% url 'admin_visitors_list' %}" class="sidebar-item {% if 'visitors' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="person-add-outline"></ion-icon>
-                Visitantes
+                <span class="mt-1">Visitantes</span>
             </a>
             {% endif %}
             
@@ -232,7 +225,7 @@
                      onclick="toggleSubmenu('mobile-consolidation-submenu')" style="cursor: pointer;">
                     <div class="sidebar-item-group-main">
                         <ion-icon name="chatbubbles-outline"></ion-icon>
-                        <span>Consolidação</span>
+                       <span class="mt-1">Consolidação</span>
                     </div>
                     <ion-icon name="chevron-down-outline" class="submenu-arrow"></ion-icon>
                 </div>
@@ -240,15 +233,15 @@
                 <div id="mobile-consolidation-submenu" class="submenu {% if 'followup' in request.resolver_match.url_name %}active{% endif %}">
                     <a href="{% url 'admin_followups_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_followups_list' %}active{% endif %}">
                         <ion-icon name="list-outline"></ion-icon>
-                        Consolidações
+                        <span class="mt-1">Consolidações</span>
                     </a>
                     <a href="{% url 'admin_templates' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_templates' %}active{% endif %}" title="Templates de consolidação">
                         <ion-icon name="clipboard-outline"></ion-icon>
-                        Templates
+                        <span class="mt-1">Templates</span>
                     </a>
                     <a href="{% url 'admin_reports' %}" class="submenu-item {% if request.resolver_match.url_name == 'admin_reports' %}active{% endif %}" title="Relatórios de consolidação">
                         <ion-icon name="analytics-outline"></ion-icon>
-                        Relatórios
+                        <span class="mt-1">Relatórios</span>
                     </a>
                 </div>
             </div>
@@ -258,7 +251,7 @@
             <!-- Eventos só para admin e usuários do tipo events -->
             <a href="{% url 'admin_events_list' %}" class="sidebar-item {% if 'events' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="calendar-outline"></ion-icon>
-                Eventos
+                <span class="mt-1">Eventos</span>
             </a>
             {% endif %}
 
@@ -266,7 +259,15 @@
             <!-- Testemunhos só para admin -->
             <a href="{% url 'admin_testimonies_list' %}" class="sidebar-item {% if 'testimonies' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
-                Testemunhos
+                <span class="mt-1">Testemunhos</span>
+            </a>
+            {% endif %}
+
+            {% if user.user_type == 'admin' or user.is_superuser %}
+            <!-- Roteiro de Culto só para admin -->
+            <a href="{% url 'roteiro_view' %}" class="sidebar-item {% if 'roteiro' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="document-text-outline"></ion-icon>
+                <span class="mt-1">Roteiro de Culto</span>
             </a>
             {% endif %}
 
@@ -275,7 +276,7 @@
         <!-- Ministérios só para admin -->
         <a href="{% url 'ministry_list' %}" class="sidebar-item {% if 'ministries' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="library-outline"></ion-icon>
-            Ministérios
+            <span class="mt-1">Ministérios</span>
         </a>
         
         <!-- Ministração com submenu só para admin -->
@@ -284,19 +285,19 @@
                  onclick="toggleSubmenu('ministration-submenu')" style="cursor: pointer;">
                 <div class="sidebar-item-group-main">
                     <ion-icon name="hand-right-outline"></ion-icon>
-                    <span>Ministração</span>
+                   <span class="mt-1">Ministração</span>
                 </div>
                 <ion-icon name="chevron-down-outline" class="submenu-arrow"></ion-icon>
-            </div>
+                </div>
             
             <div id="ministration-submenu" class="submenu {% if 'ministration' in request.resolver_match.url_name %}active{% endif %}">
                 <a href="{% url 'ministration_words_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_words_list' %}active{% endif %}" title="Palavras de Conhecimento">
                     <ion-icon name="book-outline"></ion-icon>
-                    Palavras
+                    <span class="mt-1">Palavras</span>
                 </a>
                 <a href="{% url 'ministration_healings_list' %}" class="submenu-item {% if request.resolver_match.url_name == 'ministration_healings_list' %}active{% endif %}" title="Curas">
                     <ion-icon name="heart-outline"></ion-icon>
-                    Curas
+                    <span class="mt-1">Curas</span>
                 </a>
             </div>
         </div>
@@ -307,32 +308,27 @@
                  onclick="toggleSubmenu('schedules-submenu')" style="cursor: pointer;">
                 <div class="sidebar-item-group-main">
                     <ion-icon name="calendar-number-outline"></ion-icon>
-                    <span>Escalas</span>
+                   <span class="mt-1">Escalas</span>
                 </div>
                 <ion-icon name="chevron-down-outline" class="submenu-arrow"></ion-icon>
-            </div>
+                </div>
             
             <div id="schedules-submenu" class="submenu {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}">
                 <a href="{% url 'schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
                     <ion-icon name="calendar-outline"></ion-icon>
-                    Escalas Mensais
+                    <span class="mt-1">Escalas Mensais</span>
                 </a>
                 <a href="{% url 'team_list' %}" class="submenu-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
                     <ion-icon name="people-circle-outline"></ion-icon>
-                    Equipes
+                    <span class="mt-1">Equipes</span>
                 </a>
             </div>
         </div>
-
-        <a href="{% url 'attendance_course_list' %}" class="sidebar-item {% if 'attendance_course' in request.resolver_match.url_name %}active{% endif %}">
-            <ion-icon name="clipboard-outline"></ion-icon>
-            Cursos
-        </a>
         
         <!-- Bairros só para admin -->
         <a href="{% url 'admin_neighborhoods_list' %}" class="sidebar-item {% if 'neighborhoods' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="location-outline"></ion-icon>
-            Bairros
+            <span class="mt-1">Bairros</span>
         </a>
         {% endif %}
             
@@ -340,13 +336,19 @@
             <!-- Usuários só para admin -->
             <a href="{% url 'admin_user_management' %}" class="sidebar-item {% if 'user_management' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="shield-outline"></ion-icon>
-                Usuários
+                <span class="mt-1">Usuários</span>
             </a>
             {% endif %}
             
+            <!-- Perfil do usuário para todos -->
+            <a href="{% url 'member_profile' %}" class="sidebar-item {% if request.resolver_match.url_name == 'member_profile' %}active{% endif %}">
+                <ion-icon name="person-circle-outline"></ion-icon>
+                <span class="mt-1">Meu Perfil</span>
+            </a>
+            
             <a href="{% url 'admin_logout' %}" class="sidebar-item">
                 <ion-icon name="log-out-outline"></ion-icon>
-                Sair
+                <span class="mt-1">Sair</span>
             </a>
         </nav>
     </div>

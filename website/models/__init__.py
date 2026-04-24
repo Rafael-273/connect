@@ -20,3 +20,4 @@ from .testimony import Testimony
 from .prayer_request import PrayerRequest
 from .canteen import CanteenDebtor
 from .course_attendance import AttendanceCourse, CourseParticipant, CourseLesson, CourseAttendance
+from .roteiro import Roteiro, AnuncioRoteiro, AnuncioRoteiroData

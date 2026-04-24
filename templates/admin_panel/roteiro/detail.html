@@ -1,0 +1,298 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Roteiro de Culto - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .anuncio-card {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #f1f5f9;
+        box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+        transition: box-shadow 0.15s, transform 0.15s;
+    }
+    .anuncio-card:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+    .anuncio-card.sortable-ghost {
+        opacity: 0.4;
+        transform: scale(0.98);
+    }
+    .anuncio-card.sortable-drag {
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+
+    .drag-handle {
+        cursor: grab;
+        color: #cbd5e1;
+        transition: color 0.15s;
+    }
+    .drag-handle:active { cursor: grabbing; }
+    .anuncio-card:hover .drag-handle { color: #94a3b8; }
+
+    .expired-badge {
+        background: #fef2f2;
+        color: #dc2626;
+        border-radius: 9999px;
+        padding: 2px 10px;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
+    .modal-overlay { background: rgba(0,0,0,0.5); }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+
+    /* Preview image in anuncio card */
+    .anuncio-thumb {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
+        border-radius: 10px;
+        flex-shrink: 0;
+    }
+    .anuncio-thumb-placeholder {
+        width: 64px;
+        height: 64px;
+        border-radius: 10px;
+        background: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 mb-6">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="document-text-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Roteiro de Culto</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {{ anuncios.count }} anúncio{{ anuncios.count|pluralize }} cadastrado{{ anuncios.count|pluralize }}
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a href="{% url 'roteiro_print' %}" target="_blank"
+                       class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                        <ion-icon name="print-outline"></ion-icon>
+                        Exportar
+                    </a>
+                    <a href="{% url 'roteiro_print' %}" target="_blank"
+                       class="sm:hidden w-10 h-10 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition flex items-center justify-center"
+                       title="Imprimir">
+                        <ion-icon name="print-outline"></ion-icon>
+                    </a>
+                    <!-- Mobile add (icon only) -->
+                    <a href="{% url 'roteiro_anuncio_create' %}"
+                       class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                       title="Novo Anúncio">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                    </a>
+                    <!-- Desktop add -->
+                    <a href="{% url 'roteiro_anuncio_create' %}"
+                       class="hidden sm:flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm font-medium">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Novo Anúncio
+                    </a>
+                </div>
+            </div>
+
+            <!-- Anúncios list -->
+            {% if anuncios %}
+            <div id="anuncios-list" class="space-y-3">
+                {% for anuncio in anuncios %}
+                <div class="anuncio-card p-4" data-id="{{ anuncio.id }}">
+                    <div class="flex items-center gap-3">
+                        <!-- Drag handle -->
+                        <div class="drag-handle flex-shrink-0 flex flex-col gap-0.5 px-1" title="Arrastar para reordenar">
+                            <span class="block w-4 h-0.5 bg-current rounded"></span>
+                            <span class="block w-4 h-0.5 bg-current rounded"></span>
+                            <span class="block w-4 h-0.5 bg-current rounded"></span>
+                        </div>
+
+                        <!-- Image -->
+                        {% if anuncio.foto %}
+                        <img src="{{ anuncio.foto.url }}" alt="{{ anuncio.titulo }}" class="anuncio-thumb">
+                        {% else %}
+                        <div class="anuncio-thumb-placeholder">
+                            <ion-icon name="image-outline" style="font-size:1.4rem;color:#94a3b8;"></ion-icon>
+                        </div>
+                        {% endif %}
+
+                        <!-- Content -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="font-semibold text-gray-900 text-sm truncate">{{ anuncio.titulo|default:"(sem título)" }}</span>
+                                {% if anuncio.is_expired %}
+                                <span class="expired-badge">Expirado</span>
+                                {% endif %}
+                            </div>
+                            {% if anuncio.datas.all %}
+                            <div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                                {% for d in anuncio.datas.all %}
+                                <span class="text-xs text-gray-400">
+                                    <ion-icon name="calendar-outline" class="align-middle"></ion-icon>
+                                    {{ d.data|date:"d/m/Y" }}{% if d.hora %} às {{ d.hora|time:"H:i" }}{% endif %}
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                            {% if anuncio.descricao %}
+                            <p class="text-xs text-gray-500 mt-1 line-clamp-2">{{ anuncio.descricao|truncatechars:120 }}</p>
+                            {% endif %}
+                            {% if anuncio.info_adicional %}
+                            <p class="text-xs text-gray-400 mt-1 italic line-clamp-1">{{ anuncio.info_adicional|truncatechars:80 }}</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <a href="{% url 'roteiro_anuncio_edit' anuncio.id %}"
+                               class="action-btn action-btn-edit" title="Editar">
+                                <ion-icon name="create-outline"></ion-icon>
+                            </a>
+                            <button onclick="confirmDelete({{ anuncio.id }}, '{{ anuncio.titulo|escapejs }}')"
+                                    class="action-btn action-btn-delete" title="Excluir">
+                                <ion-icon name="trash-outline"></ion-icon>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <p class="text-xs text-gray-400 mt-3 text-center">
+                <ion-icon name="reorder-three-outline" class="align-middle"></ion-icon>
+                Arraste os itens para reordenar
+            </p>
+            {% else %}
+            <div class="admin-card p-12 text-center text-gray-400 flex flex-col items-center gap-3">
+                <ion-icon name="document-text-outline" style="font-size:2.5rem;"></ion-icon>
+                <p class="text-sm font-medium">Nenhum anúncio cadastrado.</p>
+                <a href="{% url 'roteiro_anuncio_create' %}"
+                   class="mt-2 px-5 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-medium hover:bg-opacity-90 transition">
+                    Adicionar primeiro anúncio
+                </a>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 modal-overlay hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Anúncio</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja remover <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <form id="deleteForm" method="post">
+                {% csrf_token %}
+                <button type="submit"
+                        class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">
+                    <ion-icon name="trash-outline"></ion-icon> Excluir
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- SortableJS CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+<script>
+// ── Delete modal ──────────────────────────────────────────────────────────────
+const deleteModal = document.getElementById('deleteModal');
+
+function confirmDelete(id, name) {
+    document.getElementById('deleteModalName').textContent = name;
+    document.getElementById('deleteForm').action = `/admin-panel/roteiro/anuncios/${id}/delete/`;
+    deleteModal.classList.remove('hidden');
+    deleteModal.classList.add('flex');
+}
+function closeDeleteModal() {
+    deleteModal.classList.remove('flex');
+    deleteModal.classList.add('hidden');
+}
+deleteModal.addEventListener('click', e => { if (e.target === deleteModal) closeDeleteModal(); });
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeDeleteModal(); }
+});
+
+// ── SortableJS drag-and-drop reorder ─────────────────────────────────────────
+const listEl = document.getElementById('anuncios-list');
+if (listEl) {
+    Sortable.create(listEl, {
+        handle: '.drag-handle',
+        animation: 150,
+        ghostClass: 'sortable-ghost',
+        dragClass: 'sortable-drag',
+        onEnd() {
+            const order = [...listEl.querySelectorAll('[data-id]')].map(el => el.dataset.id);
+            fetch("{% url 'roteiro_anuncio_reorder' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}',
+                },
+                body: JSON.stringify({ order }),
+            }).catch(() => console.error('Falha ao salvar ordem.'));
+        },
+    });
+}
+</script>
+{% endblock %}

@@ -20,6 +20,7 @@ from .views.event import EventDetailView, EventListView
 from .views.member_auth import (
     MemberLoginView, MemberDashboardView, MemberLogoutView, MemberProfileView,
     MemberApproveWordView, MemberRejectWordView,
+    MemberRoteiroView,
     RedirectAfterLoginView,
 )
 from .views.member_schedule import MemberScheduleDetailView
@@ -78,7 +79,9 @@ from .views.admin_panel import (
     CanteenListView, CanteenEditView, CanteenDetailView, CanteenDeleteView,
     CanteenTogglePaidView, CanteenApiView, TemplatesListView, ReportsView,
     TemplateCreateView, TemplateEditView, TemplateDetailView, TemplateDeleteView,
-    TestimonyListView as AdminTestimonyListView, TestimonyEditView, TestimonyDeleteView, TestimonyToggleView
+    TestimonyListView as AdminTestimonyListView, TestimonyEditView, TestimonyDeleteView, TestimonyToggleView,
+    RoteiroView, AnuncioCreateView, AnuncioEditView, AnuncioDeleteView,
+    AnuncioReorderView, RoteiroPrintView,
 )
 
 urlpatterns = [
@@ -123,6 +126,7 @@ urlpatterns = [
     path('logout/', MemberLogoutView.as_view(), name='member_logout'),
     path('admin-logout/', MemberLogoutView.as_view(), name='admin_logout'),
     path('profile/', MemberProfileView.as_view(), name='member_profile'),
+    path('roteiro-culto/', MemberRoteiroView.as_view(), name='member_roteiro'),
     
     # Member Word Approval URLs
     path('words/approve/<int:word_id>/', MemberApproveWordView.as_view(), name='member_approve_word'),
@@ -286,6 +290,14 @@ urlpatterns = [
     path('admin-panel/testimonies/<int:testimony_id>/edit/', TestimonyEditView.as_view(), name='admin_testimony_edit'),
     path('admin-panel/testimonies/<int:testimony_id>/delete/', TestimonyDeleteView.as_view(), name='admin_testimony_delete'),
     path('admin-panel/testimonies/<int:testimony_id>/toggle/', TestimonyToggleView.as_view(), name='admin_testimony_toggle'),
+
+    # Roteiro de Culto
+    path('admin-panel/roteiro/', RoteiroView.as_view(), name='roteiro_view'),
+    path('admin-panel/roteiro/anuncios/new/', AnuncioCreateView.as_view(), name='roteiro_anuncio_create'),
+    path('admin-panel/roteiro/anuncios/<int:anuncio_id>/edit/', AnuncioEditView.as_view(), name='roteiro_anuncio_edit'),
+    path('admin-panel/roteiro/anuncios/<int:anuncio_id>/delete/', AnuncioDeleteView.as_view(), name='roteiro_anuncio_delete'),
+    path('admin-panel/roteiro/anuncios/reorder/', AnuncioReorderView.as_view(), name='roteiro_anuncio_reorder'),
+    path('admin-panel/roteiro/print/', RoteiroPrintView.as_view(), name='roteiro_print'),
 
     # APIs
     path('admin-panel/api/delete/', ApiDeleteItemView.as_view(), name='admin_api_delete'),

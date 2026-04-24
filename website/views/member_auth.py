@@ -12,6 +12,7 @@ from ..models.user import User
 from ..models.member import Member
 from ..models.ministry_membership import MinistryMembership
 from ..models.schedule import MonthlySchedule
+from ..models.roteiro import Roteiro
 from .mixins import MemberRequiredMixin, ApproverRequiredMixin, MinistrationContextMixin
 
 
@@ -69,6 +70,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'is_ministration_member': flags['is_ministration'],
             'is_boas_vindas_member': flags['is_boas_vindas'],
             'can_music_member': flags['can_music_member'],
+            'is_moderation_member': flags['is_moderation_member'],
             'member_schedules': member_schedules,
             'is_new_member': not any([flags['has_ministries'], flags['is_approver'], flags['can_consolidate']]),
         }
@@ -83,6 +85,11 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
                 member=member,
                 ministry__name__icontains='louvor',
                 is_active=True
+            ).exists(),
+            'is_moderation_member': MinistryMembership.objects.filter(
+                member=member,
+                ministry__name__icontains='modera',
+                is_active=True,
             ).exists(),
             'is_boas_vindas': MinistryMembership.objects.filter(
                 member=member,
@@ -237,6 +244,35 @@ class MemberConsolidationView(MemberRequiredMixin, MinistrationContextMixin, Vie
             'is_ministration_member': self.get_ministration_status(member),
         }
         return render(request, 'member/consolidation.html', context)
+
+
+class MemberRoteiroView(MemberRequiredMixin, MinistrationContextMixin, View):
+    """Roteiro de culto para membros do ministério de moderação."""
+
+    def get(self, request):
+        if not self._is_moderation_member(self.member):
+            messages.error(request, 'Esta área é exclusiva para membros da moderação.')
+            return redirect('member_dashboard')
+
+        roteiro, _ = Roteiro.objects.get_or_create(pk=1, defaults={'titulo': 'Roteiro de Culto'})
+        anuncios = roteiro.anuncios.prefetch_related('datas').order_by('ordem', 'created_at')
+        anuncios_ativos = [a for a in anuncios if not a.is_expired]
+
+        return render(request, 'member/roteiro.html', {
+            'roteiro': roteiro,
+            'anuncios': anuncios_ativos,
+            'member': self.member,
+            'can_consolidate': self.member.is_available_to_consolidate,
+            'is_ministration_member': self.get_ministration_status(self.member),
+        })
+
+    @staticmethod
+    def _is_moderation_member(member):
+        return MinistryMembership.objects.filter(
+            member=member,
+            ministry__name__icontains='modera',
+            is_active=True,
+        ).exists()
 
 
 class MemberApproveWordView(ApproverRequiredMixin, View):

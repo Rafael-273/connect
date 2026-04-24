@@ -375,7 +375,7 @@
         {% endif %}
         
         <!-- Cards de Ministério -->
-        {% if is_ministration_member or can_consolidate or is_boas_vindas_member or member_schedules or can_music_member %}
+        {% if is_ministration_member or can_consolidate or is_boas_vindas_member or member_schedules or can_music_member or is_moderation_member %}
             <div id="ministry-cards-container" class="space-y-3">
 
                 {% if is_ministration_member %}
@@ -476,6 +476,39 @@
                                     <div>
                                         <h4 class="text-base font-black text-gray-900 mb-1">Ver Repertório</h4>
                                         <p class="text-sm text-gray-500">Explore partituras e letras disponíveis</p>
+                                    </div>
+                                    <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+
+                {% if is_moderation_member %}
+                    <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Moderação" data-card-icon="user-shield" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+                        <!-- Header clicável -->
+                        <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                            <div class="flex items-center gap-3 sm:gap-4">
+                                <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                                    <i class="fas fa-user-shield text-white text-lg sm:text-xl"></i>
+                                </div>
+                                <div class="text-left">
+                                    <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                                        Ministério de <span style="color: #C90905;">Moderação</span>
+                                    </h3>
+                                    <p class="text-sm text-gray-500 mt-0.5">Acesse o roteiro de culto para acompanhamento</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+                        </button>
+
+                        <!-- Conteúdo colapsável -->
+                        <div class="accordion-content">
+                            <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                                <a href="{% url 'member_roteiro' %}" class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                    <div>
+                                        <h4 class="text-base font-black text-gray-900 mb-1">Ver Roteiro de Culto</h4>
+                                        <p class="text-sm text-gray-500">Visualize os anúncios ativos e datas do culto</p>
                                     </div>
                                     <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
                                 </a>

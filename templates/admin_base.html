@@ -7,28 +7,6 @@
     {% include 'parciais/head.html' %}
     <link rel="stylesheet" href="{% static 'base.css' %}">
     <title>{% block title %}{% endblock %}</title>
-    <!-- Apply sidebar collapsed state before first paint to avoid open animation -->
-    <script>
-        (function(){
-            if (localStorage.getItem('admin_sidebar_collapsed') === '1') {
-                document.documentElement.classList.add('admin-sidebar-collapsed-preload');
-            }
-        })();
-    </script>
-    <!-- Suppress ALL transitions and animations until after first paint -->
-    <style id="no-transitions-preload">
-        *, *::before, *::after {
-            transition-duration: 0ms !important;
-            animation-duration: 0ms !important;
-        }
-    </style>
-    <style>
-        /* Suppress sidebar collapse transition during initial load */
-        html.admin-sidebar-collapsed-preload #admin-sidebar,
-        html.admin-sidebar-collapsed-preload .main-content-wrapper {
-            transition: none !important;
-        }
-    </style>
     <style>
         @font-face {
             font-family: "Giga Sans";
@@ -74,8 +52,6 @@
     
     // Função global para controlar submenus
     function toggleSubmenu(submenuId) {
-        if (document.body.classList.contains('admin-sidebar-collapsed')) return;
-
         const submenu = document.getElementById(submenuId);
         if (!submenu) return;
         
@@ -99,41 +75,6 @@
     }
     
     $(document).ready(function() {
-        const sidebarCollapseKey = 'admin_sidebar_collapsed';
-
-        function applySidebarState(collapsed) {
-            if (window.innerWidth < 769) return;
-            document.body.classList.toggle('admin-sidebar-collapsed', collapsed);
-
-            const toggleBtn = document.getElementById('sidebar-collapse-toggle');
-            if (toggleBtn) {
-                toggleBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
-                toggleBtn.setAttribute('title', collapsed ? 'Expandir menu' : 'Minimizar menu');
-            }
-        }
-
-        function toggleSidebarCollapsed() {
-            const collapsed = !document.body.classList.contains('admin-sidebar-collapsed');
-            applySidebarState(collapsed);
-            localStorage.setItem(sidebarCollapseKey, collapsed ? '1' : '0');
-        }
-
-        const initialCollapsed = localStorage.getItem(sidebarCollapseKey) === '1';
-        applySidebarState(initialCollapsed);
-        // Re-enable transitions after first paint (double-rAF ensures we wait for the frame to be drawn)
-        requestAnimationFrame(function() {
-            requestAnimationFrame(function() {
-                var noTrans = document.getElementById('no-transitions-preload');
-                if (noTrans) noTrans.parentNode.removeChild(noTrans);
-                document.documentElement.classList.remove('admin-sidebar-collapsed-preload');
-            });
-        });
-
-        const sidebarToggleBtn = document.getElementById('sidebar-collapse-toggle');
-        if (sidebarToggleBtn) {
-            sidebarToggleBtn.addEventListener('click', toggleSidebarCollapsed);
-        }
-
         $(window).scroll(function() {
             const navbar = $('#navbar');
             if ($(this).scrollTop() > 0) {
@@ -172,9 +113,6 @@
         $(window).on('resize', function() {
             if (window.innerWidth >= 768) {
                 closeMobileSidebar();
-                applySidebarState(localStorage.getItem(sidebarCollapseKey) === '1');
-            } else {
-                document.body.classList.remove('admin-sidebar-collapsed');
             }
         });
     
@@ -196,11 +134,6 @@
     @media screen and (min-width: 769px) {
         .main-content-wrapper {
             margin-left: 18rem !important;
-            transition: margin-left 0.2s ease;
-        }
-
-        body.admin-sidebar-collapsed .main-content-wrapper {
-            margin-left: 5.5rem !important;
         }
     }
 
@@ -270,114 +203,36 @@
         background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
         box-shadow: 0 12px 32px rgba(15, 23, 42, 0.09);
         border-right: 1px solid rgba(148, 163, 184, 0.24);
-        scrollbar-width: none;
-        -ms-overflow-style: none;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.55) transparent;
         overscroll-behavior: contain;
         -webkit-overflow-scrolling: touch;
     }
 
-    .sidebar-inner-scroll::-webkit-scrollbar {
-        width: 0;
-        display: none;
+    .sidebar::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+        background-color: rgba(148, 163, 184, 0.45);
+        border-radius: 9999px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb:hover {
+        background-color: rgba(100, 116, 139, 0.7);
     }
 
     .sidebar-scroll {
         height: 100vh;
     }
 
-    .sidebar-inner-scroll {
-        height: 100%;
-        overflow-y: auto;
-        overflow-x: visible;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
-    }
-
     .sidebar-brand {
         background: linear-gradient(135deg, rgba(201, 9, 5, 0.04), rgba(230, 57, 70, 0.015));
         border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-    }
-
-    #admin-sidebar {
-        width: 18rem;
-        transition: width 0.2s ease;
-        overflow: visible !important;
-    }
-
-    .sidebar-collapse-toggle {
-        width: 32px;
-        height: 32px;
-        border: 1px solid #d1d5db;
-        border-radius: 999px;
-        background: white;
-        color: #64748b;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        position: absolute;
-        top: 36px;
-        right: -16px;
-        z-index: 60;
-        transition: all 0.18s;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
-    }
-
-    .sidebar-collapse-toggle:hover {
-        border-color: rgba(201, 9, 5, 0.4);
-        color: var(--color-primary);
-        background: #fffafa;
-    }
-
-    .collapse-icon-collapsed { display: none; }
-
-    body.admin-sidebar-collapsed #admin-sidebar {
-        width: 5.5rem !important;
-    }
-
-    body.admin-sidebar-collapsed .sidebar-brand-logo {
-        display: block;
-        height: 2rem !important;
-        width: auto;
-    }
-
-    body.admin-sidebar-collapsed .sidebar-collapse-toggle {
-        right: -16px;
-    }
-
-    body.admin-sidebar-collapsed .collapse-icon-expanded { display: none; }
-    body.admin-sidebar-collapsed .collapse-icon-collapsed { display: inline-flex; }
-
-    body.admin-sidebar-collapsed .sidebar-item,
-    body.admin-sidebar-collapsed .member-area-link {
-        justify-content: center;
-        gap: 0;
-        padding-left: 10px;
-        padding-right: 10px;
-        font-size: 0;
-    }
-
-    body.admin-sidebar-collapsed .sidebar-item ion-icon,
-    body.admin-sidebar-collapsed .member-area-link ion-icon {
-        font-size: 20px;
-    }
-
-    body.admin-sidebar-collapsed .sidebar-item span,
-    body.admin-sidebar-collapsed .member-area-link span,
-    body.admin-sidebar-collapsed .sidebar-item-group span,
-    body.admin-sidebar-collapsed .submenu-arrow,
-    body.admin-sidebar-collapsed .submenu {
-        display: none !important;
-    }
-
-    body.admin-sidebar-collapsed .sidebar-item-group {
-        justify-content: center;
-        padding-left: 10px;
-        padding-right: 10px;
-        pointer-events: none;
-    }
-
-    body.admin-sidebar-collapsed .sidebar-item-group-main {
-        justify-content: center;
     }
 
     .sidebar-nav {
@@ -603,25 +458,6 @@
             padding: 10px 12px 10px 32px;
         }
     }
-
-    /* Row link — primeira coluna clicável nas listagens */
-    td.row-link {
-        cursor: pointer;
-    }
-    td.row-link:hover {
-        background-color: rgba(0, 0, 0, 0.025);
-    }
 </style>
-<script>
-    // Row link — clicar na primeira coluna abre o detalhe do item
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('td[data-row-href]').forEach(function(td) {
-            td.addEventListener('click', function(e) {
-                if (e.target.closest('a, button, input, select, textarea')) return;
-                window.location.href = td.dataset.rowHref;
-            });
-        });
-    });
-</script>
 </body>
 </html>

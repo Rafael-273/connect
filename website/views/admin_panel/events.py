@@ -98,7 +98,7 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
             'is_recurring': is_recurring,
             'event_date': event_date,
             'event_time': request.POST.get('event_time') or None,
-            'location': request.POST.get('location') or None,
+            'location': request.POST.get('location') or '',
             'link_more_info': request.POST.get('link_more_info') or None,
             'link_type': request.POST.get('link_type') or 'more_info',
             'display_start': display_start,

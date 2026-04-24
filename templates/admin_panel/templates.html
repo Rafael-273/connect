@@ -236,12 +236,12 @@
                         <a href="{% url 'admin_template_detail' template.id %}"
                            class="flex-1 py-2 px-3 bg-[var(--color-primary)] text-white rounded-lg font-medium text-sm hover:bg-opacity-90 transition flex items-center justify-center gap-1.5">
                             <ion-icon name="eye-outline"></ion-icon>
-                            Ver
+                            <span class="mt-1">Ver</span>
                         </a>
                         <a href="{% url 'admin_followup_create' %}?template={{ template.id }}"
                            class="flex-1 py-2 px-3 bg-green-50 text-green-600 rounded-lg font-medium text-sm hover:bg-green-100 transition flex items-center justify-center gap-1.5">
                             <ion-icon name="play-outline"></ion-icon>
-                            Usar
+                            <span class="mt-1">Usar</span>
                         </a>
                         <a href="{% url 'admin_template_edit' template.id %}"
                            class="py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center">

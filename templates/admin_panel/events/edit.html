@@ -58,6 +58,19 @@
     .checkbox-card:has(input:checked) { border-color: var(--color-primary); background-color: rgba(201,9,5,0.04); }
     .checkbox-card label { font-size: 0.8rem; font-weight: 500; color: #374151; cursor: pointer; user-select: none; }
     .banner-preview { max-width: 260px; max-height: 180px; object-fit: cover; border-radius: 10px; border: 1.5px solid #e5e7eb; }
+
+    @media (max-width: 640px) {
+        .section-header {
+            padding-bottom: 0.6rem;
+            margin-bottom: 0.9rem;
+        }
+        .form-group {
+            margin-bottom: 0.9rem;
+        }
+        .checkbox-card {
+            padding: 0.5rem 0.7rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -100,25 +113,20 @@
                 {% csrf_token %}
 
                 <!-- Informações Básicas -->
-                <div class="admin-card p-6 md:p-8 mb-4">
+                <div class="admin-card p-4 sm:p-6 md:p-8 mb-3 sm:mb-4">
                     <div class="section-header">
                         <div class="icon-wrap"><ion-icon name="calendar-outline"></ion-icon></div>
                         <span>Informações Básicas</span>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                         <div class="form-group">
                             <label class="form-label">Título do Evento *</label>
                             <input type="text" name="title" value="{{ event.title|default:'' }}"
                                    class="form-input" required>
                         </div>
-                        <div class="form-group">
-                            <label class="form-label">Slug (URL) *</label>
-                            <input type="text" name="slug" value="{{ event.slug|default:'' }}"
-                                   class="form-input" required placeholder="url-amigavel-do-evento">
-                            <p class="text-gray-400 text-xs mt-1">Apenas letras, números e hífens.</p>
-                        </div>
-                        <div class="form-group md:col-span-2">
-                            <label class="checkbox-card">
+                        <input type="hidden" name="slug" value="{{ event.slug|default:'' }}">
+                        <div class="form-group flex items-end">
+                            <label class="checkbox-card w-full">
                                 <input type="checkbox" id="is_recurring" name="is_recurring" class="form-checkbox"
                                        {% if event.is_recurring %}checked{% endif %}>
                                 <div>
@@ -131,12 +139,12 @@
                 </div>
 
                 <!-- Data & Hora -->
-                <div class="admin-card p-6 md:p-8 mb-4">
+                <div class="admin-card p-4 sm:p-6 md:p-8 mb-3 sm:mb-4">
                     <div class="section-header">
                         <div class="icon-wrap"><ion-icon name="time-outline"></ion-icon></div>
                         <span>Data & Hora</span>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                         <div class="form-group recurrence-options" id="recurrenceOptions">
                             <label class="form-label">Padrão de Recorrência</label>
                             <select name="recurrence_pattern" class="form-select">
@@ -190,7 +198,7 @@
                 </div>
 
                 <!-- Localização & Link -->
-                <div class="admin-card p-6 md:p-8 mb-4">
+                <div class="admin-card p-4 sm:p-6 md:p-8 mb-3 sm:mb-4">
                     <div class="section-header">
                         <div class="icon-wrap"><ion-icon name="location-outline"></ion-icon></div>
                         <span>Localização & Link</span>
@@ -200,7 +208,7 @@
                         <input type="text" name="location" value="{{ event.location|default:'' }}"
                                class="form-input" placeholder="Endereço ou descrição do local">
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                         <div class="form-group">
                             <label class="form-label">Link para Mais Informações</label>
                             <input type="url" name="link_more_info" value="{{ event.link_more_info|default:'' }}"
@@ -221,7 +229,7 @@
                 </div>
 
                 <!-- Descrição & Banner -->
-                <div class="admin-card p-6 md:p-8 mb-4">
+                <div class="admin-card p-4 sm:p-6 md:p-8 mb-3 sm:mb-4">
                     <div class="section-header">
                         <div class="icon-wrap"><ion-icon name="image-outline"></ion-icon></div>
                         <span>Descrição & Banner</span>
@@ -245,12 +253,12 @@
                 </div>
 
                 <!-- Buttons -->
-                <div class="flex items-center justify-between mt-6">
+                <div class="flex items-center justify-between mt-4 sm:mt-6">
                     <a href="{% url 'admin_events_list' %}" class="sm:hidden flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
                         Voltar
                     </a>
-                    <div class="flex gap-3 ml-auto">
+                    <div class="flex gap-2 sm:gap-3 ml-auto">
                         <a href="{% url 'admin_events_list' %}" class="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-sm font-medium">Cancelar</a>
                         <button type="submit" class="px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold">
                             {% if event %}Atualizar Evento{% else %}Criar Evento{% endif %}
@@ -264,17 +272,6 @@
 </div>
 
 <script>
-    // Auto-generate slug from title
-    const titleInput = document.querySelector('input[name="title"]');
-    const slugInput = document.querySelector('input[name="slug"]');
-    titleInput.addEventListener('input', function() {
-        if (slugInput.getAttribute('data-auto') !== 'false') {
-            slugInput.value = this.value.toLowerCase()
-                .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim('-');
-        }
-    });
-    slugInput.addEventListener('input', function() { this.setAttribute('data-auto', 'false'); });
-
     // Toggle recurrence options
     const isRecurringCheckbox = document.getElementById('is_recurring');
     const recurrenceOptions = document.querySelectorAll('.recurrence-options');
