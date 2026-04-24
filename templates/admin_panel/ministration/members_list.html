@@ -42,9 +42,18 @@
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-4 md:p-6 mt-24">
             <!-- Header -->
-            <div class="mb-6 md:mb-8">
-                <h1 class="text-2xl md:text-3xl font-bold text-gray-900 page-title">Membros do Ministério</h1>
-                <p class="text-gray-600 mt-2">Gerenciar membros do Ministério de Ministração</p>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="people" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900 leading-tight">Membros do Ministério</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {% if total_members %}{{ total_members }} membro{{ total_members|pluralize:"s" }}{% else %}Gerenciar membros do Ministério de Ministração{% endif %}
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <!-- Estatísticas -->
@@ -83,24 +92,20 @@
 
             <!-- Filtros -->
             <div class="admin-card p-4 md:p-6 mb-6">
-                <form method="GET" class="flex flex-col md:flex-row gap-4">
-                    <input type="text" name="search" value="{{ request.GET.search }}" 
+                <form method="GET" id="filter-form" class="flex flex-col md:flex-row gap-4">
+                    <input type="text" name="search" id="search-input" value="{{ request.GET.search }}" 
                            placeholder="Buscar membro..." 
                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
                     
-                    <select name="status" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+                    <select name="status" onchange="document.getElementById('filter-form').submit()" class="px-4 pt-[0.65rem] pb-[0.35rem] border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm cursor-pointer">
                         <option value="">Todos</option>
                         <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Ativos</option>
                         <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inativos</option>
                     </select>
                     
                     <div class="flex gap-2">
-                        <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
-                            <ion-icon name="search" class="mr-2"></ion-icon>Buscar
-                        </button>
-                        <a href="{% url 'ministration_members_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
-                            Limpar
-                        </a>
+                        <button type="submit" class="flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm leading-none"><ion-icon name="search-outline"></ion-icon><span class="mt-[0.15rem]">Buscar</span></button>
+                        {% if request.GET %}<a href="{% url 'ministration_members_list' %}" class="flex items-center justify-center w-10 h-10 rounded-full bg-gray-100 hover:bg-red-100 hover:text-[var(--color-primary)] text-gray-400 transition-colors" title="Limpar filtros"><ion-icon name="close-circle-outline" style="font-size:1.25rem;"></ion-icon></a>{% endif %}
                     </div>
                 </form>
             </div>
@@ -197,4 +202,25 @@
         </div>
     </div>
 </div>
+
+<script>
+// Auto-filter with loading overlay
+(function () {
+    if (!document.getElementById('filter-loading-overlay')) {
+        var ov = document.createElement('div');
+        ov.id = 'filter-loading-overlay';
+        ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        ov.style.display = 'none';
+        ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+        document.body.appendChild(ov);
+    }
+    var overlay = document.getElementById('filter-loading-overlay');
+    var form = document.getElementById('filter-form');
+    if (!form) return;
+    form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+    form.querySelectorAll('input[type="date"]').forEach(function(input) {
+        input.addEventListener('change', function () { form.submit(); });
+    });
+})();
+</script>
 {% endblock %}

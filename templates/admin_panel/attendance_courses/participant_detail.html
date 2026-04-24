@@ -1,0 +1,57 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}Detalhes do Aluno - {{ participant.full_name }}{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold text-gray-900">{{ participant.full_name }}</h1>
+                    <p class="text-sm text-gray-500">Detalhes do aluno no curso {{ course.name }}</p>
+                </div>
+                <a href="{% url 'attendance_course_participant_list' course.id %}" class="px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium">Voltar</a>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Registros</p><p class="text-2xl font-bold">{{ total_records }}</p></div>
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Presenças</p><p class="text-2xl font-bold text-emerald-700">{{ present_count }}</p></div>
+                <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4"><p class="text-xs text-gray-500 uppercase">Taxa</p><p class="text-2xl font-bold text-[var(--color-primary)]">{{ attendance_rate }}%</p></div>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4">
+                <p class="text-sm text-gray-700"><strong>Telefone:</strong> {{ participant.phone|default:'-' }}</p>
+                <p class="text-sm text-gray-700 mt-1"><strong>Email:</strong> {{ participant.email|default:'-' }}</p>
+            </div>
+
+            <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 text-gray-500 uppercase text-xs tracking-wider">
+                            <tr>
+                                <th class="text-left px-4 py-3">Aula</th>
+                                <th class="text-left px-4 py-3">Data</th>
+                                <th class="text-left px-4 py-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in records %}
+                            <tr class="border-t border-gray-100">
+                                <td class="px-4 py-3">{{ record.lesson.title }}</td>
+                                <td class="px-4 py-3">{{ record.lesson.lesson_date|date:'d/m/Y' }}</td>
+                                <td class="px-4 py-3">{{ record.get_status_display }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="px-4 py-8 text-center text-gray-500">Sem registros de presença.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

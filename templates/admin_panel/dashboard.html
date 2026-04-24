@@ -8,10 +8,43 @@
     body {
         background-color: #f8f9fa !important;
     }
+
+    .header-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        background: var(--color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        box-shadow: 0 8px 20px rgba(201, 9, 5, 0.22);
+    }
+
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 2rem;
+    }
+
+    @media (min-width: 640px) {
+        .kpi-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem;
+        }
+    }
+
+    @media (min-width: 1280px) {
+        .kpi-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+    }
     
     .admin-card {
         background: white;
         border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
         transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
@@ -25,10 +58,32 @@
         background: linear-gradient(135deg, var(--color-primary), var(--color-danger));
         color: white;
         border-radius: 12px;
-        padding: 24px;
-        text-align: center;
+        padding: 20px;
+        min-height: 136px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        text-align: left;
         position: relative;
         overflow: hidden;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(17, 24, 39, 0.18);
+    }
+
+    .stat-card--visitors {
+        background: linear-gradient(135deg, var(--color-light), var(--color-primary));
+    }
+
+    .stat-card--events {
+        background: linear-gradient(135deg, var(--color-danger), var(--color-dark));
+    }
+
+    .stat-card--conversions {
+        background: linear-gradient(135deg, var(--color-primary), var(--color-light));
     }
     
     .stat-card::before {
@@ -41,61 +96,173 @@
         background: rgba(255,255,255,0.1);
         transform: rotate(45deg);
     }
+
+    .kpi-label {
+        font-size: 0.78rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        opacity: 0.85;
+        font-weight: 600;
+    }
+
+    .kpi-value {
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1.1;
+        margin-top: 0.45rem;
+    }
+
+    .kpi-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255,255,255,0.16);
+        border: 1px solid rgba(255,255,255,0.25);
+        font-size: 1.25rem;
+    }
     
     .chart-container {
         background: white;
         border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
         padding: 20px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .section-panel {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .section-head-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .section-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(201, 9, 5, 0.1);
+        color: var(--color-primary);
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .section-link {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--color-primary);
+        transition: opacity 0.2s ease;
+        white-space: nowrap;
+    }
+
+    .section-link:hover {
+        opacity: 0.8;
+    }
+
+    .activity-item {
+        border-radius: 10px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .activity-item:hover {
+        transform: translateX(2px);
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+    }
+
+    .section-title {
+        color: #111827;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .empty-state {
+        text-align: center;
+        color: #6b7280;
+        padding: 1.25rem 0.5rem;
     }
 </style>
 {% endblock %}
 
 {% block content %}
+{% include 'parciais/messages.html' %}
+
 <div class="flex min-h-screen bg-gray-50">
     <!-- Sidebar -->
     {% include 'parciais/admin_sidebar.html' %}
 
     <!-- Main Content -->
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-3 md:p-6 mt-24">
+        <div class="p-4 sm:p-6 mt-24">
             <!-- Header -->
-            <div class="mb-8">
-                <h1 class="text-2xl md:text-3xl font-bold text-gray-900">Dashboard</h1>
-                <p class="text-gray-600 mt-2">Visão geral do sistema da Igreja Filadélfia</p>
+            <div class="flex items-center gap-3 mb-6">
+                <div class="header-icon">
+                    <ion-icon name="speedometer" class="text-xl text-white"></ion-icon>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Painel Administrativo</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">Visão geral do sistema da Igreja Filadélfia</p>
+                </div>
             </div>
 
             <!-- Stats Cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-8">
+            <div class="kpi-grid">
                 <div class="stat-card">
                     <div class="relative z-10">
-                        <div class="text-3xl font-bold">{{ total_members }}</div>
-                        <div class="text-sm opacity-90 mt-1">Membros Ativos</div>
-                        <ion-icon name="people" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
+                        <p class="kpi-label">Membros Ativos</p>
+                        <p class="kpi-value">{{ total_members }}</p>
+                    </div>
+                    <div class="kpi-icon relative z-10">
+                        <ion-icon name="people"></ion-icon>
                     </div>
                 </div>
                 
-                <div class="stat-card" style="background: linear-gradient(135deg, var(--color-light), var(--color-primary));">
+                <div class="stat-card stat-card--visitors">
                     <div class="relative z-10">
-                        <div class="text-3xl font-bold">{{ total_visitors }}</div>
-                        <div class="text-sm opacity-90 mt-1">Total de Visitantes</div>
-                        <ion-icon name="person-add" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
+                        <p class="kpi-label">Total de Visitantes</p>
+                        <p class="kpi-value">{{ total_visitors }}</p>
+                    </div>
+                    <div class="kpi-icon relative z-10">
+                        <ion-icon name="person-add"></ion-icon>
                     </div>
                 </div>
                 
-                <div class="stat-card" style="background: linear-gradient(135deg, var(--color-danger), var(--color-dark));">
+                <div class="stat-card stat-card--events">
                     <div class="relative z-10">
-                        <div class="text-3xl font-bold">{{ total_events }}</div>
-                        <div class="text-sm opacity-90 mt-1">Eventos</div>
-                        <ion-icon name="calendar" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
+                        <p class="kpi-label">Eventos</p>
+                        <p class="kpi-value">{{ total_events }}</p>
+                    </div>
+                    <div class="kpi-icon relative z-10">
+                        <ion-icon name="calendar"></ion-icon>
                     </div>
                 </div>
                 
-                <div class="stat-card" style="background: linear-gradient(135deg, var(--color-primary), var(--color-light));">
+                <div class="stat-card stat-card--conversions">
                     <div class="relative z-10">
-                        <div class="text-3xl font-bold">{{ recent_conversions }}</div>
-                        <div class="text-sm opacity-90 mt-1">Conversões (30 dias)</div>
-                        <ion-icon name="heart" class="absolute top-4 right-4 text-2xl opacity-30"></ion-icon>
+                        <p class="kpi-label">Conversões (30 dias)</p>
+                        <p class="kpi-value">{{ recent_conversions }}</p>
+                    </div>
+                    <div class="kpi-icon relative z-10">
+                        <ion-icon name="heart"></ion-icon>
                     </div>
                 </div>
             </div>
@@ -104,7 +271,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                 <!-- Visitors Chart -->
                 <div class="chart-container">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Visitantes por Mês</h3>
+                    <h3 class="text-lg section-title mb-4">Visitantes por Mês</h3>
                     <div style="position: relative; height: 300px;">
                         <canvas id="visitorsChart"></canvas>
                     </div>
@@ -112,7 +279,7 @@
 
                 <!-- Ministry Stats -->
                 <div class="chart-container">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Membros por Ministério</h3>
+                    <h3 class="text-lg section-title mb-4">Membros por Ministério</h3>
                     <div class="space-y-3">
                         {% for ministry in ministries_stats %}
                         <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -131,7 +298,7 @@
                 <!-- Recent Visitors -->
                 <div class="admin-card p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-800">Visitantes Recentes</h3>
+                        <h3 class="text-lg section-title">Visitantes Recentes</h3>
                         <a href="{% url 'admin_visitors_list' %}" class="text-[var(--color-primary)] text-sm hover:underline">
                             Ver todos
                         </a>
@@ -156,7 +323,7 @@
                 <!-- Recently Converted -->
                 <div class="admin-card p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-800">Recém Convertidos</h3>
+                        <h3 class="text-lg section-title">Recém Convertidos</h3>
                         <a href="{% url 'admin_members_list' %}?status=new_convert" class="text-green-600 text-sm hover:underline">
                             Ver todos
                         </a>
@@ -187,7 +354,7 @@
                 <!-- Upcoming Events -->
                 <div class="admin-card p-6">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-lg font-semibold text-gray-800">Próximos Eventos</h3>
+                        <h3 class="text-lg section-title">Próximos Eventos</h3>
                         <a href="{% url 'admin_events_list' %}" class="text-[var(--color-primary)] text-sm hover:underline">
                             Ver todos
                         </a>

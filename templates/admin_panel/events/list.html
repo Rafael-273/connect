@@ -6,53 +6,15 @@
 {% block head %}
 <style>
     body {
+        background-color: #f8f9fa !important;
     }
-    
+
     .admin-card {
         background: white;
         border-radius: 12px;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
     }
-    
-    @media (max-width: 768px) {
-        .admin-card {
-            padding: 0;
-            border-radius: 8px;
-        }
-        
-        .table-container {
-            margin: 0 -8px;
-        }
-    }
-    
-    .sidebar {
-        background: white;
-        min-height: 100vh;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-    }
-    
-    .sidebar-item {
-        display: flex;
-        align-items: center;
-        padding: 12px 20px;
-        color: #64748b;
-        text-decoration: none;
-        transition: all 0.3s ease;
-        border-left: 3px solid transparent;
-    }
-    
-    .sidebar-item:hover, .sidebar-item.active {
-        background-color: #f1f5f9;
-        color: var(--color-primary);
-        border-left-color: var(--color-primary);
-        text-decoration: none;
-    }
-    
-    .sidebar-item ion-icon {
-        font-size: 20px;
-        margin-right: 12px;
-    }
-    
+
     .event-banner {
         width: 70px;
         height: 50px;
@@ -60,29 +22,70 @@
         border-radius: 8px;
         flex-shrink: 0;
     }
-    
+
     .status-badge {
         padding: 4px 12px;
         border-radius: 20px;
         font-size: 12px;
         font-weight: 600;
-        max-width: 100%;
         display: inline-flex;
         align-items: center;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
-    
+
     .status-upcoming {
         background-color: #dbeafe;
         color: #1e40af;
     }
-    
+
     .status-past {
         background-color: #f3f4f6;
         color: #374151;
     }
+
+    /* Table improvements */
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
+    }
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+    .data-table tbody td {
+        padding: 14px 24px;
+        vertical-align: middle;
+    }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .action-btn-view   { background: rgba(201,9,5,0.08); color: var(--color-primary); }
+    .action-btn-view:hover   { background: rgba(201,9,5,0.16); }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
 </style>
 {% endblock %}
 
@@ -94,149 +97,243 @@
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-3 md:p-6 mt-24">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                <div class="mb-4 sm:mb-0">
-                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Eventos</h1>
-                    <p class="text-gray-600 mt-2">Gerenciar eventos da igreja</p>
+            <!-- Title -->
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="calendar" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Eventos</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if events.paginator.count %}{{ events.paginator.count }} evento{{ events.paginator.count|pluralize:"s" }}{% else %}Gerenciar eventos da igreja{% endif %}
+                        </p>
+                    </div>
                 </div>
-                <a href="{% url 'admin_event_create' %}" class="bg-[var(--color-primary)] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center w-full sm:w-auto">
-                    <ion-icon name="add" class="mr-2"></ion-icon>
+                <!-- Mobile: Novo Evento (icon only) -->
+                <a href="{% url 'admin_event_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Novo Evento">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Search + Filters + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="status" id="hidden-status" value="{{ status_filter }}">
+
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar por título, descrição ou local..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-events"
+                                class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if status_filter %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                        <div id="filter-panel-events"
+                             class="hidden absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                                    <select id="panel-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os Status</option>
+                                        <option value="upcoming" {% if status_filter == 'upcoming' %}selected{% endif %}>Próximos</option>
+                                        <option value="past"     {% if status_filter == 'past' %}selected{% endif %}>Passados</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                <a href="{% url 'admin_events_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-events"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <a href="{% url 'admin_event_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
                     Novo Evento
                 </a>
             </div>
 
-            <div class="admin-card p-4 sm:p-6 mb-6">
-                <form method="GET" class="flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-center">
-                    <div class="w-full sm:flex-1 sm:min-w-64">
-                        <input type="text" name="search" value="{{ search }}" 
-                               placeholder="Buscar por título, descrição ou local..." 
-                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+            <!-- Versão Mobile: Cards -->
+            <div class="block md:hidden space-y-4">
+                {% for event in events %}
+                <div class="admin-card p-4 hover:shadow-lg transition-shadow">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            {% if event.banner %}
+                            <img class="event-banner" src="{{ event.banner.url }}" alt="{{ event.title }}">
+                            {% else %}
+                            <div class="event-banner bg-[var(--color-primary)] flex items-center justify-center text-white font-bold rounded-lg">
+                                <ion-icon name="calendar"></ion-icon>
+                            </div>
+                            {% endif %}
+                            <div class="flex-1 min-w-0">
+                                <h3 class="text-base font-bold text-gray-900 truncate">{{ event.title }}</h3>
+                                <p class="text-xs text-gray-500">{{ event.event_date|date:"d/m/Y" }}{% if event.event_time %} • {{ event.event_time|time:"H:i" }}h{% endif %}</p>
+                            </div>
+                        </div>
+                        {% now "Y-m-d" as today %}
+                        {% if event.event_date|date:"Y-m-d" >= today %}
+                        <span class="status-badge status-upcoming ml-2 flex-shrink-0"><ion-icon name="time" class="mr-1 text-xs"></ion-icon>Próximo</span>
+                        {% else %}
+                        <span class="status-badge status-past ml-2 flex-shrink-0"><ion-icon name="checkmark-circle" class="mr-1 text-xs"></ion-icon>Realizado</span>
+                        {% endif %}
                     </div>
-                    
-                    <div class="w-full sm:w-auto">
-                        <select name="status" class="w-full sm:w-[13rem] px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
-                            <option value="">Todos os Status</option>
-                            <option value="upcoming" {% if status_filter == 'upcoming' %}selected{% endif %}>Próximos</option>
-                            <option value="past" {% if status_filter == 'past' %}selected{% endif %}>Passados</option>
-                        </select>
+
+                    <div class="space-y-1.5 mb-3 text-sm">
+                        <div class="flex items-center gap-2">
+                            <ion-icon name="location" class="text-gray-400"></ion-icon>
+                            <span class="text-gray-700 truncate">{{ event.location|default:"--" }}</span>
+                        </div>
+                        {% if event.description %}
+                        <div class="flex items-start gap-2">
+                            <ion-icon name="document-text" class="text-gray-400 mt-0.5"></ion-icon>
+                            <span class="text-gray-700 line-clamp-2">{{ event.description|truncatewords:12 }}</span>
+                        </div>
+                        {% endif %}
                     </div>
-                    
-                    <div class="flex gap-2 w-full sm:w-auto">
-                        <button type="submit" class="flex-1 sm:flex-initial bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center">
-                            <ion-icon name="search" class="mr-2"></ion-icon>
-                            Buscar
-                        </button>
-                        
-                        <a href="{% url 'admin_events_list' %}" class="flex-1 sm:flex-initial bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center">
-                            Limpar
+
+                    <div class="flex gap-2 pt-3 border-t border-gray-100">
+                        <a href="{% url 'event_detail' slug=event.slug %}" target="_blank"
+                           class="flex-1 py-2 px-3 bg-[var(--color-primary)] text-white rounded-lg font-medium text-sm hover:bg-opacity-90 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="eye-outline"></ion-icon> Ver
                         </a>
+                        <button onclick="editEvent({{ event.id }})"
+                                class="flex-1 py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="create-outline"></ion-icon> Editar
+                        </button>
+                        <button onclick="deleteEvent({{ event.id }}, '{{ event.title }}')"
+                                class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-sm hover:bg-red-100 transition flex items-center justify-center">
+                            <ion-icon name="trash-outline"></ion-icon>
+                        </button>
                     </div>
-                </form>
+                </div>
+                {% empty %}
+                <div class="admin-card p-8 text-center text-gray-500">Nenhum evento encontrado.</div>
+                {% endfor %}
             </div>
 
-            <div class="admin-card overflow-hidden shadow-sm">
-                <div class="overflow-x-auto sm:-mx-6 lg:-mx-8">
-                    <div class="inline-block min-w-full py-2 sm:px-6 lg:px-8">
-                        <div class="overflow-hidden">
-                            <table class="w-full table-fixed">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3 md:w-1/4">Evento</th>
-                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6 hidden sm:table-cell">Data/Hora</th>
-                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/6 hidden md:table-cell">Local</th>
-                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Status</th>
-                                        <th class="px-2 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Ações</th>
-                                    </tr>
-                                </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
+            <!-- Versão Desktop: Tabela -->
+            <div class="admin-card overflow-hidden hidden md:block">
+                <div class="overflow-x-auto table-responsive">
+                    <table class="w-full data-table">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Evento</th>
+                                <th class="text-left">Data/Hora</th>
+                                <th class="text-left">Local</th>
+                                <th class="text-left">Status</th>
+                                <th class="text-left">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
                             {% for event in events %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-2 md:px-6 py-4">
-                                    <div class="flex items-center">
+                            <tr>
+                                <td class="row-link" data-row-href="{% url 'admin_event_edit' event.id %}">
+                                    <div class="flex items-center gap-3">
                                         {% if event.banner %}
-                                        <img class="event-banner flex-shrink-0 hidden sm:block" src="{{ event.banner.url }}" alt="{{ event.title }}">
+                                        <img class="event-banner" src="{{ event.banner.url }}" alt="{{ event.title }}">
                                         {% else %}
-                                        <div class="event-banner flex-shrink-0 bg-[var(--color-primary)] hidden sm:flex items-center justify-center text-white font-bold">
+                                        <div class="event-banner bg-[var(--color-primary)] flex items-center justify-center text-white font-bold rounded-lg">
                                             <ion-icon name="calendar"></ion-icon>
                                         </div>
                                         {% endif %}
-                                        <div class="ml-0 sm:ml-3 min-w-0 flex-1">
+                                        <div class="min-w-0">
                                             <div class="text-sm font-medium text-gray-900 truncate">{{ event.title }}</div>
-                                            <div class="text-xs text-gray-500 truncate hidden sm:block">{{ event.description|truncatewords:8 }}</div>
-                                            <div class="text-xs text-gray-500 sm:hidden">
-                                                {{ event.event_date|date:"d/m/Y" }}
-                                                {% if event.event_time %} • {{ event.event_time|time:"H:i" }}h{% endif %}
-                                            </div>
+                                            <div class="text-xs text-gray-400 mt-0.5 truncate">{{ event.description|truncatewords:8 }}</div>
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-2 md:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
-                                    <div class="text-sm text-gray-900">{{ event.event_date|date:"d/m/Y" }}</div>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ event.event_date|date:"d/m/Y" }}</div>
                                     {% if event.event_time %}
-                                    <div class="text-xs text-gray-500">{{ event.event_time|time:"H:i" }}h</div>
+                                    <div class="text-xs text-gray-400 mt-0.5">{{ event.event_time|time:"H:i" }}h</div>
                                     {% endif %}
                                 </td>
-                                <td class="px-2 md:px-6 py-4 hidden md:table-cell">
-                                    <div class="text-sm text-gray-900 truncate">{{ event.location|default:"--" }}</div>
+                                <td>
+                                    <div class="text-sm text-gray-800 truncate">{{ event.location|default:"--" }}</div>
                                     {% if event.link_more_info %}
-                                    <a href="{{ event.link_more_info }}" target="_blank" class="text-xs text-[var(--color-primary)] hover:underline truncate block">
-                                        Mais informações
-                                    </a>
+                                    <a href="{{ event.link_more_info }}" target="_blank" class="text-xs text-[var(--color-primary)] hover:underline truncate block">Mais informações</a>
                                     {% endif %}
                                 </td>
-                                <td class="px-2 md:px-6 py-4">
+                                <td class="whitespace-nowrap">
                                     {% now "Y-m-d" as today %}
                                     {% if event.event_date|date:"Y-m-d" >= today %}
-                                    <span class="status-badge status-upcoming inline-flex items-center text-[10px] md:text-xs">
-                                        <ion-icon name="time" class="mr-1 text-xs"></ion-icon>
-                                        <span class="truncate">Próximo</span>
+                                    <span class="status-badge status-upcoming">
+                                        <ion-icon name="time" class="mr-1 text-xs"></ion-icon>Próximo
                                     </span>
                                     {% else %}
-                                    <span class="status-badge status-past inline-flex items-center text-[10px] md:text-xs">
-                                        <ion-icon name="checkmark-circle" class="mr-1 text-xs"></ion-icon>
-                                        <span class="truncate">Realizado</span>
+                                    <span class="status-badge status-past">
+                                        <ion-icon name="checkmark-circle" class="mr-1 text-xs"></ion-icon>Realizado
                                     </span>
                                     {% endif %}
-                                    
                                     {% if event.display_start|date:"Y-m-d" <= today and event.display_end|date:"Y-m-d" >= today %}
                                     <div class="mt-1">
-                                        <span class="status-badge inline-flex items-center text-[10px] md:text-xs" style="background-color: #dcfce7; color: #166534;">
-                                            <ion-icon name="eye" class="mr-1 text-xs"></ion-icon>
-                                            <span class="truncate">Visível</span>
+                                        <span class="status-badge" style="background-color:#dcfce7;color:#166534;">
+                                            <ion-icon name="eye" class="mr-1 text-xs"></ion-icon>Visível
                                         </span>
                                     </div>
                                     {% else %}
                                     <div class="mt-1">
-                                        <span class="status-badge inline-flex items-center text-[10px] md:text-xs" style="background-color: #fee2e2; color: #991b1b;">
-                                            <ion-icon name="eye-off" class="mr-1 text-xs"></ion-icon>
-                                            <span class="truncate">Oculto</span>
+                                        <span class="status-badge" style="background-color:#fee2e2;color:#991b1b;">
+                                            <ion-icon name="eye-off" class="mr-1 text-xs"></ion-icon>Oculto
                                         </span>
                                     </div>
                                     {% endif %}
                                 </td>
-                                <td class="px-1 md:px-2 py-4">
-                                    <div class="flex items-center justify-around space-x-1">
-                                        <a href="{% url 'event_detail' slug=event.slug %}" target="_blank"
-                                           class="text-[var(--color-primary)] hover:text-opacity-80 p-1">
-                                            <ion-icon name="eye" class="text-lg"></ion-icon>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <a href="{% url 'event_detail' slug=event.slug %}" target="_blank" class="action-btn action-btn-view" title="Ver">
+                                            <ion-icon name="eye-outline"></ion-icon>
                                         </a>
-                                        <button onclick="editEvent({{ event.id }})" 
-                                                class="text-blue-600 hover:text-blue-800 p-1">
-                                            <ion-icon name="create" class="text-lg"></ion-icon>
+                                        <button onclick="editEvent({{ event.id }})" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
                                         </button>
-                                        <button onclick="deleteEvent({{ event.id }}, '{{ event.title }}')" 
-                                                class="text-red-600 hover:text-red-800 p-1">
-                                            <ion-icon name="trash" class="text-lg"></ion-icon>
+                                        <button onclick="deleteEvent({{ event.id }}, '{{ event.title }}')" class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="5" class="px-6 py-8 text-center text-gray-500">
-                                    <div class="flex flex-col items-center justify-center">
-                                        <ion-icon name="calendar-outline" class="text-4xl mb-2 text-gray-400"></ion-icon>
-                                        <p>Nenhum evento encontrado.</p>
+                                <td colspan="5" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center gap-2 text-gray-400">
+                                        <ion-icon name="calendar-outline" style="font-size:2rem;"></ion-icon>
+                                        <span class="text-sm">Nenhum evento encontrado.</span>
                                     </div>
                                 </td>
                             </tr>
@@ -244,44 +341,27 @@
                         </tbody>
                     </table>
                 </div>
-
-                {% if events.has_other_pages %}
-                <div class="px-3 md:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between">
-                    <div class="text-xs md:text-sm text-gray-500 mb-4 sm:mb-0 text-center sm:text-left">
-                        Mostrando {{ events.start_index }} a {{ events.end_index }} de {{ events.paginator.count }} eventos
-                    </div>
-                    <div class="flex flex-wrap gap-1 md:gap-2 justify-center">
-                        {% if events.has_previous %}
-                        <a href="?page={{ events.previous_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-2 md:px-3 py-1 border border-gray-300 rounded text-xs md:text-sm text-gray-600 hover:bg-gray-50">
-                            Anterior
-                        </a>
-                        {% endif %}
-                        
-                        {% for num in events.paginator.page_range %}
-                        {% if num == events.number %}
-                        <span class="px-2 md:px-3 py-1 bg-[var(--color-primary)] text-white rounded text-xs md:text-sm">{{ num }}</span>
-                        {% elif num > events.number|add:'-3' and num < events.number|add:'3' %}
-                        <a href="?page={{ num }}&{{ request.GET.urlencode }}" 
-                           class="px-2 md:px-3 py-1 border border-gray-300 rounded text-xs md:text-sm text-gray-600 hover:bg-gray-50">
-                            {{ num }}
-                        </a>
-                        {% endif %}
-                        {% endfor %}
-                        
-                        {% if events.has_next %}
-                        <a href="?page={{ events.next_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-2 md:px-3 py-1 border border-gray-300 rounded text-xs md:text-sm text-gray-600 hover:bg-gray-50">
-                            Próximo
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endif %}
-                        </div>
-                    </div>
-                </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Evento</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
         </div>
     </div>
 </div>
@@ -290,31 +370,92 @@
     function editEvent(eventId) {
         window.location.href = `/admin-panel/events/${eventId}/edit/`;
     }
-    
+
+    let _deleteEventId = null;
+    let _deleteEventTitle = null;
+
     function deleteEvent(eventId, eventTitle) {
-        if (confirm(`Tem certeza que deseja excluir o evento "${eventTitle}"?`)) {
-            fetch('{% url "admin_api_delete" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'event',
-                    id: eventId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao excluir evento: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('Erro na comunicação com o servidor');
+        _deleteEventId = eventId;
+        _deleteEventTitle = eventTitle;
+        document.getElementById('deleteModalName').textContent = eventTitle;
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteEventId = null;
+    }
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteEventId) return;
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        fetch('{% url "admin_api_delete" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'event', id: _deleteEventId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+                alert('Erro ao excluir evento: ' + data.error);
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+            alert('Erro na comunicação com o servidor');
+        });
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
+
+    // Filter panel toggle
+    (function () {
+        var toggle   = document.getElementById('filter-toggle-events');
+        var panel    = document.getElementById('filter-panel-events');
+        var applyBtn = document.getElementById('apply-filters-events');
+        var hiddenStatus = document.getElementById('hidden-status');
+        var panelStatus  = document.getElementById('panel-status');
+        if (!toggle || !panel) return;
+        toggle.addEventListener('click', function (e) { e.stopPropagation(); panel.classList.toggle('hidden'); });
+        document.addEventListener('click', function (e) { if (!panel.contains(e.target) && e.target !== toggle) panel.classList.add('hidden'); });
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                hiddenStatus.value = panelStatus.value;
+                document.getElementById('filter-form').submit();
             });
         }
-    }
+    })();
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 {% endblock %}

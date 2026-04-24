@@ -5,160 +5,322 @@
 
 {% block head %}
 <style>
-    body {
-        background-color: #f8f9fa !important;
-    }
-    
+    body { background-color: #f8f9fa !important; }
+
+    /* ── Card ── */
     .admin-card {
         background: white;
-        border-radius: 0.75rem;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        border-radius: 14px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
     }
-    
-    @media (min-width: 640px) {
-        .admin-card {
-            border-radius: 12px;
-        }
-    }
-    
-    .sidebar {
-        background: white;
-        min-height: 100vh;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-    }
-    
-    .sidebar-item {
+
+    /* ── Section header inside card ── */
+    .section-header {
         display: flex;
         align-items: center;
-        padding: 12px 20px;
-        color: #64748b;
-        text-decoration: none;
-        transition: all 0.3s ease;
-        border-left: 3px solid transparent;
+        gap: 0.625rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1.5px solid #f1f5f9;
     }
-    
-    .sidebar-item:hover, .sidebar-item.active {
-        background-color: #f1f5f9;
-        color: var(--color-primary);
-        border-left-color: var(--color-primary);
-        text-decoration: none;
+    .section-header .icon-wrap {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        background: var(--color-primary);
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
     }
-    
-    .sidebar-item ion-icon {
-        font-size: 20px;
-        margin-right: 12px;
+    .section-header .icon-wrap ion-icon { color: white; font-size: 15px; }
+    .section-header span {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
-    
-    .form-group {
-        margin-bottom: 1rem;
-    }
-    
-    @media (min-width: 640px) {
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-    }
-    
+
+    /* ── Form primitives ── */
+    .form-group { margin-bottom: 1.25rem; }
+
     .form-label {
         display: block;
         font-weight: 600;
         color: #374151;
-        margin-bottom: 0.5rem;
-        font-size: 0.875rem;
+        margin-bottom: 0.375rem;
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
     }
-    
-    @media (min-width: 640px) {
-        .form-label {
-            font-size: 1rem;
-        }
-    }
-    
-    .form-input {
-        width: 100%;
-        padding: 0.625rem;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
-        font-size: 0.875rem;
-        transition: border-color 0.2s;
-    }
-    
-    @media (min-width: 640px) {
-        .form-input {
-            padding: 0.75rem;
-            font-size: 0.875rem;
-        }
-    }
-    
-    .form-input:focus {
-        outline: none;
-        border-color: var(--color-primary);
-        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
-    }
-    
-    .form-select {
-        width: 100%;
-        padding: 0.625rem;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
-        font-size: 0.875rem;
-        background-color: white;
-        transition: border-color 0.2s;
-    }
-    
-    @media (min-width: 640px) {
-        .form-select {
-            padding: 0.75rem;
-        }
-    }
-    
-    .form-select:focus {
-        outline: none;
-        border-color: var(--color-primary);
-        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
-    }
-    
+
+    .form-input,
+    .form-select,
     .form-textarea {
         width: 100%;
-        padding: 0.625rem;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
+        padding: 0.6rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
         font-size: 0.875rem;
-        resize: vertical;
-        min-height: 80px;
-        transition: border-color 0.2s;
+        background-color: #fafafa;
+        color: #111827;
+        transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
+        appearance: none;
     }
-    
-    @media (min-width: 640px) {
-        .form-textarea {
-            padding: 0.75rem;
-            min-height: 100px;
-        }
+    .form-input:hover, .form-select:hover, .form-textarea:hover {
+        border-color: #d1d5db;
+        background-color: white;
     }
-    
-    .form-textarea:focus {
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
         outline: none;
         border-color: var(--color-primary);
-        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(201,9,5,0.09);
     }
+    .form-select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.75rem center;
+        background-size: 1rem;
+        padding-right: 2.25rem;
+    }
+    .form-textarea {
+        resize: vertical;
+        min-height: 90px;
+    }
+
+    /* ── Checkbox ── */
+    .form-checkbox {
+        width: 1.1rem; height: 1.1rem;
+        border-radius: 5px;
+        border: 1.5px solid #d1d5db;
+        accent-color: var(--color-primary);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .checkbox-card {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.625rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: border-color 0.18s, background-color 0.18s;
+        background: #fafafa;
+    }
+    .checkbox-card:has(input:checked) {
+        border-color: var(--color-primary);
+        background-color: rgba(201,9,5,0.04);
+    }
+    .checkbox-card label {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #374151;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    /* ── Tom Select (ministérios) ── */
+    .ts-wrapper.form-control { padding: 0; }
+    .ts-wrapper .ts-control {
+        border: 1.5px solid #e5e7eb !important;
+        border-radius: 10px !important;
+        background: #fafafa !important;
+        box-shadow: none !important;
+        padding: 5px 10px !important;
+        min-height: 44px;
+        gap: 4px;
+        flex-wrap: wrap !important;
+        cursor: text;
+        transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+    }
+    .ts-wrapper .ts-control:hover {
+        background: white !important;
+        border-color: #d1d5db !important;
+    }
+    .ts-wrapper.focus .ts-control {
+        border-color: var(--color-primary) !important;
+        background: white !important;
+        box-shadow: 0 0 0 3px rgba(201,9,5,0.09) !important;
+    }
+    .ts-wrapper .ts-control .item {
+        background: var(--color-primary) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 6px !important;
+        font-size: 0.74rem !important;
+        font-weight: 600 !important;
+        padding: 0.5rem 1rem !important;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .ts-wrapper .ts-control .item .remove {
+        color: rgba(255,255,255,0.75) !important;
+        font-size: 1rem !important;
+        line-height: 1;
+        padding: 0.2rem 1rem 0 0  !important;
+        border: none !important;
+        background: none !important;
+    }
+    .ts-wrapper .ts-control .item .remove:hover { color: white !important; }
+    .ts-wrapper .ts-control input { font-size: 0.85rem !important; color: #374151 !important; }
+    .ts-wrapper .ts-dropdown {
+        border: 1.5px solid #e5e7eb !important;
+        border-radius: 10px !important;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.1) !important;
+        overflow: hidden;
+        margin-top: 4px;
+    }
+    .ts-wrapper .ts-dropdown .ts-dropdown-content { padding: 4px; }
+    .ts-wrapper .ts-dropdown .option {
+        border-radius: 7px;
+        font-size: 0.85rem;
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+    }
+    .ts-wrapper .ts-dropdown .option:before {
+        content: '';
+        width: 16px; height: 16px;
+        border: 1.5px solid #d1d5db;
+        border-radius: 4px;
+        flex-shrink: 0;
+        transition: background 0.15s, border-color 0.15s;
+    }
+    .ts-wrapper .ts-dropdown .option.selected:before,
+    .ts-wrapper .ts-dropdown .option.active:before {
+        background: var(--color-primary);
+        border-color: var(--color-primary);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10' fill='white'%3E%3Cpath d='M1 5l3 3 7-7'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: center;
+        background-size: 10px;
+    }
+    .ts-wrapper .ts-dropdown .option.selected { color: var(--color-primary); font-weight: 600; background: rgba(201,9,5,0.05) !important; }
+    .ts-wrapper .ts-dropdown .option.active:not(.selected) { background: #f3f4f6 !important; }
+    .ts-wrapper .ts-dropdown-header-tabroot { padding: 8px 8px 4px; }
+    .ts-wrapper .ts-dropdown input.ts-dropdown-search {
+        width: 100%;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 7px;
+        padding: 6px 10px;
+        font-size: 0.83rem;
+        outline: none;
+    }
+    .ts-wrapper .ts-dropdown input.ts-dropdown-search:focus { border-color: var(--color-primary); }
+
+    /* ── Profile photo uploader ── */
+    .photo-upload-zone {
+        border: 2px dashed #e5e7eb;
+        border-radius: 14px;
+        background: #fafafa;
+        transition: border-color 0.2s, background 0.2s;
+        cursor: pointer;
+    }
+    .photo-upload-zone:hover, .photo-upload-zone.drag-over {
+        border-color: var(--color-primary);
+        background: rgba(201,9,5,0.03);
+    }
+    .photo-upload-zone input[type=file] { display: none; }
+    #photo-preview-wrap { display: none; }
+    #photo-preview-wrap img { display: block; }
 </style>
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 <script>
-$(document).ready(function() {
-    $('#ministry-select').select2({
-        placeholder: 'Selecione os Ministérios',
-        width: '100%',
-        allowClear: true,
-        language: {
-            noResults: function() {
-                return "Nenhum ministério encontrado";
+document.addEventListener('DOMContentLoaded', function () {
+
+    // ── Ministérios: Tom Select ──────────────────────────────────────
+    var ministryEl = document.getElementById('ministry-select');
+    if (ministryEl) {
+        new TomSelect(ministryEl, {
+            plugins: ['remove_button'],
+            placeholder: 'Pesquisar e selecionar ministérios...',
+            maxItems: null,
+            closeAfterSelect: false,
+            hideSelected: false,
+            onInitialize: function() {
+                // Prevent virtual keyboard on mobile (avoids viewport shift that buries dropdown)
+                if ('ontouchstart' in window) {
+                    this.control_input.readOnly = true;
+                    this.control_input.style.width = '0';
+                    this.control_input.style.opacity = '0';
+                    this.control_input.style.position = 'absolute';
+                }
+            },
+            render: {
+                no_results: function() {
+                    return '<div class="no-results" style="padding:8px 12px;font-size:0.83rem;color:#9ca3af;">Nenhum ministério encontrado</div>';
+                }
             }
-        }
-    });
+        });
+    }
+
+    // ── Phone mask (jQuery) ──────────────────────────────────────────
     if (typeof $ === 'function' && $.fn.mask) {
         $('input[name="phone"]').mask('(00) 00000-0000');
+    }
+
+    // ── Profile photo uploader ───────────────────────────────────────
+    var zone    = document.getElementById('photo-zone');
+    var input   = document.getElementById('photo-input');
+    var preview = document.getElementById('photo-preview');
+    var previewWrap  = document.getElementById('photo-preview-wrap');
+    var zonePlaceholder = document.getElementById('photo-zone-placeholder');
+    var removeBtn = document.getElementById('photo-remove-btn');
+
+    if (!zone || !input) return;
+
+    function showPreview(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            previewWrap.style.display = 'flex';
+            zonePlaceholder.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    zone.addEventListener('click', function(e) {
+        if (e.target === removeBtn || removeBtn.contains(e.target)) return;
+        input.click();
+    });
+
+    input.addEventListener('change', function() {
+        if (this.files && this.files[0]) showPreview(this.files[0]);
+    });
+
+    if (removeBtn) {
+        removeBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            input.value = '';
+            preview.src = '';
+            previewWrap.style.display = 'none';
+            zonePlaceholder.style.display = 'flex';
+        });
+    }
+
+    zone.addEventListener('dragover',  function(e) { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', function()  { zone.classList.remove('drag-over'); });
+    zone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        var file = e.dataTransfer.files[0];
+        if (file) { input.files = e.dataTransfer.files; showPreview(file); }
+    });
+
+    // ── Submit overlay ───────────────────────────────────────────────
+    var overlay = document.getElementById('submit-overlay');
+    var form = document.querySelector('form[method="POST"]');
+    if (form && overlay) {
+        form.addEventListener('submit', function() {
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+        });
     }
 });
 </script>
@@ -167,202 +329,248 @@ $(document).ready(function() {
 {% block content %}
 {% include 'parciais/messages.html' %}
 
+<!-- Loading overlay -->
+<div id="submit-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div>
+        <p class="text-gray-700 text-base font-semibold">Salvando...</p>
+    </div>
+</div>
+
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
 
-    <div class="flex-1 lg:ml-64 mt-6 md:mt-0">
-        <div class="p-4 sm:p-6 mt-20 sm:mt-24">
-            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
-                <div class="text-center sm:text-left">
-                    <h1 class="text-3xl sm:text-3xl font-bold text-gray-900">
-                        {% if member %}Editar Membro{% else %}Novo Membro{% endif %}
-                    </h1>
-                    <p class="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
-                        {% if member %}Atualizar informações do membro{% else %}Adicionar novo membro à igreja{% endif %}
-                    </p>
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-6 mt-24">
+
+            <!-- Title (matches list pages pattern) -->
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <div class="w-11 h-11 sm:w-11 sm:h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="{% if member %}create{% else %}person-add{% endif %}" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">
+                            {% if member %}Editar Membro{% else %}Novo Membro{% endif %}
+                        </h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if member %}Atualizar informações de {{ member.name }}{% else %}Adicionar novo membro à igreja{% endif %}
+                        </p>
+                    </div>
                 </div>
-                <a href="{% url 'admin_members_list' %}" class="bg-gray-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center text-sm sm:text-base w-full sm:w-auto">
-                    <ion-icon name="arrow-back" class="mr-2"></ion-icon>
+                <a href="{% url 'admin_members_list' %}"
+                   class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex-shrink-0 ml-3">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
                     Voltar à Lista
                 </a>
             </div>
 
-            <div class="admin-card p-4 sm:p-6 md:p-8">
+            <div class="admin-card p-6 md:p-8">
                 <form method="POST" enctype="multipart/form-data">
                     {% csrf_token %}
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+
+                    {% if form.non_field_errors %}
+                    <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-start gap-2">
+                        <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                        <span>{{ form.non_field_errors }}</span>
+                    </div>
+                    {% endif %}
+
+                    <!-- ══ Dados Pessoais ══ -->
+                    <div class="section-header">
+                        <div class="icon-wrap"><ion-icon name="person-outline"></ion-icon></div>
+                        <span>Dados Pessoais</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+
                         <div class="form-group">
-                            <label class="form-label">Nome Completo *</label>
-                            <input type="text" name="name" value="{{ member.name|default:'' }}" 
-                                   class="form-input" required>
+                            <label class="form-label">Nome Completo <span class="text-red-500">*</span></label>
+                            {{ form.name }}
+                            {% if form.name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.name.errors.0 }}</p>{% endif %}
                         </div>
-                        
+
                         <div class="form-group">
                             <label class="form-label">Email</label>
-                            <input type="email" name="email" value="{{ member.email|default:'' }}" 
-                                   class="form-input">
+                            {{ form.email }}
+                            {% if form.email.errors %}<p class="text-red-500 text-xs mt-1">{{ form.email.errors.0 }}</p>{% endif %}
                         </div>
-                        
+
                         <div class="form-group">
                             <label class="form-label">Telefone</label>
-                            <input type="text" name="phone" value="{{ member.phone|default:'' }}" 
-                                   class="form-input" placeholder="(11) 99999-9999">
+                            {{ form.phone }}
+                            {% if form.phone.errors %}<p class="text-red-500 text-xs mt-1">{{ form.phone.errors.0 }}</p>{% endif %}
                         </div>
-                        
+
                         <div class="form-group">
                             <label class="form-label">Data de Nascimento</label>
-                            <input type="date" name="birth_date" 
-                                   value="{% if member.birth_date %}{{ member.birth_date|date:'Y-m-d' }}{% endif %}" 
-                                   class="form-input">
+                            {{ form.birth_date }}
+                            {% if form.birth_date.errors %}<p class="text-red-500 text-xs mt-1">{{ form.birth_date.errors.0 }}</p>{% endif %}
                         </div>
-                        
+
                         <div class="form-group">
                             <label class="form-label">Gênero</label>
-                            <select name="gender" class="form-select">
-                                <option value="">Selecionar...</option>
-                                <option value="male" {% if member.gender == 'male' %}selected{% endif %}>Masculino</option>
-                                <option value="female" {% if member.gender == 'female' %}selected{% endif %}>Feminino</option>
-                            </select>
+                            {{ form.gender }}
+                            {% if form.gender.errors %}<p class="text-red-500 text-xs mt-1">{{ form.gender.errors.0 }}</p>{% endif %}
                         </div>
-                        
+
                         <div class="form-group">
                             <label class="form-label">Estado Civil</label>
-                            <select name="marital_status" class="form-select">
-                                <option value="">Selecionar...</option>
-                                <option value="single" {% if member.marital_status == 'single' %}selected{% endif %}>Solteiro(a)</option>
-                                <option value="married" {% if member.marital_status == 'married' %}selected{% endif %}>Casado(a)</option>
-                                <option value="divorced" {% if member.marital_status == 'divorced' %}selected{% endif %}>Divorciado(a)</option>
-                                <option value="widowed" {% if member.marital_status == 'widowed' %}selected{% endif %}>Viúvo(a)</option>
-                            </select>
+                            {{ form.marital_status }}
+                            {% if form.marital_status.errors %}<p class="text-red-500 text-xs mt-1">{{ form.marital_status.errors.0 }}</p>{% endif %}
                         </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Ministério</label>
-                            <select name="ministry" id="ministry-select" multiple class="form-select">
-                                {% for ministry in ministries %}
-                                <option value="{{ ministry.id }}" {% if member and ministry in member.ministry.all %}selected{% endif %}>{{ ministry.name }}</option>
-                                {% endfor %}
-                            </select>
-                            <small class="text-gray-500">Segure Ctrl (Windows) ou Command (Mac) para selecionar mais de um.</small>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Bairro</label>
-                            <select name="neighborhood" class="form-select">
-                                <option value="">Selecionar...</option>
-                                {% for neighborhood in neighborhoods %}
-                                <option value="{{ neighborhood.id }}" {% if member.neighborhood_id == neighborhood.id %}selected{% endif %}>
-                                    {{ neighborhood.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Tipo de Conversão</label>
-                            <select name="conversion" class="form-select">
-                                <option value="">Selecionar...</option>
-                                <option value="new_convert" {% if member.conversion == 'new_convert' %}selected{% endif %}>Novo Convertido</option>
-                                <option value="reconciled" {% if member.conversion == 'reconciled' %}selected{% endif %}>Reconciliado</option>
-                                <option value="from_another_church" {% if member.conversion == 'from_another_church' %}selected{% endif %}>Vindo de outra Igreja</option>
-                            </select>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label">Data da Conversão</label>
-                            <input type="date" name="conversion_date" 
-                                   value="{% if member.conversion_date %}{{ member.conversion_date|date:'Y-m-d' }}{% endif %}" 
-                                   class="form-input">
-                        </div>
-                        
-                        <!-- Removidos: Tags, Cônjuge, Tipo de Personalidade, Dias disponíveis, Interesses/Habilidades, Desafios Iniciais -->
-                        <!-- Os campos removidos estavam aqui -->
+
                     </div>
-                    
-                    <!-- Endereço -->
-                    <div class="form-group">
-                        <label class="form-label">Endereço Completo</label>
-                        <input type="text" name="address" value="{{ member.address|default:'' }}" 
-                               class="form-input" placeholder="Rua, número, bairro, cidade">
-                    </div>
-                    
-                    <!-- Foto de Perfil -->
+
+                    <!-- ── Foto de Perfil ── -->
                     <div class="form-group">
                         <label class="form-label">Foto de Perfil</label>
-                        {% if member.profile_picture %}
-                        <div class="mb-4">
-                            <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}" 
-                                 class="w-20 h-20 rounded-full object-cover border-2 border-gray-300">
-                            <p class="text-sm text-gray-600 mt-2">Foto atual</p>
+
+                        <div id="photo-zone" class="photo-upload-zone p-4" role="button" tabindex="0"
+                             aria-label="Selecionar foto de perfil">
+
+                            <!-- Preview (shown after picking a file or if already has one) -->
+                            <div id="photo-preview-wrap"
+                                 class="items-center gap-4 {% if not member.profile_picture %}hidden{% endif %}"
+                                 {% if member.profile_picture %}style="display:flex"{% endif %}>
+                                <img id="photo-preview"
+                                     src="{% if member.profile_picture %}{{ member.profile_picture.url }}{% endif %}"
+                                     alt="Foto de perfil"
+                                     class="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-white shadow-md flex-shrink-0">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-semibold text-gray-800">{% if member.profile_picture %}Foto atual{% else %}Foto selecionada{% endif %}</p>
+                                    <p class="text-xs text-gray-400 mt-0.5">Clique para trocar ou arraste uma nova imagem</p>
+                                    <button id="photo-remove-btn" type="button"
+                                            class="mt-2 inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium transition">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                        </svg>
+                                        <span class="mt-1 mr-1">Remover</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Placeholder (shown when no photo) -->
+                            <div id="photo-zone-placeholder"
+                                 class="py-6 flex-col items-center justify-center text-center gap-3 {% if member.profile_picture %}hidden{% else %}flex{% endif %}">
+                                <div class="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
+                                    <svg class="w-7 h-7 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-semibold text-gray-700">Clique ou arraste uma foto</p>
+                                    <p class="text-xs text-gray-400 mt-0.5">JPG ou PNG &middot; máx. 5 MB</p>
+                                </div>
+                            </div>
+
+                            {{ form.profile_picture }}
                         </div>
-                        {% endif %}
-                        <input type="file" name="profile_picture" class="form-input" accept="image/*">
-                        <p class="text-xs text-gray-500 mt-1">Formatos aceitos: JPG, PNG. Tamanho máximo: 5MB</p>
+
+                        {% if form.profile_picture.errors %}<p class="text-red-500 text-xs mt-1">{{ form.profile_picture.errors.0 }}</p>{% endif %}
                     </div>
-                    
-                    <!-- Testemunho -->
+
+                    <!-- ══ Igreja & Localização ══ -->
+                    <div class="section-header mt-2">
+                        <div class="icon-wrap"><ion-icon name="business-outline"></ion-icon></div>
+                        <span>Igreja &amp; Localização</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+
+                        <div class="form-group md:col-span-2">
+                            <label class="form-label">Ministérios</label>
+                            {{ form.ministry }}
+                            <p class="text-xs text-gray-400 mt-1">Clique para adicionar &middot; clique no &times; para remover um ministério</p>
+                            {% if form.ministry.errors %}<p class="text-red-500 text-xs mt-1">{{ form.ministry.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Bairro</label>
+                            {{ form.neighborhood }}
+                            {% if form.neighborhood.errors %}<p class="text-red-500 text-xs mt-1">{{ form.neighborhood.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Endereço Completo</label>
+                            {{ form.address }}
+                            {% if form.address.errors %}<p class="text-red-500 text-xs mt-1">{{ form.address.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Tipo de Conversão</label>
+                            {{ form.conversion }}
+                            {% if form.conversion.errors %}<p class="text-red-500 text-xs mt-1">{{ form.conversion.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Data da Conversão</label>
+                            {{ form.conversion_date }}
+                            {% if form.conversion_date.errors %}<p class="text-red-500 text-xs mt-1">{{ form.conversion_date.errors.0 }}</p>{% endif %}
+                        </div>
+
+                    </div>
+
+                    <!-- ── Testemunho ── -->
                     <div class="form-group">
                         <label class="form-label">Testemunho</label>
-                        <textarea name="testimony" class="form-textarea" 
-                                  placeholder="Compartilhe o testemunho do membro...">{{ member.testimony|default:'' }}</textarea>
+                        {{ form.testimony }}
+                        {% if form.testimony.errors %}<p class="text-red-500 text-xs mt-1">{{ form.testimony.errors.0 }}</p>{% endif %}
                     </div>
-                    
-                    <!-- Agrupar todos os checkboxes no final -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 mt-4 sm:mt-6">
-                        <div class="form-group">
-                            <label class="form-label text-sm sm:text-base">Status</label>
-                            <div class="flex items-center">
-                                <input type="checkbox" name="is_active" 
-                                       {% if member.is_active or not member %}checked{% endif %}
-                                       class="form-checkbox h-4 w-4 sm:h-5 sm:w-5 text-[var(--color-primary)] rounded border-gray-300 focus:ring-[var(--color-primary)]">
-                                <label class="ml-2 text-xs sm:text-sm text-gray-700">Membro ativo</label>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label text-sm sm:text-base">Disponível para consolidar?</label>
-                            <div class="flex items-center">
-                                <input type="checkbox" name="is_available_to_consolidate" {% if member.is_available_to_consolidate %}checked{% endif %} class="form-checkbox h-4 w-4 sm:h-5 sm:w-5 text-[var(--color-primary)]">
-                                <label class="ml-2 text-xs sm:text-sm text-gray-700">Sim</label>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label text-sm sm:text-base">Disponível para discipular?</label>
-                            <div class="flex items-center">
-                                <input type="checkbox" name="is_available_to_disciple" {% if member.is_available_to_disciple %}checked{% endif %} class="form-checkbox h-4 w-4 sm:h-5 sm:w-5 text-[var(--color-primary)]">
-                                <label class="ml-2 text-xs sm:text-sm text-gray-700">Sim</label>
-                            </div>
-                        </div>
+
+                    <!-- ══ Status & Disponibilidade ══ -->
+                    <div class="section-header mt-2">
+                        <div class="icon-wrap"><ion-icon name="checkmark-circle-outline"></ion-icon></div>
+                        <span>Status &amp; Disponibilidade</span>
                     </div>
-                    
-                    <!-- Permissões de Usuário -->
-                    <div class="mt-6 sm:mt-8 border-t pt-4 sm:pt-6">
-                        <h3 class="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Permissões de Acesso ao Sistema</h3>
-                        <div class="grid grid-cols-1 gap-4 sm:gap-6">
-                            <div class="form-group">
-                                <label class="form-label text-sm sm:text-base">Tipo de Usuário</label>
-                                <select name="user_type" class="form-select text-sm sm:text-base">
-                                    <option value="member" {% if member.user.user_type == 'member' or not member %}selected{% endif %}>Membro (Sem acesso ao painel)</option>
-                                    <option value="admin" {% if member.user.user_type == 'admin' %}selected{% endif %}>Administrador (Acesso total)</option>
-                                    <option value="canteen" {% if member.user.user_type == 'canteen' %}selected{% endif %}>Cantina (Gerencia fiados)</option>
-                                    <option value="visitors" {% if member.user.user_type == 'visitors' %}selected{% endif %}>Visitantes (Gerencia visitantes)</option>
-                                    <option value="consolidation" {% if member.user.user_type == 'consolidation' %}selected{% endif %}>Consolidação (Gerencia acompanhamentos)</option>
-                                    <option value="events" {% if member.user.user_type == 'events' %}selected{% endif %}>Eventos (Gerencia eventos)</option>
-                                </select>
-                                <p class="text-xs sm:text-sm text-gray-500 mt-1">O usuário será criado automaticamente com a senha padrão "123"</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                        <label class="checkbox-card">
+                            {{ form.is_active }}
+                            <div>
+                                <p class="text-xs font-600 text-gray-800">Membro ativo</p>
+                                <p class="text-xs text-gray-400 leading-tight">Aparece nas listagens e relatórios</p>
                             </div>
+                        </label>
+                        <label class="checkbox-card">
+                            {{ form.is_available_to_consolidate }}
+                            <div>
+                                <p class="text-xs font-600 text-gray-800">Disponível para consolidar</p>
+                                <p class="text-xs text-gray-400 leading-tight">Pode ser responsável por acompanhamentos</p>
+                            </div>
+                        </label>
+                        <label class="checkbox-card">
+                            {{ form.is_available_to_disciple }}
+                            <div>
+                                <p class="text-xs font-600 text-gray-800">Disponível para discipular</p>
+                                <p class="text-xs text-gray-400 leading-tight">Pode ser discipulador de outros membros</p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- ══ Permissões de Acesso ══ -->
+                    <div class="section-header">
+                        <div class="icon-wrap"><ion-icon name="shield-checkmark-outline"></ion-icon></div>
+                        <span>Permissões de Acesso</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                        <div class="form-group">
+                            <label class="form-label">Tipo de Usuário</label>
+                            {{ form.user_type }}
+                            {% if form.user_type.errors %}<p class="text-red-500 text-xs mt-1">{{ form.user_type.errors.0 }}</p>{% endif %}
+                            <p class="text-xs text-gray-400 mt-1">O usuário será criado automaticamente com a senha padrão <strong>123</strong></p>
                         </div>
                     </div>
-                    
-                    <!-- Botões -->
-                    <div class="flex flex-col sm:flex-row justify-end gap-3 sm:space-x-4 mt-6 sm:mt-8">
-                        <a href="{% url 'admin_members_list' %}" 
-                           class="px-4 sm:px-6 py-2 sm:py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition text-center text-sm sm:text-base">
+
+                    <!-- ── Botões ── -->
+                    <div class="flex items-center justify-end gap-3 pt-6 border-t border-gray-100 mt-2">
+                        <a href="{% url 'admin_members_list' %}"
+                           class="px-5 py-2.5 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 transition text-sm font-medium">
                             Cancelar
                         </a>
-                        <button type="submit" 
-                                class="px-4 sm:px-6 py-2 sm:py-3 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm sm:text-base">
-                            {% if member %}Atualizar Membro{% else %}Criar Membro{% endif %}
+                        <button type="submit"
+                                class="px-6 py-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold shadow-sm">
+                            {% if member %}Salvar Alterações{% else %}Criar Membro{% endif %}
                         </button>
                     </div>
                 </form>

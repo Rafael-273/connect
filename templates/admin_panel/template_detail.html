@@ -5,303 +5,356 @@
 
 {% block head %}
 <style>
-    body {
-        background-color: #f8f9fa !important;
-    }
-    
+    body { background-color: #f8f9fa !important; }
+
     .admin-card {
         background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        border-radius: 14px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
     }
-    
+
+    /* ── Section header ── */
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1.5px solid #f1f5f9;
+    }
+    .section-header .icon-wrap {
+        width: 32px; height: 32px;
+        border-radius: 8px;
+        background: var(--color-primary);
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .section-header .icon-wrap ion-icon { color: white; font-size: 15px; }
+    .section-header .icon-wrap.green  { background: #16a34a; }
+    .section-header .icon-wrap.blue   { background: #2563eb; }
+    .section-header span {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* ── Step card ── */
     .step-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 16px;
-        margin-bottom: 12px;
-        background: #f9fafb;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 12px;
+        background: #fafafa;
+        margin-bottom: 10px;
+        transition: border-color 0.18s, box-shadow 0.18s;
     }
-    
+    .step-card:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+    .step-badge {
+        width: 30px; height: 30px;
+        border-radius: 50%;
+        background: var(--color-primary);
+        color: white;
+        font-size: 0.8rem;
+        font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* ── Usage card ── */
     .usage-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 12px;
-        margin-bottom: 8px;
+        padding: 12px 14px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fafafa;
         cursor: pointer;
-        transition: all 0.3s ease;
+        transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+        margin-bottom: 8px;
     }
-    
     .usage-card:hover {
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        transform: translateY(-1px);
+        border-color: var(--color-primary);
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.07);
     }
-    
-    /* Modal para duplicação */
+
+    /* ── Stat pill ── */
+    .stat-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        background: #fafafa;
+    }
+    .stat-pill .val {
+        font-size: 1.1rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .stat-pill .lbl {
+        font-size: 0.75rem;
+        color: #6b7280;
+        font-weight: 500;
+    }
+
+    /* ── Action buttons ── */
+    .action-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        width: 100%;
+        padding: 9px 16px;
+        border-radius: 10px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+        text-decoration: none;
+        border: 1.5px solid transparent;
+    }
+    .action-btn-primary {
+        background: var(--color-primary);
+        color: white;
+    }
+    .action-btn-primary:hover { opacity: 0.9; box-shadow: 0 2px 8px rgba(201,9,5,0.18); }
+
+    .action-btn-edit {
+        background: #eff6ff;
+        color: #2563eb;
+        border-color: #bfdbfe;
+    }
+    .action-btn-edit:hover { background: #dbeafe; border-color: #93c5fd; }
+
+    .action-btn-dup {
+        background: #faf5ff;
+        color: #7c3aed;
+        border-color: #ddd6fe;
+    }
+    .action-btn-dup:hover { background: #ede9fe; border-color: #c4b5fd; }
+
+    .action-btn-delete {
+        background: #fef2f2;
+        color: #dc2626;
+        border-color: #fecaca;
+    }
+    .action-btn-delete:hover { background: #fee2e2; border-color: #fca5a5; }
+
+    /* ── Duplicate modal ── */
     .modal-overlay {
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0,0,0,0.5);
+        inset: 0;
+        background: rgba(0,0,0,0.45);
         z-index: 9999;
         display: flex;
         align-items: center;
         justify-content: center;
         opacity: 0;
         visibility: hidden;
-        transition: all 0.3s ease;
+        transition: opacity 0.2s, visibility 0.2s;
     }
-    
-    .modal-overlay.active {
-        opacity: 1;
-        visibility: visible;
-    }
-    
+    .modal-overlay.active { opacity: 1; visibility: visible; }
     .modal-content {
         background: white;
-        padding: 32px;
-        border-radius: 12px;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-        max-width: 500px;
-        width: 90%;
-        transform: scale(0.9);
-        transition: transform 0.3s ease;
+        padding: 28px 32px;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        max-width: 480px;
+        width: 92%;
+        transform: scale(0.95);
+        transition: transform 0.2s;
     }
-    
-    .modal-overlay.active .modal-content {
-        transform: scale(1);
+    .modal-overlay.active .modal-content { transform: scale(1); }
+
+    .form-input {
+        width: 100%;
+        padding: 0.6rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        background-color: #fafafa;
+        color: #111827;
+        transition: border-color 0.18s, box-shadow 0.18s;
+    }
+    .form-input:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(201,9,5,0.09);
     }
 </style>
 {% endblock %}
 
 {% block content %}
+{% include 'parciais/messages.html' %}
+
 <div class="flex min-h-screen bg-gray-50">
-    {% include 'parciais/messages.html' %}
     {% include 'parciais/admin_sidebar.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-6 mt-24">
-            <!-- Header com Informações do Template -->
-            <div class="admin-card mb-6">
-                <div class="p-6">
-                    <div class="flex flex-col md:flex-row justify-between items-start gap-4">
-                        <div class="flex-1">
-                            <div class="flex items-center gap-3 mb-2">
-                                <h1 class="text-2xl font-bold text-gray-900">{{ template.name }}</h1>
-                                <span class="bg-{% if usage_count > 0 %}green{% else %}gray{% endif %}-100 text-{% if usage_count > 0 %}green{% else %}gray{% endif %}-800 text-sm font-medium px-3 py-1 rounded-full">
-                                    {% if usage_count > 0 %}Em Uso{% else %}Inativo{% endif %}
-                                </span>
-                            </div>
-                            
-                            {% if template.description %}
-                                <p class="text-gray-600 mb-4">{{ template.description }}</p>
-                            {% endif %}
-                            
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold text-[var(--color-primary)]">{{ steps.count }}</div>
-                                    <div class="text-gray-600">Etapa{{ steps.count|pluralize }}</div>
-                                </div>
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold text-green-600">{{ usage_count }}</div>
-                                    <div class="text-gray-600">Em Uso</div>
-                                </div>
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold text-blue-600">{{ template.created_at|date:"d/m/Y" }}</div>
-                                    <div class="text-gray-600">Criado</div>
-                                </div>
-                                <div class="text-center">
-                                    <div class="text-2xl font-bold text-purple-600">{{ template.update_at|date:"d/m/Y" }}</div>
-                                    <div class="text-gray-600">Atualizado</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="flex flex-col gap-2">
-                            <a href="{% url 'admin_followup_create' %}?template={{ template.id }}" 
-                               class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition duration-300 text-center">
-                                <ion-icon name="play-outline" class="mr-2"></ion-icon>
-                                Usar Template
-                            </a>
-                            <a href="{% url 'admin_template_edit' template.id %}" 
-                               class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-300 text-center">
-                                <ion-icon name="create-outline" class="mr-2"></ion-icon>
-                                Editar
-                            </a>
-                            <a href="{% url 'admin_templates' %}" 
-                               class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition duration-300 text-center">
-                                <ion-icon name="arrow-back-outline" class="mr-2"></ion-icon>
-                                Voltar
-                            </a>
-                        </div>
+        <div class="p-4 sm:p-6 mt-24">
+
+            <!-- Page title bar -->
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="document-text-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">{{ template.name }}</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">Detalhes do template de consolidação</p>
                     </div>
                 </div>
+                <a href="{% url 'admin_templates' %}"
+                   class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex-shrink-0 ml-3">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Voltar à Lista
+                </a>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Etapas do Template -->
+            <!-- Content grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                <!-- Etapas -->
                 <div class="lg:col-span-2">
-                    <div class="admin-card">
-                        <div class="p-6">
-                            <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                                <ion-icon name="list-outline" class="mr-2"></ion-icon>
-                                Etapas do Template ({{ steps.count }})
-                            </h2>
-                            
-                            {% if steps %}
-                                <div class="space-y-4">
-                                    {% for step in steps %}
-                                        <div class="step-card">
-                                            <div class="flex items-start gap-3">
-                                                <div class="bg-[var(--color-primary)] text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm flex-shrink-0">
-                                                    <span style="margin-top: 0.2rem;">{{ step.week }}</span>
-                                                </div>
-                                                <div class="flex-1">
-                                                    <h4 class="font-medium text-gray-900">{{ step.title }}</h4>
-                                                    {% if step.description %}
-                                                        <p class="text-gray-600 text-sm">{{ step.description }}</p>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                <div class="text-center py-8">
-                                    <ion-icon name="document-outline" class="text-4xl text-gray-400 mb-2"></ion-icon>
-                                    <p class="text-gray-500">Nenhuma etapa configurada ainda</p>
-                                    <a href="{% url 'admin_template_edit' template.id %}" 
-                                       class="text-[var(--color-primary)] hover:underline">
-                                        Adicionar etapas
-                                    </a>
-                                </div>
-                            {% endif %}
+                    <div class="admin-card p-6">
+                        <div class="section-header">
+                            <div class="icon-wrap"><ion-icon name="list-outline"></ion-icon></div>
+                            <span>Etapas do Template ({{ steps.count }})</span>
                         </div>
+
+                        {% if steps %}
+                        <div>
+                            {% for step in steps %}
+                            <div class="step-card">
+                                <div class="step-badge">{{ step.week }}</div>
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-semibold text-gray-900 text-sm leading-snug">{{ step.title }}</h4>
+                                    {% if step.description %}
+                                    <p class="text-gray-500 text-xs mt-1 leading-relaxed">{{ step.description }}</p>
+                                    {% endif %}
+                                </div>
+                                <div class="flex-shrink-0">
+                                    <span class="text-xs text-gray-400 font-medium">Semana {{ step.week }}</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-10">
+                            <ion-icon name="document-outline" style="font-size:2.5rem;color:#d1d5db;"></ion-icon>
+                            <p class="text-gray-400 text-sm mt-3 mb-4">Nenhuma etapa configurada ainda.</p>
+                            <a href="{% url 'admin_template_edit' template.id %}"
+                               class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white"
+                               style="background:var(--color-primary);">
+                                <ion-icon name="add-outline"></ion-icon>
+                                Adicionar Etapas
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
 
-                <!-- Consolidações que Usam Este Template -->
-                <div class="lg:col-span-1">
-                    <div class="admin-card">
-                        <div class="p-6">
-                            <h2 class="text-xl font-semibold text-gray-900 mb-4">
-                                <ion-icon name="people-outline" class="mr-2"></ion-icon>
-                                Consolidações ({{ usage_count }})
-                            </h2>
-                            
-                            {% if followups_using %}
-                                <div class="space-y-2 max-h-96 overflow-y-auto">
-                                    {% for followup in followups_using %}
-                                        <div class="usage-card" data-url="{% url 'admin_followup_detail' followup.id %}" onclick="window.location.href = this.dataset.url;">
-                                            <h5 class="font-medium text-gray-900">{{ followup.accompanied.name }}</h5>
-                                            <p class="text-sm text-gray-600">
-                                                Responsável: {{ followup.responsible.name }}
-                                            </p>
-                                            <p class="text-xs text-gray-500">
-                                                Início: {{ followup.start_date|date:"d/m/Y"|default:followup.created_at|date:"d/m/Y" }}
-                                                {% if followup.end_date %}
-                                                    | Fim: {{ followup.end_date|date:"d/m/Y" }}
-                                                {% endif %}
-                                            </p>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                                
-                                {% if followups_using.count > 10 %}
-                                    <div class="mt-4 text-center">
-                                        <a href="{% url 'admin_followups_list' %}?template={{ template.id }}" 
-                                           class="text-[var(--color-primary)] hover:underline">
-                                            Ver todas as consolidações
-                                        </a>
-                                    </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="text-center py-8">
-                                    <ion-icon name="people-outline" class="text-4xl text-gray-400 mb-2"></ion-icon>
-                                    <p class="text-gray-500 mb-3">Nenhuma consolidação usando este template ainda</p>
-                                    <a href="{% url 'admin_followup_create' %}?template={{ template.id }}" 
-                                       class="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition duration-300 inline-block">
-                                        <ion-icon name="add-outline" class="mr-2"></ion-icon>
-                                        Criar Consolidação
-                                    </a>
-                                </div>
-                            {% endif %}
+                <!-- Sidebar -->
+                <div class="lg:col-span-1 flex flex-col gap-5">
+                    <!-- Consolidações -->
+                    <div class="admin-card p-6">
+                        <div class="section-header">
+                            <div class="icon-wrap green"><ion-icon name="people-outline"></ion-icon></div>
+                            <span>Consolidações ({{ usage_count }})</span>
                         </div>
+
+                        {% if followups_using %}
+                        <div class="max-h-96 overflow-y-auto space-y-1 pr-1">
+                            {% for followup in followups_using %}
+                            <div class="usage-card"
+                                 onclick="window.location.href='{% url 'admin_followup_detail' followup.id %}'">
+                                <h5 class="font-semibold text-gray-900 text-sm leading-tight">{{ followup.accompanied.name }}</h5>
+                                <p class="text-xs text-gray-500 mt-0.5">
+                                    Resp: {{ followup.responsible.name }}
+                                </p>
+                                <p class="text-xs text-gray-400 mt-0.5">
+                                    Início: {{ followup.start_date|date:"d/m/Y"|default:followup.created_at|date:"d/m/Y" }}{% if followup.end_date %} &ndash; {{ followup.end_date|date:"d/m/Y" }}{% endif %}
+                                </p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% if followups_using.count > 10 %}
+                        <div class="mt-3 text-center">
+                            <a href="{% url 'admin_followups_list' %}?template={{ template.id }}"
+                               class="text-xs font-medium" style="color:var(--color-primary);">
+                                Ver todas as consolidações →
+                            </a>
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <div class="text-center py-8">
+                            <ion-icon name="people-outline" style="font-size:2.5rem;color:#d1d5db;"></ion-icon>
+                            <p class="text-gray-400 text-sm mt-3 mb-4">Nenhuma consolidação usando este template.</p>
+                            <a href="{% url 'admin_followup_create' %}?template={{ template.id }}"
+                               class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white"
+                               style="background:var(--color-primary);">
+                                <ion-icon name="add-outline"></ion-icon>
+                                Criar Consolidação
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
 
-                    <!-- Ações Rápidas -->
-                    <div class="admin-card mt-6">
-                        <div class="p-6">
-                            <h3 class="text-lg font-semibold text-gray-900 mb-4">Ações</h3>
-                            
-                            <div class="space-y-2">
-                                <a href="{% url 'admin_template_edit' template.id %}" 
-                                   class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition duration-300 block text-center">
-                                    <ion-icon name="create-outline" class="mr-2"></ion-icon>
-                                    Editar Template
-                                </a>
-                                
-                                <button type="button" onclick="duplicateTemplate()" 
-                                        class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition duration-300">
-                                    <ion-icon name="copy-outline" class="mr-2"></ion-icon>
-                                    Duplicar Template
-                                </button>
-                                
-                                <a href="{% url 'admin_template_delete' template.id %}" 
-                                   class="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition duration-300 block text-center"
-                                   onclick="return confirm('Tem certeza que deseja excluir este template?')">
-                                    <ion-icon name="trash-outline" class="mr-2"></ion-icon>
-                                    Excluir Template
-                                </a>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
+
         </div>
     </div>
 </div>
 
-<!-- Modal para Duplicação de Template -->
+<!-- Duplicate Modal -->
 <div class="modal-overlay" id="duplicateModal">
     <div class="modal-content">
-        <div class="text-center">
-            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-purple-100 mb-4">
-                <ion-icon name="copy-outline" class="text-purple-600 text-2xl"></ion-icon>
+        <div class="flex items-center gap-3 mb-5">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background:#faf5ff;">
+                <ion-icon name="copy-outline" style="color:#7c3aed;font-size:1.2rem;"></ion-icon>
             </div>
-            <h3 class="text-lg font-medium text-gray-900 mb-2">Duplicar Template</h3>
-            <p class="text-sm text-gray-500 mb-6">
-                Deseja criar uma cópia do template "<strong>{{ template.name }}</strong>"?<br>
-                Uma nova versão será criada com todas as etapas configuradas.
-            </p>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Duplicar Template</h3>
+                <p class="text-sm text-gray-500">Todas as etapas serão copiadas</p>
+            </div>
         </div>
-        
+
         <form id="duplicateForm" method="POST" action="{% url 'admin_template_create' %}">
             {% csrf_token %}
             <input type="hidden" name="duplicate_from" value="{{ template.id }}">
-            
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Nome do novo template</label>
-                <input type="text" 
-                       name="name" 
+
+            <div class="mb-5">
+                <label class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5">Nome do novo template</label>
+                <input type="text"
+                       name="name"
                        id="duplicateName"
                        value="Cópia de {{ template.name }}"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-purple-500 focus:border-purple-500"
+                       class="form-input"
                        required>
             </div>
-            
-            <div class="flex gap-3 justify-end">
-                <button type="button" 
-                        onclick="closeDuplicateModal()"
-                        class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+
+            <div class="flex gap-3 justify-end border-t border-gray-100 pt-4">
+                <button type="button" onclick="closeDuplicateModal()"
+                        class="px-5 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">
                     Cancelar
                 </button>
-                <button type="submit"
-                        class="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
-                    <ion-icon name="copy-outline" class="mr-1"></ion-icon>
-                    Duplicar Template
+                <button type="submit" id="duplicateSubmitBtn"
+                        class="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white rounded-lg transition"
+                        style="background:#7c3aed;">
+                    <ion-icon name="copy-outline"></ion-icon>
+                    Duplicar
                 </button>
             </div>
         </form>
@@ -309,56 +362,33 @@
 </div>
 
 <script>
-function duplicateTemplate() {
-    openDuplicateModal();
-}
-
 function openDuplicateModal() {
     const modal = document.getElementById('duplicateModal');
-    const nameInput = document.getElementById('duplicateName');
-    
-    // Focar no campo de nome após a animação
     modal.classList.add('active');
     setTimeout(() => {
+        const nameInput = document.getElementById('duplicateName');
         nameInput.focus();
         nameInput.select();
-    }, 300);
+    }, 220);
 }
 
 function closeDuplicateModal() {
-    const modal = document.getElementById('duplicateModal');
-    modal.classList.remove('active');
+    document.getElementById('duplicateModal').classList.remove('active');
 }
 
-// Fechar modal ao clicar no overlay
-document.getElementById('duplicateModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeDuplicateModal();
-    }
+document.getElementById('duplicateModal').addEventListener('click', function (e) {
+    if (e.target === this) closeDuplicateModal();
 });
 
-// Fechar modal com ESC
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeDuplicateModal();
-    }
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeDuplicateModal();
 });
 
-// Submeter formulário e mostrar loading
-document.getElementById('duplicateForm').addEventListener('submit', function() {
-    const submitBtn = this.querySelector('button[type="submit"]');
-    const originalText = submitBtn.innerHTML;
-    
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<ion-icon name="hourglass-outline" class="mr-1"></ion-icon> Duplicando...';
-    
-    // Restaurar botão se houver erro (backup)
-    setTimeout(() => {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = originalText;
-    }, 5000);
+document.getElementById('duplicateForm').addEventListener('submit', function () {
+    const btn = document.getElementById('duplicateSubmitBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Duplicando...';
+    setTimeout(() => { btn.disabled = false; }, 6000);
 });
 </script>
-
-{% csrf_token %}
 {% endblock %}

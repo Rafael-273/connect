@@ -1,7 +1,88 @@
 {% extends 'admin_base.html' %}
 {% load static %}
 
-{% block title %}Nova Música - Painel Administrativo{% endblock %}
+{% block title %}{% if action == 'create' %}Nova Música{% else %}Editar Música{% endif %} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    }
+
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1.5px solid #f1f5f9;
+    }
+    .section-header .icon-wrap {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: var(--color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .section-header .icon-wrap ion-icon {
+        color: white;
+        font-size: 15px;
+    }
+    .section-header span {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .form-group { margin-bottom: 1.25rem; }
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.375rem;
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+    }
+
+    .form-input,
+    input[type='text'],
+    input[type='file'] {
+        width: 100%;
+        padding: 0.6rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        background-color: #fafafa;
+        color: #111827;
+        transition: border-color 0.18s, box-shadow 0.18s, background-color 0.18s;
+    }
+
+    input[type='text']:hover,
+    input[type='file']:hover {
+        border-color: #d1d5db;
+        background-color: white;
+    }
+
+    input[type='text']:focus,
+    input[type='file']:focus {
+        outline: none;
+        border-color: var(--color-primary);
+        background-color: white;
+        box-shadow: 0 0 0 3px rgba(201,9,5,0.09);
+    }
+
+    input[type='file'] { cursor: pointer; }
+</style>
+{% endblock %}
 
 {% block content %}
 {% include 'parciais/messages.html' %}
@@ -10,112 +91,112 @@
     {% include 'parciais/admin_sidebar.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-3 md:p-6 mt-24">
+        <div class="p-4 sm:p-6 mt-24">
 
             <!-- Cabeçalho -->
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                <div>
-                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
-                        Nova Música
-                    </h1>
-                    <p class="text-gray-600 mt-2">
-                        Cadastrar nova cifra no repertório
-                    </p>
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="musical-notes-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">
+                            {% if action == 'create' %}Nova Música{% else %}Editar Música{% endif %}
+                        </h1>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {% if action == 'create' %}Cadastrar nova cifra no repertório{% else %}Atualizar informações da música{% endif %}
+                        </p>
+                    </div>
                 </div>
-
                 <a href="{% url 'admin_music_list' %}"
-                   class="mt-4 sm:mt-0 bg-gray-600 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-gray-700 transition">
-                    Voltar
+                   class="hidden sm:flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium flex-shrink-0 ml-3">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Voltar à Lista
                 </a>
             </div>
 
-            <!-- Card do formulário -->
-            <div class="admin-card p-6 max-w-3xl">
-
-                <form method="post" enctype="multipart/form-data" class="space-y-6">
+            <!-- Card -->
+            <div class="admin-card p-6 md:p-8">
+                <form method="post" enctype="multipart/form-data">
                     {% csrf_token %}
 
-                    <!-- Nome da música -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                            Nome
-                        </label>
-                        <input
-                            type="text"
-                            name="name"
-                            value="{{ form.name.value|default:'' }}"
-                            placeholder="Ex: Rude Cruz"
-                            required
-                                class="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                        >   
-
+                    <div class="section-header">
+                        <div class="icon-wrap"><ion-icon name="information-circle-outline"></ion-icon></div>
+                        <span>Informações da Música</span>
                     </div>
 
-                    <!-- Cantor -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                            Cantor
+                    <div class="form-group">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">
+                            Nome da Música <span class="text-red-500">*</span>
                         </label>
-                        <input
-                            type="text"
-                            name="singer"
-                            value="{{ form.singer.value|default:'' }}"
-                            placeholder="Ex: Ministério Filadélfia"
-                            required
-                                class="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                        >
-
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <p class="text-red-600 text-sm mt-1">{{ form.name.errors.0 }}</p>
+                        {% endif %}
                     </div>
 
-                    <!-- PDF -->
-                    <!-- PDF -->
-<div>
-    <label class="block text-sm font-semibold text-gray-700 mb-2">
-        Cifra (PDF)
-    </label>
+                    <div class="form-group">
+                        <label for="{{ form.singer.id_for_label }}" class="form-label">
+                            Cantor / Ministério <span class="text-red-500">*</span>
+                        </label>
+                        {{ form.singer }}
+                        {% if form.singer.errors %}
+                        <p class="text-red-600 text-sm mt-1">{{ form.singer.errors.0 }}</p>
+                        {% endif %}
+                    </div>
 
-    {% if form.instance.chord_sheet %}
-        <p class="text-sm text-gray-600 mb-2">
-            PDF atual:
-            <a href="{{ form.instance.chord_sheet.url }}"
-               target="_blank"
-               class="text-blue-600 underline">
-                Ver arquivo
-            </a>
-        </p>
-    {% endif %}
+                    <div class="section-header mt-2">
+                        <div class="icon-wrap"><ion-icon name="document-outline"></ion-icon></div>
+                        <span>Cifra</span>
+                    </div>
 
-    <input
-        type="file"
-        name="chord_sheet"
-        accept="application/pdf"
-        class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white"
-    >
+                    <div class="form-group">
+                        <label for="{{ form.chord_sheet.id_for_label }}" class="form-label">
+                            Arquivo PDF
+                        </label>
 
-    <p class="text-sm text-gray-500 mt-1">
-        Apenas arquivos PDF
-    </p>
-</div>
+                        {% if form.instance.chord_sheet %}
+                        <div class="flex items-center gap-3 mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <ion-icon name="document-text-outline" class="text-[var(--color-primary)] text-xl flex-shrink-0"></ion-icon>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-medium text-gray-700 truncate">PDF atual</p>
+                                <a href="{{ form.instance.chord_sheet.url }}" target="_blank"
+                                   class="text-xs text-blue-600 hover:underline">Ver arquivo</a>
+                            </div>
+                        </div>
+                        {% endif %}
 
+                        {{ form.chord_sheet }}
+                        {% if form.chord_sheet.errors %}
+                        <p class="text-red-600 text-sm mt-1">{{ form.chord_sheet.errors.0 }}</p>
+                        {% endif %}
+                        <p class="text-xs text-gray-500 mt-1.5">Apenas arquivos PDF. Opcional.</p>
+                    </div>
 
                     <!-- Botões -->
-                    <div class="flex items-center gap-4 pt-4">
-                        <button
-                            type="submit"
-                            class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition font-semibold flex items-center"
-                        >
-                            <ion-icon name="save" class="mr-2"></ion-icon>
-                            Salvar Música
-                        </button>
-
+                    <div class="flex flex-col sm:flex-row gap-3 mt-8 pt-6 border-t border-gray-100">
                         <a href="{% url 'admin_music_list' %}"
-                           class="text-gray-600 hover:underline">
+                           class="sm:hidden flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                            </svg>
+                            Voltar
+                        </a>
+                        <button type="submit"
+                                class="flex-1 flex items-center justify-center gap-2 bg-[var(--color-primary)] hover:bg-opacity-90 text-white px-6 py-3 rounded-xl transition font-semibold text-sm shadow-sm">
+                            <ion-icon name="checkmark-circle-outline" class="text-lg"></ion-icon>
+                            {% if action == 'create' %}Cadastrar Música{% else %}Salvar Alterações{% endif %}
+                        </button>
+                        <a href="{% url 'admin_music_list' %}"
+                           class="flex-1 flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-600 px-6 py-3 rounded-xl hover:bg-gray-50 transition font-semibold text-sm">
+                            <ion-icon name="close-circle-outline" class="text-lg"></ion-icon>
                             Cancelar
                         </a>
                     </div>
 
                 </form>
-
             </div>
 
         </div>

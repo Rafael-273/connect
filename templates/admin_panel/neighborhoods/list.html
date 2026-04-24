@@ -5,15 +5,26 @@
 
 {% block head %}
 <style>
-    body {
-        background-color: #f8f9fa !important;
+    body { background-color: #f8f9fa !important; }
+    .admin-card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .data-table thead th {
+        background: #f8fafc; font-size: 0.7rem; font-weight: 700;
+        letter-spacing: 0.07em; text-transform: uppercase; color: #6b7280;
+        border-bottom: 2px solid #f1f5f9; padding: 14px 24px;
     }
-    
-    .admin-card {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    .data-table tbody tr { border-bottom: 1px solid #f8fafc; transition: background 0.15s, box-shadow 0.15s; }
+    .data-table tbody tr:hover { background: #fafbff; box-shadow: inset 3px 0 0 var(--color-primary); }
+    .data-table tbody td { padding: 14px 24px; vertical-align: middle; }
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px; border-radius: 9px; font-size: 1.1rem;
+        transition: all 0.15s; border: none; cursor: pointer; flex-shrink: 0;
     }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child, .data-table td:last-child { text-align: right; }
 </style>
 {% endblock %}
 
@@ -25,95 +36,104 @@
     <!-- Main Content -->
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-4 md:p-6 mt-24">
-            <!-- Header -->
-            <div class="flex flex-col md:flex-row justify-between items-center mb-6 md:mb-8 gap-4">
-                <div>
-                    <h1 class="text-2xl md:text-3xl font-bold text-gray-900 page-title">Bairros</h1>
-                    <p class="text-gray-600 mt-2">Gerenciar bairros e regiões</p>
+<!-- Title -->
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="map" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Bairros</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if neighborhoods.paginator.count %}{{ neighborhoods.paginator.count }} bairro{{ neighborhoods.paginator.count|pluralize:"s" }}{% else %}Gerenciar bairros e regiões{% endif %}
+                        </p>
+                    </div>
                 </div>
-                <a href="{% url 'admin_neighborhood_create' %}" class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center w-full md:w-auto">
-                    <ion-icon name="add" class="mr-2"></ion-icon>
-                    Novo Bairro
+                <a href="{% url 'admin_neighborhood_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Novo Bairro">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
                 </a>
             </div>
 
-            <!-- Search -->
-            <div class="admin-card p-6 mb-6">
-                <form method="GET" class="flex flex-col md:flex-row gap-4 items-start md:items-center">
-                    <div class="flex-1 w-full">
-                        <input type="text" name="search" value="{{ search }}" 
-                               placeholder="Buscar bairros..." 
-                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+            <!-- Search + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar bairros..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
                     </div>
-                    
-                    <div class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-                        <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition w-full md:w-auto">
-                            <ion-icon name="search" class="mr-2"></ion-icon>
-                            Buscar
-                        </button>
-                        
-                        <a href="{% url 'admin_neighborhoods_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition w-full md:w-auto text-center">
-                            Limpar
-                        </a>
-                    </div>
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
                 </form>
+
+                <a href="{% url 'admin_neighborhood_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Novo Bairro
+                </a>
             </div>
 
             <!-- Neighborhoods Table -->
             <div class="admin-card overflow-hidden">
                 <div class="overflow-x-auto table-responsive">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
+                    <table class="w-full data-table">
+                        <thead>
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bairro</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Região Pai</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data de Criação</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                <th class="text-left">Bairro</th>
+                                <th class="text-left">Região Pai</th>
+                                <th class="text-left">Data de Criação</th>
+                                <th class="text-left">Ações</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
+                        <tbody class="bg-white">
                             {% for neighborhood in neighborhoods %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <div class="w-10 h-10 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold">
+                            <tr>
+                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_neighborhood_edit' neighborhood.id %}">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-9 h-9 bg-[var(--color-primary)] rounded-lg flex items-center justify-center text-white flex-shrink-0">
                                             <ion-icon name="location"></ion-icon>
                                         </div>
-                                        <div class="ml-4">
-                                            <div class="text-sm font-medium text-gray-900">{{ neighborhood.name }}</div>
-                                        </div>
+                                        <div class="text-sm font-medium text-gray-900">{{ neighborhood.name }}</div>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900">
-                                        {% if neighborhood.parent %}
-                                            {{ neighborhood.parent.name }}
-                                        {% else %}
-                                            <span class="text-gray-400">Região Principal</span>
-                                        {% endif %}
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">
+                                        {% if neighborhood.parent %}{{ neighborhood.parent.name }}{% else %}<span class="text-gray-400">Região Principal</span>{% endif %}
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900">{{ neighborhood.created_at|date:"d/m/Y" }}</div>
-                                    <div class="text-sm text-gray-500">{{ neighborhood.created_at|time:"H:i" }}</div>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ neighborhood.created_at|date:"d/m/Y" }}</div>
+                                    <div class="text-xs text-gray-400 mt-0.5">{{ neighborhood.created_at|time:"H:i" }}</div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex space-x-2">
-                                        <a href="{% url 'admin_neighborhood_edit' neighborhood.id %}" 
-                                           class="text-blue-600 hover:text-blue-800">
-                                            <ion-icon name="create" class="text-lg"></ion-icon>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <a href="{% url 'admin_neighborhood_edit' neighborhood.id %}" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
                                         </a>
-                                        <button onclick="deleteNeighborhood({{ neighborhood.id }}, '{{ neighborhood.name }}')" 
-                                                class="text-red-600 hover:text-red-800">
-                                            <ion-icon name="trash" class="text-lg"></ion-icon>
+                                        <button onclick="deleteNeighborhood({{ neighborhood.id }}, '{{ neighborhood.name }}')" class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="4" class="px-6 py-4 text-center text-gray-500">
-                                    Nenhum bairro encontrado.
+                                <td colspan="4" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center gap-2 text-gray-400">
+                                        <ion-icon name="map-outline" style="font-size:2rem;"></ion-icon>
+                                        <span class="text-sm">Nenhum bairro encontrado.</span>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -123,33 +143,31 @@
 
                 <!-- Pagination -->
                 {% if neighborhoods.has_other_pages %}
-                <div class="px-4 md:px-6 py-3 border-t border-gray-200 flex flex-col md:flex-row items-center justify-between gap-3">
-                    <div class="text-sm text-gray-500">
-                        Mostrando {{ neighborhoods.start_index }} a {{ neighborhoods.end_index }} de {{ neighborhoods.paginator.count }} bairros
+                <div class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
+                        Mostrando {{ neighborhoods.start_index }}–{{ neighborhoods.end_index }} de {{ neighborhoods.paginator.count }} bairros
                     </div>
-                    <div class="flex flex-wrap justify-center gap-2">
+                    <div class="flex items-center gap-1 order-1 sm:order-2 flex-wrap justify-center">
                         {% if neighborhoods.has_previous %}
-                        <a href="?page={{ neighborhoods.previous_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                            Anterior
+                        <a href="?page={{ neighborhoods.previous_page_number }}&{{ request.GET.urlencode }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            <span class="hidden sm:inline">Anterior</span>
                         </a>
                         {% endif %}
-                        
                         {% for num in neighborhoods.paginator.page_range %}
                         {% if num == neighborhoods.number %}
-                        <span class="px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm">{{ num }}</span>
+                        <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ num }}</span>
                         {% elif num > neighborhoods.number|add:'-3' and num < neighborhoods.number|add:'3' %}
-                        <a href="?page={{ num }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                            {{ num }}
-                        </a>
+                        <a href="?page={{ num }}&{{ request.GET.urlencode }}"
+                           class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition min-w-[2rem] text-center">{{ num }}</a>
                         {% endif %}
                         {% endfor %}
-                        
                         {% if neighborhoods.has_next %}
-                        <a href="?page={{ neighborhoods.next_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                            Próximo
+                        <a href="?page={{ neighborhoods.next_page_number }}&{{ request.GET.urlencode }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <span class="hidden sm:inline">Próximo</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                         </a>
                         {% endif %}
                     </div>
@@ -199,6 +217,26 @@
     </div>
 </div>
 
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Bairro</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let editingNeighborhoodId = null;
     
@@ -218,31 +256,53 @@
         document.getElementById('neighborhoodModal').classList.remove('hidden');
     }
     
+    let _deleteNeighborhoodId = null;
+
     function deleteNeighborhood(neighborhoodId, neighborhoodName) {
-        if (confirm(`Tem certeza que deseja excluir o bairro "${neighborhoodName}"?`)) {
-            fetch('{% url "admin_api_delete" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'neighborhood',
-                    id: neighborhoodId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao excluir bairro: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('Erro na comunicação com o servidor');
-            });
-        }
+        _deleteNeighborhoodId = neighborhoodId;
+        document.getElementById('deleteModalName').textContent = neighborhoodName;
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
     }
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteNeighborhoodId = null;
+    }
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteNeighborhoodId) return;
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        fetch('{% url "admin_api_delete" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'neighborhood', id: _deleteNeighborhoodId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+                alert('Erro ao excluir bairro: ' + data.error);
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+            alert('Erro na comunicação com o servidor');
+        });
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
     
     function closeModal() {
         document.getElementById('neighborhoodModal').classList.add('hidden');
@@ -282,5 +342,24 @@
             alert('Erro na comunicação com o servidor');
         });
     });
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 {% endblock %}

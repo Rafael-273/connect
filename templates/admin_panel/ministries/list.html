@@ -1,7 +1,53 @@
 {% extends "admin_base.html" %}
 {% load static %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}Ministérios - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .status-badge {
+        display: inline-flex; align-items: center; padding: 0.2rem 0.65rem;
+        border-radius: 9999px; font-size: 0.7rem; font-weight: 600; gap: 0.25rem;
+    }
+    .status-active   { background: #dcfce7; color: #166534; }
+    .status-inactive { background: #f3f4f6; color: #6b7280; }
+
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 0.07em;
+        text-transform: uppercase; color: #6b7280;
+        border-bottom: 2px solid #f1f5f9; padding: 14px 24px;
+    }
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+    .data-table tbody td { padding: 14px 24px; vertical-align: middle; }
+    .data-table th:last-child, .data-table td:last-child { text-align: right; }
+
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px; border-radius: 9px;
+        font-size: 1.1rem; transition: all 0.15s;
+        border: none; cursor: pointer; flex-shrink: 0;
+    }
+    .action-btn-view   { background: #fef2f2; color: var(--color-primary); }
+    .action-btn-view:hover   { background: #fee2e2; }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="flex min-h-screen bg-gray-50">
@@ -9,243 +55,348 @@
     {% include 'parciais/messages.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-3 sm:p-4 lg:p-6 mt-20 sm:mt-24">
-            <!-- Header -->
-            <div class="mb-4 sm:mb-6">
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                    <div class="flex-1 min-w-0">
-                        <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 truncate">Ministérios</h1>
-                        <p class="text-gray-600 text-xs sm:text-sm mt-1">Gerenciar ministérios da igreja</p>
-                    </div>
-                    <a href="{% url 'ministry_create' %}" 
-                       class="bg-orange-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-orange-700 transition font-medium flex items-center justify-center gap-2 shadow-md text-sm sm:text-base">
-                        <ion-icon name="add-circle-outline" class="text-lg sm:text-xl"></ion-icon>
-                        <span class="hidden xs:inline">Criar Ministério</span>
-                        <span class="xs:hidden">Criar</span>
-                    </a>
+        <div class="p-3 sm:p-4 lg:p-6">
+            <!-- Title -->
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <ion-icon name="albums" class="text-xl text-white"></ion-icon>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 leading-tight">Ministérios</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">
+                        {% if page_obj.paginator.count %}{{ page_obj.paginator.count }} ministério{{ page_obj.paginator.count|pluralize:"s" }}{% else %}Gerenciar ministérios da igreja{% endif %}
+                    </p>
                 </div>
             </div>
 
-            <!-- Filtros -->
-            <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
-                <form method="GET" class="space-y-3 sm:space-y-0 sm:flex sm:gap-3">
-                    <input type="text" name="search" value="{{ request.GET.search }}" 
-                           placeholder="Buscar ministério..." 
-                           class="w-full sm:flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
-                    
-                    <select name="status" class="w-full sm:w-auto px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-sm">
-                        <option value="">Todos os Status</option>
-                        <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Ativos</option>
-                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inativos</option>
-                    </select>
-                    
-                    <div class="flex gap-2">
-                        <button type="submit" class="flex-1 sm:flex-none bg-orange-600 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-orange-700 transition font-medium text-sm flex items-center justify-center gap-2">
-                            <ion-icon name="search" class="text-base"></ion-icon>
-                            <span>Buscar</span>
+            <!-- Search + Filters + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="status" id="hidden-status" value="{{ request.GET.status }}">
+
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ request.GET.search }}"
+                               placeholder="Buscar ministério..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-ministries"
+                                class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if request.GET.status %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
                         </button>
-                        <a href="{% url 'ministry_list' %}" class="flex-1 sm:flex-none bg-gray-500 text-white px-4 sm:px-6 py-2.5 rounded-lg hover:bg-gray-600 transition font-medium text-sm flex items-center justify-center">
-                            Limpar
-                        </a>
+
+                        <div id="filter-panel-ministries"
+                             class="hidden absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                                    <select id="panel-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os Status</option>
+                                        <option value="active"   {% if request.GET.status == 'active' %}selected{% endif %}>Ativos</option>
+                                        <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>Inativos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                <a href="{% url 'ministry_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-ministries"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </form>
+
+                <a href="{% url 'ministry_create' %}"
+                   class="flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Criar Ministério
+                </a>
             </div>
 
             <!-- Lista de Ministérios -->
             {% if ministries %}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+
+            <!-- Versão Mobile: Cards -->
+            <div class="block md:hidden space-y-4">
                 {% for ministry in ministries %}
-                <div class="bg-white rounded-lg shadow-sm hover:shadow-md transition p-4">
+                <div class="admin-card p-4 hover:shadow-lg transition-shadow">
                     <div class="flex items-start gap-3 mb-3">
-                        <div class="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" 
-                             style="background-color: {{ ministry.color }}20; border: 2px solid {{ ministry.color }};">
-                            <ion-icon name="people" class="text-2xl" style="color: {{ ministry.color }};"></ion-icon>
+                        <div class="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0"
+                             style="background-color: color-mix(in srgb, var(--color-primary) 12%, transparent); border: 2px solid var(--color-primary);">
+                            <ion-icon name="people" class="text-xl" style="color: var(--color-primary);"></ion-icon>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <div class="flex items-start justify-between gap-2 mb-1">
-                                <h3 class="text-base sm:text-lg font-semibold text-gray-900 truncate">{{ ministry.name }}</h3>
+                            <div class="flex items-center justify-between gap-2 mb-1">
+                                <p class="font-semibold text-gray-900 truncate">{{ ministry.name }}</p>
                                 {% if ministry.is_active %}
-                                <span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0">Ativo</span>
+                                <span class="status-badge status-active flex-shrink-0">Ativo</span>
                                 {% else %}
-                                <span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded text-xs font-semibold flex-shrink-0">Inativo</span>
+                                <span class="status-badge status-inactive flex-shrink-0">Inativo</span>
                                 {% endif %}
                             </div>
                             {% if ministry.description %}
-                            <p class="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-2">{{ ministry.description }}</p>
+                            <p class="text-xs text-gray-500 line-clamp-2">{{ ministry.description|truncatechars:80 }}</p>
                             {% endif %}
-                            <div class="flex flex-wrap gap-2 text-xs sm:text-sm text-gray-600">
-                                <span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded">
-                                    <ion-icon name="people-outline" class="flex-shrink-0"></ion-icon>
-                                    <span>{{ ministry.total_members }} membro{{ ministry.total_members|pluralize }}</span>
-                                </span>
-                                <span class="flex items-center gap-1 bg-orange-50 px-2 py-1 rounded">
-                                    <ion-icon name="star-outline" class="flex-shrink-0"></ion-icon>
-                                    <span>{{ ministry.total_leaders }} líder{{ ministry.total_leaders|pluralize:"es" }}</span>
-                                </span>
-                            </div>
                         </div>
                     </div>
-                    
-                    <div class="flex gap-2 pt-3 border-t border-gray-100">
-                        <a href="{% url 'ministry_members' ministry.id %}" 
-                           class="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-center text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5">
-                            <ion-icon name="people-outline" class="text-base"></ion-icon>
-                            <span>Gerenciar Membros</span>
+                    <div class="flex gap-3 text-xs text-gray-600 mb-3">
+                        <span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg">
+                            <ion-icon name="people-outline"></ion-icon>
+                            {{ ministry.total_members }} membro{{ ministry.total_members|pluralize }}
+                        </span>
+                        <span class="flex items-center gap-1 bg-orange-50 px-2 py-1 rounded-lg text-orange-700">
+                            <ion-icon name="star-outline"></ion-icon>
+                            {{ ministry.total_leaders }} líder{{ ministry.total_leaders|pluralize:"es" }}
+                        </span>
+                    </div>
+                    <div class="flex gap-2">
+                        <a href="{% url 'ministry_members' ministry.id %}"
+                           class="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-white hover:bg-opacity-90 px-3 py-2 rounded-lg text-xs font-medium transition">
+                            <ion-icon name="people-outline"></ion-icon> Membros
                         </a>
-                        <a href="{% url 'ministry_edit' ministry.id %}" 
-                           class="bg-gray-600 text-white px-3 py-2 rounded-lg hover:bg-gray-700 transition text-xs sm:text-sm font-medium flex items-center justify-center">
-                            <ion-icon name="create-outline" class="text-base"></ion-icon>
+                        <a href="{% url 'ministry_edit' ministry.id %}"
+                           class="flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-2 rounded-lg text-xs font-medium transition">
+                            <ion-icon name="create-outline"></ion-icon> Editar
                         </a>
-                        <a href="{% url 'ministry_delete' ministry.id %}" 
-                           class="bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 transition text-xs sm:text-sm font-medium flex items-center justify-center">
-                            <ion-icon name="trash-outline" class="text-base"></ion-icon>
-                        </a>
+                        <button onclick="deleteMinistry({{ ministry.id }}, '{{ ministry.name|escapejs }}', '{% url 'ministry_delete' ministry.id %}')"
+                           class="flex items-center justify-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg text-xs font-medium transition">
+                            <ion-icon name="trash-outline"></ion-icon> Excluir
+                        </button>
                     </div>
                 </div>
                 {% endfor %}
             </div>
 
-            <!-- Paginação -->
-            {% if is_paginated %}
-            <div class="mt-6 flex justify-center">
-                <nav class="flex items-center gap-2">
-                    {% if page_obj.has_previous %}
-                    <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
-                        Anterior
-                    </a>
-                    {% endif %}
-                    
-                    <span class="px-3 py-2 bg-orange-600 text-white rounded-lg text-sm">
-                        {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-                    </span>
-                    
-                    {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">
-                        Próxima
-                    </a>
-                    {% endif %}
-                </nav>
+            <!-- Versão Desktop: Tabela -->
+            <div class="admin-card overflow-hidden hidden md:block">
+                <div class="overflow-x-auto table-responsive">
+                    <table class="w-full data-table">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Ministério</th>
+                                <th class="text-left">Membros</th>
+                                <th class="text-left">Líderes</th>
+                                <th class="text-left">Status</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
+                            {% for ministry in ministries %}
+                            <tr>
+                                <td class="row-link" data-row-href="{% url 'ministry_members' ministry.id %}">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                             style="background-color: color-mix(in srgb, var(--color-primary) 12%, transparent); border: 2px solid var(--color-primary);">
+                                            <ion-icon name="people" class="text-base" style="color: var(--color-primary);"></ion-icon>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="font-semibold text-gray-900 text-sm">{{ ministry.name }}</p>
+                                            {% if ministry.description %}
+                                            <p class="text-xs text-gray-400 truncate max-w-xs">{{ ministry.description|truncatechars:60 }}</p>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-sm text-gray-700">{{ ministry.total_members }}</td>
+                                <td class="text-sm text-gray-700">{{ ministry.total_leaders }}</td>
+                                <td>
+                                    {% if ministry.is_active %}
+                                    <span class="status-badge status-active">Ativo</span>
+                                    {% else %}
+                                    <span class="status-badge status-inactive">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <a href="{% url 'ministry_members' ministry.id %}"
+                                           class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-primary)] text-white hover:bg-opacity-90 rounded-lg text-xs font-semibold transition whitespace-nowrap">
+                                            <ion-icon name="people-outline"></ion-icon>
+                                            Gerenciar Membros
+                                        </a>
+                                        <a href="{% url 'ministry_edit' ministry.id %}" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
+                                        </a>
+                                        <button onclick="deleteMinistry({{ ministry.id }}, '{{ ministry.name|escapejs }}', '{% url 'ministry_delete' ministry.id %}')" class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.has_other_pages %}
+                <div class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
+                        {{ page_obj.paginator.count }} ministério{{ page_obj.paginator.count|pluralize }}
+                    </div>
+                    <div class="flex items-center gap-1 order-1 sm:order-2">
+                        {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}&search={{ request.GET.search }}&status={{ request.GET.status }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <ion-icon name="chevron-back-outline"></ion-icon>
+                        </a>
+                        {% endif %}
+                        {% for num in page_obj.paginator.page_range %}
+                        {% if num == page_obj.number %}
+                        <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ num }}</span>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <a href="?page={{ num }}&search={{ request.GET.search }}&status={{ request.GET.status }}"
+                           class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition min-w-[2rem] text-center">{{ num }}</a>
+                        {% endif %}
+                        {% endfor %}
+                        {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}&search={{ request.GET.search }}&status={{ request.GET.status }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <ion-icon name="chevron-forward-outline"></ion-icon>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Paginação Mobile -->
+            {% if page_obj.has_other_pages %}
+            <div class="flex justify-center gap-2 mt-6 md:hidden">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&search={{ request.GET.search }}&status={{ request.GET.status }}"
+                   class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition flex items-center">
+                    <ion-icon name="chevron-back-outline"></ion-icon>
+                </a>
+                {% endif %}
+                <span class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-medium">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                </span>
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&search={{ request.GET.search }}&status={{ request.GET.status }}"
+                   class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition flex items-center">
+                    <ion-icon name="chevron-forward-outline"></ion-icon>
+                </a>
+                {% endif %}
             </div>
             {% endif %}
-            
+
             {% else %}
-            <div class="bg-white rounded-lg shadow-sm p-8 sm:p-12 text-center">
-                <ion-icon name="folder-open-outline" class="text-5xl sm:text-6xl text-gray-300 mb-3 sm:mb-4"></ion-icon>
-                <h3 class="text-lg sm:text-xl font-semibold text-gray-800 mb-2">Nenhum ministério encontrado</h3>
-                <p class="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6">Crie o primeiro ministério da igreja</p>
-                <a href="{% url 'ministry_create' %}" class="inline-block bg-orange-600 text-white px-5 py-2.5 sm:px-6 sm:py-3 rounded-lg hover:bg-orange-700 transition font-medium text-sm sm:text-base">
-                    <ion-icon name="add-outline" class="align-middle"></ion-icon>
+            <div class="admin-card p-16 text-center">
+                <ion-icon name="albums-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
+                <h3 class="text-xl font-semibold text-gray-500 mb-2">Nenhum ministério encontrado</h3>
+                <p class="text-gray-400 mb-6">Crie o primeiro ministério da igreja.</p>
+                <a href="{% url 'ministry_create' %}"
+                   class="inline-flex items-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm">
+                    <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
                     Criar Primeiro Ministério
                 </a>
             </div>
             {% endif %}
+
         </div>
     </div>
 </div>
-                <textarea id="ministryDescription" name="description" rows="3"
-                          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]"></textarea>
+
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
             </div>
-            <div class="flex justify-end space-x-3">
-                <button type="button" onclick="closeModal()" 
-                        class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">
-                    Cancelar
-                </button>
-                <button type="submit" 
-                        class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90">
-                    Salvar
-                </button>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Ministério</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
             </div>
-        </form>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
+        </div>
+        <form id="deleteMinistryForm" method="POST" class="hidden">{% csrf_token %}</form>
     </div>
 </div>
 
 <script>
-    let editingMinistryId = null;
-    
-    function openAddModal() {
-        editingMinistryId = null;
-        document.getElementById('modalTitle').textContent = 'Novo Ministério';
-        document.getElementById('ministryName').value = '';
-        document.getElementById('ministryDescription').value = '';
-        document.getElementById('ministryModal').classList.remove('hidden');
+    let _deleteMinistryUrl = null;
+
+    function deleteMinistry(ministryId, ministryName, deleteUrl) {
+        _deleteMinistryUrl = deleteUrl;
+        document.getElementById('deleteModalName').textContent = ministryName;
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
     }
-    
-    function editMinistry(id, name, description) {
-        editingMinistryId = id;
-        document.getElementById('modalTitle').textContent = 'Editar Ministério';
-        document.getElementById('ministryName').value = name;
-        document.getElementById('ministryDescription').value = description;
-        document.getElementById('ministryModal').classList.remove('hidden');
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteMinistryUrl = null;
     }
-    
-    function viewMinistry(ministryId) {
-        // Implementar visualização do ministério
-        console.log('Ver ministério:', ministryId);
-    }
-    
-    function deleteMinistry(ministryId, ministryName) {
-        if (confirm(`Tem certeza que deseja excluir o ministério "${ministryName}"?`)) {
-            fetch('{% url "admin_api_delete" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'ministry',
-                    id: ministryId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao excluir ministério: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('Erro na comunicação com o servidor');
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteMinistryUrl) return;
+        const form = document.getElementById('deleteMinistryForm');
+        form.action = _deleteMinistryUrl;
+        form.submit();
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
+
+    // Filter panel toggle
+    (function () {
+        var toggle   = document.getElementById('filter-toggle-ministries');
+        var panel    = document.getElementById('filter-panel-ministries');
+        var applyBtn = document.getElementById('apply-filters-ministries');
+        var hiddenStatus = document.getElementById('hidden-status');
+        var panelStatus  = document.getElementById('panel-status');
+        if (!toggle || !panel) return;
+        toggle.addEventListener('click', function (e) { e.stopPropagation(); panel.classList.toggle('hidden'); });
+        document.addEventListener('click', function (e) { if (!panel.contains(e.target) && e.target !== toggle) panel.classList.add('hidden'); });
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                hiddenStatus.value = panelStatus.value;
+                document.getElementById('filter-form').submit();
             });
         }
-    }
-    
-    function closeModal() {
-        document.getElementById('ministryModal').classList.add('hidden');
-    }
-    
-    // Handle form submission
-    document.getElementById('ministryForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const formData = new FormData(this);
-        const data = {
-            name: formData.get('name'),
-            description: formData.get('description')
-        };
-        
-        if (editingMinistryId) {
-            data.id = editingMinistryId;
-        }
-        
-        fetch('{% url "admin_ministry_api" %}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert(data.message);
-                location.reload();
-            } else {
-                alert('Erro: ' + data.error);
-            }
-        })
-        .catch(error => {
-            alert('Erro na comunicação com o servidor');
-        });
-    });
+    })();
+
+    // Loading overlay
+    (function () {
+        var ov = document.createElement('div');
+        ov.id = 'filter-loading-overlay';
+        ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        ov.style.display = 'none';
+        ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+        document.body.appendChild(ov);
+        var form = document.getElementById('filter-form');
+        if (form) form.addEventListener('submit', function () { ov.style.display = 'flex'; });
+    })();
 </script>
 {% endblock %}

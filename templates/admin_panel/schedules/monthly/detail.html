@@ -3,274 +3,409 @@
 
 {% block title %}{{ schedule.title }} - {{ schedule.get_month_display }}/{{ schedule.year }} - Admin Panel{% endblock %}
 
+{% block head %}
+<style>
+.admin-card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.action-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; font-size: 1.1rem; transition: all 0.15s; border: none; cursor: pointer; flex-shrink: 0; }
+.action-btn-edit { background: #eff6ff; color: #2563eb; }
+.action-btn-edit:hover { background: #dbeafe; }
+.action-btn-delete { background: #fef2f2; color: #dc2626; }
+.action-btn-delete:hover { background: #fee2e2; }
+.action-btn-division { background: #fff1f1; color: var(--color-primary); }
+.action-btn-division:hover { background: #ffe4e4; }
+.status-badge { display: inline-flex; align-items: center; padding: 0.2rem 0.65rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+.day-date-badge { border-radius: 10px; background: var(--color-primary); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4px; }
+.day-date-badge.cancelled { background: #9ca3af; }
+/* Modal */
+@keyframes modal-in {
+    from { opacity: 0; transform: scale(0.96) translateY(10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes overlay-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.modal-overlay-animated { animation: overlay-in 0.2s ease-out; }
+.modal-card { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.04); animation: modal-in 0.22s cubic-bezier(.16,1,.3,1); }
+.modal-header { display: flex; align-items: center; gap: 14px; padding: 18px 24px; flex-shrink: 0; }
+.modal-header-title { font-size: 0.9rem; font-weight: 800; color: white; line-height: 1.25; letter-spacing: -0.01em; }
+.modal-header-sub { font-size: 0.72rem; margin-top: 2px; color: rgba(255,255,255,0.72); }
+.modal-icon { width: 38px; height: 38px; border-radius: 11px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.modal-close-btn { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(255,255,255,0.18); color: white; border: none; cursor: pointer; transition: background 0.15s, transform 0.15s; flex-shrink: 0; margin-left: auto; }
+.modal-close-btn:hover { background: rgba(255,255,255,0.32); transform: scale(1.05); }
+.modal-body { padding: 24px; overflow-y: auto; flex: 1; background: #f8fafc; }
+.modal-body-white { background: white; }
+.modal-footer { padding: 16px 24px; border-top: 1.5px solid #f1f5f9; background: white; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+.modal-btn-primary { display: inline-flex; align-items: center; gap: 7px; padding: 10px 20px; background: var(--color-primary); color: white; border: none; border-radius: 11px; font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: opacity 0.15s, transform 0.1s; letter-spacing: 0.01em; }
+.modal-btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.modal-btn-primary:active { transform: translateY(0); }
+.modal-btn-primary:disabled { background: #9ca3af; cursor: not-allowed; opacity: 1; transform: none; }
+.modal-btn-secondary { display: inline-flex; align-items: center; gap: 7px; padding: 10px 20px; background: #f1f5f9; color: #374151; border: none; border-radius: 11px; font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: background 0.15s, transform 0.1s; }
+.modal-btn-secondary:hover { background: #e2e8f0; transform: translateY(-1px); }
+.modal-btn-secondary:active { transform: translateY(0); }
+.modal-form-label { display: block; font-size: 0.72rem; font-weight: 700; color: #6b7280; margin-bottom: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
+.modal-form-label span { font-weight: 400; color: #9ca3af; text-transform: none; font-size: 0.7rem; letter-spacing: 0; }
+.modal-form-input { width: 100%; padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.875rem; color: #111827; background: white; transition: border-color 0.15s, box-shadow 0.15s; outline: none; box-sizing: border-box; }
+.modal-form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(201,9,5,0.10); }
+.modal-section { background: white; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; border: 1.5px solid #f1f5f9; }
+.section-header { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1.5px solid #f1f5f9; }
+.section-header .icon-wrap { width: 28px; height: 28px; border-radius: 7px; background: var(--color-primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+</style>
+{% endblock %}
+
 {% block content %}
-<!-- Admin Sidebar -->
-{% include 'parciais/admin_sidebar.html' %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
 
-<!-- Main Content with sidebar offset and top spacing -->
-<div class="md:pl-64 pt-24">
-    <div class="container mx-auto px-4 py-6">
-        <!-- Header -->
-        <div class="mb-4 sm:mb-6">
-            <div class="flex items-center gap-2 sm:gap-3 mb-2">
-                <a href="{% url 'schedule_list' %}" class="text-gray-600 hover:text-gray-900 flex items-centerex-shrink-0">
-                    <ion-icon name="arrow-back-outline" class="text-xl sm:text-2xl"></ion-icon>
-                </a>
-                <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 truncate">{{ schedule.title }}</h1>
-                <!-- publish/draft badge removed; current schedule is always the month's schedule -->
-            </div>
-            <div class="flex flex-wrap gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 ml-8 sm:ml-11">
-                <span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg">
-                    <ion-icon name="library-outline" class="flex-shrink-0"></ion-icon>
-                    <span class="truncate">{{ schedule.ministry.name }}</span>
-                </span>
-                <span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg">
-                    <ion-icon name="calendar-outline" class="flex-shrink-0"></ion-icon>
-                    <span>{{ schedule.get_month_display }}/{{ schedule.year }}</span>
-                </span>
-                <span class="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg">
-                <ion-icon name="{% if schedule.use_team_rotation %}people-circle-outline{% else %}person-outline{% endif %}" class="flex-shrink-0"></ion-icon>
-                <span class="hidden sm:inline">{% if schedule.use_team_rotation %}Rotação de Equipes{% else %}Membros Diretos{% endif %}</span>
-                <span class="sm:hidden">{% if schedule.use_team_rotation %}Equipes{% else %}Membros{% endif %}</span>
-            </span>
-        </div>
-    </div>
-
-    <div class="bg-white rounded-lg shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
-        <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <button onclick="openCalendarModal()" 
-                    class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 sm:px-6 rounded-lg transition font-semibold flex items-center justify-center gap-2 shadow-md text-sm sm:text-base">
-                <ion-icon name="calendar-outline" class="text-lg sm:text-xl"></ion-icon>
-                <span class="hidden xs:inline">Adicionar Dias pelo Calendário</span>
-                <span class="xs:hidden">Adicionar Dias</span>
-            </button>
-            
-            <div class="flex gap-2">
-                <a href="{% url 'schedule_export_pdf' schedule.id %}" 
-                   target="_blank"
-                   class="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-lg transition text-sm flex items-center justify-center gap-2">
-                    <ion-icon name="download-outline" class="text-base"></ion-icon>
-                    <span class="hidden sm:inline">Exportar PDF</span>
-                    <span class="sm:hidden">PDF</span>
-                </a>
-                
-                <!-- Publish/unpublish removed — current schedule is automatically the month's schedule -->
-                
-                <a href="{% url 'schedule_edit' schedule.id %}" 
-                   class="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg transition text-sm flex items-center justify-center gap-2">
-                    <ion-icon name="create-outline" class="text-base"></ion-icon>
-                    <span class="hidden sm:inline">Editar Escala</span>
-                    <span class="sm:hidden">Editar</span>
-                </a>
-            </div>
-        </div>
-    </div>
-
-    <!-- Guidelines -->
-    {% if schedule.guidelines %}
-    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 rounded-r-lg">
-        <div class="flex items-start gap-2">
-            <ion-icon name="information-circle-outline" class="text-blue-500 text-xl mt-0.5"></ion-icon>
-            <div>
-                <h3 class="font-semibold text-blue-800 mb-1">Orientações</h3>
-                <p class="text-sm text-blue-700 whitespace-pre-line">{{ schedule.guidelines }}</p>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Days List -->
-    {% if days %}
-    <div class="space-y-6">
-        {% for week_num, week_days in weeks.items %}
-        <div class="bg-white rounded-lg shadow-sm p-4 sm:p-6">
-            <h3 class="text-lg font-semibold text-gray-800 mb-4">Semana {{ week_num }}</h3>
-            
-            <div class="space-y-4">
-                {% for day in week_days %}
-                <article class="group relative overflow-hidden rounded-xl transition-all duration-300 hover:shadow-lg {% if day.is_cancelled %}bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300{% else %}bg-gradient-to-br from-white via-orange-50/30 to-white border-2 border-orange-200 hover:border-orange-300{% endif %}">
-                    <div class="flex flex-col sm:flex-row sm:items-stretch gap-3 sm:gap-5 p-3 sm:p-5">
-                        <!-- Date Badge -->
-                        <div class="flex-shrink-0 w-full sm:w-20 lg:w-24 relative">
-                            <div class="rounded-xl p-3 sm:p-4 sm:h-full flex flex-row sm:flex-col items-center justify-between sm:justify-center text-center gap-2 sm:gap-0 {% if day.is_cancelled %}bg-gradient-to-br from-gray-300 to-gray-400 text-gray-700{% else %}bg-gradient-to-br from-orange-500 via-orange-600 to-orange-700 text-white shadow-lg{% endif %} transition-transform duration-300 group-hover:scale-105">
-                                <div class="text-xs font-bold uppercase tracking-wider opacity-90">{{ day.pt_weekday|slice:":3" }}</div>
-                                <div class="font-black text-3xl sm:text-4xl leading-none sm:my-2">{{ day.date|date:"j" }}</div>
-                                <div class="text-xs font-medium uppercase opacity-90">{{ day.date|date:"M" }}</div>
-                            </div>
-                        </div>
-
-                        <!-- Content -->
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-start justify-between gap-3 mb-3">
-                                <div class="flex-1 min-w-0">
-                                    <h4 class="text-lg sm:text-xl font-bold text-gray-900 truncate mb-1">{{ day.description|default_if_none:"Sem descrição" }}</h4>
-                                    <div class="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
-                                        <ion-icon name="calendar-outline" class="text-sm sm:text-base flex-shrink-0"></ion-icon>
-                                        <span class="font-medium">{{ day.date|date:"d/m/Y" }}</span>
-                                        <span class="text-gray-400 hidden sm:inline">•</span>
-                                        <span class="hidden sm:inline">{{ day.pt_weekday }}</span>
-                                    </div>
-                                </div>
-                                {% if day.is_cancelled %}
-                                <span class="inline-flex items-center gap-1.5 bg-red-500 text-white text-xs font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-full shadow-sm flex-shrink-0">
-                                    <ion-icon name="ban-outline" class="text-xs sm:text-sm"></ion-icon>
-                                    <span class="hidden xs:inline">Cancelado</span>
-                                </span>
-                                {% endif %}
-                            </div>
-
-                            <!-- Team/Members -->
-                            <div class="flex flex-wrap gap-2 mb-3">
-                                {% if day.team %}
-                                <div class="inline-flex items-center gap-2 sm:gap-2.5 bg-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg border-2 border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-                                    <span class="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full shadow-sm flex-shrink-0" style="background-color: {{ day.team.color }};"></span>
-                                    <span class="text-xs sm:text-sm font-semibold text-gray-800">{{ day.team.name }}</span>
-                                    <span class="text-xs bg-gray-100 text-gray-600 px-1.5 sm:px-2 py-0.5 rounded-full font-medium">{{ day.team.get_member_count }}</span>
-                                </div>
-                                {% endif %}
-
-                                {% for member in day.members.all %}
-                                <div class="inline-flex items-center gap-1.5 sm:gap-2 bg-white px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg border-2 border-gray-200 text-xs sm:text-sm font-medium shadow-sm hover:shadow-md transition-shadow">
-                                    <ion-icon name="person-circle-outline" class="text-base sm:text-lg text-orange-600 flex-shrink-0"></ion-icon>
-                                    <span class="truncate max-w-[8rem] sm:max-w-[12rem] text-gray-800">{{ member.name }}</span>
-                                </div>
-                                {% endfor %}
-
-                                {% if not day.team and not day.members.all %}
-                                <span class="inline-flex items-center gap-1.5 text-gray-500 italic text-xs sm:text-sm bg-gray-100 px-2.5 sm:px-3 py-1.5 rounded-lg">
-                                    <ion-icon name="alert-circle-outline" class="text-sm sm:text-base flex-shrink-0"></ion-icon>
-                                    <span>Sem atribuição</span>
-                                </span>
-                                {% endif %}
-                            </div>
-
-                            <!-- Notes -->
-                            {% if day.notes %}
-                            <div class="mt-3 bg-blue-50 border-l-4 border-blue-400 p-2.5 sm:p-3 rounded-r-lg">
-                                <div class="flex items-start gap-2">
-                                    <ion-icon name="information-circle-outline" class="text-blue-500 text-base sm:text-lg mt-0.5 flex-shrink-0"></ion-icon>
-                                    <p class="text-xs sm:text-sm text-blue-900 italic">{{ day.notes }}</p>
-                                </div>
-                            </div>
-                            {% endif %}
-
-                            <!-- Cancellation Reason -->
-                            {% if day.is_cancelled and day.cancellation_reason %}
-                            <div class="mt-3 bg-red-50 border-l-4 border-red-400 p-2.5 sm:p-3 rounded-r-lg">
-                                <div class="flex items-start gap-2">
-                                    <ion-icon name="close-circle-outline" class="text-red-500 text-base sm:text-lg mt-0.5 flex-shrink-0"></ion-icon>
-                                    <p class="text-xs sm:text-sm text-red-900"><strong class="font-semibold">Motivo:</strong> {{ day.cancellation_reason }}</p>
-                                </div>
-                            </div>
-                            {% endif %}
-                            
-                            <!-- Actions Mobile -->
-                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-200 sm:hidden">
-                                <button onclick="editDay({{ day.id }})" class="flex-1 flex items-center justify-center gap-2 bg-gradient-to-br from-blue-500 to-blue-600 text-white py-2.5 rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md text-sm font-medium">
-                                    <ion-icon name="create-outline" class="text-lg"></ion-icon>
-                                    <span>Editar</span>
-                                </button>
-                                <button onclick="deleteDay({{ day.id }})" class="flex-1 flex items-center justify-center gap-2 bg-gradient-to-br from-red-500 to-red-600 text-white py-2.5 rounded-lg hover:from-red-600 hover:to-red-700 transition-all shadow-md text-sm font-medium">
-                                    <ion-icon name="trash-outline" class="text-lg"></ion-icon>
-                                    <span>Remover</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Actions Desktop -->
-                        <div class="hidden sm:flex flex-col items-center justify-center gap-3 pl-3 border-l-2 border-gray-200">
-                            <button onclick="editDay({{ day.id }})" title="Editar" class="group/btn flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-md hover:shadow-xl hover:scale-110">
-                                <ion-icon name="create-outline" class="text-2xl"></ion-icon>
-                            </button>
-                            <button onclick="deleteDay({{ day.id }})" title="Remover" class="group/btn flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-red-600 text-white hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-md hover:shadow-xl hover:scale-110">
-                                <ion-icon name="trash-outline" class="text-2xl"></ion-icon>
-                            </button>
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 mb-2 md:mb-6">
+                <div class="flex items-center gap-3 min-w-0">
+                    <a href="{% url 'schedule_list' %}" class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-900 transition shadow-sm">
+                        <ion-icon name="arrow-back-outline" class="text-lg"></ion-icon>
+                    </a>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 truncate">{{ schedule.title }}</h1>
+                        <div class="flex flex-wrap items-center gap-2 mt-1">
+                            <span class="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                <ion-icon name="library-outline" class="text-xs"></ion-icon>
+                                {{ schedule.ministry.name }}
+                            </span>
+                            <span class="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                <ion-icon name="calendar-outline" class="text-xs"></ion-icon>
+                                {{ schedule.get_month_display }}/{{ schedule.year }}
+                            </span>
+                            <span class="hidden sm:inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                <ion-icon name="{% if schedule.use_team_rotation %}people-circle-outline{% else %}person-outline{% endif %}" class="text-xs"></ion-icon>
+                                {% if schedule.use_team_rotation %}Rotação de Equipes{% else %}Membros Diretos{% endif %}
+                            </span>
                         </div>
                     </div>
-                </article>
+                </div>
+                <!-- Desktop actions -->
+                <div class="hidden sm:flex items-center gap-2 flex-shrink-0">
+                    <button onclick="openCalendarModal()"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-white text-sm font-semibold shadow-sm transition"
+                            style="background: var(--color-primary);">
+                        <ion-icon name="calendar-outline" class="text-base"></ion-icon>
+                        Adicionar Dias
+                    </button>
+                    <a href="{% url 'schedule_print' schedule.id %}" target="_blank"
+                       class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:border-gray-300 hover:bg-gray-50 transition">
+                        <ion-icon name="print-outline" class="text-base"></ion-icon>
+                        PDF
+                    </a>
+                    <a href="{% url 'schedule_edit' schedule.id %}"
+                       class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:border-gray-300 hover:bg-gray-50 transition">
+                        <ion-icon name="create-outline" class="text-base"></ion-icon>
+                        Editar Escala
+                    </a>
+                </div>
+                <!-- Mobile actions -->
+                <div class="flex sm:hidden items-center gap-2 flex-shrink-0">
+                    <button onclick="openCalendarModal()"
+                            class="w-9 h-9 flex items-center justify-center rounded-xl text-white shadow-sm transition"
+                            style="background: var(--color-primary);">
+                        <ion-icon name="calendar-outline" class="text-lg"></ion-icon>
+                    </button>
+                    <a href="{% url 'schedule_print' schedule.id %}" target="_blank"
+                       class="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-700 shadow-sm hover:border-gray-300 transition">
+                        <ion-icon name="print-outline" class="text-lg"></ion-icon>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Guidelines -->
+            {% if schedule.guidelines %}
+            <div class="admin-card p-4 mb-5 flex items-start gap-3">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--color-primary);">
+                    <ion-icon name="information-circle-outline" class="text-white text-sm"></ion-icon>
+                </div>
+                <div>
+                    <h3 class="font-semibold text-gray-800 mb-1 text-sm">Orientações</h3>
+                    <p class="text-sm text-gray-600 whitespace-pre-line">{{ schedule.guidelines }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Days List -->
+            {% if days %}
+            <div class="space-y-5">
+                {% for week_num, week_days in weeks.items %}
+                <div class="admin-card overflow-hidden">
+                    <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--color-primary);">
+                            <ion-icon name="calendar-number-outline" class="text-white text-xs"></ion-icon>
+                        </div>
+                        <span class="font-bold text-gray-800 text-sm uppercase tracking-wide">Semana {{ week_num }}</span>
+                        <span class="ml-auto text-xs text-gray-400 font-medium">{{ week_days|length }} dia{{ week_days|length|pluralize:"s" }}</span>
+                    </div>
+                    <div class="divide-y divide-gray-50">
+                        {% for day in week_days %}
+                        <div class="p-4 sm:p-5 hover:bg-gray-50/50 transition {% if day.is_cancelled %}opacity-60{% endif %}">
+                            <div class="flex items-start gap-3 sm:gap-4">
+                            <!-- Date Badge -->
+                            <div class="flex-shrink-0 day-date-badge {% if day.is_cancelled %}cancelled{% endif %} w-12 h-12 sm:w-14 sm:h-14">
+                                <span class="text-[9px] font-bold uppercase opacity-90 leading-none">{{ day.pt_weekday|slice:":3" }}</span>
+                                <span class="text-lg sm:text-xl font-black leading-tight">{{ day.date|date:"j" }}</span>
+                                <span class="text-[9px] font-medium uppercase opacity-90 leading-none">{{ day.date|date:"M" }}</span>
+                            </div>
+                            <!-- Content -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap mb-1">
+                                    <h4 class="font-bold text-gray-900 text-sm">{{ day.description|default_if_none:"Sem descrição" }}</h4>
+                                    {% if day.is_cancelled %}
+                                    <span class="status-badge bg-red-100 text-red-700">
+                                        <ion-icon name="ban-outline" class="mr-1 text-xs"></ion-icon>Cancelado
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <p class="text-xs text-gray-400 mb-2">{{ day.date|date:"d/m/Y" }} &mdash; {{ day.pt_weekday }}</p>
+                                <!-- Team/Members -->
+                                {% if day.has_shifts %}
+                                <div class="space-y-1.5">
+                                    <div class="flex flex-wrap gap-1.5 items-center">
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0" style="color:var(--color-primary);background:#fff1f1;border:1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);">
+                                            <ion-icon name="sunny-outline" class="text-xs"></ion-icon>Manhã
+                                        </span>
+                                        {% for member in day.members_morning.all %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                            <ion-icon name="person-circle-outline" class="text-sm flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                            {{ member.name }}
+                                        </span>
+                                        {% empty %}
+                                        <span class="text-xs text-gray-400 italic">Sem membros</span>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5 items-center">
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0" style="color:var(--color-primary);background:#fff1f1;border:1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);">
+                                            <ion-icon name="moon-outline" class="text-xs"></ion-icon>Noite
+                                        </span>
+                                        {% for member in day.members_evening.all %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                            <ion-icon name="person-circle-outline" class="text-sm flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                            {{ member.name }}
+                                        </span>
+                                        {% empty %}
+                                        <span class="text-xs text-gray-400 italic">Sem membros</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="flex flex-wrap gap-1.5">
+                                    {% if day.team %}
+                                    <span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                        <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: {{ day.team.color }};"></span>
+                                        {{ day.team.name }}
+                                        <span class="text-gray-400">({{ day.team.get_member_count }})</span>
+                                    </span>
+                                    {% endif %}
+                                    {% for member in day.members.all %}
+                                    <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                        <ion-icon name="person-circle-outline" class="text-sm flex-shrink-0" style="color: var(--color-primary);"></ion-icon>
+                                        {{ member.name }}
+                                    </span>
+                                    {% endfor %}
+                                    {% if not day.team and not day.members.all %}
+                                    <span class="inline-flex items-center gap-1 text-gray-400 italic text-xs bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg">
+                                        <ion-icon name="alert-circle-outline" class="text-sm text-gray-300"></ion-icon>
+                                        Sem atribuição
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                                <!-- Division Assignments -->
+                                {% if day.grouped_divisions %}
+                                <div class="flex flex-wrap gap-1.5 mt-2">
+                                    {% for group in day.grouped_divisions %}
+                                    <span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg text-xs text-gray-600">
+                                        <ion-icon name="git-branch-outline" class="flex-shrink-0 text-sm" style="color: var(--color-primary);"></ion-icon>
+                                        <span class="font-semibold" style="color: var(--color-primary);">{{ group.division.name }}:</span>
+                                        {% for member in group.members %}{{ member.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                <!-- Notes -->
+                                {% if day.notes %}
+                                <p class="text-xs text-gray-500 italic flex items-start gap-1 mt-2">
+                                    <ion-icon name="information-circle-outline" class="text-blue-400 mt-0.5 flex-shrink-0 text-sm"></ion-icon>
+                                    {{ day.notes }}
+                                </p>
+                                {% endif %}
+                                <!-- Cancellation Reason -->
+                                {% if day.is_cancelled and day.cancellation_reason %}
+                                <p class="text-xs text-red-600 flex items-start gap-1 mt-1">
+                                    <ion-icon name="close-circle-outline" class="mt-0.5 flex-shrink-0 text-sm"></ion-icon>
+                                    <span><strong>Motivo:</strong> {{ day.cancellation_reason }}</span>
+                                </p>
+                                {% endif %}
+                                <!-- Actions — mobile only, below content -->
+                                <div class="flex items-center gap-1.5 mt-3 sm:hidden">
+                                    <button onclick="editDay({{ day.id }})" title="Editar" class="action-btn action-btn-edit">
+                                        <ion-icon name="create-outline"></ion-icon>
+                                    </button>
+                                    {% if divisions %}
+                                    <button onclick="openDivisionModal({{ day.id }})" title="Atribuir Divisões" class="action-btn action-btn-division">
+                                        <ion-icon name="git-branch-outline"></ion-icon>
+                                    </button>
+                                    {% endif %}
+                                    <button onclick="deleteDay({{ day.id }})" title="Remover" class="action-btn action-btn-delete">
+                                        <ion-icon name="trash-outline"></ion-icon>
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Actions — desktop only -->
+                            <div class="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+                                <button onclick="editDay({{ day.id }})" title="Editar" class="action-btn action-btn-edit">
+                                    <ion-icon name="create-outline"></ion-icon>
+                                </button>
+                                {% if divisions %}
+                                <button onclick="openDivisionModal({{ day.id }})" title="Atribuir Divisões" class="action-btn action-btn-division">
+                                    <ion-icon name="git-branch-outline"></ion-icon>
+                                </button>
+                                {% endif %}
+                                <button onclick="deleteDay({{ day.id }})" title="Remover" class="action-btn action-btn-delete">
+                                    <ion-icon name="trash-outline"></ion-icon>
+                                </button>
+                            </div>
+                            </div><!-- end flex row -->
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
                 {% endfor %}
             </div>
+            {% else %}
+            <div class="admin-card p-10 text-center">
+                <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4" style="background: #fff1f1;">
+                    <ion-icon name="calendar-clear-outline" class="text-3xl" style="color: var(--color-primary);"></ion-icon>
+                </div>
+                <h3 class="text-lg font-bold text-gray-800 mb-1">Nenhum dia adicionado</h3>
+                <p class="text-sm text-gray-500 mb-5">Comece adicionando os dias de culto ou eventos desta escala</p>
+                <button onclick="openCalendarModal()"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold shadow-sm transition"
+                        style="background: var(--color-primary);">
+                    <ion-icon name="add-outline" class="text-base"></ion-icon>
+                    Adicionar Primeiro Dia
+                </button>
+            </div>
+            {% endif %}
+
         </div>
-        {% endfor %}
     </div>
-    {% else %}
-    <div class="bg-white rounded-lg shadow-sm p-8 sm:p-12 text-center">
-        <ion-icon name="calendar-clear-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
-        <h3 class="text-xl font-semibold text-gray-800 mb-2">Nenhum dia adicionado</h3>
-        <p class="text-gray-600 mb-6">Comece adicionando os dias de culto ou eventos desta escala</p>
-        <button onclick="openAddDayModal()" 
-                class="inline-block bg-[var(--church-secondary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition">
-            <ion-icon name="add-outline" class="align-middle"></ion-icon>
-            Adicionar Primeiro Dia
-        </button>
+</div>
+
+<!-- Division Assignment Modal -->
+<div id="divisionAssignModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 modal-overlay-animated">
+    <div class="modal-card w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <!-- Header -->
+        <div class="modal-header" style="background: var(--color-primary);">
+            <div class="modal-icon">
+                <ion-icon name="git-branch-outline" class="text-white text-lg"></ion-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="modal-header-title">Atribuir Divisões</p>
+                <p id="divisionModalDate" class="modal-header-sub"></p>
+            </div>
+            <button onclick="closeDivisionModal()" class="modal-close-btn">
+                <ion-icon name="close-outline" class="text-lg"></ion-icon>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="modal-body">
+            <div id="divisionAssignContent" class="space-y-3">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+        <!-- Footer -->
+        <div class="modal-footer">
+            <button onclick="closeDivisionModal()" class="modal-btn-secondary">
+                Cancelar
+            </button>
+            <button onclick="saveDivisionAssignments()" class="modal-btn-primary">
+                <ion-icon name="save-outline" class="text-sm"></ion-icon>
+                Salvar Atribuições
+            </button>
+        </div>
     </div>
-    {% endif %}
 </div>
 
 <!-- Calendar Modal -->
-<div id="calendarModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 sm:p-4">
-    <div class="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
-        <div class="p-3 sm:p-4 lg:p-6">
-            <div class="flex justify-between items-start gap-3 mb-4 sm:mb-6">
-                <div class="flex-1 min-w-0">
-                    <h2 class="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800 truncate">Gerenciar Escala do Mês</h2>
-                    <p class="text-gray-600 text-xs sm:text-sm mt-1">Configure todos os dias e salve tudo de uma vez</p>
-                </div>
-                <button onclick="closeCalendarModal()" class="text-gray-500 hover:text-gray-700 flex-shrink-0">
-                    <ion-icon name="close-outline" class="text-2xl sm:text-3xl"></ion-icon>
-                </button>
+<div id="calendarModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 modal-overlay-animated">
+    <div class="modal-card w-full max-w-7xl max-h-[95vh] sm:max-h-[90vh] flex flex-col">
+        <!-- Header -->
+        <div class="modal-header" style="background: var(--color-primary);">
+            <div class="modal-icon">
+                <ion-icon name="calendar-outline" class="text-white text-lg"></ion-icon>
             </div>
-            
+            <div class="flex-1 min-w-0">
+                <p class="modal-header-title">Gerenciar Escala do Mês</p>
+                <p class="modal-header-sub">Configure todos os dias e salve tudo de uma vez</p>
+            </div>
+            <button onclick="closeCalendarModal()" class="modal-close-btn">
+                <ion-icon name="close-outline" class="text-lg"></ion-icon>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="modal-body modal-body-white">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                 <!-- Calendar Column -->
                 <div class="lg:col-span-2">
-                    <p class="text-gray-600 text-xs sm:text-sm mb-3 sm:mb-4">Clique nos dias para atribuir {% if schedule.use_team_rotation %}equipes{% else %}membros{% endif %}</p>
-                    
+                    <p class="text-gray-400 text-xs sm:text-sm mb-3 sm:mb-4 flex items-center gap-1.5">
+                        <ion-icon name="hand-left-outline" class="text-sm flex-shrink-0"></ion-icon>
+                        Clique nos dias para atribuir {% if schedule.use_team_rotation %}equipes{% else %}membros{% endif %}
+                    </p>
+
                     <!-- Calendar -->
-                    <div id="calendar" class="bg-white border border-gray-200 rounded-lg p-2 sm:p-3 lg:p-4 mb-3 sm:mb-4"></div>
-                    
+                    <div id="calendar" class="rounded-xl p-2 sm:p-3 mb-4" style="background: white; border: 1.5px solid #f1f5f9; box-shadow: 0 1px 8px rgba(0,0,0,0.05);"></div>
+
                     <!-- Quick Select Options -->
-                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4">
-                        <h3 class="font-semibold text-gray-800 text-sm sm:text-base mb-2 sm:mb-3">Ações Rápidas:</h3>
+                    <div class="admin-card p-3 sm:p-4">
+                        <div class="section-header">
+                            <div class="icon-wrap"><ion-icon name="flash-outline" class="text-white text-xs"></ion-icon></div>
+                            <span class="font-bold text-gray-800 text-sm">Ações Rápidas</span>
+                        </div>
                         <div class="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-                            <button onclick="quickSelectDays('sundays')" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium">
-                                <span class="hidden xs:inline">Selecionar </span>Domingos
+                            <button onclick="quickSelectDays('sundays')" class="px-3 py-2 rounded-lg text-xs font-semibold transition hover:opacity-80" style="background:#f1f5f9; color:#374151; border: 1.5px solid #e5e7eb;">
+                                Domingos
                             </button>
-                            <button onclick="quickSelectDays('wednesdays')" class="bg-green-100 hover:bg-green-200 text-green-800 px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium">
-                                <span class="hidden xs:inline">Selecionar </span>Quartas
+                            <button onclick="quickSelectDays('wednesdays')" class="px-3 py-2 rounded-lg text-xs font-semibold transition hover:opacity-80" style="background:#f1f5f9; color:#374151; border: 1.5px solid #e5e7eb;">
+                                Quartas
                             </button>
-                            <button onclick="quickSelectDays('weekends')" class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium">
-                                <span class="hidden xs:inline">Finais de </span>Semana
+                            <button onclick="quickSelectDays('weekends')" class="text-white px-3 py-2 rounded-lg text-xs font-semibold hover:opacity-85 transition" style="background: var(--color-primary);">
+                                Finais de Semana
                             </button>
-                            <button onclick="clearPendingDays()" class="bg-red-100 hover:bg-red-200 text-red-800 px-2.5 sm:px-3 py-2 rounded-lg text-xs sm:text-sm font-medium">
-                                Limpar<span class="hidden xs:inline"> Tudo</span>
+                            <button onclick="clearPendingDays()" class="px-3 py-2 rounded-lg text-xs font-semibold transition hover:opacity-80" style="background:#fff1f1; color:var(--color-primary); border: 1.5px solid color-mix(in srgb, var(--color-primary) 25%, transparent);">
+                                Limpar Tudo
                             </button>
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Pending Days Column -->
                 <div class="lg:col-span-1">
-                    <div class="bg-gray-50 rounded-lg p-3 sm:p-4 lg:sticky lg:top-0">
-                        <h3 class="font-semibold text-gray-800 text-sm sm:text-base mb-2 sm:mb-3">Dias Pendentes</h3>
-                        <div id="pendingDaysList" class="space-y-2 mb-3 sm:mb-4 max-h-60 sm:max-h-80 lg:max-h-96 overflow-y-auto">
-                            <p class="text-gray-500 text-xs sm:text-sm">Nenhum dia configurado</p>
+                    <div class="admin-card p-3 sm:p-4 lg:sticky lg:top-0">
+                        <div class="section-header">
+                            <div class="icon-wrap"><ion-icon name="time-outline" class="text-white text-xs"></ion-icon></div>
+                            <span class="font-bold text-gray-800 text-sm">Dias Pendentes</span>
                         </div>
-                        
-                        <div class="pt-3 sm:pt-4 border-t border-gray-300">
-                            <div class="flex items-center justify-between mb-3 sm:mb-4">
-                                <span class="font-semibold text-gray-700 text-sm sm:text-base">Total:</span>
-                                <span id="pendingCount" class="bg-orange-100 text-orange-800 px-2.5 sm:px-3 py-1 rounded-full font-bold text-sm sm:text-base">0</span>
+                        <div id="pendingDaysList" class="space-y-2 mb-3 sm:mb-4 max-h-60 sm:max-h-80 lg:max-h-96 overflow-y-auto">
+                            <p class="text-gray-400 text-xs text-center py-4">Nenhum dia configurado</p>
+                        </div>
+
+                        <div class="pt-3 border-t border-gray-100">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="font-semibold text-gray-700 text-sm">Total:</span>
+                                <span id="pendingCount" class="text-white px-3 py-1 rounded-full font-bold text-sm" style="background: var(--color-primary);">0</span>
                             </div>
-                            
-                            <button onclick="saveAllDays()" 
+                            <button onclick="saveAllDays()"
                                     id="saveAllDaysBtn"
-                                    class="w-full bg-orange-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg transition font-semibold shadow-md disabled:bg-gray-400 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-orange-700 disabled:hover:bg-gray-400 text-sm sm:text-base">
-                                <div class="flex items-center justify-center gap-2">
-                                    <ion-icon name="save-outline" class="text-lg sm:text-xl"></ion-icon>
-                                    <span class="hidden xs:inline">Salvar Todos os Dias</span>
-                                    <span class="xs:hidden">Salvar</span>
-                                </div>
+                                    class="modal-btn-primary w-full justify-center py-2.5 text-sm">
+                                <ion-icon name="save-outline" class="text-base"></ion-icon>
+                                Salvar Todos os Dias
                             </button>
                         </div>
                     </div>
@@ -281,82 +416,151 @@
 </div>
 
 <!-- Day Assignment Modal -->
-<div id="dayAssignmentModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div class="p-6">
-            <div class="flex justify-between items-center mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-800" id="assignmentModalTitle">Atribuir ao Dia</h2>
-                    <p class="text-gray-600 text-sm" id="assignmentModalDate"></p>
-                </div>
-                <button onclick="closeDayAssignmentModal()" class="text-gray-500 hover:text-gray-700">
-                    <ion-icon name="close-outline" class="text-3xl"></ion-icon>
-                </button>
+<div id="dayAssignmentModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 modal-overlay-animated">
+    <div class="modal-card w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <!-- Header -->
+        <div class="modal-header" style="background: var(--color-primary);">
+            <div class="modal-icon">
+                <ion-icon name="calendar-number-outline" class="text-white text-lg"></ion-icon>
             </div>
-            
+            <div class="flex-1 min-w-0">
+                <p class="modal-header-title" id="assignmentModalTitle">Atribuir ao Dia</p>
+                <p class="modal-header-sub" id="assignmentModalDate"></p>
+            </div>
+            <button onclick="closeDayAssignmentModal()" class="modal-close-btn">
+                <ion-icon name="close-outline" class="text-lg"></ion-icon>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="modal-body">
             <form id="dayAssignmentForm" class="space-y-4">
                 <input type="hidden" id="assignmentDate" name="date">
                 <input type="hidden" id="assignmentDayId" name="dayId">
-                
+
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                        Descrição
-                        <span class="text-gray-500 font-normal">(Ex: Culto de Quarta, Culto de Domingo)</span>
-                    </label>
-                    <input type="text" 
-                           id="assignmentDescription" 
+                    <label class="modal-form-label">Descrição <span>(Ex: Culto de Quarta, Culto de Domingo)</span></label>
+                    <input type="text"
+                           id="assignmentDescription"
                            name="description"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
+                           class="modal-form-input"
                            placeholder="Ex: Culto de Quarta-feira">
                 </div>
-                
+
+                {% if not schedule.use_team_rotation %}
+                <!-- Shift toggle -->
+                <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-200">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--color-primary);">
+                            <ion-icon name="sunny-outline" class="text-white text-sm"></ion-icon>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">Dois turnos (Manhã e Noite)</p>
+                            <p class="text-xs text-gray-500">Escalas separadas para cada período</p>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input type="checkbox" id="shiftToggle" class="sr-only peer" onchange="toggleShiftsUI(this.checked)">
+                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#C90905]"></div>
+                    </label>
+                </div>
+                {% endif %}
+
+                <!-- Single assignment section (hidden when shifts are on) -->
+                <div id="singleAssignmentSection">
                 {% if schedule.use_team_rotation %}
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Equipe *</label>
-                    <select id="assignmentTeam" 
+                    <label class="modal-form-label">Equipe *</label>
+                    <select id="assignmentTeam"
                             name="team"
                             required
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500">
+                            class="modal-form-input">
                         <option value="">Selecione a equipe</option>
                         {% for team in teams %}
                         <option value="{{ team.id }}">{{ team.name }} ({{ team.get_member_count }} membros)</option>
                         {% endfor %}
                     </select>
                 </div>
-                {% else %}
+                {% elif not divisions %}
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Membros *</label>
-                    <select id="assignmentMembers" 
-                            name="members" 
-                            multiple
-                            required
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500"
-                            style="min-height: 200px;">
+                    <label class="modal-form-label">Membros *</label>
+                    <select id="assignmentMembers"
+                            name="members"
+                            multiple>
                         {% for member in members %}
                         <option value="{{ member.id }}">{{ member.name }}</option>
                         {% endfor %}
                     </select>
-                    <p class="text-sm text-gray-500 mt-1">Segure Ctrl/Cmd para selecionar múltiplos membros</p>
                 </div>
                 {% endif %}
-                
+
+                {% if divisions %}
+                <!-- Divisions section — always visible, styled -->
+                <div id="assignmentDivisionsWrapper" class="rounded-xl overflow-hidden" style="border: 1.5px solid color-mix(in srgb, var(--color-primary) 35%, transparent);">
+                    <div class="flex items-center gap-2.5 px-4 py-3" style="background: var(--color-primary);">
+                        <ion-icon name="git-branch-outline" class="text-white text-base flex-shrink-0"></ion-icon>
+                        <span class="font-bold text-white text-sm">Atribuição por Divisões</span>
+                        <span id="divisionsSummaryText" class="ml-auto text-xs px-2.5 py-1 rounded-full font-semibold" style="background: rgba(255,255,255,0.2); color: white;"></span>
+                    </div>
+                    <div id="assignmentDivisionsContent" class="px-4 pb-4 pt-3 space-y-3 bg-white">
+                        <!-- Dynamically populated by JS -->
+                    </div>
+                </div>
+                {% endif %}
+                </div><!-- end #singleAssignmentSection -->
+
+                {% if not schedule.use_team_rotation %}
+                <!-- Shift assignment section (shown when shifts are on) -->
+                <div id="shiftAssignmentSection" class="hidden space-y-3">
+                    <!-- Manhã -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid var(--color-primary);">
+                        <div class="flex items-center gap-2 px-4 py-2.5" style="background: var(--color-primary);">
+                            <ion-icon name="sunny-outline" class="text-white text-base flex-shrink-0"></ion-icon>
+                            <span class="font-bold text-white text-sm">Manhã</span>
+                            <span id="morningBadge" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.25);color:white;">Nenhum</span>
+                        </div>
+                        <div class="px-4 py-3 bg-white">
+                            <select id="assignmentMembersMorning" name="members_morning" multiple class="shift-select w-full">
+                                {% for member in members %}
+                                <option value="{{ member.id }}">{{ member.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Noite -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid var(--color-primary);">
+                        <div class="flex items-center gap-2 px-4 py-2.5" style="background: var(--color-primary);">
+                            <ion-icon name="moon-outline" class="text-white text-base flex-shrink-0"></ion-icon>
+                            <span class="font-bold text-white text-sm">Noite</span>
+                            <span id="eveningBadge" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.25);color:white;">Nenhum</span>
+                        </div>
+                        <div class="px-4 py-3 bg-white">
+                            <select id="assignmentMembersEvening" name="members_evening" multiple class="shift-select w-full">
+                                {% for member in members %}
+                                <option value="{{ member.id }}">{{ member.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Observações</label>
-                    <textarea id="assignmentNotes" 
+                    <label class="modal-form-label">Observações</label>
+                    <textarea id="assignmentNotes"
                               name="notes"
                               rows="3"
-                              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-orange-500 resize-none"
+                              class="modal-form-input resize-none"
                               placeholder="Observações sobre este dia..."></textarea>
                 </div>
-                
-                <div class="flex gap-3 mt-6">
-                    <button type="submit" 
-                            class="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded-lg transition font-semibold">
+
+                <div class="flex gap-3 pt-2">
+                    <button type="submit" class="modal-btn-primary flex-1 justify-center py-2.5">
+                        <ion-icon name="save-outline" class="text-sm"></ion-icon>
                         Salvar
                     </button>
-                    <button type="button" 
+                    <button type="button"
                             onclick="closeDayAssignmentModal()"
-                            class="flex-1 bg-gray-500 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition font-semibold">
+                            class="modal-btn-secondary flex-1 justify-center py-2.5">
                         Cancelar
                     </button>
                 </div>
@@ -366,44 +570,47 @@
 </div>
 
 <!-- Add/Edit Day Modal -->
-<div id="dayModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div class="p-6">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold text-gray-800" id="modalTitle">Adicionar Dia</h2>
-                <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
-                    <ion-icon name="close-outline" class="text-3xl"></ion-icon>
-                </button>
+<div id="dayModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 modal-overlay-animated">
+    <div class="modal-card w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <!-- Header -->
+        <div class="modal-header" style="background: var(--color-primary);">
+            <div class="modal-icon">
+                <ion-icon name="add-circle-outline" class="text-white text-lg"></ion-icon>
             </div>
-            
+            <div class="flex-1 min-w-0">
+                <p class="modal-header-title" id="modalTitle">Adicionar Dia</p>
+            </div>
+            <button onclick="closeModal()" class="modal-close-btn">
+                <ion-icon name="close-outline" class="text-lg"></ion-icon>
+            </button>
+        </div>
+        <!-- Body -->
+        <div class="modal-body">
             <form id="dayForm" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Data *</label>
-                    <input type="date" 
-                           id="dayDate" 
-                           name="date" 
+                    <label class="modal-form-label">Data *</label>
+                    <input type="date"
+                           id="dayDate"
+                           name="date"
                            required
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)]">
+                           class="modal-form-input">
                 </div>
-                
+
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                        Descrição
-                        <span class="text-gray-500 font-normal">(Ex: Culto de Quarta, Culto de Domingo)</span>
-                    </label>
-                    <input type="text" 
-                           id="dayDescription" 
+                    <label class="modal-form-label">Descrição <span>(Ex: Culto de Quarta, Culto de Domingo)</span></label>
+                    <input type="text"
+                           id="dayDescription"
                            name="description"
-                           class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)]"
+                           class="modal-form-input"
                            placeholder="Ex: Culto de Quarta-feira">
                 </div>
-                
+
                 {% if schedule.use_team_rotation %}
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Equipe</label>
-                    <select id="dayTeam" 
+                    <label class="modal-form-label">Equipe</label>
+                    <select id="dayTeam"
                             name="team"
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)]">
+                            class="modal-form-input">
                         <option value="">Selecione a equipe</option>
                         {% for team in teams %}
                         <option value="{{ team.id }}">{{ team.name }} ({{ team.get_member_count }} membros)</option>
@@ -412,11 +619,11 @@
                 </div>
                 {% else %}
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Membros</label>
-                    <select id="dayMembers" 
-                            name="members" 
+                    <label class="modal-form-label">Membros</label>
+                    <select id="dayMembers"
+                            name="members"
                             multiple
-                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)]"
+                            class="modal-form-input"
                             style="min-height: 150px;">
                         {% for member in members %}
                         <option value="{{ member.id }}">{{ member.name }}</option>
@@ -424,24 +631,24 @@
                     </select>
                 </div>
                 {% endif %}
-                
+
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Observações</label>
-                    <textarea id="dayNotes" 
+                    <label class="modal-form-label">Observações</label>
+                    <textarea id="dayNotes"
                               name="notes"
                               rows="3"
-                              class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--church-secondary)] resize-none"
+                              class="modal-form-input resize-none"
                               placeholder="Observações sobre este dia..."></textarea>
                 </div>
-                
-                <div class="flex gap-3 mt-6">
-                    <button type="submit" 
-                            class="flex-1 bg-[var(--church-secondary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition font-semibold">
+
+                <div class="flex gap-3 pt-2">
+                    <button type="submit" class="modal-btn-primary flex-1 justify-center py-2.5">
+                        <ion-icon name="save-outline" class="text-sm"></ion-icon>
                         Salvar
                     </button>
-                    <button type="button" 
+                    <button type="button"
                             onclick="closeModal()"
-                            class="flex-1 bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 transition font-semibold">
+                            class="modal-btn-secondary flex-1 justify-center py-2.5">
                         Cancelar
                     </button>
                 </div>
@@ -449,16 +656,287 @@
         </div>
     </div>
 </div>
-
 <!-- SweetAlert2 & Select2 -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+/* ===== SweetAlert2 Custom Theme ===== */
+.swal2-popup.swal-custom {
+    font-family: inherit !important;
+    border-radius: 16px !important;
+    padding: 32px 28px 28px !important;
+    max-width: 420px !important;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.04) !important;
+}
+/* Header: icon + title stacked, centered */
+.swal2-popup.swal-custom .swal2-header {
+    padding: 0 !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 16px !important;
+    margin-bottom: 6px !important;
+}
+/* Icon redesign: filled circle, no ring */
+.swal2-popup.swal-custom .swal2-icon {
+    border: none !important;
+    width: 68px !important;
+    height: 68px !important;
+    margin: 0 auto !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+}
+/* Icon content color + size */
+.swal2-popup.swal-custom .swal2-icon .swal2-icon-content {
+    font-size: 2rem !important;
+    font-weight: 900 !important;
+    line-height: 1 !important;
+}
+/* Warning + Question → red circle */
+.swal2-popup.swal-custom .swal2-icon.swal2-warning,
+.swal2-popup.swal-custom .swal2-icon.swal2-question {
+    background: #fee2e2 !important;
+    border-color: transparent !important;
+    color: #dc2626 !important;
+}
+.swal2-popup.swal-custom .swal2-icon.swal2-warning .swal2-icon-content,
+.swal2-popup.swal-custom .swal2-icon.swal2-question .swal2-icon-content {
+    color: #dc2626 !important;
+}
+/* Error → red circle, scale down the X */
+.swal2-popup.swal-custom .swal2-icon.swal2-error {
+    background: #fee2e2 !important;
+    border-color: transparent !important;
+}
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark {
+    transform: scale(0.6) !important;
+}
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-left,
+.swal2-popup.swal-custom .swal2-icon.swal2-error .swal2-x-mark-line-right {
+    background-color: #dc2626 !important;
+}
+/* Success → green circle */
+.swal2-popup.swal-custom .swal2-icon.swal2-success {
+    background: #dcfce7 !important;
+    border-color: transparent !important;
+}
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-ring {
+    border-color: transparent !important;
+}
+.swal2-popup.swal-custom .swal2-icon.swal2-success [class^='swal2-success-circular-line'],
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-fix {
+    background: transparent !important;
+}
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-tip,
+.swal2-popup.swal-custom .swal2-icon.swal2-success .swal2-success-line-long {
+    background-color: #16a34a !important;
+}
+/* Info → blue circle */
+.swal2-popup.swal-custom .swal2-icon.swal2-info {
+    background: #dbeafe !important;
+    border-color: transparent !important;
+    color: #2563eb !important;
+}
+.swal2-popup.swal-custom .swal2-icon.swal2-info .swal2-icon-content {
+    color: #2563eb !important;
+}
+/* Title */
+.swal2-popup.swal-custom .swal2-title {
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: #111827 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.4 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    text-align: center !important;
+}
+/* Body */
+.swal2-popup.swal-custom .swal2-html-container {
+    font-size: 0.875rem !important;
+    color: #6b7280 !important;
+    font-weight: 400 !important;
+    text-align: center !important;
+    padding: 0 !important;
+    line-height: 1.6 !important;
+}
+swal2-popup swal2-modal swal-custom swal2-icon-question swal2-show {
+    gap: 4px !important;
+}
+.swal2-popup.swal-custom .swal2-content {
+    padding: 0 !important;
+}
+/* Actions: full-width buttons side by side */
+.swal2-popup.swal-custom .swal2-actions {
+    width: 100% !important;
+    gap: 10px !important;
+    flex-wrap: nowrap !important;
+    justify-content: stretch !important;
+    margin-top: 3px !important;
+}
+/* Buttons base */
+.swal-btn {
+    flex: 1 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+    padding: 11px 16px !important;
+    border-radius: 10px !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    transition: background 0.15s, transform 0.1s, box-shadow 0.15s !important;
+    letter-spacing: 0.01em !important;
+    white-space: nowrap !important;
+}
+.swal-btn:hover { transform: translateY(-1px) !important; box-shadow: 0 4px 12px rgba(0,0,0,0.12) !important; }
+.swal-btn:active { transform: translateY(0) !important; box-shadow: none !important; }
+/* Cancel: white + border */
+.swal-btn-cancel {
+    background: white !important;
+    color: #374151 !important;
+    border: 1.5px solid #d1d5db !important;
+}
+.swal-btn-cancel:hover { background: #f9fafb !important; }
+/* Confirm: brand red */
+.swal-btn-confirm {
+    background: var(--color-primary) !important;
+    color: white !important;
+    border: none !important;
+}
+.swal-btn-confirm:hover { background: #a80703 !important; }
+/* Deny: neutral gray */
+.swal-btn-deny {
+    background: #6b7280 !important;
+    color: white !important;
+    border: none !important;
+}
+/* Danger confirm */
+.swal-btn-danger {
+    background: #dc2626 !important;
+    color: white !important;
+    border: none !important;
+}
+.swal-btn-danger:hover { background: #b91c1c !important; }
+/* Loader */
+.swal2-popup.swal-custom .swal2-loader {
+    border-color: var(--color-primary) transparent var(--color-primary) transparent !important;
+}
+</style>
+<script>
+// Override global Swal with our custom mixin so every Swal.fire() call uses the custom theme
+window.Swal = Swal.mixin({
+    customClass: {
+        popup:         'swal-custom',
+        confirmButton: 'swal-btn swal-btn-confirm',
+        denyButton:    'swal-btn swal-btn-deny',
+        cancelButton:  'swal-btn swal-btn-cancel',
+    },
+    buttonsStyling: false,
+    backdrop: 'rgba(0,0,0,0.6)',
+});
+</script>
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<style>
+/* ===== Select2 Custom Styling ===== */
+.select2-container--default .select2-selection--multiple {
+    border: 1.5px solid #e5e7eb !important;
+    border-radius: 0.625rem !important;
+    background: #f9fafb !important;
+    min-height: 44px !important;
+    padding: 4px 6px !important;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.select2-container--default.select2-container--focus .select2-selection--multiple {
+    border-color: #C90905 !important;
+    box-shadow: 0 0 0 3px rgba(201,9,5,.15) !important;
+    background: #fff !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__rendered {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+    padding: 2px 2px !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    background: #C90905 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    padding: 2px 10px 2px 8px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__display{
+    padding-left: 10px !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: rgba(255,255,255,.7) !important;
+    font-size: 14px !important;
+    order: -1;
+    border-right: 0 !important;
+    padding-left: 7px;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+    color: #fff !important;
+    background: transparent !important;
+}
+.select2-container .select2-search--inline .select2-search__field{
+    margin-bottom: 6px !important;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__placeholder {
+    color: #9ca3af !important;
+    font-size: 13px !important;
+}
+/* Inline search input (inside the tag box) */
+.select2-search--inline .select2-search__field {
+    font-family: inherit !important;
+    font-size: 13px !important;
+    color: #111827 !important;
+    margin: 0 !important;
+    padding: 2px 4px !important;
+    line-height: 1.6 !important;
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #C90905 !important;
+}
+.select2-container--default .select2-results__option[aria-selected=true] {
+    background-color: #fff1f1 !important;
+    color: #8C0910 !important;
+    font-weight: 600 !important;
+}
+.select2-dropdown {
+    border: 1.5px solid #e5e7eb !important;
+    border-radius: 0.625rem !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,.10) !important;
+    overflow: hidden;
+}
+.select2-search--dropdown .select2-search__field {
+    border: 1.5px solid #e5e7eb !important;
+    border-radius: 0.5rem !important;
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+}
+.select2-results__option {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+}
+</style>
 
 <script>
 const scheduleId = {{ schedule.id }};
 let editingDayId = null;
+let assignmentDivisionsExpanded = false;
 
 function getCookie(name) {
     let cookieValue = null;
@@ -525,9 +1003,45 @@ document.getElementById('dayForm').addEventListener('submit', function(e) {
                 title: 'Sucesso!',
                 text: 'Dia salvo com sucesso.',
                 icon: 'success',
-                confirmButtonColor: 'var(--church-secondary)'
+                confirmButtonColor: '#C90905'
             }).then(() => {
                 window.location.reload();
+            });
+        } else if (data.conflict) {
+            // Conflito detectado — perguntar se deseja sobrescrever
+            let conflictHtml = '<div class="text-left"><ul class="list-disc pl-5 space-y-1">';
+            (data.conflict_details || []).forEach(c => {
+                conflictHtml += `<li>${c}</li>`;
+            });
+            conflictHtml += '</ul></div>';
+            Swal.fire({
+                icon: 'warning',
+                title: 'Conflito de Escala!',
+                html: conflictHtml,
+                showCancelButton: true,
+                confirmButtonColor: '#C90905',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Continuar mesmo assim',
+                cancelButtonText: 'Cancelar',
+                width: '600px'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    formData.append('override_conflict', 'true');
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                        body: formData
+                    })
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.success) {
+                            Swal.fire('Sucesso!', 'Dia salvo com sucesso.', 'success').then(() => window.location.reload());
+                        } else {
+                            Swal.fire('Erro!', d.error || 'Erro ao salvar', 'error');
+                        }
+                    })
+                    .catch(() => Swal.fire('Erro!', 'Erro ao salvar o dia.', 'error'));
+                }
             });
         } else {
             Swal.fire('Erro!', data.error || 'Erro ao salvar', 'error');
@@ -546,8 +1060,7 @@ function deleteDay(dayId) {
         text: "Esta ação não pode ser desfeita!",
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#6b7280',
+        customClass: { popup: 'swal-custom', confirmButton: 'swal-btn swal-btn-danger', cancelButton: 'swal-btn swal-btn-cancel' },
         confirmButtonText: 'Sim, deletar!',
         cancelButtonText: 'Cancelar'
     }).then((result) => {
@@ -647,8 +1160,7 @@ function closeCalendarModal() {
             text: 'Você tem dias configurados que não foram salvos',
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonColor: '#dc2626',
-            cancelButtonColor: '#6b7280',
+            customClass: { popup: 'swal-custom', confirmButton: 'swal-btn swal-btn-danger', cancelButton: 'swal-btn swal-btn-cancel' },
             confirmButtonText: 'Sim, descartar',
             cancelButtonText: 'Continuar editando'
         }).then((result) => {
@@ -676,7 +1188,13 @@ function loadScheduleDays() {
         memberIds: [{% for member in day.members.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
         memberNames: [{% for member in day.members.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
         {% endif %}
-        notes: '{{ day.notes|default:""|escapejs }}'
+        hasShifts: {{ day.has_shifts|yesno:"true,false" }},
+        morningMemberIds: [{% for member in day.members_morning.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
+        morningMemberNames: [{% for member in day.members_morning.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+        eveningMemberIds: [{% for member in day.members_evening.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
+        eveningMemberNames: [{% for member in day.members_evening.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+        notes: '{{ day.notes|default:""|escapejs }}',
+        divisionAssignments: Object.fromEntries([{% for group in day.grouped_divisions %}[{{ group.division.id }}, [{% for m in group.members %}{{ m.id }}{% if not forloop.last %},{% endif %}{% endfor %}]]{% if not forloop.last %},{% endif %}{% endfor %}])
     };
     {% endfor %}
     renderCalendar();
@@ -693,19 +1211,14 @@ function renderCalendar() {
         "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
     
     let html = `
-        <div class="text-center mb-3 sm:mb-4">
-            <h3 class="text-base sm:text-lg lg:text-xl font-bold text-gray-800">${monthNames[scheduleMonth - 1]} ${scheduleYear}</h3>
+        <div class="text-center mb-4">
+            <h3 class="text-base sm:text-lg font-bold text-gray-800 tracking-tight">${monthNames[scheduleMonth - 1]} ${scheduleYear}</h3>
         </div>
-        <div class="grid grid-cols-7 gap-0.5 sm:gap-1 mb-2 text-[10px] xs:text-xs sm:text-sm">
-            <div class="text-center font-semibold text-gray-700 py-1 sm:py-2">Dom</div>
-            <div class="text-center font-semibold text-gray-700 py-1 sm:py-2">Seg</div>
-            <div class="text-center font-semibold text-gray-700 py-1 sm:py-2">Ter</div>
-            <div class="text-center font-semibold text-gray-700 py-1 sm:py-2">Qua</div>
-            <div class="text-center font-semibold text-gray-700 py-1 sm:py-2">Qui</div>
-            <div class="text-center font-semibold text-gray-700 py-1 sm:py-2">Sex</div>
-            <div class="text-center font-semibold text-gray-700 py-1 sm:py-2">Sáb</div>
+        <div class="grid grid-cols-7 gap-1 mb-1">
+            ${['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => `
+            <div class="text-center py-1.5 text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest">${d}</div>`).join('')}
         </div>
-        <div class="grid grid-cols-7 gap-0.5 sm:gap-1">`;
+        <div class="grid grid-cols-7 gap-1 sm:gap-1.5">`;
     
     // Empty cells before the first day
     for (let i = 0; i < startingDayOfWeek; i++) {
@@ -718,29 +1231,32 @@ function renderCalendar() {
         const existingDay = scheduleDays[dateStr];
         const pendingDay = pendingDays[dateStr];
         
-        let bgColor, textColor, borderColor, icon;
+        let bgColor, textColor, borderColor, icon, extraStyle;
         if (existingDay) {
-            bgColor = 'bg-green-100';
+            bgColor = 'bg-green-50';
             textColor = 'text-green-800';
-            borderColor = 'border-green-500';
-            icon = '<ion-icon name="checkmark-circle" class="text-green-600 text-sm sm:text-base"></ion-icon>';
+            borderColor = 'border-green-400';
+            extraStyle = '';
+            icon = '<ion-icon name="checkmark-circle" class="text-green-500 text-sm sm:text-base"></ion-icon>';
         } else if (pendingDay) {
-            bgColor = 'bg-yellow-100';
-            textColor = 'text-yellow-800';
-            borderColor = 'border-yellow-500';
-            icon = '<ion-icon name="time-outline" class="text-yellow-600 text-sm sm:text-base"></ion-icon>';
+            bgColor = 'bg-red-50';
+            textColor = 'text-red-800';
+            borderColor = 'border-red-400';
+            extraStyle = '';
+            icon = '<ion-icon name="time-outline" class="text-red-500 text-sm sm:text-base"></ion-icon>';
         } else {
-            bgColor = 'bg-white hover:bg-orange-50';
-            textColor = 'text-gray-700';
-            borderColor = 'border-gray-300';
+            bgColor = 'bg-white';
+            textColor = 'text-gray-600';
+            borderColor = 'border-gray-200';
+            extraStyle = 'hover:border-red-300 hover:bg-red-50 hover:text-red-700';
             icon = '';
         }
-        
+
         html += `
-            <div onclick="openDayAssignment('${dateStr}')" 
-                 class="aspect-square flex flex-col items-center justify-center border sm:border-2 ${borderColor} ${bgColor} ${textColor} rounded-md sm:rounded-lg cursor-pointer transition p-0.5 sm:p-1 relative">
-                <span class="font-bold text-xs xs:text-sm sm:text-base lg:text-lg">${day}</span>
-                ${icon ? `<div class="absolute top-0 right-0 sm:top-0.5 sm:right-0.5">${icon}</div>` : ''}
+            <div onclick="openDayAssignment('${dateStr}')"
+                 class="aspect-square flex flex-col items-center justify-center border-2 ${borderColor} ${bgColor} ${textColor} ${extraStyle} rounded-xl cursor-pointer transition-all duration-150 relative group">
+                <span class="font-bold text-xs sm:text-base lg:text-lg leading-none">${day}</span>
+                ${icon ? `<div class="absolute top-0.5 right-0.5 sm:top-1 sm:right-1">${icon}</div>` : ''}
             </div>`;
     }
     
@@ -774,17 +1290,64 @@ function openDayAssignment(dateStr) {
     
     if (useTeamRotation) {
         document.getElementById('assignmentTeam').value = dayData ? dayData.teamId : '';
-    } else {
-        const memberSelect = document.getElementById('assignmentMembers');
-        Array.from(memberSelect.options).forEach(option => {
-            option.selected = dayData && dayData.memberIds && dayData.memberIds.includes(parseInt(option.value));
-        });
+    } else if (document.getElementById('assignmentMembers')) {
+        const memberIds = dayData && dayData.memberIds ? dayData.memberIds.map(String) : [];
+        setTimeout(() => {
+            if (!$('#assignmentMembers').hasClass('select2-hidden-accessible')) {
+                $('#assignmentMembers').select2({
+                    placeholder: 'Clique para adicionar membros...',
+                    allowClear: true,
+                    width: '100%',
+                    dropdownParent: $('#dayAssignmentModal')
+                });
+            }
+            $('#assignmentMembers').val(memberIds).trigger('change');
+        }, 50);
     }
-    
+
+    // Populate shift fields
+    const hasShifts = dayData ? (dayData.hasShifts || false) : false;
+    const shiftToggle = document.getElementById('shiftToggle');
+    if (shiftToggle) {
+        shiftToggle.checked = hasShifts;
+        toggleShiftsUI(hasShifts, false); // false = don't init select2 yet
+        if (hasShifts) {
+            const morningIds = dayData && dayData.morningMemberIds ? dayData.morningMemberIds.map(String) : [];
+            const eveningIds = dayData && dayData.eveningMemberIds ? dayData.eveningMemberIds.map(String) : [];
+            setTimeout(() => {
+                initShiftSelects();
+                $('#assignmentMembersMorning').val(morningIds).trigger('change');
+                $('#assignmentMembersEvening').val(eveningIds).trigger('change');
+            }, 80);
+        }
+    }
+
+    // Populate division assignments section — always visible
     document.getElementById('dayAssignmentModal').classList.remove('hidden');
+
+    if (availableDivisions.length > 0) {
+        const divAssignments = (dayData && dayData.divisionAssignments) ? dayData.divisionAssignments : {};
+        assignmentDivisionsExpanded = true;
+        destroyAssignmentDivisionSelects();
+        renderAssignmentDivisions(divAssignments);
+        setTimeout(() => {
+            enforceDivisionMemberExclusivity();
+        }, 50);
+    }
 }
 
 function closeDayAssignmentModal() {
+    destroyAssignmentDivisionSelects();
+    destroyShiftSelects();
+    assignmentDivisionsExpanded = false;
+    if ($('#assignmentMembers').hasClass('select2-hidden-accessible')) {
+        $('#assignmentMembers').select2('destroy');
+    }
+    const shiftToggle = document.getElementById('shiftToggle');
+    if (shiftToggle) {
+        shiftToggle.checked = false;
+        toggleShiftsUI(false, false);
+    }
     document.getElementById('dayAssignmentModal').classList.add('hidden');
     document.getElementById('dayAssignmentForm').reset();
 }
@@ -797,13 +1360,6 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
     const date = formData.get('date');
     const dayId = formData.get('dayId');
     
-    // If it's an existing day (already saved), add to pending for batch update
-    if (dayId) {
-        // store existing day id so saveAllDays knows to call edit endpoint
-        pendingDays[date] = pendingDays[date] || {};
-        pendingDays[date].existingId = dayId;
-    }
-    
     // Validate
     if (useTeamRotation) {
         if (!formData.get('team')) {
@@ -811,27 +1367,127 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
                 icon: 'warning',
                 title: 'Equipe obrigatória',
                 text: 'Por favor, selecione uma equipe',
-                confirmButtonColor: '#f97316'
+                confirmButtonColor: '#C90905'
             });
             return;
         }
-    } else {
-        const members = formData.getAll('members');
-        if (members.length === 0) {
+    } else if (availableDivisions.length === 0) {
+        // Only require direct member selection when there are no divisions and shifts are off
+        const shiftToggle = document.getElementById('shiftToggle');
+        const hasShifts = shiftToggle ? shiftToggle.checked : false;
+        if (!hasShifts) {
+            const members = formData.getAll('members');
+            if (members.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Membros obrigatórios',
+                    text: 'Por favor, selecione ao menos um membro',
+                    confirmButtonColor: '#C90905'
+                });
+                return;
+            }
+        }
+    }
+
+    // Validate no member is assigned to more than one division
+    if (availableDivisions.length > 0) {
+        const divisionData = getAssignmentDivisionData();
+        const memberDivisionMap = {}; // member_id -> division name
+        let divConflictLines = [];
+        availableDivisions.forEach(div => {
+            const memberIds = divisionData[div.id] || [];
+            memberIds.forEach(memberId => {
+                if (memberDivisionMap[memberId] !== undefined) {
+                    const memberName = (availableMembers.find(m => m.id === memberId) || {}).name || String(memberId);
+                    divConflictLines.push(`<li><strong>${memberName}</strong>: ${memberDivisionMap[memberId]} e ${div.name}</li>`);
+                } else {
+                    memberDivisionMap[memberId] = div.name;
+                }
+            });
+        });
+        if (divConflictLines.length > 0) {
             Swal.fire({
-                icon: 'warning',
-                title: 'Membros obrigatórios',
-                text: 'Por favor, selecione ao menos um membro',
-                confirmButtonColor: '#f97316'
+                icon: 'error',
+                title: 'Membro em duas divisões!',
+                html: `<div class="text-left"><p class="mb-2">Os membros abaixo estão atribuídos em mais de uma divisão no mesmo dia:</p><ul class="list-disc pl-5 space-y-1 text-sm">${divConflictLines.join('')}</ul></div>`,
+                confirmButtonColor: '#C90905'
             });
             return;
         }
+    }
+
+    // Verificar conflitos de escala antes de prosseguir
+    if (!useTeamRotation) {
+        const shiftToggleConflict = document.getElementById('shiftToggle');
+        const hasShiftsConflict = shiftToggleConflict ? shiftToggleConflict.checked : false;
+        const conflictData = new FormData();
+        conflictData.append('date', date);
+        conflictData.append('schedule_id', scheduleId);
+        if (hasShiftsConflict) {
+            const morningVals = $('#assignmentMembersMorning').val() || [];
+            const eveningVals = $('#assignmentMembersEvening').val() || [];
+            [...morningVals, ...eveningVals].forEach(id => conflictData.append('members', id));
+        } else {
+            formData.getAll('members').forEach(id => conflictData.append('members', id));
+        }
+        
+        fetch('/admin-panel/schedules/check-conflict/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            body: conflictData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.has_conflict) {
+                // Montar lista de conflitos para exibir
+                let conflictHtml = '<div class="text-left"><p class="mb-2 font-semibold text-red-600">Os seguintes membros já estão escalados nesta data:</p><ul class="list-disc pl-5 space-y-1">';
+                data.conflicts.forEach(c => {
+                    conflictHtml += `<li><strong>${c.member_name}</strong> — ${c.ministry_name} - ${c.schedule_title} (${c.date})</li>`;
+                });
+                conflictHtml += '</ul></div>';
+                
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Conflito de Escala!',
+                    html: conflictHtml,
+                    showCancelButton: true,
+                    confirmButtonColor: '#C90905',
+                    cancelButtonColor: '#6b7280',
+                    confirmButtonText: 'Continuar mesmo assim',
+                    cancelButtonText: 'Cancelar',
+                    width: '600px'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        saveDayToPending(formData, date, dayId, true);
+                    }
+                });
+            } else {
+                saveDayToPending(formData, date, dayId, false);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao verificar conflitos:', error);
+            // Em caso de falha na verificação, prosseguir normalmente
+            saveDayToPending(formData, date, dayId, false);
+        });
+    } else {
+        saveDayToPending(formData, date, dayId, false);
+    }
+});
+
+function saveDayToPending(formData, date, dayId, overrideConflict) {
+    // If it's an existing day (already saved), add to pending for batch update
+    if (dayId) {
+        // store existing day id so saveAllDays knows to call edit endpoint
+        pendingDays[date] = pendingDays[date] || {};
+        pendingDays[date].existingId = dayId;
     }
     
     // Save to pending (merge with existing pending entry if present)
     pendingDays[date] = Object.assign(pendingDays[date] || {}, {
         description: formData.get('description') || '',
-        notes: formData.get('notes') || ''
+        notes: formData.get('notes') || '',
+        overrideConflict: overrideConflict
     });
     
     if (useTeamRotation) {
@@ -839,11 +1495,41 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         const teamSelect = document.getElementById('assignmentTeam');
         pendingDays[date].teamName = teamSelect.options[teamSelect.selectedIndex].text;
     } else {
-        pendingDays[date].memberIds = formData.getAll('members').map(id => parseInt(id));
-        const memberSelect = document.getElementById('assignmentMembers');
-        pendingDays[date].memberNames = Array.from(memberSelect.selectedOptions).map(opt => opt.text);
+        // Check if shift mode is active
+        const shiftToggle = document.getElementById('shiftToggle');
+        const hasShifts = shiftToggle ? shiftToggle.checked : false;
+        pendingDays[date].hasShifts = hasShifts;
+        if (hasShifts) {
+            const morningVals = $('#assignmentMembersMorning').val() || [];
+            const eveningVals = $('#assignmentMembersEvening').val() || [];
+            pendingDays[date].morningMemberIds = morningVals.map(id => parseInt(id));
+            pendingDays[date].eveningMemberIds = eveningVals.map(id => parseInt(id));
+            const morningSelect = document.getElementById('assignmentMembersMorning');
+            const eveningSelect = document.getElementById('assignmentMembersEvening');
+            pendingDays[date].morningMemberNames = morningSelect ? Array.from(morningSelect.options).filter(o => o.selected).map(o => o.text) : [];
+            pendingDays[date].eveningMemberNames = eveningSelect ? Array.from(eveningSelect.options).filter(o => o.selected).map(o => o.text) : [];
+            pendingDays[date].memberIds = [];
+            pendingDays[date].memberNames = [];
+        } else {
+            pendingDays[date].hasShifts = false;
+            pendingDays[date].morningMemberIds = [];
+            pendingDays[date].eveningMemberIds = [];
+            pendingDays[date].morningMemberNames = [];
+            pendingDays[date].eveningMemberNames = [];
+            const memberSelect = document.getElementById('assignmentMembers');
+            if (memberSelect) {
+                pendingDays[date].memberIds = formData.getAll('members').map(id => parseInt(id));
+                pendingDays[date].memberNames = Array.from(memberSelect.selectedOptions).map(opt => opt.text);
+            } else {
+                pendingDays[date].memberIds = [];
+                pendingDays[date].memberNames = [];
+            }
+        }
     }
-    
+
+    // Collect division assignments
+    pendingDays[date].divisionAssignments = getAssignmentDivisionData();
+
     closeDayAssignmentModal();
     renderCalendar();
     updatePendingList();
@@ -855,7 +1541,7 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         timer: 2000,
         showConfirmButton: false
     });
-});
+}
 
 // Update pending days list in sidebar
 function updatePendingList() {
@@ -899,35 +1585,43 @@ function updatePendingList() {
         if (useTeamRotation) {
             assignmentText = day.teamName || 'Sem equipe';
         } else {
-            const count = day.memberIds ? day.memberIds.length : 0;
-            assignmentText = count > 0 ? `${count} membro${count > 1 ? 's' : ''}` : 'Sem membros';
+            // Count direct members first; if none, count across all division assignments
+            const directCount = day.memberIds ? day.memberIds.length : 0;
+            if (directCount > 0) {
+                assignmentText = `${directCount} membro${directCount > 1 ? 's' : ''}`;
+            } else if (day.divisionAssignments && Object.keys(day.divisionAssignments).length > 0) {
+                const divEntries = Object.values(day.divisionAssignments);
+                const totalDivMembers = divEntries.reduce((sum, ids) => sum + (ids ? ids.length : 0), 0);
+                const divCount = divEntries.filter(ids => ids && ids.length > 0).length;
+                if (totalDivMembers > 0) {
+                    assignmentText = `${divCount} div. / ${totalDivMembers} membro${totalDivMembers !== 1 ? 's' : ''}`;
+                } else {
+                    assignmentText = 'Sem membros';
+                }
+            } else {
+                assignmentText = 'Sem membros';
+            }
         }
-        const pendingTypeBadge = day.existingId ? `<span class="text-xs bg-yellow-300 text-yellow-900 px-2 py-0.5 rounded ml-2">Atualizar</span>` : '';
+        const pendingTypeBadge = day.existingId ? `<span class="text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(201,9,5,0.15);color:var(--color-primary);">Editar</span>` : `<span class="text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(201,9,5,0.1);color:var(--color-primary);">Novo</span>`;
 
         html += `
-            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <div class="flex items-start justify-between">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="font-bold text-yellow-800">${date.getDate()}/${date.getMonth() + 1}</span>
-                            <span class="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded">${assignmentText}</span>
-                            ${pendingTypeBadge}
-                        </div>
-                        ${day.description ? `<p class="text-sm text-gray-700">${day.description}</p>` : ''}
-                    </div>
-                    <div class="flex gap-1 ml-2">
-                        <button onclick="openDayAssignment('${dateStr}')" 
-                                class="text-blue-600 hover:text-blue-700 p-1"
-                                title="Editar">
-                            <ion-icon name="create-outline"></ion-icon>
-                        </button>
-                        <button onclick="removePendingDay('${dateStr}')" 
-                                class="text-red-600 hover:text-red-700 p-1"
-                                title="Remover">
-                            <ion-icon name="trash-outline"></ion-icon>
-                        </button>
-                    </div>
+            <div class="rounded-xl overflow-hidden" style="border: 1.5px solid color-mix(in srgb, var(--color-primary) 25%, transparent);">
+                <div class="flex items-center gap-2 px-3 py-2" style="background: var(--color-primary);">
+                    <span class="font-black text-white text-sm">${date.getDate()}/${date.getMonth() + 1}</span>
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full flex-1 truncate" style="background:rgba(255,255,255,0.2);color:white;">${assignmentText}</span>
+                    ${pendingTypeBadge}
+                    <button onclick="openDayAssignment('${dateStr}')"
+                            class="w-6 h-6 flex items-center justify-center rounded-lg transition flex-shrink-0"
+                            style="background:rgba(255,255,255,0.2);" title="Editar">
+                        <ion-icon name="create-outline" style="color:white;font-size:0.8rem;"></ion-icon>
+                    </button>
+                    <button onclick="removePendingDay('${dateStr}')"
+                            class="w-6 h-6 flex items-center justify-center rounded-lg transition flex-shrink-0"
+                            style="background:rgba(255,255,255,0.2);" title="Remover">
+                        <ion-icon name="trash-outline" style="color:white;font-size:0.8rem;"></ion-icon>
+                    </button>
                 </div>
+                ${day.description ? `<div class="px-3 py-2 bg-white text-xs text-gray-600 font-medium">${day.description}</div>` : ''}
             </div>`;
     });
     html += '</div>';
@@ -942,8 +1636,7 @@ function removePendingDay(dateStr) {
         text: 'Este dia será removido da lista pendente',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#6b7280',
+        customClass: { popup: 'swal-custom', confirmButton: 'swal-btn swal-btn-danger', cancelButton: 'swal-btn swal-btn-cancel' },
         confirmButtonText: 'Sim, remover',
         cancelButtonText: 'Cancelar'
     }).then((result) => {
@@ -964,7 +1657,7 @@ function saveAllDays() {
             icon: 'warning',
             title: 'Nenhum dia pendente',
             text: 'Configure ao menos um dia antes de salvar',
-            confirmButtonColor: '#f97316'
+            confirmButtonColor: '#C90905'
         });
         return;
     }
@@ -974,7 +1667,7 @@ function saveAllDays() {
         text: 'Todos os dias configurados serão salvos',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#f97316',
+        confirmButtonColor: '#C90905',
         cancelButtonColor: '#6b7280',
         confirmButtonText: 'Sim, salvar tudo',
         cancelButtonText: 'Cancelar'
@@ -999,10 +1692,21 @@ function saveAllDays() {
                 formData.append('description', day.description);
                 formData.append('notes', day.notes);
                 
+                // Enviar flag de override se o usuário já confirmou o conflito
+                if (day.overrideConflict) {
+                    formData.append('override_conflict', 'true');
+                }
+                
                 if (useTeamRotation) {
                     formData.append('team', day.teamId);
                 } else {
-                    day.memberIds.forEach(id => formData.append('members', id));
+                    formData.append('has_shifts', day.hasShifts ? 'true' : 'false');
+                    if (day.hasShifts) {
+                        (day.morningMemberIds || []).forEach(id => formData.append('members_morning', id));
+                        (day.eveningMemberIds || []).forEach(id => formData.append('members_evening', id));
+                    } else {
+                        (day.memberIds || []).forEach(id => formData.append('members', id));
+                    }
                 }
                 
                 const url = day.existingId ? `/admin-panel/schedules/days/${day.existingId}/edit/` : `/admin-panel/schedules/${scheduleId}/days/new/`;
@@ -1014,6 +1718,26 @@ function saveAllDays() {
                     savedCount++;
                     document.getElementById('saveProgress').textContent = `${savedCount} de ${pendingCount}`;
                     return response.json();
+                }).then(data => {
+                    // After creating/editing the day, also save division assignments if any
+                    if (data.success && day.divisionAssignments && Object.keys(day.divisionAssignments).length > 0) {
+                        const dayId = data.day_id || day.existingId;
+                        if (dayId) {
+                            const assignments = Object.entries(day.divisionAssignments).map(([divId, memberIds]) => ({
+                                division_id: parseInt(divId),
+                                member_ids: memberIds
+                            }));
+                            return fetch(`/admin-panel/schedules/days/${dayId}/divisions/`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRFToken': getCookie('csrftoken')
+                                },
+                                body: JSON.stringify({ assignments })
+                            }).then(r => r.json()).then(() => data);
+                        }
+                    }
+                    return data;
                 });
             });
             
@@ -1021,11 +1745,22 @@ function saveAllDays() {
                 .then(results => {
                     const errors = results.filter(r => !r.success);
                     if (errors.length > 0) {
+                        const conflictErrors = errors.filter(r => r.conflict);
+                        let errorHtml = `<p>${savedCount - errors.length} dias salvos, ${errors.length} com erro.</p>`;
+                        if (conflictErrors.length > 0) {
+                            errorHtml += '<div class="text-left mt-3"><p class="font-semibold text-red-600">Conflitos detectados:</p><ul class="list-disc pl-5 space-y-1 text-sm">';
+                            conflictErrors.forEach(e => {
+                                (e.conflict_details || []).forEach(c => {
+                                    errorHtml += `<li>${c}</li>`;
+                                });
+                            });
+                            errorHtml += '</ul></div>';
+                        }
                         Swal.fire({
                             icon: 'warning',
                             title: 'Parcialmente salvo',
-                            text: `${savedCount - errors.length} dias salvos, ${errors.length} com erro`,
-                            confirmButtonColor: '#f97316'
+                            html: errorHtml,
+                            confirmButtonColor: '#C90905'
                         }).then(() => {
                             window.location.reload();
                         });
@@ -1034,7 +1769,7 @@ function saveAllDays() {
                             icon: 'success',
                             title: 'Todos os dias salvos!',
                             text: `${savedCount} dia(s) adicionado(s) com sucesso`,
-                            confirmButtonColor: '#f97316',
+                            confirmButtonColor: '#C90905',
                             timer: 2000
                         }).then(() => {
                             window.location.reload();
@@ -1047,7 +1782,7 @@ function saveAllDays() {
                         icon: 'error',
                         title: 'Erro',
                         text: 'Ocorreu um erro ao salvar os dias',
-                        confirmButtonColor: '#f97316'
+                        confirmButtonColor: '#C90905'
                     });
                 });
         }
@@ -1065,8 +1800,7 @@ function clearAllPending() {
         text: 'Todos os dias pendentes serão removidos',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#6b7280',
+        customClass: { popup: 'swal-custom', confirmButton: 'swal-btn swal-btn-danger', cancelButton: 'swal-btn swal-btn-cancel' },
         confirmButtonText: 'Sim, limpar',
         cancelButtonText: 'Cancelar'
     }).then((result) => {
@@ -1117,7 +1851,7 @@ function quickSelectDays(type) {
             icon: 'info',
             title: 'Dias adicionados!',
             text: 'Configure as equipes/membros antes de salvar',
-            confirmButtonColor: '#f97316'
+            confirmButtonColor: '#C90905'
         });
     }
 }
@@ -1146,7 +1880,7 @@ function saveExistingDay(dayId, formData) {
                 icon: 'success',
                 title: 'Atualizado!',
                 text: 'Dia atualizado com sucesso',
-                confirmButtonColor: '#f97316'
+                confirmButtonColor: '#C90905'
             }).then(() => {
                 window.location.reload();
             });
@@ -1155,7 +1889,7 @@ function saveExistingDay(dayId, formData) {
                 icon: 'error',
                 title: 'Erro',
                 text: data.error || 'Ocorreu um erro ao salvar',
-                confirmButtonColor: '#f97316'
+                confirmButtonColor: '#C90905'
             });
         }
     })
@@ -1165,7 +1899,7 @@ function saveExistingDay(dayId, formData) {
             icon: 'error',
             title: 'Erro',
             text: 'Ocorreu um erro ao salvar',
-            confirmButtonColor: '#f97316'
+            confirmButtonColor: '#C90905'
         });
     });
 }
@@ -1191,7 +1925,7 @@ function quickAddDays(type) {
             icon: 'info',
             title: 'Nenhum dia para adicionar',
             text: 'Todos os dias deste tipo já foram adicionados',
-            confirmButtonColor: '#f97316'
+            confirmButtonColor: '#C90905'
         });
         return;
     }
@@ -1201,7 +1935,7 @@ function quickAddDays(type) {
         text: 'Os dias serão criados sem atribuição. Você poderá atribuir membros/equipes depois.',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonColor: '#f97316',
+        confirmButtonColor: '#C90905',
         cancelButtonColor: '#6b7280',
         confirmButtonText: 'Sim, adicionar',
         cancelButtonText: 'Cancelar'
@@ -1234,7 +1968,7 @@ function quickAddDays(type) {
                         icon: 'success',
                         title: 'Dias adicionados!',
                         text: `${dates.length} dia(s) criado(s). Recarregando...`,
-                        confirmButtonColor: '#f97316',
+                        confirmButtonColor: '#C90905',
                         timer: 2000
                     }).then(() => {
                         window.location.reload();
@@ -1246,7 +1980,7 @@ function quickAddDays(type) {
                         icon: 'error',
                         title: 'Erro',
                         text: 'Ocorreu um erro ao adicionar os dias',
-                        confirmButtonColor: '#f97316'
+                        confirmButtonColor: '#C90905'
                     });
                 });
         }
@@ -1261,6 +1995,413 @@ function refreshCalendar() {
 function clearPendingDays() {
     clearAllPending();
 }
+
+// ==================== DIVISION MODAL HELPERS (for day assignment popup) ====================
+
+function toggleModalDivisions() {
+    // Divisions are always visible — toggle kept for backwards compat but no-op
+}
+
+
+function memberInitials(name) {
+    return name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+}
+
+function renderAssignmentDivisions(divisionAssignments) {
+    const container = document.getElementById('assignmentDivisionsContent');
+    if (!container || availableDivisions.length === 0) return;
+
+    const assignMap = divisionAssignments || {};
+
+    let html = '';
+    availableDivisions.forEach((div) => {
+        const selectedIds = assignMap[div.id] || [];
+        const selectedCount = selectedIds.length;
+        const marginLeft = div.parentId ? 'ml-4' : '';
+        html += `
+            <div class="${marginLeft} rounded-xl overflow-hidden"
+                 style="border: 1.5px solid color-mix(in srgb, var(--color-primary) 35%, transparent);">
+                <!-- Card Header -->
+                <div class="flex items-center gap-2.5 px-4 py-3" style="background: var(--color-primary);">
+                    ${ div.parentId ? `<ion-icon name="return-down-forward-outline" class="text-white/70 text-sm flex-shrink-0"></ion-icon>` : '' }
+                    <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255,255,255,0.2);">
+                        <ion-icon name="git-branch-outline" class="text-white text-base"></ion-icon>
+                    </div>
+                    <span class="text-sm font-bold text-white flex-1">${div.name}</span>
+                    <span id="assign_div_badge_${div.id}"
+                          class="text-xs font-bold px-2.5 py-1 rounded-full"
+                          style="background:rgba(255,255,255,.2); color:#fff; min-width:56px; text-align:center;">
+                        ${selectedCount > 0 ? selectedCount + ' membro' + (selectedCount !== 1 ? 's' : '') : 'Nenhum'}
+                    </span>
+                </div>
+                <!-- Card Body -->
+                <div class="px-4 py-3 bg-white">
+                    <p class="text-xs font-semibold mb-1.5 text-gray-500 flex items-center gap-1">
+                        <ion-icon name="people-outline" class="text-sm"></ion-icon>Selecione os membros
+                    </p>
+                    <select id="assign_div_${div.id}" multiple
+                            class="assign-division-select w-full"
+                            data-division-id="${div.id}"
+                            data-badge-id="assign_div_badge_${div.id}"
+                            data-badge-bg="rgba(255,255,255,.2)"
+                            data-badge-class=""
+                            data-color-idx="0">
+        `;
+        availableMembers.forEach(m => {
+            const sel = selectedIds.includes(m.id) ? 'selected' : '';
+            html += `<option value="${m.id}" ${sel}>${m.name}</option>`;
+        });
+        html += `</select></div></div>`;
+    });
+
+    container.innerHTML = html;
+    initAssignmentDivisionSelects();
+    updateDivisionsSummary(assignMap);
+}
+
+function initAssignmentDivisionSelects() {
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.assign-division-select').each(function() {
+            if (!$(this).hasClass('select2-hidden-accessible')) {
+                $(this).select2({
+                    placeholder: 'Clique para adicionar membros...',
+                    allowClear: true,
+                    width: '100%',
+                    dropdownParent: $('#dayAssignmentModal'),
+                    templateResult: function(state) {
+                        if (!state.id) return state.text;
+                        const initials = state.text.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+                        return $(`<span class="flex items-center gap-2">
+                            <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#fff1f1;color:#C90905;font-size:10px;font-weight:700;flex-shrink:0;">${initials}</span>
+                            <span>${state.text}</span>
+                        </span>`);
+                    }
+                });
+            }
+            // Bind real-time cross-division exclusivity + badge update
+            $(this).off('change.exclusivity').on('change.exclusivity', function() {
+                updateDivisionBadge(this);
+                enforceDivisionMemberExclusivity();
+                updateDivisionsSummary(getAssignmentDivisionData());
+            });
+        });
+    }
+}
+
+function updateDivisionBadge(selectEl) {
+    const badgeId = selectEl.dataset.badgeId;
+    if (!badgeId) return;
+    const badge = document.getElementById(badgeId);
+    if (!badge) return;
+    let count;
+    if (typeof $ !== 'undefined' && $(selectEl).data('select2')) {
+        const vals = $(selectEl).val();
+        count = vals ? vals.length : 0;
+    } else {
+        count = Array.from(selectEl.selectedOptions).length;
+    }
+    badge.textContent = count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum';
+}
+
+// Prevent the same member from appearing in more than one division at a time
+function enforceDivisionMemberExclusivity() {
+    // Collect current selections per division
+    const divisionSelections = {};
+    document.querySelectorAll('.assign-division-select').forEach(sel => {
+        const divId = parseInt(sel.dataset.divisionId);
+        let selectedIds;
+        if (typeof $ !== 'undefined' && $(sel).data('select2')) {
+            const vals = $(sel).val();
+            selectedIds = vals ? vals.map(v => parseInt(v)) : [];
+        } else {
+            selectedIds = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+        }
+        divisionSelections[divId] = selectedIds;
+    });
+
+    // For each select, disable options that are selected in OTHER divisions
+    document.querySelectorAll('.assign-division-select').forEach(sel => {
+        const thisDivId = parseInt(sel.dataset.divisionId);
+
+        const otherSelected = new Set();
+        Object.entries(divisionSelections).forEach(([divId, ids]) => {
+            if (parseInt(divId) !== thisDivId) {
+                ids.forEach(id => otherSelected.add(id));
+            }
+        });
+
+        Array.from(sel.options).forEach(opt => {
+            const memberId = parseInt(opt.value);
+            if (otherSelected.has(memberId)) {
+                opt.disabled = true;
+                opt.setAttribute('title', 'Já atribuído em outra divisão');
+            } else {
+                opt.disabled = false;
+                opt.removeAttribute('title');
+            }
+        });
+
+        // Refresh Select2 to reflect disabled state
+        if (typeof $ !== 'undefined' && $(sel).data('select2')) {
+            $(sel).trigger('change.select2');
+        }
+    });
+}
+
+function destroyAssignmentDivisionSelects() {
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.assign-division-select').each(function() {
+            if ($(this).hasClass('select2-hidden-accessible')) {
+                $(this).select2('destroy');
+            }
+        });
+    }
+}
+
+function toggleShiftsUI(checked, doInit = true) {
+    const single = document.getElementById('singleAssignmentSection');
+    const shifts = document.getElementById('shiftAssignmentSection');
+    if (!shifts) return;
+    if (checked) {
+        if (single) single.classList.add('hidden');
+        shifts.classList.remove('hidden');
+        if (doInit) initShiftSelects();
+    } else {
+        if (single) single.classList.remove('hidden');
+        shifts.classList.add('hidden');
+        destroyShiftSelects();
+    }
+}
+
+function initShiftSelects() {
+    ['#assignmentMembersMorning', '#assignmentMembersEvening'].forEach(sel => {
+        if ($(sel).length && !$(sel).hasClass('select2-hidden-accessible')) {
+            $(sel).select2({
+                placeholder: 'Clique para adicionar membros...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $('#dayAssignmentModal')
+            });
+            const badgeId = sel === '#assignmentMembersMorning' ? 'morningBadge' : 'eveningBadge';
+            $(sel).off('change.badge').on('change.badge', function() {
+                const count = $(this).val() ? $(this).val().length : 0;
+                const badge = document.getElementById(badgeId);
+                if (badge) badge.textContent = count > 0 ? count + (count === 1 ? ' membro' : ' membros') : 'Nenhum';
+            });
+        }
+    });
+}
+
+function destroyShiftSelects() {
+    ['#assignmentMembersMorning', '#assignmentMembersEvening'].forEach(sel => {
+        if ($(sel).length && $(sel).hasClass('select2-hidden-accessible')) {
+            $(sel).select2('destroy');
+        }
+    });
+}
+
+
+
+function getAssignmentDivisionData() {
+    const assignments = {};
+    document.querySelectorAll('.assign-division-select').forEach(sel => {
+        const divId = parseInt(sel.dataset.divisionId);
+        let memberIds;
+        if (typeof $ !== 'undefined' && $(sel).data('select2')) {
+            const vals = $(sel).val();
+            memberIds = vals ? vals.map(v => parseInt(v)) : [];
+        } else {
+            memberIds = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+        }
+        if (memberIds.length > 0) {
+            assignments[divId] = memberIds;
+        }
+    });
+    return assignments;
+}
+
+function updateDivisionsSummary(assignMap) {
+    const summaryEl = document.getElementById('divisionsSummaryText');
+    if (!summaryEl) return;
+    const totalMembers = Object.values(assignMap).reduce((sum, ids) => sum + ids.length, 0);
+    const divCount = Object.keys(assignMap).filter(k => (assignMap[k] || []).length > 0).length;
+    if (divCount > 0) {
+        summaryEl.textContent = `${divCount} div. / ${totalMembers} membro${totalMembers !== 1 ? 's' : ''}`;
+    } else {
+        summaryEl.textContent = '';
+    }
+}
+
+// ==================== DIVISION ASSIGNMENT FUNCTIONS ====================
+
+let currentDivisionDayId = null;
+
+// Available members for division assignment
+const availableMembers = [
+    {% for m in members %}
+    { id: {{ m.id }}, name: '{{ m.name|escapejs }}' }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+// Available divisions  
+const availableDivisions = [
+    {% for d in divisions %}
+    { id: {{ d.id }}, name: '{{ d.name|escapejs }}', parentId: {{ d.parent_id|default_if_none:"null" }}, order: {{ d.order }} }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+];
+
+function openDivisionModal(dayId) {
+    currentDivisionDayId = dayId;
+    document.getElementById('divisionAssignModal').classList.remove('hidden');
+    
+    // Fetch current assignments for this day
+    fetch(`/admin-panel/schedules/days/${dayId}/divisions/`)
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('divisionModalDate').textContent = `Data: ${data.date}`;
+            renderDivisionForm(data.divisions, data.assignments);
+        })
+        .catch(() => {
+            document.getElementById('divisionAssignContent').innerHTML = 
+                '<p class="text-red-500">Erro ao carregar divisões</p>';
+        });
+}
+
+function closeDivisionModal() {
+    document.getElementById('divisionAssignModal').classList.add('hidden');
+    currentDivisionDayId = null;
+}
+
+function renderDivisionForm(divisions, currentAssignments) {
+    const container = document.getElementById('divisionAssignContent');
+    
+    if (!divisions || divisions.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <div class="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3" style="background:#fff1f1;">
+                    <ion-icon name="git-branch-outline" class="text-3xl" style="color:#C90905;"></ion-icon>
+                </div>
+                <p class="text-gray-600 font-medium">Nenhuma divisão cadastrada</p>
+                <a href="/admin-panel/schedules/{{ schedule.id }}/edit/" 
+                   class="inline-flex items-center gap-1 text-sm mt-2 font-medium" style="color:#C90905;">
+                    <ion-icon name="add-circle-outline"></ion-icon>Adicionar divisões na escala
+                </a>
+            </div>
+        `;
+        return;
+    }
+    
+    // Group current assignments by division
+    const assignmentsByDiv = {};
+    currentAssignments.forEach(a => {
+        if (!assignmentsByDiv[a.division_id]) assignmentsByDiv[a.division_id] = [];
+        assignmentsByDiv[a.division_id].push(a.member_id);
+    });
+    
+    let html = '';
+    divisions.forEach((div, idx) => {
+        const c = divisionCardColors[idx % divisionCardColors.length];
+        const selectedMembers = assignmentsByDiv[div.id] || [];
+        const marginLeft = div.parent_id ? 'ml-4' : '';
+        const count = selectedMembers.length;
+        
+        html += `
+            <div class="${marginLeft} div-card-${c.cssIdx} rounded-2xl overflow-hidden"
+                 style="box-shadow: 0 2px 12px ${c.border}22; border: 1.5px solid ${c.border}44;">
+                <div class="flex items-center gap-2.5 px-4 py-3" style="background: ${c.headerBg};">
+                    ${ div.parent_id ? `<ion-icon name="return-down-forward-outline" class="text-white/70 text-sm flex-shrink-0"></ion-icon>` : '' }
+                    <div class="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                        <ion-icon name="git-branch-outline" class="text-white text-base"></ion-icon>
+                    </div>
+                    <span class="text-sm font-bold text-white flex-1 tracking-wide">${div.name}</span>
+                    <span id="div_badge_${div.id}"
+                          class="text-xs font-bold px-2.5 py-1 rounded-full"
+                          style="background:rgba(255,255,255,.25); color:#fff; min-width:56px; text-align:center;">
+                        ${count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum'}
+                    </span>
+                </div>
+                <div class="px-4 py-3" style="background: ${c.bodyBg};">
+                    <p class="text-xs font-semibold mb-1.5" style="color:${c.iconColor};">
+                        <ion-icon name="people-outline" class="align-middle mr-1"></ion-icon>Selecione os membros
+                    </p>
+                    <select id="div_members_${div.id}" multiple
+                            class="division-member-select w-full"
+                            data-division-id="${div.id}"
+                            data-badge-id="div_badge_${div.id}">
+        `;
+        
+        availableMembers.forEach(m => {
+            const selected = selectedMembers.includes(m.id) ? 'selected' : '';
+            html += `<option value="${m.id}" ${selected}>${m.name}</option>`;
+        });
+        
+        html += `</select></div></div>`;
+    });
+    
+    container.innerHTML = html;
+    
+    // Initialize select2 on the dropdowns
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $('.division-member-select').each(function() {
+            $(this).select2({
+                placeholder: 'Clique para adicionar membros...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $('#divisionAssignModal'),
+                templateResult: function(state) {
+                    if (!state.id) return state.text;
+                    const initials = state.text.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+                    return $(`<span class="flex items-center gap-2">
+                        <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#fff1f1;color:#C90905;font-size:10px;font-weight:700;flex-shrink:0;">${initials}</span>
+                        <span>${state.text}</span>
+                    </span>`);
+                }
+            });
+            // Live badge update
+            $(this).on('change', function() {
+                const badgeId = this.dataset.badgeId;
+                if (!badgeId) return;
+                const badge = document.getElementById(badgeId);
+                if (!badge) return;
+                const count = $(this).val() ? $(this).val().length : 0;
+                badge.textContent = count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum';
+            });
+        });
+    }
+}
+
+function saveDivisionAssignments() {
+    if (!currentDivisionDayId) return;
+    
+    const assignments = [];
+    document.querySelectorAll('.division-member-select').forEach(select => {
+        const divId = parseInt(select.dataset.divisionId);
+        const memberIds = Array.from(select.selectedOptions).map(o => parseInt(o.value));
+        if (memberIds.length > 0) {
+            assignments.push({ division_id: divId, member_ids: memberIds });
+        }
+    });
+    
+    const csrfToken = getCookie('csrftoken');
+    
+    fetch(`/admin-panel/schedules/days/${currentDivisionDayId}/divisions/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ assignments })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            closeDivisionModal();
+            window.location.reload();
+        } else {
+            alert(data.error || 'Erro ao salvar atribuições');
+        }
+    })
+    .catch(() => alert('Erro de conexão'));
+}
 </script>
-</div>
 {% endblock %}

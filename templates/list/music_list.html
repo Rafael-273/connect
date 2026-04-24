@@ -1,4 +1,4 @@
-{% extends "login_base.html" %}
+{% extends "member_base.html" %}
 {% load static %}
 
 {% block head %}
@@ -31,27 +31,73 @@
         </div>
     </section>
 
-    <!-- BUSCA -->
-    <div class="px-4 sm:px-6 py-6">
-        <form method="get" class="flex gap-2">
-            <input 
-                type="text"
-                name="search"
-                value="{{ request.GET.search }}"
-                placeholder="Buscar música ou cantor..."
-                onkeyup="buscarMusica()"
-                class="flex-1 px-4 py-3 rounded-xl border-2 text-sm focus:outline-none"
-                style="border-color: rgba(201, 9, 5, 0.15);"
-            >
-            <button class="px-5 py-3 rounded-xl text-white font-bold text-sm transition-all hover:-translate-y-0.5"
-                    style="background-color: #C90905;">
-                <i class="fas fa-search"></i>
-            </button>
-        </form>
+    <!-- BUSCA + FILTRO -->
+    <div class="px-4 sm:px-6 py-4">
+        <div class="flex items-center gap-2">
+            <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                <input type="hidden" name="tempo" id="hidden-tempo" value="{{ request.GET.tempo }}">
+
+                <div class="relative flex-1 min-w-0">
+                    <input type="text" name="search" id="search-input" value="{{ request.GET.search }}"
+                           placeholder="Buscar música ou cantor..."
+                           class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none bg-white text-sm"
+                           style="focus:border-color: #C90905;">
+                </div>
+
+                <button type="submit"
+                        class="flex-shrink-0 p-2.5 text-white rounded-lg hover:opacity-90 transition-all duration-200 flex items-center justify-center"
+                        style="background-color: #C90905;"
+                        title="Buscar">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </button>
+
+                <div class="relative flex-shrink-0">
+                    <button type="button" id="filter-toggle-music"
+                            class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                        </svg>
+                        Filtros
+                        {% if request.GET.tempo %}
+                        <span class="w-2 h-2 rounded-full" style="background-color: #C90905;"></span>
+                        {% endif %}
+                    </button>
+
+                    <div id="filter-panel-music"
+                         class="hidden absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1">Andamento</label>
+                                <select id="panel-tempo" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm bg-white cursor-pointer">
+                                    <option value="">Todos</option>
+                                    <option value="rapida" {% if request.GET.tempo == 'rapida' %}selected{% endif %}>Rápidas</option>
+                                    <option value="media"  {% if request.GET.tempo == 'media'  %}selected{% endif %}>Médias</option>
+                                    <option value="lenta"  {% if request.GET.tempo == 'lenta'  %}selected{% endif %}>Lentas</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                            <a href="{% url 'music_user_list' %}"
+                               class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                Limpar
+                            </a>
+                            <button type="button" id="apply-filters-music"
+                                    class="flex-1 px-3 py-2 text-sm text-white rounded-lg hover:opacity-90 transition-all"
+                                    style="background-color: #C90905;">
+                                Aplicar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
     </div>
 
     <!-- LISTA -->
-    <div id="lista-musicas" class="px-4 sm:px-6 space-y-4">
+    <div id="lista-musicas" class="px-4 sm:px-6 space-y-2">
 
         {% for music in musics %}
 
@@ -100,6 +146,32 @@
         {% endfor %}
 
     </div>
+
+    <!-- Paginação -->
+    {% if is_paginated %}
+    <div class="px-4 sm:px-6 py-4 flex items-center justify-center gap-2">
+        {% if page_obj.has_previous %}
+            <a href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.tempo %}tempo={{ request.GET.tempo }}&{% endif %}page={{ page_obj.previous_page_number }}"
+               class="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm hover:bg-gray-50 transition flex items-center gap-1">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                Anterior
+            </a>
+        {% endif %}
+
+        <span class="px-3 py-2 text-sm text-gray-600 font-medium">
+            {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+        </span>
+
+        {% if page_obj.has_next %}
+            <a href="?{% if request.GET.search %}search={{ request.GET.search }}&{% endif %}{% if request.GET.tempo %}tempo={{ request.GET.tempo }}&{% endif %}page={{ page_obj.next_page_number }}"
+               class="px-3 py-2 rounded-lg border text-white text-sm hover:opacity-90 transition flex items-center gap-1"
+               style="background-color: #C90905; border-color: #C90905;">
+                Próximo
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </a>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 
 <!-- Bottom Navigation -->
@@ -133,18 +205,25 @@
 </nav>
 
 <script>
-function buscarMusica() {
-    const valor = document.querySelector('input[name="search"]').value;
+// Toggle filter panel
+const filterToggle = document.getElementById('filter-toggle-music');
+const filterPanel  = document.getElementById('filter-panel-music');
 
-    fetch(`/ministerio-louvor/?search=${valor}`)
-        .then(response => response.text())
-        .then(html => {
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, "text/html");
-            const novaLista = doc.querySelector("#lista-musicas").innerHTML;
-            document.querySelector("#lista-musicas").innerHTML = novaLista;
-        });
-}
+filterToggle.addEventListener('click', () => {
+    filterPanel.classList.toggle('hidden');
+});
+
+document.addEventListener('click', (e) => {
+    if (!filterToggle.contains(e.target) && !filterPanel.contains(e.target)) {
+        filterPanel.classList.add('hidden');
+    }
+});
+
+// Apply filters
+document.getElementById('apply-filters-music').addEventListener('click', () => {
+    document.getElementById('hidden-tempo').value = document.getElementById('panel-tempo').value;
+    document.getElementById('filter-form').submit();
+});
 </script>
 
 <script>

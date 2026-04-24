@@ -13,7 +13,10 @@ from .visitor import Visitor
 from .ministry import Ministry
 from .neighborhood import Neighborhood
 from .follow_up import FollowUp
-from .canteen import CanteenDebtor
 from .word_of_knowledge import WordOfKnowledge, Healing
-from .schedule import Team, MonthlySchedule, ScheduleDay
+from .schedule import Team, MonthlySchedule, ScheduleDay, ScaleDivision, DivisionMember
 from .music import Music
+from .testimony import Testimony
+from .prayer_request import PrayerRequest
+from .canteen import CanteenDebtor
+from .course_attendance import AttendanceCourse, CourseParticipant, CourseLesson, CourseAttendance

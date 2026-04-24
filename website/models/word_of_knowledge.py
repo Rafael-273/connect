@@ -83,12 +83,6 @@ class WordOfKnowledge(BaseModel):
                     days_until_sunday = 7
                 self.service_date = (recorded_date + timedelta(days=days_until_sunday)).date()
             
-            # Auto-aprovar se o membro for aprovador
-            if self.member.is_approver:
-                self.is_approved = True
-                self.approved_by = self.member
-                self.approved_at = datetime.now()
-        
         super().save(*args, **kwargs)
     
     def __str__(self):

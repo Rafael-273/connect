@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Evangelismos{% endblock %}
+
+{% block content %}
+<section class="flex-grow container mx-auto mb-8 mt-32 flex flex-col items-center px-4 sm:px-6 lg:px-8">
+  <div class="w-full px-4 md:px-12">
+
+    <div class="text-center mb-8">
+      <h1 class="text-4xl md:text-6xl font-bold text-[var(--color-primary)] mb-2">Evangelismos</h1>
+      <p class="text-base md:text-lg text-gray-700">Lista de todas as pessoas que foram evangelizadas 🙌</p>
+    </div>
+
+    <div class="mb-4 flex md:hidden px-2 md:px-0 w-full">
+      <button class="w-full text-white px-4 py-2 rounded transition duration-300" style="background-color: var(--color-primary);" onclick="toggleModal()">
+        Filtros
+      </button>
+    </div>
+
+    <div id="filterModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 hidden flex justify-center items-center z-50 cursor-pointer" onclick="closeModal(event)">
+      <div class="filterModal p-6 rounded-lg w-11/12 sm:w-3/4 md:w-1/2 lg:w-1/3 xl:w-1/4 flex flex-col items-center bg-white">
+        <h2 class="text-3xl mb-4">Filtrar <b>Evangelismos</b></h2>
+        <form method="get" action="{% url 'evangelism_list' %}" class="w-full">
+
+          <div class="mb-4 w-full">
+            <label for="period" class="block text-gray-700 font-medium">Período</label>
+            <select name="period" id="period" class="w-full text-gray-800 px-4 py-2 rounded-md border border-gray-300 focus:outline-none">
+              <option value="" {% if not period %}selected{% endif %}>Todos</option>
+              <option value="7_days" {% if period == '7_days' %}selected{% endif %}>Últimos 7 dias</option>
+              <option value="30_days" {% if period == '30_days' %}selected{% endif %}>Último mês</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-2 sm:gap-4">
+            <button type="reset" class="w-full sm:w-1/2 text-white px-4 py-2 rounded-md transition duration-300" style="background-color: var(--color-primary);">
+              Limpar
+            </button>
+            <button type="submit" class="w-full sm:w-1/2 text-white px-4 py-2 rounded-md transition duration-300" style="background-color: var(--color-primary);">
+              Buscar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <form method="get" action="{% url 'evangelism_list' %}" class="w-full mb-6">
+      <div class="search flex flex-col md:flex-row gap-2 px-2 md:px-0">
+        <input
+          type="text"
+          name="q"
+          placeholder="Buscar evangelizados"
+          value="{{ query }}"
+          class="p-2 border border-gray-300 rounded-md w-full"
+        >
+        <button type="submit" class="hidden md:block px-4 py-2 rounded-md text-white" style="background-color: var(--color-primary);">
+          Buscar
+        </button>
+        <button type="button" class="text-white px-4 py-2 hidden md:flex rounded-md transition duration-300" style="background-color: var(--color-primary);" onclick="toggleModal()">
+          Filtros
+        </button>
+      </div>
+    </form>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {% for ev in evangelisms %}
+        <div class="bg-white border border-gray-200 shadow-xl rounded-2xl p-6 flex flex-col justify-between space-y-4">
+
+          <div class="flex flex-col gap-1">
+            <h2 class="text-2xl font-extrabold text-gray-800">{{ ev.name }}</h2>
+            <p class="text-sm text-gray-500 font-medium">
+              <i class="far fa-calendar-alt mr-1"></i>{{ ev.evangelism_date|date:"d/m/Y" }}
+            </p>
+          </div>
+
+          <div class="space-y-2 text-sm text-gray-700">
+            {% if ev.phone %}
+              <p><strong>Telefone:</strong> {{ ev.phone }}</p>
+            {% endif %}
+            {% if ev.address %}
+              <p><strong>Endereço:</strong> {{ ev.address }}</p>
+            {% endif %}
+            {% if ev.neighborhood %}
+              <p><strong>Bairro:</strong> {{ ev.neighborhood.name }}</p>
+            {% endif %}
+          </div>
+
+          {% if ev.prayer_request or ev.wants_peace_house %}
+            <div class="p-4 bg-gray-50 border border-gray-100 rounded-xl text-sm space-y-2 text-gray-700">
+              {% if ev.prayer_request %}
+                <p><strong>🙏 Pedido de Oração:</strong> {{ ev.prayer_request }}</p>
+              {% endif %}
+              {% if ev.wants_peace_house %}
+                <p><strong>🏠 Deseja Casa de Paz:</strong> <span class="text-green-600 font-semibold">Sim</span></p>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if ev.phone %}
+            <a
+              href="https://wa.me/55{{ ev.phone }}?text=Olá {{ ev.name|urlencode }}, tudo bem? Eu sou da Igreja Filadélfia! Foi uma alegria conversar com você hoje!"
+              target="_blank"
+              class="mt-4 inline-block w-full text-center bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-light)] text-white font-bold py-2 rounded-lg shadow-md hover:shadow-lg transition duration-300"
+            >
+              Entrar em Contato pelo WhatsApp
+            </a>
+          {% endif %}
+        </div>
+      {% empty %}
+        <p class="text-center text-gray-500 col-span-full">Nenhum evangelismo encontrado.</p>
+      {% endfor %}
+    </div>
+
+  </div>
+</section>
+
+<script>
+  function toggleModal() {
+    const modal = document.getElementById('filterModal');
+    modal.classList.toggle('hidden');
+  }
+
+  function closeModal(event) {
+    const inner = document.querySelector('.filterModal');
+    if (!inner.contains(event.target)) {
+      document.getElementById('filterModal').classList.add('hidden');
+    }
+  }
+</script>
+{% endblock %}

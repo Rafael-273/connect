@@ -1,0 +1,424 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Testemunhos - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .badge {
+        display: inline-flex; align-items: center;
+        padding: 0.2rem 0.65rem;
+        border-radius: 9999px;
+        font-size: 0.7rem; font-weight: 600;
+        gap: 0.25rem;
+    }
+    .badge-approved  { background: #dcfce7; color: #166534; }
+    .badge-pending   { background: #fef9c3; color: #854d0e; }
+    .badge-home      { background: #dbeafe; color: #1e40af; }
+    .badge-category  { background: #f3e8ff; color: #6b21a8; }
+
+    /* Toggle pill */
+    .toggle-pill { display: inline-flex; align-items: center; cursor: pointer; gap: 0.4rem; font-size: 0.75rem; font-weight: 500; }
+    .toggle-pill input { display: none; }
+    .pill-track {
+        width: 36px; height: 20px; border-radius: 9999px;
+        background: #d1d5db; position: relative; transition: background .25s; flex-shrink: 0;
+    }
+    .pill-track::after {
+        content: ''; width: 14px; height: 14px; background: white;
+        border-radius: 50%; position: absolute; top: 3px; left: 3px; transition: transform .25s;
+    }
+    input:checked ~ .pill-track { background: var(--color-primary); }
+    input:checked ~ .pill-track::after { transform: translateX(16px); }
+
+    /* Table */
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem; font-weight: 700; letter-spacing: 0.07em;
+        text-transform: uppercase; color: #6b7280;
+        border-bottom: 2px solid #f1f5f9; padding: 14px 24px;
+    }
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+    .data-table tbody td { padding: 14px 24px; vertical-align: middle; }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px; border-radius: 9px;
+        font-size: 1.1rem; transition: all 0.15s;
+        border: none; cursor: pointer; flex-shrink: 0;
+    }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+
+            <!-- Title -->
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="chatbubble-ellipses" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Testemunhos</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if total %}{{ total }} testemunho{{ total|pluralize:"s" }} cadastrado{{ total|pluralize:"s" }}{% else %}Gerencie os testemunhos exibidos no site{% endif %}
+                        </p>
+                    </div>
+                </div>
+                <!-- Mobile: Novo (icon only) -->
+                <a href="{% url 'admin_testimony_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Novo Testemunho">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Search + Filters + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="category" id="hidden-category" value="{{ request.GET.category }}">
+                    <input type="hidden" name="approved" id="hidden-approved" value="{{ request.GET.approved }}">
+
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ request.GET.search }}"
+                               placeholder="Buscar por título..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-testimonies"
+                                class="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if request.GET.category or request.GET.approved %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                        <div id="filter-panel-testimonies"
+                             class="hidden absolute right-0 top-full mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Categoria</label>
+                                    <select id="panel-category" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white dark:bg-gray-800 cursor-pointer">
+                                        <option value="">Todas as categorias</option>
+                                        {% for value, label in category_choices %}
+                                        <option value="{{ value }}" {% if request.GET.category == value %}selected{% endif %}>{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Aprovação</label>
+                                    <select id="panel-approved" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white dark:bg-gray-800 cursor-pointer">
+                                        <option value="">Todos</option>
+                                        <option value="true"  {% if request.GET.approved == 'true' %}selected{% endif %}>Aprovados</option>
+                                        <option value="false" {% if request.GET.approved == 'false' %}selected{% endif %}>Pendentes</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                                <a href="{% url 'admin_testimonies_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-testimonies"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Desktop: Novo Testemunho -->
+                <a href="{% url 'admin_testimony_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Novo Testemunho
+                </a>
+            </div>
+
+            {% if testimonies %}
+
+            <!-- Versão Mobile: Cards -->
+            <div class="block md:hidden space-y-4">
+                {% for t in testimonies %}
+                <div class="admin-card p-4 hover:shadow-lg transition-shadow">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="flex-1 min-w-0 pr-2">
+                            <h3 class="text-base font-bold text-gray-900 truncate">{{ t.title }}</h3>
+                            <span class="badge badge-category mt-1 inline-flex">
+                                <ion-icon name="pricetag-outline"></ion-icon>
+                                {{ t.get_category_display }}
+                            </span>
+                        </div>
+                        {% if t.is_approved %}
+                        <span class="badge badge-approved flex-shrink-0"><ion-icon name="checkmark-circle-outline"></ion-icon> Aprovado</span>
+                        {% else %}
+                        <span class="badge badge-pending flex-shrink-0"><ion-icon name="time-outline"></ion-icon> Pendente</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 items-center mb-3">
+                        {% if t.show_on_home %}
+                        <span class="badge badge-home"><ion-icon name="home-outline"></ion-icon> Na Home</span>
+                        {% endif %}
+                        {% if t.testimony_date %}
+                        <span class="text-xs text-gray-400">{{ t.testimony_date|date:"d/m/Y" }}</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex gap-4 py-3 border-t border-b border-gray-100 mb-3">
+                        <label class="toggle-pill text-gray-600">
+                            <input type="checkbox" {% if t.is_approved %}checked{% endif %}
+                                   onchange="toggleField({{ t.id }}, 'is_approved', this)">
+                            <span class="pill-track"></span>
+                            Aprovado
+                        </label>
+                        <label class="toggle-pill text-gray-600">
+                            <input type="checkbox" {% if t.show_on_home %}checked{% endif %}
+                                   onchange="toggleField({{ t.id }}, 'show_on_home', this)">
+                            <span class="pill-track"></span>
+                            Na Home
+                        </label>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <a href="{% url 'admin_testimony_edit' t.id %}"
+                           class="flex-1 py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="create-outline"></ion-icon>
+                            Editar
+                        </a>
+                        <a href="{% url 'admin_testimony_delete' t.id %}"
+                           class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-sm hover:bg-red-100 transition flex items-center justify-center">
+                            <ion-icon name="trash-outline"></ion-icon>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Versão Desktop: Tabela -->
+            <div class="admin-card overflow-hidden hidden md:block">
+                <div class="overflow-x-auto table-responsive">
+                    <table class="w-full data-table">
+                        <thead>
+                            <tr>
+                                <th class="text-left">Testemunho</th>
+                                <th class="text-left">Categoria</th>
+                                <th class="text-left">Data</th>
+                                <th class="text-left">Aprovado</th>
+                                <th class="text-left">Na Home</th>
+                                <th class="text-left">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white">
+                            {% for t in testimonies %}
+                            <tr>
+                                <td class="row-link" data-row-href="{% url 'admin_testimony_edit' t.id %}">
+                                    <div class="text-sm font-medium text-gray-900">{{ t.title }}</div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <span class="badge badge-category">
+                                        <ion-icon name="pricetag-outline"></ion-icon>
+                                        {{ t.get_category_display }}
+                                    </span>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-700">
+                                        {% if t.testimony_date %}{{ t.testimony_date|date:"d/m/Y" }}{% else %}—{% endif %}
+                                    </div>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <label class="toggle-pill text-gray-600">
+                                        <input type="checkbox" {% if t.is_approved %}checked{% endif %}
+                                               onchange="toggleField({{ t.id }}, 'is_approved', this)">
+                                        <span class="pill-track"></span>
+                                        {% if t.is_approved %}<span class="text-green-700">Sim</span>{% else %}<span class="text-gray-400">Não</span>{% endif %}
+                                    </label>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <label class="toggle-pill text-gray-600">
+                                        <input type="checkbox" {% if t.show_on_home %}checked{% endif %}
+                                               onchange="toggleField({{ t.id }}, 'show_on_home', this)">
+                                        <span class="pill-track"></span>
+                                        {% if t.show_on_home %}<span class="text-blue-700">Sim</span>{% else %}<span class="text-gray-400">Não</span>{% endif %}
+                                    </label>
+                                </td>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <a href="{% url 'admin_testimony_edit' t.id %}" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
+                                        </a>
+                                        <a href="{% url 'admin_testimony_delete' t.id %}" class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if page_obj.has_other_pages %}
+                <div class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
+                        Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} — {{ total }} testemunho{{ total|pluralize:"s" }}
+                    </div>
+                    <div class="flex items-center gap-1 order-1 sm:order-2">
+                        {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}&search={{ request.GET.search }}&category={{ request.GET.category }}&approved={{ request.GET.approved }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            <span class="hidden sm:inline">Anterior</span>
+                        </a>
+                        {% endif %}
+                        {% for num in page_obj.paginator.page_range %}
+                        {% if num == page_obj.number %}
+                        <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ num }}</span>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <a href="?page={{ num }}&search={{ request.GET.search }}&category={{ request.GET.category }}&approved={{ request.GET.approved }}"
+                           class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition min-w-[2rem] text-center">
+                            {{ num }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                        {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}&search={{ request.GET.search }}&category={{ request.GET.category }}&approved={{ request.GET.approved }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <span class="hidden sm:inline">Próximo</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Paginação Mobile -->
+            {% if page_obj.has_other_pages %}
+            <div class="flex justify-center gap-2 mt-6 md:hidden">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&search={{ request.GET.search }}&category={{ request.GET.category }}&approved={{ request.GET.approved }}"
+                   class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition flex items-center">
+                    <ion-icon name="chevron-back-outline"></ion-icon>
+                </a>
+                {% endif %}
+                <span class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-medium">
+                    {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+                </span>
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&search={{ request.GET.search }}&category={{ request.GET.category }}&approved={{ request.GET.approved }}"
+                   class="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition flex items-center">
+                    <ion-icon name="chevron-forward-outline"></ion-icon>
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="admin-card p-16 text-center">
+                <ion-icon name="chatbubble-ellipses-outline" class="text-6xl text-gray-300 mb-4"></ion-icon>
+                <h3 class="text-xl font-semibold text-gray-500 mb-2">Nenhum testemunho encontrado</h3>
+                <p class="text-gray-400 mb-6">Cadastre o primeiro testemunho para exibir no site.</p>
+                <a href="{% url 'admin_testimony_create' %}"
+                   class="inline-flex items-center gap-2 bg-[var(--color-primary)] text-white px-5 py-2.5 rounded-lg hover:bg-opacity-90 transition font-medium text-sm">
+                    <ion-icon name="add-circle-outline" class="text-lg"></ion-icon>
+                    Cadastrar Testemunho
+                </a>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleField(id, field, checkbox) {
+    const originalValue = checkbox.checked;
+    fetch(`/admin-panel/testimonies/${id}/toggle/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}' },
+        body: JSON.stringify({ field: field })
+    })
+    .then(r => r.json())
+    .then(data => { if (!data.success) { checkbox.checked = !originalValue; alert('Erro ao atualizar. Tente novamente.'); } })
+    .catch(() => { checkbox.checked = !originalValue; alert('Erro de comunicação com o servidor.'); });
+}
+
+(function () {
+    var toggle   = document.getElementById('filter-toggle-testimonies');
+    var panel    = document.getElementById('filter-panel-testimonies');
+    var applyBtn = document.getElementById('apply-filters-testimonies');
+    var hiddenCategory = document.getElementById('hidden-category');
+    var hiddenApproved = document.getElementById('hidden-approved');
+    var panelCategory  = document.getElementById('panel-category');
+    var panelApproved  = document.getElementById('panel-approved');
+    if (!toggle || !panel) return;
+    toggle.addEventListener('click', function(e) { e.stopPropagation(); panel.classList.toggle('hidden'); });
+    document.addEventListener('click', function(e) { if (!panel.contains(e.target) && e.target !== toggle) panel.classList.add('hidden'); });
+    if (applyBtn) {
+        applyBtn.addEventListener('click', function() {
+            hiddenCategory.value = panelCategory.value;
+            hiddenApproved.value = panelApproved.value;
+            document.getElementById('filter-form').submit();
+        });
+    }
+})();
+
+(function () {
+    var ov = document.createElement('div');
+    ov.id = 'filter-loading-overlay';
+    ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    ov.style.display = 'none';
+    ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+    document.body.appendChild(ov);
+    var form = document.getElementById('filter-form');
+    if (form) form.addEventListener('submit', function() { ov.style.display = 'flex'; });
+})();
+</script>
+{% endblock %}

@@ -49,8 +49,8 @@ class MessageCleanupMiddleware:
                 'admin_visitor_edit',
                 'admin_event_create',
                 'admin_event_edit',
-                'admin_ministry_create',
-                'admin_ministry_edit',
+                'ministry_create',
+                'ministry_edit',
                 'admin_neighborhood_create',
                 'admin_neighborhood_edit'
             ]

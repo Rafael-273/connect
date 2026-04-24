@@ -1,4 +1,4 @@
-{% extends "login_base.html" %}
+{% extends "member_base.html" %}
 {% load static %}
 
 {% block title %}Consolidação - {{ member.name }}{% endblock %}
@@ -65,7 +65,6 @@
     .float-animation { animation: float 6s ease-in-out infinite; }
     .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
 </style>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 {% endblock %}
 
 {% block content %}
@@ -256,123 +255,20 @@
                 {% endfor %}
             </div>
         {% else %}
-            <!-- Estado vazio redesenhado -->
             <div class="bg-white/90 backdrop-blur-sm rounded-3xl shadow-xl border border-white/50 p-12 text-center">
-                <!-- Ilustração animada -->
                 <div class="relative mb-8">
                     <div class="w-24 h-24 mx-auto bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 rounded-3xl flex items-center justify-center shadow-xl">
                         <i class="fas fa-user-graduate text-blue-500 text-4xl"></i>
                     </div>
-                    <!-- Elementos decorativos -->
                     <div class="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full opacity-80"></div>
                     <div class="absolute -bottom-2 -left-2 w-4 h-4 bg-gradient-to-br from-green-400 to-blue-500 rounded-full opacity-60"></div>
                 </div>
                 
                 <h3 class="text-2xl font-bold text-gray-800 mb-3">Sua jornada de consolidação está começando!</h3>
                 <p class="text-gray-600 text-lg mb-8 max-w-md mx-auto leading-relaxed">Você ainda não possui pessoas sendo consolidadas. Que tal começar a fazer a diferença na vida de alguém?</p>
-                
-                {% if not can_consolidate %}
-                <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-6 max-w-md mx-auto">
-                    <div class="flex items-center gap-3 mb-3">
-                        <div class="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-info text-white text-sm"></i>
-                        </div>
-                        <h4 class="font-semibold text-gray-800">Como se tornar consolidador?</h4>
-                    </div>
-                    <p class="text-gray-600 text-sm leading-relaxed">Entre em contato com a liderança da igreja para participar do programa de consolidação e começar a discipular novos convertidos.</p>
-                </div>
-                {% endif %}
             </div>
         {% endif %}
     </main>
 
-    <!-- Bottom Navigation -->
-    <nav id="bottomNav" class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out {% if can_consolidate and is_ministration_member %}w-[90%] max-w-lg justify-around{% elif can_consolidate or is_ministration_member %}w-auto gap-2 justify-center{% else %}w-auto gap-2 justify-center{% endif %}" style="background: linear-gradient(to bottom right, rgba(255, 255, 255, 0.98), rgba(249, 250, 251, 0.98)); backdrop-filter: blur(20px); border-color: rgba(245, 158, 11, 0.2);">
-        <!-- Home -->
-        <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(245, 158, 11, 0.05); border-color: rgba(245, 158, 11, 0.15);">
-                <i class="fas fa-home text-lg transition-transform group-hover:scale-110" style="color: #F59E0B;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Home</span>
-        </a>
-        
-        <!-- Consolidação (Ativo) -->
-        {% if can_consolidate %}
-        <a href="{% url 'member_consolidation' %}" class="flex flex-col items-center text-xs font-bold transition-all duration-300 hover:scale-105 p-2 px-3 relative group">
-            <div class="relative">
-                <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300" style="background-color: #F59E0B;">
-                    <i class="fas fa-user-graduate text-white text-lg"></i>
-                </div>
-            </div>
-            <span style="color: #F59E0B;">Consolidar</span>
-        </a>
-        {% endif %}
-        
-        <!-- Curas (somente para membros do ministério de ministração) -->
-        {% if is_ministration_member %}
-        <a href="{% url 'word_of_knowledge_list' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(251, 146, 60, 0.05); border-color: rgba(251, 146, 60, 0.15);">
-                <i class="fas fa-heart-pulse text-lg transition-transform group-hover:scale-110" style="color: #FB923C;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Curas</span>
-        </a>
-        {% endif %}
-        
-        <!-- Perfil -->
-        <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 transition-all duration-300 hover:scale-105 p-2 px-3 group">
-            <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 border-2 shadow-md group-hover" style="background: rgba(217, 119, 6, 0.05); border-color: rgba(217, 119, 6, 0.15);">
-                <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110" style="color: #D97706;"></i>
-            </div>
-            <span class="group-hover:font-bold transition-all">Perfil</span>
-        </a>
-    </nav>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Script para ocultar/mostrar menu inferior ao rolar
-            let lastScrollTop = 0;
-            let isScrolling;
-            const nav = document.getElementById('bottomNav');
-            const scrollThreshold = 50;
-
-            window.addEventListener('scroll', function() {
-                clearTimeout(isScrolling);
-                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                
-                if (scrollTop <= 100) {
-                    nav.classList.remove('nav-hidden');
-                    nav.classList.add('nav-visible');
-                    lastScrollTop = scrollTop;
-                    return;
-                }
-
-                if (Math.abs(scrollTop - lastScrollTop) > scrollThreshold) {
-                    if (scrollTop > lastScrollTop) {
-                        nav.classList.add('nav-hidden');
-                        nav.classList.remove('nav-visible');
-                    } else {
-                        nav.classList.remove('nav-hidden');
-                        nav.classList.add('nav-visible');
-                    }
-                    lastScrollTop = scrollTop;
-                }
-
-                isScrolling = setTimeout(function() {
-                    nav.classList.remove('nav-hidden');
-                    nav.classList.add('nav-visible');
-                }, 1000);
-            }, false);
-
-            // Mostra o menu quando passar o mouse próximo à parte inferior
-            document.addEventListener('mousemove', function(e) {
-                const windowHeight = window.innerHeight;
-                const mouseY = e.clientY;
-                
-                if (windowHeight - mouseY < 150) {
-                    nav.classList.remove('nav-hidden');
-                    nav.classList.add('nav-visible');
-                }
-            });
-        });
-    </script>
+    {% include 'parciais/member_bottom_nav.html' with nav_active='consolidation' can_consolidate=True %}
 {% endblock %}

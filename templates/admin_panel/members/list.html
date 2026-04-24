@@ -48,7 +48,9 @@
         height: 50px;
         border-radius: 50%;
         object-fit: cover;
-        border: 3px solid var(--color-accent);
+        border: 2px solid var(--color-accent);
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 1.15rem;
     }
     
     .status-badge {
@@ -67,6 +69,50 @@
         background-color: #fef2f2;
         color: #991b1b;
     }
+
+    /* Table improvements */
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
+    }
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+    .data-table tbody td {
+        padding: 14px 24px;
+        vertical-align: middle;
+    }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .action-btn-view   { background: rgba(201,9,5,0.08); color: var(--color-primary); }
+    .action-btn-view:hover   { background: rgba(201,9,5,0.16); }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
 </style>
 {% endblock %}
 
@@ -77,55 +123,116 @@
     {% include 'parciais/admin_sidebar.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-6 mt-24">
-            <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 text-center md:text-left">
-                <div class="w-full md:w-auto">
-                    <h1 class="text-3xl font-bold text-gray-900 page-title">Membros</h1>
-                    <p class="text-gray-600 mt-2">Gerenciar membros da igreja</p>
+        <div class="p-4 sm:p-6 mt-24">
+            <!-- Title -->
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="people" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Membros</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">
+                            {% if members.paginator.count %}{{ members.paginator.count }} membro{{ members.paginator.count|pluralize }} cadastrado{{ members.paginator.count|pluralize }}{% else %}Gerenciar membros da igreja{% endif %}
+                        </p>
+                    </div>
                 </div>
-                <a href="{% url 'admin_member_create' %}" class="bg-[var(--color-primary)] text-white px-6 py-3 rounded-lg hover:bg-opacity-90 transition flex items-center justify-center w-full md:w-auto">
-                    <ion-icon name="add" class="mr-2"></ion-icon>
-                    Novo Membro
+                <!-- Mobile: Novo Membro (icon only) -->
+                <a href="{% url 'admin_member_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Novo Membro">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
                 </a>
             </div>
 
-            <div class="admin-card p-6 mb-6">
-                <form method="GET" class="flex flex-wrap gap-4 items-center">
-                    <div class="flex-1 min-w-64">
-                        <input type="text" name="search" value="{{ search }}" 
-                               placeholder="Buscar por nome, email ou telefone..." 
-                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
+            <!-- Search + Filters + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <!-- Hidden filter values -->
+                    <input type="hidden" name="ministry" id="hidden-ministry" value="{{ ministry_filter }}">
+                    <input type="hidden" name="status"   id="hidden-status"   value="{{ status_filter }}">
+
+                    <!-- Search input -->
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar membros..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
                     </div>
-                    
-                    <div>
-                        <select name="ministry" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none w-[14rem] focus:border-[var(--color-primary)]">
-                            <option value="">Todos os Ministérios</option>
-                            {% for ministry in ministries %}
-                            <option value="{{ ministry.id }}" {% if ministry_filter == ministry.id|slugify %}selected{% endif %}>
-                                {{ ministry.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <select name="status" class="px-4 py-2 border border-gray-300 w-[14rem] rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
-                            <option value="">Todos os Status</option>
-                            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Ativo</option>
-                            <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inativo</option>
-                            <option value="new_convert" {% if status_filter == 'new_convert' %}selected{% endif %}>Novos Convertidos</option>
-                        </select>
-                    </div>
-                    
-                    <button type="submit" class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
-                        <ion-icon name="search" class="mr-2"></ion-icon>
-                        Buscar
+
+                    <!-- Search button (icon only) -->
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
                     </button>
-                    
-                    <a href="{% url 'admin_members_list' %}" class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
-                        Limpar
-                    </a>
+
+                    <!-- Filters dropdown -->
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-members"
+                            class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                      d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if ministry_filter or status_filter %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                        <!-- Filter panel -->
+                            <div id="filter-panel-members"
+                                class="hidden absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                               <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Ministério</label>
+                                    <select id="panel-ministry"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os Ministérios</option>
+                                        {% for ministry in ministries %}
+                                        <option value="{{ ministry.id }}" {% if ministry_filter == ministry.id|stringformat:"s" %}selected{% endif %}>{{ ministry.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div>
+                                        <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                                    <select id="panel-status"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os Status</option>
+                                        <option value="active"      {% if status_filter == 'active' %}selected{% endif %}>Ativo</option>
+                                        <option value="inactive"    {% if status_filter == 'inactive' %}selected{% endif %}>Inativo</option>
+                                        <option value="new_convert" {% if status_filter == 'new_convert' %}selected{% endif %}>Novos Convertidos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                <a href="{% url 'admin_members_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-members"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </form>
+
+                <!-- Desktop: Novo Membro -->
+                <a href="{% url 'admin_member_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Novo Membro
+                </a>
             </div>
 
             <!-- Versão Mobile: Cards -->
@@ -137,7 +244,7 @@
                             {% if member.profile_picture %}
                             <img class="member-avatar" src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
                             {% else %}
-                            <div class="member-avatar bg-[var(--color-primary)] flex items-center justify-center text-white font-bold">
+                            <div class="member-avatar bg-[var(--color-primary)] flex items-center justify-center text-white">
                                 {{ member.name|first }}
                             </div>
                             {% endif %}
@@ -178,18 +285,18 @@
                     
                     <div class="flex gap-2 pt-3 border-t border-gray-100">
                         <button onclick="viewMember({{ member.id }})" 
-                                class="flex-1 py-2 px-3 bg-[var(--color-primary)] bg-opacity-10 text-white rounded-lg font-medium text-sm hover:bg-opacity-20 transition flex items-center justify-center gap-1">
-                            <ion-icon name="eye"></ion-icon>
+                                class="flex-1 py-2 px-3 bg-[var(--color-primary)] text-white rounded-lg font-medium text-sm hover:bg-opacity-90 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="eye-outline"></ion-icon>
                             Ver
                         </button>
                         <button onclick="editMember({{ member.id }})" 
-                                class="flex-1 py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center gap-1">
-                            <ion-icon name="create"></ion-icon>
+                                class="flex-1 py-2 px-3 bg-blue-50 text-blue-600 rounded-lg font-medium text-sm hover:bg-blue-100 transition flex items-center justify-center gap-1.5">
+                            <ion-icon name="create-outline"></ion-icon>
                             Editar
                         </button>
                         <button onclick="deleteMember({{ member.id }}, '{{ member.name }}')" 
-                                class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-sm hover:bg-red-100 transition">
-                            <ion-icon name="trash"></ion-icon>
+                                class="py-2 px-3 bg-red-50 text-red-600 rounded-lg font-medium text-sm hover:bg-red-100 transition flex items-center justify-center">
+                            <ion-icon name="trash-outline"></ion-icon>
                         </button>
                     </div>
                 </div>
@@ -203,74 +310,74 @@
             <!-- Versão Desktop: Tabela -->
             <div class="admin-card overflow-hidden hidden md:block">
                 <div class="overflow-x-auto table-responsive">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
+                    <table class="w-full data-table">
+                        <thead>
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Membro</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contato</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ministério</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                                <th class="text-left">Membro</th>
+                                <th class="text-left">Contato</th>
+                                <th class="text-left">Ministério</th>
+                                <th class="text-left">Status</th>
+                                <th class="text-left">Ações</th>
                             </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
+                        <tbody class="bg-white">
                             {% for member in members %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
+                            <tr>
+                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_member_edit' member.id %}">
+                                    <div class="flex items-center gap-3">
                                         {% if member.profile_picture %}
                                         <img class="member-avatar" src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
                                         {% else %}
-                                        <div class="member-avatar bg-[var(--color-primary)] flex items-center justify-center text-white font-bold">
+                                        <div class="member-avatar bg-[var(--color-primary)] flex items-center justify-center text-white">
                                             {{ member.name|first }}
                                         </div>
                                         {% endif %}
-                                        <div class="ml-4">
-                                            <div class="text-sm font-medium text-gray-900">{{ member.name }}</div>
+                                        <div>
+                                            <div class="text-sm text-gray-900">{{ member.name }}</div>
                                             {% if member.birth_date %}
-                                            <div class="text-sm text-gray-500">{{ member.birth_date|date:"d/m/Y" }}</div>
+                                            <div class="text-xs text-gray-400 mt-0.5">{{ member.birth_date|date:"d/m/Y" }}</div>
                                             {% endif %}
                                         </div>
                                     </div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900">{{ member.email|default:"--" }}</div>
-                                    <div class="text-sm text-gray-500">{{ member.phone|default:"--" }}</div>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ member.email|default:"--" }}</div>
+                                    <div class="text-xs text-gray-400 mt-0.5">{{ member.phone|default:"--" }}</div>
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-gray-900">{{ member.ministry.name|default:"Sem ministério" }}</div>
+                                <td class="whitespace-nowrap">
+                                    <div class="text-sm text-gray-800">{{ member.ministry.name|default:"Sem ministério" }}</div>
                                     {% if member.neighborhood %}
-                                    <div class="text-sm text-gray-500">{{ member.neighborhood.name }}</div>
+                                    <div class="text-xs text-gray-400 mt-0.5">{{ member.neighborhood.name }}</div>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
+                                <td class="whitespace-nowrap">
                                     {% if member.is_active %}
                                     <span class="status-badge status-active">Ativo</span>
                                     {% else %}
                                     <span class="status-badge status-inactive">Inativo</span>
                                     {% endif %}
                                 </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <div class="flex space-x-2">
-                                        <button onclick="viewMember({{ member.id }})" 
-                                                class="text-[var(--color-primary)] hover:text-opacity-80">
-                                            <ion-icon name="eye" class="text-lg"></ion-icon>
+                                <td class="whitespace-nowrap">
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        <button onclick="viewMember({{ member.id }})" class="action-btn action-btn-view" title="Ver">
+                                            <ion-icon name="eye-outline"></ion-icon>
                                         </button>
-                                        <button onclick="editMember({{ member.id }})" 
-                                                class="text-blue-600 hover:text-blue-800">
-                                            <ion-icon name="create" class="text-lg"></ion-icon>
+                                        <button onclick="editMember({{ member.id }})" class="action-btn action-btn-edit" title="Editar">
+                                            <ion-icon name="create-outline"></ion-icon>
                                         </button>
-                                        <button onclick="deleteMember({{ member.id }}, '{{ member.name }}')" 
-                                                class="text-red-600 hover:text-red-800">
-                                            <ion-icon name="trash" class="text-lg"></ion-icon>
+                                        <button onclick="deleteMember({{ member.id }}, '{{ member.name }}')" class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="5" class="px-6 py-4 text-center text-gray-500">
-                                    Nenhum membro encontrado.
+                                <td colspan="5" class="px-6 py-12 text-center">
+                                    <div class="flex flex-col items-center gap-2 text-gray-400">
+                                        <ion-icon name="people-outline" style="font-size:2rem;"></ion-icon>
+                                        <span class="text-sm">Nenhum membro encontrado.</span>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -280,33 +387,33 @@
             </div>
 
                 {% if members.has_other_pages %}
-                <div class="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
-                    <div class="text-sm text-gray-500">
-                        Mostrando {{ members.start_index }} a {{ members.end_index }} de {{ members.paginator.count }} membros
+                <div class="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div class="text-xs sm:text-sm text-gray-400 order-2 sm:order-1">
+                        Mostrando {{ members.start_index }}–{{ members.end_index }} de {{ members.paginator.count }} membros
                     </div>
-                    <div class="flex space-x-2">
+                    <div class="flex items-center gap-1 order-1 sm:order-2 flex-wrap justify-center">
                         {% if members.has_previous %}
-                        <a href="?page={{ members.previous_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                            Anterior
+                        <a href="?page={{ members.previous_page_number }}&{{ request.GET.urlencode }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                            <span class="hidden sm:inline">Anterior</span>
                         </a>
                         {% endif %}
-                        
                         {% for num in members.paginator.page_range %}
                         {% if num == members.number %}
-                        <span class="px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm">{{ num }}</span>
+                        <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ num }}</span>
                         {% elif num > members.number|add:'-3' and num < members.number|add:'3' %}
-                        <a href="?page={{ num }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
+                        <a href="?page={{ num }}&{{ request.GET.urlencode }}"
+                           class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition min-w-[2rem] text-center">
                             {{ num }}
                         </a>
                         {% endif %}
                         {% endfor %}
-                        
                         {% if members.has_next %}
-                        <a href="?page={{ members.next_page_number }}&{{ request.GET.urlencode }}" 
-                           class="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 hover:bg-gray-50">
-                            Próximo
+                        <a href="?page={{ members.next_page_number }}&{{ request.GET.urlencode }}"
+                           class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
+                            <span class="hidden sm:inline">Próximo</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                         </a>
                         {% endif %}
                     </div>
@@ -317,104 +424,135 @@
     </div>
 </div>
 
-<div id="memberModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-medium text-gray-900">Detalhes do Membro</h3>
-            <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
-                <ion-icon name="close" class="text-xl"></ion-icon>
+<!-- ── View Member Modal ── -->
+<div id="memberModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[92vh]">
+        <!-- Modal header -->
+        <div id="memberModalHeader" class="flex items-center gap-4 p-5 border-b border-gray-100 flex-shrink-0">
+            <div id="memberModalAvatar" class="w-14 h-14 rounded-xl bg-[var(--color-primary)] flex items-center justify-center text-white font-bold text-2xl flex-shrink-0 overflow-hidden"></div>
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h3 id="memberModalName" class="text-lg font-bold text-gray-900 leading-tight"></h3>
+                    <span id="memberModalBadge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"></span>
+                </div>
+                <p id="memberModalMinistry" class="text-sm text-gray-500 mt-0.5"></p>
+            </div>
+            <button onclick="closeModal()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition flex-shrink-0">
+                <ion-icon name="close" class="text-lg"></ion-icon>
             </button>
         </div>
-        <div id="memberDetails">
+        <!-- Modal body -->
+        <div id="memberDetails" class="overflow-y-auto flex-1 p-5 space-y-4"></div>
+        <!-- Modal footer -->
+        <div class="flex gap-2 justify-end p-4 border-t border-gray-100 flex-shrink-0">
+            <button onclick="closeModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Fechar</button>
+            <a id="memberModalEditBtn" href="#" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white rounded-lg transition" style="background:var(--color-primary);"><ion-icon name="create-outline"></ion-icon> Editar</a>
+        </div>
+    </div>
+</div>
+
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Membro</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
         </div>
     </div>
 </div>
 
 <script>
+    function infoRow(icon, label, value) {
+        if (!value) return '';
+        return `<div class="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+            <div class="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <ion-icon name="${icon}" style="font-size:0.95rem;color:#6b7280;"></ion-icon>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-xs text-gray-400 font-medium uppercase tracking-wide leading-none mb-0.5">${label}</p>
+                <p class="text-sm text-gray-800 font-medium">${value}</p>
+            </div>
+        </div>`;
+    }
+
+    function sectionTitle(label) {
+        return `<p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 mt-2">${label}</p>`;
+    }
+
     function viewMember(memberId) {
+        const modal = document.getElementById('memberModal');
+        document.getElementById('memberDetails').innerHTML = '<div class="flex items-center justify-center py-10"><div class="animate-spin rounded-full h-8 w-8 border-b-2" style="border-color:var(--color-primary);"></div></div>';
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
         fetch(`/admin-panel/api/member/${memberId}/`)
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
-                const detailsHtml = `
-                    <div class="space-y-4">
-                        <div class="flex items-center space-x-4">
-                            ${data.profile_picture ? 
-                                `<img src="${data.profile_picture}" alt="${data.name}" class="w-16 h-16 rounded-full object-cover">` : 
-                                `<div class="w-16 h-16 bg-[var(--color-primary)] rounded-full flex items-center justify-center text-white font-bold text-xl">${data.name.charAt(0)}</div>`
-                            }
-                            <div>
-                                <h4 class="text-xl font-semibold text-gray-900">${data.name}</h4>
-                                <p class="text-gray-600">${data.ministry || 'Sem ministério'}</p>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <span class="font-medium text-gray-700">Email:</span>
-                                <p class="text-gray-900">${data.email || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Telefone:</span>
-                                <p class="text-gray-900">${data.phone || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Data de Nascimento:</span>
-                                <p class="text-gray-900">${data.birth_date || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Gênero:</span>
-                                <p class="text-gray-900">${data.gender || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Estado Civil:</span>
-                                <p class="text-gray-900">${data.marital_status || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Bairro:</span>
-                                <p class="text-gray-900">${data.neighborhood || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Conversão:</span>
-                                <p class="text-gray-900">${data.conversion || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Data da Conversão:</span>
-                                <p class="text-gray-900">${data.conversion_date || '--'}</p>
-                            </div>
-                            <div>
-                                <span class="font-medium text-gray-700">Status:</span>
-                                <p class="text-gray-900">${data.is_active ? 'Ativo' : 'Inativo'}</p>
-                            </div>
-                        </div>
-                        
-                        ${data.address ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Endereço:</span>
-                                <p class="text-gray-900">${data.address}</p>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.testimony ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Testemunho:</span>
-                                <p class="text-gray-900">${data.testimony}</p>
-                            </div>
-                        ` : ''}
-                        
-                        ${data.interests ? `
-                            <div>
-                                <span class="font-medium text-gray-700">Interesses:</span>
-                                <p class="text-gray-900">${data.interests}</p>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-                
-                document.getElementById('memberDetails').innerHTML = detailsHtml;
-                document.getElementById('memberModal').classList.remove('hidden');
+                // Header
+                const avatarEl = document.getElementById('memberModalAvatar');
+                if (data.profile_picture) {
+                    avatarEl.innerHTML = `<img src="${data.profile_picture}" alt="${data.name}" class="w-full h-full object-cover">`;
+                } else {
+                    avatarEl.textContent = data.name.charAt(0).toUpperCase();
+                }
+                document.getElementById('memberModalName').textContent = data.name;
+                document.getElementById('memberModalMinistry').textContent = data.ministry || 'Sem ministério';
+                const badge = document.getElementById('memberModalBadge');
+                if (data.is_active) {
+                    badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700';
+                    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-green-500"></span> Ativo';
+                } else {
+                    badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500';
+                    badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span> Inativo';
+                }
+                document.getElementById('memberModalEditBtn').href = `/admin-panel/members/${memberId}/edit/`;
+
+                // Body
+                let html = sectionTitle('Contato');
+                html += infoRow('mail-outline', 'Email', data.email);
+                html += infoRow('call-outline', 'Telefone', data.phone);
+                html += infoRow('logo-whatsapp', 'WhatsApp', data.phone);
+
+                html += sectionTitle('Informações Pessoais');
+                html += infoRow('calendar-outline', 'Nascimento', data.birth_date);
+                html += infoRow('person-outline', 'Gênero', data.gender);
+                html += infoRow('heart-outline', 'Estado Civil', data.marital_status);
+                html += infoRow('location-outline', 'Bairro', data.neighborhood);
+                html += infoRow('home-outline', 'Endereço', data.address);
+
+                const churchRows = [
+                    infoRow('star-outline', 'Ministério', data.ministry),
+                    infoRow('checkmark-circle-outline', 'Conversão', data.conversion),
+                    infoRow('calendar-outline', 'Data da Conversão', data.conversion_date),
+                ].join('');
+                if (churchRows) {
+                    html += sectionTitle('Igreja');
+                    html += churchRows;
+                }
+
+                if (data.testimony) {
+                    html += sectionTitle('Testemunho');
+                    html += `<p class="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-xl p-3">${data.testimony}</p>`;
+                }
+                if (data.interests) {
+                    html += sectionTitle('Interesses');
+                    html += `<p class="text-sm text-gray-700 leading-relaxed">${data.interests}</p>`;
+                }
+
+                document.getElementById('memberDetails').innerHTML = html;
             })
-            .catch(error => {
-                alert('Erro ao carregar detalhes do membro');
+            .catch(() => {
+                document.getElementById('memberDetails').innerHTML = '<p class="text-center text-red-500 text-sm py-6">Erro ao carregar detalhes.</p>';
             });
     }
     
@@ -422,34 +560,117 @@
         window.location.href = `/admin-panel/members/${memberId}/edit/`;
     }
     
+    let _deleteTargetId = null;
+
     function deleteMember(memberId, memberName) {
-        if (confirm(`Tem certeza que deseja excluir o membro "${memberName}"?`)) {
-            fetch('{% url "admin_api_delete" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'member',
-                    id: memberId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao excluir membro: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('Erro na comunicação com o servidor');
-            });
-        }
+        _deleteTargetId = memberId;
+        document.getElementById('deleteModalName').textContent = memberName;
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
     }
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteTargetId = null;
+    }
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteTargetId) return;
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        fetch('{% url "admin_api_delete" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'member', id: _deleteTargetId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+                alert('Erro ao excluir membro: ' + data.error);
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+            alert('Erro na comunicação com o servidor');
+        });
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
     
     function closeModal() {
-        document.getElementById('memberModal').classList.add('hidden');
+        const modal = document.getElementById('memberModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
     }
+
+    document.getElementById('memberModal').addEventListener('click', function (e) {
+        if (e.target === this) closeModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { closeModal(); closeDeleteModal(); }
+    });
+
+    // Filter panel toggle
+    (function () {
+        var toggle = document.getElementById('filter-toggle-members');
+        var panel  = document.getElementById('filter-panel-members');
+        var applyBtn = document.getElementById('apply-filters-members');
+        var hiddenMinistry = document.getElementById('hidden-ministry');
+        var hiddenStatus   = document.getElementById('hidden-status');
+        var panelMinistry  = document.getElementById('panel-ministry');
+        var panelStatus    = document.getElementById('panel-status');
+
+        if (!toggle || !panel) return;
+
+        toggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            panel.classList.toggle('hidden');
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!panel.contains(e.target) && e.target !== toggle) {
+                panel.classList.add('hidden');
+            }
+        });
+
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                hiddenMinistry.value = panelMinistry.value;
+                hiddenStatus.value   = panelStatus.value;
+                document.getElementById('filter-form').submit();
+            });
+        }
+    })();
+
+    // Auto-filter with loading overlay
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+        form.querySelectorAll('input[type="date"]').forEach(function(input) {
+            input.addEventListener('change', function () { form.submit(); });
+        });
+    })();
 </script>
 {% endblock %}

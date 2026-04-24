@@ -3,6 +3,62 @@
 
 {% block title %}Músicas - Painel Administrativo{% endblock %}
 
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    /* Table improvements */
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
+    }
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background 0.15s, box-shadow 0.15s;
+    }
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+    .data-table tbody td {
+        padding: 14px 24px;
+        vertical-align: middle;
+    }
+
+    /* Action buttons */
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px;
+        border-radius: 9px;
+        font-size: 1.1rem;
+        transition: all 0.15s;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .action-btn-view   { background: rgba(201,9,5,0.08); color: var(--color-primary); }
+    .action-btn-view:hover   { background: rgba(201,9,5,0.16); }
+    .action-btn-edit   { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover   { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
+</style>
+{% endblock %}
+
 {% block content %}
 {% include 'parciais/messages.html' %}
 
@@ -12,121 +68,101 @@
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-3 md:p-6 mt-24">
 
-            <!-- Cabeçalho -->
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-                <div class="mb-4 sm:mb-0">
-                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Músicas</h1>
-                    <p class="text-gray-600 mt-2">Gerenciar cifras e repertório</p>
+            <!-- Title -->
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <ion-icon name="musical-notes" class="text-xl text-white"></ion-icon>
                 </div>
-
-                <a href="{% url 'admin_music_create' %}"
-   class="inline-flex items-center gap-2 
-          bg-red-600 hover:bg-red-700 
-          text-white font-semibold 
-          px-5 py-2.5 
-          rounded-xl 
-          shadow-md hover:shadow-lg 
-          transition-all duration-200">
-    
-    <ion-icon name="add" class="text-xl"></ion-icon>
-    Nova Música
-                </a>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900 leading-tight">Músicas</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">
+                        {% if musics %}{{ musics|length }} música{{ musics|length|pluralize:"s" }}{% else %}Gerenciar cifras e repertório{% endif %}
+                    </p>
+                </div>
             </div>
 
-            <!-- Filtro -->
-            <div class="admin-card p-4 sm:p-6 mb-6">
-                <form method="GET" class="flex flex-col sm:flex-row gap-4">
-                    <input type="text" name="search" value="{{ search }}"
-                           placeholder="Buscar por nome da música ou cantor..."
-                           class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)]">
-
-                    <div class="flex gap-2">
-                        <button type="submit"
-                                class="bg-[var(--color-primary)] text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition flex items-center">
-                            <ion-icon name="search" class="mr-2"></ion-icon>
-                            Buscar
-                        </button>
-
-                        <a href="{% url 'admin_music_list' %}"
-                           class="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-opacity-90 transition">
-                            Limpar
-                        </a>
+            <!-- Search + New -->
+            <div class="flex items-center gap-2 mb-6">
+                <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar por nome da música ou cantor..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
                     </div>
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
                 </form>
+
+                <a href="{% url 'admin_music_create' %}"
+                   class="flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Nova Música
+                </a>
             </div>
 
             <!-- Tabela -->
             <div class="admin-card overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
+                    <table class="data-table w-full">
+                        <thead>
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Música
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Cantor
-                                </th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                    Cifra (PDF)
-                                </th>
-                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
-                                    Ações
-                                </th>
+                                <th>Música</th>
+                                <th>Cantor</th>
+                                <th>Cifra (PDF)</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
 
-                        <tbody class="bg-white divide-y divide-gray-200">
+                        <tbody>
                             {% for music in musics %}
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-6 py-4 font-medium text-gray-900">
-                                    {{ music.name }}
-                                </td>
+                            <tr>
+                                <td class="font-medium text-gray-900 row-link" data-row-href="{% url 'admin_music_edit' music.id %}">{{ music.name }}</td>
 
-                                <td class="px-6 py-4 text-gray-700">
-                                    {{ music.singer|default:"—" }}
-                                </td>
+                                <td class="text-gray-700">{{ music.singer|default:"—" }}</td>
 
-                                <td class="px-6 py-4">
+                                <td>
                                     {% if music.chord_sheet %}
-                                        <a href="{{ music.chord_sheet.url }}"
-                                           target="_blank"
-                                           class="text-[var(--color-primary)] hover:underline flex items-center">
-                                            <ion-icon name="document-text-outline" class="mr-1"></ion-icon>
-                                            Ver PDF
+                                        <a href="{{ music.chord_sheet.url }}" target="_blank"
+                                           class="text-[var(--color-primary)] hover:underline flex items-center gap-1 text-sm">
+                                            <ion-icon name="document-text-outline"></ion-icon>
+                                            <span class="mt-1">Ver PDF</span>
                                         </a>
                                     {% else %}
-                                        <span class="text-gray-400">Não enviado</span>
+                                        <span class="text-gray-400 text-sm">Não enviado</span>
                                     {% endif %}
                                 </td>
 
-                                <td class="px-6 py-4 text-center">
-                                    <div class="flex justify-center gap-3">
+                                <td>
+                                    <div class="flex justify-end gap-1">
                                         {% if music.chord_sheet %}
                                         <a href="{{ music.chord_sheet.url }}" target="_blank"
-                                           class="text-[var(--color-primary)] hover:text-opacity-80">
-                                            <ion-icon name="eye"></ion-icon>
+                                           class="action-btn action-btn-view" title="Ver PDF">
+                                            <ion-icon name="eye-outline"></ion-icon>
                                         </a>
                                         {% endif %}
-
                                         <a href="{% url 'admin_music_edit' music.id %}"
-                                                class="text-blue-600 hover:text-blue-800"
-                                                title="Editar música">
-                                            <ion-icon name="create"></ion-icon>
+                                           class="action-btn action-btn-edit" title="Editar música">
+                                            <ion-icon name="create-outline"></ion-icon>
                                         </a>
-                                        
                                         <button onclick="deleteMusic({{ music.id }}, '{{ music.name }}')"
-                                                class="text-red-600 hover:text-red-800">
-                                            <ion-icon name="trash"></ion-icon>
+                                                class="action-btn action-btn-delete" title="Excluir">
+                                            <ion-icon name="trash-outline"></ion-icon>
                                         </button>
                                     </div>
                                 </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="4" class="px-6 py-8 text-center text-gray-500">
-                                    <ion-icon name="musical-notes-outline" class="text-4xl mb-2"></ion-icon>
-                                    <p>Nenhuma música cadastrada.</p>
+                                <td colspan="4" class="text-center py-8 text-gray-500">
+                                    <ion-icon name="musical-notes-outline" class="text-4xl mb-2 block mx-auto"></ion-icon>
+                                    Nenhuma música cadastrada.
                                 </td>
                             </tr>
                             {% endfor %}
@@ -139,102 +175,106 @@
     </div>
 </div>
 
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Música</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
+        </div>
+    </div>
+</div>
+
 <script>
-  const CSRF_TOKEN = "{{ csrf_token }}";
-</script>
+    let _deleteMusicId = null;
 
-<!-- SweetAlert2 -->
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    function deleteMusic(musicId, musicName) {
+        _deleteMusicId = musicId;
+        document.getElementById('deleteModalName').textContent = musicName;
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
 
-<script>
-function deleteMusic(musicId, musicName) {
-    Swal.fire({
-        title: '⚠️ Confirmar Exclusão',
-        html: `Tem certeza que deseja deletar a partitura <strong>${musicName}</strong>?<br><br>
-               <span class="text-red-600">Esta ação não pode ser desfeita!</span>`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#DC2626',
-        cancelButtonColor: '#6B7280',
-        confirmButtonText: '<i class="fas fa-trash mr-2"></i>Sim, deletar!',
-        cancelButtonText: '<i class="fas fa-times mr-2"></i>Cancelar',
-        reverseButtons: true,
-        customClass: {
-            popup: 'rounded-2xl',
-            confirmButton: 'rounded-xl px-6 py-3 font-bold',
-            cancelButton: 'rounded-xl px-6 py-3 font-bold'
-        }
-    }).then((result) => {
-        if (result.isConfirmed) {
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteMusicId = null;
+    }
 
-            // 🔄 Loading
-            Swal.fire({
-                title: 'Deletando...',
-                text: 'Por favor, aguarde...',
-                icon: 'info',
-                allowOutsideClick: false,
-                allowEscapeKey: false,
-                showConfirmButton: false,
-                didOpen: () => {
-                    Swal.showLoading();
-                }
-            });
-
-            // 🗑️ Requisição de delete
-            fetch(`/admin-panel/music/delete/${musicId}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': CSRF_TOKEN
-                }
-            })
-
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    Swal.fire({
-                        title: '✅ Deletado!',
-                        text: 'A partitura foi deletada com sucesso.',
-                        icon: 'success',
-                        confirmButtonColor: '#10B981',
-                        confirmButtonText: '<i class="fas fa-check mr-2"></i>OK',
-                        customClass: {
-                            popup: 'rounded-2xl',
-                            confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                        }
-                    }).then(() => {
-                        window.location.reload();
-                    });
-                } else {
-                    Swal.fire({
-                        title: '❌ Erro',
-                        text: data.error || 'Ocorreu um erro ao deletar a partitura.',
-                        icon: 'error',
-                        confirmButtonColor: '#EF4444',
-                        confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
-                        customClass: {
-                            popup: 'rounded-2xl',
-                            confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                        }
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Erro:', error);
-                Swal.fire({
-                    title: '❌ Erro',
-                    text: 'Ocorreu um erro ao processar a solicitação.',
-                    icon: 'error',
-                    confirmButtonColor: '#EF4444',
-                    confirmButtonText: '<i class="fas fa-times mr-2"></i>Fechar',
-                    customClass: {
-                        popup: 'rounded-2xl',
-                        confirmButton: 'rounded-xl px-6 py-3 font-bold'
-                    }
-                });
-            });
-        }
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteMusicId) return;
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        fetch(`/admin-panel/music/delete/${_deleteMusicId}/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+                alert('Erro ao excluir música: ' + data.error);
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+            alert('Erro na comunicação com o servidor');
+        });
     });
-}
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+// Auto-filter with loading overlay
+(function () {
+    if (!document.getElementById('filter-loading-overlay')) {
+        var ov = document.createElement('div');
+        ov.id = 'filter-loading-overlay';
+        ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        ov.style.display = 'none';
+        ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+        document.body.appendChild(ov);
+    }
+    var overlay = document.getElementById('filter-loading-overlay');
+    var form = document.getElementById('filter-form');
+    if (!form) return;
+    form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+    form.querySelectorAll('input[type="date"]').forEach(function(input) {
+        input.addEventListener('change', function () { form.submit(); });
+    });
+})();
 </script>
 {% endblock %}
