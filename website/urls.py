@@ -1,7 +1,7 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from django.conf import settings
-from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView
+from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView, MusicUserListView
 from .views.home import HomeView, TestimonyListView, ContactView
 from .views.visitor import VisitorCreateView, MemberVisitorCreateView, MemberVisitorListView
 from .views.evangelism import EvangelismCreateView, EvangelismListView
@@ -61,7 +61,7 @@ from .views.schedules import (
     ScheduleListView, ScheduleCreateView, ScheduleEditView, ScheduleDetailView,
     ScheduleDeleteView,
     ScheduleDayCreateView, ScheduleDayEditView, ScheduleDayDeleteView,
-    ScheduleDayToggleCancelView,
+    ScheduleDayGetView, ScheduleDayToggleCancelView,
     schedule_print_view,
     check_schedule_conflict_view,
     division_list_view, division_create_view, division_edit_view, division_delete_view,
@@ -173,6 +173,7 @@ urlpatterns = [
     
     # Schedule Days URLs
     path('admin-panel/schedules/<int:schedule_id>/days/new/', ScheduleDayCreateView.as_view(), name='schedule_day_create'),
+    path('admin-panel/schedules/days/<int:day_id>/get/', ScheduleDayGetView.as_view(), name='schedule_day_get'),
     path('admin-panel/schedules/days/<int:day_id>/edit/', ScheduleDayEditView.as_view(), name='schedule_day_edit'),
     path('admin-panel/schedules/days/<int:day_id>/delete/', ScheduleDayDeleteView.as_view(), name='schedule_day_delete'),
     path('admin-panel/schedules/days/<int:day_id>/toggle-cancel/', ScheduleDayToggleCancelView.as_view(), name='schedule_day_toggle_cancel'),
@@ -206,6 +207,7 @@ urlpatterns = [
     path('admin-panel/music/new/', MusicCreateView.as_view(), name='admin_music_create'),
     path('admin-panel/music/edit/<int:pk>/', MusicUpdateView.as_view(), name='admin_music_edit'),
     path('admin-panel/music/delete/<int:pk>/', MusicDeleteView.as_view(), name='admin_music_delete'),
+    path('ministerio-louvor/', MusicUserListView.as_view(), name='music_user_list'),
     path('admin-panel/neighborhoods/', NeighborhoodsListView.as_view(), name='admin_neighborhoods_list'),
     path('admin-panel/neighborhoods/new/', NeighborhoodEditView.as_view(), name='admin_neighborhood_create'),
     path('admin-panel/neighborhoods/<int:neighborhood_id>/edit/', NeighborhoodEditView.as_view(), name='admin_neighborhood_edit'),

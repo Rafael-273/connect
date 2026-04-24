@@ -754,6 +754,35 @@
                                 {% else %}
                                     <div class="no-assignment">Nenhuma equipe atribuída</div>
                                 {% endif %}
+                            {% elif day.has_shifts %}
+                                <div style="width:100%; display:flex; flex-direction:column; gap:8px;">
+                                    <!-- Manhã -->
+                                    <div style="border:1.5px solid #C90905; border-radius:10px; overflow:hidden;">
+                                        <div style="background:#C90905; padding:4px 10px; display:flex; align-items:center; gap:6px;">
+                                            <span style="color:white; font-size:8pt; font-weight:700; letter-spacing:0.04em;">&#9788; MANHÃ</span>
+                                        </div>
+                                        <div style="padding:8px 10px; display:flex; flex-wrap:wrap; gap:6px; background:white;">
+                                        {% for member in day.members_morning %}
+                                            <div class="member-item">👤 {{ member.name }}</div>
+                                        {% empty %}
+                                            <div class="no-assignment" style="font-size:8pt;">Nenhum membro</div>
+                                        {% endfor %}
+                                        </div>
+                                    </div>
+                                    <!-- Noite -->
+                                    <div style="border:1.5px solid #C90905; border-radius:10px; overflow:hidden;">
+                                        <div style="background:#C90905; padding:4px 10px; display:flex; align-items:center; gap:6px;">
+                                            <span style="color:white; font-size:8pt; font-weight:700; letter-spacing:0.04em;">&#9790; NOITE</span>
+                                        </div>
+                                        <div style="padding:8px 10px; display:flex; flex-wrap:wrap; gap:6px; background:white;">
+                                        {% for member in day.members_evening %}
+                                            <div class="member-item">👤 {{ member.name }}</div>
+                                        {% empty %}
+                                            <div class="no-assignment" style="font-size:8pt;">Nenhum membro</div>
+                                        {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
                             {% else %}
                                 {% if day.members %}
                                     {% for member in day.members %}

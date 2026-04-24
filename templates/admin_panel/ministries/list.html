@@ -181,10 +181,10 @@
                            class="flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-2 rounded-lg text-xs font-medium transition">
                             <ion-icon name="create-outline"></ion-icon> Editar
                         </a>
-                        <a href="{% url 'ministry_delete' ministry.id %}"
+                        <button onclick="deleteMinistry({{ ministry.id }}, '{{ ministry.name|escapejs }}', '{% url 'ministry_delete' ministry.id %}')"
                            class="flex items-center justify-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg text-xs font-medium transition">
                             <ion-icon name="trash-outline"></ion-icon> Excluir
-                        </a>
+                        </button>
                     </div>
                 </div>
                 {% endfor %}
@@ -239,9 +239,9 @@
                                         <a href="{% url 'ministry_edit' ministry.id %}" class="action-btn action-btn-edit" title="Editar">
                                             <ion-icon name="create-outline"></ion-icon>
                                         </a>
-                                        <a href="{% url 'ministry_delete' ministry.id %}" class="action-btn action-btn-delete" title="Excluir">
+                                        <button onclick="deleteMinistry({{ ministry.id }}, '{{ ministry.name|escapejs }}', '{% url 'ministry_delete' ministry.id %}')" class="action-btn action-btn-delete" title="Excluir">
                                             <ion-icon name="trash-outline"></ion-icon>
-                                        </a>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -319,7 +319,56 @@
     </div>
 </div>
 
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Ministério</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
+        </div>
+        <form id="deleteMinistryForm" method="POST" class="hidden">{% csrf_token %}</form>
+    </div>
+</div>
+
 <script>
+    let _deleteMinistryUrl = null;
+
+    function deleteMinistry(ministryId, ministryName, deleteUrl) {
+        _deleteMinistryUrl = deleteUrl;
+        document.getElementById('deleteModalName').textContent = ministryName;
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteMinistryUrl = null;
+    }
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteMinistryUrl) return;
+        const form = document.getElementById('deleteMinistryForm');
+        form.action = _deleteMinistryUrl;
+        form.submit();
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
+
     // Filter panel toggle
     (function () {
         var toggle   = document.getElementById('filter-toggle-ministries');

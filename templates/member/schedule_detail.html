@@ -126,7 +126,51 @@
                 </div>
 
                 <!-- Corpo do Dia -->
-                {% if entry.div_map or entry.members %}
+                {% if day.has_shifts %}
+                <div class="px-4 py-3 space-y-3 text-sm">
+                    <!-- Manhã -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid #C90905;">
+                        <div class="flex items-center gap-2 px-3 py-2" style="background: #C90905;">
+                            <i class="fas fa-sun text-white text-xs"></i>
+                            <span class="text-white text-xs font-bold uppercase tracking-wide">Manhã</span>
+                        </div>
+                        <div class="px-3 py-2.5 flex flex-wrap gap-2">
+                            {% for m in entry.members_morning %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
+                                {% if m.id == member.id %}text-white{% else %}text-gray-700 bg-gray-100{% endif %}"
+                                {% if m.id == member.id %}style="background-color: #C90905;"{% endif %}>
+                                {% if m.id == member.id %}<i class="fas fa-star text-xs"></i>{% endif %}
+                                {{ m.name }}
+                            </span>
+                            {% empty %}
+                            <span class="text-xs text-gray-400 italic">Sem membros</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <!-- Noite -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid #C90905;">
+                        <div class="flex items-center gap-2 px-3 py-2" style="background: #C90905;">
+                            <i class="fas fa-moon text-white text-xs"></i>
+                            <span class="text-white text-xs font-bold uppercase tracking-wide">Noite</span>
+                        </div>
+                        <div class="px-3 py-2.5 flex flex-wrap gap-2">
+                            {% for m in entry.members_evening %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
+                                {% if m.id == member.id %}text-white{% else %}text-gray-700 bg-gray-100{% endif %}"
+                                {% if m.id == member.id %}style="background-color: #C90905;"{% endif %}>
+                                {% if m.id == member.id %}<i class="fas fa-star text-xs"></i>{% endif %}
+                                {{ m.name }}
+                            </span>
+                            {% empty %}
+                            <span class="text-xs text-gray-400 italic">Sem membros</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% if day.notes %}
+                    <p class="text-xs text-gray-500 italic">{{ day.notes }}</p>
+                    {% endif %}
+                </div>
+                {% elif entry.div_map or entry.members %}
                 <div class="px-4 py-3 space-y-3 text-sm">
                     {% if entry.div_map %}
                         {% for div_name, div_members in entry.div_map.items %}

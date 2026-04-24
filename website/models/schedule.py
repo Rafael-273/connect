@@ -171,7 +171,26 @@ class ScheduleDay(BaseModel):
         verbose_name='Membros',
         help_text='Membros escalados para este dia'
     )
-    
+
+    # Turnos (Manhã / Noite)
+    has_shifts = models.BooleanField(
+        default=False,
+        verbose_name='Tem turnos (Manhã/Noite)',
+        help_text='Se verdadeiro, este dia tem escalas separadas para manhã e noite'
+    )
+    members_morning = models.ManyToManyField(
+        'Member',
+        blank=True,
+        related_name='schedule_days_morning',
+        verbose_name='Membros da Manhã',
+    )
+    members_evening = models.ManyToManyField(
+        'Member',
+        blank=True,
+        related_name='schedule_days_evening',
+        verbose_name='Membros da Noite',
+    )
+
     # Informações do dia
     description = models.CharField(
         max_length=200,

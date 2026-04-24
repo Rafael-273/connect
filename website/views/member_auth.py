@@ -68,6 +68,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'is_approver': flags['is_approver'],
             'is_ministration_member': flags['is_ministration'],
             'is_boas_vindas_member': flags['is_boas_vindas'],
+            'can_music_member': flags['can_music_member'],
             'member_schedules': member_schedules,
             'is_new_member': not any([flags['has_ministries'], flags['is_approver'], flags['can_consolidate']]),
         }
@@ -78,6 +79,11 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'is_approver': member.is_approver,
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration': self.get_ministration_status(member),
+            'can_music_member': MinistryMembership.objects.filter(
+                member=member,
+                ministry__name__icontains='louvor',
+                is_active=True
+            ).exists(),
             'is_boas_vindas': MinistryMembership.objects.filter(
                 member=member,
                 is_active=True,

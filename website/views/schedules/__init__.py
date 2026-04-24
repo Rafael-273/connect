@@ -2,6 +2,7 @@ from .days import (
     ScheduleDayCreateView,
     ScheduleDayDeleteView,
     ScheduleDayEditView,
+    ScheduleDayGetView,
     ScheduleDayToggleCancelView,
     check_schedule_conflict_view,
 )
@@ -43,6 +44,7 @@ __all__ = [
     # Schedule days
     'ScheduleDayCreateView',
     'ScheduleDayEditView',
+    'ScheduleDayGetView',
     'ScheduleDayDeleteView',
     'ScheduleDayToggleCancelView',
     'check_schedule_conflict_view',

@@ -217,6 +217,26 @@
     </div>
 </div>
 
+<!-- ── Delete Confirm Modal ── -->
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Bairro</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <div class="flex gap-2 justify-end">
+            <button onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
+        </div>
+    </div>
+</div>
+
 <script>
     let editingNeighborhoodId = null;
     
@@ -236,31 +256,53 @@
         document.getElementById('neighborhoodModal').classList.remove('hidden');
     }
     
+    let _deleteNeighborhoodId = null;
+
     function deleteNeighborhood(neighborhoodId, neighborhoodName) {
-        if (confirm(`Tem certeza que deseja excluir o bairro "${neighborhoodName}"?`)) {
-            fetch('{% url "admin_api_delete" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: 'neighborhood',
-                    id: neighborhoodId
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    location.reload();
-                } else {
-                    alert('Erro ao excluir bairro: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('Erro na comunicação com o servidor');
-            });
-        }
+        _deleteNeighborhoodId = neighborhoodId;
+        document.getElementById('deleteModalName').textContent = neighborhoodName;
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
     }
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteNeighborhoodId = null;
+    }
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteNeighborhoodId) return;
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        fetch('{% url "admin_api_delete" %}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'neighborhood', id: _deleteNeighborhoodId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                btn.disabled = false;
+                btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+                alert('Erro ao excluir bairro: ' + data.error);
+            }
+        })
+        .catch(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+            alert('Erro na comunicação com o servidor');
+        });
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
     
     function closeModal() {
         document.getElementById('neighborhoodModal').classList.add('hidden');

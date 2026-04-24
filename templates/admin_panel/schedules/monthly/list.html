@@ -187,16 +187,16 @@
                     {% endif %}
                     <div class="flex gap-2">
                         <a href="{% url 'schedule_detail' schedule.id %}"
-                           class="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] bg-opacity-10 text-[var(--color-primary)] hover:bg-opacity-20 px-3 py-2 rounded-lg text-xs font-medium transition">
-                            <ion-icon name="eye-outline"></ion-icon> Ver
+                           class="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] bg-opacity-10 text-white hover:bg-opacity-20 px-3 py-2 rounded-lg text-xs font-medium transition">
+                            <ion-icon name="eye-outline"></ion-icon> <span class="mt-1">Visualizar</span>
                         </a>
                         <a href="{% url 'schedule_edit' schedule.id %}"
                            class="flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-2 rounded-lg text-xs font-medium transition">
-                            <ion-icon name="create-outline"></ion-icon> Editar
+                            <ion-icon name="create-outline"></ion-icon> <span class="mt-1">Editar</span>
                         </a>
                         <button onclick="deleteSchedule({{ schedule.id }})"
                                 class="flex items-center justify-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg text-xs font-medium transition">
-                            <ion-icon name="trash-outline"></ion-icon> Excluir
+                            <ion-icon name="trash-outline"></ion-icon> <span class="mt-1">Excluir</span>
                         </button>
                     </div>
                 </div>

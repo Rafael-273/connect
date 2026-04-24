@@ -220,6 +220,8 @@ def schedule_print_view(request, schedule_id):
         deleted__isnull=True,
     ).select_related('team').prefetch_related(
         'members',
+        'members_morning',
+        'members_evening',
         'division_assignments',
         'division_assignments__division',
         'division_assignments__member',
@@ -259,6 +261,9 @@ def schedule_print_view(request, schedule_id):
             day_data['team'] = day.team
         else:
             day_data['members'] = list(day.members.all())
+            day_data['has_shifts'] = day.has_shifts
+            day_data['members_morning'] = list(day.members_morning.all()) if day.has_shifts else []
+            day_data['members_evening'] = list(day.members_evening.all()) if day.has_shifts else []
 
         processed_days.append(day_data)
 

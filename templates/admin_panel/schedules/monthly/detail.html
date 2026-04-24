@@ -61,7 +61,7 @@
         <div class="p-4 sm:p-6 mt-24">
 
             <!-- Header -->
-            <div class="flex items-start justify-between gap-3 mb-6">
+            <div class="flex items-center justify-between gap-3 mb-2 md:mb-6">
                 <div class="flex items-center gap-3 min-w-0">
                     <a href="{% url 'schedule_list' %}" class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-900 transition shadow-sm">
                         <ion-icon name="arrow-back-outline" class="text-lg"></ion-icon>
@@ -77,7 +77,7 @@
                                 <ion-icon name="calendar-outline" class="text-xs"></ion-icon>
                                 {{ schedule.get_month_display }}/{{ schedule.year }}
                             </span>
-                            <span class="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                            <span class="hidden sm:inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
                                 <ion-icon name="{% if schedule.use_team_rotation %}people-circle-outline{% else %}person-outline{% endif %}" class="text-xs"></ion-icon>
                                 {% if schedule.use_team_rotation %}Rotação de Equipes{% else %}Membros Diretos{% endif %}
                             </span>
@@ -106,17 +106,13 @@
                 <!-- Mobile actions -->
                 <div class="flex sm:hidden items-center gap-2 flex-shrink-0">
                     <button onclick="openCalendarModal()"
-                            class="w-9 h-9 flex items-center justify-center rounded-xl text-white shadow-sm"
+                            class="w-9 h-9 flex items-center justify-center rounded-xl text-white shadow-sm transition"
                             style="background: var(--color-primary);">
                         <ion-icon name="calendar-outline" class="text-lg"></ion-icon>
                     </button>
                     <a href="{% url 'schedule_print' schedule.id %}" target="_blank"
                        class="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-700 shadow-sm hover:border-gray-300 transition">
                         <ion-icon name="print-outline" class="text-lg"></ion-icon>
-                    </a>
-                    <a href="{% url 'schedule_edit' schedule.id %}"
-                       class="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-700 shadow-sm hover:border-gray-300 transition">
-                        <ion-icon name="create-outline" class="text-lg"></ion-icon>
                     </a>
                 </div>
             </div>
@@ -148,11 +144,12 @@
                     </div>
                     <div class="divide-y divide-gray-50">
                         {% for day in week_days %}
-                        <div class="flex items-center gap-4 p-4 sm:p-5 hover:bg-gray-50/50 transition {% if day.is_cancelled %}opacity-60{% endif %}">
+                        <div class="p-4 sm:p-5 hover:bg-gray-50/50 transition {% if day.is_cancelled %}opacity-60{% endif %}">
+                            <div class="flex items-start gap-3 sm:gap-4">
                             <!-- Date Badge -->
-                            <div class="flex-shrink-0 day-date-badge {% if day.is_cancelled %}cancelled{% endif %} w-14 h-14">
+                            <div class="flex-shrink-0 day-date-badge {% if day.is_cancelled %}cancelled{% endif %} w-12 h-12 sm:w-14 sm:h-14">
                                 <span class="text-[9px] font-bold uppercase opacity-90 leading-none">{{ day.pt_weekday|slice:":3" }}</span>
-                                <span class="text-xl font-black leading-tight">{{ day.date|date:"j" }}</span>
+                                <span class="text-lg sm:text-xl font-black leading-tight">{{ day.date|date:"j" }}</span>
                                 <span class="text-[9px] font-medium uppercase opacity-90 leading-none">{{ day.date|date:"M" }}</span>
                             </div>
                             <!-- Content -->
@@ -167,6 +164,36 @@
                                 </div>
                                 <p class="text-xs text-gray-400 mb-2">{{ day.date|date:"d/m/Y" }} &mdash; {{ day.pt_weekday }}</p>
                                 <!-- Team/Members -->
+                                {% if day.has_shifts %}
+                                <div class="space-y-1.5">
+                                    <div class="flex flex-wrap gap-1.5 items-center">
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0" style="color:var(--color-primary);background:#fff1f1;border:1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);">
+                                            <ion-icon name="sunny-outline" class="text-xs"></ion-icon>Manhã
+                                        </span>
+                                        {% for member in day.members_morning.all %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                            <ion-icon name="person-circle-outline" class="text-sm flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                            {{ member.name }}
+                                        </span>
+                                        {% empty %}
+                                        <span class="text-xs text-gray-400 italic">Sem membros</span>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5 items-center">
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0" style="color:var(--color-primary);background:#fff1f1;border:1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);">
+                                            <ion-icon name="moon-outline" class="text-xs"></ion-icon>Noite
+                                        </span>
+                                        {% for member in day.members_evening.all %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                            <ion-icon name="person-circle-outline" class="text-sm flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                            {{ member.name }}
+                                        </span>
+                                        {% empty %}
+                                        <span class="text-xs text-gray-400 italic">Sem membros</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% else %}
                                 <div class="flex flex-wrap gap-1.5">
                                     {% if day.team %}
                                     <span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
@@ -188,6 +215,7 @@
                                     </span>
                                     {% endif %}
                                 </div>
+                                {% endif %}
                                 <!-- Division Assignments -->
                                 {% if day.grouped_divisions %}
                                 <div class="flex flex-wrap gap-1.5 mt-2">
@@ -214,9 +242,23 @@
                                     <span><strong>Motivo:</strong> {{ day.cancellation_reason }}</span>
                                 </p>
                                 {% endif %}
+                                <!-- Actions — mobile only, below content -->
+                                <div class="flex items-center gap-1.5 mt-3 sm:hidden">
+                                    <button onclick="editDay({{ day.id }})" title="Editar" class="action-btn action-btn-edit">
+                                        <ion-icon name="create-outline"></ion-icon>
+                                    </button>
+                                    {% if divisions %}
+                                    <button onclick="openDivisionModal({{ day.id }})" title="Atribuir Divisões" class="action-btn action-btn-division">
+                                        <ion-icon name="git-branch-outline"></ion-icon>
+                                    </button>
+                                    {% endif %}
+                                    <button onclick="deleteDay({{ day.id }})" title="Remover" class="action-btn action-btn-delete">
+                                        <ion-icon name="trash-outline"></ion-icon>
+                                    </button>
+                                </div>
                             </div>
-                            <!-- Actions -->
-                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <!-- Actions — desktop only -->
+                            <div class="hidden sm:flex items-center gap-1.5 flex-shrink-0">
                                 <button onclick="editDay({{ day.id }})" title="Editar" class="action-btn action-btn-edit">
                                     <ion-icon name="create-outline"></ion-icon>
                                 </button>
@@ -229,6 +271,7 @@
                                     <ion-icon name="trash-outline"></ion-icon>
                                 </button>
                             </div>
+                            </div><!-- end flex row -->
                         </div>
                         {% endfor %}
                     </div>
@@ -403,6 +446,27 @@
                            placeholder="Ex: Culto de Quarta-feira">
                 </div>
 
+                {% if not schedule.use_team_rotation %}
+                <!-- Shift toggle -->
+                <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-200">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--color-primary);">
+                            <ion-icon name="sunny-outline" class="text-white text-sm"></ion-icon>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">Dois turnos (Manhã e Noite)</p>
+                            <p class="text-xs text-gray-500">Escalas separadas para cada período</p>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input type="checkbox" id="shiftToggle" class="sr-only peer" onchange="toggleShiftsUI(this.checked)">
+                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#C90905]"></div>
+                    </label>
+                </div>
+                {% endif %}
+
+                <!-- Single assignment section (hidden when shifts are on) -->
+                <div id="singleAssignmentSection">
                 {% if schedule.use_team_rotation %}
                 <div>
                     <label class="modal-form-label">Equipe *</label>
@@ -421,8 +485,7 @@
                     <label class="modal-form-label">Membros *</label>
                     <select id="assignmentMembers"
                             name="members"
-                            multiple
-                            required>
+                            multiple>
                         {% for member in members %}
                         <option value="{{ member.id }}">{{ member.name }}</option>
                         {% endfor %}
@@ -440,6 +503,43 @@
                     </div>
                     <div id="assignmentDivisionsContent" class="px-4 pb-4 pt-3 space-y-3 bg-white">
                         <!-- Dynamically populated by JS -->
+                    </div>
+                </div>
+                {% endif %}
+                </div><!-- end #singleAssignmentSection -->
+
+                {% if not schedule.use_team_rotation %}
+                <!-- Shift assignment section (shown when shifts are on) -->
+                <div id="shiftAssignmentSection" class="hidden space-y-3">
+                    <!-- Manhã -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid var(--color-primary);">
+                        <div class="flex items-center gap-2 px-4 py-2.5" style="background: var(--color-primary);">
+                            <ion-icon name="sunny-outline" class="text-white text-base flex-shrink-0"></ion-icon>
+                            <span class="font-bold text-white text-sm">Manhã</span>
+                            <span id="morningBadge" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.25);color:white;">Nenhum</span>
+                        </div>
+                        <div class="px-4 py-3 bg-white">
+                            <select id="assignmentMembersMorning" name="members_morning" multiple class="shift-select w-full">
+                                {% for member in members %}
+                                <option value="{{ member.id }}">{{ member.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Noite -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid var(--color-primary);">
+                        <div class="flex items-center gap-2 px-4 py-2.5" style="background: var(--color-primary);">
+                            <ion-icon name="moon-outline" class="text-white text-base flex-shrink-0"></ion-icon>
+                            <span class="font-bold text-white text-sm">Noite</span>
+                            <span id="eveningBadge" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.25);color:white;">Nenhum</span>
+                        </div>
+                        <div class="px-4 py-3 bg-white">
+                            <select id="assignmentMembersEvening" name="members_evening" multiple class="shift-select w-full">
+                                {% for member in members %}
+                                <option value="{{ member.id }}">{{ member.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                 </div>
                 {% endif %}
@@ -1088,6 +1188,11 @@ function loadScheduleDays() {
         memberIds: [{% for member in day.members.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
         memberNames: [{% for member in day.members.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
         {% endif %}
+        hasShifts: {{ day.has_shifts|yesno:"true,false" }},
+        morningMemberIds: [{% for member in day.members_morning.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
+        morningMemberNames: [{% for member in day.members_morning.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
+        eveningMemberIds: [{% for member in day.members_evening.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
+        eveningMemberNames: [{% for member in day.members_evening.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
         notes: '{{ day.notes|default:""|escapejs }}',
         divisionAssignments: Object.fromEntries([{% for group in day.grouped_divisions %}[{{ group.division.id }}, [{% for m in group.members %}{{ m.id }}{% if not forloop.last %},{% endif %}{% endfor %}]]{% if not forloop.last %},{% endif %}{% endfor %}])
     };
@@ -1200,6 +1305,23 @@ function openDayAssignment(dateStr) {
         }, 50);
     }
 
+    // Populate shift fields
+    const hasShifts = dayData ? (dayData.hasShifts || false) : false;
+    const shiftToggle = document.getElementById('shiftToggle');
+    if (shiftToggle) {
+        shiftToggle.checked = hasShifts;
+        toggleShiftsUI(hasShifts, false); // false = don't init select2 yet
+        if (hasShifts) {
+            const morningIds = dayData && dayData.morningMemberIds ? dayData.morningMemberIds.map(String) : [];
+            const eveningIds = dayData && dayData.eveningMemberIds ? dayData.eveningMemberIds.map(String) : [];
+            setTimeout(() => {
+                initShiftSelects();
+                $('#assignmentMembersMorning').val(morningIds).trigger('change');
+                $('#assignmentMembersEvening').val(eveningIds).trigger('change');
+            }, 80);
+        }
+    }
+
     // Populate division assignments section — always visible
     document.getElementById('dayAssignmentModal').classList.remove('hidden');
 
@@ -1216,9 +1338,15 @@ function openDayAssignment(dateStr) {
 
 function closeDayAssignmentModal() {
     destroyAssignmentDivisionSelects();
+    destroyShiftSelects();
     assignmentDivisionsExpanded = false;
     if ($('#assignmentMembers').hasClass('select2-hidden-accessible')) {
         $('#assignmentMembers').select2('destroy');
+    }
+    const shiftToggle = document.getElementById('shiftToggle');
+    if (shiftToggle) {
+        shiftToggle.checked = false;
+        toggleShiftsUI(false, false);
     }
     document.getElementById('dayAssignmentModal').classList.add('hidden');
     document.getElementById('dayAssignmentForm').reset();
@@ -1244,16 +1372,20 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
             return;
         }
     } else if (availableDivisions.length === 0) {
-        // Only require direct member selection when there are no divisions
-        const members = formData.getAll('members');
-        if (members.length === 0) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Membros obrigatórios',
-                text: 'Por favor, selecione ao menos um membro',
-                confirmButtonColor: '#C90905'
-            });
-            return;
+        // Only require direct member selection when there are no divisions and shifts are off
+        const shiftToggle = document.getElementById('shiftToggle');
+        const hasShifts = shiftToggle ? shiftToggle.checked : false;
+        if (!hasShifts) {
+            const members = formData.getAll('members');
+            if (members.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Membros obrigatórios',
+                    text: 'Por favor, selecione ao menos um membro',
+                    confirmButtonColor: '#C90905'
+                });
+                return;
+            }
         }
     }
 
@@ -1286,10 +1418,18 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
 
     // Verificar conflitos de escala antes de prosseguir
     if (!useTeamRotation) {
+        const shiftToggleConflict = document.getElementById('shiftToggle');
+        const hasShiftsConflict = shiftToggleConflict ? shiftToggleConflict.checked : false;
         const conflictData = new FormData();
         conflictData.append('date', date);
         conflictData.append('schedule_id', scheduleId);
-        formData.getAll('members').forEach(id => conflictData.append('members', id));
+        if (hasShiftsConflict) {
+            const morningVals = $('#assignmentMembersMorning').val() || [];
+            const eveningVals = $('#assignmentMembersEvening').val() || [];
+            [...morningVals, ...eveningVals].forEach(id => conflictData.append('members', id));
+        } else {
+            formData.getAll('members').forEach(id => conflictData.append('members', id));
+        }
         
         fetch('/admin-panel/schedules/check-conflict/', {
             method: 'POST',
@@ -1355,13 +1495,35 @@ function saveDayToPending(formData, date, dayId, overrideConflict) {
         const teamSelect = document.getElementById('assignmentTeam');
         pendingDays[date].teamName = teamSelect.options[teamSelect.selectedIndex].text;
     } else {
-        const memberSelect = document.getElementById('assignmentMembers');
-        if (memberSelect) {
-            pendingDays[date].memberIds = formData.getAll('members').map(id => parseInt(id));
-            pendingDays[date].memberNames = Array.from(memberSelect.selectedOptions).map(opt => opt.text);
-        } else {
+        // Check if shift mode is active
+        const shiftToggle = document.getElementById('shiftToggle');
+        const hasShifts = shiftToggle ? shiftToggle.checked : false;
+        pendingDays[date].hasShifts = hasShifts;
+        if (hasShifts) {
+            const morningVals = $('#assignmentMembersMorning').val() || [];
+            const eveningVals = $('#assignmentMembersEvening').val() || [];
+            pendingDays[date].morningMemberIds = morningVals.map(id => parseInt(id));
+            pendingDays[date].eveningMemberIds = eveningVals.map(id => parseInt(id));
+            const morningSelect = document.getElementById('assignmentMembersMorning');
+            const eveningSelect = document.getElementById('assignmentMembersEvening');
+            pendingDays[date].morningMemberNames = morningSelect ? Array.from(morningSelect.options).filter(o => o.selected).map(o => o.text) : [];
+            pendingDays[date].eveningMemberNames = eveningSelect ? Array.from(eveningSelect.options).filter(o => o.selected).map(o => o.text) : [];
             pendingDays[date].memberIds = [];
             pendingDays[date].memberNames = [];
+        } else {
+            pendingDays[date].hasShifts = false;
+            pendingDays[date].morningMemberIds = [];
+            pendingDays[date].eveningMemberIds = [];
+            pendingDays[date].morningMemberNames = [];
+            pendingDays[date].eveningMemberNames = [];
+            const memberSelect = document.getElementById('assignmentMembers');
+            if (memberSelect) {
+                pendingDays[date].memberIds = formData.getAll('members').map(id => parseInt(id));
+                pendingDays[date].memberNames = Array.from(memberSelect.selectedOptions).map(opt => opt.text);
+            } else {
+                pendingDays[date].memberIds = [];
+                pendingDays[date].memberNames = [];
+            }
         }
     }
 
@@ -1538,7 +1700,13 @@ function saveAllDays() {
                 if (useTeamRotation) {
                     formData.append('team', day.teamId);
                 } else {
-                    day.memberIds.forEach(id => formData.append('members', id));
+                    formData.append('has_shifts', day.hasShifts ? 'true' : 'false');
+                    if (day.hasShifts) {
+                        (day.morningMemberIds || []).forEach(id => formData.append('members_morning', id));
+                        (day.eveningMemberIds || []).forEach(id => formData.append('members_evening', id));
+                    } else {
+                        (day.memberIds || []).forEach(id => formData.append('members', id));
+                    }
                 }
                 
                 const url = day.existingId ? `/admin-panel/schedules/days/${day.existingId}/edit/` : `/admin-panel/schedules/${scheduleId}/days/new/`;
@@ -1989,6 +2157,50 @@ function destroyAssignmentDivisionSelects() {
         });
     }
 }
+
+function toggleShiftsUI(checked, doInit = true) {
+    const single = document.getElementById('singleAssignmentSection');
+    const shifts = document.getElementById('shiftAssignmentSection');
+    if (!shifts) return;
+    if (checked) {
+        if (single) single.classList.add('hidden');
+        shifts.classList.remove('hidden');
+        if (doInit) initShiftSelects();
+    } else {
+        if (single) single.classList.remove('hidden');
+        shifts.classList.add('hidden');
+        destroyShiftSelects();
+    }
+}
+
+function initShiftSelects() {
+    ['#assignmentMembersMorning', '#assignmentMembersEvening'].forEach(sel => {
+        if ($(sel).length && !$(sel).hasClass('select2-hidden-accessible')) {
+            $(sel).select2({
+                placeholder: 'Clique para adicionar membros...',
+                allowClear: true,
+                width: '100%',
+                dropdownParent: $('#dayAssignmentModal')
+            });
+            const badgeId = sel === '#assignmentMembersMorning' ? 'morningBadge' : 'eveningBadge';
+            $(sel).off('change.badge').on('change.badge', function() {
+                const count = $(this).val() ? $(this).val().length : 0;
+                const badge = document.getElementById(badgeId);
+                if (badge) badge.textContent = count > 0 ? count + (count === 1 ? ' membro' : ' membros') : 'Nenhum';
+            });
+        }
+    });
+}
+
+function destroyShiftSelects() {
+    ['#assignmentMembersMorning', '#assignmentMembersEvening'].forEach(sel => {
+        if ($(sel).length && $(sel).hasClass('select2-hidden-accessible')) {
+            $(sel).select2('destroy');
+        }
+    });
+}
+
+
 
 function getAssignmentDivisionData() {
     const assignments = {};

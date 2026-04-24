@@ -82,6 +82,10 @@ class ScheduleDayCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
         if soft_deleted_day:
             soft_deleted_day.delete(force_policy=HARD_DELETE)
 
+        has_shifts = request.POST.get('has_shifts') == 'true'
+        morning_ids = request.POST.getlist('members_morning')
+        evening_ids = request.POST.getlist('members_evening')
+
         try:
             day = ScheduleDay.objects.create(
                 schedule=schedule,
@@ -89,10 +93,15 @@ class ScheduleDayCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
                 team_id=team_id if team_id else None,
                 description=description,
                 notes=notes,
+                has_shifts=has_shifts,
             )
 
             if member_ids:
                 day.members.set(member_ids)
+            if morning_ids:
+                day.members_morning.set(morning_ids)
+            if evening_ids:
+                day.members_evening.set(evening_ids)
 
             return JsonResponse({
                 'success': True,
@@ -156,13 +165,45 @@ class ScheduleDayEditView(LoginRequiredMixin, StaffRequiredMixin, View):
                             'conflict_details': conflicts,
                         }, status=409)
 
+        has_shifts = request.POST.get('has_shifts') == 'true'
+        morning_ids = request.POST.getlist('members_morning')
+        evening_ids = request.POST.getlist('members_evening')
+
         day.team_id = team_id if team_id else None
         day.description = description
         day.notes = notes
+        day.has_shifts = has_shifts
         day.save()
 
         day.members.set(member_ids)
+        day.members_morning.set(morning_ids)
+        day.members_evening.set(evening_ids)
         return JsonResponse({'success': True})
+
+    def http_method_not_allowed(self, request, *args, **kwargs):
+        return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
+
+
+class ScheduleDayGetView(LoginRequiredMixin, StaffRequiredMixin, View):
+    """Retorna os dados de um dia da escala (GET-only, retorna JSON)."""
+
+    def get(self, request, day_id):
+        day = get_object_or_404(ScheduleDay, id=day_id, deleted__isnull=True)
+        return JsonResponse({
+            'success': True,
+            'date': day.date.strftime('%Y-%m-%d'),
+            'description': day.description or '',
+            'notes': day.notes or '',
+            'team_id': day.team_id,
+            'team_name': day.team.name if day.team else '',
+            'member_ids': list(day.members.values_list('id', flat=True)),
+            'member_names': list(day.members.values_list('name', flat=True)),
+            'has_shifts': day.has_shifts,
+            'morning_member_ids': list(day.members_morning.values_list('id', flat=True)),
+            'morning_member_names': list(day.members_morning.values_list('name', flat=True)),
+            'evening_member_ids': list(day.members_evening.values_list('id', flat=True)),
+            'evening_member_names': list(day.members_evening.values_list('name', flat=True)),
+        })
 
     def http_method_not_allowed(self, request, *args, **kwargs):
         return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)

@@ -17,6 +17,12 @@ WEEKDAYS_PT = [
 
 def _member_in_day(member, day):
     """Returns True if the member is assigned to a schedule day."""
+    if day.has_shifts:
+        if day.members_morning.filter(id=member.id).exists():
+            return True
+        if day.members_evening.filter(id=member.id).exists():
+            return True
+        return False
     if day.members.filter(id=member.id).exists():
         return True
     if day.team and day.team.members.filter(id=member.id).exists():
@@ -44,6 +50,8 @@ class MemberScheduleDetailView(MemberRequiredMixin, View):
             .select_related('team')
             .prefetch_related(
                 'members',
+                'members_morning',
+                'members_evening',
                 'team__members',
                 'division_assignments',
                 'division_assignments__member',
@@ -89,6 +97,8 @@ class MemberScheduleDetailView(MemberRequiredMixin, View):
                 'is_member_assigned': assigned,
                 'members': day_members,
                 'div_map': div_map,
+                'members_morning': list(day.members_morning.all()) if day.has_shifts else [],
+                'members_evening': list(day.members_evening.all()) if day.has_shifts else [],
             })
 
         return render(request, 'member/schedule_detail.html', {

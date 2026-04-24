@@ -197,6 +197,12 @@
         </button>
         
         <nav class="sidebar-nav pt-2">
+            <!-- Botão Área de Membros -->
+            <a href="{% url 'member_dashboard' %}" class="sidebar-item member-area-link">
+                <ion-icon name="home-outline"></ion-icon>
+                <span>Área de Membros</span>
+            </a>
+
             {% if user.user_type == 'admin' or user.is_superuser %}
             <!-- Dashboard só para admin -->
             <a href="{% url 'admin_dashboard' %}" class="sidebar-item {% if request.resolver_match.url_name == 'admin_dashboard' %}active{% endif %}">
