@@ -283,7 +283,7 @@ class MemberRoteiroView(MemberRequiredMixin, MinistrationContextMixin, View):
     def get(self, request):
         from ..models.roteiro import Roteiro
         roteiro, _ = Roteiro.objects.get_or_create(pk=1, defaults={'titulo': 'Roteiro de Culto'})
-        anuncios = roteiro.anuncios.prefetch_related('datas').order_by('ordem', 'created_at')
+        anuncios = roteiro.anuncios.prefetch_related('datas', 'fotos').order_by('ordem', 'created_at')
         anuncios_ativos = [a for a in anuncios if not a.is_expired]
         return render(request, 'member/roteiro.html', {
             'roteiro': roteiro,

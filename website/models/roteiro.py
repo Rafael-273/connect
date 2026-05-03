@@ -53,6 +53,15 @@ class AnuncioRoteiro(BaseModel):
             return max(datas) <= today
         return bool(self.data_expiracao and self.data_expiracao <= today)
 
+    @property
+    def imagens(self):
+        """Retorna todas as fotos do anúncio (novo campo + legado)."""
+        fotos = list(self.fotos.all().order_by('ordem', 'created_at'))
+        # Incluir a foto legada se existir
+        if self.foto:
+            return [self.foto] + [f.imagem for f in fotos]
+        return [f.imagem for f in fotos]
+
 
 class AnuncioRoteiroData(models.Model):
     """Uma data/horário de realização de um anúncio (suporta multi-dia)."""
@@ -72,3 +81,20 @@ class AnuncioRoteiroData(models.Model):
         if self.hora:
             s += f' às {self.hora.strftime("%H:%M")}'
         return s
+
+
+class AnuncioRoteiroFoto(BaseModel):
+    """Múltiplas imagens para um anúncio do roteiro."""
+    anuncio = models.ForeignKey(
+        AnuncioRoteiro, on_delete=models.CASCADE, related_name='fotos'
+    )
+    imagem = models.ImageField(upload_to='roteiro/', verbose_name='Imagem')
+    ordem = models.PositiveIntegerField(default=0, verbose_name='Ordem')
+
+    class Meta:
+        ordering = ['ordem', 'created_at']
+        verbose_name = 'Foto do Anúncio'
+        verbose_name_plural = 'Fotos do Anúncio'
+
+    def __str__(self):
+        return f"Foto #{self.pk} de {self.anuncio.titulo or 'Anúncio ' + str(self.anuncio.pk)}"

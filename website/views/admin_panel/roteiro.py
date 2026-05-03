@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.views import View
 
 from ..mixins import AdminRequiredMixin
-from ...models.roteiro import AnuncioRoteiro, AnuncioRoteiroData, Roteiro
+from ...models.roteiro import AnuncioRoteiro, AnuncioRoteiroData, AnuncioRoteiroFoto, Roteiro
 
 
 def _save_datas(anuncio, request):
@@ -35,7 +35,7 @@ class RoteiroView(LoginRequiredMixin, AdminRequiredMixin, View):
 
     def get(self, request):
         roteiro = _get_or_create_roteiro()
-        anuncios = roteiro.anuncios.prefetch_related('datas').order_by('ordem', 'created_at')
+        anuncios = roteiro.anuncios.prefetch_related('datas', 'fotos').order_by('ordem', 'created_at')
         anuncios_ativos = [a for a in anuncios if not a.is_expired]
         return render(request, 'admin_panel/roteiro/detail.html', {
             'roteiro': roteiro,
@@ -68,6 +68,12 @@ class AnuncioCreateView(LoginRequiredMixin, AdminRequiredMixin, View):
             anuncio.foto = request.FILES['foto']
 
         anuncio.save()
+
+        # Save multiple photos
+        fotos = request.FILES.getlist('fotos')
+        for i, foto in enumerate(fotos):
+            AnuncioRoteiroFoto.objects.create(anuncio=anuncio, imagem=foto, ordem=i)
+
         _save_datas(anuncio, request)
         messages.success(request, 'Anúncio adicionado com sucesso!')
         return redirect('roteiro_view')
@@ -100,6 +106,17 @@ class AnuncioEditView(LoginRequiredMixin, AdminRequiredMixin, View):
             anuncio.foto = None
 
         anuncio.save()
+
+        # Handle existing photo removal
+        remove_foto_ids = request.POST.getlist('remove_foto_ids')
+        if remove_foto_ids:
+            AnuncioRoteiroFoto.objects.filter(id__in=remove_foto_ids, anuncio=anuncio).delete()
+
+        # Save new multiple photos
+        fotos = request.FILES.getlist('fotos')
+        for i, foto in enumerate(fotos):
+            AnuncioRoteiroFoto.objects.create(anuncio=anuncio, imagem=foto, ordem=anuncio.fotos.count() + i)
+
         anuncio.datas.all().delete()
         _save_datas(anuncio, request)
         messages.success(request, 'Anúncio atualizado com sucesso!')
@@ -139,7 +156,7 @@ class RoteiroPrintView(LoginRequiredMixin, AdminRequiredMixin, View):
         roteiro = _get_or_create_roteiro()
         anuncios = (
             roteiro.anuncios
-            .prefetch_related('datas')
+            .prefetch_related('datas', 'fotos')
             .order_by('ordem', 'created_at')
         )
         # Filter out expired items for print

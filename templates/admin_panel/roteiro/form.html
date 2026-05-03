@@ -190,26 +190,48 @@
                     </div>
 
                     <div class="form-group mb-0">
-                        <label class="form-label">Foto / Imagem</label>
+                        <label class="form-label">Fotos / Imagens</label>
+                        <p class="text-gray-400 text-xs mb-3">Adicione uma ou mais fotos para o anúncio.</p>
+
                         {% if anuncio and anuncio.foto %}
-                        <div class="mb-3">
-                            <img src="{{ anuncio.foto.url }}" alt="{{ anuncio.titulo }}" class="foto-preview-img">
-                            <p class="text-xs text-gray-500 mt-1">Foto atual</p>
-                            <label class="inline-flex items-center gap-1.5 mt-2 text-xs text-red-500 cursor-pointer select-none">
-                                <input type="checkbox" name="remove_foto" value="1"
-                                       class="accent-red-500 w-3.5 h-3.5">
-                                Remover foto atual
-                            </label>
+                        <!-- Foto legada (campo único antigo) -->
+                        <div class="mb-3 p-3 bg-gray-50 rounded-xl border border-gray-200" id="legacy-foto-block">
+                            <div class="flex items-center gap-3">
+                                <img src="{{ anuncio.foto.url }}" alt="{{ anuncio.titulo }}" class="foto-preview-img">
+                                <div>
+                                    <p class="text-xs text-gray-600">Foto principal (legada)</p>
+                                    <label class="inline-flex items-center gap-1.5 mt-1 text-xs text-red-500 cursor-pointer select-none">
+                                        <input type="checkbox" name="remove_foto" value="1"
+                                               class="accent-red-500 w-3.5 h-3.5">
+                                        Remover
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                         {% endif %}
+
+                        <!-- Fotos existentes (AnuncioRoteiroFoto) -->
+                        {% if anuncio and anuncio.fotos.all %}
+                        <div id="existing-fotos" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mb-3">
+                            {% for foto in anuncio.fotos.all %}
+                            <div class="relative group foto-existing-item" data-id="{{ foto.id }}">
+                                <img src="{{ foto.imagem.url }}" alt="Foto {{ forloop.counter }}" class="foto-preview-img w-full h-24 object-cover rounded-lg border border-gray-200">
+                                <button type="button" onclick="markFotoForRemoval(this)"
+                                        class="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Remover foto">
+                                    <ion-icon name="close-outline" style="font-size:0.9rem;"></ion-icon>
+                                </button>
+                                <input type="hidden" name="remove_foto_ids" value="" disabled>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
                         <div class="file-input-wrapper">
-                            <input type="file" name="foto" accept="image/*" id="foto-input">
+                            <input type="file" name="fotos" accept="image/*" multiple id="fotos-input">
                         </div>
-                        <p class="text-gray-400 text-xs mt-1">Formatos aceitos: JPG, PNG, WEBP. Tamanho recomendado: 3840×1200px.</p>
-                        <div id="foto-new-preview" class="hidden mt-3">
-                            <img id="foto-new-img" src="" alt="" class="foto-preview-img">
-                            <p class="text-xs text-gray-500 mt-1">Prévia da nova foto</p>
-                        </div>
+                        <p class="text-gray-400 text-xs mt-1">Formatos aceitos: JPG, PNG, WEBP. Você pode selecionar várias imagens.</p>
+                        <div id="fotos-new-preview" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 mt-3 hidden"></div>
                     </div>
                 </div>
 
@@ -241,19 +263,46 @@
 </div>
 
 <script>
-// ── Live foto preview ─────────────────────────────────────────────────────────
-// ── Live foto preview ─────────────────────────────────────────────────────────
-document.getElementById('foto-input').addEventListener('change', function () {
-    const file = this.files[0];
-    const wrapper = document.getElementById('foto-new-preview');
-    const img = document.getElementById('foto-new-img');
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = e => { img.src = e.target.result; wrapper.classList.remove('hidden'); };
-        reader.readAsDataURL(file);
+// ── Mark existing foto for removal ────────────────────────────────────────────
+function markFotoForRemoval(btn) {
+    const item = btn.closest('.foto-existing-item');
+    const hiddenInput = item.querySelector('input[name="remove_foto_ids"]');
+    if (hiddenInput.disabled) {
+        hiddenInput.disabled = false;
+        hiddenInput.value = item.dataset.id;
+        item.style.opacity = '0.4';
+        btn.innerHTML = '<ion-icon name="refresh-outline" style="font-size:0.9rem;"></ion-icon>';
+        btn.title = 'Desfazer remoção';
     } else {
-        wrapper.classList.add('hidden');
+        hiddenInput.disabled = true;
+        hiddenInput.value = '';
+        item.style.opacity = '1';
+        btn.innerHTML = '<ion-icon name="close-outline" style="font-size:0.9rem;"></ion-icon>';
+        btn.title = 'Remover foto';
     }
+}
+
+// ── Multiple foto preview ─────────────────────────────────────────────────────
+document.getElementById('fotos-input').addEventListener('change', function () {
+    const wrapper = document.getElementById('fotos-new-preview');
+    wrapper.innerHTML = '';
+
+    if (this.files.length === 0) {
+        wrapper.classList.add('hidden');
+        return;
+    }
+    wrapper.classList.remove('hidden');
+
+    Array.from(this.files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const div = document.createElement('div');
+            div.className = 'relative';
+            div.innerHTML = `<img src="${e.target.result}" class="foto-preview-img w-full h-24 object-cover rounded-lg border border-green-300">`;
+            wrapper.appendChild(div);
+        };
+        reader.readAsDataURL(file);
+    });
 });
 
 // ── Multi-date rows ───────────────────────────────────────────────────────────

@@ -59,24 +59,25 @@
             }
         }
         @page {
-            margin: 0;
+            size: A4;
+            margin: 12mm 10mm;
         }
 
         @media print {
             .print-toolbar { display: none !important; }
             body {
-                padding: 32px 24px;
+                padding: 0;
             }
         }
 
         /* ── Header ─────────────────────────────────────────────────────── */
         .doc-header {
-            border-bottom: 2.5px solid #c90905;
-            padding-bottom: 12px;
-            margin-bottom: 18px;
+            border-bottom: 2px solid #c90905;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
         }
         .doc-header h1 {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 800;
             color: #c90905;
             letter-spacing: -0.5px;
@@ -92,61 +93,43 @@
         .anuncio-list {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
         }
 
         .anuncio-item {
-            display: flex;
-            gap: 12px;
-            padding: 12px;
+            position: relative;
+            padding: 10px 14px;
             border: 1px solid #e5e7eb;
-            border-radius: 12px;
+            border-radius: 10px;
             background: #fff;
-            break-inside: avoid;
-            page-break-inside: avoid;
-        }
-
-        .anuncio-item.no-image {
-            padding-left: 16px;
         }
 
         .anuncio-num {
-            width: 30px;
-            height: 30px;
-            min-width: 30px;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 26px;
+            height: 26px;
+            min-width: 26px;
             background: #c90905;
             color: #fff;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 800;
             flex-shrink: 0;
-            align-self: center;
+            z-index: 1;
         }
 
-        .anuncio-foto {
-            width: 280px;
-            height: 88px;
-            min-width: 280px;
-            object-fit: cover;
-            border-radius: 8px;
-            border: 1px solid #e5e7eb;
-            flex-shrink: 0;
-        }
-
-        .anuncio-body { flex: 1; min-width: 0; }
-
-        .anuncio-item.no-image .anuncio-body {
-            max-width: 100%;
-        }
-
-        .anuncio-head {
+        /* ── Título + Datas row ──────────────────────────────── */
+        .anuncio-top-row {
             display: flex;
             align-items: flex-start;
             justify-content: space-between;
-            gap: 10px;
+            gap: 8px;
+            padding-left: 34px;
             margin-bottom: 6px;
         }
 
@@ -159,36 +142,32 @@
             font-size: 16px;
             font-weight: 700;
             color: #111827;
-            margin-bottom: 4px;
-            line-height: 1.2;
+            line-height: 1.25;
             letter-spacing: -0.01em;
             overflow-wrap: break-word;
             word-break: break-word;
         }
 
         .anuncio-data {
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-            border-radius: 10px;
-            padding: 6px;
             display: flex;
-            flex-direction: column;
+            flex-wrap: wrap;
             gap: 4px;
+            flex-shrink: 0;
         }
 
         .anuncio-data-item {
-            display: flex;
+            display: inline-flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            background: #fff;
-            border: 1px solid #fee2e2;
-            border-radius: 7px;
-            padding: 4px 7px;
+            gap: 5px;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 999px;
+            padding: 3px 8px;
             color: #991b1b;
-            font-size: 10.5px;
+            font-size: 10px;
             font-weight: 700;
-            line-height: 1.2;
+            line-height: 1.3;
+            white-space: nowrap;
         }
 
         .anuncio-data-item.is-today {
@@ -203,30 +182,51 @@
             color: #64748b;
         }
 
-        .anuncio-data-item.is-past .anuncio-data-time {
-            background: #64748b;
-        }
-
-        .anuncio-data-day {
-            letter-spacing: 0.02em;
-            white-space: nowrap;
-        }
-
         .anuncio-data-time {
             background: #b91c1c;
             color: #fff;
             border-radius: 999px;
-            padding: 2px 6px;
-            font-size: 10px;
+            padding: 1px 5px;
+            font-size: 9px;
             font-weight: 700;
-            white-space: nowrap;
+        }
+
+        .anuncio-data-item.is-past .anuncio-data-time {
+            background: #64748b;
+        }
+
+        /* ── Fotos ──────────────────────────────────────────── */
+        .anuncio-fotos {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 6px;
+            padding-left: 34px;
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+
+        .anuncio-foto {
+            height: 210px;
+            object-fit: cover;
+            object-position: center;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            flex: 1 1 auto;
+            min-width: 160px;
+            max-width: 100%;
+        }
+
+        /* ── Descrição + Info ───────────────────────────────── */
+        .anuncio-body {
+            padding-left: 34px;
         }
 
         .anuncio-descricao {
-            font-size: 12px;
+            font-size: 11px;
             color: #374151;
-            margin-bottom: 8px;
-            line-height: 1.45;
+            margin-bottom: 4px;
+            line-height: 1.4;
             overflow-wrap: break-word;
             word-break: break-word;
         }
@@ -238,7 +238,6 @@
             border-left: 3px solid #c90905;
             padding: 6px 10px;
             border-radius: 0 6px 6px 0;
-            margin-top: 6px;
             font-style: normal;
             overflow-wrap: break-word;
             word-break: break-word;
@@ -249,26 +248,23 @@
 
         /* ── Footer ─────────────────────────────────────────────────────── */
         .doc-footer {
-            margin-top: 24px;
-            padding-top: 12px;
+            margin-top: 14px;
+            padding-top: 8px;
             border-top: 1px solid #e5e7eb;
-            font-size: 10px;
+            font-size: 9px;
             color: #9ca3af;
             text-align: right;
         }
 
         @media print {
+            body {
+                print-color-adjust: exact;
+                -webkit-print-color-adjust: exact;
+            }
             .anuncio-item {
                 box-shadow: none !important;
                 border-color: #e2e8f0;
                 background: #fff;
-            }
-            .anuncio-data {
-                background: #fff;
-                border-color: #fca5a5;
-            }
-            .anuncio-data-item {
-                border-color: #fecaca;
             }
             .doc-footer { padding: 8px 0 0 0; }
         }
@@ -299,34 +295,42 @@
 {% if anuncios %}
 <div class="anuncio-list">
     {% for anuncio in anuncios %}
-    <div class="anuncio-item{% if not anuncio.foto %} no-image{% endif %}">
+    <div class="anuncio-item">
         <div class="anuncio-num">{{ forloop.counter }}</div>
-        {% if anuncio.foto %}
-        <img src="{{ anuncio.foto.url }}" alt="{{ anuncio.titulo }}" class="anuncio-foto">
-        {% endif %}
-        <div class="anuncio-body">
-            <div class="anuncio-head">
-                <div class="anuncio-title-wrap">
-                    <p class="anuncio-titulo">{{ anuncio.titulo|default:"(sem título)" }}</p>
-                    {% if anuncio.descricao %}
-                    <p class="anuncio-descricao">{{ anuncio.descricao }}</p>
-                    {% endif %}
-                </div>
-                {% if anuncio.datas.all %}
-                <div class="anuncio-data">
-                    {% for d in anuncio.datas.all %}
-                    <div class="anuncio-data-item{% if d.data|date:'Y-m-d' == today_iso %} is-today{% elif d.data|date:'Y-m-d' < today_iso %} is-past{% endif %}">
-                        <span class="anuncio-data-day">{{ d.data|date:"d/m/Y" }}</span>
-                        {% if d.hora %}
-                        <span class="anuncio-data-time">{{ d.hora|time:"H:i" }}</span>
-                        {% else %}
-                        <span class="anuncio-data-time">Sem hora</span>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
+
+        <!-- Título + Datas -->
+        <div class="anuncio-top-row">
+            <div class="anuncio-title-wrap">
+                <p class="anuncio-titulo">{{ anuncio.titulo|default:"(sem título)" }}</p>
             </div>
+            {% if anuncio.datas.all %}
+            <div class="anuncio-data">
+                {% for d in anuncio.datas.all %}
+                <span class="anuncio-data-item{% if d.data|date:'Y-m-d' == today_iso %} is-today{% elif d.data|date:'Y-m-d' < today_iso %} is-past{% endif %}">
+                    {{ d.data|date:"d/m/Y" }}
+                    {% if d.hora %}
+                    <span class="anuncio-data-time">{{ d.hora|time:"H:i" }}</span>
+                    {% endif %}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Fotos -->
+        {% if anuncio.imagens %}
+        <div class="anuncio-fotos">
+            {% for img in anuncio.imagens %}
+            <img src="{{ img.url }}" alt="{{ anuncio.titulo }}" class="anuncio-foto">
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Descrição + Info -->
+        <div class="anuncio-body">
+            {% if anuncio.descricao %}
+            <p class="anuncio-descricao">{{ anuncio.descricao }}</p>
+            {% endif %}
             {% if anuncio.info_adicional %}
             <div class="anuncio-info">{{ anuncio.info_adicional }}</div>
             {% endif %}

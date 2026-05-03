@@ -225,14 +225,18 @@
         <div class="space-y-4">
             {% for anuncio in anuncios %}
             <article class="dashboard-card p-4 sm:p-5">
-                <div class="card-quad{% if not anuncio.foto %} no-photo{% endif %}">
+                <div class="card-quad{% if not anuncio.imagens %} no-photo{% endif %}">
                     <div class="order-col">
                         <span class="order-badge" title="Ordem {{ forloop.counter }}"><span class="mt-1">{{ forloop.counter }}</span></span>
                     </div>
 
-                    {% if anuncio.foto %}
+                    {% if anuncio.imagens %}
                     <div class="photo-col">
-                        <img src="{{ anuncio.foto.url }}" alt="{{ anuncio.titulo }}" class="w-36 h-16 sm:w-56 sm:h-24 object-cover rounded-xl border border-gray-200 flex-shrink-0 shadow-sm">
+                        <div class="flex flex-col gap-1">
+                            {% for img in anuncio.imagens %}
+                            <img src="{{ img.url }}" alt="{{ anuncio.titulo }}" class="w-36 h-16 sm:w-56 sm:h-24 object-cover rounded-xl border border-gray-200 flex-shrink-0 shadow-sm">
+                            {% endfor %}
+                        </div>
                     </div>
                     {% endif %}
 
