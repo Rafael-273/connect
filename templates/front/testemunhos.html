@@ -126,6 +126,41 @@ Testemunhos - Igreja Filadélfia
         border-color: rgba(201, 9, 5, 0.5);
         color: #fff;
     }
+
+    .share-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        gap: 0.45rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 9999px;
+        padding: 0.5rem 0.95rem;
+        border: 1px solid rgba(201, 9, 5, 0.35);
+        color: #f3f4f6;
+        background: linear-gradient(135deg, rgba(201, 9, 5, 0.22), rgba(201, 9, 5, 0.1));
+        box-shadow: 0 8px 20px rgba(201, 9, 5, 0.16);
+        transition: all 0.25s ease;
+    }
+
+    .share-btn:hover {
+        color: #fff;
+        border-color: rgba(201, 9, 5, 0.7);
+        background: linear-gradient(135deg, rgba(201, 9, 5, 0.28), rgba(201, 9, 5, 0.14));
+        transform: translateY(-2px);
+        box-shadow: 0 14px 28px rgba(201, 9, 5, 0.2);
+    }
+
+    .share-btn.copied {
+        border-color: rgba(34, 197, 94, 0.7);
+        background: linear-gradient(135deg, rgba(34, 197, 94, 0.26), rgba(34, 197, 94, 0.14));
+        box-shadow: 0 10px 24px rgba(34, 197, 94, 0.2);
+    }
+
+    .share-btn ion-icon {
+        font-size: 0.95rem;
+    }
 </style>
 {% endblock %}
 
@@ -201,6 +236,17 @@ Testemunhos - Igreja Filadélfia
                     <ion-icon name="logo-instagram" class="text-base"></ion-icon>
                     Ver no Instagram
                 </a>
+
+                <div class="w-full mt-2">
+                    <button type="button"
+                            class="share-btn"
+                            data-share-instagram
+                            data-url="{{ testimony.instagram_url }}"
+                            data-title="{{ testimony.title|escapejs }}">
+                        <ion-icon name="share-social-outline" class="text-sm"></ion-icon>
+                        <span class="share-btn-label">Compartilhar</span>
+                    </button>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -280,6 +326,63 @@ document.addEventListener('DOMContentLoaded', function() {
             src = src.replace(/\/?$/, '/embed/');
             iframe.setAttribute('src', src);
         }
+    });
+
+    // Instagram sharing via native share sheet with copy fallback
+    document.querySelectorAll('[data-share-instagram]').forEach(button => {
+        button.addEventListener('click', async function() {
+            const url = this.dataset.url;
+            const title = this.dataset.title || 'Testemunho';
+            const text = `Veja esse testemunho: ${title}`;
+            const label = this.querySelector('.share-btn-label');
+            const originalLabel = 'Compartilhar';
+
+            const isMobileDevice = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                || window.matchMedia('(pointer: coarse)').matches;
+
+            const setCopiedState = () => {
+                this.classList.add('copied');
+                if (label) {
+                    label.textContent = 'Link copiado';
+                }
+                setTimeout(() => {
+                    this.classList.remove('copied');
+                    if (label) {
+                        label.textContent = originalLabel;
+                    }
+                }, 1800);
+            };
+
+            if (!url) {
+                return;
+            }
+
+            try {
+                if (isMobileDevice && navigator.share) {
+                    await navigator.share({
+                        title: 'Igreja Filadelfia',
+                        text,
+                        url,
+                    });
+                } else {
+                    const clipboardContent = `${text} ${url}`;
+                    if (navigator.clipboard && window.isSecureContext) {
+                        await navigator.clipboard.writeText(clipboardContent);
+                        setCopiedState();
+                    } else {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = clipboardContent;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        setCopiedState();
+                    }
+                }
+            } catch (err) {
+                // User may cancel share; no action needed.
+            }
+        });
     });
 });
 </script>
