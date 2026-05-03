@@ -207,24 +207,20 @@
         }
 
         .anuncio-foto {
-            height: 210px;
-            object-fit: cover;
-            object-position: center;
+            width: 100%;
+            height: auto;
+            object-fit: contain;
             border-radius: 8px;
             border: 1px solid #e5e7eb;
-            flex: 1 1 auto;
-            min-width: 160px;
+            flex: none;
+            min-width: 100%;
             max-width: 100%;
         }
 
-        @media screen {
+        @media print {
             .anuncio-foto {
-                width: 100% !important;
-                height: auto !important;
+                max-height: 180px;
                 object-fit: contain;
-                min-width: 100%;
-                max-width: 100%;
-                flex: none;
             }
         }
 
