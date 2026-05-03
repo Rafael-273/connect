@@ -44,31 +44,11 @@
         padding: 1rem 1.25rem;
     }
 
-    .order-badge {
-        width: 1.7rem;
-        height: 1.7rem;
-        border-radius: 9999px;
-        background: #C90905;
-        color: #fff;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.72rem;
-        font-weight: 800;
-        flex-shrink: 0;
-        box-shadow: 0 4px 12px rgba(140, 9, 16, 0.22);
-        position: absolute;
-        top: 0.75rem;
-        left: 0.75rem;
-        z-index: 2;
-    }
-
     .anuncio-top-row {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         gap: 0.75rem;
-        padding-left: 2rem;
         margin-bottom: 0.5rem;
     }
 
@@ -109,7 +89,6 @@
         flex-wrap: wrap;
         gap: 0.5rem;
         margin-bottom: 0.5rem;
-        padding-left: 2rem;
     }
 
     .anuncio-foto {
@@ -140,7 +119,7 @@
         justify-content: center;
         align-items: center;
         padding: 1rem;
-    }
+    }@PRI
 
     .lightbox-overlay.active {
         display: flex;
@@ -177,7 +156,6 @@
     }
 
     .anuncio-body {
-        padding-left: 2rem;
     }
 
     .anuncio-descricao {
@@ -195,16 +173,28 @@
     }
 
     @media (max-width: 640px) {
+        .anuncio-card {
+            padding: 0.75rem 1rem;
+        }
         .anuncio-top-row {
             flex-direction: column;
             gap: 0.5rem;
+            padding-left: 0;
+        }
+        .anuncio-fotos {
+            flex-direction: column;
+            padding-left: 0;
         }
         .anuncio-foto {
-            height: 240px;
-            min-width: 100px;
+            width: 100% !important;
+            height: auto !important;
+            object-fit: contain;
+            min-width: 100%;
+            max-width: 100%;
+            flex: none;
         }
-        .anuncio-card {
-            padding: 0.75rem 1rem;
+        .anuncio-body {
+            padding-left: 0;
         }
     }
 </style>
@@ -234,14 +224,11 @@
         <div class="space-y-4">
             {% for anuncio in anuncios %}
             <article class="dashboard-card anuncio-card">
-                <!-- Número -->
-                <span class="order-badge">{{ forloop.counter }}</span>
-
-                <!-- Título + Datas -->
+                <!-- Título + Datas (desktop) -->
                 <div class="anuncio-top-row">
                     <h2 class="anuncio-title">{{ anuncio.titulo|default:"(sem título)" }}</h2>
                     {% if anuncio.datas.all %}
-                    <div class="anuncio-datas">
+                    <div class="anuncio-datas hidden sm:flex">
                         {% for d in anuncio.datas.all %}
                         <span class="date-pill">
                             <i class="fas fa-calendar-alt"></i>
@@ -257,6 +244,18 @@
                 <div class="anuncio-fotos">
                     {% for img in anuncio.imagens %}
                     <img src="{{ img.url }}" alt="{{ anuncio.titulo }}" class="anuncio-foto" onclick="openLightbox('{{ img.url }}')">
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <!-- Datas (mobile - abaixo das fotos) -->
+                {% if anuncio.datas.all %}
+                <div class="sm:hidden mb-3 flex flex-wrap gap-1">
+                    {% for d in anuncio.datas.all %}
+                    <span class="date-pill">
+                        <i class="fas fa-calendar-alt"></i>
+                        {{ d.data|date:"d/m/Y" }}{% if d.hora %} às {{ d.hora|time:"H:i" }}{% endif %}
+                    </span>
                     {% endfor %}
                 </div>
                 {% endif %}
