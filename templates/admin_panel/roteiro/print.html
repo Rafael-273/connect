@@ -68,6 +68,11 @@
             body {
                 padding: 0;
             }
+            .anuncio-header-row { display: block; }
+            .anuncio-top-row { display: block; }
+            .anuncio-fotos { display: block; column-count: 1; }
+            .anuncio-foto { margin-bottom: 4px; }
+            .anuncio-data { justify-content: flex-start; }
         }
 
         /* ── Header ─────────────────────────────────────────────────────── */
@@ -91,25 +96,37 @@
 
         /* ── Anúncio card ────────────────────────────────────────────────── */
         .anuncio-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            display: block;
+        }
+
+        .anuncio-list > .anuncio-item + .anuncio-item {
+            margin-top: 8px;
         }
 
         .anuncio-item {
-            position: relative;
-            padding: 10px 14px;
+            padding: 0;
             border: 1px solid #e5e7eb;
             border-radius: 10px;
             background: #fff;
             break-inside: avoid-page;
             page-break-inside: avoid;
+            display: block;
+            overflow: hidden;
+        }
+
+        .anuncio-item > * {
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+        }
+
+        .anuncio-header-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px 6px 14px;
         }
 
         .anuncio-num {
-            position: absolute;
-            top: 10px;
-            left: 10px;
             width: 26px;
             height: 26px;
             min-width: 26px;
@@ -122,7 +139,6 @@
             font-size: 11px;
             font-weight: 800;
             flex-shrink: 0;
-            z-index: 1;
         }
 
         /* ── Título + Datas row ──────────────────────────────── */
@@ -131,13 +147,12 @@
             align-items: flex-start;
             justify-content: space-between;
             gap: 8px;
-            padding-left: 34px;
-            margin-bottom: 6px;
+            min-width: 0;
+            flex: 1;
         }
 
         .anuncio-title-wrap {
             min-width: 0;
-            flex: 1;
         }
 
         .anuncio-titulo {
@@ -202,8 +217,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 4px;
-            margin-bottom: 6px;
-            padding-left: 34px;
+            padding: 0 14px 6px 14px;
         }
 
         .anuncio-foto {
@@ -229,7 +243,7 @@
 
         /* ── Descrição + Info ───────────────────────────────── */
         .anuncio-body {
-            padding-left: 34px;
+            padding: 0 14px 10px 14px;
         }
 
         .anuncio-descricao {
@@ -306,25 +320,26 @@
 <div class="anuncio-list">
     {% for anuncio in anuncios %}
     <div class="anuncio-item">
-        <div class="anuncio-num">{{ forloop.counter }}</div>
-
-        <!-- Título + Datas -->
-        <div class="anuncio-top-row">
-            <div class="anuncio-title-wrap">
-                <p class="anuncio-titulo">{{ anuncio.titulo|default:"(sem título)" }}</p>
+        <!-- Header: número + título + datas -->
+        <div class="anuncio-header-row">
+            <div class="anuncio-num">{{ forloop.counter }}</div>
+            <div class="anuncio-top-row">
+                <div class="anuncio-title-wrap">
+                    <p class="anuncio-titulo">{{ anuncio.titulo|default:"(sem título)" }}</p>
+                </div>
+                {% if anuncio.datas.all %}
+                <div class="anuncio-data">
+                    {% for d in anuncio.datas.all %}
+                    <span class="anuncio-data-item{% if d.data|date:'Y-m-d' == today_iso %} is-today{% elif d.data|date:'Y-m-d' < today_iso %} is-past{% endif %}">
+                        {{ d.data|date:"d/m/Y" }}
+                        {% if d.hora %}
+                        <span class="anuncio-data-time">{{ d.hora|time:"H:i" }}</span>
+                        {% endif %}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
-            {% if anuncio.datas.all %}
-            <div class="anuncio-data">
-                {% for d in anuncio.datas.all %}
-                <span class="anuncio-data-item{% if d.data|date:'Y-m-d' == today_iso %} is-today{% elif d.data|date:'Y-m-d' < today_iso %} is-past{% endif %}">
-                    {{ d.data|date:"d/m/Y" }}
-                    {% if d.hora %}
-                    <span class="anuncio-data-time">{{ d.hora|time:"H:i" }}</span>
-                    {% endif %}
-                </span>
-                {% endfor %}
-            </div>
-            {% endif %}
         </div>
 
         <!-- Fotos -->
