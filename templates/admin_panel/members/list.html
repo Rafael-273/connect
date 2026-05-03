@@ -273,7 +273,13 @@
                         </div>
                         <div class="flex items-center gap-2">
                             <ion-icon name="business" class="text-gray-400"></ion-icon>
-                            <span class="text-gray-700 truncate">{{ member.ministry.name|default:"Sem ministério" }}</span>
+                            <span class="text-gray-700 truncate">
+                                {% with member_ministries=member.ministry_memberships.all %}
+                                    {% if member_ministries %}
+                                        {% for m in member_ministries %}{{ m.ministry.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                    {% else %}Sem ministério{% endif %}
+                                {% endwith %}
+                            </span>
                         </div>
                         {% if member.neighborhood %}
                         <div class="flex items-center gap-2">
@@ -345,7 +351,13 @@
                                     <div class="text-xs text-gray-400 mt-0.5">{{ member.phone|default:"--" }}</div>
                                 </td>
                                 <td class="whitespace-nowrap">
-                                    <div class="text-sm text-gray-800">{{ member.ministry.name|default:"Sem ministério" }}</div>
+                                    <div class="text-sm text-gray-800">
+                                        {% with member_ministries=member.ministry_memberships.all %}
+                                            {% if member_ministries %}
+                                                {% for m in member_ministries %}{{ m.ministry.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                            {% else %}Sem ministério{% endif %}
+                                        {% endwith %}
+                                    </div>
                                     {% if member.neighborhood %}
                                     <div class="text-xs text-gray-400 mt-0.5">{{ member.neighborhood.name }}</div>
                                     {% endif %}

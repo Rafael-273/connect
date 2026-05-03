@@ -99,7 +99,7 @@ def convert_visitor_to_member(visitor):
 
 class MembersListView(LoginRequiredMixin, AdminRequiredMixin, View):
     def _get_queryset(self):
-        return Member.objects.select_related('user', 'neighborhood', 'spouse').order_by('-id')
+        return Member.objects.select_related('user', 'neighborhood', 'spouse').prefetch_related('ministry_memberships__ministry').order_by('-id')
 
     def _apply_filters(self, qs, search, ministry_filter, status_filter):
         if search:

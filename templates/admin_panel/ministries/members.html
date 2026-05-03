@@ -79,6 +79,14 @@
                         </p>
                     </div>
                 </div>
+                <!-- Mobile: Ícone + -->
+                <a href="{% url 'ministry_add_members' ministry.id %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Adicionar Membros">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
             </div>
 
             <!-- Stats -->
@@ -160,7 +168,7 @@
                     </div>
                 </form>
 
-                <!-- Adicionar Membros -->
+                <!-- Desktop: Adicionar Membros -->
                 <a href="{% url 'ministry_add_members' ministry.id %}"
                    class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition items-center gap-2 text-sm font-medium">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

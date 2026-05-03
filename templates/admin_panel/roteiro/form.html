@@ -213,23 +213,6 @@
                     </div>
                 </div>
 
-                <!-- ── Informação Adicional ──────────────────────────── -->
-                <div class="admin-card p-6 md:p-8 mb-6">
-                    <div class="section-header">
-                        <div class="icon-wrap"><ion-icon name="information-circle-outline"></ion-icon></div>
-                        <span>Informação Adicional</span>
-                    </div>
-                    <div class="form-group mb-0">
-                        <label class="form-label">
-                            Informação adicional
-                            <span class="text-gray-400 font-normal normal-case ml-1">(sempre exibida no roteiro)</span>
-                        </label>
-                        <textarea name="info_adicional" class="form-textarea"
-                                  placeholder="Horário, local, responsável, contato, link de inscrição...">{{ anuncio.info_adicional|default:'' }}</textarea>
-                        <p class="text-gray-400 text-xs mt-1">Este campo é exibido independentemente de um evento estar vinculado ou não.</p>
-                    </div>
-                </div>
-
                 <!-- ── Buttons ───────────────────────────────────────── -->
                 <div class="flex items-center justify-between">
                     <a href="{% url 'roteiro_view' %}"

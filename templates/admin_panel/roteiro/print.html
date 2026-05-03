@@ -58,8 +58,15 @@
                 text-decoration: none;
             }
         }
+        @page {
+            margin: 0;
+        }
+
         @media print {
             .print-toolbar { display: none !important; }
+            body {
+                padding: 32px 24px;
+            }
         }
 
         /* ── Header ─────────────────────────────────────────────────────── */
@@ -155,6 +162,8 @@
             margin-bottom: 4px;
             line-height: 1.2;
             letter-spacing: -0.01em;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
         .anuncio-data {
@@ -218,10 +227,8 @@
             color: #374151;
             margin-bottom: 8px;
             line-height: 1.45;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
         .anuncio-info {
@@ -233,6 +240,8 @@
             border-radius: 0 6px 6px 0;
             margin-top: 6px;
             font-style: normal;
+            overflow-wrap: break-word;
+            word-break: break-word;
         }
 
         /* ── Empty state ─────────────────────────────────────────────────── */
@@ -261,7 +270,7 @@
             .anuncio-data-item {
                 border-color: #fecaca;
             }
-            .doc-footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 8px 20px; }
+            .doc-footer { padding: 8px 0 0 0; }
         }
     </style>
 </head>
@@ -271,7 +280,7 @@
 <div class="print-toolbar">
     <a href="{% url 'roteiro_view' %}" class="btn-back">← Voltar</a>
     <span style="font-size:13px;font-weight:600;color:#374151;">{{ roteiro.titulo }}</span>
-    <button onclick="window.print()" class="btn-print">
+    <button onclick="triggerPrint()" class="btn-print">
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
                   d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
@@ -329,9 +338,30 @@
 <div class="empty">Nenhum anúncio ativo para este culto.</div>
 {% endif %}
 
-<div class="doc-footer">
-    Gerado pelo sistema Connect &bull; Igreja Filadelfia
-</div>
+    <div class="doc-footer">
+        Gerado pelo sistema Connect &bull; Igreja Filadelfia
+    </div>
+
+<script>
+(function() {
+    var originalTitle = document.title;
+
+    function clearTitle() {
+        document.title = '';
+    }
+
+    function restoreTitle() {
+        document.title = originalTitle;
+    }
+
+    window.addEventListener('beforeprint', clearTitle);
+    window.addEventListener('afterprint', restoreTitle);
+
+    window.triggerPrint = function() {
+        window.print();
+    };
+})();
+</script>
 
 </body>
 </html>

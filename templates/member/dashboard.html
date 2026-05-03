@@ -299,352 +299,287 @@
         
         <!-- Seção de Boas-Vindas para Novos Membros (sem vínculos) -->
         {% if is_new_member %}
-            <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(135deg, #ffffff 0%, #fef7ed 50%, #ffffff 100%); border-color: rgba(201, 9, 5, 0.2);">
-                <!-- Elementos Decorativos -->
-                <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3), transparent);"></div>
-                <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-20" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.2), transparent);"></div>
-                
-                <div class="relative z-10 p-6 sm:p-8 md:p-10 flex flex-col items-center text-center">
-                    <!-- Ícone de Boas-Vindas -->
-                    <div class="mb-6">
-                        <div class="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 mx-auto rounded-full flex items-center justify-center" style="background-color: #C90905; box-shadow: 0 10px 30px rgba(201, 9, 5, 0.3);">
-                            <i class="fas fa-heart text-white text-3xl sm:text-4xl md:text-5xl"></i>
-                        </div>
-                    </div>
-
-                    <!-- Título e Mensagem -->
-                    <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-4">
-                        Bem-vindo à <span style="color: #C90905;">Família Filadélfia!</span>
-                    </h2>
-                    <p class="text-base sm:text-lg text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
-                        Estamos muito felizes em ter você conosco, <strong style="color: #C90905;">{{ member.name }}</strong>! 
-                        Seu cadastro foi realizado com sucesso e em breve você receberá mais informações sobre como participar ativamente da nossa igreja.
-                    </p>
-
-                    <!-- Cards de Informação -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 max-w-4xl mx-auto">
-                        <!-- Card 1 -->
-                        <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(201, 9, 5, 0.2);">
-                            <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
-                                <i class="fas fa-users text-xl" style="color: #C90905;"></i>
-                            </div>
-                            <h3 class="font-bold text-gray-900 mb-2">Ministérios</h3>
-                            <p class="text-sm text-gray-600">Em breve você será vinculado a um ministério onde poderá servir</p>
-                        </div>
-
-                        <!-- Card 2 -->
-                        <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(245, 158, 11, 0.3);">
-                            <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(245, 158, 11, 0.1);">
-                                <i class="fas fa-calendar-alt text-xl" style="color: #F59E0B;"></i>
-                            </div>
-                            <h3 class="font-bold text-gray-900 mb-2">Escalas</h3>
-                            <p class="text-sm text-gray-600">Você será notificado quando for escalado para atividades</p>
-                        </div>
-
-                        <!-- Card 3 -->
-                        <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(230, 57, 70, 0.3);">
-                            <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(230, 57, 70, 0.1);">
-                                <i class="fas fa-user-graduate text-xl" style="color: #E63946;"></i>
-                            </div>
-                            <h3 class="font-bold text-gray-900 mb-2">Consolidação</h3>
-                            <p class="text-sm text-gray-600">Quando estiver disponível, poderá ajudar no acompanhamento de novos convertidos</p>
-                        </div>
-                    </div>
-
-                    <!-- Botão de Ação -->
-                    <div class="flex flex-col w-full md:w-1/2 sm:flex-row gap-3 justify-center items-center">
-                        <a href="{% url 'member_profile' %}" class="w-full inline-flex text-center items-center gap-2 px-6 py-3 text-white font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl" style="background-color: #C90905;">
-                            <i class="fas fa-user-circle"></i>
-                            Completar Perfil
-                        </a>
-                        <a href="{% url 'home' %}" class="w-full inline-flex text-center items-center gap-2 px-6 py-3 font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 border-2" style="color: #C90905; border-color: #C90905; background: white;">
-                            <i class="fas fa-home"></i>
-                            Explorar a Igreja
-                        </a>
-                    </div>
-
-                    <!-- Informação de Contato -->
-                    <div class="mt-8 p-4 rounded-lg" style="background: rgba(201, 9, 5, 0.05);">
-                        <p class="text-sm text-gray-700">
-                            <i class="fas fa-info-circle mr-2" style="color: #C90905;"></i>
-                            Dúvidas? Entre em contato com a liderança da igreja
-                        </p>
+        <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(135deg, #ffffff 0%, #fef7ed 50%, #ffffff 100%); border-color: rgba(201, 9, 5, 0.2);">
+            <!-- Elementos Decorativos -->
+            <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3), transparent);"></div>
+            <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-20" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.2), transparent);"></div>
+            
+            <div class="relative z-10 p-6 sm:p-8 md:p-10 flex flex-col items-center text-center">
+                <!-- Ícone de Boas-Vindas -->
+                <div class="mb-6">
+                    <div class="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 mx-auto rounded-full flex items-center justify-center" style="background-color: #C90905; box-shadow: 0 10px 30px rgba(201, 9, 5, 0.3);">
+                        <i class="fas fa-heart text-white text-3xl sm:text-4xl md:text-5xl"></i>
                     </div>
                 </div>
-            </section>
+
+                <!-- Título e Mensagem -->
+                <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-4">
+                    Bem-vindo à <span style="color: #C90905;">Família Filadélfia!</span>
+                </h2>
+                <p class="text-base sm:text-lg text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+                    Estamos muito felizes em ter você conosco, <strong style="color: #C90905;">{{ member.name }}</strong>! 
+                    Seu cadastro foi realizado com sucesso e em breve você receberá mais informações sobre como participar ativamente da nossa igreja.
+                </p>
+
+                <!-- Cards de Informação -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 max-w-4xl mx-auto">
+                    <!-- Card 1 -->
+                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(201, 9, 5, 0.2);">
+                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
+                            <i class="fas fa-users text-xl" style="color: #C90905;"></i>
+                        </div>
+                        <h3 class="font-bold text-gray-900 mb-2">Ministérios</h3>
+                        <p class="text-sm text-gray-600">Em breve você será vinculado a um ministério onde poderá servir</p>
+                    </div>
+
+                    <!-- Card 2 -->
+                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(245, 158, 11, 0.3);">
+                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(245, 158, 11, 0.1);">
+                            <i class="fas fa-calendar-alt text-xl" style="color: #F59E0B;"></i>
+                        </div>
+                        <h3 class="font-bold text-gray-900 mb-2">Escalas</h3>
+                        <p class="text-sm text-gray-600">Você será notificado quando for escalado para atividades</p>
+                    </div>
+
+                    <!-- Card 3 -->
+                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(230, 57, 70, 0.3);">
+                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(230, 57, 70, 0.1);">
+                            <i class="fas fa-user-graduate text-xl" style="color: #E63946;"></i>
+                        </div>
+                        <h3 class="font-bold text-gray-900 mb-2">Consolidação</h3>
+                        <p class="text-sm text-gray-600">Quando estiver disponível, poderá ajudar no acompanhamento de novos convertidos</p>
+                    </div>
+                </div>
+
+                <!-- Botão de Ação -->
+                <div class="flex flex-col w-full md:w-1/2 sm:flex-row gap-3 justify-center items-center">
+                    <a href="{% url 'member_profile' %}" class="w-full inline-flex text-center items-center gap-2 px-6 py-3 text-white font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl" style="background-color: #C90905;">
+                        <i class="fas fa-user-circle"></i>
+                        Completar Perfil
+                    </a>
+                    <a href="{% url 'home' %}" class="w-full inline-flex text-center items-center gap-2 px-6 py-3 font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 border-2" style="color: #C90905; border-color: #C90905; background: white;">
+                        <i class="fas fa-home"></i>
+                        Explorar a Igreja
+                    </a>
+                </div>
+
+                <!-- Informação de Contato -->
+                <div class="mt-8 p-4 rounded-lg" style="background: rgba(201, 9, 5, 0.05);">
+                    <p class="text-sm text-gray-700">
+                        <i class="fas fa-info-circle mr-2" style="color: #C90905;"></i>
+                        Dúvidas? Entre em contato com a liderança da igreja
+                    </p>
+                </div>
+            </div>
+        </section>
         {% endif %}
         
+        
         <!-- Cards de Ministério -->
-        {% if is_ministration_member or can_consolidate or is_boas_vindas_member or member_schedules or can_music_member or is_moderation_member %}
-            <div id="ministry-cards-container" class="space-y-3">
+        {% if is_ministration_member or can_consolidate or is_boas_vindas_member or member_schedules %}
+        <div id="ministry-cards-container" class="space-y-3">
 
-                {% if is_ministration_member %}
-                    <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Palavras de Conhecimento" data-card-icon="lightbulb" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                        <!-- Header clicável -->
-                        <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                            <div class="flex items-center gap-3 sm:gap-4">
-                                <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                                    <i class="fas fa-lightbulb text-white text-lg sm:text-xl"></i>
-                                </div>
-                                <div class="text-left">
-                                    <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                        Palavras de <span style="color: #C90905;">Conhecimento</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-500 mt-0.5">Registre palavras e curas</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                        </button>
-
-                        <!-- Conteúdo colapsável -->
-                        <div class="accordion-content">
-                            <div class="px-4 pb-4 sm:px-5 sm:pb-5">
-                                <!-- Formulário Rápido -->
-                                <form method="post" action="{% url 'word_of_knowledge_create' %}" class="bg-white rounded-xl p-4 sm:p-5 border-2 mb-4" style="border-color: rgba(201, 9, 5, 0.3);" onsubmit="showLoadingOverlay(event)">
-                                    {% csrf_token %}
-                                    <div class="mb-3">
-                                        <label class="block text-sm font-bold mb-2" style="color: #C90905;">
-                                            <i class="fas fa-edit mr-2"></i>Registrar Nova Palavra
-                                        </label>
-                                        <textarea
-                                            name="word"
-                                            rows="5"
-                                            required
-                                            class="w-full px-4 py-3 border-2 rounded-xl bg-gray-50 focus:bg-white focus:outline-none transition-all resize-none focus:border-red-600 text-sm"
-                                            style="border-color: rgba(201, 9, 5, 0.2); min-height: 8rem;"
-                                            placeholder="Escreva a palavra de conhecimento aqui..."></textarea>
-                                    </div>
-                                    <button type="submit" class="w-full sm:w-auto px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 text-sm" style="background-color: #C90905;">
-                                        <i class="fas fa-save mr-2"></i>Enviar
-                                    </button>
-                                </form>
-
-                                <!-- Links Rápidos -->
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <a href="{% url 'word_of_knowledge_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
-                                                <i class="fas fa-list text-sm" style="color: #C90905;"></i>
-                                            </div>
-                                            <div>
-                                                <h4 class="text-sm font-bold text-gray-900">Palavras e Curas</h4>
-                                                <p class="text-xs text-gray-500">Ver histórico</p>
-                                            </div>
-                                        </div>
-                                        <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
-                                    </a>
-                                    <a href="{% url 'service_words_view' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(230, 57, 70, 0.1);">
-                                                <i class="fas fa-calendar-alt text-sm" style="color: #E63946;"></i>
-                                            </div>
-                                            <div>
-                                                <h4 class="text-sm font-bold text-gray-900">Próximo Culto</h4>
-                                                <p class="text-xs text-gray-500">Ver palavras do culto</p>
-                                            </div>
-                                        </div>
-                                        <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #E63946;"></i>
-                                    </a>
-                                </div>
-                            </div>
+            {% if is_ministration_member %}
+            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Palavras de Conhecimento" data-card-icon="lightbulb" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+                <!-- Header clicável -->
+                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                    <div class="flex items-center gap-3 sm:gap-4">
+                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                            <i class="fas fa-lightbulb text-white text-lg sm:text-xl"></i>
+                        </div>
+                        <div class="text-left">
+                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                                Palavras de <span style="color: #C90905;">Conhecimento</span>
+                            </h3>
+                            <p class="text-sm text-gray-500 mt-0.5">Registre palavras e curas</p>
                         </div>
                     </div>
-                {% endif %}
+                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+                </button>
 
-                {% if can_music_member %}
-                    <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Ministério de Louvor" data-card-icon="music" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                        <!-- Header clicável -->
-                        <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                            <div class="flex items-center gap-3 sm:gap-4">
-                                <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                                    <i class="fas fa-music text-white text-lg sm:text-xl"></i>
-                                </div>
-                                <div class="text-left">
-                                    <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                        Ministério de <span style="color: #C90905;">Louvor</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-500 mt-0.5">Acesse o repertório e cifras</p>
-                                </div>
+                <!-- Conteúdo colapsável -->
+                <div class="accordion-content">
+                    <div class="px-4 pb-4 sm:px-5 sm:pb-5">
+                        <!-- Formulário Rápido -->
+                        <form method="post" action="{% url 'word_of_knowledge_create' %}" class="bg-white rounded-xl p-4 sm:p-5 border-2 mb-4" style="border-color: rgba(201, 9, 5, 0.3);" onsubmit="showLoadingOverlay(event)">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="block text-sm font-bold mb-2" style="color: #C90905;">
+                                    <i class="fas fa-edit mr-2"></i>Registrar Nova Palavra
+                                </label>
+                                <textarea
+                                    name="word"
+                                    rows="5"
+                                    required
+                                    class="w-full px-4 py-3 border-2 rounded-xl bg-gray-50 focus:bg-white focus:outline-none transition-all resize-none focus:border-red-600 text-sm"
+                                    style="border-color: rgba(201, 9, 5, 0.2); min-height: 8rem;"
+                                    placeholder="Escreva a palavra de conhecimento aqui..."></textarea>
                             </div>
-                            <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                        </button>
+                            <button type="submit" class="w-full sm:w-auto px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 text-sm" style="background-color: #C90905;">
+                                <i class="fas fa-save mr-2"></i>Enviar
+                            </button>
+                        </form>
 
-                        <!-- Conteúdo colapsável -->
-                        <div class="accordion-content">
-                            <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                                <a href="{% url 'music_user_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                        <!-- Links Rápidos -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <a href="{% url 'word_of_knowledge_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
+                                        <i class="fas fa-list text-sm" style="color: #C90905;"></i>
+                                    </div>
                                     <div>
-                                        <h4 class="text-base font-black text-gray-900 mb-1">Ver Repertório</h4>
-                                        <p class="text-sm text-gray-500">Explore partituras e letras disponíveis</p>
+                                        <h4 class="text-sm font-bold text-gray-900">Palavras e Curas</h4>
+                                        <p class="text-xs text-gray-500">Ver histórico</p>
                                     </div>
-                                    <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-
-                {% if is_moderation_member %}
-                    <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Moderação" data-card-icon="user-shield" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                        <!-- Header clicável -->
-                        <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                            <div class="flex items-center gap-3 sm:gap-4">
-                                <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                                    <i class="fas fa-user-shield text-white text-lg sm:text-xl"></i>
                                 </div>
-                                <div class="text-left">
-                                    <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                        Ministério de <span style="color: #C90905;">Moderação</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-500 mt-0.5">Acesse o roteiro de culto para acompanhamento</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                        </button>
-
-                        <!-- Conteúdo colapsável -->
-                        <div class="accordion-content">
-                            <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                                <a href="{% url 'member_roteiro' %}" class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
+                            </a>
+                            <a href="{% url 'service_words_view' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(230, 57, 70, 0.1);">
+                                        <i class="fas fa-calendar-alt text-sm" style="color: #E63946;"></i>
+                                    </div>
                                     <div>
-                                        <h4 class="text-base font-black text-gray-900 mb-1">Ver Roteiro de Culto</h4>
-                                        <p class="text-sm text-gray-500">Visualize os anúncios ativos e datas do culto</p>
+                                        <h4 class="text-sm font-bold text-gray-900">Próximo Culto</h4>
+                                        <p class="text-xs text-gray-500">Ver palavras do culto</p>
                                     </div>
-                                    <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
-                                </a>
-                            </div>
+                                </div>
+                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #E63946;"></i>
+                            </a>
                         </div>
                     </div>
-                {% endif %}
-
-                {% if can_consolidate %}
-                    <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Consolidação" data-card-icon="user-graduate" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                        <!-- Header clicável -->
-                        <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                            <div class="flex items-center gap-3 sm:gap-4">
-                                <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                                    <i class="fas fa-user-graduate text-white text-lg sm:text-xl"></i>
-                                </div>
-                                <div class="text-left">
-                                    <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                        Ministério de <span style="color: #C90905;">Consolidação</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-500 mt-0.5">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                        </button>
-
-                        <!-- Conteúdo colapsável -->
-                        <div class="accordion-content">
-                            <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                                <a href="{% url 'member_consolidation' %}" class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                    <div>
-                                        <h4 class="text-base font-black text-gray-900 mb-1">Ver Consolidados</h4>
-                                        <p class="text-sm text-gray-500">Acesse todas as informações sobre sua consolidação</p>
-                                    </div>
-                                    <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-
-                {% if is_boas_vindas_member %}
-                    <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Boas Vindas" data-card-icon="hand-holding-heart" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                        <!-- Header clicável -->
-                        <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                            <div class="flex items-center gap-3 sm:gap-4">
-                                <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                                    <i class="fas fa-hand-holding-heart text-white text-lg sm:text-xl"></i>
-                                </div>
-                                <div class="text-left">
-                                    <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                        Ministério de <span style="color: #C90905;">Boas Vindas</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-500 mt-0.5">Cadastre e visualize visitantes</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                        </button>
-
-                        <!-- Conteúdo colapsável -->
-                        <div class="accordion-content">
-                            <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <a href="{% url 'member_visitor_create' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
-                                                <i class="fas fa-user-plus text-sm" style="color: #C90905;"></i>
-                                            </div>
-                                            <div>
-                                                <h4 class="text-sm font-bold text-gray-900">Cadastrar Visitante</h4>
-                                                <p class="text-xs text-gray-500">Registrar novo visitante</p>
-                                            </div>
-                                        </div>
-                                        <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
-                                    </a>
-                                    <a href="{% url 'member_visitor_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(230, 57, 70, 0.1);">
-                                                <i class="fas fa-list text-sm" style="color: #E63946;"></i>
-                                            </div>
-                                            <div>
-                                                <h4 class="text-sm font-bold text-gray-900">Ver Visitantes</h4>
-                                                <p class="text-xs text-gray-500">Histórico de visitas</p>
-                                            </div>
-                                        </div>
-                                        <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #E63946;"></i>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-
-                {% if member_schedules %}
-                    <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Escalas do Mês" data-card-icon="calendar-check" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                        <!-- Header clicável -->
-                        <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                            <div class="flex items-center gap-3 sm:gap-4">
-                                <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                                    <i class="fas fa-calendar-check text-white text-lg sm:text-xl"></i>
-                                </div>
-                                <div class="text-left">
-                                    <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                        Escalas do <span style="color: #C90905;">Mês</span>
-                                    </h3>
-                                    <p class="text-sm text-gray-500 mt-0.5">{{ member_schedules|length }} escala{{ member_schedules|length|pluralize:"s" }} disponíve{{ member_schedules|length|pluralize:"l,is" }}</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                        </button>
-
-                        <!-- Conteúdo colapsável -->
-                        <div class="accordion-content">
-                            <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                                <div class="flex flex-col gap-3">
-                                    {% for schedule in member_schedules %}
-                                    <a href="{% url 'member_schedule_detail' schedule.id %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
-                                                <i class="fas fa-calendar-alt text-sm" style="color: #C90905;"></i>
-                                            </div>
-                                            <div>
-                                                <h4 class="text-sm font-bold text-gray-900">{{ schedule.title }}</h4>
-                                                <p class="text-xs text-gray-500">{{ schedule.ministry.name }} · {{ schedule.month }}/{{ schedule.year }}</p>
-                                            </div>
-                                        </div>
-                                        <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
-                                    </a>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
-
+                </div>
             </div>
+            {% endif %}
+
+            {% if can_consolidate %}
+            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Consolidação" data-card-icon="user-graduate" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+                <!-- Header clicável -->
+                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                    <div class="flex items-center gap-3 sm:gap-4">
+                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                            <i class="fas fa-user-graduate text-white text-lg sm:text-xl"></i>
+                        </div>
+                        <div class="text-left">
+                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                                Ministério de <span style="color: #C90905;">Consolidação</span>
+                            </h3>
+                            <p class="text-sm text-gray-500 mt-0.5">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+                </button>
+
+                <!-- Conteúdo colapsável -->
+                <div class="accordion-content">
+                    <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                        <a href="{% url 'member_consolidation' %}" class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div>
+                                <h4 class="text-base font-black text-gray-900 mb-1">Ver Consolidados</h4>
+                                <p class="text-sm text-gray-500">Acesse todas as informações sobre sua consolidação</p>
+                            </div>
+                            <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if is_boas_vindas_member %}
+            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Boas Vindas" data-card-icon="hand-holding-heart" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+                <!-- Header clicável -->
+                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                    <div class="flex items-center gap-3 sm:gap-4">
+                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                            <i class="fas fa-hand-holding-heart text-white text-lg sm:text-xl"></i>
+                        </div>
+                        <div class="text-left">
+                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                                Ministério de <span style="color: #C90905;">Boas Vindas</span>
+                            </h3>
+                            <p class="text-sm text-gray-500 mt-0.5">Cadastre e visualize visitantes</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+                </button>
+
+                <!-- Conteúdo colapsável -->
+                <div class="accordion-content">
+                    <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <a href="{% url 'member_visitor_create' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
+                                        <i class="fas fa-user-plus text-sm" style="color: #C90905;"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-gray-900">Cadastrar Visitante</h4>
+                                        <p class="text-xs text-gray-500">Registrar novo visitante</p>
+                                    </div>
+                                </div>
+                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
+                            </a>
+                            <a href="{% url 'member_visitor_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(230, 57, 70, 0.1);">
+                                        <i class="fas fa-list text-sm" style="color: #E63946;"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-gray-900">Ver Visitantes</h4>
+                                        <p class="text-xs text-gray-500">Histórico de visitas</p>
+                                    </div>
+                                </div>
+                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #E63946;"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if member_schedules %}
+            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Escalas do Mês" data-card-icon="calendar-check" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+                <!-- Header clicável -->
+                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                    <div class="flex items-center gap-3 sm:gap-4">
+                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                            <i class="fas fa-calendar-check text-white text-lg sm:text-xl"></i>
+                        </div>
+                        <div class="text-left">
+                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                                Escalas do <span style="color: #C90905;">Mês</span>
+                            </h3>
+                            <p class="text-sm text-gray-500 mt-0.5">{{ member_schedules|length }} escala{{ member_schedules|length|pluralize:"s" }} disponíve{{ member_schedules|length|pluralize:"l,is" }}</p>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+                </button>
+
+                <!-- Conteúdo colapsável -->
+                <div class="accordion-content">
+                    <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                        <div class="flex flex-col gap-3">
+                            {% for schedule in member_schedules %}
+                            <a href="{% url 'member_schedule_detail' schedule.id %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
+                                        <i class="fas fa-calendar-alt text-sm" style="color: #C90905;"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-sm font-bold text-gray-900">{{ schedule.title }}</h4>
+                                        <p class="text-xs text-gray-500">{{ schedule.ministry.name }} · {{ schedule.month }}/{{ schedule.year }}</p>
+                                    </div>
+                                </div>
+                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
         {% endif %}
     </main>
 
@@ -658,7 +593,7 @@
             const cards = Array.from(container.querySelectorAll('[data-ministry-card]'));
             if (cards.length === 0) return;
 
-            if (cards.length <= 1) {
+            if (cards.length <= 2) {
                 // Flat mode: expand all, remove toggle interaction
                 cards.forEach(card => {
                     const content = card.querySelector('.accordion-content');
@@ -680,7 +615,7 @@
                     const tabBtn = document.createElement('button');
                     tabBtn.type = 'button';
                     tabBtn.className = 'ministry-tab-btn' + (idx === 0 ? ' active' : '');
-                    tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> <span class="mt-1">${label}</span>`;
+                    tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> ${label}`;
                     tabBtn.addEventListener('click', () => switchMinistryTab(cards, tabBar, idx));
                     tabBar.appendChild(tabBtn);
 
