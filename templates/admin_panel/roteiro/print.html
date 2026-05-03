@@ -19,7 +19,7 @@
 
         /* ── Screen-only helpers ─────────────────────────────────────────── */
         @media screen {
-            body { padding: 24px; max-width: 800px; margin: 0 auto; }
+            body { padding: 24px; }
 
             .print-toolbar {
                 display: flex;
@@ -102,6 +102,8 @@
             border: 1px solid #e5e7eb;
             border-radius: 10px;
             background: #fff;
+            break-inside: avoid-page;
+            page-break-inside: avoid;
         }
 
         .anuncio-num {
@@ -202,8 +204,6 @@
             gap: 4px;
             margin-bottom: 6px;
             padding-left: 34px;
-            break-inside: avoid;
-            page-break-inside: avoid;
         }
 
         .anuncio-foto {
@@ -364,6 +364,11 @@
     window.triggerPrint = function() {
         window.print();
     };
+
+    // Auto-trigger print dialog on page load
+    window.addEventListener('load', function() {
+        window.print();
+    });
 })();
 </script>
 
