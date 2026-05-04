@@ -129,6 +129,93 @@
         }
     });
 });
+
+/* Mobile Bottom Sheet Swipe Handler */
+document.addEventListener('DOMContentLoaded', () => {
+    // Setup swipe-to-dismiss for all modals on mobile
+    const isHugeSmallScreen = window.innerWidth <= 768;
+    if (!isHugeSmallScreen) return; // Only on mobile
+
+    const modalIds = [
+        'divisionAssignModal', 
+        'calendarModal', 
+        'dayAssignmentModal', 
+        'dayModal',
+        'deleteModal',
+        'duplicateModal',
+        'cropModal'
+    ];
+
+    modalIds.forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+
+        const modalCard = modal.querySelector('.modal-card, .modal-content, .modal-overlay');
+        if (!modalCard) return;
+
+        let touchStartY = 0;
+        let touchCurrentY = 0;
+        let isDragging = false;
+
+        modalCard.addEventListener('touchstart', (e) => {
+            touchStartY = e.touches[0].clientY;
+            isDragging = true;
+            modalCard.style.transition = 'none';
+        }, false);
+
+        modalCard.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            touchCurrentY = e.touches[0].clientY;
+            const diff = touchCurrentY - touchStartY;
+            
+            // Only drag downward
+            if (diff > 0) {
+                modalCard.style.transform = `translateY(${diff}px)`;
+            }
+        }, false);
+
+        modalCard.addEventListener('touchend', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            const diff = touchCurrentY - touchStartY;
+            const threshold = 150; // 150px threshold to dismiss
+            
+            if (diff > threshold) {
+                // Swipe down far enough - close modal
+                modalCard.classList.add('closing');
+                modal.style.animation = 'slideDown 0.2s ease-out forwards';
+                
+                setTimeout(() => {
+                    // Find and call the appropriate close function
+                    const closeButton = modal.querySelector('[onclick*="close"]');
+                    if (closeButton && closeButton.onclick) {
+                        closeButton.onclick();
+                    } else {
+                        // Fallback: just hide the modal
+                        modal.classList.add('hidden');
+                        modalCard.style.transform = '';
+                        modalCard.style.transition = '';
+                    }
+                }, 200);
+            } else {
+                // Snap back
+                modalCard.style.transition = 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                modalCard.style.transform = '';
+            }
+        }, false);
+    });
+
+    // Re-setup on window resize if going from desktop to mobile
+    let lastWidth = window.innerWidth;
+    window.addEventListener('resize', () => {
+        if (lastWidth > 768 && window.innerWidth <= 768) {
+            // Crossed into mobile - reload
+            location.reload();
+        }
+        lastWidth = window.innerWidth;
+    });
+});
 </script><style>
     /* Desktop and Mobile admin styling */
     @media screen and (min-width: 769px) {
@@ -185,13 +272,21 @@
             flex-direction: column !important;
         }
     }
+
+    /* iPhone zoom prevention - 16px minimum for all inputs */
+    .form-input, .form-textarea {
+        font-size: 16px !important;
+    }
+    
+    /* Bottom Sheet Modal Helper */
+    .modal-swipe-handler {
+        touch-action: pan-y;
+        user-select: none;
+        -webkit-user-select: none;
+    }
     
     /* Improved form responsiveness */
     @media (max-width: 640px) {
-        .form-input, .form-textarea {
-            font-size: 16px !important; /* Prevent zoom on iOS */
-        }
-        
         /* Card adjustments for very small screens */
         .admin-card {
             border-radius: 8px !important;

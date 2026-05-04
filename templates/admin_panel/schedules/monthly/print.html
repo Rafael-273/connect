@@ -693,6 +693,20 @@
                             <td>
                                 {% if day.is_cancelled %}
                                     <span class="tbl-no-member">—</span>
+                                {% elif day.has_shift_divisions %}
+                                    {% with mrn=day.div_members_map_morning|get_item:division.id eve=day.div_members_map_evening|get_item:division.id %}
+                                        {% if mrn %}
+                                            <div style="margin-bottom:2px;"><span style="font-size:7pt;font-weight:700;color:#C90905;">☀</span>
+                                            {% for m in mrn %}<span class="tbl-member">{{ m.name }}</span>{% endfor %}</div>
+                                        {% endif %}
+                                        {% if eve %}
+                                            <div><span style="font-size:7pt;font-weight:700;color:#555;">🌙</span>
+                                            {% for m in eve %}<span class="tbl-member">{{ m.name }}</span>{% endfor %}</div>
+                                        {% endif %}
+                                        {% if not mrn and not eve %}
+                                            <span class="tbl-no-member">—</span>
+                                        {% endif %}
+                                    {% endwith %}
                                 {% else %}
                                     {% with members=day.div_members_map|get_item:division.id %}
                                         {% if members %}

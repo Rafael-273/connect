@@ -65,8 +65,8 @@ from .views.schedules import (
     ScheduleDayGetView, ScheduleDayToggleCancelView,
     schedule_print_view,
     check_schedule_conflict_view,
-    division_list_view, division_create_view, division_edit_view, division_delete_view,
-    schedule_day_division_assign_view
+    DivisionListView, DivisionCreateView, DivisionEditView, DivisionDeleteView,
+    ScheduleDayDivisionAssignView
 )
 from .views.prayer_request import PrayerRequestCreateView, PrayerRequestListView
 from .views.admin_panel import (
@@ -184,11 +184,11 @@ urlpatterns = [
     path('admin-panel/schedules/check-conflict/', check_schedule_conflict_view, name='schedule_check_conflict'),
     
     # Division URLs - Subdivisões de Escala (gerenciadas inline no form da escala)
-    path('admin-panel/ministries/<int:ministry_id>/divisions/', division_list_view, name='division_list'),
-    path('admin-panel/schedules/<int:schedule_id>/divisions/new/', division_create_view, name='division_create'),
-    path('admin-panel/divisions/<int:division_id>/edit/', division_edit_view, name='division_edit'),
-    path('admin-panel/divisions/<int:division_id>/delete/', division_delete_view, name='division_delete'),
-    path('admin-panel/schedules/days/<int:day_id>/divisions/', schedule_day_division_assign_view, name='schedule_day_division_assign'),
+    path('admin-panel/ministries/<int:ministry_id>/divisions/', DivisionListView.as_view(), name='division_list'),
+    path('admin-panel/schedules/<int:schedule_id>/divisions/new/', DivisionCreateView.as_view(), name='division_create'),
+    path('admin-panel/divisions/<int:division_id>/edit/', DivisionEditView.as_view(), name='division_edit'),
+    path('admin-panel/divisions/<int:division_id>/delete/', DivisionDeleteView.as_view(), name='division_delete'),
+    path('admin-panel/schedules/days/<int:day_id>/divisions/', ScheduleDayDivisionAssignView.as_view(), name='schedule_day_division_assign'),
     
     # Team URLs
     path('admin-panel/teams/', TeamListView.as_view(), name='team_list'),

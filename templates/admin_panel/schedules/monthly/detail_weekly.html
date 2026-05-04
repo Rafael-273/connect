@@ -1,0 +1,802 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ schedule.title }} - Escala Semanal - Admin Panel{% endblock %}
+
+{% block head %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet">
+<style>
+.admin-card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.action-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; font-size: 1.1rem; transition: all 0.15s; border: none; cursor: pointer; flex-shrink: 0; }
+.action-btn-edit { background: #eff6ff; color: #2563eb; }
+.action-btn-edit:hover { background: #dbeafe; }
+.action-btn-division { background: #fff1f1; color: var(--color-primary); }
+.action-btn-division:hover { background: #ffe4e4; }
+.status-badge { display: inline-flex; align-items: center; padding: 0.2rem 0.65rem; border-radius: 9999px; font-size: 0.7rem; font-weight: 600; }
+.day-date-badge { border-radius: 10px; background: var(--color-primary); color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4px; }
+.day-date-badge.cancelled { background: #9ca3af; }
+
+@keyframes modal-in {
+    from { opacity: 0; transform: scale(0.96) translateY(10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes overlay-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.modal-overlay-animated { animation: overlay-in 0.2s ease-out; }
+.modal-card { background: white; border-radius: 20px; overflow: hidden; box-shadow: 0 32px 80px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.04); animation: modal-in 0.22s cubic-bezier(.16,1,.3,1); }
+.modal-header { display: flex; align-items: center; gap: 14px; padding: 18px 24px; flex-shrink: 0; }
+.modal-header-title { font-size: 0.9rem; font-weight: 800; color: white; line-height: 1.25; letter-spacing: -0.01em; }
+.modal-header-sub { font-size: 0.72rem; margin-top: 2px; color: rgba(255,255,255,0.72); }
+.modal-icon { width: 38px; height: 38px; border-radius: 11px; background: rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.modal-close-btn { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: rgba(255,255,255,0.18); color: white; border: none; cursor: pointer; transition: background 0.15s, transform 0.15s; flex-shrink: 0; margin-left: auto; }
+.modal-close-btn:hover { background: rgba(255,255,255,0.32); transform: scale(1.05); }
+.modal-body { padding: 24px; overflow-y: auto; flex: 1; background: #f8fafc; }
+.modal-footer { padding: 16px 24px; border-top: 1.5px solid #f1f5f9; background: white; display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+.modal-btn-primary { display: inline-flex; align-items: center; gap: 7px; padding: 10px 20px; background: var(--color-primary); color: white; border: none; border-radius: 11px; font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: opacity 0.15s, transform 0.1s; }
+.modal-btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.modal-btn-primary:disabled { background: #9ca3af; cursor: not-allowed; opacity: 1; transform: none; }
+.modal-btn-secondary { display: inline-flex; align-items: center; gap: 7px; padding: 10px 20px; background: #f1f5f9; color: #374151; border: none; border-radius: 11px; font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: background 0.15s, transform 0.1s; }
+.modal-btn-secondary:hover { background: #e2e8f0; transform: translateY(-1px); }
+.modal-form-label { display: block; font-size: 0.72rem; font-weight: 700; color: #6b7280; margin-bottom: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
+.modal-form-input { width: 100%; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 16px; color: #111827; background: white; transition: border-color 0.15s, box-shadow 0.15s; outline: none; box-sizing: border-box; }
+.modal-form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(201,9,5,0.10); }
+textarea { font-family: inherit; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px; resize: vertical; font-size: 16px; }
+.modal-section { background: white; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; border: 1.5px solid #f1f5f9; }
+.section-header { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1.5px solid #f1f5f9; }
+.section-header .icon-wrap { width: 28px; height: 28px; border-radius: 7px; background: var(--color-primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+@media (max-width: 768px) {
+    .modal-overlay-animated { align-items: flex-end !important; background: linear-gradient(to top, rgba(0,0,0,0.5), transparent) !important; }
+    .modal-card { width: 100% !important; max-width: 100% !important; max-height: 90vh !important; border-radius: 20px 20px 0 0 !important; animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important; overflow-y: auto; }
+    .modal-card::before { content: ''; display: block; width: 40px; height: 4px; background: #e5e7eb; border-radius: 2px; margin: 12px auto; }
+    .modal-btn-primary, .modal-btn-secondary { flex: 1; min-height: 44px; border-radius: 10px; font-size: 16px; }
+    @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+}
+
+/* Select2 */
+.select2-container--default .select2-selection--single,
+.select2-container--default .select2-selection--multiple { font-size: 16px !important; min-height: 25px; height: 2.5rem !important; }
+.select2-container--default .select2-selection--multiple { padding: 2px 4px !important; }
+.select2-container--default .select2-selection--multiple .select2-selection__rendered { padding: 0 !important; display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.select2-container--default .select2-search--inline { display: flex; align-items: center; }
+.select2-container--default .select2-search--inline .select2-search__field { font-size: 16px !important; padding: 4px 8px !important; min-width: 150px !important; height: auto !important; margin: 0 !important; }
+.select2-dropdown { font-size: 16px !important; }
+.select2-results__option { padding: 12px 16px !important; font-size: 16px !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+    {% include 'parciais/messages.html' %}
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between gap-3 mb-4 md:mb-6">
+                <div class="flex items-center gap-3 min-w-0">
+                    <a href="{% url 'schedule_list' %}" class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-gray-900 transition shadow-sm">
+                        <ion-icon name="arrow-back-outline" class="text-lg"></ion-icon>
+                    </a>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 truncate">{{ schedule.title }}</h1>
+                        <div class="flex flex-wrap items-center gap-2 mt-1">
+                            <span class="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                <ion-icon name="library-outline" class="text-xs"></ion-icon>
+                                {{ schedule.ministry.name }}
+                            </span>
+                            <span class="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                                <ion-icon name="repeat-outline" class="text-xs"></ion-icon>
+                                Semanal
+                            </span>
+                            {% if schedule.days_of_week %}
+                            <span class="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                <ion-icon name="calendar-outline" class="text-xs"></ion-icon>
+                                {{ schedule.get_days_display }}
+                            </span>
+                            {% endif %}
+                            <span class="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                <ion-icon name="time-outline" class="text-xs"></ion-icon>
+                                {{ schedule.start_date|date:"d/m/Y" }}{% if schedule.end_date %} → {{ schedule.end_date|date:"d/m/Y" }}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hidden sm:flex items-center gap-2 flex-shrink-0">
+                    <a href="{% url 'schedule_print' schedule.id %}" target="_blank"
+                       class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:border-gray-300 hover:bg-gray-50 transition">
+                        <ion-icon name="print-outline" class="text-base"></ion-icon>
+                        PDF
+                    </a>
+                    <a href="{% url 'schedule_edit' schedule.id %}"
+                       class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-700 text-sm font-semibold shadow-sm hover:border-gray-300 hover:bg-gray-50 transition">
+                        <ion-icon name="create-outline" class="text-base"></ion-icon>
+                        Editar Escala
+                    </a>
+                </div>
+                <!-- Mobile -->
+                <div class="flex sm:hidden items-center gap-2 flex-shrink-0">
+                    <a href="{% url 'schedule_edit' schedule.id %}" class="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+                        <ion-icon name="create-outline" class="text-lg"></ion-icon>
+                    </a>
+                </div>
+            </div>
+
+            {% if schedule.guidelines %}
+            <div class="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex gap-2">
+                <ion-icon name="information-circle-outline" class="text-lg flex-shrink-0 mt-0.5"></ion-icon>
+                <span>{{ schedule.guidelines }}</span>
+            </div>
+            {% endif %}
+
+            <!-- Days -->
+            {% if weeks %}
+            <div class="admin-card overflow-hidden">
+                <div class="divide-y divide-gray-50">
+                {% for week_num, week_days in weeks.items %}{% for day in week_days %}
+                <div class="p-4 sm:p-5 hover:bg-gray-50/50 transition {% if day.is_cancelled %}opacity-60{% endif %}">
+                    <div class="flex items-start gap-3 sm:gap-4">
+                        <!-- Date badge -->
+                        <div class="flex-shrink-0 day-date-badge {% if day.is_cancelled %}cancelled{% endif %} w-12 h-12 sm:w-14 sm:h-14">
+                            <span class="text-[9px] font-bold uppercase opacity-90 leading-none">{{ day.pt_weekday|slice:":3" }}</span>
+                            <span class="text-lg sm:text-xl font-black leading-tight">{{ day.date|date:"j" }}</span>
+                            <span class="text-[9px] font-medium uppercase opacity-90 leading-none">{{ day.date|date:"M" }}</span>
+                        </div>
+
+                        <!-- Content -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                                        <h4 class="font-bold text-gray-900 text-sm">{{ day.description|default_if_none:"Sem descrição" }}</h4>
+                                        {% if day.is_cancelled %}
+                                        <span class="status-badge bg-red-100 text-red-700">
+                                            <ion-icon name="ban-outline" class="mr-1 text-xs"></ion-icon>Cancelado
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-xs text-gray-400 mb-2">{{ day.date|date:"d/m/Y" }} &mdash; {{ day.pt_weekday }}</p>
+                                </div>
+                                <button onclick="editDay({{ day.id }}, '{{ day.date|date:'d/m/Y' }}', '{{ day.pt_weekday }}')"
+                                        class="action-btn action-btn-edit flex-shrink-0" title="Editar dia">
+                                    <ion-icon name="create-outline"></ion-icon>
+                                </button>
+                            </div>
+
+                            <!-- Equipes ou Membros -->
+                            {% if schedule.use_team_rotation %}
+                                {% if day.team %}
+                                <span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                    <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: {{ day.team.color|default:'#6b7280' }};"></span>
+                                    {{ day.team.name }}
+                                    <span class="text-gray-400">({{ day.team.get_member_count }})</span>
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center gap-1 text-gray-400 italic text-xs bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg">
+                                    <ion-icon name="alert-circle-outline" class="text-sm text-gray-300"></ion-icon>
+                                    Sem equipe atribuída
+                                </span>
+                                {% endif %}
+                            {% else %}
+                                {% if day.has_shifts %}
+                                <div class="space-y-1.5">
+                                    <div class="flex flex-wrap gap-1.5 items-center">
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0" style="color:var(--color-primary);background:#fff1f1;border:1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);">
+                                            <ion-icon name="sunny-outline" class="text-xs"></ion-icon>Manhã
+                                        </span>
+                                        {% for member in day.members_morning.all %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                            <ion-icon name="person-circle-outline" class="text-sm flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                            {{ member.name }}
+                                        </span>
+                                        {% empty %}
+                                        <span class="text-xs text-gray-400 italic">Sem membros</span>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="flex flex-wrap gap-1.5 items-center">
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full flex-shrink-0" style="color:var(--color-primary);background:#fff1f1;border:1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);">
+                                            <ion-icon name="moon-outline" class="text-xs"></ion-icon>Noite
+                                        </span>
+                                        {% for member in day.members_evening.all %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                            <ion-icon name="person-circle-outline" class="text-sm flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                            {{ member.name }}
+                                        </span>
+                                        {% empty %}
+                                        <span class="text-xs text-gray-400 italic">Sem membros</span>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="flex flex-wrap gap-1.5">
+                                    {% for member in day.members.all %}
+                                    <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-700">
+                                        <ion-icon name="person-circle-outline" class="text-sm flex-shrink-0" style="color: var(--color-primary);"></ion-icon>
+                                        {{ member.name }}
+                                    </span>
+                                    {% endfor %}
+                                    {% if not day.members.all %}
+                                    <!-- Divisões (sem turno) -->
+                                    {% if day.grouped_divisions %}
+                                    <div class="flex flex-wrap gap-1.5 w-full">
+                                        {% for group in day.grouped_divisions %}
+                                        <span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg text-xs text-gray-600">
+                                            <ion-icon name="git-branch-outline" class="flex-shrink-0 text-sm" style="color: var(--color-primary);"></ion-icon>
+                                            <span class="font-semibold" style="color: var(--color-primary);">{{ group.division.name }}:</span>
+                                            {% for m in group.members %}{{ m.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                        </span>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <span class="inline-flex items-center gap-1 text-gray-400 italic text-xs bg-gray-50 border border-gray-200 px-2.5 py-1 rounded-lg">
+                                        <ion-icon name="alert-circle-outline" class="text-sm text-gray-300"></ion-icon>
+                                        Sem atribuição
+                                    </span>
+                                    {% endif %}
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                                <!-- Divisões com turno -->
+                                {% if day.has_shifts and day.morning_grouped_divisions or day.has_shifts and day.evening_grouped_divisions %}
+                                <div class="mt-2 space-y-1">
+                                    {% if day.morning_grouped_divisions %}
+                                    <div class="flex items-start gap-1">
+                                        <ion-icon name="sunny-outline" class="text-xs mt-0.5 flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                        <div class="flex flex-wrap gap-1">
+                                        {% for group in day.morning_grouped_divisions %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-lg text-xs text-gray-600">
+                                            <span class="font-semibold" style="color:var(--color-primary);">{{ group.division.name }}:</span>
+                                            {% for member in group.members %}{{ member.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                        </span>
+                                        {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% if day.evening_grouped_divisions %}
+                                    <div class="flex items-start gap-1">
+                                        <ion-icon name="moon-outline" class="text-xs mt-0.5 flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                        <div class="flex flex-wrap gap-1">
+                                        {% for group in day.evening_grouped_divisions %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-lg text-xs text-gray-600">
+                                            <span class="font-semibold" style="color:var(--color-primary);">{{ group.division.name }}:</span>
+                                            {% for member in group.members %}{{ member.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                        </span>
+                                        {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+                            {% endif %}
+
+                            <!-- Notes -->
+                            {% if day.notes %}
+                            <p class="text-xs text-gray-500 italic flex items-start gap-1 mt-2">
+                                <ion-icon name="information-circle-outline" class="text-blue-400 mt-0.5 flex-shrink-0 text-sm"></ion-icon>
+                                {{ day.notes }}
+                            </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}{% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="admin-card p-12 text-center">
+                <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <ion-icon name="calendar-outline" class="text-3xl text-gray-400"></ion-icon>
+                </div>
+                <p class="text-gray-500 font-medium mb-1">Nenhum dia gerado ainda</p>
+                <p class="text-sm text-gray-400">Verifique as datas e dias da semana configurados na escala.</p>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- Modal: Editar Dia (Unificado - inclui divisões) -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="editDayModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay-animated bg-black bg-opacity-50">
+    <div class="modal-card w-full max-w-2xl flex flex-col" style="max-height: 90vh;">
+        <div class="modal-header" style="background: var(--color-primary);">
+            <div class="modal-icon"><ion-icon name="create-outline" class="text-white text-lg"></ion-icon></div>
+            <div class="flex-1 min-w-0">
+                <p class="modal-header-title" id="editDayTitle">Editar Dia</p>
+                <p class="modal-header-sub" id="editDaySubtitle"></p>
+            </div>
+            <button type="button" class="modal-close-btn" onclick="closeEditDayModal()">
+                <ion-icon name="close-outline" class="text-lg"></ion-icon>
+            </button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editDayId">
+            <div class="space-y-4">
+
+                <div>
+                    <label class="modal-form-label">Descrição <span class="font-normal text-gray-400 normal-case">(Ex: Culto de Quarta, Culto de Domingo)</span></label>
+                    <input type="text" id="editDayDescription" class="modal-form-input" placeholder="Ex: Culto de Quarta-feira">
+                </div>
+
+                {% if not schedule.use_team_rotation %}
+                <!-- Shift toggle -->
+                <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-200">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--color-primary);">
+                            <ion-icon name="sunny-outline" class="text-white text-sm"></ion-icon>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">Dois turnos (Manhã e Noite)</p>
+                            <p class="text-xs text-gray-500">Escalas separadas para cada período</p>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                        <input type="checkbox" id="editDayHasShifts" class="sr-only peer" onchange="toggleShifts(this.checked)">
+                        <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#C90905]"></div>
+                    </label>
+                </div>
+                {% endif %}
+
+                <!-- Single assignment section -->
+                <div id="singleAssignmentSection">
+                    {% if schedule.use_team_rotation %}
+                    <div>
+                        <label class="modal-form-label">Equipe</label>
+                        <select id="editDayTeam" class="modal-form-input">
+                            <option value="">Sem equipe</option>
+                            {% for team in teams %}
+                            <option value="{{ team.id }}">{{ team.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% elif not divisions %}
+                    <div>
+                        <label class="modal-form-label">Membros</label>
+                        <select id="editDayMembers" name="members" multiple class="w-full">
+                            {% for member in members %}
+                            <option value="{{ member.id }}">{{ member.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+
+                    {% if divisions and not schedule.use_team_rotation %}
+                    <!-- Division cards (single shift) -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid color-mix(in srgb, var(--color-primary) 35%, transparent);">
+                        <div class="flex items-center gap-2.5 px-4 py-3" style="background: var(--color-primary);">
+                            <ion-icon name="git-branch-outline" class="text-white text-base flex-shrink-0"></ion-icon>
+                            <span class="font-bold text-white text-sm">Atribuição por Divisões</span>
+                            <span id="divisionsSummaryText" class="ml-auto text-xs px-2.5 py-1 rounded-full font-semibold" style="background: rgba(255,255,255,0.2); color: white;"></span>
+                        </div>
+                        <div id="assignmentDivisionsContent" class="px-4 pb-4 pt-3 space-y-3 bg-white">
+                            <!-- Populated by renderDivisionCards() -->
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if not schedule.use_team_rotation %}
+                <!-- Shift assignment section -->
+                <div id="shiftAssignmentSection" class="hidden space-y-3">
+                    <!-- Manhã -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid var(--color-primary);">
+                        <div class="flex items-center gap-2 px-4 py-2.5" style="background: var(--color-primary);">
+                            <ion-icon name="sunny-outline" class="text-white text-base flex-shrink-0"></ion-icon>
+                            <span class="font-bold text-white text-sm">Manhã</span>
+                            <span id="morningBadge" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.25);color:white;">Nenhum</span>
+                        </div>
+                        {% if not divisions %}
+                        <div class="px-4 py-3 bg-white">
+                            <select id="editDayMorning" name="members_morning" multiple class="w-full">
+                                {% for member in members %}
+                                <option value="{{ member.id }}">{{ member.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% else %}
+                        <div id="morningDivisionsContent" class="px-4 pb-4 pt-3 space-y-3 bg-white">
+                            <!-- Populated by renderShiftDivisionCards('morning', ...) -->
+                        </div>
+                        {% endif %}
+                    </div>
+                    <!-- Noite -->
+                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid var(--color-primary);">
+                        <div class="flex items-center gap-2 px-4 py-2.5" style="background: var(--color-primary);">
+                            <ion-icon name="moon-outline" class="text-white text-base flex-shrink-0"></ion-icon>
+                            <span class="font-bold text-white text-sm">Noite</span>
+                            <span id="eveningBadge" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.25);color:white;">Nenhum</span>
+                        </div>
+                        {% if not divisions %}
+                        <div class="px-4 py-3 bg-white">
+                            <select id="editDayEvening" name="members_evening" multiple class="w-full">
+                                {% for member in members %}
+                                <option value="{{ member.id }}">{{ member.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% else %}
+                        <div id="eveningDivisionsContent" class="px-4 pb-4 pt-3 space-y-3 bg-white">
+                            <!-- Populated by renderShiftDivisionCards('evening', ...) -->
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div>
+                    <label class="modal-form-label">Observações <span class="font-normal text-gray-400 normal-case">(Opcional)</span></label>
+                    <textarea id="editDayNotes" rows="3" class="modal-form-input" style="resize:vertical;" placeholder="Observações sobre este dia..."></textarea>
+                </div>
+
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="modal-btn-secondary" onclick="closeEditDayModal()">Cancelar</button>
+            <button type="button" class="modal-btn-primary" id="saveEditDayBtn" onclick="saveEditDay()">
+                <ion-icon name="checkmark-circle-outline"></ion-icon>
+                Salvar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+const useTeamRotation = {{ schedule.use_team_rotation|yesno:"true,false" }};
+const hasDivisions = {{ divisions|yesno:"true,false" }};
+
+const availableDivisions = [
+    {% for d in divisions %}
+    { id: {{ d.id }}, name: '{{ d.name|escapejs }}', parentId: {{ d.parent_id|default_if_none:"null" }}, order: {{ d.order }} },
+    {% endfor %}
+];
+const availableMembers = [
+    {% for m in members %}
+    { id: {{ m.id }}, name: '{{ m.name|escapejs }}' },
+    {% endfor %}
+];
+
+let _currentDayId = null;
+
+// ─── Open ─────────────────────────────────────────────────────
+function editDay(dayId, dateStr, weekday) {
+    _currentDayId = dayId;
+    document.getElementById('editDayId').value = dayId;
+    document.getElementById('editDayTitle').textContent = weekday;
+    document.getElementById('editDaySubtitle').textContent = dateStr;
+    document.getElementById('editDayDescription').value = '';
+    document.getElementById('editDayNotes').value = '';
+
+    if (!useTeamRotation) {
+        const st = document.getElementById('editDayHasShifts');
+        if (st) st.checked = false;
+        toggleShifts(false, false);
+    }
+
+    if (hasDivisions) {
+        const dc = document.getElementById('assignmentDivisionsContent');
+        if (dc) dc.innerHTML = '<div class="text-center py-4 text-gray-400 text-sm">Carregando...</div>';
+    }
+
+    document.getElementById('editDayModal').classList.remove('hidden');
+
+    const dayFetch = fetch(`/admin-panel/schedules/days/${dayId}/get/`).then(r => r.json());
+    const divFetch = hasDivisions
+        ? fetch(`/admin-panel/schedules/days/${dayId}/divisions/`).then(r => r.json())
+        : Promise.resolve({ assignments: [] });
+
+    Promise.all([dayFetch, divFetch]).then(([dayData, divData]) => {
+        document.getElementById('editDayDescription').value = dayData.description || '';
+        document.getElementById('editDayNotes').value = dayData.notes || '';
+
+        if (useTeamRotation) {
+            const ts = document.getElementById('editDayTeam');
+            if (ts) ts.value = String(dayData.team_id || '');
+        } else if (hasDivisions) {
+            const byShift = { single: {}, morning: {}, evening: {} };
+            (divData.assignments || []).forEach(a => {
+                const sk = a.shift === 'morning' ? 'morning' : a.shift === 'evening' ? 'evening' : 'single';
+                if (!byShift[sk][a.division_id]) byShift[sk][a.division_id] = [];
+                byShift[sk][a.division_id].push(a.member_id);
+            });
+            const hasMorning = Object.values(byShift.morning).some(arr => arr.length > 0);
+            const hasEvening = Object.values(byShift.evening).some(arr => arr.length > 0);
+            const hasShifts = hasMorning || hasEvening;
+            const st = document.getElementById('editDayHasShifts');
+            if (st) st.checked = hasShifts;
+            toggleShifts(hasShifts, false);
+            setTimeout(() => {
+                if (hasShifts) {
+                    renderShiftDivisionCards('morning', byShift.morning);
+                    renderShiftDivisionCards('evening', byShift.evening);
+                } else {
+                    renderDivisionCards(byShift.single);
+                }
+            }, 50);
+        } else {
+            const hasShifts = dayData.has_shifts || false;
+            const st = document.getElementById('editDayHasShifts');
+            if (st) st.checked = hasShifts;
+            toggleShifts(hasShifts, false);
+            setTimeout(() => {
+                initDirectMemberSelects();
+                if (hasShifts) {
+                    const mIds = (dayData.morning_member_ids || []).map(String);
+                    const eIds = (dayData.evening_member_ids || []).map(String);
+                    $('#editDayMorning').val(mIds.length ? mIds : null).trigger('change');
+                    $('#editDayEvening').val(eIds.length ? eIds : null).trigger('change');
+                    updateDirectBadge('morningBadge', mIds.length);
+                    updateDirectBadge('eveningBadge', eIds.length);
+                } else {
+                    const ids = (dayData.member_ids || []).map(String);
+                    $('#editDayMembers').val(ids.length ? ids : null).trigger('change');
+                }
+            }, 50);
+        }
+    }).catch(() => {});
+}
+
+// ─── Close ────────────────────────────────────────────────────
+function closeEditDayModal() {
+    destroyAllDivisionSelects();
+    ['#editDayMembers', '#editDayMorning', '#editDayEvening'].forEach(sel => {
+        if ($(sel).hasClass('select2-hidden-accessible')) $(sel).select2('destroy');
+    });
+    document.getElementById('editDayModal').classList.add('hidden');
+    _currentDayId = null;
+}
+
+// ─── Shift toggle ─────────────────────────────────────────────
+function toggleShifts(checked, doInit) {
+    if (doInit === undefined) doInit = true;
+    const single = document.getElementById('singleAssignmentSection');
+    const shifts = document.getElementById('shiftAssignmentSection');
+    if (single) single.classList.toggle('hidden', checked);
+    if (shifts) shifts.classList.toggle('hidden', !checked);
+
+    if (!doInit) return;
+
+    destroyAllDivisionSelects();
+    if (!useTeamRotation && !hasDivisions) {
+        ['#editDayMembers', '#editDayMorning', '#editDayEvening'].forEach(sel => {
+            if ($(sel).hasClass('select2-hidden-accessible')) $(sel).select2('destroy');
+        });
+        initDirectMemberSelects();
+    } else if (hasDivisions) {
+        if (checked) {
+            renderShiftDivisionCards('morning', {});
+            renderShiftDivisionCards('evening', {});
+        } else {
+            renderDivisionCards({});
+        }
+    }
+}
+
+function updateDirectBadge(badgeId, count) {
+    const b = document.getElementById(badgeId);
+    if (b) b.textContent = count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum';
+}
+
+// ─── Direct member selects ────────────────────────────────────
+function initDirectMemberSelects() {
+    const parent = $('#editDayModal');
+    const opts = { placeholder: 'Clique para adicionar membros...', allowClear: true, width: '100%', dropdownParent: parent };
+    if ($('#editDayMembers').length && !$('#editDayMembers').hasClass('select2-hidden-accessible')) {
+        $('#editDayMembers').select2(opts);
+    }
+    if ($('#editDayMorning').length && !$('#editDayMorning').hasClass('select2-hidden-accessible')) {
+        $('#editDayMorning').select2({ ...opts, placeholder: 'Membros da manhã...' }).on('change', function() {
+            updateDirectBadge('morningBadge', ($(this).val() || []).length);
+        });
+    }
+    if ($('#editDayEvening').length && !$('#editDayEvening').hasClass('select2-hidden-accessible')) {
+        $('#editDayEvening').select2({ ...opts, placeholder: 'Membros da noite...' }).on('change', function() {
+            updateDirectBadge('eveningBadge', ($(this).val() || []).length);
+        });
+    }
+}
+
+// ─── Division cards (single shift) ───────────────────────────
+function renderDivisionCards(assignMap) {
+    const container = document.getElementById('assignmentDivisionsContent');
+    if (!container) return;
+    const map = assignMap || {};
+    let html = '';
+    availableDivisions.forEach(div => {
+        const selectedIds = (map[div.id] || []).map(Number);
+        const cnt = selectedIds.length;
+        html += `
+        <div class="rounded-xl overflow-hidden" style="border:1.5px solid color-mix(in srgb,var(--color-primary) 35%,transparent);">
+            <div class="flex items-center gap-2.5 px-4 py-3" style="background:var(--color-primary);">
+                <div class="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,0.2);">
+                    <ion-icon name="git-branch-outline" class="text-white text-base"></ion-icon>
+                </div>
+                <span class="text-sm font-bold text-white flex-1">${div.name}</span>
+                <span id="assign_div_badge_${div.id}" class="text-xs font-bold px-2.5 py-1 rounded-full"
+                      style="background:rgba(255,255,255,.2);color:#fff;min-width:56px;text-align:center;">
+                    ${cnt > 0 ? cnt + ' membro' + (cnt !== 1 ? 's' : '') : 'Nenhum'}
+                </span>
+            </div>
+            <div class="px-4 py-3 bg-white">
+                <p class="text-xs font-semibold mb-1.5 text-gray-500 flex items-center gap-1">
+                    <ion-icon name="people-outline" class="text-sm"></ion-icon>Selecione os membros
+                </p>
+                <select id="assign_div_${div.id}" multiple class="assign-division-select w-full" data-division-id="${div.id}">
+                    ${availableMembers.map(m => `<option value="${m.id}"${selectedIds.includes(m.id) ? ' selected' : ''}>${m.name}</option>`).join('')}
+                </select>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+    availableDivisions.forEach(div => {
+        $(`#assign_div_${div.id}`).select2({
+            placeholder: 'Clique para adicionar membros...',
+            allowClear: true, width: '100%',
+            dropdownParent: $('#editDayModal'),
+        }).on('change', function() {
+            const c = ($(this).val() || []).length;
+            const b = document.getElementById(`assign_div_badge_${div.id}`);
+            if (b) b.textContent = c > 0 ? c + ' membro' + (c !== 1 ? 's' : '') : 'Nenhum';
+            updateDivisionsSummary();
+        });
+    });
+    updateDivisionsSummary();
+}
+
+// ─── Division cards (per shift) ───────────────────────────────
+function renderShiftDivisionCards(shiftKey, assignMap) {
+    const containerId = shiftKey === 'morning' ? 'morningDivisionsContent' : 'eveningDivisionsContent';
+    const badgeId = shiftKey === 'morning' ? 'morningBadge' : 'eveningBadge';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const map = assignMap || {};
+    let totalMembers = 0, html = '';
+    availableDivisions.forEach(div => {
+        const selectedIds = (map[div.id] || []).map(Number);
+        totalMembers += selectedIds.length;
+        const cnt = selectedIds.length;
+        html += `
+        <div class="rounded-xl overflow-hidden" style="border:1.5px solid color-mix(in srgb,var(--color-primary) 35%,transparent);">
+            <div class="flex items-center gap-2.5 px-4 py-2" style="background:var(--color-primary);">
+                <div class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(255,255,255,0.2);">
+                    <ion-icon name="git-branch-outline" class="text-white text-sm"></ion-icon>
+                </div>
+                <span class="text-sm font-bold text-white flex-1">${div.name}</span>
+                <span id="shiftdiv_badge_${shiftKey}_${div.id}" class="text-xs font-bold px-2 py-0.5 rounded-full"
+                      style="background:rgba(255,255,255,.2);color:#fff;min-width:48px;text-align:center;">
+                    ${cnt > 0 ? cnt + ' membro' + (cnt !== 1 ? 's' : '') : 'Nenhum'}
+                </span>
+            </div>
+            <div class="px-3 py-2.5 bg-white">
+                <select id="shiftdiv_${shiftKey}_${div.id}" multiple class="shift-div-select w-full"
+                        data-shift="${shiftKey}" data-division-id="${div.id}">
+                    ${availableMembers.map(m => `<option value="${m.id}"${selectedIds.includes(m.id) ? ' selected' : ''}>${m.name}</option>`).join('')}
+                </select>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+    const badge = document.getElementById(badgeId);
+    if (badge) badge.textContent = totalMembers > 0 ? `${totalMembers} membro${totalMembers !== 1 ? 's' : ''}` : 'Nenhum';
+    $(`#${containerId} .shift-div-select`).each(function() {
+        $(this).select2({
+            placeholder: 'Clique para adicionar membros...',
+            allowClear: true, width: '100%',
+            dropdownParent: $('#editDayModal'),
+        }).on('change', function() {
+            const b = document.getElementById(`shiftdiv_badge_${this.dataset.shift}_${this.dataset.divisionId}`);
+            if (b) { const c = ($(this).val() || []).length; b.textContent = c > 0 ? c + ' membro' + (c !== 1 ? 's' : '') : 'Nenhum'; }
+            const sb = document.getElementById(this.dataset.shift === 'morning' ? 'morningBadge' : 'eveningBadge');
+            if (sb) {
+                let total = 0;
+                document.querySelectorAll(`.shift-div-select[data-shift="${this.dataset.shift}"]`)
+                    .forEach(s => { total += ($(s).val() || []).length; });
+                sb.textContent = total > 0 ? `${total} membro${total !== 1 ? 's' : ''}` : 'Nenhum';
+            }
+        });
+    });
+}
+
+function destroyAllDivisionSelects() {
+    if (typeof $ === 'undefined' || !$.fn.select2) return;
+    ['assignmentDivisionsContent', 'morningDivisionsContent', 'eveningDivisionsContent'].forEach(cId => {
+        const c = document.getElementById(cId);
+        if (c) $(c).find('select').each(function() {
+            if ($(this).hasClass('select2-hidden-accessible')) $(this).select2('destroy');
+        });
+    });
+}
+
+function updateDivisionsSummary() {
+    const el = document.getElementById('divisionsSummaryText');
+    if (!el) return;
+    let total = 0, divCount = 0;
+    document.querySelectorAll('.assign-division-select').forEach(s => {
+        const v = $(s).val();
+        if (v && v.length) { total += v.length; divCount++; }
+    });
+    el.textContent = divCount > 0 ? `${divCount} div. / ${total} membro${total !== 1 ? 's' : ''}` : '';
+}
+
+// ─── Save ─────────────────────────────────────────────────────
+async function saveEditDay() {
+    const dayId = document.getElementById('editDayId').value;
+    const saveBtn = document.getElementById('saveEditDayBtn');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Salvando...';
+    try {
+        if (hasDivisions) {
+            const hasShifts = document.getElementById('editDayHasShifts').checked;
+            const assignments = [];
+            if (hasShifts) {
+                ['morning', 'evening'].forEach(sk => {
+                    availableDivisions.forEach(div => {
+                        const vals = $(`#shiftdiv_${sk}_${div.id}`).val() || [];
+                        if (vals.length) assignments.push({ division_id: div.id, member_ids: vals.map(Number), shift: sk });
+                    });
+                });
+            } else {
+                availableDivisions.forEach(div => {
+                    const vals = $(`#assign_div_${div.id}`).val() || [];
+                    if (vals.length) assignments.push({ division_id: div.id, member_ids: vals.map(Number), shift: 'none' });
+                });
+            }
+            const divResp = await fetch(`/admin-panel/schedules/days/${dayId}/divisions/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+                body: JSON.stringify({ assignments }),
+            }).then(r => r.json());
+            if (!divResp.success) throw new Error(divResp.error || 'Erro ao salvar divisões.');
+        }
+
+        const fd = new FormData();
+        fd.append('csrfmiddlewaretoken', CSRF);
+        fd.append('description', document.getElementById('editDayDescription').value);
+        fd.append('notes', document.getElementById('editDayNotes').value);
+        if (useTeamRotation) {
+            const tv = document.getElementById('editDayTeam')?.value;
+            if (tv) fd.append('team', tv);
+        } else if (!hasDivisions) {
+            const hasShifts = document.getElementById('editDayHasShifts').checked;
+            fd.append('has_shifts', hasShifts);
+            if (hasShifts) {
+                ($('#editDayMorning').val() || []).forEach(v => fd.append('members_morning', v));
+                ($('#editDayEvening').val() || []).forEach(v => fd.append('members_evening', v));
+            } else {
+                ($('#editDayMembers').val() || []).forEach(v => fd.append('members', v));
+            }
+        }
+
+        const editResp = await fetch(`/admin-panel/schedules/days/${dayId}/edit/`, { method: 'POST', body: fd }).then(r => r.json());
+        if (!editResp.success) throw new Error(editResp.error || 'Erro ao salvar.');
+
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<ion-icon name="checkmark-circle-outline"></ion-icon> Salvar';
+        closeEditDayModal();
+        window.location.reload();
+    } catch(e) {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<ion-icon name="checkmark-circle-outline"></ion-icon> Salvar';
+        Swal.fire('Erro', e.message, 'error');
+    }
+}
+
+// ─── Init direct selects on DOMContentLoaded ─────────────────
+document.addEventListener('DOMContentLoaded', function () {
+    if (!useTeamRotation && !hasDivisions) {
+        initDirectMemberSelects();
+    }
+});
+
+document.getElementById('editDayModal')?.addEventListener('click', function(e) {
+    if (e.target === this) closeEditDayModal();
+});
+</script>
+{% endblock %}

@@ -115,7 +115,7 @@
                 <div id="mobile-schedules-submenu" class="submenu {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}">
                     <a href="{% url 'schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
                         <ion-icon name="calendar-outline"></ion-icon>
-                        <span class="mt-1">Escalas Mensais</span>
+                        <span class="mt-1">Escalas</span>
                     </a>
                     <a href="{% url 'team_list' %}" class="submenu-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
                         <ion-icon name="people-circle-outline"></ion-icon>
@@ -322,7 +322,7 @@
             <div id="schedules-submenu" class="submenu {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}">
                 <a href="{% url 'schedule_list' %}" class="submenu-item {% if 'schedule' in request.resolver_match.url_name %}active{% endif %}">
                     <ion-icon name="calendar-outline"></ion-icon>
-                    <span class="mt-1">Escalas Mensais</span>
+                    <span class="mt-1">Escalas</span>
                 </a>
                 <a href="{% url 'team_list' %}" class="submenu-item {% if 'team' in request.resolver_match.url_name %}active{% endif %}">
                     <ion-icon name="people-circle-outline"></ion-icon>

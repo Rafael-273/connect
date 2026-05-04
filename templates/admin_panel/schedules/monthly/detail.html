@@ -45,8 +45,153 @@
 .modal-btn-secondary:active { transform: translateY(0); }
 .modal-form-label { display: block; font-size: 0.72rem; font-weight: 700; color: #6b7280; margin-bottom: 6px; letter-spacing: 0.06em; text-transform: uppercase; }
 .modal-form-label span { font-weight: 400; color: #9ca3af; text-transform: none; font-size: 0.7rem; letter-spacing: 0; }
-.modal-form-input { width: 100%; padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 0.875rem; color: #111827; background: white; transition: border-color 0.15s, box-shadow 0.15s; outline: none; box-sizing: border-box; }
+.modal-form-input { width: 100%; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 16px; color: #111827; background: white; transition: border-color 0.15s, box-shadow 0.15s; outline: none; box-sizing: border-box; -webkit-font-smoothing: antialiased; }
 .modal-form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(201,9,5,0.10); }
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="number"],
+input[type="tel"],
+input[type="url"],
+textarea,
+select {
+    font-size: 16px !important;
+    -webkit-font-smoothing: antialiased;
+}
+textarea {
+    font-family: inherit;
+    padding: 12px 16px;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 10px;
+    resize: vertical;
+}
+/* Select2 iPhone Fix */
+.select2-container--default .select2-selection--single,
+.select2-container--default .select2-selection--multiple {
+    font-size: 16px !important;
+    min-height: 36px;
+    height: auto !important;
+}
+.select2-container--default .select2-selection--multiple { padding: 2px 4px !important; }
+.select2-container--default .select2-selection--multiple .select2-selection__rendered { padding: 0 !important; display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.select2-container--default .select2-search--inline { display: flex; align-items: center; }
+.select2-container--default .select2-search--inline .select2-search__field {
+    font-size: 16px !important;
+    padding: 4px 8px !important;
+    min-width: 150px !important;
+    height: auto !important;
+    margin: 0 !important;
+}
+.select2-dropdown {
+    font-size: 16px !important;
+}
+.select2-results__option {
+    padding: 12px 16px !important;
+    font-size: 16px !important;
+}
+
+/* Form inputs iPhone fix */
+.form-input,
+.form-textarea {
+    font-size: 16px !important;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ===== MOBILE BOTTOM SHEET MODALS ===== */
+@media (max-width: 768px) {
+    /* Transform modal overlay for bottom sheet */
+    .modal-overlay-animated,
+    .modal-overlay {
+        align-items: flex-end !important;
+        background: linear-gradient(to top, rgba(0,0,0,0.5), transparent) !important;
+    }
+
+    /* Modal card becomes bottom sheet */
+    .modal-card {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 90vh !important;
+        border-radius: 20px 20px 0 0 !important;
+        animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+        overflow-y: auto;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.15) !important;
+    }
+
+    /* Drag handle indicator */
+    .modal-card::before {
+        content: '';
+        display: block;
+        width: 40px;
+        height: 4px;
+        background: #e5e7eb;
+        border-radius: 2px;
+        margin: 12px auto;
+    }
+
+    /* Header styling */
+    .modal-header {
+        border-radius: 20px 20px 0 0 !important;
+        padding: 16px 16px 12px !important;
+    }
+
+    /* Body padding */
+    .modal-body {
+        padding: 16px 16px 20px !important;
+    }
+
+    /* Footer positioning */
+    .modal-footer {
+        padding: 12px 16px 20px !important;
+        gap: 10px !important;
+    }
+
+    .modal-btn-primary,
+    .modal-btn-secondary {
+        flex: 1;
+        min-height: 44px;
+        border-radius: 10px;
+        font-size: 16px;
+    }
+
+    /* Animation for bottom sheet slide up */
+    @keyframes slideUp {
+        from {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideDown {
+        from {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+    }
+
+    /* For closing animation */
+    .modal-card.closing {
+        animation: slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+    }
+
+    /* Remove max-height constraint on smaller screens for overflow */
+    @media (max-height: 600px) {
+        .modal-card {
+            max-height: 100vh !important;
+        }
+    }
+}
+
 .modal-section { background: white; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; border: 1.5px solid #f1f5f9; }
 .section-header { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; margin-bottom: 14px; border-bottom: 1.5px solid #f1f5f9; }
 .section-header .icon-wrap { width: 28px; height: 28px; border-radius: 7px; background: var(--color-primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -217,7 +362,36 @@
                                 </div>
                                 {% endif %}
                                 <!-- Division Assignments -->
-                                {% if day.grouped_divisions %}
+                                {% if day.has_shifts and day.morning_grouped_divisions or day.has_shifts and day.evening_grouped_divisions %}
+                                <div class="mt-2 space-y-1">
+                                    {% if day.morning_grouped_divisions %}
+                                    <div class="flex items-start gap-1">
+                                        <ion-icon name="sunny-outline" class="text-xs mt-0.5 flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                        <div class="flex flex-wrap gap-1">
+                                        {% for group in day.morning_grouped_divisions %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-lg text-xs text-gray-600">
+                                            <span class="font-semibold" style="color:var(--color-primary);">{{ group.division.name }}:</span>
+                                            {% for member in group.members %}{{ member.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                        </span>
+                                        {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% if day.evening_grouped_divisions %}
+                                    <div class="flex items-start gap-1">
+                                        <ion-icon name="moon-outline" class="text-xs mt-0.5 flex-shrink-0" style="color:var(--color-primary);"></ion-icon>
+                                        <div class="flex flex-wrap gap-1">
+                                        {% for group in day.evening_grouped_divisions %}
+                                        <span class="inline-flex items-center gap-1 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-lg text-xs text-gray-600">
+                                            <span class="font-semibold" style="color:var(--color-primary);">{{ group.division.name }}:</span>
+                                            {% for member in group.members %}{{ member.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                                        </span>
+                                        {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% elif day.grouped_divisions %}
                                 <div class="flex flex-wrap gap-1.5 mt-2">
                                     {% for group in day.grouped_divisions %}
                                     <span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-2 py-1 rounded-lg text-xs text-gray-600">
@@ -518,13 +692,20 @@
                             <span class="font-bold text-white text-sm">Manhã</span>
                             <span id="morningBadge" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.25);color:white;">Nenhum</span>
                         </div>
-                        <div class="px-4 py-3 bg-white">
+                        <!-- Plain member select — shown only when there are no divisions -->
+                        <div id="morningMembersSelect" class="px-4 py-3 bg-white{% if divisions %} hidden{% endif %}">
                             <select id="assignmentMembersMorning" name="members_morning" multiple class="shift-select w-full">
                                 {% for member in members %}
                                 <option value="{{ member.id }}">{{ member.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
+                        {% if divisions %}
+                        <!-- Division cards inside Manhã shift -->
+                        <div id="morningDivisionsContent" class="px-4 pb-4 pt-3 space-y-3 bg-white">
+                            <!-- Populated by renderShiftDivisions('morning', ...) -->
+                        </div>
+                        {% endif %}
                     </div>
                     <!-- Noite -->
                     <div class="rounded-xl overflow-hidden" style="border: 1.5px solid var(--color-primary);">
@@ -533,13 +714,20 @@
                             <span class="font-bold text-white text-sm">Noite</span>
                             <span id="eveningBadge" class="ml-auto text-xs font-bold px-2 py-0.5 rounded-full" style="background:rgba(255,255,255,0.25);color:white;">Nenhum</span>
                         </div>
-                        <div class="px-4 py-3 bg-white">
+                        <!-- Plain member select — shown only when there are no divisions -->
+                        <div id="eveningMembersSelect" class="px-4 py-3 bg-white{% if divisions %} hidden{% endif %}">
                             <select id="assignmentMembersEvening" name="members_evening" multiple class="shift-select w-full">
                                 {% for member in members %}
                                 <option value="{{ member.id }}">{{ member.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
+                        {% if divisions %}
+                        <!-- Division cards inside Noite shift -->
+                        <div id="eveningDivisionsContent" class="px-4 pb-4 pt-3 space-y-3 bg-white">
+                            <!-- Populated by renderShiftDivisions('evening', ...) -->
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endif %}
@@ -844,8 +1032,9 @@ window.Swal = Swal.mixin({
     border: 1.5px solid #e5e7eb !important;
     border-radius: 0.625rem !important;
     background: #f9fafb !important;
-    min-height: 44px !important;
-    padding: 4px 6px !important;
+    min-height: 36px !important;
+    height: auto !important;
+    padding: 2px 4px !important;
     transition: border-color 0.15s, box-shadow 0.15s;
 }
 .select2-container--default.select2-container--focus .select2-selection--multiple {
@@ -856,8 +1045,9 @@ window.Swal = Swal.mixin({
 .select2-container--default .select2-selection--multiple .select2-selection__rendered {
     display: flex !important;
     flex-wrap: wrap !important;
-    gap: 4px !important;
-    padding: 2px 2px !important;
+    gap: 2px !important;
+    padding: 0 !important;
+    align-items: center;
 }
 .select2-container--default .select2-selection--multiple .select2-selection__choice {
     display: inline-flex !important;
@@ -867,28 +1057,32 @@ window.Swal = Swal.mixin({
     color: #fff !important;
     border: none !important;
     border-radius: 999px !important;
-    padding: 2px 10px 2px 8px !important;
+    padding: 2px 8px 2px 8px !important;
     font-size: 12px !important;
     font-weight: 600 !important;
-    line-height: 1.6 !important;
+    line-height: 1.4 !important;
     margin: 0 !important;
+    white-space: nowrap;
 }
 .select2-container--default .select2-selection--multiple .select2-selection__choice__display{
-    padding-left: 10px !important;
+    padding: 0 !important;
 }
 .select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
     color: rgba(255,255,255,.7) !important;
     font-size: 14px !important;
     order: -1;
     border-right: 0 !important;
-    padding-left: 7px;
+    padding: 0 4px !important;
 }
 .select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
     color: #fff !important;
     background: transparent !important;
 }
 .select2-container .select2-search--inline .select2-search__field{
-    margin-bottom: 6px !important;
+    margin: 0 !important;
+    padding: 4px 8px !important;
+    min-width: 150px !important;
+    height: 2rem !important;
 }
 .select2-container--default .select2-selection--multiple .select2-selection__placeholder {
     color: #9ca3af !important;
@@ -901,7 +1095,7 @@ window.Swal = Swal.mixin({
     color: #111827 !important;
     margin: 0 !important;
     padding: 2px 4px !important;
-    line-height: 1.6 !important;
+    line-height: 1.4 !important;
     border: none !important;
     outline: none !important;
     background: transparent !important;
@@ -1194,7 +1388,9 @@ function loadScheduleDays() {
         eveningMemberIds: [{% for member in day.members_evening.all %}{{ member.id }}{% if not forloop.last %},{% endif %}{% endfor %}],
         eveningMemberNames: [{% for member in day.members_evening.all %}'{{ member.name|escapejs }}'{% if not forloop.last %},{% endif %}{% endfor %}],
         notes: '{{ day.notes|default:""|escapejs }}',
-        divisionAssignments: Object.fromEntries([{% for group in day.grouped_divisions %}[{{ group.division.id }}, [{% for m in group.members %}{{ m.id }}{% if not forloop.last %},{% endif %}{% endfor %}]]{% if not forloop.last %},{% endif %}{% endfor %}])
+        divisionAssignments: Object.fromEntries([{% for group in day.grouped_divisions %}[{{ group.division.id }}, [{% for m in group.members %}{{ m.id }}{% if not forloop.last %},{% endif %}{% endfor %}]]{% if not forloop.last %},{% endif %}{% endfor %}]),
+        morningDivisionAssignments: Object.fromEntries([{% for group in day.morning_grouped_divisions %}[{{ group.division.id }}, [{% for m in group.members %}{{ m.id }}{% if not forloop.last %},{% endif %}{% endfor %}]]{% if not forloop.last %},{% endif %}{% endfor %}]),
+        eveningDivisionAssignments: Object.fromEntries([{% for group in day.evening_grouped_divisions %}[{{ group.division.id }}, [{% for m in group.members %}{{ m.id }}{% if not forloop.last %},{% endif %}{% endfor %}]]{% if not forloop.last %},{% endif %}{% endfor %}])
     };
     {% endfor %}
     renderCalendar();
@@ -1312,20 +1508,32 @@ function openDayAssignment(dateStr) {
         shiftToggle.checked = hasShifts;
         toggleShiftsUI(hasShifts, false); // false = don't init select2 yet
         if (hasShifts) {
-            const morningIds = dayData && dayData.morningMemberIds ? dayData.morningMemberIds.map(String) : [];
-            const eveningIds = dayData && dayData.eveningMemberIds ? dayData.eveningMemberIds.map(String) : [];
-            setTimeout(() => {
-                initShiftSelects();
-                $('#assignmentMembersMorning').val(morningIds).trigger('change');
-                $('#assignmentMembersEvening').val(eveningIds).trigger('change');
-            }, 80);
+            if (availableDivisions.length > 0) {
+                // Populate shift division cards
+                const morningAssign = (dayData && dayData.morningDivisionAssignments) ? dayData.morningDivisionAssignments : {};
+                const eveningAssign = (dayData && dayData.eveningDivisionAssignments) ? dayData.eveningDivisionAssignments : {};
+                setTimeout(() => {
+                    renderShiftDivisions('morning', morningAssign);
+                    renderShiftDivisions('evening', eveningAssign);
+                }, 80);
+            } else {
+                const morningIds = dayData && dayData.morningMemberIds ? dayData.morningMemberIds.map(String) : [];
+                const eveningIds = dayData && dayData.eveningMemberIds ? dayData.eveningMemberIds.map(String) : [];
+                setTimeout(() => {
+                    initShiftSelects();
+                    $('#assignmentMembersMorning').val(morningIds).trigger('change');
+                    $('#assignmentMembersEvening').val(eveningIds).trigger('change');
+                }, 80);
+            }
         }
     }
 
     // Populate division assignments section — always visible
     document.getElementById('dayAssignmentModal').classList.remove('hidden');
 
-    if (availableDivisions.length > 0) {
+    // Only render into singleAssignmentSection when shifts are OFF
+    // (when shifts are ON with divisions, renderShiftDivisions is called above)
+    if (availableDivisions.length > 0 && !hasShifts) {
         const divAssignments = (dayData && dayData.divisionAssignments) ? dayData.divisionAssignments : {};
         assignmentDivisionsExpanded = true;
         destroyAssignmentDivisionSelects();
@@ -1339,6 +1547,7 @@ function openDayAssignment(dateStr) {
 function closeDayAssignmentModal() {
     destroyAssignmentDivisionSelects();
     destroyShiftSelects();
+    destroyShiftDivisions();
     assignmentDivisionsExpanded = false;
     if ($('#assignmentMembers').hasClass('select2-hidden-accessible')) {
         $('#assignmentMembers').select2('destroy');
@@ -1389,34 +1598,53 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         }
     }
 
-    // Validate no member is assigned to more than one division
+    // Validate no member is assigned to more than one division within the same shift
     if (availableDivisions.length > 0) {
         const divisionData = getAssignmentDivisionData();
-        const memberDivisionMap = {}; // member_id -> division name
         let divConflictLines = [];
-        availableDivisions.forEach(div => {
-            const memberIds = divisionData[div.id] || [];
-            memberIds.forEach(memberId => {
-                if (memberDivisionMap[memberId] !== undefined) {
-                    const memberName = (availableMembers.find(m => m.id === memberId) || {}).name || String(memberId);
-                    divConflictLines.push(`<li><strong>${memberName}</strong>: ${memberDivisionMap[memberId]} e ${div.name}</li>`);
-                } else {
-                    memberDivisionMap[memberId] = div.name;
-                }
+        // For shifted format, check each shift independently
+        const shiftsToCheck = (divisionData.morning !== undefined)
+            ? [['morning', divisionData.morning], ['evening', divisionData.evening]]
+            : [['', divisionData]];
+        shiftsToCheck.forEach(([shiftLabel, shiftData]) => {
+            const memberDivisionMap = {};
+            availableDivisions.forEach(div => {
+                const memberIds = (shiftData || {})[div.id] || [];
+                memberIds.forEach(memberId => {
+                    if (memberDivisionMap[memberId] !== undefined) {
+                        const memberName = (availableMembers.find(m => m.id === memberId) || {}).name || String(memberId);
+                        const shiftSuffix = shiftLabel ? ` (${shiftLabel === 'morning' ? 'Manhã' : 'Noite'})` : '';
+                        divConflictLines.push(`<li><strong>${memberName}</strong>${shiftSuffix}: ${memberDivisionMap[memberId]} e ${div.name}</li>`);
+                    } else {
+                        memberDivisionMap[memberId] = div.name;
+                    }
+                });
             });
         });
         if (divConflictLines.length > 0) {
             Swal.fire({
-                icon: 'error',
+                icon: 'warning',
                 title: 'Membro em duas divisões!',
-                html: `<div class="text-left"><p class="mb-2">Os membros abaixo estão atribuídos em mais de uma divisão no mesmo dia:</p><ul class="list-disc pl-5 space-y-1 text-sm">${divConflictLines.join('')}</ul></div>`,
-                confirmButtonColor: '#C90905'
+                html: `<div class="text-left"><p class="mb-2">Os membros abaixo estão atribuídos em mais de uma divisão no mesmo turno:</p><ul class="list-disc pl-5 space-y-1 text-sm">${divConflictLines.join('')}</ul></div>`,
+                showCancelButton: true,
+                confirmButtonColor: '#C90905',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Continuar mesmo assim',
+                cancelButtonText: 'Cancelar',
+                width: '600px'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    proceedWithConflictCheck(formData, date, dayId);
+                }
             });
             return;
         }
     }
 
-    // Verificar conflitos de escala antes de prosseguir
+    proceedWithConflictCheck(formData, date, dayId);
+});
+
+function proceedWithConflictCheck(formData, date, dayId) {
     if (!useTeamRotation) {
         const shiftToggleConflict = document.getElementById('shiftToggle');
         const hasShiftsConflict = shiftToggleConflict ? shiftToggleConflict.checked : false;
@@ -1439,7 +1667,6 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         .then(response => response.json())
         .then(data => {
             if (data.has_conflict) {
-                // Montar lista de conflitos para exibir
                 let conflictHtml = '<div class="text-left"><p class="mb-2 font-semibold text-red-600">Os seguintes membros já estão escalados nesta data:</p><ul class="list-disc pl-5 space-y-1">';
                 data.conflicts.forEach(c => {
                     conflictHtml += `<li><strong>${c.member_name}</strong> — ${c.ministry_name} - ${c.schedule_title} (${c.date})</li>`;
@@ -1467,13 +1694,12 @@ document.getElementById('dayAssignmentForm').addEventListener('submit', function
         })
         .catch(error => {
             console.error('Erro ao verificar conflitos:', error);
-            // Em caso de falha na verificação, prosseguir normalmente
             saveDayToPending(formData, date, dayId, false);
         });
     } else {
         saveDayToPending(formData, date, dayId, false);
     }
-});
+}
 
 function saveDayToPending(formData, date, dayId, overrideConflict) {
     // If it's an existing day (already saved), add to pending for batch update
@@ -1527,8 +1753,18 @@ function saveDayToPending(formData, date, dayId, overrideConflict) {
         }
     }
 
-    // Collect division assignments
-    pendingDays[date].divisionAssignments = getAssignmentDivisionData();
+    // Collect division assignments (flat or per-shift)
+    const divData = getAssignmentDivisionData();
+    if (divData.morning !== undefined) {
+        // Shifted format
+        pendingDays[date].divisionAssignments = null;
+        pendingDays[date].morningDivisionAssignments = divData.morning;
+        pendingDays[date].eveningDivisionAssignments = divData.evening;
+    } else {
+        pendingDays[date].divisionAssignments = divData;
+        pendingDays[date].morningDivisionAssignments = null;
+        pendingDays[date].eveningDivisionAssignments = null;
+    }
 
     closeDayAssignmentModal();
     renderCalendar();
@@ -1589,6 +1825,17 @@ function updatePendingList() {
             const directCount = day.memberIds ? day.memberIds.length : 0;
             if (directCount > 0) {
                 assignmentText = `${directCount} membro${directCount > 1 ? 's' : ''}`;
+            } else if (day.morningDivisionAssignments !== null && day.morningDivisionAssignments !== undefined ||
+                       day.eveningDivisionAssignments !== null && day.eveningDivisionAssignments !== undefined) {
+                const allShiftIds = [
+                    ...Object.values(day.morningDivisionAssignments || {}),
+                    ...Object.values(day.eveningDivisionAssignments || {}),
+                ];
+                const totalDivMembers = allShiftIds.reduce((sum, ids) => sum + (ids ? ids.length : 0), 0);
+                const divCount = allShiftIds.filter(ids => ids && ids.length > 0).length;
+                assignmentText = totalDivMembers > 0
+                    ? `${divCount} div. / ${totalDivMembers} membro${totalDivMembers !== 1 ? 's' : ''}`
+                    : 'Sem membros';
             } else if (day.divisionAssignments && Object.keys(day.divisionAssignments).length > 0) {
                 const divEntries = Object.values(day.divisionAssignments);
                 const totalDivMembers = divEntries.reduce((sum, ids) => sum + (ids ? ids.length : 0), 0);
@@ -1720,13 +1967,31 @@ function saveAllDays() {
                     return response.json();
                 }).then(data => {
                     // After creating/editing the day, also save division assignments if any
-                    if (data.success && day.divisionAssignments && Object.keys(day.divisionAssignments).length > 0) {
-                        const dayId = data.day_id || day.existingId;
-                        if (dayId) {
-                            const assignments = Object.entries(day.divisionAssignments).map(([divId, memberIds]) => ({
+                    const dayId = data.day_id || day.existingId;
+                    if (data.success && dayId) {
+                        let assignments = null;
+
+                        if (day.morningDivisionAssignments !== null && day.morningDivisionAssignments !== undefined) {
+                            // Per-shift format
+                            assignments = [];
+                            ['morning', 'evening'].forEach(shift => {
+                                const shiftData = shift === 'morning' ? (day.morningDivisionAssignments || {}) : (day.eveningDivisionAssignments || {});
+                                Object.entries(shiftData).forEach(([divId, memberIds]) => {
+                                    if (memberIds && memberIds.length > 0) {
+                                        assignments.push({ division_id: parseInt(divId), member_ids: memberIds, shift });
+                                    }
+                                });
+                            });
+                        } else if (day.divisionAssignments && Object.keys(day.divisionAssignments).length > 0) {
+                            // Flat format
+                            assignments = Object.entries(day.divisionAssignments).map(([divId, memberIds]) => ({
                                 division_id: parseInt(divId),
-                                member_ids: memberIds
+                                member_ids: memberIds,
+                                shift: 'none',
                             }));
+                        }
+
+                        if (assignments && assignments.length > 0) {
                             return fetch(`/admin-panel/schedules/days/${dayId}/divisions/`, {
                                 method: 'POST',
                                 headers: {
@@ -2165,11 +2430,23 @@ function toggleShiftsUI(checked, doInit = true) {
     if (checked) {
         if (single) single.classList.add('hidden');
         shifts.classList.remove('hidden');
-        if (doInit) initShiftSelects();
+        if (doInit) {
+            if (availableDivisions.length > 0) {
+                // Render empty division cards inside each shift
+                renderShiftDivisions('morning', {});
+                renderShiftDivisions('evening', {});
+            } else {
+                initShiftSelects();
+            }
+        }
     } else {
         if (single) single.classList.remove('hidden');
         shifts.classList.add('hidden');
-        destroyShiftSelects();
+        if (availableDivisions.length > 0) {
+            destroyShiftDivisions();
+        } else {
+            destroyShiftSelects();
+        }
     }
 }
 
@@ -2200,9 +2477,134 @@ function destroyShiftSelects() {
     });
 }
 
+function renderShiftDivisions(shiftKey, assignments) {
+    const containerId = shiftKey === 'morning' ? 'morningDivisionsContent' : 'eveningDivisionsContent';
+    const badgeId = shiftKey === 'morning' ? 'morningBadge' : 'eveningBadge';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const assignMap = assignments || {};
+    let totalMembers = 0;
+    let html = '';
+    availableDivisions.forEach((div) => {
+        const selectedIds = (assignMap[div.id] || []).map(Number);
+        totalMembers += selectedIds.length;
+        const selectedCount = selectedIds.length;
+        const marginLeft = div.parentId ? 'ml-4' : '';
+        html += `
+            <div class="${marginLeft} rounded-xl overflow-hidden"
+                 style="border: 1.5px solid color-mix(in srgb, var(--color-primary) 35%, transparent);">
+                <div class="flex items-center gap-2.5 px-4 py-2" style="background: var(--color-primary);">
+                    ${ div.parentId ? '<ion-icon name="return-down-forward-outline" class="text-white/70 text-sm flex-shrink-0"></ion-icon>' : '' }
+                    <div class="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255,255,255,0.2);">
+                        <ion-icon name="git-branch-outline" class="text-white text-sm"></ion-icon>
+                    </div>
+                    <span class="text-sm font-bold text-white flex-1">${div.name}</span>
+                    <span id="shiftdiv_badge_${shiftKey}_${div.id}"
+                          class="text-xs font-bold px-2 py-0.5 rounded-full"
+                          style="background:rgba(255,255,255,.2); color:#fff; min-width:48px; text-align:center;">
+                        ${selectedCount > 0 ? selectedCount + ' membro' + (selectedCount !== 1 ? 's' : '') : 'Nenhum'}
+                    </span>
+                </div>
+                <div class="px-3 py-2.5 bg-white">
+                    <select id="shiftdiv_${shiftKey}_${div.id}" multiple
+                            class="shift-div-select w-full"
+                            data-shift="${shiftKey}"
+                            data-division-id="${div.id}"
+                            data-badge-id="shiftdiv_badge_${shiftKey}_${div.id}">
+        `;
+        availableMembers.forEach(m => {
+            const sel = selectedIds.includes(m.id) ? 'selected' : '';
+            html += `<option value="${m.id}" ${sel}>${m.name}</option>`;
+        });
+        html += `</select></div></div>`;
+    });
+
+    container.innerHTML = html;
+
+    // Update shift badge count
+    const badge = document.getElementById(badgeId);
+    if (badge) badge.textContent = totalMembers > 0 ? `${totalMembers} membro${totalMembers !== 1 ? 's' : ''}` : 'Nenhum';
+
+    // Init select2
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        $(`#${containerId} .shift-div-select`).each(function() {
+            if (!$(this).hasClass('select2-hidden-accessible')) {
+                $(this).select2({
+                    placeholder: 'Clique para adicionar membros...',
+                    allowClear: true,
+                    width: '100%',
+                    dropdownParent: $('#dayAssignmentModal'),
+                });
+                $(this).on('change.shiftbadge', function() {
+                    const bid = this.dataset.badgeId;
+                    if (bid) {
+                        const b = document.getElementById(bid);
+                        if (b) {
+                            const c = $(this).val() ? $(this).val().length : 0;
+                            b.textContent = c > 0 ? c + ' membro' + (c !== 1 ? 's' : '') : 'Nenhum';
+                        }
+                    }
+                    // Update shift total badge
+                    const shiftBid = this.dataset.shift === 'morning' ? 'morningBadge' : 'eveningBadge';
+                    const shiftBadge = document.getElementById(shiftBid);
+                    if (shiftBadge) {
+                        const shiftKey = this.dataset.shift;
+                        let total = 0;
+                        document.querySelectorAll(`.shift-div-select[data-shift="${shiftKey}"]`).forEach(s => {
+                            const vals = $(s).val();
+                            total += vals ? vals.length : 0;
+                        });
+                        shiftBadge.textContent = total > 0 ? `${total} membro${total !== 1 ? 's' : ''}` : 'Nenhum';
+                    }
+                });
+            }
+        });
+    }
+}
+
+function destroyShiftDivisions() {
+    if (typeof $ !== 'undefined' && $.fn.select2) {
+        ['morningDivisionsContent', 'eveningDivisionsContent'].forEach(cId => {
+            const container = document.getElementById(cId);
+            if (!container) return;
+            $(container).find('.shift-div-select').each(function() {
+                if ($(this).hasClass('select2-hidden-accessible')) {
+                    $(this).select2('destroy');
+                }
+            });
+        });
+    }
+}
+
 
 
 function getAssignmentDivisionData() {
+    const shiftToggle = document.getElementById('shiftToggle');
+    const hasShifts = shiftToggle && shiftToggle.checked;
+
+    if (hasShifts && availableDivisions.length > 0) {
+        // Return per-shift format
+        const result = { morning: {}, evening: {} };
+        ['morning', 'evening'].forEach(shift => {
+            document.querySelectorAll(`.shift-div-select[data-shift="${shift}"]`).forEach(sel => {
+                const divId = parseInt(sel.dataset.divisionId);
+                let memberIds;
+                if (typeof $ !== 'undefined' && $(sel).data('select2')) {
+                    const vals = $(sel).val();
+                    memberIds = vals ? vals.map(v => parseInt(v)) : [];
+                } else {
+                    memberIds = Array.from(sel.selectedOptions).map(o => parseInt(o.value));
+                }
+                if (memberIds.length > 0) {
+                    result[shift][divId] = memberIds;
+                }
+            });
+        });
+        return result;
+    }
+
+    // Return flat format (no shifts)
     const assignments = {};
     document.querySelectorAll('.assign-division-select').forEach(sel => {
         const divId = parseInt(sel.dataset.divisionId);
@@ -2259,7 +2661,7 @@ function openDivisionModal(dayId) {
         .then(r => r.json())
         .then(data => {
             document.getElementById('divisionModalDate').textContent = `Data: ${data.date}`;
-            renderDivisionForm(data.divisions, data.assignments);
+            renderDivisionForm(data.divisions, data.assignments, data.has_shifts);
         })
         .catch(() => {
             document.getElementById('divisionAssignContent').innerHTML = 
@@ -2272,7 +2674,7 @@ function closeDivisionModal() {
     currentDivisionDayId = null;
 }
 
-function renderDivisionForm(divisions, currentAssignments) {
+function renderDivisionForm(divisions, currentAssignments, hasShifts) {
     const container = document.getElementById('divisionAssignContent');
     
     if (!divisions || divisions.length === 0) {
@@ -2290,55 +2692,117 @@ function renderDivisionForm(divisions, currentAssignments) {
         `;
         return;
     }
-    
-    // Group current assignments by division
-    const assignmentsByDiv = {};
-    currentAssignments.forEach(a => {
-        if (!assignmentsByDiv[a.division_id]) assignmentsByDiv[a.division_id] = [];
-        assignmentsByDiv[a.division_id].push(a.member_id);
-    });
-    
-    let html = '';
-    divisions.forEach((div, idx) => {
-        const c = divisionCardColors[idx % divisionCardColors.length];
-        const selectedMembers = assignmentsByDiv[div.id] || [];
-        const marginLeft = div.parent_id ? 'ml-4' : '';
-        const count = selectedMembers.length;
-        
-        html += `
-            <div class="${marginLeft} div-card-${c.cssIdx} rounded-2xl overflow-hidden"
-                 style="box-shadow: 0 2px 12px ${c.border}22; border: 1.5px solid ${c.border}44;">
-                <div class="flex items-center gap-2.5 px-4 py-3" style="background: ${c.headerBg};">
-                    ${ div.parent_id ? `<ion-icon name="return-down-forward-outline" class="text-white/70 text-sm flex-shrink-0"></ion-icon>` : '' }
-                    <div class="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
-                        <ion-icon name="git-branch-outline" class="text-white text-base"></ion-icon>
-                    </div>
-                    <span class="text-sm font-bold text-white flex-1 tracking-wide">${div.name}</span>
-                    <span id="div_badge_${div.id}"
-                          class="text-xs font-bold px-2.5 py-1 rounded-full"
-                          style="background:rgba(255,255,255,.25); color:#fff; min-width:56px; text-align:center;">
-                        ${count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum'}
-                    </span>
-                </div>
-                <div class="px-4 py-3" style="background: ${c.bodyBg};">
-                    <p class="text-xs font-semibold mb-1.5" style="color:${c.iconColor};">
-                        <ion-icon name="people-outline" class="align-middle mr-1"></ion-icon>Selecione os membros
-                    </p>
-                    <select id="div_members_${div.id}" multiple
-                            class="division-member-select w-full"
-                            data-division-id="${div.id}"
-                            data-badge-id="div_badge_${div.id}">
-        `;
-        
-        availableMembers.forEach(m => {
-            const selected = selectedMembers.includes(m.id) ? 'selected' : '';
-            html += `<option value="${m.id}" ${selected}>${m.name}</option>`;
+
+    if (hasShifts) {
+        // Group assignments by shift then division
+        const byShiftDiv = { morning: {}, evening: {} };
+        currentAssignments.forEach(a => {
+            const s = (a.shift === 'morning' || a.shift === 'evening') ? a.shift : 'morning';
+            if (!byShiftDiv[s][a.division_id]) byShiftDiv[s][a.division_id] = [];
+            byShiftDiv[s][a.division_id].push(a.member_id);
         });
-        
-        html += `</select></div></div>`;
-    });
-    
-    container.innerHTML = html;
+
+        const renderShiftBlock = (shiftKey, shiftLabel, icon) => {
+            let html = `
+                <div class="rounded-xl overflow-hidden mb-3" style="border:1.5px solid var(--color-primary);">
+                    <div class="flex items-center gap-2 px-4 py-2.5" style="background:var(--color-primary);">
+                        <ion-icon name="${icon}" class="text-white text-base flex-shrink-0"></ion-icon>
+                        <span class="font-bold text-white text-sm">${shiftLabel}</span>
+                    </div>
+                    <div class="px-4 pb-4 pt-3 space-y-3 bg-white">
+            `;
+            divisions.forEach((div, idx) => {
+                const c = divisionCardColors[idx % divisionCardColors.length];
+                const selectedMembers = byShiftDiv[shiftKey][div.id] || [];
+                const count = selectedMembers.length;
+                const marginLeft = div.parent_id ? 'ml-4' : '';
+                html += `
+                    <div class="${marginLeft} rounded-xl overflow-hidden"
+                         style="border:1.5px solid ${c.border}44;">
+                        <div class="flex items-center gap-2.5 px-4 py-2.5" style="background:${c.headerBg};">
+                            ${ div.parent_id ? '<ion-icon name="return-down-forward-outline" class="text-white/70 text-sm flex-shrink-0"></ion-icon>' : '' }
+                            <div class="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                                <ion-icon name="git-branch-outline" class="text-white text-base"></ion-icon>
+                            </div>
+                            <span class="text-sm font-bold text-white flex-1">${div.name}</span>
+                            <span id="div_badge_${shiftKey}_${div.id}"
+                                  class="text-xs font-bold px-2.5 py-1 rounded-full"
+                                  style="background:rgba(255,255,255,.25);color:#fff;min-width:56px;text-align:center;">
+                                ${count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum'}
+                            </span>
+                        </div>
+                        <div class="px-4 py-3" style="background:${c.bodyBg};">
+                            <p class="text-xs font-semibold mb-1.5" style="color:${c.iconColor};">
+                                <ion-icon name="people-outline" class="align-middle mr-1"></ion-icon>Selecione os membros
+                            </p>
+                            <select id="div_members_${shiftKey}_${div.id}" multiple
+                                    class="division-member-select w-full"
+                                    data-division-id="${div.id}"
+                                    data-shift="${shiftKey}"
+                                    data-badge-id="div_badge_${shiftKey}_${div.id}">
+                `;
+                availableMembers.forEach(m => {
+                    const selected = selectedMembers.includes(m.id) ? 'selected' : '';
+                    html += `<option value="${m.id}" ${selected}>${m.name}</option>`;
+                });
+                html += `</select></div></div>`;
+            });
+            html += `</div></div>`;
+            return html;
+        };
+
+        container.innerHTML =
+            renderShiftBlock('morning', 'Manhã', 'sunny-outline') +
+            renderShiftBlock('evening', 'Noite', 'moon-outline');
+
+    } else {
+        // No shifts — flat assignment
+        const assignmentsByDiv = {};
+        currentAssignments.forEach(a => {
+            if (!assignmentsByDiv[a.division_id]) assignmentsByDiv[a.division_id] = [];
+            assignmentsByDiv[a.division_id].push(a.member_id);
+        });
+
+        let html = '';
+        divisions.forEach((div, idx) => {
+            const c = divisionCardColors[idx % divisionCardColors.length];
+            const selectedMembers = assignmentsByDiv[div.id] || [];
+            const marginLeft = div.parent_id ? 'ml-4' : '';
+            const count = selectedMembers.length;
+
+            html += `
+                <div class="${marginLeft} div-card-${c.cssIdx} rounded-2xl overflow-hidden"
+                     style="box-shadow: 0 2px 12px ${c.border}22; border: 1.5px solid ${c.border}44;">
+                    <div class="flex items-center gap-2.5 px-4 py-3" style="background: ${c.headerBg};">
+                        ${ div.parent_id ? '<ion-icon name="return-down-forward-outline" class="text-white/70 text-sm flex-shrink-0"></ion-icon>' : '' }
+                        <div class="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center flex-shrink-0">
+                            <ion-icon name="git-branch-outline" class="text-white text-base"></ion-icon>
+                        </div>
+                        <span class="text-sm font-bold text-white flex-1 tracking-wide">${div.name}</span>
+                        <span id="div_badge_${div.id}"
+                              class="text-xs font-bold px-2.5 py-1 rounded-full"
+                              style="background:rgba(255,255,255,.25); color:#fff; min-width:56px; text-align:center;">
+                            ${count > 0 ? count + ' membro' + (count !== 1 ? 's' : '') : 'Nenhum'}
+                        </span>
+                    </div>
+                    <div class="px-4 py-3" style="background: ${c.bodyBg};">
+                        <p class="text-xs font-semibold mb-1.5" style="color:${c.iconColor};">
+                            <ion-icon name="people-outline" class="align-middle mr-1"></ion-icon>Selecione os membros
+                        </p>
+                        <select id="div_members_${div.id}" multiple
+                                class="division-member-select w-full"
+                                data-division-id="${div.id}"
+                                data-shift="none"
+                                data-badge-id="div_badge_${div.id}">
+            `;
+            availableMembers.forEach(m => {
+                const selected = selectedMembers.includes(m.id) ? 'selected' : '';
+                html += `<option value="${m.id}" ${selected}>${m.name}</option>`;
+            });
+            html += `</select></div></div>`;
+        });
+        container.innerHTML = html;
+    }
     
     // Initialize select2 on the dropdowns
     if (typeof $ !== 'undefined' && $.fn.select2) {
@@ -2376,9 +2840,10 @@ function saveDivisionAssignments() {
     const assignments = [];
     document.querySelectorAll('.division-member-select').forEach(select => {
         const divId = parseInt(select.dataset.divisionId);
+        const shift = select.dataset.shift || 'none';
         const memberIds = Array.from(select.selectedOptions).map(o => parseInt(o.value));
         if (memberIds.length > 0) {
-            assignments.push({ division_id: divId, member_ids: memberIds });
+            assignments.push({ division_id: divId, member_ids: memberIds, shift });
         }
     });
     

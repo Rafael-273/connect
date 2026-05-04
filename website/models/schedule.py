@@ -56,14 +56,39 @@ class Team(BaseModel):
 
 
 class MonthlySchedule(BaseModel):
-    """Escala mensal de um ministério"""
-    
+    """Escala de um ministério — mensal ou semanal recorrente."""
+
+    TYPE_MONTHLY = 'monthly'
+    TYPE_WEEKLY = 'weekly'
+    TYPE_CHOICES = [
+        (TYPE_MONTHLY, 'Mensal'),
+        (TYPE_WEEKLY, 'Semanal'),
+    ]
+
     MONTH_CHOICES = [
         (1, 'Janeiro'), (2, 'Fevereiro'), (3, 'Março'), (4, 'Abril'),
         (5, 'Maio'), (6, 'Junho'), (7, 'Julho'), (8, 'Agosto'),
         (9, 'Setembro'), (10, 'Outubro'), (11, 'Novembro'), (12, 'Dezembro')
     ]
-    
+
+    WEEK_DAYS_CHOICES = [
+        (0, 'Segunda-feira'),
+        (1, 'Terça-feira'),
+        (2, 'Quarta-feira'),
+        (3, 'Quinta-feira'),
+        (4, 'Sexta-feira'),
+        (5, 'Sábado'),
+        (6, 'Domingo'),
+    ]
+
+    # Tipo da escala
+    schedule_type = models.CharField(
+        max_length=10,
+        choices=TYPE_CHOICES,
+        default=TYPE_MONTHLY,
+        verbose_name='Tipo',
+    )
+
     ministry = models.ForeignKey(
         'Ministry',
         on_delete=models.CASCADE,
@@ -75,22 +100,49 @@ class MonthlySchedule(BaseModel):
         verbose_name='Título',
         help_text='Ex: Fotografia, Gravação, Cultos, Ensaios'
     )
+
+    # Campos exclusivos da escala MENSAL
     month = models.IntegerField(
         choices=MONTH_CHOICES,
-        verbose_name='Mês'
+        verbose_name='Mês',
+        blank=True,
+        null=True,
     )
     year = models.IntegerField(
-        verbose_name='Ano'
+        verbose_name='Ano',
+        blank=True,
+        null=True,
     )
-    
-    
+
+    # Campos exclusivos da escala SEMANAL
+    start_date = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name='Válida a partir de',
+        help_text='Primeira semana desta escala semanal',
+    )
+    end_date = models.DateField(
+        blank=True,
+        null=True,
+        verbose_name='Válida até',
+        help_text='Deixe vazio para vigência indefinida',
+    )
+    # Dias da semana que terão escala, ex: "0,2,6" = seg, qua, dom
+    days_of_week = models.CharField(
+        max_length=13,
+        blank=True,
+        null=True,
+        verbose_name='Dias da Semana',
+        help_text='Apenas para escalas semanais (0=seg … 6=dom)',
+    )
+
     # Modo de atribuição
     use_team_rotation = models.BooleanField(
         default=False,
         verbose_name='Usar Rotação de Equipes',
-        help_text='Se marcado, usa equipes que se revezam por semana. Se não, atribui membros diretamente aos dias.'
+        help_text='Se marcado, usa equipes que se revezam. Se não, atribui membros diretamente aos dias.'
     )
-    
+
     # Orientações
     guidelines = models.TextField(
         blank=True,
@@ -98,7 +150,7 @@ class MonthlySchedule(BaseModel):
         verbose_name='Orientações',
         help_text='Instruções e informações importantes para esta escala'
     )
-    
+
     # Publicação
     is_published = models.BooleanField(
         default=False,
@@ -110,29 +162,53 @@ class MonthlySchedule(BaseModel):
         null=True,
         verbose_name='Publicada em'
     )
-    
+
     class Meta:
-        verbose_name = 'Escala Mensal'
-        verbose_name_plural = 'Escalas Mensais'
-        ordering = ['-year', '-month', 'ministry__name', 'title']
-        unique_together = [['ministry', 'title', 'month', 'year']]
-    
+        verbose_name = 'Escala'
+        verbose_name_plural = 'Escalas'
+        ordering = ['-year', '-month', '-start_date', 'ministry__name', 'title']
+
     def __str__(self):
+        if self.schedule_type == self.TYPE_WEEKLY:
+            return f"{self.ministry.name} - {self.title} (Semanal)"
         return f"{self.ministry.name} - {self.title} - {self.get_month_display()}/{self.year}"
-    
+
+    @property
+    def is_weekly(self):
+        return self.schedule_type == self.TYPE_WEEKLY
+
+    @property
+    def is_monthly(self):
+        return self.schedule_type == self.TYPE_MONTHLY
+
+    def get_days_of_week_list(self):
+        """Retorna lista de inteiros dos dias da semana (escala semanal)."""
+        if not self.days_of_week:
+            return []
+        return [int(d.strip()) for d in self.days_of_week.split(',')]
+
+    def set_days_of_week(self, day_list):
+        """Define days_of_week a partir de lista de inteiros."""
+        self.days_of_week = ','.join(str(d) for d in sorted(day_list)) if day_list else ''
+
+    def get_days_display(self):
+        """Retorna string legível dos dias da semana."""
+        names = {v: k.split('-')[0] for v, k in [(d[0], d[1]) for d in self.WEEK_DAYS_CHOICES]}
+        return ', '.join(names[i] for i in self.get_days_of_week_list() if i in names)
+
     def get_total_days(self):
-        """Retorna total de dias no mês"""
-        return monthrange(self.year, self.month)[1]
-    
+        """Retorna total de dias no mês (apenas mensal)."""
+        if self.month and self.year:
+            return monthrange(self.year, self.month)[1]
+        return 0
+
     def publish(self):
-        """Publica a escala"""
         if not self.is_published:
             self.is_published = True
             self.published_at = datetime.now()
             self.save()
-    
+
     def unpublish(self):
-        """Despublica a escala"""
         if self.is_published:
             self.is_published = False
             self.published_at = None
@@ -140,8 +216,8 @@ class MonthlySchedule(BaseModel):
 
 
 class ScheduleDay(BaseModel):
-    """Dia específico dentro de uma escala mensal"""
-    
+    """Dia específico dentro de uma escala (mensal ou semanal)."""
+
     schedule = models.ForeignKey(
         MonthlySchedule,
         on_delete=models.CASCADE,
@@ -150,6 +226,13 @@ class ScheduleDay(BaseModel):
     )
     date = models.DateField(
         verbose_name='Data'
+    )
+    # Preenchido apenas em escalas semanais para identificar o padrão de repetição
+    day_of_week = models.IntegerField(
+        blank=True,
+        null=True,
+        verbose_name='Dia da Semana',
+        help_text='0=seg … 6=dom. Preenchido apenas em escalas semanais.',
     )
     
     # Para escalas com rotação de equipes
@@ -356,6 +439,15 @@ class ScaleDivision(BaseModel):
 class DivisionMember(BaseModel):
     """Atribuição de um membro a uma divisão em um dia específico de escala."""
 
+    SHIFT_NONE = 'none'
+    SHIFT_MORNING = 'morning'
+    SHIFT_EVENING = 'evening'
+    SHIFT_CHOICES = [
+        (SHIFT_NONE, 'Sem turno'),
+        (SHIFT_MORNING, 'Manhã'),
+        (SHIFT_EVENING, 'Noite'),
+    ]
+
     division = models.ForeignKey(
         ScaleDivision,
         on_delete=models.CASCADE,
@@ -374,11 +466,17 @@ class DivisionMember(BaseModel):
         related_name='division_assignments',
         verbose_name='Membro'
     )
+    shift = models.CharField(
+        max_length=10,
+        choices=SHIFT_CHOICES,
+        default=SHIFT_NONE,
+        verbose_name='Turno',
+    )
 
     class Meta:
         verbose_name = 'Membro da Divisão'
         verbose_name_plural = 'Membros das Divisões'
-        unique_together = [['division', 'schedule_day', 'member']]
+        unique_together = [['division', 'schedule_day', 'member', 'shift']]
         ordering = ['division__order', 'member__name']
 
     def __str__(self):

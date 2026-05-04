@@ -7,11 +7,11 @@ from .days import (
     check_schedule_conflict_view,
 )
 from .divisions import (
-    division_create_view,
-    division_delete_view,
-    division_edit_view,
-    division_list_view,
-    schedule_day_division_assign_view,
+    DivisionCreateView,
+    DivisionDeleteView,
+    DivisionEditView,
+    DivisionListView,
+    ScheduleDayDivisionAssignView,
 )
 from .monthly import (
     ScheduleCreateView,
@@ -49,9 +49,9 @@ __all__ = [
     'ScheduleDayToggleCancelView',
     'check_schedule_conflict_view',
     # Divisions
-    'division_list_view',
-    'division_create_view',
-    'division_edit_view',
-    'division_delete_view',
-    'schedule_day_division_assign_view',
+    'DivisionListView',
+    'DivisionCreateView',
+    'DivisionEditView',
+    'DivisionDeleteView',
+    'ScheduleDayDivisionAssignView',
 ]

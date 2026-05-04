@@ -1,18 +1,17 @@
-from datetime import datetime
+from datetime import datetime, timedelta, date
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
-from django.views.generic import ListView
 
 from ..mixins import StaffRequiredMixin
 from ...models import Ministry, MonthlySchedule, ScheduleDay, Team
 from ...models.member import Member
 from ...models.ministry_membership import MinistryMembership
-from ...models.schedule import ScaleDivision
+from ...models.schedule import DivisionMember, ScaleDivision
 
 WEEKDAYS_PT = [
     'Segunda-feira',
@@ -25,49 +24,100 @@ WEEKDAYS_PT = [
 ]
 
 
-class ScheduleListView(LoginRequiredMixin, StaffRequiredMixin, ListView):
-    """Lista todas as escalas mensais."""
+# ---------------------------------------------------------------------------
+# Helper: gera ScheduleDay para escalas semanais
+# ---------------------------------------------------------------------------
 
-    model = MonthlySchedule
-    template_name = 'admin_panel/schedules/monthly/list.html'
-    context_object_name = 'schedules'
+def _generate_weekly_days(schedule):
+    """Garante que todos os ScheduleDay da escala semanal existam no banco.
 
-    def get_queryset(self):
-        queryset = MonthlySchedule.objects.select_related('ministry').filter(deleted__isnull=True)
+    Percorre o intervalo [start_date, end_date] (ou até hoje+90 dias se sem
+    end_date) e cria ScheduleDay para cada ocorrência de days_of_week.
+    Não recria dias já existentes.
+    """
+    if not schedule.is_weekly:
+        return
 
-        ministry_id = self.request.GET.get('ministry')
-        year = self.request.GET.get('year')
-        month = self.request.GET.get('month')
-        search = self.request.GET.get('search', '')
+    day_list = schedule.get_days_of_week_list()
+    if not day_list:
+        return
+
+    start = schedule.start_date
+    end = schedule.end_date or (date.today() + timedelta(days=90))
+
+    existing_dates = set(
+        ScheduleDay.objects
+        .filter(schedule=schedule, deleted__isnull=True)
+        .values_list('date', flat=True)
+    )
+
+    current = start
+    to_create = []
+    while current <= end:
+        if current.weekday() in day_list and current not in existing_dates:
+            to_create.append(ScheduleDay(
+                schedule=schedule,
+                date=current,
+                day_of_week=current.weekday(),
+            ))
+        current += timedelta(days=1)
+
+    if to_create:
+        ScheduleDay.objects.bulk_create(to_create)
+
+
+# ---------------------------------------------------------------------------
+# LIST
+# ---------------------------------------------------------------------------
+
+class ScheduleListView(LoginRequiredMixin, StaffRequiredMixin, View):
+    """Lista todas as escalas (mensais e semanais)."""
+
+    def get(self, request):
+        ministry_id = request.GET.get('ministry')
+        search = request.GET.get('search', '')
+        schedule_type = request.GET.get('type', '')
+        year = request.GET.get('year')
+        month = request.GET.get('month')
+        current_year = datetime.now().year
+
+        qs = MonthlySchedule.objects.select_related('ministry').filter(deleted__isnull=True)
 
         if ministry_id:
-            queryset = queryset.filter(ministry_id=ministry_id)
+            qs = qs.filter(ministry_id=ministry_id)
+        if schedule_type:
+            qs = qs.filter(schedule_type=schedule_type)
         if year:
-            queryset = queryset.filter(year=year)
+            qs = qs.filter(year=year)
         if month:
-            queryset = queryset.filter(month=month)
+            qs = qs.filter(month=month)
         if search:
-            queryset = queryset.filter(
+            qs = qs.filter(
                 Q(title__icontains=search) | Q(ministry__name__icontains=search)
             )
 
-        return queryset.order_by('-year', '-month', 'ministry__name')
+        qs = qs.order_by('-year', '-month', '-start_date', 'ministry__name')
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        current_year = datetime.now().year
-        context['ministries'] = Ministry.objects.filter(deleted__isnull=True).order_by('name')
-        context['years'] = range(current_year - 1, current_year + 2)
-        context['months'] = MonthlySchedule.MONTH_CHOICES
-        context['selected_ministry'] = self.request.GET.get('ministry')
-        context['selected_year'] = self.request.GET.get('year')
-        context['selected_month'] = self.request.GET.get('month')
-        context['search'] = self.request.GET.get('search', '')
-        return context
+        context = {
+            'schedules': qs,
+            'ministries': Ministry.objects.filter(deleted__isnull=True).order_by('name'),
+            'years': range(current_year - 1, current_year + 2),
+            'months': MonthlySchedule.MONTH_CHOICES,
+            'selected_ministry': ministry_id,
+            'selected_year': year,
+            'selected_month': month,
+            'selected_type': schedule_type,
+            'search': search,
+        }
+        return render(request, 'admin_panel/schedules/monthly/list.html', context)
 
+
+# ---------------------------------------------------------------------------
+# CREATE / EDIT
+# ---------------------------------------------------------------------------
 
 class ScheduleCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
-    """Cria uma nova escala mensal."""
+    """Cria uma nova escala (mensal ou semanal)."""
 
     def get(self, request):
         current_year = datetime.now().year
@@ -77,37 +127,63 @@ class ScheduleCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
             'months': MonthlySchedule.MONTH_CHOICES,
             'current_month': datetime.now().month,
             'current_year': current_year,
+            'week_days_choices': MonthlySchedule.WEEK_DAYS_CHOICES,
+            'initial_type': request.GET.get('type', 'monthly'),
         }
         return render(request, 'admin_panel/schedules/monthly/form.html', context)
 
     def post(self, request):
+        schedule_type = request.POST.get('schedule_type', MonthlySchedule.TYPE_MONTHLY)
         ministry_id = request.POST.get('ministry')
-        title = request.POST.get('title')
-        month = request.POST.get('month')
-        year = request.POST.get('year')
+        title = request.POST.get('title', '').strip()
         use_team_rotation = request.POST.get('use_team_rotation') == 'true'
         guidelines = request.POST.get('guidelines') or None
 
         ministry = get_object_or_404(Ministry, id=ministry_id)
 
-        schedule = MonthlySchedule.objects.create(
-            ministry=ministry,
-            title=title,
-            month=int(month),
-            year=int(year),
-            use_team_rotation=use_team_rotation,
-            guidelines=guidelines,
-        )
+        if schedule_type == MonthlySchedule.TYPE_WEEKLY:
+            start_date_str = request.POST.get('start_date', '').strip()
+            end_date_str = request.POST.get('end_date', '').strip()
+            days_of_week = request.POST.getlist('days_of_week')
 
-        division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
-        for i, name in enumerate(division_names):
-            ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
+            schedule = MonthlySchedule.objects.create(
+                schedule_type=MonthlySchedule.TYPE_WEEKLY,
+                ministry=ministry,
+                title=title,
+                start_date=datetime.strptime(start_date_str, '%Y-%m-%d').date(),
+                end_date=datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None,
+                use_team_rotation=use_team_rotation,
+                guidelines=guidelines,
+            )
+            schedule.set_days_of_week([int(d) for d in days_of_week])
+            schedule.save()
+            _generate_weekly_days(schedule)
+            division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
+            for i, name in enumerate(division_names):
+                ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
+        else:
+            month = request.POST.get('month')
+            year = request.POST.get('year')
+
+            schedule = MonthlySchedule.objects.create(
+                schedule_type=MonthlySchedule.TYPE_MONTHLY,
+                ministry=ministry,
+                title=title,
+                month=int(month),
+                year=int(year),
+                use_team_rotation=use_team_rotation,
+                guidelines=guidelines,
+            )
+
+            division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
+            for i, name in enumerate(division_names):
+                ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
 
         return redirect('schedule_detail', schedule_id=schedule.id)
 
 
 class ScheduleEditView(LoginRequiredMixin, StaffRequiredMixin, View):
-    """Edita uma escala mensal existente."""
+    """Edita uma escala existente (mensal ou semanal)."""
 
     def get(self, request, schedule_id):
         schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
@@ -122,6 +198,7 @@ class ScheduleEditView(LoginRequiredMixin, StaffRequiredMixin, View):
             'ministries': Ministry.objects.filter(deleted__isnull=True).order_by('name'),
             'years': range(current_year - 1, current_year + 2),
             'months': MonthlySchedule.MONTH_CHOICES,
+            'week_days_choices': MonthlySchedule.WEEK_DAYS_CHOICES,
             'existing_divisions': existing_divisions,
         }
         return render(request, 'admin_panel/schedules/monthly/form.html', context)
@@ -130,34 +207,73 @@ class ScheduleEditView(LoginRequiredMixin, StaffRequiredMixin, View):
         schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
 
         schedule.ministry_id = request.POST.get('ministry')
-        schedule.title = request.POST.get('title')
-        schedule.month = int(request.POST.get('month'))
-        schedule.year = int(request.POST.get('year'))
+        schedule.title = request.POST.get('title', '').strip()
         schedule.use_team_rotation = request.POST.get('use_team_rotation') == 'true'
         schedule.guidelines = request.POST.get('guidelines') or None
-        schedule.save()
 
-        ScaleDivision.objects.filter(schedule=schedule, deleted__isnull=True).delete()
-        division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
-        for i, name in enumerate(division_names):
-            ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
+        if schedule.is_weekly:
+            start_date_str = request.POST.get('start_date', '').strip()
+            end_date_str = request.POST.get('end_date', '').strip()
+            days_of_week = request.POST.getlist('days_of_week')
+            schedule.start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            schedule.end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
+            schedule.set_days_of_week([int(d) for d in days_of_week])
+            schedule.save()
+            _generate_weekly_days(schedule)
+            ScaleDivision.objects.filter(schedule=schedule, deleted__isnull=True).delete()
+            division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
+            for i, name in enumerate(division_names):
+                ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
+        else:
+            schedule.month = int(request.POST.get('month'))
+            schedule.year = int(request.POST.get('year'))
+            schedule.save()
+
+            ScaleDivision.objects.filter(schedule=schedule, deleted__isnull=True).delete()
+            division_names = [n.strip() for n in request.POST.getlist('divisions') if n.strip()]
+            for i, name in enumerate(division_names):
+                ScaleDivision.objects.create(schedule=schedule, name=name, order=i)
 
         return redirect('schedule_detail', schedule_id=schedule.id)
 
 
+# ---------------------------------------------------------------------------
+# DETAIL
+# ---------------------------------------------------------------------------
+
 class ScheduleDetailView(LoginRequiredMixin, StaffRequiredMixin, View):
-    """Visualiza detalhes de uma escala mensal."""
+    """Visualiza detalhes de uma escala (mensal ou semanal)."""
 
     def get(self, request, schedule_id):
         schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
 
-        days = (
+        if schedule.is_weekly:
+            _generate_weekly_days(schedule)
+
+        days_qs = (
             ScheduleDay.objects
             .filter(schedule=schedule, deleted__isnull=True)
             .select_related('team')
-            .prefetch_related('members')
+            .prefetch_related(
+                'members',
+                'members_morning',
+                'members_evening',
+                Prefetch(
+                    'division_assignments',
+                    queryset=DivisionMember.objects.filter(
+                        deleted__isnull=True
+                    ).select_related('division', 'member').order_by(
+                        'division__order', 'division__name', 'member__name'
+                    ),
+                ),
+            )
             .order_by('date')
         )
+
+        if schedule.is_weekly and schedule.end_date:
+            days_qs = days_qs.filter(date__lte=schedule.end_date)
+
+        days = list(days_qs)
 
         teams = (
             Team.objects
@@ -182,14 +298,48 @@ class ScheduleDetailView(LoginRequiredMixin, StaffRequiredMixin, View):
                 day.pt_weekday = WEEKDAYS_PT[day.date.weekday()]
             except Exception:
                 day.pt_weekday = ''
-            week_num = day.get_week_number()
+
+            if schedule.is_monthly:
+                week_num = day.get_week_number()
+            else:
+                week_num = day.date.isocalendar()[1]
+
             weeks.setdefault(week_num, []).append(day)
+
+            groups, grouped = {}, []
+            groups_morning, grouped_morning = {}, []
+            groups_evening, grouped_evening = {}, []
+            for a in day.division_assignments.all():
+                if a.shift == 'morning':
+                    if a.division_id not in groups_morning:
+                        groups_morning[a.division_id] = {'division': a.division, 'members': []}
+                        grouped_morning.append(groups_morning[a.division_id])
+                    groups_morning[a.division_id]['members'].append(a.member)
+                elif a.shift == 'evening':
+                    if a.division_id not in groups_evening:
+                        groups_evening[a.division_id] = {'division': a.division, 'members': []}
+                        grouped_evening.append(groups_evening[a.division_id])
+                    groups_evening[a.division_id]['members'].append(a.member)
+                else:
+                    if a.division_id not in groups:
+                        groups[a.division_id] = {'division': a.division, 'members': []}
+                        grouped.append(groups[a.division_id])
+                    groups[a.division_id]['members'].append(a.member)
+            day.grouped_divisions = grouped
+            day.morning_grouped_divisions = grouped_morning
+            day.evening_grouped_divisions = grouped_evening
 
         divisions = ScaleDivision.objects.filter(
             schedule=schedule, deleted__isnull=True
         ).order_by('order', 'name')
 
-        return render(request, 'admin_panel/schedules/monthly/detail.html', {
+        template = (
+            'admin_panel/schedules/monthly/detail_weekly.html'
+            if schedule.is_weekly
+            else 'admin_panel/schedules/monthly/detail.html'
+        )
+
+        return render(request, template, {
             'schedule': schedule,
             'days': days,
             'weeks': weeks,
@@ -199,8 +349,12 @@ class ScheduleDetailView(LoginRequiredMixin, StaffRequiredMixin, View):
         })
 
 
+# ---------------------------------------------------------------------------
+# DELETE
+# ---------------------------------------------------------------------------
+
 class ScheduleDeleteView(LoginRequiredMixin, StaffRequiredMixin, View):
-    """Deleta uma escala mensal (POST-only, retorna JSON)."""
+    """Deleta uma escala (POST-only, retorna JSON)."""
 
     def post(self, request, schedule_id):
         schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
@@ -211,9 +365,13 @@ class ScheduleDeleteView(LoginRequiredMixin, StaffRequiredMixin, View):
         return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
+# ---------------------------------------------------------------------------
+# PRINT
+# ---------------------------------------------------------------------------
+
 @login_required
 def schedule_print_view(request, schedule_id):
-    """Exibe a escala em formato printável para impressão nativa do navegador"""
+    """Exibe a escala em formato printável para impressão nativa do navegador."""
     schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
     days = ScheduleDay.objects.filter(
         schedule=schedule,
@@ -267,11 +425,12 @@ def schedule_print_view(request, schedule_id):
 
         processed_days.append(day_data)
 
+    month_name = month_names[schedule.month - 1] if schedule.month else ''
     return render(request, 'admin_panel/schedules/monthly/print.html', {
         'schedule': schedule,
         'days': processed_days,
         'divisions': divisions,
-        'month_name': month_names[schedule.month - 1],
+        'month_name': month_name,
         'generated_at': datetime.now().strftime('%d/%m/%Y às %H:%M'),
         'use_team_rotation': schedule.use_team_rotation,
     })
