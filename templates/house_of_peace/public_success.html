@@ -1,0 +1,67 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitação Enviada — Casa de Paz</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes scaleIn {
+            from { transform: scale(0.7); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .scale-in { animation: scaleIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both; }
+        .float-icon { animation: float 3s ease-in-out infinite; }
+    </style>
+</head>
+<body style="background: linear-gradient(135deg, #EBF5FB 0%, #FDFEFE 50%, #E8F8F5 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+    <div class="text-center px-6 py-12 max-w-lg mx-auto">
+        <!-- Ícone de sucesso -->
+        <div class="scale-in w-28 h-28 mx-auto mb-6 rounded-full flex items-center justify-center shadow-2xl float-icon"
+             style="background: linear-gradient(135deg, #148F77, #1A5276);">
+            <i class="fas fa-check text-white text-5xl"></i>
+        </div>
+
+        <h1 class="text-3xl font-black text-gray-900 mb-3">Solicitação Enviada!</h1>
+        <p class="text-lg text-gray-600 mb-2">
+            Obrigado, <strong style="color: #148F77;">{{ requester_name }}</strong>!
+        </p>
+        <p class="text-base text-gray-600 mb-8 leading-relaxed">
+            Sua solicitação de Casa de Paz foi recebida com sucesso. 
+            Em breve, irmãos da Igreja Filadélfia entrarão em contato pelo telefone cadastrado para agendar a visita.
+        </p>
+
+        <!-- Cards de informação -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div class="bg-white rounded-2xl p-5 shadow-lg border-2" style="border-color: rgba(20,143,119,0.2);">
+                <i class="fas fa-phone text-2xl mb-2" style="color: #148F77;"></i>
+                <p class="text-sm font-bold text-gray-700">Contato em breve</p>
+                <p class="text-xs text-gray-500">Via WhatsApp ou ligação</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-lg border-2" style="border-color: rgba(26,82,118,0.2);">
+                <i class="fas fa-praying-hands text-2xl mb-2" style="color: #1A5276;"></i>
+                <p class="text-sm font-bold text-gray-700">Oração em casa</p>
+                <p class="text-xs text-gray-500">2 a 3 irmãos visitarão você</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 shadow-lg border-2" style="border-color: rgba(243,156,18,0.2);">
+                <i class="fas fa-heart text-2xl mb-2" style="color: #F39C12;"></i>
+                <p class="text-sm font-bold text-gray-700">Com amor</p>
+                <p class="text-xs text-gray-500">Família Filadélfia</p>
+            </div>
+        </div>
+
+        <a href="{% url 'home' %}"
+           class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl shadow-xl transition-all duration-300 hover:-translate-y-1"
+           style="background: linear-gradient(135deg, #1A5276, #148F77);">
+            <i class="fas fa-home"></i>
+            Voltar ao início
+        </a>
+    </div>
+</body>
+</html>

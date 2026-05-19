@@ -69,6 +69,17 @@ from .views.schedules import (
     ScheduleDayDivisionAssignView
 )
 from .views.prayer_request import PrayerRequestCreateView, PrayerRequestListView
+from .views.house_of_peace import (
+    HouseOfPeacePublicCreateView,
+    HouseOfPeaceAvailableListView,
+    HouseOfPeaceAcceptView,
+    HouseOfPeaceMyListView,
+    HouseOfPeaceScheduleView,
+    HouseOfPeaceCompleteView,
+    HouseOfPeaceDetailView,
+    HouseOfPeaceRescheduleView,
+    HouseOfPeaceCancelScheduleView,
+)
 from .views.admin_panel import (
     DashboardView, MembersListView, VisitorsListView,
     EventsListView, NeighborhoodsListView,
@@ -92,6 +103,20 @@ urlpatterns = [
     path('prayer-request/', PrayerRequestCreateView.as_view(), name='prayer_request_create'),
     path('prayer-request/list', PrayerRequestListView.as_view(), name='prayer_request_list'),
     path('evangelism/', EvangelismCreateView.as_view(), name='evangelism'),
+
+    # House of Peace — public form (no login)
+    path('house-of-peace/', HouseOfPeacePublicCreateView.as_view(), name='house_of_peace_public_form'),
+
+    # House of Peace — member area
+    path('house-of-peace/available/', HouseOfPeaceAvailableListView.as_view(), name='house_of_peace_available'),
+    path('house-of-peace/<int:house_id>/accept/', HouseOfPeaceAcceptView.as_view(), name='house_of_peace_accept'),
+    path('house-of-peace/my/', HouseOfPeaceMyListView.as_view(), name='house_of_peace_my_list'),
+    path('house-of-peace/assignment/<int:assignment_id>/schedule/', HouseOfPeaceScheduleView.as_view(), name='house_of_peace_schedule'),
+    path('house-of-peace/assignment/<int:assignment_id>/reschedule/', HouseOfPeaceRescheduleView.as_view(), name='house_of_peace_reschedule'),
+    path('house-of-peace/assignment/<int:assignment_id>/cancel-schedule/', HouseOfPeaceCancelScheduleView.as_view(), name='house_of_peace_cancel_schedule'),
+    path('house-of-peace/assignment/<int:assignment_id>/complete/', HouseOfPeaceCompleteView.as_view(), name='house_of_peace_complete'),
+    path('house-of-peace/<int:house_id>/details/', HouseOfPeaceDetailView.as_view(), name='house_of_peace_detail'),
+
     path('evangelism/list/', EvangelismListView.as_view(), name='evangelism_list'),
     path('new_converts/list/', NewConvertsListView.as_view(), name='new_converts_list'),
     path('member/register/', MemberCreateView.as_view(), name='member_register'),

@@ -1,0 +1,1055 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Casas de Paz Disponíveis{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+    :root {
+        --peace-blue: #6BA3D8;
+        --peace-dark-blue: #2E5F8E;
+        --peace-light: #EBF5FB;
+        --peace-cream: #EBF5FB;
+        --peace-gold: #F39C12;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes float {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+    }
+    .animate-fade { animation: fadeIn 0.6s ease-out; }
+    .float-animation { animation: float 3s ease-in-out infinite; }
+
+    .peace-card {
+        background: white;
+        border-radius: 1.25rem;
+        border: 2px solid rgba(107,163,216,0.2);
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 16px rgba(107,163,216,0.06);
+    }
+    .peace-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 32px rgba(107,163,216,0.12);
+        z-index: 10;
+        position: relative;
+    }
+    .peace-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
+    .btn-accept {
+        background: #6BA3D8;
+        color: white;
+        border: none;
+        padding: 0.875rem 1.5rem;
+        border-radius: 1rem;
+        font-weight: 800;
+        font-size: 0.95rem;
+        width: 100%;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        box-shadow: 0 4px 12px rgba(107,163,216,0.3);
+    }
+    .btn-accept:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(107,163,216,0.4);
+    }
+    .slot-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .hop-popup {
+        width: min(620px, calc(100vw - 2rem));
+        border-radius: 1.4rem;
+        padding: 0;
+        overflow: hidden;
+        box-shadow: 0 28px 72px rgba(15, 42, 66, 0.26);
+        z-index: 9999;
+    }
+    .hop-sheet {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        margin: 0 !important;
+        border-radius: 1.35rem 1.35rem 0 0 !important;
+        padding: 0;
+        align-self: end;
+        border-top: 1px solid rgba(107,163,216,0.2);
+        box-shadow: 0 -16px 50px rgba(15, 42, 66, 0.25);
+        z-index: 9999;
+    }
+    .swal2-container {
+        z-index: 9998;
+    }
+    .hop-sheet::before {
+        content: '';
+        display: block;
+        width: 44px;
+        height: 5px;
+        border-radius: 999px;
+        background: rgba(107,114,128,0.35);
+        margin: 0.55rem auto 0.25rem;
+    }
+    .hop-sheet-container {
+        align-items: flex-end !important;
+        padding: 0 !important;
+    }
+    .hop-actions {
+        margin: 0;
+        padding: 0.8rem 1rem 0.7rem;
+        border-top: 1px solid rgba(107,163,216,0.12);
+        background: #fff;
+        gap: 0.6rem;
+    }
+    .hop-confirm,
+    .hop-cancel {
+        margin: 0 !important;
+        border-radius: 0.85rem !important;
+        padding: 0.78rem 1rem !important;
+        font-weight: 800 !important;
+        font-size: 0.94rem !important;
+        width: 100% !important;
+        flex: 1 !important;
+    }
+    .hop-confirm {
+        box-shadow: 0 10px 24px rgba(107,163,216,0.25);
+    }
+    .hop-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+    .hop-actions .swal2-styled {
+        width: 100%;
+    }
+    .hop-modal p {
+        margin-top: 0.25rem;
+    }
+    .hop-title {
+        margin-top: 0;
+    }
+    .hop-subtitle {
+        margin-top: 0.25rem !important;
+    }
+    .hop-label {
+        margin-top: 0.25rem;
+    }
+    .hop-value {
+        margin-top: 0.1rem;
+    }
+    .hop-html-wrap {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    .hop-modal {
+        text-align: left;
+        background: #fff;
+    }
+    .hop-head {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        padding: 1.6rem 1.2rem 1.1rem;
+        background: #f5fbff;
+        border-bottom: 1px solid rgba(107,163,216,0.12);
+    }
+    .hop-avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 900;
+        font-size: 1.65rem;
+        background: #6BA3D8;
+        box-shadow: 0 8px 20px rgba(107,163,216,0.3);
+        flex-shrink: 0;
+    }
+    .hop-title {
+        margin: 0;
+        color: #2E5F8E;
+        font-size: 1.45rem;
+        font-weight: 900;
+        line-height: 1.2;
+        max-width: 350px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .hop-subtitle {
+        margin: 0.22rem 0 0;
+        color: #6BA3D8;
+        font-size: 1rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .hop-body {
+        padding: 1rem 1.2rem 0.6rem;
+        max-height: min(58vh, 580px);
+        overflow: auto;
+    }
+    .hop-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 0.9rem;
+        margin-top: 0.5rem;
+    }
+    .hop-card {
+        border-radius: 1rem;
+        padding: 0.85rem;
+        border: 1px solid rgba(31, 41, 55, 0.08);
+        background: #f8fafc;
+    }
+    .hop-card-blue { background: #EBF5FB; }
+    .hop-card-teal { background: #f0f8fe; }
+    .hop-label {
+        margin: 0 0 0.45rem;
+        color: #6B7280;
+        font-size: 0.71rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 800;
+    }
+    .hop-value {
+        margin: 0;
+        margin-top: 0.1rem;
+        color: #1F2937;
+        font-size: 1.2rem;
+        font-weight: 900;
+        line-height: 1.1;
+    }
+    .hop-muted {
+        margin-top: 0.3rem;
+        color: #9CA3AF;
+        font-size: 0.76rem;
+        font-weight: 600;
+    }
+    .hop-slots {
+        display: flex;
+        gap: 0.35rem;
+        margin-top: 0.25rem;
+    }
+    .hop-slot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: #E5E7EB;
+    }
+    .hop-slot-filled { background: #6BA3D8; }
+    .hop-block {
+        border-radius: 1rem;
+        border: 1px solid rgba(107,163,216,0.14);
+        background: #f0f8fe;
+        padding: 0.85rem;
+        margin-bottom: 0.85rem;
+        margin-top: 0.5rem;
+    }
+    .hop-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-top: 0.25rem;
+    }
+    .hop-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.32rem;
+        padding: 0.36rem 0.6rem;
+        border-radius: 999px;
+        background: rgba(107,163,216,0.12);
+        border: 1px solid rgba(107,163,216,0.2);
+        color: #6BA3D8;
+        font-size: 0.75rem;
+        font-weight: 800;
+    }
+    .hop-quote {
+        border-radius: 1rem;
+        border: 1px solid rgba(31, 41, 55, 0.08);
+        border-left: 4px solid #6BA3D8;
+        background: #F8FAFC;
+        padding: 0.8rem 0.9rem;
+        margin-bottom: 0.85rem;
+        margin-top: 0.5rem;
+        color: #4B5563;
+        font-size: 0.9rem;
+        line-height: 1.45;
+        font-style: italic;
+    }
+    .hop-contact {
+        border-radius: 1rem;
+        border: 1px solid rgba(107,163,216,0.18);
+        background: #EBF5FB;
+        padding: 0.85rem;
+        margin-bottom: 0.45rem;
+        margin-top: 0.5rem;
+    }
+    .hop-contact-number {
+        margin: 0;
+        margin-top: 0.1rem;
+        color: #1F2937;
+        font-size: 1.05rem;
+        font-weight: 800;
+        letter-spacing: 0.01em;
+    }
+    .hop-note {
+        border-radius: 1rem;
+        border: 1px solid rgba(107,163,216,0.13);
+        background: #f5fbff;
+        padding: 0.95rem;
+        margin-top: 0.25rem;
+        color: #2E5F8E;
+        line-height: 1.5;
+        font-weight: 600;
+    }
+    .hop-confirm-panel {
+        border-radius: 1rem;
+        border: 1px solid rgba(107,163,216,0.18);
+        background: #f0f8fe;
+        padding: 0.9rem;
+        margin-top: 0.2rem;
+    }
+    .hop-confirm-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+    }
+    .hop-confirm-key {
+        margin: 0;
+        color: #6B7280;
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        font-weight: 800;
+    }
+    .hop-confirm-value {
+        margin: 0.2rem 0 0;
+        margin-top: 0.3rem;
+        color: #1F2937;
+        font-size: 1.02rem;
+        font-weight: 900;
+        text-align: right;
+    }
+    .hop-confirm-alert {
+        border-radius: 0.95rem;
+        border: 1px solid rgba(245,158,11,0.24);
+        background: linear-gradient(150deg, rgba(245,158,11,0.14), rgba(245,158,11,0.06));
+        color: #92400E;
+        font-size: 0.82rem;
+        font-weight: 700;
+        line-height: 1.45;
+        padding: 0.75rem 0.8rem;
+        margin-top: 0.8rem;
+    }
+    .hop-success {
+        border-color: rgba(107, 163, 216, 0.2);
+        background: linear-gradient(135deg, rgba(107,163,216,0.1), rgba(107,163,216,0.04));
+        color: #2E5F8E;
+    }
+
+
+
+    @media (max-width: 767px) {
+        .peace-card {
+            border-radius: 1rem;
+        }
+        .peace-card-head {
+            padding: 0.85rem 0.9rem !important;
+        }
+        .peace-card-body {
+            padding: 0.85rem 0.9rem 0.95rem !important;
+        }
+        .peace-family-name {
+            font-size: 0.95rem !important;
+            line-height: 1.2;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .peace-family-neighborhood {
+            font-size: 0.84rem !important;
+        }
+        .peace-card-actions {
+            flex-direction: column;
+            gap: 0.55rem;
+        }
+        .peace-card-actions > button {
+            width: 100%;
+            flex: none;
+        }
+        .hop-sheet {
+            max-height: 90vh;
+        }
+        .hop-body {
+            max-height: min(56vh, calc(100vh - 260px));
+            padding: 0.9rem 1rem 0.6rem;
+        }
+        .hop-title { font-size: 1.5rem; }
+        .hop-grid { gap: 0.65rem; }
+        .hop-card { padding: 0.75rem; }
+        .hop-actions { padding: 0.75rem 0.9rem 0.55rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+    <!-- Header -->
+    <section class="relative p-4" style="background: #f5fbff;">
+        <div class="absolute inset-0" style="background: #f5fbff;"></div>
+        <div class="absolute top-0 right-0 w-72 h-72 rounded-full -mr-36 -mt-36 opacity-40"
+             style="background: radial-gradient(circle, rgba(107,163,216,0.1), transparent);"></div>
+        <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-40"
+             style="background: radial-gradient(circle, rgba(107,163,216,0.08), transparent);"></div>
+
+        <div class="relative z-10 py-6 sm:py-8">
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-black text-gray-800 mb-2">Casas de Paz Disponíveis</h1>
+                    <p class="text-sm sm:text-base text-gray-600 mt-1">Famílias esperando uma visita de oração</p>
+                </div>
+                <a href="{% url 'member_dashboard' %}"
+                   class="hidden sm:flex items-center gap-2 px-6 py-3 bg-white/70 backdrop-blur-sm hover:bg-white/90 text-gray-700 rounded-2xl transition-all duration-300 shadow-lg hover:shadow-xl hover:-translate-y-1">
+                    <i class="fas fa-arrow-left text-sm"></i>
+                    <span class="text-sm font-medium">Voltar</span>
+                </a>
+            </div>
+
+            <!-- Search + Filter Section -->
+            <div class="mt-6">
+                <div class="flex items-center gap-2 relative">
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" id="peace-search-input" placeholder="Buscar por família, bairro..."
+                               class="w-full pl-4 pr-4 py-2.5 border-2 border-gray-200 rounded-lg focus:outline-none bg-white text-sm transition-all focus:border-teal-500">
+                    </div>
+
+                    <button type="button" id="peace-filter-toggle"
+                            class="px-3 py-2.5 border-2 border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm font-medium flex-shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                        </svg>
+                        Filtros
+                        <span class="w-2 h-2 rounded-full hidden" id="peace-filter-indicator" style="background-color: #6BA3D8;"></span>
+                    </button>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- List -->
+    <section class="relative z-20 px-4 sm:px-8 pb-24 space-y-4 animate-fade mt-[-1.5rem]">
+        {% if available_houses %}
+            {% for house in available_houses %}
+            <div class="peace-card" data-house-id="{{ house.id }}">
+                <!-- Header do card -->
+                <div class="peace-card-head p-4 sm:p-5" style="background: #ffffff; border-bottom: 1px solid rgba(107,163,216,0.1);">
+                    <div class="flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <!-- Avatar -->
+                            <div class="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg"
+                                 style="background: #6BA3D8;">
+                                <span class="inline-block mt-1">{{ house.requester_name|slice:":1"|upper }}</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="peace-family-name text-lg font-black text-gray-900 truncate">Família {{ house.requester_name|truncatewords:3 }}</h3>
+                                <p class="peace-family-neighborhood text-sm text-gray-500 flex items-center gap-1">
+                                    <i class="fas fa-map-marker-alt" style="color: #6BA3D8;"></i>
+                                    {{ house.neighborhood.name }}
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Slots disponíveis -->
+                        <div class="flex-shrink-0 text-right">
+                            <div class="flex gap-1 justify-end mb-1">
+                                {% for i in "123" %}
+                                <span class="slot-dot {% if forloop.counter <= house.assignments_count %}bg-teal-500{% else %}bg-gray-200{% endif %}"></span>
+                                {% endfor %}
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">{{ house.assignments_count }}/3 membros</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Corpo -->
+                <div class="peace-card-body p-4 sm:p-5 space-y-3">
+                    <!-- Info chips -->
+                    <div class="flex flex-wrap gap-2">
+                        <span class="peace-badge" style="background: rgba(107,163,216,0.1); color: #2E5F8E;">
+                            <i class="fas fa-users text-xs"></i>
+                            <span class="inline-block mt-1">{{ house.family_size }} pessoa{{ house.family_size|pluralize:"s" }}</span>
+                        </span>
+
+                        {% if house.prayer_types_display %}
+                        {% for pt in house.prayer_types_display|slice:":2" %}
+                        <span class="peace-badge" style="background: rgba(243,156,18,0.1); color: #B7770D;">
+                            <i class="fas fa-pray text-xs"></i>
+                            <span class="inline-block mt-1">{{ pt }}</span>
+                        </span>
+                        {% endfor %}
+                        {% if house.prayer_types_display|length > 2 %}
+                        <span class="peace-badge bg-gray-100 text-gray-600">
+                            +{{ house.prayer_types_display|length|add:"-2" }} mais
+                        </span>
+                        {% endif %}
+                        {% endif %}
+                    </div>
+
+                    {% if house.prayer_description %}
+                    <p class="text-sm text-gray-600 bg-gray-50 rounded-xl p-3 border border-gray-100 mt-1">
+                        <i class="fas fa-quote-left text-xs text-gray-400 mr-1"></i>
+                        {{ house.prayer_description|truncatechars:120 }}
+                    </p>
+                    {% endif %}
+
+                    <!-- Botões -->
+                    <div class="peace-card-actions flex gap-2 pt-1 mt-1">
+                        <button onclick="showHouseDetails({{ house.id }})"
+                                class="flex-1 py-3 rounded-xl font-bold text-sm border-2 transition-all hover:-translate-y-0.5"
+                                style="border-color: #6BA3D8; color: #6BA3D8; background: white;">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            <span class="inline-block mt-1">Ver Detalhes</span>
+                        </button>
+                        <button onclick="acceptHouseOfPeace({{ house.id }}, '{{ house.requester_name|escapejs }}')"
+                                class="btn-accept flex-1">
+                            <i class="fas fa-hand-holding-heart mr-2"></i>
+                            <span class="inline-block mt-1">Aceitar</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-16 px-6">
+                <div class="w-24 h-24 mx-auto mb-6 rounded-3xl flex items-center justify-center shadow-xl float-animation"
+                     style="background: rgba(107,163,216,0.12);">
+                    <i class="fas fa-home text-4xl" style="color: #6BA3D8;"></i>
+                </div>
+                <h3 class="text-2xl font-black text-gray-800 mb-3">Nenhuma Casa de Paz disponível</h3>
+                <p class="text-base text-gray-600 mb-8 max-w-md mx-auto mt-1">
+                    No momento todas as famílias já possuem irmãos alocados ou não há novas solicitações.
+                </p>
+                <a href="{% url 'house_of_peace_my_list' %}"
+                   class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl shadow-xl transition-all duration-300 hover:-translate-y-1"
+                   style="background: #6BA3D8;">
+                    <i class="fas fa-list"></i>
+                    Minhas Casas de Paz
+                </a>
+            </div>
+        {% endif %}
+    </section>
+
+    {% include 'parciais/member_bottom_nav.html' with nav_active='home' color_scheme='house_of_peace' %}
+
+    <!-- Filter Panel (fora de qualquer seção para evitar stacking context) -->
+    <div id="peace-filter-panel"
+         class="hidden"
+         style="position: fixed; z-index: 2147483647; width: 288px; max-height: 80vh; overflow-y: auto; background: #fff; border: 2px solid #E5E7EB; border-radius: 0.75rem; box-shadow: 0 20px 60px rgba(0,0,0,0.15); padding: 1rem;">
+        <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Filtros</p>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Bairro</label>
+                <select id="peace-filter-neighborhood" class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none text-sm bg-white cursor-pointer" style="color: #374151;">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Tamanho da Família</label>
+                <select id="peace-filter-family-size" class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none text-sm bg-white cursor-pointer" style="color: #374151;">
+                    <option value="">Todos</option>
+                    <option value="1-2">1-2 pessoas</option>
+                    <option value="3-5">3-5 pessoas</option>
+                    <option value="6+">6+ pessoas</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Vagas Disponíveis</label>
+                <select id="peace-filter-slots" class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none text-sm bg-white cursor-pointer" style="color: #374151;">
+                    <option value="">Todos</option>
+                    <option value="3">Equipe Incompleta (1-2)</option>
+                    <option value="1">Apenas 1 vaga</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-700 mb-2 uppercase tracking-wide">Ordenar por</label>
+                <select id="peace-filter-sort" class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none text-sm bg-white cursor-pointer" style="color: #374151;">
+                    <option value="default">Mais recentes</option>
+                    <option value="slots-asc">Menos vagas</option>
+                    <option value="slots-desc">Mais vagas</option>
+                    <option value="family-asc">Famílias menores</option>
+                    <option value="family-desc">Famílias maiores</option>
+                </select>
+            </div>
+        </div>
+        <div class="flex gap-2 mt-5 pt-4 border-t-2 border-gray-100">
+            <button type="button" id="peace-clear-filters"
+                    class="flex-1 text-center px-3 py-2 text-sm font-bold text-gray-600 hover:bg-gray-50 rounded-lg transition-all">
+                Limpar
+            </button>
+            <button type="button" id="peace-apply-filters"
+                    class="flex-1 px-3 py-2 text-sm font-bold text-white rounded-lg hover:opacity-90 transition-all"
+                    style="background-color: #6BA3D8;">
+                Aplicar
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal de Detalhes -->
+    <script>
+        // Store original data for filtering
+        const HOUSES_DATA = [
+            {% for house in available_houses %}
+            {
+                id: {{ house.id }},
+                requester_name: "{{ house.requester_name|escapejs }}",
+                neighborhood_id: {{ house.neighborhood.id }},
+                neighborhood_name: "{{ house.neighborhood.name|escapejs }}",
+                family_size: {{ house.family_size }},
+                assignments_count: {{ house.assignments_count }},
+                prayer_types: [{% for pt in house.prayer_types_display %}"{{ pt|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
+                address: "{{ house.address|escapejs }}"
+            },
+            {% endfor %}
+        ];
+
+        // Initialize filters
+        const filterToggle = document.getElementById('peace-filter-toggle');
+        const filterPanel = document.getElementById('peace-filter-panel');
+        const searchInput = document.getElementById('peace-search-input');
+        const clearBtn = document.getElementById('peace-clear-filters');
+        const applyBtn = document.getElementById('peace-apply-filters');
+        const filterIndicator = document.getElementById('peace-filter-indicator');
+
+        // Populate neighborhood options
+        const neighborhoodSelect = document.getElementById('peace-filter-neighborhood');
+        const uniqueNeighborhoods = [...new Map(HOUSES_DATA.map(h => [h.neighborhood_id, { id: h.neighborhood_id, name: h.neighborhood_name }])).values()];
+        uniqueNeighborhoods.sort((a, b) => a.name.localeCompare(b.name));
+        uniqueNeighborhoods.forEach(n => {
+            const option = document.createElement('option');
+            option.value = n.id;
+            option.textContent = n.name;
+            neighborhoodSelect.appendChild(option);
+        });
+
+        function positionPanel() {
+            const rect = filterToggle.getBoundingClientRect();
+            const clientW = document.documentElement.clientWidth;
+            const panelW = Math.min(288, rect.right - 16);
+            filterPanel.style.top = (rect.bottom + 8) + 'px';
+            filterPanel.style.right = (clientW - rect.right) + 'px';
+            filterPanel.style.width = panelW + 'px';
+        }
+
+        // Toggle filter panel
+        filterToggle.addEventListener('click', () => {
+            filterPanel.classList.toggle('hidden');
+            if (!filterPanel.classList.contains('hidden')) positionPanel();
+        });
+
+        // Close filter panel when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!filterToggle.contains(e.target) && !filterPanel.contains(e.target)) {
+                filterPanel.classList.add('hidden');
+            }
+        });
+
+        // Reposition on scroll
+        window.addEventListener('scroll', () => {
+            if (!filterPanel.classList.contains('hidden')) positionPanel();
+        });
+
+        // Apply filters
+        applyBtn.addEventListener('click', () => {
+            filterCards();
+            filterPanel.classList.add('hidden');
+        });
+
+        // Clear filters
+        clearBtn.addEventListener('click', () => {
+            document.getElementById('peace-filter-neighborhood').value = '';
+            document.getElementById('peace-filter-family-size').value = '';
+            document.getElementById('peace-filter-slots').value = '';
+            document.getElementById('peace-filter-sort').value = 'default';
+            searchInput.value = '';
+            filterIndicator.classList.add('hidden');
+            filterCards();
+            filterPanel.classList.add('hidden');
+        });
+
+        // Search on input (real-time)
+        searchInput.addEventListener('input', debounce(() => {
+            filterCards();
+            updateFilterIndicator();
+        }, 300));
+
+        function updateFilterIndicator() {
+            const neighborhood = document.getElementById('peace-filter-neighborhood').value;
+            const familySize = document.getElementById('peace-filter-family-size').value;
+            const slots = document.getElementById('peace-filter-slots').value;
+            const search = searchInput.value.trim();
+
+            const hasActiveFilters = neighborhood || familySize || slots || search;
+            if (hasActiveFilters) {
+                filterIndicator.classList.remove('hidden');
+            } else {
+                filterIndicator.classList.add('hidden');
+            }
+        }
+
+        function filterCards() {
+            const search = searchInput.value.toLowerCase().trim();
+            const neighborhood = document.getElementById('peace-filter-neighborhood').value;
+            const familySize = document.getElementById('peace-filter-family-size').value;
+            const slots = document.getElementById('peace-filter-slots').value;
+            const sort = document.getElementById('peace-filter-sort').value;
+
+            let filtered = HOUSES_DATA.filter(house => {
+                // Search filter
+                if (search) {
+                    const searchableText = `${house.requester_name} ${house.neighborhood_name} ${house.address}`.toLowerCase();
+                    if (!searchableText.includes(search)) return false;
+                }
+
+                // Neighborhood filter
+                if (neighborhood && house.neighborhood_id != neighborhood) return false;
+
+                // Family size filter
+                if (familySize) {
+                    const [min, max] = familySize === '6+' 
+                        ? [6, Infinity]
+                        : familySize.split('-').map(Number);
+                    if (house.family_size < min || house.family_size > max) return false;
+                }
+
+                // Available slots filter
+                if (slots) {
+                    const availableSlots = 3 - house.assignments_count;
+                    if (slots === '1' && availableSlots !== 1) return false;
+                    if (slots === '3' && (availableSlots !== 1 && availableSlots !== 2)) return false;
+                }
+
+                return true;
+            });
+
+            // Sort
+            if (sort === 'slots-asc') {
+                filtered.sort((a, b) => (3 - a.assignments_count) - (3 - b.assignments_count));
+            } else if (sort === 'slots-desc') {
+                filtered.sort((a, b) => (3 - b.assignments_count) - (3 - a.assignments_count));
+            } else if (sort === 'family-asc') {
+                filtered.sort((a, b) => a.family_size - b.family_size);
+            } else if (sort === 'family-desc') {
+                filtered.sort((a, b) => b.family_size - a.family_size);
+            }
+
+            // Update visibility
+            const cards = document.querySelectorAll('[data-house-id]');
+            const visibleIds = new Set(filtered.map(h => h.id));
+
+            cards.forEach(card => {
+                const houseId = parseInt(card.getAttribute('data-house-id'));
+                card.style.display = visibleIds.has(houseId) ? '' : 'none';
+            });
+
+            // Update count
+            const resultCount = filtered.length;
+            document.getElementById('count-available').textContent = resultCount;
+
+            // Show "no results" message if needed
+            const listSection = document.querySelector('section.relative.z-20.px-4');
+            const noResultsMsg = document.getElementById('peace-no-results');
+
+            if (resultCount === 0 && !noResultsMsg) {
+                const msg = document.createElement('div');
+                msg.id = 'peace-no-results';
+                msg.className = 'text-center py-16 px-6 animate-fade';
+                msg.innerHTML = `
+                    <div class="w-20 h-20 mx-auto mb-4 rounded-2xl flex items-center justify-center" style="background: rgba(107,163,216,0.1);">
+                        <i class="fas fa-search text-3xl" style="color: #6BA3D8;"></i>
+                    </div>
+                    <h3 class="text-xl font-black text-gray-800 mb-2">Nenhuma casa encontrada</h3>
+                    <p class="text-sm text-gray-600">Tente ajustar os filtros ou a busca para encontrar casas disponíveis.</p>
+                `;
+                listSection.innerHTML = msg.outerHTML + listSection.innerHTML;
+            } else if (resultCount > 0 && noResultsMsg) {
+                noResultsMsg.remove();
+            }
+
+            updateFilterIndicator();
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        function isMobileViewport() {
+            return window.matchMedia('(max-width: 767px)').matches;
+        }
+
+        function modalClasses() {
+            const isMobile = isMobileViewport();
+            return {
+                container: isMobile ? 'hop-sheet-container' : '',
+                popup: isMobile ? 'hop-sheet' : 'hop-popup',
+                actions: 'hop-actions',
+                confirmButton: 'hop-confirm',
+                cancelButton: 'hop-cancel',
+                htmlContainer: 'hop-html-wrap',
+            };
+        }
+
+        function slotsMarkup(assignmentsCount) {
+            return Array.from({ length: 3 }, (_, i) => {
+                const stateClass = i < assignmentsCount ? 'hop-slot hop-slot-filled' : 'hop-slot';
+                return `<span class="${stateClass}"></span>`;
+            }).join('');
+        }
+
+        function tagsMarkup(prayerTypes) {
+            if (!prayerTypes || !prayerTypes.length) {
+                return '<span class="hop-muted">Nao especificado</span>';
+            }
+
+            return prayerTypes
+                .map((item) => `<span class="hop-tag"><i class="fas fa-hands-praying"></i>${item}</span>`)
+                .join('');
+        }
+
+        function detailMarkup(data) {
+            const avatarLetter = (data.requester_name || 'F').charAt(0).toUpperCase();
+            const nameParts = (data.requester_name || '').split(' ');
+            const displayName = nameParts.slice(0, 2).join(' ');
+
+            return `
+                <section class="hop-modal">
+                    <header class="hop-head">
+                        <div class="hop-avatar">${avatarLetter}</div>
+                        <div>
+                            <h2 class="hop-title">Familia ${displayName}</h2>
+                            <p class="hop-subtitle"><i class="fas fa-location-dot"></i>${data.neighborhood || 'Bairro nao informado'}</p>
+                        </div>
+                    </header>
+
+                    <div class="hop-body">
+                        <div class="hop-grid">
+                            <article class="hop-card hop-card-blue">
+                                <p class="hop-label">Tamanho da Familia</p>
+                                <p class="hop-value">${data.family_size}</p>
+                                <p class="hop-muted">pessoa${data.family_size > 1 ? 's' : ''}</p>
+                            </article>
+
+                            <article class="hop-card hop-card-teal">
+                                <p class="hop-label">Vagas Disponiveis</p>
+                                <div class="hop-slots">${slotsMarkup(data.assignments_count || 0)}</div>
+                                <p class="hop-muted">${data.assignments_count || 0}/3 membros</p>
+                            </article>
+                        </div>
+
+                        <div class="hop-block">
+                            <p class="hop-label">Pedidos de Oracao</p>
+                            <div class="hop-tags">${tagsMarkup(data.prayer_types)}</div>
+                        </div>
+
+                        ${data.prayer_description ? `
+                            <blockquote class="hop-quote">
+                                <i class="fas fa-quote-left"></i>
+                                &nbsp;"${data.prayer_description}"
+                            </blockquote>
+                        ` : ''}
+
+                        ${data.show_phone && data.phone ? `
+                            <div class="hop-contact">
+                                <p class="hop-label"><i class="fas fa-phone"></i> Contato da Familia</p>
+                                <p class="hop-contact-number">${data.phone}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                </section>
+            `;
+        }
+
+        function showHouseDetails(houseId) {
+            fetch(`/house-of-peace/${houseId}/details/`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.success) return;
+
+                    Swal.fire({
+                        title: '',
+                        html: detailMarkup(data),
+                        showCancelButton: true,
+                        position: isMobileViewport() ? 'bottom' : 'center',
+                        confirmButtonText: '<i class="fas fa-hand-holding-heart mr-2"></i>Aceitar Casa de Paz',
+                        cancelButtonText: 'Fechar',
+                        confirmButtonColor: '#6BA3D8',
+                        cancelButtonColor: '#8A93A3',
+                        width: isMobileViewport() ? undefined : 620,
+                        customClass: modalClasses(),
+                    }).then((result) => {
+                        if (result.isConfirmed) {
+                            acceptHouseOfPeace(houseId, data.requester_name);
+                        }
+                    });
+                });
+        }
+
+        function confirmMarkup(personName) {
+            const nameParts = (personName || '').split(' ');
+            const displayName = nameParts.slice(0, 2).join(' ');
+            
+            return `
+                <section class="hop-modal">
+                    <header class="hop-head">
+                        <div class="hop-avatar"><i class="fas fa-house"></i></div>
+                        <div>
+                            <h2 class="hop-title">Confirmar</h2>
+                            <p class="hop-subtitle">Revisão final antes de continuar</p>
+                        </div>
+                    </header>
+                    <div class="hop-body">
+                        <div class="hop-confirm-panel">
+                            <div class="hop-confirm-row">
+                                <p class="hop-confirm-key">Familia</p>
+                                <p class="hop-confirm-value">${displayName}</p>
+                            </div>
+                        </div>
+                        <p class="hop-confirm-alert">
+                            <i class="fas fa-circle-exclamation"></i>
+                            Ao confirmar, esta Casa de Paz sera vinculada ao seu acompanhamento e o contato da familia sera liberado para organizacao da visita.
+                        </p>
+                    </div>
+                </section>
+            `;
+        }
+
+        function successMarkup(personName, phone) {
+            const nameParts = (personName || '').split(' ');
+            const displayName = nameParts.slice(0, 2).join(' ');
+            
+            return `
+                <section class="hop-modal">
+                    <header class="hop-head">
+                        <div class="hop-avatar" style="background:#6BA3D8;"><i class="fas fa-check"></i></div>
+                        <div>
+                            <h2 class="hop-title" style="color:#2E5F8E;">Casa de Paz Aceita</h2>
+                            <p class="hop-subtitle" style="color:#6BA3D8;">agora voce pode agendar</p>
+                        </div>
+                    </header>
+                    <div class="hop-body">
+                        <p class="hop-note hop-success">
+                            Voce aceitou a Casa de Paz da familia <strong>${displayName}</strong>.
+                        </p>
+                        <div class="hop-contact" style="border-color:rgba(107,163,216,0.2);background:linear-gradient(160deg,rgba(107,163,216,0.1),rgba(107,163,216,0.03));">
+                            <p class="hop-label"><i class="fas fa-phone"></i> Contato</p>
+                            <p class="hop-contact-number">${phone || 'Nao informado'}</p>
+                        </div>
+                    </div>
+                </section>
+            `;
+        }
+
+        function acceptHouseOfPeace(houseId, personName) {
+            Swal.fire({
+                title: '',
+                html: confirmMarkup(personName),
+                showCancelButton: true,
+                position: isMobileViewport() ? 'bottom' : 'center',
+                confirmButtonColor: '#6BA3D8',
+                cancelButtonColor: '#8A93A3',
+                confirmButtonText: '<i class="fas fa-check-circle mr-2"></i><span class="inline-block mt-1">Confirmar Aceite</span>',
+                cancelButtonText: '<span class="inline-block mt-1">Revisar depois</span>',
+                width: isMobileViewport() ? undefined : 620,
+                customClass: modalClasses(),
+            }).then(result => {
+                if (!result.isConfirmed) return;
+
+                Swal.fire({
+                    title: '',
+                    html: '<div style="padding:1.2rem 1rem;text-align:center;color:#2E5F8E;font-weight:700;">Processando...</div>',
+                    position: isMobileViewport() ? 'bottom' : 'center',
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    didOpen: () => Swal.showLoading(),
+                    customClass: { popup: isMobileViewport() ? 'hop-sheet' : 'hop-popup' },
+                });
+
+                fetch(`/house-of-peace/${houseId}/accept/`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCookie('csrftoken'), 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                title: '',
+                                html: successMarkup(personName, data.phone),
+                                icon: 'success',
+                                position: isMobileViewport() ? 'bottom' : 'center',
+                                confirmButtonColor: '#6BA3D8',
+                                confirmButtonText: '<i class="fas fa-list mr-2"></i>Minhas Casas de Paz',
+                                width: isMobileViewport() ? undefined : 620,
+                                customClass: modalClasses(),
+                            }).then(() => window.location.href = '/house-of-peace/my/');
+                        } else {
+                            Swal.fire({
+                                title: 'Erro',
+                                text: data.error || 'Erro desconhecido',
+                                icon: 'error',
+                                position: isMobileViewport() ? 'bottom' : 'center',
+                                confirmButtonColor: '#EF4444',
+                                customClass: { popup: isMobileViewport() ? 'hop-sheet' : 'hop-popup', confirmButton: 'hop-confirm' },
+                            });
+                        }
+                    })
+                    .catch(() => Swal.fire({
+                        title: 'Erro de conexao',
+                        text: 'Ocorreu um erro ao processar sua solicitacao. Tente novamente.',
+                        icon: 'error',
+                        position: isMobileViewport() ? 'bottom' : 'center',
+                        confirmButtonColor: '#EF4444',
+                        customClass: { popup: isMobileViewport() ? 'hop-sheet' : 'hop-popup', confirmButton: 'hop-confirm' },
+                    }));
+            });
+        }
+
+        function getCookie(name) {
+            let v = null;
+            if (document.cookie && document.cookie !== '') {
+                for (const c of document.cookie.split(';')) {
+                    const t = c.trim();
+                    if (t.startsWith(name + '=')) { v = decodeURIComponent(t.slice(name.length + 1)); break; }
+                }
+            }
+            return v;
+        }
+    </script>
+{% endblock %}

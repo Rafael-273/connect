@@ -20,43 +20,109 @@
     }
 
     /* Classes customizadas com cores da igreja */
-    .bg-church-red { background-color: var(--church-red) !important; }
-    .bg-church-dark { background-color: var(--church-dark) !important; }
-    .bg-church-red-light { background-color: var(--church-red-light) !important; }
-    .bg-church-cream { background-color: var(--church-cream) !important; }
-    .bg-church-warm { background-color: var(--church-warm) !important; }
-    .text-church-red { color: var(--church-red) !important; }
-    .text-church-dark { color: var(--church-dark) !important; }
-    .text-church-danger { color: var(--church-danger) !important; }
-    .text-church-gold { color: var(--church-gold) !important; }
-    .text-church-cream { color: var(--church-cream) !important; }
-    .border-church-red { border-color: var(--church-red) !important; }
-    .border-church-gold { border-color: var(--church-gold) !important; }
+    .bg-church-red {
+        background-color: var(--church-red) !important;
+    }
+
+    .bg-church-dark {
+        background-color: var(--church-dark) !important;
+    }
+
+    .bg-church-red-light {
+        background-color: var(--church-red-light) !important;
+    }
+
+    .bg-church-cream {
+        background-color: var(--church-cream) !important;
+    }
+
+    .bg-church-warm {
+        background-color: var(--church-warm) !important;
+    }
+
+    .text-church-red {
+        color: var(--church-red) !important;
+    }
+
+    .text-church-dark {
+        color: var(--church-dark) !important;
+    }
+
+    .text-church-danger {
+        color: var(--church-danger) !important;
+    }
+
+    .text-church-gold {
+        color: var(--church-gold) !important;
+    }
+
+    .text-church-cream {
+        color: var(--church-cream) !important;
+    }
+
+    .border-church-red {
+        border-color: var(--church-red) !important;
+    }
+
+    .border-church-gold {
+        border-color: var(--church-gold) !important;
+    }
+
     .bg-gradient-church {
         background: linear-gradient(135deg, var(--church-red) 0%, var(--church-dark) 100%) !important;
     }
+
     .bg-gradient-warm {
         background: linear-gradient(135deg, var(--church-red-light) 0%, var(--church-red) 100%) !important;
     }
-    
-    .hover-church-red:hover { color: var(--church-red) !important; }
-    .hover-church-dark:hover { color: var(--church-dark) !important; }
-    .hover-border-church-red:hover { border-color: var(--church-red) !important; }
+
+    .hover-church-red:hover {
+        color: var(--church-red) !important;
+    }
+
+    .hover-church-dark:hover {
+        color: var(--church-dark) !important;
+    }
+
+    .hover-border-church-red:hover {
+        border-color: var(--church-red) !important;
+    }
 
     /* Animações de entrada */
     @keyframes slideDown {
-        from { transform: translateY(-30px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
+        from {
+            transform: translateY(-30px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
     }
 
     @keyframes fadeInUp {
-        from { transform: translateY(20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
+        from {
+            transform: translateY(20px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
     }
 
     @keyframes scaleIn {
-        from { transform: scale(0.95); opacity: 0; }
-        to { transform: scale(1); opacity: 1; }
+        from {
+            transform: scale(0.95);
+            opacity: 0;
+        }
+
+        to {
+            transform: scale(1);
+            opacity: 1;
+        }
     }
 
     .animate-slideDown {
@@ -101,7 +167,7 @@
         transform: translate(-50%, 0) !important;
         opacity: 1 !important;
     }
-    
+
     /* Loading Overlay */
     .loading-overlay {
         display: none;
@@ -115,16 +181,21 @@
         justify-content: center;
         align-items: center;
     }
-    
+
     .loading-overlay.active {
         display: flex;
     }
-    
+
     @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
     }
-    
+
     .spinner {
         border: 4px solid rgba(255, 255, 255, 0.3);
         border-top: 4px solid #C90905;
@@ -140,20 +211,25 @@
         overflow: hidden;
         transition: max-height 0.4s ease, padding 0.3s ease;
     }
+
     .accordion-content.open {
         max-height: 2000px;
     }
+
     .accordion-chevron {
         transition: transform 0.3s ease;
         flex-shrink: 0;
     }
+
     .accordion-chevron.open {
         transform: rotate(180deg);
     }
+
     .accordion-header {
         cursor: pointer;
         transition: background 0.2s ease;
     }
+
     .accordion-header:hover .accordion-icon-wrap {
         opacity: 0.85;
     }
@@ -168,7 +244,11 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
     }
-    .ministry-tab-bar::-webkit-scrollbar { display: none; }
+
+    .ministry-tab-bar::-webkit-scrollbar {
+        display: none;
+    }
+
     .ministry-tab-btn {
         display: inline-flex;
         align-items: center;
@@ -185,6 +265,7 @@
         flex-shrink: 0;
         cursor: pointer;
     }
+
     .ministry-tab-btn.active {
         background-color: #C90905;
         color: white;
@@ -230,559 +311,755 @@
 {% endblock %}
 
 {% block content %}
-    <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="loading-overlay">
-        <div class="text-center">
-            <div class="spinner mx-auto mb-4"></div>
-            <p class="text-white font-bold text-lg">Salvando palavra...</p>
-        </div>
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="text-center">
+        <div class="spinner mx-auto mb-4"></div>
+        <p class="text-white font-bold text-lg">Salvando palavra...</p>
     </div>
+</div>
 
-    <!-- Header + Hero unificados -->
-    <section class="relative overflow-hidden animate-slideDown px-4 py-2" style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
-        <!-- Elementos Decorativos -->
-        <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-16 opacity-20" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.1), transparent);"></div>
-        <div class="absolute top-0 left-0 w-48 h-48 rounded-full -ml-24 -mt-16 opacity-20" style="background: radial-gradient(circle, rgba(230, 57, 70, 0.1), transparent);"></div>
-        
-        <div class="relative z-10">
-            <header class="p-4 sm:p-6 md:p-8">
-                <div class="flex items-center justify-between gap-4">
-                    <!-- Info do Usuário -->
-                    <div class="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-                        <div class="relative flex-shrink-0">
-                            <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center overflow-hidden" style="background-color: #C90905;">
-                                {% if member.profile_picture %}
-                                    <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}" class="w-full h-full object-cover">
-                                {% else %}
-                                    <i class="fas fa-user text-white text-2xl sm:text-3xl"></i>
-                                {% endif %}
-                            </div>
-                        </div>
-                        
-                        <div class="min-w-0 flex-1">
-                            <p class="text-xs sm:text-xs text-gray-600 tracking-wide">Bem-vindo(a)</p>
-                            <h2 class="font-black text-xl sm:text-2xl text-gray-900 truncate leading-tight">{{ member.name }}</h2>
-                            <p class="text-sm sm:text-sm text-gray-600 font-medium hidden sm:block">Família Filadélfia</p>
+<!-- Header + Hero unificados -->
+<section class="relative overflow-hidden animate-slideDown px-4 py-2"
+    style="background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff); border-color: rgba(201, 9, 5, 0.15);">
+    <!-- Elementos Decorativos -->
+    <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-16 opacity-20"
+        style="background: radial-gradient(circle, rgba(201, 9, 5, 0.1), transparent);"></div>
+    <div class="absolute top-0 left-0 w-48 h-48 rounded-full -ml-24 -mt-16 opacity-20"
+        style="background: radial-gradient(circle, rgba(230, 57, 70, 0.1), transparent);"></div>
+
+    <div class="relative z-10">
+        <header class="p-4 sm:p-6 md:p-8">
+            <div class="flex items-center justify-between gap-4">
+                <!-- Info do Usuário -->
+                <div class="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                    <div class="relative flex-shrink-0">
+                        <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center overflow-hidden"
+                            style="background-color: #C90905;">
+                            {% if member.profile_picture %}
+                            <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}"
+                                class="w-full h-full object-cover">
+                            {% else %}
+                            <i class="fas fa-user text-white text-2xl sm:text-3xl"></i>
+                            {% endif %}
                         </div>
                     </div>
 
-                    <!-- Logo -->
-                    <div class="flex-shrink-0">
-                        <img src="{% static 'assets/red_icon.png' %}" alt="Igreja Filadelfia" class="w-12 h-12 sm:w-16 sm:h-16 object-contain">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs sm:text-xs text-gray-600 tracking-wide">Bem-vindo(a)</p>
+                        <h2 class="font-black text-xl sm:text-2xl text-gray-900 truncate leading-tight">{{member.name}}</h2>
+                        <p class="text-sm sm:text-sm text-gray-600 font-medium hidden sm:block">Família Filadélfia</p>
                     </div>
                 </div>
-            </header>
-        </div>
-    </section>
 
-    <!-- Messages -->
-    {% if messages %}
-    <div class="px-4 md:px-8 pt-2 max-w-4xl mx-auto">
-        {% for message in messages %}
-        <div class="message-alert px-4 py-3 rounded-xl mb-3 text-sm sm:text-sm font-bold border shadow-sm flex items-center gap-3
+                <!-- Logo -->
+                <div class="flex-shrink-0">
+                    <img src="{% static 'assets/red_icon.png' %}" alt="Igreja Filadelfia"
+                        class="w-12 h-12 sm:w-16 sm:h-16 object-contain">
+                </div>
+            </div>
+        </header>
+    </div>
+</section>
+
+<!-- Messages -->
+{% if messages %}
+<div class="px-4 md:px-8 pt-2 max-w-4xl mx-auto">
+    {% for message in messages %}
+    <div class="message-alert px-4 py-3 rounded-xl mb-3 text-sm sm:text-sm font-bold border shadow-sm flex items-center gap-3
             {% if message.tags == 'error' %}bg-red-50 border-red-100 text-red-600
             {% elif message.tags == 'success' %}bg-green-50 border-green-100 text-green-700
             {% elif message.tags == 'warning' %}bg-yellow-50 border-yellow-100 text-yellow-700
-            {% else %}bg-blue-50 border-blue-100 text-blue-600{% endif %}"
-            data-message-id="{{ forloop.counter }}">
-            <i class="fas fa-{% if message.tags == 'error' %}exclamation-circle{% elif message.tags == 'success' %}check-circle{% elif message.tags == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
-            <span class="flex-1">{{ message }}</span>
-            <button onclick="closeMessage(this)" class="ml-2 hover:opacity-70">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        {% endfor %}
+            {% else %}bg-blue-50 border-blue-100 text-blue-600{% endif %}" data-message-id="{{ forloop.counter }}">
+        <i
+            class="fas fa-{% if message.tags == 'error' %}exclamation-circle{% elif message.tags == 'success' %}check-circle{% elif message.tags == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+        <span class="flex-1">{{ message }}</span>
+        <button onclick="closeMessage(this)" class="ml-2 hover:opacity-70">
+            <i class="fas fa-times"></i>
+        </button>
     </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<main class="px-4 md:px-8 pt-2 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400"
+    style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
+
+    <!-- Seção de Boas-Vindas para Novos Membros (sem vínculos) -->
+    {% if is_new_member %}
+    <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12"
+        style="background: linear-gradient(135deg, #ffffff 0%, #fef7ed 50%, #ffffff 100%); border-color: rgba(201, 9, 5, 0.2);">
+        <!-- Elementos Decorativos -->
+        <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20"
+            style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3), transparent);"></div>
+        <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-20"
+            style="background: radial-gradient(circle, rgba(201, 9, 5, 0.2), transparent);"></div>
+
+        <div class="relative z-10 p-6 sm:p-8 md:p-10 flex flex-col items-center text-center">
+            <!-- Ícone de Boas-Vindas -->
+            <div class="mb-6">
+                <div class="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 mx-auto rounded-full flex items-center justify-center"
+                    style="background-color: #C90905; box-shadow: 0 10px 30px rgba(201, 9, 5, 0.3);">
+                    <i class="fas fa-heart text-white text-3xl sm:text-4xl md:text-5xl"></i>
+                </div>
+            </div>
+
+            <!-- Título e Mensagem -->
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-4">
+                Bem-vindo à <span style="color: #C90905;">Família Filadélfia!</span>
+            </h2>
+            <p class="text-base sm:text-lg text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
+                Estamos muito felizes em ter você conosco, <strong style="color: #C90905;">{{ member.name }}</strong>!
+                Seu cadastro foi realizado com sucesso e em breve você receberá mais informações sobre como participar
+                ativamente da nossa igreja.
+            </p>
+
+            <!-- Cards de Informação -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 max-w-4xl mx-auto">
+                <!-- Card 1 -->
+                <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                    style="border-color: rgba(201, 9, 5, 0.2);">
+                    <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center"
+                        style="background: rgba(201, 9, 5, 0.1);">
+                        <i class="fas fa-users text-xl" style="color: #C90905;"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-900 mb-2">Ministérios</h3>
+                    <p class="text-sm text-gray-600">Em breve você será vinculado a um ministério onde poderá servir</p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                    style="border-color: rgba(245, 158, 11, 0.3);">
+                    <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center"
+                        style="background: rgba(245, 158, 11, 0.1);">
+                        <i class="fas fa-calendar-alt text-xl" style="color: #F59E0B;"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-900 mb-2">Escalas</h3>
+                    <p class="text-sm text-gray-600">Você será notificado quando for escalado para atividades</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
+                    style="border-color: rgba(230, 57, 70, 0.3);">
+                    <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center"
+                        style="background: rgba(230, 57, 70, 0.1);">
+                        <i class="fas fa-user-graduate text-xl" style="color: #E63946;"></i>
+                    </div>
+                    <h3 class="font-bold text-gray-900 mb-2">Consolidação</h3>
+                    <p class="text-sm text-gray-600">Quando estiver disponível, poderá ajudar no acompanhamento de novos
+                        convertidos</p>
+                </div>
+            </div>
+
+            <!-- Botão de Ação -->
+            <div class="flex flex-col w-full md:w-1/2 sm:flex-row gap-3 justify-center items-center">
+                <a href="{% url 'member_profile' %}"
+                    class="w-full inline-flex text-center items-center gap-2 px-6 py-3 text-white font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                    style="background-color: #C90905;">
+                    <i class="fas fa-user-circle"></i>
+                    Completar Perfil
+                </a>
+                <a href="{% url 'home' %}"
+                    class="w-full inline-flex text-center items-center gap-2 px-6 py-3 font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 border-2"
+                    style="color: #C90905; border-color: #C90905; background: white;">
+                    <i class="fas fa-home"></i>
+                    Explorar a Igreja
+                </a>
+            </div>
+
+            <!-- Informação de Contato -->
+            <div class="mt-8 p-4 rounded-lg" style="background: rgba(201, 9, 5, 0.05);">
+                <p class="text-sm text-gray-700">
+                    <i class="fas fa-info-circle mr-2" style="color: #C90905;"></i>
+                    Dúvidas? Entre em contato com a liderança da igreja
+                </p>
+            </div>
+        </div>
+    </section>
     {% endif %}
 
-    <main class="px-4 md:px-8 pt-2 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400" style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
-        
-        <!-- Seção de Boas-Vindas para Novos Membros (sem vínculos) -->
-        {% if is_new_member %}
-        <section class="relative overflow-hidden rounded-xl sm:rounded-2xl border-2 mb-6 sm:mb-8 md:mb-12" style="background: linear-gradient(135deg, #ffffff 0%, #fef7ed 50%, #ffffff 100%); border-color: rgba(201, 9, 5, 0.2);">
-            <!-- Elementos Decorativos -->
-            <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-20" style="background: radial-gradient(circle, rgba(245, 158, 11, 0.3), transparent);"></div>
-            <div class="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 opacity-20" style="background: radial-gradient(circle, rgba(201, 9, 5, 0.2), transparent);"></div>
-            
-            <div class="relative z-10 p-6 sm:p-8 md:p-10 flex flex-col items-center text-center">
-                <!-- Ícone de Boas-Vindas -->
-                <div class="mb-6">
-                    <div class="w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 mx-auto rounded-full flex items-center justify-center" style="background-color: #C90905; box-shadow: 0 10px 30px rgba(201, 9, 5, 0.3);">
-                        <i class="fas fa-heart text-white text-3xl sm:text-4xl md:text-5xl"></i>
+
+    <!-- Cards de Ministério -->
+    {% if is_ministration_member or can_consolidate or is_boas_vindas_member or is_moderacao_member or member_schedules or can_music_member or is_house_of_peace_member%}
+    <div id="ministry-cards-container" class="space-y-3">
+
+        {% if is_ministration_member %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
+            data-card-label="Palavras de Conhecimento" data-card-icon="lightbulb"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <!-- Header clicável -->
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5"
+                aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style="background-color: #C90905;">
+                        <i class="fas fa-lightbulb text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                            Palavras de <span style="color: #C90905;">Conhecimento</span>
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-0.5">Registre palavras e curas</p>
                     </div>
                 </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
 
-                <!-- Título e Mensagem -->
-                <h2 class="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-4">
-                    Bem-vindo à <span style="color: #C90905;">Família Filadélfia!</span>
-                </h2>
-                <p class="text-base sm:text-lg text-gray-600 mb-8 max-w-2xl mx-auto leading-relaxed">
-                    Estamos muito felizes em ter você conosco, <strong style="color: #C90905;">{{ member.name }}</strong>! 
-                    Seu cadastro foi realizado com sucesso e em breve você receberá mais informações sobre como participar ativamente da nossa igreja.
-                </p>
-
-                <!-- Cards de Informação -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8 max-w-4xl mx-auto">
-                    <!-- Card 1 -->
-                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(201, 9, 5, 0.2);">
-                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
-                            <i class="fas fa-users text-xl" style="color: #C90905;"></i>
+            <!-- Conteúdo colapsável -->
+            <div class="accordion-content">
+                <div class="px-4 pb-4 sm:px-5 sm:pb-5">
+                    <!-- Formulário Rápido -->
+                    <form method="post" action="{% url 'word_of_knowledge_create' %}"
+                        class="bg-white rounded-xl p-4 sm:p-5 border-2 mb-4" style="border-color: rgba(201, 9, 5, 0.3);"
+                        onsubmit="showLoadingOverlay(event)">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="block text-sm font-bold mb-2" style="color: #C90905;">
+                                <i class="fas fa-edit mr-2"></i><span class="inline-block mt-1">Registrar Nova Palavra</span>
+                            </label>
+                            <textarea name="word" rows="5" required
+                                class="w-full px-4 py-3 border-2 rounded-xl bg-gray-50 focus:bg-white focus:outline-none transition-all resize-none focus:border-red-600 text-sm"
+                                style="border-color: rgba(201, 9, 5, 0.2); min-height: 8rem;"
+                                placeholder="Escreva a palavra de conhecimento aqui..."></textarea>
                         </div>
-                        <h3 class="font-bold text-gray-900 mb-2">Ministérios</h3>
-                        <p class="text-sm text-gray-600">Em breve você será vinculado a um ministério onde poderá servir</p>
-                    </div>
+                        <button type="submit"
+                            class="w-full sm:w-auto px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 text-sm"
+                            style="background-color: #C90905;">
+                            <i class="fas fa-save mr-2"></i><span class="inline-block mt-1">Enviar</span>
+                        </button>
+                    </form>
 
-                    <!-- Card 2 -->
-                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(245, 158, 11, 0.3);">
-                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(245, 158, 11, 0.1);">
-                            <i class="fas fa-calendar-alt text-xl" style="color: #F59E0B;"></i>
-                        </div>
-                        <h3 class="font-bold text-gray-900 mb-2">Escalas</h3>
-                        <p class="text-sm text-gray-600">Você será notificado quando for escalado para atividades</p>
-                    </div>
-
-                    <!-- Card 3 -->
-                    <div class="bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg" style="border-color: rgba(230, 57, 70, 0.3);">
-                        <div class="w-12 h-12 mx-auto mb-3 rounded-lg flex items-center justify-center" style="background: rgba(230, 57, 70, 0.1);">
-                            <i class="fas fa-user-graduate text-xl" style="color: #E63946;"></i>
-                        </div>
-                        <h3 class="font-bold text-gray-900 mb-2">Consolidação</h3>
-                        <p class="text-sm text-gray-600">Quando estiver disponível, poderá ajudar no acompanhamento de novos convertidos</p>
-                    </div>
-                </div>
-
-                <!-- Botão de Ação -->
-                <div class="flex flex-col w-full md:w-1/2 sm:flex-row gap-3 justify-center items-center">
-                    <a href="{% url 'member_profile' %}" class="w-full inline-flex text-center items-center gap-2 px-6 py-3 text-white font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-xl" style="background-color: #C90905;">
-                        <i class="fas fa-user-circle"></i>
-                        Completar Perfil
-                    </a>
-                    <a href="{% url 'home' %}" class="w-full inline-flex text-center items-center gap-2 px-6 py-3 font-bold rounded-xl transition-all duration-300 hover:-translate-y-1 border-2" style="color: #C90905; border-color: #C90905; background: white;">
-                        <i class="fas fa-home"></i>
-                        Explorar a Igreja
-                    </a>
-                </div>
-
-                <!-- Informação de Contato -->
-                <div class="mt-8 p-4 rounded-lg" style="background: rgba(201, 9, 5, 0.05);">
-                    <p class="text-sm text-gray-700">
-                        <i class="fas fa-info-circle mr-2" style="color: #C90905;"></i>
-                        Dúvidas? Entre em contato com a liderança da igreja
-                    </p>
-                </div>
-            </div>
-        </section>
-        {% endif %}
-        
-        
-        <!-- Cards de Ministério -->
-        {% if is_ministration_member or can_consolidate or is_boas_vindas_member or is_moderacao_member or member_schedules %}
-        <div id="ministry-cards-container" class="space-y-3">
-
-            {% if is_ministration_member %}
-            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Palavras de Conhecimento" data-card-icon="lightbulb" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                <!-- Header clicável -->
-                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                    <div class="flex items-center gap-3 sm:gap-4">
-                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                            <i class="fas fa-lightbulb text-white text-lg sm:text-xl"></i>
-                        </div>
-                        <div class="text-left">
-                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                Palavras de <span style="color: #C90905;">Conhecimento</span>
-                            </h3>
-                            <p class="text-sm text-gray-500 mt-0.5">Registre palavras e curas</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                </button>
-
-                <!-- Conteúdo colapsável -->
-                <div class="accordion-content">
-                    <div class="px-4 pb-4 sm:px-5 sm:pb-5">
-                        <!-- Formulário Rápido -->
-                        <form method="post" action="{% url 'word_of_knowledge_create' %}" class="bg-white rounded-xl p-4 sm:p-5 border-2 mb-4" style="border-color: rgba(201, 9, 5, 0.3);" onsubmit="showLoadingOverlay(event)">
-                            {% csrf_token %}
-                            <div class="mb-3">
-                                <label class="block text-sm font-bold mb-2" style="color: #C90905;">
-                                    <i class="fas fa-edit mr-2"></i>Registrar Nova Palavra
-                                </label>
-                                <textarea
-                                    name="word"
-                                    rows="5"
-                                    required
-                                    class="w-full px-4 py-3 border-2 rounded-xl bg-gray-50 focus:bg-white focus:outline-none transition-all resize-none focus:border-red-600 text-sm"
-                                    style="border-color: rgba(201, 9, 5, 0.2); min-height: 8rem;"
-                                    placeholder="Escreva a palavra de conhecimento aqui..."></textarea>
-                            </div>
-                            <button type="submit" class="w-full sm:w-auto px-6 py-3 text-white font-bold rounded-xl transition-all hover:-translate-y-0.5 text-sm" style="background-color: #C90905;">
-                                <i class="fas fa-save mr-2"></i>Enviar
-                            </button>
-                        </form>
-
-                        <!-- Links Rápidos -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <a href="{% url 'word_of_knowledge_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
-                                        <i class="fas fa-list text-sm" style="color: #C90905;"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-sm font-bold text-gray-900">Palavras e Curas</h4>
-                                        <p class="text-xs text-gray-500">Ver histórico</p>
-                                    </div>
+                    <!-- Links Rápidos -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <a href="{% url 'word_of_knowledge_list' %}"
+                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+                            style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style="background: rgba(201, 9, 5, 0.1);">
+                                    <i class="fas fa-list text-sm" style="color: #C90905;"></i>
                                 </div>
-                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
-                            </a>
-                            <a href="{% url 'service_words_view' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(230, 57, 70, 0.1);">
-                                        <i class="fas fa-calendar-alt text-sm" style="color: #E63946;"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-sm font-bold text-gray-900">Próximo Culto</h4>
-                                        <p class="text-xs text-gray-500">Ver palavras do culto</p>
-                                    </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900">Palavras e Curas</h4>
+                                    <p class="text-xs text-gray-500">Ver histórico</p>
                                 </div>
-                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #E63946;"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {% if can_consolidate %}
-            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Consolidação" data-card-icon="user-graduate" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                <!-- Header clicável -->
-                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                    <div class="flex items-center gap-3 sm:gap-4">
-                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                            <i class="fas fa-user-graduate text-white text-lg sm:text-xl"></i>
-                        </div>
-                        <div class="text-left">
-                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                Ministério de <span style="color: #C90905;">Consolidação</span>
-                            </h3>
-                            <p class="text-sm text-gray-500 mt-0.5">{{ followups_responsible|length }} pessoa{{ followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                </button>
-
-                <!-- Conteúdo colapsável -->
-                <div class="accordion-content">
-                    <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                        <a href="{% url 'member_consolidation' %}" class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                            <div>
-                                <h4 class="text-base font-black text-gray-900 mb-1">Ver Consolidados</h4>
-                                <p class="text-sm text-gray-500">Acesse todas as informações sobre sua consolidação</p>
                             </div>
-                            <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
+                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
+                                style="color: #C90905;"></i>
+                        </a>
+                        <a href="{% url 'service_words_view' %}"
+                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+                            style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style="background: rgba(230, 57, 70, 0.1);">
+                                    <i class="fas fa-calendar-alt text-sm" style="color: #E63946;"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900">Próximo Culto</h4>
+                                    <p class="text-xs text-gray-500">Ver palavras do culto</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
+                                style="color: #E63946;"></i>
                         </a>
                     </div>
                 </div>
             </div>
-            {% endif %}
-
-            {% if is_boas_vindas_member %}
-            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Boas Vindas" data-card-icon="hand-holding-heart" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                <!-- Header clicável -->
-                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                    <div class="flex items-center gap-3 sm:gap-4">
-                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                            <i class="fas fa-hand-holding-heart text-white text-lg sm:text-xl"></i>
-                        </div>
-                        <div class="text-left">
-                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                Ministério de <span style="color: #C90905;">Boas Vindas</span>
-                            </h3>
-                            <p class="text-sm text-gray-500 mt-0.5">Cadastre e visualize visitantes</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                </button>
-
-                <!-- Conteúdo colapsável -->
-                <div class="accordion-content">
-                    <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <a href="{% url 'member_visitor_create' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
-                                        <i class="fas fa-user-plus text-sm" style="color: #C90905;"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-sm font-bold text-gray-900">Cadastrar Visitante</h4>
-                                        <p class="text-xs text-gray-500">Registrar novo visitante</p>
-                                    </div>
-                                </div>
-                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
-                            </a>
-                            <a href="{% url 'member_visitor_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(230, 57, 70, 0.1);">
-                                        <i class="fas fa-list text-sm" style="color: #E63946;"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-sm font-bold text-gray-900">Ver Visitantes</h4>
-                                        <p class="text-xs text-gray-500">Histórico de visitas</p>
-                                    </div>
-                                </div>
-                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #E63946;"></i>
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {% if is_moderacao_member %}
-            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Moderação" data-card-icon="clipboard-list" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                <!-- Header clicável -->
-                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                    <div class="flex items-center gap-3 sm:gap-4">
-                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                            <i class="fas fa-clipboard-list text-white text-lg sm:text-xl"></i>
-                        </div>
-                        <div class="text-left">
-                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                Ministério de <span style="color: #C90905;">Moderação</span>
-                            </h3>
-                            <p class="text-sm text-gray-500 mt-0.5">Visualize o roteiro do culto</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                </button>
-
-                <!-- Conteúdo colapsável -->
-                <div class="accordion-content">
-                    <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                        <a href="{% url 'member_roteiro' %}" class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                            <div>
-                                <h4 class="text-base font-black text-gray-900 mb-1">Roteiro de Culto</h4>
-                                <p class="text-sm text-gray-500">Acesse o roteiro com anúncios, datas e informações para o culto</p>
-                            </div>
-                            <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2" style="color: #C90905;"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {% if member_schedules %}
-            <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Escalas do Mês" data-card-icon="calendar-check" style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
-                <!-- Header clicável -->
-                <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
-                    <div class="flex items-center gap-3 sm:gap-4">
-                        <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                            <i class="fas fa-calendar-check text-white text-lg sm:text-xl"></i>
-                        </div>
-                        <div class="text-left">
-                            <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
-                                Escalas do <span style="color: #C90905;">Mês</span>
-                            </h3>
-                            <p class="text-sm text-gray-500 mt-0.5">{{ member_schedules|length }} escala{{ member_schedules|length|pluralize:"s" }} disponíve{{ member_schedules|length|pluralize:"l,is" }}</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
-                </button>
-
-                <!-- Conteúdo colapsável -->
-                <div class="accordion-content">
-                    <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
-                        <div class="flex flex-col gap-3">
-                            {% for schedule in member_schedules %}
-                            <a href="{% url 'member_schedule_detail' schedule.id %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(201, 9, 5, 0.1);">
-                                        <i class="fas fa-calendar-alt text-sm" style="color: #C90905;"></i>
-                                    </div>
-                                    <div>
-                                        <h4 class="text-sm font-bold text-gray-900">{{ schedule.title }}</h4>
-                                        <p class="text-xs text-gray-500">{{ schedule.ministry.name }} · {{ schedule.month }}/{{ schedule.year }}</p>
-                                    </div>
-                                </div>
-                                <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color: #C90905;"></i>
-                            </a>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
         </div>
         {% endif %}
-    </main>
 
-    {% include 'parciais/member_bottom_nav.html' with nav_active='home' %}
+        {% if can_consolidate %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
+            data-card-label="Consolidação" data-card-icon="user-graduate"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <!-- Header clicável -->
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5"
+                aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style="background-color: #C90905;">
+                        <i class="fas fa-user-graduate text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                            Ministério de <span style="color: #C90905;">Consolidação</span>
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-0.5">{{ followups_responsible|length }} pessoa{{
+                            followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
 
-    <script>
-        // Ministry cards: flat (≤2) or tabs (≥3)
-        function initMinistryCards() {
-            const container = document.getElementById('ministry-cards-container');
-            if (!container) return;
-            const cards = Array.from(container.querySelectorAll('[data-ministry-card]'));
-            if (cards.length === 0) return;
+            <!-- Conteúdo colapsável -->
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <a href="{% url 'member_consolidation' %}"
+                        class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1"
+                        style="border-color: rgba(201, 9, 5, 0.3);">
+                        <div>
+                            <h4 class="text-base font-black text-gray-900 mb-1">Ver Consolidados</h4>
+                            <p class="text-sm text-gray-500">Acesse todas as informações sobre sua consolidação</p>
+                        </div>
+                        <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2"
+                            style="color: #C90905;"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
-            if (cards.length <= 2) {
-                // Flat mode: expand all, remove toggle interaction
-                cards.forEach(card => {
-                    const content = card.querySelector('.accordion-content');
-                    const chevron = card.querySelector('.accordion-chevron');
-                    const btn = card.querySelector('.accordion-header');
-                    if (content) content.classList.add('open');
-                    if (chevron) chevron.style.display = 'none';
-                    if (btn) btn.style.pointerEvents = 'none';
-                });
-            } else {
-                // Tab mode
-                const tabBar = document.createElement('div');
-                tabBar.className = 'ministry-tab-bar';
+        {% if is_boas_vindas_member %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Boas Vindas"
+            data-card-icon="hand-holding-heart"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <!-- Header clicável -->
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5"
+                aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style="background-color: #C90905;">
+                        <i class="fas fa-hand-holding-heart text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                            Ministério de <span style="color: #C90905;">Boas Vindas</span>
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-0.5">Cadastre e visualize visitantes</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
 
-                cards.forEach((card, idx) => {
-                    const label = card.dataset.cardLabel || '';
-                    const icon = card.dataset.cardIcon || '';
+            <!-- Conteúdo colapsável -->
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <a href="{% url 'member_visitor_create' %}"
+                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+                            style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style="background: rgba(201, 9, 5, 0.1);">
+                                    <i class="fas fa-user-plus text-sm" style="color: #C90905;"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900">Cadastrar Visitante</h4>
+                                    <p class="text-xs text-gray-500">Registrar novo visitante</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
+                                style="color: #C90905;"></i>
+                        </a>
+                        <a href="{% url 'member_visitor_list' %}"
+                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+                            style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style="background: rgba(230, 57, 70, 0.1);">
+                                    <i class="fas fa-list text-sm" style="color: #E63946;"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900">Ver Visitantes</h4>
+                                    <p class="text-xs text-gray-500">Histórico de visitas</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
+                                style="color: #E63946;"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
-                    const tabBtn = document.createElement('button');
-                    tabBtn.type = 'button';
-                    tabBtn.className = 'ministry-tab-btn' + (idx === 0 ? ' active' : '');
-                    tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> ${label}`;
-                    tabBtn.addEventListener('click', () => switchMinistryTab(cards, tabBar, idx));
-                    tabBar.appendChild(tabBtn);
+        {% if is_moderacao_member %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Moderação"
+            data-card-icon="clipboard-list"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <!-- Header clicável -->
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5"
+                aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style="background-color: #C90905;">
+                        <i class="fas fa-clipboard-list text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                            Ministério de <span style="color: #C90905;">Moderação</span>
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-0.5">Visualize o roteiro do culto</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
 
-                    // Hide header chevron & disable click
-                    const chevron = card.querySelector('.accordion-chevron');
-                    const headerBtn = card.querySelector('.accordion-header');
-                    if (chevron) chevron.style.display = 'none';
-                    if (headerBtn) headerBtn.style.pointerEvents = 'none';
+            <!-- Conteúdo colapsável -->
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <a href="{% url 'member_roteiro' %}"
+                        class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1"
+                        style="border-color: rgba(201, 9, 5, 0.3);">
+                        <div>
+                            <h4 class="text-base font-black text-gray-900 mb-1">Roteiro de Culto</h4>
+                            <p class="text-sm text-gray-500">Acesse o roteiro com anúncios, datas e informações para o
+                                culto</p>
+                        </div>
+                        <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2"
+                            style="color: #C90905;"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
-                    // Show first, hide rest
-                    const content = card.querySelector('.accordion-content');
-                    if (idx === 0) {
-                        card.style.display = '';
-                        if (content) content.classList.add('open');
-                    } else {
-                        card.style.display = 'none';
-                    }
-                });
+        {% if can_music_member %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
+            data-card-label="Ministério de Louvor" data-card-icon="music"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <!-- Header clicável -->
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5"
+                aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style="background-color: #C90905;">
+                        <i class="fas fa-music text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                            Ministério de <span style="color: #C90905;">Louvor</span>
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-0.5">Acesse o repertório e cifras</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
 
-                container.insertBefore(tabBar, container.firstChild);
-            }
-        }
+            <!-- Conteúdo colapsável -->
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <a href="{% url 'music_user_list' %}"
+                        class="group flex items-center justify-between bg-white rounded-xl p-5 border-2 transition-all duration-300 hover:-translate-y-1"
+                        style="border-color: rgba(201, 9, 5, 0.3);">
+                        <div>
+                            <h4 class="text-base font-black text-gray-900 mb-1">Ver Repertório</h4>
+                            <p class="text-sm text-gray-500">Explore partituras e letras disponíveis</p>
+                        </div>
+                        <i class="fas fa-arrow-right text-xl transition-transform group-hover:translate-x-2"
+                            style="color: #C90905;"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
-        function switchMinistryTab(cards, tabBar, activeIdx) {
-            cards.forEach((card, idx) => {
+        {% if member_schedules %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
+            data-card-label="Escalas do Mês" data-card-icon="calendar-check"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <!-- Header clicável -->
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5"
+                aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style="background-color: #C90905;">
+                        <i class="fas fa-calendar-check text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                            Escalas do <span style="color: #C90905;">Mês</span>
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-0.5">{{ member_schedules|length }} escala{{
+                            member_schedules|length|pluralize:"s" }} disponíve{{
+                            member_schedules|length|pluralize:"l,is" }}</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
+
+            <!-- Conteúdo colapsável -->
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <div class="flex flex-col gap-3">
+                        {% for schedule in member_schedules %}
+                        <a href="{% url 'member_schedule_detail' schedule.id %}"
+                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+                            style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style="background: rgba(201, 9, 5, 0.1);">
+                                    <i class="fas fa-calendar-alt text-sm" style="color: #C90905;"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900">{{ schedule.title }}</h4>
+                                    <p class="text-xs text-gray-500">{{ schedule.ministry.name }} · {{ schedule.month
+                                        }}/{{ schedule.year }}</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
+                                style="color: #C90905;"></i>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if is_house_of_peace_member %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
+            data-card-label="Casa de Paz" data-card-icon="home"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <!-- Header clicável -->
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5"
+                aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0"
+                        style="background-color: #C90905;">
+                        <i class="fas fa-home text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                            <span style="color: #C90905;">Casa de Paz</span>
+                        </h3>
+                        <p class="text-sm text-gray-500 mt-0.5">Abra seu lar para um momento de oração</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
+
+            <!-- Conteúdo colapsável -->
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <div class="flex flex-col gap-3">
+                        <a href="{% url 'house_of_peace_available' %}"
+                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+                            style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style="background: rgba(201, 9, 5, 0.1);">
+                                    <i class="fas fa-door-open text-sm" style="color: #C90905;"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900">Casas de Paz Disponíveis</h4>
+                                    <p class="text-xs text-gray-500">Explore as casas aguardando visitantes</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
+                                style="color: #C90905;"></i>
+                        </a>
+
+                        <a href="{% url 'house_of_peace_my_list' %}"
+                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+                            style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style="background: rgba(201, 9, 5, 0.1);">
+                                    <i class="fas fa-list text-sm" style="color: #C90905;"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900">Minhas Casas de Paz</h4>
+                                    <p class="text-xs text-gray-500">Gerencie suas solicitações</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
+                                style="color: #C90905;"></i>
+                        </a>
+                        <a href="{% url 'house_of_peace_public_form' %}"
+                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+                            style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div class="flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style="background: rgba(201, 9, 5, 0.1);">
+                                    <i class="fas fa-plus text-sm" style="color: #C90905;"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-sm font-bold text-gray-900">Cadastrar Nova Casa</h4>
+                                    <p class="text-xs text-gray-500">Solicite uma visita em seu lar</p>
+                                </div>
+                            </div>
+                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
+                                style="color: #C90905;"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+    {% endif %}
+</main>
+
+{% include 'parciais/member_bottom_nav.html' with nav_active='home' %}
+
+<script>
+    // Ministry cards: flat (≤2) or tabs (≥3)
+    function initMinistryCards() {
+        const container = document.getElementById('ministry-cards-container');
+        if (!container) return;
+        const cards = Array.from(container.querySelectorAll('[data-ministry-card]'));
+        if (cards.length === 0) return;
+
+        if (cards.length <= 2) {
+            // Flat mode: expand all, remove toggle interaction
+            cards.forEach(card => {
                 const content = card.querySelector('.accordion-content');
-                if (idx === activeIdx) {
+                const chevron = card.querySelector('.accordion-chevron');
+                const btn = card.querySelector('.accordion-header');
+                if (content) content.classList.add('open');
+                if (chevron) chevron.style.display = 'none';
+                if (btn) btn.style.pointerEvents = 'none';
+            });
+        } else {
+            // Tab mode
+            const tabBar = document.createElement('div');
+            tabBar.className = 'ministry-tab-bar';
+
+            cards.forEach((card, idx) => {
+                const label = card.dataset.cardLabel || '';
+                const icon = card.dataset.cardIcon || '';
+
+                const tabBtn = document.createElement('button');
+                tabBtn.type = 'button';
+                tabBtn.className = 'ministry-tab-btn' + (idx === 0 ? ' active' : '');
+                tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> <span class="inline-block mt-1">${label}</span>`;
+                tabBtn.addEventListener('click', () => switchMinistryTab(cards, tabBar, idx));
+                tabBar.appendChild(tabBtn);
+
+                // Hide header chevron & disable click
+                const chevron = card.querySelector('.accordion-chevron');
+                const headerBtn = card.querySelector('.accordion-header');
+                if (chevron) chevron.style.display = 'none';
+                if (headerBtn) headerBtn.style.pointerEvents = 'none';
+
+                // Show first, hide rest
+                const content = card.querySelector('.accordion-content');
+                if (idx === 0) {
                     card.style.display = '';
                     if (content) content.classList.add('open');
                 } else {
                     card.style.display = 'none';
-                    if (content) content.classList.remove('open');
                 }
             });
-            tabBar.querySelectorAll('.ministry-tab-btn').forEach((btn, idx) => {
-                btn.classList.toggle('active', idx === activeIdx);
-            });
-        }
 
-        document.addEventListener('DOMContentLoaded', initMinistryCards);
+            container.insertBefore(tabBar, container.firstChild);
+        }
+    }
 
-        // Flag para prevenir múltiplas submissões
-        let isSubmitting = false;
-        
-        // Loading overlay function
-        function showLoadingOverlay(event) {
-            // Prevenir múltiplas submissões
-            if (isSubmitting) {
-                event.preventDefault();
-                return false;
+    function switchMinistryTab(cards, tabBar, activeIdx) {
+        cards.forEach((card, idx) => {
+            const content = card.querySelector('.accordion-content');
+            if (idx === activeIdx) {
+                card.style.display = '';
+                if (content) content.classList.add('open');
+            } else {
+                card.style.display = 'none';
+                if (content) content.classList.remove('open');
             }
-            
-            const form = event.target;
-            if (form.checkValidity()) {
-                isSubmitting = true;
-                document.getElementById('loadingOverlay').classList.add('active');
-                const submitButton = form.querySelector('button[type="submit"]');
-                if (submitButton) {
-                    submitButton.disabled = true;
-                }
-            }
-        }
-        
-        // Message handling
-        function closeMessage(btn) {
-            const alert = btn.closest('.message-alert');
-            alert.style.opacity = '0';
-            alert.style.transform = 'translateX(100%)';
-            setTimeout(() => alert.remove(), 300);
-        }
-        
-        // Auto-dismiss messages after 5 seconds
-        document.addEventListener('DOMContentLoaded', function() {
-            const alerts = document.querySelectorAll('.message-alert');
-            alerts.forEach((alert, index) => {
-                setTimeout(() => {
-                    alert.style.transition = 'all 0.3s ease-out';
-                    alert.style.opacity = '0';
-                    alert.style.transform = 'translateX(100%)';
-                    setTimeout(() => alert.remove(), 300);
-                }, 5000 + (index * 500));
-            });
         });
-        
-        // PWA Install Prompt (apenas mobile)
-        let deferredPrompt;
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        tabBar.querySelectorAll('.ministry-tab-btn').forEach((btn, idx) => {
+            btn.classList.toggle('active', idx === activeIdx);
+        });
+    }
 
-        console.log('=== PWA Debug ===');
-        console.log('isIOS:', isIOS);
-        console.log('isMobile:', isMobile);
-        console.log('isStandalone:', isStandalone);
-        console.log('User Agent:', navigator.userAgent);
-        console.log('Swal disponível:', typeof Swal !== 'undefined');
-        console.log('localStorage pwa-install-prompted:', localStorage.getItem('pwa-install-prompted'));
-        console.log('Protocol:', window.location.protocol);
-        console.log('Is HTTPS:', window.location.protocol === 'https:');
-        console.log('Is localhost:', window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    document.addEventListener('DOMContentLoaded', initMinistryCards);
 
-        // Verifica se está em HTTPS ou localhost
-        const isSecureContext = window.location.protocol === 'https:' || 
-                               window.location.hostname === 'localhost' || 
-                               window.location.hostname === '127.0.0.1';
-        
-        if (!isSecureContext && isMobile) {
-            console.warn('PWA requer HTTPS para funcionar em produção!');
+    // Flag para prevenir múltiplas submissões
+    let isSubmitting = false;
+
+    // Loading overlay function
+    function showLoadingOverlay(event) {
+        // Prevenir múltiplas submissões
+        if (isSubmitting) {
+            event.preventDefault();
+            return false;
         }
 
-        // Registra o service worker
-        if ('serviceWorker' in navigator && isSecureContext) {
-            navigator.serviceWorker.register('/static/sw.js', { updateViaCache: 'none' })
-                .then(registration => {
-                    console.log('Service Worker registrado com sucesso:', registration);
-                    // Força atualização do service worker
-                    registration.update();
-                })
-                .catch(error => {
-                    console.error('Falha ao registrar Service Worker:', error);
-                });
-        } else if (!isSecureContext) {
-            console.warn('Service Worker requer contexto seguro (HTTPS)');
+        const form = event.target;
+        if (form.checkValidity()) {
+            isSubmitting = true;
+            document.getElementById('loadingOverlay').classList.add('active');
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
         }
+    }
 
-        // Função para mostrar o prompt de instalação
-        window.showInstallPrompt = function() {
-            console.log('showInstallPrompt chamado. isIOS:', isIOS, 'isMobile:', isMobile, 'deferredPrompt:', !!deferredPrompt, 'isStandalone:', isStandalone);
-            
-            if (isIOS) {
-                // iOS - Instruções para adicionar à tela inicial
-                Swal.fire({
-                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">📱 Instalar Filadélfia</div>',
-                    html: `
+    // Message handling
+    function closeMessage(btn) {
+        const alert = btn.closest('.message-alert');
+        alert.style.opacity = '0';
+        alert.style.transform = 'translateX(100%)';
+        setTimeout(() => alert.remove(), 300);
+    }
+
+    // Auto-dismiss messages after 5 seconds
+    document.addEventListener('DOMContentLoaded', function () {
+        const alerts = document.querySelectorAll('.message-alert');
+        alerts.forEach((alert, index) => {
+            setTimeout(() => {
+                alert.style.transition = 'all 0.3s ease-out';
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateX(100%)';
+                setTimeout(() => alert.remove(), 300);
+            }, 5000 + (index * 500));
+        });
+    });
+
+    // PWA Install Prompt (apenas mobile)
+    let deferredPrompt;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    console.log('=== PWA Debug ===');
+    console.log('isIOS:', isIOS);
+    console.log('isMobile:', isMobile);
+    console.log('isStandalone:', isStandalone);
+    console.log('User Agent:', navigator.userAgent);
+    console.log('Swal disponível:', typeof Swal !== 'undefined');
+    console.log('localStorage pwa-install-prompted:', localStorage.getItem('pwa-install-prompted'));
+    console.log('Protocol:', window.location.protocol);
+    console.log('Is HTTPS:', window.location.protocol === 'https:');
+    console.log('Is localhost:', window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    // Verifica se está em HTTPS ou localhost
+    const isSecureContext = window.location.protocol === 'https:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+    if (!isSecureContext && isMobile) {
+        console.warn('PWA requer HTTPS para funcionar em produção!');
+    }
+
+    // Registra o service worker
+    if ('serviceWorker' in navigator && isSecureContext) {
+        navigator.serviceWorker.register('/static/sw.js', { updateViaCache: 'none' })
+            .then(registration => {
+                console.log('Service Worker registrado com sucesso:', registration);
+                // Força atualização do service worker
+                registration.update();
+            })
+            .catch(error => {
+                console.error('Falha ao registrar Service Worker:', error);
+            });
+    } else if (!isSecureContext) {
+        console.warn('Service Worker requer contexto seguro (HTTPS)');
+    }
+
+    // Função para mostrar o prompt de instalação
+    window.showInstallPrompt = function () {
+        console.log('showInstallPrompt chamado. isIOS:', isIOS, 'isMobile:', isMobile, 'deferredPrompt:', !!deferredPrompt, 'isStandalone:', isStandalone);
+
+        if (isIOS) {
+            // iOS - Instruções para adicionar à tela inicial
+            Swal.fire({
+                title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">📱 Instalar Filadélfia</div>',
+                html: `
                         <div style="text-align: left; padding: 0.5rem;">
                             <p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin-bottom: 1rem;">Adicione o <strong style="color: #C90905;">Filadélfia</strong> à sua tela inicial para acesso rápido!</p>
                             <div style="background: #F9FAFB; border-left: 4px solid #C90905; border-radius: 0.5rem; padding: 1rem;">
@@ -795,69 +1072,69 @@
                             </div>
                         </div>
                     `,
-                    showCloseButton: true,
+                showCloseButton: true,
+                confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                confirmButtonColor: '#C90905',
+                width: '85%',
+                padding: '1.75rem 1rem',
+                customClass: {
+                    popup: 'pwa-popup',
+                    title: 'pwa-title',
+                    htmlContainer: 'pwa-html',
+                    confirmButton: 'pwa-button'
+                }
+            });
+        } else if (deferredPrompt) {
+            // Android/Chrome - Prompt nativo
+            console.log('Mostrando prompt nativo do Android/Chrome');
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                console.log('User choice:', choiceResult.outcome);
+                if (choiceResult.outcome === 'accepted') {
+                    Swal.fire({
+                        title: '<div style="color: #10B981; font-weight: 700; font-size: 1.25rem;">🎉 Instalado!</div>',
+                        html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> foi instalado com sucesso!</p>',
+                        confirmButtonColor: '#C90905',
+                        timer: 2500,
+                        showConfirmButton: false,
+                        width: '85%',
+                        padding: '1.75rem 1rem'
+                    });
+                }
+                deferredPrompt = null;
+            });
+        } else {
+            // Prompt visual para Android/Chrome quando não há deferredPrompt ainda
+            console.log('deferredPrompt não disponível ainda. isStandalone:', isStandalone);
+
+            if (isStandalone) {
+                Swal.fire({
+                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">✅ App Instalado</div>',
+                    html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> já está instalado no seu dispositivo!</p>',
                     confirmButtonText: '<i class="fas fa-check"></i> Entendi',
                     confirmButtonColor: '#C90905',
                     width: '85%',
                     padding: '1.75rem 1rem',
                     customClass: {
-                        popup: 'pwa-popup',
-                        title: 'pwa-title',
-                        htmlContainer: 'pwa-html',
                         confirmButton: 'pwa-button'
                     }
                 });
-            } else if (deferredPrompt) {
-                // Android/Chrome - Prompt nativo
-                console.log('Mostrando prompt nativo do Android/Chrome');
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    console.log('User choice:', choiceResult.outcome);
-                    if (choiceResult.outcome === 'accepted') {
-                        Swal.fire({
-                            title: '<div style="color: #10B981; font-weight: 700; font-size: 1.25rem;">🎉 Instalado!</div>',
-                            html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> foi instalado com sucesso!</p>',
-                            confirmButtonColor: '#C90905',
-                            timer: 2500,
-                            showConfirmButton: false,
-                            width: '85%',
-                            padding: '1.75rem 1rem'
-                        });
+            } else if (!isSecureContext) {
+                Swal.fire({
+                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">🔒 HTTPS Necessário</div>',
+                    html: '<p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin: 0;">A instalação do app requer uma <strong style="color: #C90905;">conexão segura (HTTPS)</strong>. Acesse via HTTPS para instalar.</p>',
+                    confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                    confirmButtonColor: '#C90905',
+                    width: '85%',
+                    padding: '1.75rem 1rem',
+                    customClass: {
+                        confirmButton: 'pwa-button'
                     }
-                    deferredPrompt = null;
                 });
             } else {
-                // Prompt visual para Android/Chrome quando não há deferredPrompt ainda
-                console.log('deferredPrompt não disponível ainda. isStandalone:', isStandalone);
-                
-                if (isStandalone) {
-                    Swal.fire({
-                        title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">✅ App Instalado</div>',
-                        html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> já está instalado no seu dispositivo!</p>',
-                        confirmButtonText: '<i class="fas fa-check"></i> Entendi',
-                        confirmButtonColor: '#C90905',
-                        width: '85%',
-                        padding: '1.75rem 1rem',
-                        customClass: {
-                            confirmButton: 'pwa-button'
-                        }
-                    });
-                } else if (!isSecureContext) {
-                    Swal.fire({
-                        title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">🔒 HTTPS Necessário</div>',
-                        html: '<p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin: 0;">A instalação do app requer uma <strong style="color: #C90905;">conexão segura (HTTPS)</strong>. Acesse via HTTPS para instalar.</p>',
-                        confirmButtonText: '<i class="fas fa-check"></i> Entendi',
-                        confirmButtonColor: '#C90905',
-                        width: '85%',
-                        padding: '1.75rem 1rem',
-                        customClass: {
-                            confirmButton: 'pwa-button'
-                        }
-                    });
-                } else {
-                    Swal.fire({
-                        title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">Instalação Indisponível</div>',
-                        html: `
+                Swal.fire({
+                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">Instalação Indisponível</div>',
+                    html: `
                             <div style="text-align: left;">
                                 <p style="color: #4B5563; font-size: 1rem; margin-bottom: 0.75rem;">A instalação não está disponível neste momento.</p>
                                 <div style="background: #F9FAFB; border-radius: 0.5rem; padding: 0.75rem;">
@@ -870,76 +1147,76 @@
                                 </div>
                             </div>
                         `,
-                        confirmButtonText: '<i class="fas fa-check"></i> Entendi',
-                        confirmButtonColor: '#C90905',
-                        width: '85%',
-                        padding: '1.75rem 1rem',
-                        customClass: {
-                            confirmButton: 'pwa-button'
-                        }
-                    });
-                }
-            }
-        };
-
-        // Captura o evento beforeinstallprompt (Android/Chrome)
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            console.log('beforeinstallprompt capturado');
-
-            // Se for mobile, não estiver instalado e não foi perguntado, mostra automaticamente
-            const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
-            if (isMobile && !isStandalone && !hasBeenPrompted) {
-                setTimeout(() => {
-                    Swal.fire({
-                        title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">📱 Instalar Filadélfia</div>',
-                        html: '<p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin: 0;">Instale o <strong style="color: #C90905;">Filadélfia</strong> na sua tela inicial para acesso rápido e experiência completa!</p>',
-                        showCancelButton: true,
-                        confirmButtonText: '<i class="fas fa-download"></i> Instalar',
-                        cancelButtonText: 'Agora Não',
-                        confirmButtonColor: '#C90905',
-                        cancelButtonColor: '#6B7280',
-                        reverseButtons: true,
-                        width: '85%',
-                        padding: '1.75rem 1rem',
-                        customClass: {
-                            confirmButton: 'pwa-button',
-                            cancelButton: 'pwa-button'
-                        }
-                    }).then((result) => {
-                        if (result.isConfirmed && deferredPrompt) {
-                            deferredPrompt.prompt();
-                            deferredPrompt.userChoice.then((choiceResult) => {
-                                if (choiceResult.outcome === 'accepted') {
-                                    Swal.fire({
-                                        title: '<div style="color: #10B981; font-weight: 700; font-size: 1.25rem;">🎉 Instalado!</div>',
-                                        html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> foi instalado com sucesso!</p>',
-                                        confirmButtonColor: '#C90905',
-                                        timer: 2500,
-                                        showConfirmButton: false,
-                                        width: '85%',
-                                        padding: '1.75rem 1rem'
-                                    });
-                                }
-                                deferredPrompt = null;
-                            });
-                        }
-                        localStorage.setItem('pwa-install-prompted', 'true');
-                    });
-                }, 2000);
-            }
-        });
-
-        // Para iOS mobile - mostra prompt automaticamente se não foi perguntado
-        if (isIOS && isMobile && !isStandalone) {
-            const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
-            if (!hasBeenPrompted) {
-                setTimeout(() => {
-                    showInstallPrompt();
-                    localStorage.setItem('pwa-install-prompted', 'true');
-                }, 2000);
+                    confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                    confirmButtonColor: '#C90905',
+                    width: '85%',
+                    padding: '1.75rem 1rem',
+                    customClass: {
+                        confirmButton: 'pwa-button'
+                    }
+                });
             }
         }
-    </script>
+    };
+
+    // Captura o evento beforeinstallprompt (Android/Chrome)
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        console.log('beforeinstallprompt capturado');
+
+        // Se for mobile, não estiver instalado e não foi perguntado, mostra automaticamente
+        const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
+        if (isMobile && !isStandalone && !hasBeenPrompted) {
+            setTimeout(() => {
+                Swal.fire({
+                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">📱 Instalar Filadélfia</div>',
+                    html: '<p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin: 0;">Instale o <strong style="color: #C90905;">Filadélfia</strong> na sua tela inicial para acesso rápido e experiência completa!</p>',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-download"></i> Instalar',
+                    cancelButtonText: 'Agora Não',
+                    confirmButtonColor: '#C90905',
+                    cancelButtonColor: '#6B7280',
+                    reverseButtons: true,
+                    width: '85%',
+                    padding: '1.75rem 1rem',
+                    customClass: {
+                        confirmButton: 'pwa-button',
+                        cancelButton: 'pwa-button'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed && deferredPrompt) {
+                        deferredPrompt.prompt();
+                        deferredPrompt.userChoice.then((choiceResult) => {
+                            if (choiceResult.outcome === 'accepted') {
+                                Swal.fire({
+                                    title: '<div style="color: #10B981; font-weight: 700; font-size: 1.25rem;">🎉 Instalado!</div>',
+                                    html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> foi instalado com sucesso!</p>',
+                                    confirmButtonColor: '#C90905',
+                                    timer: 2500,
+                                    showConfirmButton: false,
+                                    width: '85%',
+                                    padding: '1.75rem 1rem'
+                                });
+                            }
+                            deferredPrompt = null;
+                        });
+                    }
+                    localStorage.setItem('pwa-install-prompted', 'true');
+                });
+            }, 2000);
+        }
+    });
+
+    // Para iOS mobile - mostra prompt automaticamente se não foi perguntado
+    if (isIOS && isMobile && !isStandalone) {
+        const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
+        if (!hasBeenPrompted) {
+            setTimeout(() => {
+                showInstallPrompt();
+                localStorage.setItem('pwa-install-prompted', 'true');
+            }, 2000);
+        }
+    }
+</script>
 {% endblock %}

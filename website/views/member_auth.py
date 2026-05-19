@@ -69,8 +69,10 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'is_ministration_member': flags['is_ministration'],
             'is_boas_vindas_member': flags['is_boas_vindas'],
             'is_moderacao_member': flags['is_moderacao'],
+            'can_music_member': flags['has_ministries'],
             'member_schedules': member_schedules,
             'is_new_member': not any([flags['has_ministries'], flags['is_approver'], flags['can_consolidate']]),
+            'is_house_of_peace_member': flags['has_ministries'],
         }
 
     def _get_ministry_flags(self, member):

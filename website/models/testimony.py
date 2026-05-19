@@ -14,6 +14,11 @@ class Testimony(BaseModel):
         ('other', 'Outro'),
     ]
 
+    SOURCE_CHOICES = [
+        ('manual', 'Cadastro manual'),
+        ('house_of_peace', 'Casa de Paz'),
+    ]
+
     author_name = models.CharField(
         max_length=150,
         verbose_name='Nome do Autor',
@@ -65,6 +70,23 @@ class Testimony(BaseModel):
         null=True,
         verbose_name='URL do Instagram',
         help_text='Cole a URL do post/reel do Instagram para embed de vídeo'
+    )
+
+    # Origem do testemunho
+    source = models.CharField(
+        max_length=20,
+        choices=SOURCE_CHOICES,
+        default='manual',
+        verbose_name='Origem'
+    )
+    house_of_peace_assignment = models.ForeignKey(
+        'HouseOfPeaceAssignment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='testimonies',
+        verbose_name='Atribuição de Casa de Paz',
+        help_text='Caso este testemunho tenha sido gerado durante uma Casa de Paz'
     )
 
     class Meta:

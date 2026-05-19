@@ -140,6 +140,15 @@ class Healing(BaseModel):
     )
     healing_date = models.DateField(verbose_name='Data da Cura')
     recorded_at = models.DateTimeField(auto_now_add=True, verbose_name='Registrado em')
+    house_of_peace_assignment = models.ForeignKey(
+        'HouseOfPeaceAssignment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='healings',
+        verbose_name='Atribuição de Casa de Paz',
+        help_text='Caso esta cura tenha sido registrada durante uma Casa de Paz'
+    )
     
     class Meta:
         verbose_name = 'Cura'

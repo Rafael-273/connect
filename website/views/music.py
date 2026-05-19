@@ -8,6 +8,7 @@ from django.views import View
 from django.views.generic import UpdateView
 from django.contrib import messages
 from django.db.models import Q
+from .mixins import MinistrationContextMixin
 
 
 class MusicListView(LoginRequiredMixin, ListView):
@@ -15,10 +16,12 @@ class MusicListView(LoginRequiredMixin, ListView):
     template_name = 'admin_panel/music/list.html'
     context_object_name = 'musics'
     ordering = ['name']
+    paginate_by = 20
 
     def get_queryset(self):
         queryset = super().get_queryset()
         search = self.request.GET.get('search', '').strip()
+        tempo = self.request.GET.get('tempo', '').strip()
 
         if search:
             queryset = queryset.filter(
@@ -26,18 +29,22 @@ class MusicListView(LoginRequiredMixin, ListView):
                 Q(singer__icontains=search)
             )
 
+        if tempo:
+            queryset = queryset.filter(tempo=tempo)
+
         return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['search'] = self.request.GET.get('search', '')
+        context['tempo_filter'] = self.request.GET.get('tempo', '')
         return context
 
 
 class MusicCreateView(LoginRequiredMixin, CreateView):
     model = Music
     template_name = 'admin_panel/music/form.html'
-    fields = ['name', 'singer', 'chord_sheet']
+    fields = ['name', 'singer', 'tempo', 'chord_sheet']
     success_url = reverse_lazy('admin_music_list')
 
     def get_context_data(self, **kwargs):
@@ -62,7 +69,7 @@ class MusicDeleteView(LoginRequiredMixin, View):
 class MusicUpdateView(LoginRequiredMixin, UpdateView):
     model = Music
     template_name = 'admin_panel/music/form.html'
-    fields = ['name', 'singer', 'chord_sheet']
+    fields = ['name', 'singer', 'tempo', 'chord_sheet']
     success_url = reverse_lazy('admin_music_list')
 
     def get_context_data(self, **kwargs):
@@ -75,7 +82,7 @@ class MusicUpdateView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
     
 
-class MusicUserListView(LoginRequiredMixin, ListView):
+class MusicUserListView(LoginRequiredMixin, MinistrationContextMixin, ListView):
     model = Music
     template_name = 'list/music_list.html'
     context_object_name = 'musics'
@@ -97,6 +104,21 @@ class MusicUserListView(LoginRequiredMixin, ListView):
             queryset = queryset.filter(tempo=tempo)
 
         return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        member = self.request.user.member
+        flags = self._get_ministry_flags(member)
+        context['can_consolidate'] = flags['can_consolidate']
+        context['is_ministration_member'] = flags['is_ministration']
+        return context
+
+    def _get_ministry_flags(self, member):
+        from website.models import MinistryMembership
+        return {
+            'can_consolidate': member.is_available_to_consolidate,
+            'is_ministration': self.get_ministration_status(member),
+        }
 
 
     

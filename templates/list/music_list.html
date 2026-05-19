@@ -3,6 +3,33 @@
 
 {% block head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<style>
+    /* Apple-style input for iOS */
+    input[type="text"],
+    input[type="search"] {
+        font-size: 16px !important;
+        -webkit-appearance: none;
+        appearance: none;
+        -webkit-border-radius: 8px;
+        border-radius: 8px;
+    }
+
+    input[type="text"]:focus,
+    input[type="search"]:focus {
+        border-color: #C90905 !important;
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1) !important;
+    }
+
+    /* Prevent zoom on iOS input focus */
+    @supports (-webkit-touch-callout: none) {
+        input[type="text"],
+        input[type="search"],
+        textarea,
+        select {
+            font-size: 16px !important;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block title %}Ministério de Louvor{% endblock %}
@@ -40,8 +67,8 @@
                 <div class="relative flex-1 min-w-0">
                     <input type="text" name="search" id="search-input" value="{{ request.GET.search }}"
                            placeholder="Buscar música ou cantor..."
-                           class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none bg-white text-sm"
-                           style="focus:border-color: #C90905;">
+                           class="w-full pl-4 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none bg-white text-sm transition-all"
+                           style="font-size: 16px; -webkit-appearance: none; appearance: none; focus:border-color: #C90905; focus:ring: 2px solid rgba(201,9,5,0.2);">
                 </div>
 
                 <button type="submit"
@@ -175,34 +202,7 @@
 </div>
 
 <!-- Bottom Navigation -->
-<nav class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center gap-2 z-50"
-     style="background: rgba(255,255,255,0.98); backdrop-filter: blur(20px); border-color: rgba(201, 9, 5, 0.15);">
-
-    <a href="{% url 'member_dashboard' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 p-2 px-3">
-        <div class="py-2.5 px-4 rounded-xl mb-1.5 border-2 shadow-md transition transform hover:-translate-y-1 hover:scale-110"
-     style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
-            <i class="fas fa-home text-lg" style="color:#C90905;"></i>
-        </div>
-        Home
-    </a>
-
-    <a href="#" class="flex flex-col items-center text-xs font-bold p-2 px-3">
-        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition transform hover:-translate-y-1 hover:scale-110"
-     style="background-color:#C90905;">
-            <i class="fas fa-music text-white text-lg"></i>
-        </div>
-        <span style="color:#C90905;">Músicas</span>
-    </a>
-
-    <a href="{% url 'member_profile' %}" class="flex flex-col items-center text-xs font-medium text-gray-600 p-2 px-3">
-        <div class="py-2.5 px-4 rounded-xl mb-1.5 border-2 shadow-md transition transform hover:-translate-y-1 hover:scale-110"
-     style="background: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15);">
-            <i class="fas fa-user-circle text-lg" style="color:#E63946;"></i>
-        </div>
-        Perfil
-    </a>
-
-</nav>
+{% include 'parciais/member_bottom_nav.html' with nav_active='musicas' %}
 
 <script>
 // Toggle filter panel

@@ -147,6 +147,22 @@
                         {% endif %}
                     </div>
 
+                    <div class="form-group">
+                        <label for="{{ form.tempo.id_for_label }}" class="form-label">
+                            Andamento
+                        </label>
+                        <select name="tempo" id="{{ form.tempo.id_for_label }}"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                            <option value="" {% if not form.instance.tempo %}selected{% endif %}>Não definido</option>
+                            <option value="lenta"  {% if form.instance.tempo == 'lenta' %}selected{% endif %}>Lenta</option>
+                            <option value="media"  {% if form.instance.tempo == 'media' %}selected{% endif %}>Média</option>
+                            <option value="rapida" {% if form.instance.tempo == 'rapida' %}selected{% endif %}>Rápida</option>
+                        </select>
+                        {% if form.tempo.errors %}
+                        <p class="text-red-600 text-sm mt-1">{{ form.tempo.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
                     <div class="section-header mt-2">
                         <div class="icon-wrap"><ion-icon name="document-outline"></ion-icon></div>
                         <span>Cifra</span>

@@ -54,6 +54,17 @@
     .action-btn-edit:hover   { background: #dbeafe; }
     .action-btn-delete { background: #fef2f2; color: #dc2626; }
     .action-btn-delete:hover { background: #fee2e2; }
+    .action-btn-pdf-disabled { background: #f3f4f6; color: #9ca3af; cursor: not-allowed; }
+    
+    /* Mobile: action buttons should fill height */
+    @media (max-width: 767px) {
+        .mobile-button-group .action-btn {
+            height: 100%;
+            min-height: 48px;
+            width: 44px;
+        }
+    }
+    
     .data-table th:last-child,
     .data-table td:last-child { text-align: right; }
 </style>
@@ -66,29 +77,42 @@
     {% include 'parciais/admin_sidebar.html' %}
 
     <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
-        <div class="p-3 md:p-6 mt-24">
+        <div class="p-4 md:p-6 mt-24">
 
             <!-- Title -->
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
-                    <ion-icon name="musical-notes" class="text-xl text-white"></ion-icon>
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="musical-notes" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-2xl font-bold text-gray-900 leading-tight">Músicas</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">
+                            {% if page_obj.paginator.count %}Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }} • {{ page_obj.paginator.count }} música{{ page_obj.paginator.count|pluralize:"s" }}{% else %}Gerenciar cifras e repertório{% endif %}
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900 leading-tight">Músicas</h1>
-                    <p class="text-sm text-gray-500 mt-0.5">
-                        {% if musics %}{{ musics|length }} música{{ musics|length|pluralize:"s" }}{% else %}Gerenciar cifras e repertório{% endif %}
-                    </p>
-                </div>
+                <!-- Mobile: Nova Música (icon only) -->
+                <a href="{% url 'admin_music_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Nova Música">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
             </div>
 
-            <!-- Search + New -->
+            <!-- Search + Filters + New -->
             <div class="flex items-center gap-2 mb-6">
                 <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="tempo" id="hidden-tempo" value="{{ tempo_filter }}">
+
                     <div class="relative flex-1 min-w-0">
                         <input type="text" name="search" id="search-input" value="{{ search }}"
                                placeholder="Buscar por nome da música ou cantor..."
                                class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
                     </div>
+
                     <button type="submit"
                             class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
                             title="Buscar">
@@ -96,10 +120,49 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                         </svg>
                     </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-music"
+                            class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if tempo_filter %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                        <div id="filter-panel-music"
+                            class="hidden absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Andamento</label>
+                                    <select id="panel-tempo" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os andamentos</option>
+                                        <option value="lenta"  {% if tempo_filter == 'lenta' %}selected{% endif %}>Lenta</option>
+                                        <option value="media"  {% if tempo_filter == 'media' %}selected{% endif %}>Média</option>
+                                        <option value="rapida" {% if tempo_filter == 'rapida' %}selected{% endif %}>Rápida</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                <a href="{% url 'admin_music_list' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-music"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </form>
 
                 <a href="{% url 'admin_music_create' %}"
-                   class="flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center gap-2 text-sm font-medium">
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -107,39 +170,93 @@
                 </a>
             </div>
 
-            <!-- Tabela -->
-            <div class="admin-card overflow-hidden">
+            <!-- Mobile: Cards -->
+            <div class="block md:hidden space-y-4 mb-6">
+                {% for music in page_obj.object_list %}
+                <div class="admin-card p-4">
+                    <div class="flex items-stretch justify-between gap-2">
+                        <div class="flex items-center gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0">
+                                <ion-icon name="musical-notes-outline" class="text-white text-lg"></ion-icon>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-base font-bold text-gray-900 truncate">{{ music.name }}</h3>
+                                <p class="text-sm text-gray-500">{{ music.singer|default:"—" }}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-stretch gap-1 flex-shrink-0 mobile-button-group">
+                            <!-- PDF Button -->
+                            {% if music.chord_sheet %}
+                            <a href="{{ music.chord_sheet.url }}" target="_blank" class="action-btn action-btn-view" title="Ver PDF">
+                                <ion-icon name="document-text-outline"></ion-icon>
+                            </a>
+                            {% else %}
+                            <button class="action-btn action-btn-pdf-disabled" disabled title="Sem cifra disponível">
+                                <ion-icon name="document-text-outline"></ion-icon>
+                            </button>
+                            {% endif %}
+                            <!-- Edit Button -->
+                            <a href="{% url 'admin_music_edit' music.id %}" class="action-btn action-btn-edit" title="Editar">
+                                <ion-icon name="create-outline"></ion-icon>
+                            </a>
+                            <!-- Delete Button -->
+                            <button onclick="deleteMusic({{ music.id }}, '{{ music.name }}')" class="action-btn action-btn-delete" title="Excluir">
+                                <ion-icon name="trash-outline"></ion-icon>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="admin-card p-8 text-center text-gray-500">
+                    <ion-icon name="musical-notes-outline" class="text-4xl mb-2 block mx-auto"></ion-icon>
+                    Nenhuma música cadastrada.
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Desktop: Tabela -->
+            <div class="admin-card overflow-hidden hidden md:block">
                 <div class="overflow-x-auto">
                     <table class="data-table w-full">
                         <thead>
                             <tr>
                                 <th>Música</th>
                                 <th>Cantor</th>
+                                <th>Andamento</th>
                                 <th>Cifra (PDF)</th>
                                 <th>Ações</th>
                             </tr>
                         </thead>
 
                         <tbody>
-                            {% for music in musics %}
+                            {% for music in page_obj.object_list %}
                             <tr>
-                                <td class="font-medium text-gray-900 row-link" data-row-href="{% url 'admin_music_edit' music.id %}">{{ music.name }}</td>
-
-                                <td class="text-gray-700">{{ music.singer|default:"—" }}</td>
-
-                                <td>
+                                <td data-label="Música" class="font-medium text-gray-900 row-link" data-row-href="{% url 'admin_music_edit' music.id %}">{{ music.name }}</td>
+                                <td data-label="Cantor" class="text-gray-700">{{ music.singer|default:"—" }}</td>
+                                <td data-label="Andamento">
+                                    {% if music.tempo %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold
+                                        {% if music.tempo == 'lenta' %}bg-blue-50 text-blue-700
+                                        {% elif music.tempo == 'media' %}bg-yellow-50 text-yellow-700
+                                        {% else %}bg-green-50 text-green-700{% endif %}">
+                                        {{ music.get_tempo_display }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-gray-400 text-sm">—</span>
+                                    {% endif %}
+                                </td>
+                                <td data-label="Cifra (PDF)">
                                     {% if music.chord_sheet %}
                                         <a href="{{ music.chord_sheet.url }}" target="_blank"
                                            class="text-[var(--color-primary)] hover:underline flex items-center gap-1 text-sm">
                                             <ion-icon name="document-text-outline"></ion-icon>
-                                            <span class="mt-1">Ver PDF</span>
+                                            <span class="inline-block mt-1">Ver PDF</span>
                                         </a>
                                     {% else %}
                                         <span class="text-gray-400 text-sm">Não enviado</span>
                                     {% endif %}
                                 </td>
-
-                                <td>
+                                <td data-label="Ações">
                                     <div class="flex justify-end gap-1">
                                         {% if music.chord_sheet %}
                                         <a href="{{ music.chord_sheet.url }}" target="_blank"
@@ -160,9 +277,11 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="4" class="text-center py-8 text-gray-500">
-                                    <ion-icon name="musical-notes-outline" class="text-4xl mb-2 block mx-auto"></ion-icon>
-                                    Nenhuma música cadastrada.
+                                <td colspan="5" class="text-center py-12 text-gray-500">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <ion-icon name="musical-notes-outline" class="text-5xl mb-3 text-gray-300"></ion-icon>
+                                        <p class="text-base">Nenhuma música cadastrada.</p>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -170,6 +289,65 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Pagination -->
+            {% if page_obj.has_other_pages %}
+            <div class="flex items-center justify-between gap-4 mt-6 pt-6 border-t border-gray-200">
+                <div class="text-sm text-gray-600">
+                    Mostrando <span class="font-semibold text-gray-900">{{ page_obj.start_index }}</span> a <span class="font-semibold text-gray-900">{{ page_obj.end_index }}</span> de <span class="font-semibold text-gray-900">{{ page_obj.paginator.count }}</span> músicas
+                </div>
+                <div class="flex items-center gap-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page=1{% if search %}&search={{ search }}{% endif %}{% if tempo_filter %}&tempo={{ tempo_filter }}{% endif %}"
+                       class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition" title="Primeira página">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                    </a>
+                    <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if tempo_filter %}&tempo={{ tempo_filter }}{% endif %}"
+                       class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition" title="Página anterior">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7 7-7"/>
+                        </svg>
+                    </a>
+                    {% endif %}
+
+                    <!-- Página numbers -->
+                    <div class="flex items-center gap-1">
+                        {% for page_num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == page_num %}
+                            <span class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-[var(--color-primary)] text-white font-medium text-sm">{{ page_num }}</span>
+                            {% elif page_num >= page_obj.number|add:'-2' and page_num <= page_obj.number|add:'2' %}
+                            <a href="?page={{ page_num }}{% if search %}&search={{ search }}{% endif %}{% if tempo_filter %}&tempo={{ tempo_filter }}{% endif %}"
+                               class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm transition">{{ page_num }}</a>
+                            {% elif page_num == 1 or page_num == page_obj.paginator.num_pages %}
+                            <a href="?page={{ page_num }}{% if search %}&search={{ search }}{% endif %}{% if tempo_filter %}&tempo={{ tempo_filter }}{% endif %}"
+                               class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 font-medium text-sm transition">{{ page_num }}</a>
+                            {% elif page_num == 2 and page_obj.number > 4 %}
+                            <span class="px-2 text-gray-400">...</span>
+                            {% elif page_num == page_obj.paginator.num_pages|add:'-1' and page_obj.number < page_obj.paginator.num_pages|add:'-3' %}
+                            <span class="px-2 text-gray-400">...</span>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if tempo_filter %}&tempo={{ tempo_filter }}{% endif %}"
+                       class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition" title="Próxima página">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if tempo_filter %}&tempo={{ tempo_filter }}{% endif %}"
+                       class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 transition" title="Última página">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                        </svg>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
 
         </div>
     </div>
@@ -257,6 +435,31 @@
         }
         return cookieValue;
     }
+
+// Filter panel toggle
+(function () {
+    var toggle   = document.getElementById('filter-toggle-music');
+    var panel    = document.getElementById('filter-panel-music');
+    var applyBtn = document.getElementById('apply-filters-music');
+    if (!toggle || !panel) return;
+
+    toggle.addEventListener('click', function (e) {
+        e.stopPropagation();
+        panel.classList.toggle('hidden');
+    });
+    document.addEventListener('click', function (e) {
+        if (!panel.contains(e.target) && e.target !== toggle) {
+            panel.classList.add('hidden');
+        }
+    });
+    if (applyBtn) {
+        applyBtn.addEventListener('click', function () {
+            var tempoSelect = document.getElementById('panel-tempo');
+            if (tempoSelect) document.getElementById('hidden-tempo').value = tempoSelect.value;
+            document.getElementById('filter-form').submit();
+        });
+    }
+})();
 
 // Auto-filter with loading overlay
 (function () {
