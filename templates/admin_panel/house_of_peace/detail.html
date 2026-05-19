@@ -1,0 +1,238 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}{{ house.family_name }} - Casa de Paz{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+
+    .admin-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .info-row {
+        display: flex; gap: 0.5rem; align-items: flex-start;
+        padding: 0.75rem 0; border-bottom: 1px solid #f3f4f6;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-label { font-size: 0.75rem; font-weight: 600; color: #6b7280; min-width: 130px; flex-shrink: 0; }
+    .info-value { font-size: 0.875rem; color: #111827; }
+
+    .badge {
+        display: inline-flex; align-items: center; gap: 0.25rem;
+        padding: 0.25rem 0.75rem; border-radius: 9999px;
+        font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-available   { background: #dcfce7; color: #166534; }
+    .badge-in_progress { background: #dbeafe; color: #1e40af; }
+    .badge-completed   { background: #f3f4f6; color: #374151; }
+    .badge-cancelled   { background: #fef2f2; color: #991b1b; }
+
+    /* Assignment cards */
+    .assignment-card {
+        border: 1px solid #f1f5f9; border-radius: 10px; padding: 1rem;
+        transition: box-shadow 0.15s;
+    }
+    .assignment-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+    .badge-assign-accepted   { background: #dbeafe; color: #1e40af; }
+    .badge-assign-scheduled  { background: #fef9c3; color: #854d0e; }
+    .badge-assign-completed  { background: #dcfce7; color: #166534; }
+    .badge-assign-cancelled  { background: #fee2e2; color: #991b1b; }
+
+    .prayer-tag {
+        display: inline-flex; align-items: center;
+        padding: 0.2rem 0.6rem; border-radius: 9999px;
+        background: #fef3c7; color: #92400e;
+        font-size: 0.7rem; font-weight: 600;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 md:p-6 mt-24 max-w-4xl mx-auto">
+
+            <!-- Back + Header -->
+            <div class="flex items-center gap-3 mb-6">
+                <a href="{% url 'admin_house_of_peace_list' %}"
+                   class="w-9 h-9 flex items-center justify-center rounded-lg bg-white border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition flex-shrink-0">
+                    <ion-icon name="arrow-back-outline"></ion-icon>
+                </a>
+                <div class="flex-1 min-w-0">
+                    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">{{ house.family_name }}</h1>
+                    <p class="text-sm text-gray-500">Casa de Paz</p>
+                </div>
+                <span class="badge badge-{{ house.status }} flex-shrink-0">{{ house.get_status_display }}</span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+
+                <!-- Dados principais -->
+                <div class="admin-card p-5 md:col-span-2">
+                    <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Informações</h2>
+
+                    <div class="info-row">
+                        <span class="info-label">Solicitante</span>
+                        <span class="info-value font-semibold">{{ house.family_name }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Telefone</span>
+                        <span class="info-value">
+                            <a href="tel:{{ house.phone }}" class="text-blue-600 hover:underline">{{ house.phone }}</a>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Endereço</span>
+                        <span class="info-value">{{ house.address }}</span>
+                    </div>
+                    {% if house.neighborhood %}
+                    <div class="info-row">
+                        <span class="info-label">Bairro</span>
+                        <span class="info-value">{{ house.neighborhood.name }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="info-row">
+                        <span class="info-label">Família</span>
+                        <span class="info-value">{{ house.family_size }} pessoa{{ house.family_size|pluralize:"s" }}</span>
+                    </div>
+                    {% if house.prayer_types_display %}
+                    <div class="info-row">
+                        <span class="info-label">Motivos de oração</span>
+                        <div class="info-value flex flex-wrap gap-1">
+                            {% for pt in house.prayer_types_display %}
+                            <span class="prayer-tag">{{ pt }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if house.prayer_description %}
+                    <div class="info-row">
+                        <span class="info-label">Pedido de oração</span>
+                        <span class="info-value text-gray-600">{{ house.prayer_description }}</span>
+                    </div>
+                    {% endif %}
+                    <div class="info-row">
+                        <span class="info-label">Cadastrado em</span>
+                        <span class="info-value text-gray-500">{{ house.created_at|date:"d/m/Y H:i" }}</span>
+                    </div>
+                </div>
+
+                <!-- Painel de Status -->
+                <div class="admin-card p-5 flex flex-col gap-4">
+                    <div>
+                        <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Status</h2>
+                        <form method="POST" action="{% url 'admin_house_of_peace_status' house.id %}">
+                            {% csrf_token %}
+                            <select name="status"
+                                    onchange="this.form.submit()"
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                {% for value, label in status_choices %}
+                                <option value="{{ value }}" {% if house.status == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </div>
+
+                    <div>
+                        <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-2">Membros</h2>
+                        <div class="text-3xl font-bold {% if house.active_count >= 3 %}text-blue-600{% elif house.active_count > 0 %}text-green-600{% else %}text-gray-400{% endif %}">
+                            {{ house.active_count }}<span class="text-lg font-normal text-gray-400">/3</span>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-0.5">membros ativos</p>
+                    </div>
+
+                    <div class="mt-auto pt-4 border-t border-gray-100">
+                        <form method="POST" action="{% url 'admin_house_of_peace_delete' house.id %}"
+                              onsubmit="return confirm('Tem certeza que deseja remover esta Casa de Paz? Esta ação não pode ser desfeita.')">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="w-full px-4 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition flex items-center justify-center gap-2">
+                                <ion-icon name="trash-outline"></ion-icon>
+                                Remover Casa de Paz
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Membros / Atribuições -->
+            <div class="admin-card p-5">
+                <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">
+                    Membros Atribuídos
+                    <span class="ml-2 text-xs font-normal text-gray-400 normal-case">{{ assignments.count }} atribuição{{ assignments.count|pluralize:"ões" }}</span>
+                </h2>
+
+                {% if assignments %}
+                <div class="space-y-3">
+                    {% for a in assignments %}
+                    <div class="assignment-card">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-9 h-9 rounded-full bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 text-white text-sm font-bold">
+                                    {{ a.member.name|first|upper }}
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="font-semibold text-gray-900 text-sm">{{ a.member.name }}</p>
+                                    <p class="text-xs text-gray-400">Aceito em {{ a.accepted_at|date:"d/m/Y" }}</p>
+                                </div>
+                            </div>
+                            <span class="badge badge-assign-{{ a.status }} flex-shrink-0">{{ a.get_status_display }}</span>
+                        </div>
+
+                        {% if a.scheduled_date %}
+                        <div class="mt-2 flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg w-fit">
+                            <ion-icon name="calendar-outline"></ion-icon>
+                            Agendado para {{ a.scheduled_date|date:"d/m/Y" }}
+                        </div>
+                        {% endif %}
+
+                        {% if a.status == 'completed' %}
+                        <div class="mt-2 space-y-1.5">
+                            {% if a.report %}
+                            <div class="text-xs text-gray-600 bg-gray-50 px-3 py-2 rounded-lg">
+                                <span class="font-semibold text-gray-700 block mb-0.5">Relato:</span>
+                                {{ a.report|truncatechars:200 }}
+                            </div>
+                            {% endif %}
+                            <div class="flex gap-2 flex-wrap">
+                                {% if a.had_healing %}
+                                <span class="badge" style="background:#dcfce7;color:#166534;">
+                                    <ion-icon name="heart-outline"></ion-icon> Houve cura
+                                </span>
+                                {% endif %}
+                                {% if a.had_testimony %}
+                                <span class="badge" style="background:#ede9fe;color:#5b21b6;">
+                                    <ion-icon name="chatbubble-ellipses-outline"></ion-icon> Houve testemunho
+                                </span>
+                                {% endif %}
+                                {% if a.will_continue %}
+                                <span class="badge" style="background:#dbeafe;color:#1e40af;">
+                                    <ion-icon name="refresh-outline"></ion-icon> Continuará
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="flex flex-col items-center justify-center py-8 text-center">
+                    <ion-icon name="people-outline" class="text-3xl text-gray-300 mb-2"></ion-icon>
+                    <p class="text-sm text-gray-400">Nenhum membro atribuído ainda.</p>
+                </div>
+                {% endif %}
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

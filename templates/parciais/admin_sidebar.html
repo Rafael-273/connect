@@ -101,6 +101,11 @@
                 <span class="mt-1">Música</span>
             </a>
 
+            <a href="{% url 'admin_house_of_peace_list' %}" class="sidebar-item {% if 'house_of_peace' in request.resolver_match.url_name %}active{% endif %}">
+                <ion-icon name="home-outline"></ion-icon>
+                <span class="mt-1">Casas de Paz</span>
+            </a>
+
             <!-- Escalas com submenu só para admin -->
             <div class="sidebar-group">
                 <div class="sidebar-item-group {% if 'schedule' in request.resolver_match.url_name or 'team' in request.resolver_match.url_name %}active{% endif %}" 
@@ -288,6 +293,11 @@
         <a href="{% url 'admin_music_list' %}" class="sidebar-item {% if 'music' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="musical-notes-outline"></ion-icon>
             <span class="mt-1">Música</span>
+        </a>
+
+        <a href="{% url 'admin_house_of_peace_list' %}" class="sidebar-item {% if 'house_of_peace' in request.resolver_match.url_name %}active{% endif %}">
+            <ion-icon name="home-outline"></ion-icon>
+            <span class="mt-1">Casas de Paz</span>
         </a>
         
         <!-- Ministração com submenu só para admin -->

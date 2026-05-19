@@ -25,6 +25,10 @@ from .roteiro import (
     RoteiroView, AnuncioCreateView, AnuncioEditView, AnuncioDeleteView,
     AnuncioReorderView, RoteiroPrintView,
 )
+from .house_of_peace import (
+    AdminHouseOfPeaceListView, AdminHouseOfPeaceDetailView,
+    AdminHouseOfPeaceStatusView, AdminHouseOfPeaceDeleteView,
+)
 
 __all__ = [
     'DashboardView',
@@ -44,4 +48,6 @@ __all__ = [
     'TestimonyListView', 'TestimonyEditView', 'TestimonyDeleteView', 'TestimonyToggleView',
     'RoteiroView', 'AnuncioCreateView', 'AnuncioEditView', 'AnuncioDeleteView',
     'AnuncioReorderView', 'RoteiroPrintView',
+    'AdminHouseOfPeaceListView', 'AdminHouseOfPeaceDetailView',
+    'AdminHouseOfPeaceStatusView', 'AdminHouseOfPeaceDeleteView',
 ]

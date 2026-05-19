@@ -93,6 +93,8 @@ from .views.admin_panel import (
     TestimonyListView as AdminTestimonyListView, TestimonyEditView, TestimonyDeleteView, TestimonyToggleView,
     RoteiroView, AnuncioCreateView, AnuncioEditView, AnuncioDeleteView,
     AnuncioReorderView, RoteiroPrintView,
+    AdminHouseOfPeaceListView, AdminHouseOfPeaceDetailView,
+    AdminHouseOfPeaceStatusView, AdminHouseOfPeaceDeleteView,
 )
 
 urlpatterns = [
@@ -317,6 +319,12 @@ urlpatterns = [
     path('admin-panel/testimonies/<int:testimony_id>/toggle/', TestimonyToggleView.as_view(), name='admin_testimony_toggle'),
 
     # Roteiro de Culto
+    # Casa de Paz (admin)
+    path('admin-panel/house-of-peace/', AdminHouseOfPeaceListView.as_view(), name='admin_house_of_peace_list'),
+    path('admin-panel/house-of-peace/<int:house_id>/', AdminHouseOfPeaceDetailView.as_view(), name='admin_house_of_peace_detail'),
+    path('admin-panel/house-of-peace/<int:house_id>/status/', AdminHouseOfPeaceStatusView.as_view(), name='admin_house_of_peace_status'),
+    path('admin-panel/house-of-peace/<int:house_id>/delete/', AdminHouseOfPeaceDeleteView.as_view(), name='admin_house_of_peace_delete'),
+
     path('admin-panel/roteiro/', RoteiroView.as_view(), name='roteiro_view'),
     path('admin-panel/roteiro/anuncios/new/', AnuncioCreateView.as_view(), name='roteiro_anuncio_create'),
     path('admin-panel/roteiro/anuncios/<int:anuncio_id>/edit/', AnuncioEditView.as_view(), name='roteiro_anuncio_edit'),
