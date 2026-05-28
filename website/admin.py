@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, testimony, prayer_request
+from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, testimony, prayer_request, music
 from .models.schedule import ScaleDivision, DivisionMember
 
 admin.site.register(ministry.Ministry)
@@ -107,3 +107,33 @@ class TestimonyAdmin(admin.ModelAdmin):
             'fields': ('is_approved', 'show_on_home')
         }),
     )
+
+
+class ChordSheetInline(admin.TabularInline):
+    model = music.ChordSheet
+    extra = 1
+    fields = ('file', 'tone', 'order')
+    ordering = ('order',)
+
+
+@admin.register(music.Music)
+class MusicAdmin(admin.ModelAdmin):
+    list_display = ('name', 'singer', 'tempo', 'chord_count')
+    list_filter = ('tempo', 'created_at')
+    search_fields = ('name', 'singer')
+    inlines = [ChordSheetInline]
+    fieldsets = (
+        ('Informações da Música', {
+            'fields': ('name', 'singer', 'tempo')
+        }),
+        ('Campo Legado', {
+            'fields': ('chord_sheet',),
+            'description': 'Este campo será descontinuado. Use a seção de Cifras abaixo.',
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def chord_count(self, obj):
+        count = obj.chordsheets.count()
+        return f"{count} cifra{'s' if count != 1 else ''}"
+    chord_count.short_description = 'Cifras'

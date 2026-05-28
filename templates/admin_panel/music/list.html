@@ -186,8 +186,9 @@
                         </div>
                         <div class="flex items-stretch gap-1 flex-shrink-0 mobile-button-group">
                             <!-- PDF Button -->
-                            {% if music.chord_sheet %}
-                            <a href="{{ music.chord_sheet.url }}" target="_blank" class="action-btn action-btn-view" title="Ver PDF">
+                            {% with chords=music.chordsheets.all %}
+                            {% if chords %}
+                            <a href="{{ chords.0.file.url }}" target="_blank" class="action-btn action-btn-view" title="Ver PDF">
                                 <ion-icon name="document-text-outline"></ion-icon>
                             </a>
                             {% else %}
@@ -195,6 +196,7 @@
                                 <ion-icon name="document-text-outline"></ion-icon>
                             </button>
                             {% endif %}
+                            {% endwith %}
                             <!-- Edit Button -->
                             <a href="{% url 'admin_music_edit' music.id %}" class="action-btn action-btn-edit" title="Editar">
                                 <ion-icon name="create-outline"></ion-icon>
@@ -246,24 +248,32 @@
                                     {% endif %}
                                 </td>
                                 <td data-label="Cifra (PDF)">
-                                    {% if music.chord_sheet %}
-                                        <a href="{{ music.chord_sheet.url }}" target="_blank"
-                                           class="text-[var(--color-primary)] hover:underline flex items-center gap-1 text-sm">
-                                            <ion-icon name="document-text-outline"></ion-icon>
-                                            <span class="inline-block mt-1">Ver PDF</span>
-                                        </a>
+                                    {% with chords=music.chordsheets.all %}
+                                    {% if chords %}
+                                        <div class="flex flex-wrap gap-1">
+                                        {% for chord in chords %}
+                                            <a href="{{ chord.file.url }}" target="_blank"
+                                               class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-[var(--color-primary)] hover:bg-red-100 transition">
+                                                <ion-icon name="document-text-outline"></ion-icon>
+                                                <span class="mt-1">{% if chord.tone %}{{ chord.tone }}{% else %}Cifra{% endif %}</span>
+                                            </a>
+                                        {% endfor %}
+                                        </div>
                                     {% else %}
-                                        <span class="text-gray-400 text-sm">Não enviado</span>
+                                        <span class="text-gray-400 text-sm">—</span>
                                     {% endif %}
+                                    {% endwith %}
                                 </td>
                                 <td data-label="Ações">
                                     <div class="flex justify-end gap-1">
-                                        {% if music.chord_sheet %}
-                                        <a href="{{ music.chord_sheet.url }}" target="_blank"
+                                        {% with chords=music.chordsheets.all %}
+                                        {% if chords %}
+                                        <a href="{{ chords.0.file.url }}" target="_blank"
                                            class="action-btn action-btn-view" title="Ver PDF">
                                             <ion-icon name="eye-outline"></ion-icon>
                                         </a>
                                         {% endif %}
+                                        {% endwith %}
                                         <a href="{% url 'admin_music_edit' music.id %}"
                                            class="action-btn action-btn-edit" title="Editar música">
                                             <ion-icon name="create-outline"></ion-icon>

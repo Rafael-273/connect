@@ -1,14 +1,15 @@
 from django.urls import reverse_lazy
 from django.views.generic import ListView, CreateView
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth.mixins import LoginRequiredMixin
-from website.models import Music
+from website.models import Music, ChordSheet
 from django.http import JsonResponse
 from django.views import View
 from django.views.generic import UpdateView
 from django.contrib import messages
 from django.db.models import Q
 from .mixins import MinistrationContextMixin
+from website.forms.music import MusicForm, ChordSheetFormSet, ChordSheetFormSetEdit
 
 
 class MusicListView(LoginRequiredMixin, ListView):
@@ -43,14 +44,31 @@ class MusicListView(LoginRequiredMixin, ListView):
 
 class MusicCreateView(LoginRequiredMixin, CreateView):
     model = Music
+    form_class = MusicForm
     template_name = 'admin_panel/music/form.html'
-    fields = ['name', 'singer', 'tempo', 'chord_sheet']
     success_url = reverse_lazy('admin_music_list')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['action'] = 'create'
+        if 'formset' not in context:
+            if self.request.POST:
+                context['formset'] = ChordSheetFormSet(self.request.POST, self.request.FILES, instance=self.object, prefix='chordsheets')
+            else:
+                context['formset'] = ChordSheetFormSet(instance=self.object, prefix='chordsheets')
         return context
+
+    def form_valid(self, form):
+        self.object = form.save()
+        formset = ChordSheetFormSet(self.request.POST, self.request.FILES, instance=self.object, prefix='chordsheets')
+
+        if formset.is_valid():
+            formset.save()
+            messages.success(self.request, 'Música cadastrada com sucesso!')
+            return redirect(self.success_url)
+        else:
+            self.object.delete()
+            return self.render_to_response(self.get_context_data(form=form, formset=formset))
 
 
 class MusicDeleteView(LoginRequiredMixin, View):
@@ -68,18 +86,30 @@ class MusicDeleteView(LoginRequiredMixin, View):
 
 class MusicUpdateView(LoginRequiredMixin, UpdateView):
     model = Music
+    form_class = MusicForm
     template_name = 'admin_panel/music/form.html'
-    fields = ['name', 'singer', 'tempo', 'chord_sheet']
     success_url = reverse_lazy('admin_music_list')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['action'] = 'edit'
+        if 'formset' not in context:
+            if self.request.POST:
+                context['formset'] = ChordSheetFormSetEdit(self.request.POST, self.request.FILES, instance=self.object, prefix='chordsheets')
+            else:
+                context['formset'] = ChordSheetFormSetEdit(instance=self.object, prefix='chordsheets')
         return context
 
     def form_valid(self, form):
-        messages.success(self.request, 'Música atualizada com sucesso!')
-        return super().form_valid(form)
+        self.object = form.save()
+        formset = ChordSheetFormSet(self.request.POST, self.request.FILES, instance=self.object, prefix='chordsheets')
+
+        if formset.is_valid():
+            formset.save()
+            messages.success(self.request, 'Música atualizada com sucesso!')
+            return redirect(self.success_url)
+        else:
+            return self.render_to_response(self.get_context_data(form=form, formset=formset))
     
 
 class MusicUserListView(LoginRequiredMixin, MinistrationContextMixin, ListView):

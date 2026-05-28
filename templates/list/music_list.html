@@ -29,6 +29,48 @@
             font-size: 16px !important;
         }
     }
+
+    /* Estilos do modal */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes zoomIn {
+        from {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        to {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    .animate-in {
+        animation: fadeIn 0.2s ease-in-out;
+    }
+
+    .fade-in {
+        animation: fadeIn 0.2s ease-in-out;
+    }
+
+    .zoom-in-95 > div {
+        animation: zoomIn 0.2s ease-in-out;
+    }
+
+    /* Badge de quantidade de cifras */
+    [id^="modal-cifras-"] button span {
+        transition: all 0.2s ease;
+    }
+
+    [id^="modal-cifras-"] button:hover {
+        background-color: rgba(201, 9, 5, 0.1) !important;
+    }
 </style>
 {% endblock %}
 
@@ -128,18 +170,11 @@
 
         {% for music in musics %}
 
-            {% if music.chord_sheet %}
-                <div 
-                    onclick="abrirPDF('{{ music.chord_sheet.url }}')"
-                    class="bg-white rounded-2xl border-2 p-4 shadow-sm hover:shadow-md transition-all hover:-translate-y-1 cursor-pointer"
-                    style="border-color: rgba(201, 9, 5, 0.15);">
-            {% else %}
-                <div 
-                    class="bg-white rounded-2xl border-2 p-4 shadow-sm opacity-60 cursor-not-allowed"
-                    style="border-color: rgba(201, 9, 5, 0.15);">
-            {% endif %}
+            <div 
+                class="bg-white rounded-2xl border-2 p-4 flex shadow-sm transition-all"
+                style="border-color: rgba(201, 9, 5, 0.15);">
 
-                <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center w-full justify-between gap-3">
                     <div class="flex-1">
                         <h3 class="text-lg font-bold text-gray-900">
                             {{ music.name }}
@@ -148,7 +183,89 @@
                             {{ music.singer }}
                         </p>
                     </div>
+
+                    <!-- Cifras - Lado Direito -->
+                    <div class="flex-shrink-0">
+                        {% with chords=music.chordsheets.all %}
+                        {% if chords %}
+                            {% if chords|length == 1 %}
+                                <!-- Uma única cifra: botão direto -->
+                                <button type="button"
+                                        onclick="abrirPDF('{{ chords.0.file.url }}')"
+                                        class="flex items-center justify-center w-10 h-10 rounded-lg border transition-all hover:shadow-md"
+                                        style="background-color: rgba(201, 9, 5, 0.08); border-color: rgba(201, 9, 5, 0.2); color: #C90905;"
+                                        title="{% if chords.0.tone %}{{ chords.0.tone }}{% else %}Cifra{% endif %}">
+                                    <i class="fas fa-file-pdf"></i>
+                                </button>
+                            {% else %}
+                                <!-- Múltiplas cifras: popup -->
+                                <button type="button"
+                                        onclick="abrirSeletorCifra(event, {{ music.id }})"
+                                        class="flex items-center justify-center w-10 h-10 rounded-lg border transition-all hover:shadow-md relative"
+                                        style="background-color: rgba(201, 9, 5, 0.08); border-color: rgba(201, 9, 5, 0.2); color: #C90905;"
+                                        title="Escolher cifra">
+                                    <i class="fas fa-file-pdf"></i>
+                                    <span class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                                        <span class="mt-1">{{ chords|length }}</span>
+                                    </span>
+                                </button>
+                                
+                                <!-- Modal oculto com a lista de cifras -->
+                                <div id="modal-cifras-{{ music.id }}" class="hidden fixed inset-0 bg-black bg-opacity-50 z-[9999] flex items-center justify-center p-4">
+                                    <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in-95">
+                                        <h3 class="text-lg font-bold text-gray-900 mb-4">Escolher Cifra</h3>
+                                        <p class="text-sm text-gray-600 mb-4">{{ music.name }}</p>
+                                        
+                                        <div class="space-y-2 max-h-96 overflow-y-auto">
+                                            {% for chord in chords %}
+                                            <button type="button"
+                                                    onclick="abrirPDF('{{ chord.file.url }}'); fecharSeletorCifra({{ music.id }})"
+                                                    class="w-full flex items-center justify-between p-3 rounded-lg border transition-all hover:shadow-md"
+                                                    style="background-color: rgba(201, 9, 5, 0.05); border-color: rgba(201, 9, 5, 0.15); color: #111827;">
+                                                <span class="flex items-center gap-3 flex-1 min-w-0">
+                                                    <i class="fas fa-file-pdf flex-shrink-0" style="color: #C90905;"></i>
+                                                    <div class="text-left min-w-0">
+                                                        {% if chord.tone %}
+                                                            <div class="font-semibold text-sm">Tom: {{ chord.tone }}</div>
+                                                            <div class="text-xs text-gray-500">Cifra</div>
+                                                        {% else %}
+                                                            <div class="font-semibold text-sm">Cifra</div>
+                                                        {% endif %}
+                                                    </div>
+                                                </span>
+                                                <i class="fas fa-arrow-right flex-shrink-0 ml-2" style="color: #C90905;"></i>
+                                            </button>
+                                            {% endfor %}
+                                        </div>
+                                        
+                                        <button type="button"
+                                                onclick="fecharSeletorCifra({{ music.id }})"
+                                                class="w-full mt-4 px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all text-sm font-medium">
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% elif music.chord_sheet %}
+                            <!-- Fallback para cifra legada -->
+                            <button type="button"
+                                    onclick="abrirPDF('{{ music.chord_sheet.url }}')"
+                                    class="flex items-center justify-center w-10 h-10 rounded-lg border transition-all hover:shadow-md"
+                                    style="background-color: rgba(201, 9, 5, 0.08); border-color: rgba(201, 9, 5, 0.2); color: #C90905;"
+                                    title="Cifra">
+                                <i class="fas fa-file-pdf"></i>
+                            </button>
+                        {% endif %}
+                        {% endwith %}
+                    </div>
                 </div>
+
+                <!-- Info abaixo (Cifras legado - removido da exibição) -->
+                {% if music.chordsheets.all|length == 0 and music.chord_sheet %}
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <!-- Espaço vazio se precisar adicionar info futura -->
+                </div>
+                {% endif %}
 
             </div>
 
@@ -230,6 +347,43 @@ document.getElementById('apply-filters-music').addEventListener('click', () => {
 function abrirPDF(url){
     window.open(url, "_blank");
 }
+
+function abrirSeletorCifra(event, musicId) {
+    event.preventDefault();
+    event.stopPropagation();
+    const modal = document.getElementById(`modal-cifras-${musicId}`);
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
+function fecharSeletorCifra(musicId) {
+    const modal = document.getElementById(`modal-cifras-${musicId}`);
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+// Fechar modal ao clicar fora dele
+document.addEventListener('click', (e) => {
+    document.querySelectorAll('[id^="modal-cifras-"]').forEach(modal => {
+        if (!modal.contains(e.target) && !modal.classList.contains('hidden')) {
+            const clickedButton = e.target.closest('button');
+            if (!clickedButton || !clickedButton.getAttribute('onclick')?.includes('abrirSeletorCifra')) {
+                modal.classList.add('hidden');
+            }
+        }
+    });
+});
+
+// Fechar modal com ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('[id^="modal-cifras-"]').forEach(modal => {
+            modal.classList.add('hidden');
+        });
+    }
+});
 </script>
 
 {% endblock %}

@@ -15,7 +15,7 @@ from .neighborhood import Neighborhood
 from .follow_up import FollowUp
 from .word_of_knowledge import WordOfKnowledge, Healing
 from .schedule import Team, MonthlySchedule, ScheduleDay, ScaleDivision, DivisionMember
-from .music import Music
+from .music import Music, ChordSheet
 from .testimony import Testimony
 from .prayer_request import PrayerRequest
 from .canteen import CanteenDebtor

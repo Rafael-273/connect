@@ -585,8 +585,7 @@
                         <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
                             Ministério de <span style="color: #C90905;">Consolidação</span>
                         </h3>
-                        <p class="text-sm text-gray-500 mt-0.5">{{ followups_responsible|length }} pessoa{{
-                            followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
+                        <p class="text-sm text-gray-500 mt-0.5">{{ followups_responsible|length }} pessoa{{followups_responsible|length|pluralize:"s" }} em acompanhamento</p>
                     </div>
                 </div>
                 <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
@@ -771,9 +770,7 @@
                         <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
                             Escalas do <span style="color: #C90905;">Mês</span>
                         </h3>
-                        <p class="text-sm text-gray-500 mt-0.5">{{ member_schedules|length }} escala{{
-                            member_schedules|length|pluralize:"s" }} disponíve{{
-                            member_schedules|length|pluralize:"l,is" }}</p>
+                        <p class="text-sm text-gray-500 mt-0.5">{{ member_schedules|length }} escala{{member_schedules|length|pluralize:"s" }} disponíve{{member_schedules|length|pluralize:"l,is" }}</p>
                     </div>
                 </div>
                 <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
@@ -794,8 +791,7 @@
                                 </div>
                                 <div>
                                     <h4 class="text-sm font-bold text-gray-900">{{ schedule.title }}</h4>
-                                    <p class="text-xs text-gray-500">{{ schedule.ministry.name }} · {{ schedule.month
-                                        }}/{{ schedule.year }}</p>
+                                    <p class="text-xs text-gray-500">{{ schedule.ministry.name }} · {{ schedule.month}}/{{ schedule.year }}</p>
                                 </div>
                             </div>
                             <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"

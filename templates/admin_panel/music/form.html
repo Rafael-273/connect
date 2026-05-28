@@ -9,13 +9,14 @@
 
     .admin-card {
         background: white;
-        border-radius: 14px;
-        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #e5e7eb;
     }
 
     .section-header {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 0.625rem;
         padding-bottom: 0.75rem;
         margin-bottom: 1.25rem;
@@ -30,6 +31,7 @@
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
+        margin-top: 0.125rem;
     }
     .section-header .icon-wrap ion-icon {
         color: white;
@@ -41,6 +43,7 @@
         color: #374151;
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        display: block;
     }
 
     .form-group { margin-bottom: 1.25rem; }
@@ -55,7 +58,8 @@
 
     .form-input,
     input[type='text'],
-    input[type='file'] {
+    input[type='file'],
+    input[type='number'] {
         width: 100%;
         padding: 0.6rem 0.875rem;
         border: 1.5px solid #e5e7eb;
@@ -67,13 +71,15 @@
     }
 
     input[type='text']:hover,
-    input[type='file']:hover {
+    input[type='file']:hover,
+    input[type='number']:hover {
         border-color: #d1d5db;
         background-color: white;
     }
 
     input[type='text']:focus,
-    input[type='file']:focus {
+    input[type='file']:focus,
+    input[type='number']:focus {
         outline: none;
         border-color: var(--color-primary);
         background-color: white;
@@ -81,6 +87,152 @@
     }
 
     input[type='file'] { cursor: pointer; }
+
+    /* Estilos para o formset */
+    .formset-container {
+        border: 1.5px solid #f0f0f0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #fafafa 0%, #fcfcfc 100%);
+        margin-bottom: 1.25rem;
+    }
+
+    .formset-form {
+        display: grid;
+        grid-template-columns: 1fr 200px auto;
+        gap: 1rem;
+        align-items: flex-end;
+        margin-bottom: 1.25rem;
+        padding: 1rem;
+        background-color: white;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        transition: all 0.2s ease;
+    }
+
+    .formset-form:hover {
+        border-color: #d1d5db;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .formset-form:last-child {
+        margin-bottom: 0;
+    }
+
+    .formset-form .form-group {
+        margin-bottom: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .formset-form .form-group label {
+        font-size: 0.75rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .current-file-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%);
+        border: 1.5px solid #86efac;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .current-file-banner ion-icon {
+        color: #16a34a;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .current-file-banner a {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #166534;
+        text-decoration: none;
+        transition: all 0.2s;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .current-file-banner a:hover {
+        color: #15803d;
+        text-decoration: underline;
+    }
+
+    .btn-delete-chord {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        background-color: #fee2e2;
+        color: #dc2626;
+        border: none;
+        cursor: pointer;
+        transition: all 0.18s;
+        flex-shrink: 0;
+    }
+
+    .btn-delete-chord:hover {
+        background-color: #fecaca;
+        color: #b91c1c;
+    }
+
+    .hidden-input {
+        display: none;
+    }
+
+    /* Empty state para cifras */
+    .formset-empty-state {
+        text-align: center;\n        padding: 2rem 1rem;\n        color: #9ca3af;\n    }\n\n    .formset-empty-state ion-icon {\n        font-size: 2.5rem;\n        color: #d1d5db;\n        margin-bottom: 0.75rem;\n    }\n\n    .formset-empty-state p {\n        font-size: 0.875rem;\n        margin-bottom: 1rem;\n    }
+
+    @media (max-width: 640px) {
+        .formset-form {
+            grid-template-columns: 1fr;
+            padding: 1rem;
+        }
+
+        .btn-delete-chord {
+            width: 100%;
+            height: 40px;
+            align-self: flex-end;
+        }
+    }
+
+    .add-chord-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.65rem 1.25rem;
+        background-color: transparent;
+        color: var(--color-primary);
+        border: 1.5px dashed rgba(201, 9, 5, 0.35);
+        border-radius: 10px;
+        cursor: pointer;
+        font-size: 0.875rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        margin-top: 1rem;
+    }
+
+    .add-chord-btn:hover {
+        background-color: rgba(201, 9, 5, 0.05);
+        border-color: rgba(201, 9, 5, 0.6);
+    }
+
+    /* Esconder "Currently" do ClearableFileInput */
+    .clearable-file-input {
+        display: none;
+    }
 </style>
 {% endblock %}
 
@@ -163,32 +315,84 @@
                         {% endif %}
                     </div>
 
-                    <div class="section-header mt-2">
+                    <div class="section-header mt-6">
                         <div class="icon-wrap"><ion-icon name="document-outline"></ion-icon></div>
-                        <span>Cifra</span>
+                        <div>
+                            <span>Cifras</span>
+                            <p class="text-xs font-normal text-gray-500 mt-0.5">Adicione uma ou mais cifras em diferentes tons</p>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="{{ form.chord_sheet.id_for_label }}" class="form-label">
-                            Arquivo PDF
-                        </label>
+                    <div class="formset-container">
+                        {{ formset.management_form }}
 
-                        {% if form.instance.chord_sheet %}
-                        <div class="flex items-center gap-3 mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                            <ion-icon name="document-text-outline" class="text-[var(--color-primary)] text-xl flex-shrink-0"></ion-icon>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-sm font-medium text-gray-700 truncate">PDF atual</p>
-                                <a href="{{ form.instance.chord_sheet.url }}" target="_blank"
-                                   class="text-xs text-blue-600 hover:underline">Ver arquivo</a>
-                            </div>
+                        {% if formset.non_form_errors %}
+                        <div class="text-red-600 text-sm mb-3">
+                            {{ formset.non_form_errors }}
                         </div>
                         {% endif %}
 
-                        {{ form.chord_sheet }}
-                        {% if form.chord_sheet.errors %}
-                        <p class="text-red-600 text-sm mt-1">{{ form.chord_sheet.errors.0 }}</p>
-                        {% endif %}
-                        <p class="text-xs text-gray-500 mt-1.5">Apenas arquivos PDF. Opcional.</p>
+                        <div id="formset-forms">
+                            {% for form in formset %}
+                                <div class="formset-form" data-form-index="{{ forloop.counter0 }}">
+                                    <div class="form-group">
+                                        <label for="{{ form.file.id_for_label }}" class="form-label">
+                                            Arquivo PDF
+                                        </label>
+                                        {% if form.instance.pk and form.instance.file %}
+                                            <div class="current-file-banner">
+                                                <ion-icon name="document-text-outline"></ion-icon>
+                                                <a href="{{ form.instance.file.url }}" target="_blank"
+                                                   title="{{ form.instance.file.name }}"
+                                                   onclick="event.stopPropagation()">
+                                                    PDF atual — clique para abrir
+                                                </a>
+                                            </div>
+                                        {% endif %}
+                                        {{ form.file }}
+                                        {% if form.file.errors %}
+                                        <p class="text-red-600 text-xs mt-1">{{ form.file.errors.0 }}</p>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label for="{{ form.tone.id_for_label }}" class="form-label">
+                                            Tom
+                                        </label>
+                                        {{ form.tone }}
+                                        {% if form.tone.errors %}
+                                        <p class="text-red-600 text-xs mt-1">{{ form.tone.errors.0 }}</p>
+                                        {% endif %}
+                                    </div>
+
+                                    <div>
+                                        {% if form.instance.pk %}
+                                            <button type="button" class="btn-delete-chord" onclick="deleteChord(this)" title="Excluir cifra">
+                                                <ion-icon name="trash-outline" class="text-lg"></ion-icon>
+                                            </button>
+                                        {% else %}
+                                            {% if forloop.last %}
+                                                <button type="button" class="btn-delete-chord" onclick="deleteChord(this)" style="display: none;" title="Excluir cifra">
+                                                    <ion-icon name="trash-outline" class="text-lg"></ion-icon>
+                                                </button>
+                                            {% else %}
+                                                <button type="button" class="btn-delete-chord" onclick="deleteChord(this)" title="Excluir cifra">
+                                                    <ion-icon name="trash-outline" class="text-lg"></ion-icon>
+                                                </button>
+                                            {% endif %}
+                                        {% endif %}
+                                    </div>
+
+                                    {{ form.id }}
+                                    {{ form.music }}
+                                </div>
+                            {% endfor %}
+                        </div>
+
+                        <button type="button" class="add-chord-btn" onclick="addChord()">
+                            <ion-icon name="add-circle-outline"></ion-icon>
+                            Adicionar Cifra
+                        </button>
                     </div>
 
                     <!-- Botões -->
@@ -218,4 +422,71 @@
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script>
+// Função para adicionar nova cifra
+function addChord() {
+    const formsetContainer = document.getElementById('formset-forms');
+    const totalForms = document.querySelector('input[name="chordsheets-TOTAL_FORMS"]');
+    const currentIndex = parseInt(totalForms.value);
+    
+    // Cria nova row
+    const newForm = document.createElement('div');
+    newForm.className = 'formset-form';
+    newForm.setAttribute('data-form-index', currentIndex);
+    
+    const prefix = 'chordsheets-' + currentIndex;
+    
+    newForm.innerHTML = `
+        <div class="form-group">
+            <label for="id_${prefix}-file" class="form-label">Arquivo PDF</label>
+            <input type="file" name="${prefix}-file" id="id_${prefix}-file" class="form-input" accept=".pdf">
+        </div>
+        
+        <div class="form-group">
+            <label for="id_${prefix}-tone" class="form-label">Tom</label>
+            <input type="text" name="${prefix}-tone" id="id_${prefix}-tone" class="form-input" placeholder="Ex: Dó, Mi, Sol">
+        </div>
+        
+        <div>
+            <button type="button" class="btn-delete-chord" onclick="deleteChord(this)" title="Excluir cifra">
+                <ion-icon name="trash-outline" class="text-lg"></ion-icon>
+            </button>
+        </div>
+        
+        <input type="hidden" name="${prefix}-id" id="id_${prefix}-id">
+        <input type="hidden" name="${prefix}-music" id="id_${prefix}-music">
+    `;
+    
+    formsetContainer.appendChild(newForm);
+    totalForms.value = currentIndex + 1;
+}
+
+// Função para deletar cifra
+function deleteChord(button) {
+    const form = button.closest('.formset-form');
+    const idInput = form.querySelector('input[id$="-id"]');
+    const deleteCheckbox = form.querySelector('input[name$="-DELETE"]');
+    
+    if (idInput.value) {
+        // Se é um formulário existente, marca como delete
+        if (!deleteCheckbox) {
+            const checkbox = document.createElement('input');
+            checkbox.type = 'hidden';
+            checkbox.name = form.querySelector('input[name$="-id"]').name.replace('-id', '-DELETE');
+            checkbox.value = 'on';
+            form.appendChild(checkbox);
+        } else {
+            deleteCheckbox.value = 'on';
+        }
+        form.style.display = 'none';
+    } else {
+        // Se é um novo formulário, remove do DOM
+        form.remove();
+        const totalForms = document.querySelector('input[name="chordsheets-TOTAL_FORMS"]');
+        totalForms.value = parseInt(totalForms.value) - 1;
+    }
+}
+</script>
 {% endblock %}

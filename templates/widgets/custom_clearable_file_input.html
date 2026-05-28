@@ -1,0 +1,7 @@
+{% load i18n %}
+<input type="{{ widget.type }}" name="{{ widget.name }}"{% include "django/forms/widgets/attrs.html" %} />
+{% if widget.is_initial %}
+    <span style="display: none;">
+        <label for="{{ widget.clear_checkbox_id }}"><input type="checkbox" name="{{ widget.clear_checkbox_name }}" id="{{ widget.clear_checkbox_id }}" /> {% trans "Clear" %}</label>
+    </span>
+{% endif %}
