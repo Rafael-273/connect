@@ -22,3 +22,8 @@ from .canteen import CanteenDebtor
 from .course_attendance import AttendanceCourse, CourseParticipant, CourseLesson, CourseAttendance
 from .roteiro import Roteiro, AnuncioRoteiro, AnuncioRoteiroData
 from .house_of_peace import HouseOfPeace, HouseOfPeaceAssignment
+from .media_content import MediaContent
+from .media_task import MediaTask
+from .media_comment import MediaComment
+from .media_attachment import MediaAttachment
+from .media_month_plan import MediaContentCategory, MediaMonthPlan

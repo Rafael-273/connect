@@ -1,0 +1,359 @@
+{% extends "member_base.html" %}
+{% load static pt_date %}
+
+{% block title %}{{ plan }} · Planejamento{% endblock %}
+
+{% block head %}
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+
+    /* Step indicator */
+    .step-dot { width: 2rem; height: 2rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; transition: all 0.3s; }
+    .step-dot.active { background: var(--media-color); color: white; box-shadow: 0 0 0 4px rgba(var(--media-rgb),0.2); }
+    .step-dot.done { background: #10B981; color: white; }
+    .step-dot.idle { background: #E5E7EB; color: #9CA3AF; }
+    .step-line { flex: 1; height: 2px; background: #E5E7EB; transition: background 0.3s; }
+    .step-line.done { background: #10B981; }
+
+    /* Toggle buttons (Step 1) */
+    .toggle-btn { border-radius: 1rem; border: 2px solid #E5E7EB; background: white; transition: all 0.2s; cursor: pointer; }
+    .toggle-btn.selected { border-color: var(--media-color); background: rgba(var(--media-rgb),0.06); }
+
+    /* Content cards (Step 2) */
+    .content-row { background: white; border-radius: 0.875rem; border: 1.5px solid rgba(var(--media-rgb),0.1); transition: all 0.2s; box-shadow: 0 1px 6px rgba(0,0,0,0.04); }
+    .section-header { display: flex; align-items: center; gap: 10px; padding: 12px 0 8px; }
+    .badge { display: inline-flex; align-items: center; font-size: 0.65rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; }
+    .badge-pending { background: #F3F4F6; color: #6B7280; }
+    .badge-in_progress { background: #DBEAFE; color: #1D4ED8; }
+    .badge-review { background: #FEF3C7; color: #92400E; }
+    .badge-approved { background: #D1FAE5; color: #065F46; }
+    .badge-scheduled { background: #EDE9FE; color: #5B21B6; }
+    .badge-published { background: #ECFDF5; color: #047857; }
+
+    /* Calendar embed (Step 3) */
+    #plan-calendar { background: white; border-radius: 1rem; overflow: hidden; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50">
+
+    <!-- Back + Title -->
+    <div class="px-4 pt-6 pb-4 bg-white border-b border-gray-100">
+        <a href="{% url 'media_dashboard' %}" class="flex items-center gap-1.5 text-xs font-semibold mb-3" style="color: var(--media-color);">
+            <i class="fas fa-arrow-left"></i> Planejamento de Mídia
+        </a>
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl flex flex-col items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, rgba(var(--media-rgb),0.12), rgba(var(--media-rgb),0.06));">
+                <span class="text-lg font-black leading-none" style="color: var(--media-color);">{{ plan.month|stringformat:"02d" }}</span>
+                <span class="text-xs text-gray-400">{{ plan.year }}</span>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">{{ plan.month_name }} {{ plan.year }}</h1>
+                <p class="text-xs text-gray-500">{{ plan.event_count|default:0 }} evento{{ plan.event_count|default:0|pluralize }} · {{ plan.category_count|default:0 }} categoria{{ plan.category_count|default:0|pluralize }} · {{ total_contents }} conteúdo{{ total_contents|pluralize }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step Indicator -->
+    <div class="px-6 py-4 bg-white border-b border-gray-100">
+        <div class="flex items-center">
+            <!-- Step 1 -->
+            <a href="{% url 'media_plan_step' plan.year plan.month 1 %}">
+                <div class="step-dot {% if step == 1 %}active{% elif step > 1 %}done{% else %}idle{% endif %}">
+                    {% if step > 1 %}<i class="fas fa-check text-xs"></i>{% else %}1{% endif %}
+                </div>
+            </a>
+            <div class="step-line {% if step > 1 %}done{% endif %}"></div>
+            <!-- Step 2 -->
+            <a href="{% if has_macros %}{% url 'media_plan_step' plan.year plan.month 2 %}{% else %}#{% endif %}">
+                <div class="step-dot {% if step == 2 %}active{% elif step > 2 %}done{% elif has_macros %}idle{% else %}idle opacity-40{% endif %}">
+                    {% if step > 2 %}<i class="fas fa-check text-xs"></i>{% else %}2{% endif %}
+                </div>
+            </a>
+            <div class="step-line {% if step > 2 %}done{% endif %}"></div>
+            <!-- Step 3 -->
+            <a href="{% if has_macros and total_contents > 0 %}{% url 'media_plan_step' plan.year plan.month 3 %}{% else %}#{% endif %}">
+                <div class="step-dot {% if step == 3 %}active{% else %}idle {% if not has_macros or total_contents == 0 %}opacity-40{% endif %}{% endif %}">3</div>
+            </a>
+        </div>
+        <div class="flex justify-between mt-1.5 text-xs text-gray-400 font-medium">
+            <span style="{% if step == 1 %}color: var(--media-color); font-weight: 700;{% endif %}">Macros</span>
+            <span style="{% if step == 2 %}color: var(--media-color); font-weight: 700;{% endif %}">Conteúdos</span>
+            <span style="{% if step == 3 %}color: var(--media-color); font-weight: 700;{% endif %}">Calendário</span>
+        </div>
+    </div>
+
+    <!-- =========================================================
+         ETAPA 1: MACROS (Eventos + Categorias)
+    ========================================================== -->
+    {% if step == 1 %}
+    <div class="px-4 pt-5">
+
+        <!-- Events of the month -->
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Eventos do mês</p>
+        {% if events_this_month %}
+        <div class="space-y-2 mb-5">
+            {% for event in events_this_month %}
+            <form method="post" action="{% url 'media_plan_toggle_event' plan.year plan.month %}">
+                {% csrf_token %}
+                <input type="hidden" name="event_pk" value="{{ event.pk }}">
+                <button type="submit" class="toggle-btn w-full flex items-center gap-3 p-3.5 text-left {% if event.pk in plan_event_ids %}selected{% endif %}">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 {% if event.pk in plan_event_ids %}bg-purple-100{% else %}bg-gray-100{% endif %}">
+                        {% if event.pk in plan_event_ids %}
+                        <i class="fas fa-check text-sm" style="color: var(--media-color);"></i>
+                        {% else %}
+                        <i class="fas fa-calendar-day text-sm text-gray-400"></i>
+                        {% endif %}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-semibold {% if event.pk in plan_event_ids %}text-purple-900{% else %}text-gray-700{% endif %} truncate">{{ event.title }}</div>
+                        <div class="text-xs text-gray-400">{{ event.event_date|date:"d \d\e M" }}</div>
+                    </div>
+                    <span class="text-xs font-semibold flex-shrink-0 {% if event.pk in plan_event_ids %}text-purple-600{% else %}text-gray-400{% endif %}">
+                        {% if event.pk in plan_event_ids %}Incluído{% else %}+ Incluir{% endif %}
+                    </span>
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-400 mb-5">
+            Nenhum evento cadastrado para {{ plan.month_name }}.
+        </div>
+        {% endif %}
+
+        <!-- Content Categories -->
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Categorias de conteúdo avulso</p>
+        {% if all_categories %}
+        <div class="space-y-2 mb-4">
+            {% for cat in all_categories %}
+            <form method="post" action="{% url 'media_plan_toggle_category' plan.year plan.month %}">
+                {% csrf_token %}
+                <input type="hidden" name="category_pk" value="{{ cat.pk }}">
+                <button type="submit" class="toggle-btn w-full flex items-center gap-3 p-3.5 text-left {% if cat.pk in plan_category_ids %}selected{% endif %}">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 {% if cat.pk in plan_category_ids %}bg-blue-100{% else %}bg-gray-100{% endif %}">
+                        {% if cat.pk in plan_category_ids %}
+                        <i class="fas fa-check text-sm text-blue-600"></i>
+                        {% else %}
+                        <i class="fas fa-layer-group text-sm text-gray-400"></i>
+                        {% endif %}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-semibold {% if cat.pk in plan_category_ids %}text-blue-900{% else %}text-gray-700{% endif %} truncate">{{ cat.name }}</div>
+                        <div class="text-xs text-gray-400">{{ cat.get_content_type_display }}{% if cat.description %} · {{ cat.description|truncatechars:30 }}{% endif %}</div>
+                    </div>
+                    <span class="text-xs font-semibold flex-shrink-0 {% if cat.pk in plan_category_ids %}text-blue-600{% else %}text-gray-400{% endif %}">
+                        {% if cat.pk in plan_category_ids %}Incluída{% else %}+ Incluir{% endif %}
+                    </span>
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Create new category -->
+        {% if is_media_leader %}
+        <details class="bg-white rounded-xl border-2 border-dashed border-gray-200 mb-6">
+            <summary class="flex items-center gap-2 px-4 py-3 cursor-pointer text-sm font-semibold text-gray-500 select-none">
+                <i class="fas fa-plus-circle text-gray-400"></i> Nova categoria personalizada
+            </summary>
+            <form method="post" action="{% url 'media_plan_create_category' plan.year plan.month %}" class="px-4 pb-4 pt-2 space-y-3">
+                {% csrf_token %}
+                <input type="text" name="name" placeholder="Nome da categoria" required
+                    class="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <select name="content_type" required class="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+                    <option value="">Tipo de conteúdo…</option>
+                    <option value="artwork">Arte</option>
+                    <option value="reel">Reel</option>
+                    <option value="carousel">Carrossel</option>
+                    <option value="story">Story</option>
+                    <option value="photography">Fotografia</option>
+                    <option value="video">Vídeo</option>
+                    <option value="livestream">Transmissão ao Vivo</option>
+                    <option value="youtube">YouTube</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="website_banner">Banner do Site</option>
+                    <option value="devotional">Devocional</option>
+                    <option value="announcement">Comunicado</option>
+                </select>
+                <input type="text" name="description" placeholder="Descrição (opcional)"
+                    class="w-full rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <button type="submit" class="w-full py-2.5 rounded-xl text-sm font-bold text-white" style="background: var(--media-color);">
+                    Criar e adicionar ao plano
+                </button>
+            </form>
+        </details>
+        {% endif %}
+
+        <!-- CTA next step -->
+        {% if has_macros %}
+        <a href="{% url 'media_plan_step' plan.year plan.month 2 %}" class="block w-full py-3.5 rounded-2xl text-center text-sm font-bold text-white shadow-lg mb-2" style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+            Próxima etapa: criar conteúdos <i class="fas fa-arrow-right ml-1"></i>
+        </a>
+        {% else %}
+        <div class="text-center text-xs text-gray-400 py-2">Selecione ao menos um evento ou categoria para avançar.</div>
+        {% endif %}
+    </div>
+
+
+    <!-- =========================================================
+         ETAPA 2: CONTEÚDOS POR MACRO
+    ========================================================== -->
+    {% elif step == 2 %}
+    <div class="px-4 pt-5">
+
+        <!-- Events -->
+        {% for event in plan_events %}
+        <div class="mb-5">
+            <div class="section-header">
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background: rgba(var(--media-rgb),0.1);">
+                    <i class="fas fa-calendar-day text-sm" style="color: var(--media-color);"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-gray-900 truncate">{{ event.title }}</div>
+                    <div class="text-xs text-gray-400">{{ event.event_date|date:"d \d\e M" }}</div>
+                </div>
+                {% if is_media_leader %}
+                <a href="{% url 'media_content_create' %}?month_plan={{ plan.pk }}&event={{ event.pk }}" class="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg flex-shrink-0" style="background: rgba(var(--media-rgb),0.1); color: var(--media-color);">
+                    <i class="fas fa-plus"></i> Conteúdo
+                </a>
+                {% endif %}
+            </div>
+            {% with contents=event_contents|get_item:event.pk %}
+            {% if contents %}
+            <div class="space-y-1.5 ml-0">
+                {% for c in contents %}
+                <a href="{% url 'media_content_detail' c.pk %}" class="content-row flex items-center gap-3 px-3.5 py-3 block">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-0.5">
+                            <span class="badge badge-{{ c.status }}">{{ c.get_status_display }}</span>
+                            <span class="text-xs text-gray-400">{{ c.get_content_type_display }}</span>
+                        </div>
+                        <div class="text-sm font-semibold text-gray-900 truncate">{{ c.title }}</div>
+                        {% if c.due_date %}<div class="text-xs text-gray-400 mt-0.5">Prazo: {{ c.due_date|date:"d/m" }}</div>{% endif %}
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-200 text-xs flex-shrink-0"></i>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="ml-0 bg-white rounded-xl border border-dashed border-gray-200 py-3 px-4 text-xs text-gray-400 text-center">
+                Nenhum conteúdo planejado para este evento.
+                {% if is_media_leader %}<br><a href="{% url 'media_content_create' %}?month_plan={{ plan.pk }}&event={{ event.pk }}" class="font-semibold" style="color: var(--media-color);">Criar primeiro →</a>{% endif %}
+            </div>
+            {% endif %}
+            {% endwith %}
+        </div>
+        {% endfor %}
+
+        <!-- Categories -->
+        {% for cat in plan_categories %}
+        <div class="mb-5">
+            <div class="section-header">
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
+                    <i class="fas fa-layer-group text-sm text-blue-500"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-gray-900 truncate">{{ cat.name }}</div>
+                    <div class="text-xs text-gray-400">{{ cat.get_content_type_display }}</div>
+                </div>
+                {% if is_media_leader %}
+                <a href="{% url 'media_content_create' %}?month_plan={{ plan.pk }}&category={{ cat.pk }}" class="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg flex-shrink-0 bg-blue-50 text-blue-600">
+                    <i class="fas fa-plus"></i> Conteúdo
+                </a>
+                {% endif %}
+            </div>
+            {% with contents=category_contents|get_item:cat.pk %}
+            {% if contents %}
+            <div class="space-y-1.5">
+                {% for c in contents %}
+                <a href="{% url 'media_content_detail' c.pk %}" class="content-row flex items-center gap-3 px-3.5 py-3 block">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 mb-0.5">
+                            <span class="badge badge-{{ c.status }}">{{ c.get_status_display }}</span>
+                        </div>
+                        <div class="text-sm font-semibold text-gray-900 truncate">{{ c.title }}</div>
+                        {% if c.due_date %}<div class="text-xs text-gray-400 mt-0.5">Prazo: {{ c.due_date|date:"d/m" }}</div>{% endif %}
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-200 text-xs flex-shrink-0"></i>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="bg-white rounded-xl border border-dashed border-gray-200 py-3 px-4 text-xs text-gray-400 text-center">
+                Nenhum conteúdo planejado nesta categoria.
+                {% if is_media_leader %}<br><a href="{% url 'media_content_create' %}?month_plan={{ plan.pk }}&category={{ cat.pk }}" class="font-semibold text-blue-500">Criar primeiro →</a>{% endif %}
+            </div>
+            {% endif %}
+            {% endwith %}
+        </div>
+        {% endfor %}
+
+        <!-- Nav buttons -->
+        <div class="flex gap-3 mt-4 mb-2">
+            <a href="{% url 'media_plan_step' plan.year plan.month 1 %}" class="flex-1 py-3 rounded-2xl text-center text-sm font-semibold bg-gray-100 text-gray-600">
+                <i class="fas fa-arrow-left mr-1"></i> Macros
+            </a>
+            {% if total_contents > 0 %}
+            <a href="{% url 'media_plan_step' plan.year plan.month 3 %}" class="flex-1 py-3 rounded-2xl text-center text-sm font-bold text-white shadow" style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                Ver calendário <i class="fas fa-arrow-right ml-1"></i>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+
+    <!-- =========================================================
+         ETAPA 3: CALENDÁRIO
+    ========================================================== -->
+    {% elif step == 3 %}
+    <div class="px-4 pt-5">
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-4">
+            <div id="plan-calendar" class="p-3"></div>
+        </div>
+        <!-- Legend -->
+        <div class="flex flex-wrap gap-3 text-xs text-gray-500 mb-5">
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> Eventos</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Publicações</span>
+            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> Prazos</span>
+        </div>
+        <a href="{% url 'media_plan_step' plan.year plan.month 2 %}" class="block py-3 rounded-2xl text-center text-sm font-semibold bg-gray-100 text-gray-600 mb-2">
+            <i class="fas fa-arrow-left mr-1"></i> Voltar a conteúdos
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+
+{% if step == 3 %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const cal = new FullCalendar.Calendar(document.getElementById('plan-calendar'), {
+        initialView: 'dayGridMonth',
+        initialDate: '{{ plan.year }}-{{ plan.month|stringformat:"02d" }}-01',
+        locale: 'pt-br',
+        headerToolbar: { left: 'prev', center: 'title', right: 'next' },
+        height: 'auto',
+        eventSources: [{
+            url: '{% url "media_calendar_events" %}',
+            extraParams: {
+                start: '{{ plan.year }}-{{ plan.month|stringformat:"02d" }}-01',
+                end: '{{ plan.year }}-{{ plan.month|stringformat:"02d" }}-28',
+            }
+        }],
+        eventClick: function(info) {
+            const props = info.event.extendedProps;
+            if (props.type === 'content' && props.pk) {
+                window.location.href = '/media/contents/' + props.pk + '/';
+            }
+        },
+    });
+    cal.render();
+});
+</script>
+{% endif %}
+{% endblock %}

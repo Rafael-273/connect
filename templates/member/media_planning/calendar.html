@@ -1,0 +1,94 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Calendário de Mídia{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+    #calendar { font-size: 0.8rem; }
+    .fc-toolbar-title { font-size: 1rem !important; font-weight: 700; }
+    .fc-button { background: var(--media-color) !important; border-color: var(--media-color) !important; font-size: 0.75rem !important; }
+    .fc-button:hover { opacity: 0.85; }
+    .fc-daygrid-event { border-radius: 4px !important; font-size: 0.7rem !important; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-28">
+
+    <!-- Header -->
+    <div class="px-4 pt-6 pb-4 flex items-center justify-between">
+        <div>
+            <h1 class="text-xl font-bold text-gray-900">Calendário</h1>
+            <p class="text-sm text-gray-500">Planejamento de Mídia</p>
+        </div>
+        <a href="{% url 'media_dashboard' %}" class="text-gray-400 hover:text-gray-600 text-sm">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+    </div>
+
+    <!-- Legend -->
+    <div class="px-4 mb-4 flex flex-wrap gap-3">
+        <div class="flex items-center gap-1.5 text-xs text-gray-600">
+            <span class="legend-dot" style="background:#3B82F6;"></span> Eventos da Igreja
+        </div>
+        <div class="flex items-center gap-1.5 text-xs text-gray-600">
+            <span class="legend-dot" style="background:#10B981;"></span> Publicações de Mídia
+        </div>
+        <div class="flex items-center gap-1.5 text-xs text-gray-600">
+            <span class="legend-dot" style="background:#F59E0B;"></span> Prazo de Tarefas
+        </div>
+    </div>
+
+    <!-- Calendar Container -->
+    <div class="px-4">
+        <div id="calendar" class="bg-white rounded-xl border border-gray-200 p-3"></div>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const calendarEl = document.getElementById('calendar');
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'pt-br',
+        headerToolbar: {
+            left: 'prev,next',
+            center: 'title',
+            right: 'dayGridMonth,listWeek'
+        },
+        buttonText: {
+            month: 'Mês',
+            list: 'Lista'
+        },
+        events: {
+            url: '{% url "media_calendar_events" %}',
+            method: 'GET',
+            failure: function() {
+                alert('Erro ao carregar eventos do calendário.');
+            }
+        },
+        eventClick: function(info) {
+            if (info.event.url) {
+                info.jsEvent.preventDefault();
+                window.location.href = info.event.url;
+            }
+        },
+        eventTimeFormat: {
+            hour: '2-digit',
+            minute: '2-digit',
+            meridiem: false,
+        },
+        height: 'auto',
+    });
+    calendar.render();
+});
+</script>
+
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

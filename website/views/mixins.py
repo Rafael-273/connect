@@ -95,3 +95,10 @@ class MinistrationContextMixin:
             ministry__name__icontains='ministração',
             is_active=True,
         ).exists()
+
+    def get_media_status(self, member):
+        return MinistryMembership.objects.filter(
+            member=member,
+            ministry__name__iexact='Mídia Externa',
+            is_active=True,
+        ).exists()

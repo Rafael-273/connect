@@ -1,12 +1,35 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from django.conf import settings
+from .views.media_planning import (
+    MediaDashboardView,
+    MediaMonthPlanCreateView,
+    MediaMonthPlanDetailView,
+    MediaMonthPlanWizardView,
+    MediaPlanToggleEventView,
+    MediaPlanToggleCategoryView,
+    MediaContentCategoryCreateView,
+    MediaEventContentsView,
+    MediaCategoryContentsView,
+    MediaContentListView,
+    MediaContentDetailView,
+    MediaContentCreateView,
+    MediaContentUpdateView,
+    MediaContentDeleteView,
+    MediaTaskCreateView,
+    MediaTaskUpdateStatusView,
+    MediaCommentCreateView,
+    MediaAttachmentCreateView,
+    MediaCalendarView,
+    MediaCalendarEventsAPIView,
+    MediaCalendarUpdateView,
+)
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView, MusicUserListView
 from .views.home import HomeView, TestimonyListView, ContactView
 from .views.visitor import VisitorCreateView, MemberVisitorCreateView, MemberVisitorListView
 from .views.evangelism import EvangelismCreateView, EvangelismListView
 from .views.member import (
-    MemberCreateView, 
+    MemberCreateView,
     NewConvertsListView,
     MemberConsolidationListView,
     MemberConsolidationDetailView,
@@ -350,4 +373,31 @@ urlpatterns = [
     path('admin-panel/ministries/<int:ministry_id>/members/remove/<int:member_id>/', MinistryRemoveMemberView.as_view(), name='ministry_remove_member'),
     path('admin-panel/ministries/<int:ministry_id>/members/toggle-role/<int:member_id>/', MinistryToggleRoleView.as_view(), name='ministry_toggle_role'),
     path('admin-panel/ministries/<int:ministry_id>/members/toggle-status/<int:member_id>/', MinistryToggleStatusView.as_view(), name='ministry_toggle_status'),
+
+    # Media Planning URLs
+    path('media/', MediaDashboardView.as_view(), name='media_dashboard'),
+    # Month Plans (wizard)
+    path('media/planos/novo/', MediaMonthPlanCreateView.as_view(), name='media_plan_create'),
+    path('media/planos/<int:year>/<int:month>/', MediaMonthPlanDetailView.as_view(), name='media_plan_detail'),
+    path('media/planos/<int:year>/<int:month>/etapa/<int:step>/', MediaMonthPlanWizardView.as_view(), name='media_plan_step'),
+    path('media/planos/<int:year>/<int:month>/evento/toggle/', MediaPlanToggleEventView.as_view(), name='media_plan_toggle_event'),
+    path('media/planos/<int:year>/<int:month>/categoria/toggle/', MediaPlanToggleCategoryView.as_view(), name='media_plan_toggle_category'),
+    path('media/planos/<int:year>/<int:month>/categoria/criar/', MediaContentCategoryCreateView.as_view(), name='media_plan_create_category'),
+    # Standalone content browse (outside plans)
+    path('media/events/<int:event_pk>/', MediaEventContentsView.as_view(), name='media_event_contents'),
+    path('media/category/<str:content_type>/', MediaCategoryContentsView.as_view(), name='media_category_contents'),
+    # Content CRUD
+    path('media/contents/', MediaContentListView.as_view(), name='media_content_list'),
+    path('media/contents/create/', MediaContentCreateView.as_view(), name='media_content_create'),
+    path('media/contents/<int:pk>/', MediaContentDetailView.as_view(), name='media_content_detail'),
+    path('media/contents/<int:pk>/edit/', MediaContentUpdateView.as_view(), name='media_content_update'),
+    path('media/contents/<int:pk>/delete/', MediaContentDeleteView.as_view(), name='media_content_delete'),
+    path('media/contents/<int:pk>/tasks/create/', MediaTaskCreateView.as_view(), name='media_task_create'),
+    path('media/tasks/<int:pk>/status/', MediaTaskUpdateStatusView.as_view(), name='media_task_update_status'),
+    path('media/contents/<int:pk>/comment/', MediaCommentCreateView.as_view(), name='media_comment_create'),
+    path('media/contents/<int:pk>/attach/', MediaAttachmentCreateView.as_view(), name='media_attachment_create'),
+    # Calendar
+    path('media/calendar/', MediaCalendarView.as_view(), name='media_calendar'),
+    path('media/calendar/events/', MediaCalendarEventsAPIView.as_view(), name='media_calendar_events'),
+    path('media/calendar/contents/<int:pk>/reschedule/', MediaCalendarUpdateView.as_view(), name='media_calendar_update'),
 ]

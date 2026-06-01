@@ -1,0 +1,93 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}{% if action == 'create' %}Novo Conteúdo{% else %}Editar Conteúdo{% endif %}{% endblock %}
+
+{% block head %}
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-28">
+
+    <!-- Header -->
+    <div class="px-4 pt-6 pb-4 flex items-center gap-3">
+        <a href="{% if content %}{% url 'media_content_detail' content.pk %}{% else %}{% url 'media_content_list' %}{% endif %}" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-arrow-left text-lg"></i>
+        </a>
+        <div>
+            <h1 class="text-xl font-bold text-gray-900">{% if action == 'create' %}Novo Conteúdo{% else %}Editar Conteúdo{% endif %}</h1>
+            <p class="text-sm text-gray-500">Planejamento de Mídia</p>
+        </div>
+    </div>
+
+    <form method="post" class="px-4 space-y-4">{% csrf_token %}
+
+        <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Título *</label>
+                {{ form.title }}
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Descrição</label>
+                {{ form.description }}
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Tipo</label>
+                    {{ form.content_type }}
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Status</label>
+                    {{ form.status }}
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Prioridade</label>
+                    {{ form.priority }}
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Responsável</label>
+                    {{ form.responsible }}
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Evento (opcional)</label>
+                {{ form.event }}
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Prazo de produção</label>
+                    {{ form.due_date }}
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Data de publicação</label>
+                    {{ form.publication_date }}
+                </div>
+            </div>
+        </div>
+
+        {% if form.errors %}
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+            {% for field in form %}{% for error in field.errors %}<p>{{ field.label }}: {{ error }}</p>{% endfor %}{% endfor %}
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}
+
+        <button type="submit" class="w-full py-3 rounded-xl text-sm font-bold text-white" style="background: var(--media-color);">
+            {% if action == 'create' %}Criar conteúdo{% else %}Salvar alterações{% endif %}
+        </button>
+
+    </form>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

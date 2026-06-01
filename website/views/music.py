@@ -141,6 +141,7 @@ class MusicUserListView(LoginRequiredMixin, MinistrationContextMixin, ListView):
         flags = self._get_ministry_flags(member)
         context['can_consolidate'] = flags['can_consolidate']
         context['is_ministration_member'] = flags['is_ministration']
+        context['is_media_member'] = flags['is_media']
         return context
 
     def _get_ministry_flags(self, member):
@@ -148,6 +149,7 @@ class MusicUserListView(LoginRequiredMixin, MinistrationContextMixin, ListView):
         return {
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration': self.get_ministration_status(member),
+            'is_media': self.get_media_status(member),
         }
 
 

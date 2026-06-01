@@ -94,6 +94,7 @@ class HouseOfPeaceAvailableListView(MemberRequiredMixin, MinistrationContextMixi
             'member': member,
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(member),
+            'is_media_member': self.get_media_status(member),
         }
         return render(request, 'house_of_peace/available_list.html', context)
 
@@ -163,6 +164,7 @@ class HouseOfPeaceMyListView(MemberRequiredMixin, MinistrationContextMixin, View
             'member': member,
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(member),
+            'is_media_member': self.get_media_status(member),
         }
         return render(request, 'house_of_peace/my_list.html', context)
 
@@ -202,6 +204,7 @@ class HouseOfPeaceCompleteView(MemberRequiredMixin, MinistrationContextMixin, Vi
             'assignment': assignment,
             'can_consolidate': self.member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(self.member),
+            'is_media_member': self.get_media_status(self.member),
         })
 
     def post(self, request, assignment_id):
@@ -234,6 +237,7 @@ class HouseOfPeaceCompleteView(MemberRequiredMixin, MinistrationContextMixin, Vi
                 'assignment': assignment,
                 'can_consolidate': self.member.is_available_to_consolidate,
                 'is_ministration_member': self.get_ministration_status(self.member),
+                'is_media_member': self.get_media_status(self.member),
             })
 
         assignment.complete(
@@ -324,6 +328,7 @@ class HouseOfPeaceDetailView(MemberRequiredMixin, MinistrationContextMixin, View
             'assignments': casa.assignments.select_related('member').all(),
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(member),
+            'is_media_member': self.get_media_status(member),
         }
 
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':

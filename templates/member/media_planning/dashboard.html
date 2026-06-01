@@ -1,0 +1,134 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Planejamento de Mídia{% endblock %}
+
+{% block head %}
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+    .plan-card {
+        background: white;
+        border-radius: 1.25rem;
+        border: 2px solid rgba(var(--media-rgb),0.12);
+        transition: all 0.25s ease;
+        box-shadow: 0 2px 12px rgba(var(--media-rgb),0.06);
+    }
+    .plan-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(var(--media-rgb),0.12); }
+    .progress-bar-bg { background: rgba(var(--media-rgb),0.12); border-radius: 9999px; height: 6px; overflow: hidden; }
+    .progress-bar-fill { background: linear-gradient(90deg, #8B5CF6, #A78BFA); border-radius: 9999px; height: 100%; }
+    .progress-bar-fill.done { background: linear-gradient(90deg, #10B981, #34D399); }
+    .stat-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; background: rgba(var(--media-rgb),0.08); color: #6D28D9; }
+    .fab { position: fixed; bottom: 5.5rem; right: 1rem; width: 3.25rem; height: 3.25rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 20px rgba(var(--media-rgb),0.4); z-index: 40; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-28" style="background: linear-gradient(135deg, rgba(139,92,246,0.03) 0%, #fff 60%);">
+
+    <!-- Header -->
+    <div class="px-4 pt-8 pb-5">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                    <i class="fas fa-camera-retro text-white text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-900">Planejamento de Mídia</h1>
+                    <p class="text-xs text-gray-500">Planejamento mensal da equipe</p>
+                </div>
+            </div>
+            <a href="{% url 'media_calendar' %}" class="w-9 h-9 rounded-xl flex items-center justify-center border-2" style="border-color: rgba(var(--media-rgb),0.3); color: var(--media-color);">
+                <i class="fas fa-calendar-alt text-sm"></i>
+            </a>
+        </div>
+    </div>
+
+    <!-- Global stats strip -->
+    <div class="px-4 flex gap-2 mb-6 overflow-x-auto pb-1">
+        <div class="flex-shrink-0 bg-white rounded-xl border border-gray-100 px-4 py-2.5 text-center shadow-sm min-w-[80px]">
+            <div class="text-lg font-bold" style="color: var(--media-color);">{{ total_pending }}</div>
+            <div class="text-xs text-gray-500">Em prod.</div>
+        </div>
+        <div class="flex-shrink-0 bg-white rounded-xl border border-gray-100 px-4 py-2.5 text-center shadow-sm min-w-[80px]">
+            <div class="text-lg font-bold text-amber-500">{{ total_delayed }}</div>
+            <div class="text-xs text-gray-500">Atrasadas</div>
+        </div>
+        <div class="flex-shrink-0 bg-white rounded-xl border border-gray-100 px-4 py-2.5 text-center shadow-sm min-w-[80px]">
+            <div class="text-lg font-bold text-emerald-500">{{ total_this_week }}</div>
+            <div class="text-xs text-gray-500">Esta semana</div>
+        </div>
+        <a href="{% url 'media_content_list' %}" class="flex-shrink-0 bg-white rounded-xl border border-gray-100 px-4 py-2.5 text-center shadow-sm min-w-[80px] flex flex-col items-center justify-center">
+            <i class="fas fa-list-ul text-gray-400 text-sm"></i>
+            <div class="text-xs text-gray-500 mt-0.5">Lista</div>
+        </a>
+    </div>
+
+    <!-- Month Plans -->
+    <div class="px-4">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Planejamentos mensais</p>
+
+        {% if plans %}
+        <div class="space-y-3">
+            {% for plan in plans %}
+            <a href="{% url 'media_plan_detail' plan.year plan.month %}" class="plan-card flex items-center gap-4 p-4 block">
+                <!-- Month badge -->
+                <div class="w-14 h-14 rounded-2xl flex flex-col items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, rgba(var(--media-rgb),0.12), rgba(var(--media-rgb),0.06));">
+                    <span class="text-lg font-black leading-none" style="color: var(--media-color);">{{ plan.month|stringformat:"02d" }}</span>
+                    <span class="text-xs text-gray-500">{{ plan.year }}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-base font-bold text-gray-900">{{ plan.month_name }}</div>
+                    <div class="flex items-center gap-2 mt-1 mb-2">
+                        {% if plan.event_count > 0 %}
+                        <span class="stat-pill"><i class="fas fa-calendar-day"></i>{{ plan.event_count }} evento{{ plan.event_count|pluralize }}</span>
+                        {% endif %}
+                        {% if plan.category_count > 0 %}
+                        <span class="stat-pill"><i class="fas fa-layer-group"></i>{{ plan.category_count }} cat.</span>
+                        {% endif %}
+                        {% if plan.total_contents == 0 %}
+                        <span class="text-xs text-gray-400 italic">Sem conteúdos</span>
+                        {% endif %}
+                    </div>
+                    {% if plan.total_contents > 0 %}
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill{% if plan.progress == 100 %} done{% endif %}" style="width: {{ plan.progress }}%;"></div>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="text-right flex-shrink-0">
+                    {% if plan.total_contents > 0 %}
+                    <div class="text-base font-bold {% if plan.progress == 100 %}text-emerald-600{% else %}text-gray-800{% endif %}">{{ plan.progress }}%</div>
+                    <div class="text-xs text-gray-400">{{ plan.done_count }}/{{ plan.total_contents }}</div>
+                    {% else %}
+                    <span class="text-xs font-semibold px-2.5 py-1.5 rounded-lg" style="background: rgba(var(--media-rgb),0.1); color: var(--media-color);">Planejar</span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-16">
+            <div class="w-20 h-20 mx-auto rounded-3xl flex items-center justify-center mb-5" style="background: rgba(var(--media-rgb),0.08);">
+                <i class="fas fa-calendar-plus text-4xl" style="color: var(--media-color);"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gray-800 mb-1">Nenhum plano criado</h2>
+            <p class="text-sm text-gray-400 mb-6">Comece criando o planejamento do mês atual.</p>
+            {% if is_media_leader %}
+            <a href="{% url 'media_plan_create' %}" class="inline-flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold text-white shadow-lg" style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                <i class="fas fa-plus"></i> Criar planejamento
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+
+{% if is_media_leader %}
+<a href="{% url 'media_plan_create' %}" class="fab text-white" style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+    <i class="fas fa-plus text-lg"></i>
+</a>
+{% endif %}
+
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

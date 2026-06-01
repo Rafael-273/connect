@@ -1,0 +1,131 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}{{ event.title }} · Mídia{% endblock %}
+
+{% block head %}
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+    .media-card {
+        background: white;
+        border-radius: 1rem;
+        border: 1.5px solid rgba(var(--media-rgb),0.1);
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .media-card:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(var(--media-rgb),0.1); }
+    .progress-bar-bg { background: rgba(var(--media-rgb),0.12); border-radius: 9999px; height: 8px; overflow: hidden; }
+    .progress-bar-fill { background: linear-gradient(90deg, #8B5CF6, #A78BFA); border-radius: 9999px; height: 100%; transition: width 0.5s ease; }
+    .progress-bar-fill.done { background: linear-gradient(90deg, #10B981, #34D399); }
+    .badge { display: inline-flex; align-items: center; font-size: 0.65rem; font-weight: 600; padding: 2px 8px; border-radius: 9999px; }
+    .badge-pending { background: #F3F4F6; color: #6B7280; }
+    .badge-in_progress { background: #DBEAFE; color: #1D4ED8; }
+    .badge-review { background: #FEF3C7; color: #92400E; }
+    .badge-approved { background: #D1FAE5; color: #065F46; }
+    .badge-scheduled { background: #EDE9FE; color: #5B21B6; }
+    .badge-published { background: #ECFDF5; color: #047857; }
+    .priority-low { color: #6B7280; }
+    .priority-medium { color: #3B82F6; }
+    .priority-high { color: #F59E0B; }
+    .priority-urgent { color: #EF4444; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50">
+
+    <!-- Back + Header -->
+    <div class="px-4 pt-6 pb-4 bg-white border-b border-gray-100">
+        <a href="{% url 'media_dashboard' %}" class="flex items-center gap-1.5 text-xs font-semibold mb-3" style="color: var(--media-color);">
+            <i class="fas fa-arrow-left"></i> Planejamento de Mídia
+        </a>
+        <div class="flex items-start gap-3">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                <i class="fas fa-calendar-day text-white"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h1 class="text-lg font-bold text-gray-900">{{ event.title }}</h1>
+                <div class="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
+                    <span><i class="fas fa-calendar-alt mr-1"></i>{{ event.event_date|date:"d \d\e M \d\e Y" }}</span>
+                    {% if event.location %}<span><i class="fas fa-map-marker-alt mr-1"></i>{{ event.location }}</span>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress -->
+        {% if total > 0 %}
+        <div class="mt-4">
+            <div class="flex justify-between text-xs text-gray-500 mb-1.5">
+                <span>{{ done }} de {{ total }} conteúdo{{ total|pluralize }} prontos</span>
+                <span class="font-bold {% if progress == 100 %}text-emerald-600{% else %}text-gray-700{% endif %}">{{ progress }}%</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill{% if progress == 100 %} done{% endif %}" style="width: {{ progress }}%;"></div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Action Bar -->
+    <div class="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-2">
+        {% if is_media_leader %}
+        <a href="{% url 'media_content_create' %}?event={{ event.pk }}" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">
+            <i class="fas fa-plus"></i> Novo conteúdo
+        </a>
+        {% endif %}
+        <a href="{% url 'media_content_list' %}?event={{ event.pk }}" class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 bg-white">
+            <i class="fas fa-filter"></i> Filtrar
+        </a>
+    </div>
+
+    <!-- Contents List -->
+    <div class="px-4 pt-4">
+        {% if contents %}
+        <div class="space-y-2">
+            {% for content in contents %}
+            <a href="{% url 'media_content_detail' content.pk %}" class="media-card flex items-center gap-3 p-3.5 block">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="badge badge-{{ content.status }}">{{ content.get_status_display }}</span>
+                        <span class="text-xs text-gray-400">{{ content.get_content_type_display }}</span>
+                        {% if content.priority == 'urgent' %}
+                        <i class="fas fa-fire text-xs priority-urgent" title="Urgente"></i>
+                        {% elif content.priority == 'high' %}
+                        <i class="fas fa-arrow-up text-xs priority-high" title="Alta prioridade"></i>
+                        {% endif %}
+                    </div>
+                    <div class="text-sm font-semibold text-gray-900 truncate">{{ content.title }}</div>
+                    <div class="flex items-center gap-3 mt-1 text-xs text-gray-400">
+                        {% if content.responsible %}
+                        <span><i class="fas fa-user mr-1"></i>{{ content.responsible.member.name|default:content.responsible.email|truncatechars:20 }}</span>
+                        {% endif %}
+                        {% if content.due_date %}
+                        <span><i class="fas fa-clock mr-1"></i>Prazo: {{ content.due_date|date:"d/m" }}</span>
+                        {% endif %}
+                        {% if content.publication_date %}
+                        <span><i class="fas fa-calendar-check mr-1"></i>Pub: {{ content.publication_date|date:"d/m" }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-300 text-xs flex-shrink-0"></i>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-16">
+            <div class="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-4 bg-gray-100">
+                <i class="fas fa-camera text-2xl text-gray-300"></i>
+            </div>
+            <p class="text-gray-500 text-sm mb-1">Nenhum conteúdo planejado para este evento.</p>
+            {% if is_media_leader %}
+            <a href="{% url 'media_content_create' %}?event={{ event.pk }}" class="inline-block mt-3 text-sm font-semibold px-5 py-2.5 rounded-xl text-white" style="background: var(--media-color);">
+                <i class="fas fa-plus mr-2"></i>Planejar primeiro conteúdo
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

@@ -67,6 +67,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'can_consolidate': flags['can_consolidate'],
             'is_approver': flags['is_approver'],
             'is_ministration_member': flags['is_ministration'],
+            'is_media_member': flags['is_media'],
             'is_boas_vindas_member': flags['is_boas_vindas'],
             'is_moderacao_member': flags['is_moderacao'],
             'can_music_member': flags['has_ministries'],
@@ -81,6 +82,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'is_approver': member.is_approver,
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration': self.get_ministration_status(member),
+            'is_media': self.get_media_status(member),
             'is_boas_vindas': MinistryMembership.objects.filter(
                 member=member,
                 is_active=True,
@@ -155,6 +157,7 @@ class MemberProfileView(MemberRequiredMixin, MinistrationContextMixin, View):
             'password_form': password_form or MemberPasswordChangeForm(user=self.request.user),
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(member),
+            'is_media_member': self.get_media_status(member),
         }
 
     def post(self, request):
@@ -237,6 +240,7 @@ class MemberConsolidationView(MemberRequiredMixin, MinistrationContextMixin, Vie
             'active_consolidations': consolidations.filter(end_date__isnull=True).count(),
             'completed_consolidations': consolidations.filter(end_date__isnull=False).count(),
             'is_ministration_member': self.get_ministration_status(member),
+            'is_media_member': self.get_media_status(member),
         }
         return render(request, 'member/consolidation.html', context)
 

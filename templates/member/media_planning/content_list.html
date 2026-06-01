@@ -1,0 +1,110 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Conteúdos de Mídia{% endblock %}
+
+{% block head %}
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+    .media-card { background: white; border-radius: 1rem; border: 2px solid rgba(var(--media-rgb),0.12); overflow: hidden; transition: all 0.3s; }
+    .media-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(var(--media-rgb),0.1); }
+    .badge-pending { background: #F3F4F6; color: #374151; }
+    .badge-in_progress { background: #DBEAFE; color: #1D4ED8; }
+    .badge-review { background: #FEF3C7; color: #92400E; }
+    .badge-approved { background: #D1FAE5; color: #065F46; }
+    .badge-scheduled { background: #EDE9FE; color: #5B21B6; }
+    .badge-published { background: #ECFDF5; color: #047857; }
+    .badge-low { background: #F3F4F6; color: #6B7280; }
+    .badge-medium { background: #FEF3C7; color: #92400E; }
+    .badge-high { background: #FEE2E2; color: #B91C1C; }
+    .badge-urgent { background: #EF4444; color: #FFF; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-28">
+
+    <!-- Header -->
+    <div class="px-4 pt-8 pb-4 flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Conteúdos</h1>
+            <p class="text-sm text-gray-500">Planejamento de Mídia</p>
+        </div>
+        {% if is_media_leader %}
+        <a href="{% url 'media_content_create' %}" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">
+            <i class="fas fa-plus"></i> Novo
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Filters -->
+    <form method="get" class="px-4 mb-4 space-y-2">
+        <div class="grid grid-cols-2 gap-2">
+            <select name="status" class="form-input text-sm">
+                <option value="">Todos os status</option>
+                {% for val, label in status_choices %}<option value="{{ val }}" {% if filter_status == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <select name="content_type" class="form-input text-sm">
+                <option value="">Todos os tipos</option>
+                {% for val, label in content_types %}<option value="{{ val }}" {% if filter_content_type == val %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select>
+            <select name="event" class="form-input text-sm">
+                <option value="">Todos os eventos</option>
+                {% for e in events %}<option value="{{ e.pk }}" {% if filter_event == e.pk|stringformat:"s" %}selected{% endif %}>{{ e.title }}</option>{% endfor %}
+            </select>
+            <select name="responsible" class="form-input text-sm">
+                <option value="">Todos os resp.</option>
+                {% for u in users %}<option value="{{ u.pk }}" {% if filter_responsible == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.member.name|default:u.email }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="flex gap-2">
+            <input type="date" name="pub_date" value="{{ filter_pub_date }}" class="form-input text-sm flex-1">
+            <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">Filtrar</button>
+            <a href="{% url 'media_content_list' %}" class="px-4 py-2 rounded-xl text-sm font-semibold border-2 border-gray-300 text-gray-600 flex items-center">Limpar</a>
+        </div>
+    </form>
+
+    <!-- Content List -->
+    <div class="px-4 space-y-3">
+        {% for content in contents %}
+        <a href="{% url 'media_content_detail' content.pk %}" class="media-card block p-4">
+            <div class="flex items-start justify-between gap-3 mb-2">
+                <div class="flex-1 min-w-0">
+                    <h3 class="font-semibold text-gray-900 truncate">{{ content.title }}</h3>
+                    <p class="text-xs text-gray-500">{{ content.get_content_type_display }}{% if content.event %} · {{ content.event.title }}{% endif %}</p>
+                </div>
+                <div class="flex flex-col items-end gap-1 flex-shrink-0">
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full badge-{{ content.status }}">{{ content.get_status_display }}</span>
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full badge-{{ content.priority }}">{{ content.get_priority_display }}</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 text-xs text-gray-500">
+                {% if content.responsible %}<span><i class="fas fa-user mr-1"></i>{{ content.responsible.member.name|default:content.responsible.email }}</span>{% endif %}
+                {% if content.publication_date %}<span><i class="fas fa-calendar-check mr-1"></i>{{ content.publication_date|date:"d/m H:i" }}</span>{% endif %}
+                {% if content.due_date %}<span><i class="fas fa-hourglass-half mr-1"></i>{{ content.due_date|date:"d/m" }}</span>{% endif %}
+            </div>
+        </a>
+        {% empty %}
+        <div class="py-12 text-center">
+            <i class="fas fa-inbox text-4xl text-gray-300 mb-3 block"></i>
+            <p class="text-gray-500 text-sm">Nenhum conteúdo encontrado.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if is_paginated %}
+    <div class="px-4 py-6 flex justify-center gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}" class="px-4 py-2 rounded-xl border-2 border-gray-300 text-sm text-gray-600">Anterior</a>
+        {% endif %}
+        <span class="px-4 py-2 text-sm text-gray-500">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">Próxima</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}
