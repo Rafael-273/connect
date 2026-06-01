@@ -138,6 +138,20 @@ class MediaContentCreateView(MediaLeaderRequiredMixin, View):
             messages.success(request, f'Conteúdo "{content.title}" criado com sucesso!')
             if content.month_plan_id:
                 plan = content.month_plan
+                if content.event_id:
+                    return redirect(
+                        'media_plan_macro_event',
+                        year=plan.year,
+                        month=plan.month,
+                        event_pk=content.event_id,
+                    )
+                if content.category_id:
+                    return redirect(
+                        'media_plan_macro_category',
+                        year=plan.year,
+                        month=plan.month,
+                        category_pk=content.category_id,
+                    )
                 return redirect('media_plan_step', year=plan.year, month=plan.month, step=2)
             if content.event_id:
                 return redirect('media_event_contents', event_pk=content.event_id)

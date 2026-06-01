@@ -6,6 +6,9 @@ from .month_plan import (
     MediaPlanToggleEventView,
     MediaPlanToggleCategoryView,
     MediaContentCategoryCreateView,
+    MediaPlanCreateEventView,
+    MediaPlanMacroEventView,
+    MediaPlanMacroCategoryView,
 )
 from .event_contents import MediaEventContentsView
 from .category_contents import MediaCategoryContentsView
@@ -30,6 +33,9 @@ __all__ = [
     'MediaPlanToggleEventView',
     'MediaPlanToggleCategoryView',
     'MediaContentCategoryCreateView',
+    'MediaPlanCreateEventView',
+    'MediaPlanMacroEventView',
+    'MediaPlanMacroCategoryView',
     'MediaEventContentsView',
     'MediaCategoryContentsView',
     'MediaContentListView',

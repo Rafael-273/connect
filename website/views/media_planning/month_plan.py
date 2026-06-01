@@ -1,3 +1,6 @@
+from datetime import datetime
+import calendar
+
 from django.contrib import messages
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -5,7 +8,7 @@ from django.utils import timezone
 from django.views import View
 
 from ...models.event import Event
-from ...models.media_content import MediaContent
+from ...models.media_content import CONTENT_TYPE_CHOICES, MediaContent
 from ...models.media_month_plan import (
     MONTH_NAMES_PT,
     MediaContentCategory,
@@ -103,6 +106,8 @@ class MediaMonthPlanWizardView(MediaMemberRequiredMixin, View):
         plan.event_count = len(plan_event_ids)
         plan.category_count = len(plan_category_ids)
 
+        last_day = calendar.monthrange(plan.year, plan.month)[1]
+
         return {
             **self._nav_context(),
             'plan': plan,
@@ -114,6 +119,11 @@ class MediaMonthPlanWizardView(MediaMemberRequiredMixin, View):
             'plan_event_ids': plan_event_ids,
             'plan_category_ids': plan_category_ids,
             'all_categories': all_categories,
+            'content_type_choices': CONTENT_TYPE_CHOICES,
+            'selected_event_count': len(plan_event_ids),
+            'selected_category_count': len(plan_category_ids),
+            'plan_month_start': f'{plan.year}-{plan.month:02d}-01',
+            'plan_month_end': f'{plan.year}-{plan.month:02d}-{last_day:02d}',
             # Step 2 data
             'plan_events': plan_events,
             'plan_categories': plan_categories,
@@ -156,7 +166,6 @@ class MediaContentCategoryCreateView(MediaLeaderRequiredMixin, View):
         content_type = request.POST.get('content_type', '')
         description = request.POST.get('description', '').strip()
 
-        from ...models.media_content import CONTENT_TYPE_CHOICES
         valid_types = [c[0] for c in CONTENT_TYPE_CHOICES]
         if not name or content_type not in valid_types:
             messages.error(request, 'Preencha o nome e o tipo da categoria.')
@@ -167,5 +176,127 @@ class MediaContentCategoryCreateView(MediaLeaderRequiredMixin, View):
             defaults={'content_type': content_type, 'description': description},
         )
         plan.categories.add(cat)
-        messages.success(request, f'Categoria "{cat.name}" criada e adicionada!')
-        return redirect('media_plan_step', year=year, month=month, step=1)
+        messages.success(request, f'Categoria "{cat.name}" criada!')
+        return redirect('media_plan_step', year=year, month=month, step=2)
+
+
+DEFAULT_EVENT_BANNER = 'event_banners/LOGO_FUNDO.jpg'
+
+
+class MediaPlanCreateEventView(MediaLeaderRequiredMixin, View):
+    """POST: create an event for the plan month and add it to the plan."""
+    def post(self, request, year, month):
+        plan = get_object_or_404(MediaMonthPlan, year=year, month=month)
+        title = request.POST.get('title', '').strip()
+        event_date_str = request.POST.get('event_date', '').strip()
+        event_time_str = request.POST.get('event_time', '').strip()
+        location = request.POST.get('location', '').strip()
+        description = request.POST.get('description', '').strip() or title
+
+        if not title or not event_date_str:
+            messages.error(request, 'Preencha o título e a data do evento.')
+            return redirect('media_plan_step', year=year, month=month, step=1)
+
+        try:
+            event_date = datetime.strptime(event_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            messages.error(request, 'Data inválida.')
+            return redirect('media_plan_step', year=year, month=month, step=1)
+
+        if event_date.year != plan.year or event_date.month != plan.month:
+            messages.error(
+                request,
+                f'O evento deve acontecer em {MONTH_NAMES_PT[plan.month]} de {plan.year}.',
+            )
+            return redirect('media_plan_step', year=year, month=month, step=1)
+
+        event_time = None
+        if event_time_str:
+            try:
+                event_time = datetime.strptime(event_time_str, '%H:%M').time()
+            except ValueError:
+                messages.error(request, 'Horário inválido.')
+                return redirect('media_plan_step', year=year, month=month, step=1)
+
+        event = Event(
+            title=title,
+            description=description,
+            event_date=event_date,
+            event_time=event_time,
+            location=location,
+            display_start=event_date,
+            display_end=event_date,
+        )
+        if 'banner' in request.FILES:
+            event.banner = request.FILES['banner']
+        else:
+            event.banner = DEFAULT_EVENT_BANNER
+        event.save()
+
+        plan.events.add(event)
+        messages.success(request, f'Evento "{event.title}" criado!')
+        return redirect('media_plan_step', year=year, month=month, step=2)
+
+
+class MediaPlanMacroEventView(MediaMemberRequiredMixin, View):
+    """Contents list for an event macro within a month plan."""
+    template_name = 'member/media_planning/plan_macro_contents.html'
+
+    def get(self, request, year, month, event_pk):
+        plan = get_object_or_404(MediaMonthPlan, year=year, month=month)
+        event = get_object_or_404(Event, pk=event_pk)
+        if not plan.events.filter(pk=event.pk).exists():
+            messages.error(request, 'Este evento não faz parte deste planejamento.')
+            return redirect('media_plan_step', year=year, month=month, step=2)
+
+        contents = (
+            MediaContent.objects.filter(month_plan=plan, event=event)
+            .select_related('responsible__member')
+            .order_by('due_date', '-created_at')
+        )
+        total = contents.count()
+        done = contents.filter(status__in=['approved', 'scheduled', 'published']).count()
+
+        ctx = {
+            **self._nav_context(),
+            'plan': plan,
+            'macro_type': 'event',
+            'event': event,
+            'contents': contents,
+            'total': total,
+            'done': done,
+            'progress': int(done / total * 100) if total else 0,
+        }
+        return render(request, self.template_name, ctx)
+
+
+class MediaPlanMacroCategoryView(MediaMemberRequiredMixin, View):
+    """Contents list for a category macro within a month plan."""
+    template_name = 'member/media_planning/plan_macro_contents.html'
+
+    def get(self, request, year, month, category_pk):
+        plan = get_object_or_404(MediaMonthPlan, year=year, month=month)
+        category = get_object_or_404(MediaContentCategory, pk=category_pk)
+        if not plan.categories.filter(pk=category.pk).exists():
+            messages.error(request, 'Esta categoria não faz parte deste planejamento.')
+            return redirect('media_plan_step', year=year, month=month, step=2)
+
+        contents = (
+            MediaContent.objects.filter(month_plan=plan, category=category)
+            .select_related('responsible__member')
+            .order_by('due_date', '-created_at')
+        )
+        total = contents.count()
+        done = contents.filter(status__in=['approved', 'scheduled', 'published']).count()
+
+        ctx = {
+            **self._nav_context(),
+            'plan': plan,
+            'macro_type': 'category',
+            'category': category,
+            'contents': contents,
+            'total': total,
+            'done': done,
+            'progress': int(done / total * 100) if total else 0,
+        }
+        return render(request, self.template_name, ctx)
