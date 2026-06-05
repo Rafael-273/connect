@@ -7,252 +7,255 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <style>
+    :root {
+        --color-primary: #C90905;
+        --color-dark: #260200;
+        --color-accent: #FDDEB9;
+    }
+
     @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
+        from { opacity: 0; transform: translateY(12px); }
         to { opacity: 1; transform: translateY(0); }
     }
-    @keyframes float {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-10px); }
+    @keyframes popupFadeIn {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
     }
-    .animate-fade { animation: fadeIn 0.6s ease-out; }
-    .float-animation { animation: float 3s ease-in-out infinite; }
+    .animate-fade { animation: fadeIn 0.45s ease-out; }
+
+    .hop-page { min-height: 100vh; background: #f5f5f5; }
+
+    .hop-header {
+        padding: 1.25rem 1rem;
+        border-bottom: 1px solid rgba(201, 9, 5, 0.1);
+        background: #fff;
+    }
+    @media (min-width: 640px) {
+        .hop-header { padding: 1.5rem 1.5rem 1.25rem; }
+    }
+    .hop-back {
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 0.625rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(201, 9, 5, 0.15);
+        color: var(--color-primary);
+        background: #fff;
+        transition: transform 0.15s ease;
+        flex-shrink: 0;
+    }
+    .hop-back:hover { transform: translateX(-2px); }
+
+    .hop-list {
+        width: 100%;
+        padding: 0 1rem 6rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+    @media (min-width: 640px) {
+        .hop-list { padding: 0 1.5rem 6rem; gap: 0.75rem; }
+    }
 
     .peace-card {
-        background: white;
-        border-radius: 1.25rem;
-        border: 2px solid rgba(107,163,216,0.2);
+        background: #fff;
+        border-radius: 1rem;
+        border: 1px solid rgba(38, 2, 0, 0.08);
+        box-shadow: 0 1px 3px rgba(38, 2, 0, 0.04);
         overflow: hidden;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 16px rgba(107,163,216,0.06);
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
     .peace-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 12px 30px rgba(107,163,216,0.12);
+        box-shadow: 0 6px 20px rgba(38, 2, 0, 0.07);
+        transform: translateY(-1px);
     }
 
-    .tab-btn {
-        padding: 0.6rem 1.25rem;
-        border-radius: 0.75rem;
-        font-weight: 700;
-        font-size: 0.875rem;
-        border: 2px solid #E5E7EB;
-        background: white;
-        color: #6B7280;
-        transition: all 0.2s ease;
-        cursor: pointer;
-    }
-    .tab-btn.active {
-        background: #6BA3D8;
-        color: white;
-        border-color: transparent;
-        box-shadow: 0 4px 12px rgba(107,163,216,0.3);
-    }
-
-    .status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.45rem 1rem;
-        border-radius: 0.5rem;
-        font-size: 0.78rem;
-        font-weight: 700;
-        height: 2.6rem;
-        box-sizing: border-box;
-    }
-    .badge-text {
-        display: inline-block;
-    }
-    .peace-card-head {
-        background: white;
-        border-bottom: 1px solid rgba(107,163,216,0.1);
-        padding: 1rem 1.15rem;
-    }
-    .peace-card-body {
-        padding: 1rem 1.15rem 1.1rem;
-        display: grid;
-        gap: 0.9rem;
-    }
-    .peace-summary-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.75rem;
-    }
-    .peace-summary-item {
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        border-radius: 0.95rem;
-        background: #f8fafc;
-        padding: 0.78rem 0.85rem;
-        min-width: 0;
-    }
-    .peace-summary-label {
-        margin: 0;
-        color: #94A3B8;
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-    }
-    .peace-summary-value {
-        margin: 0.35rem 0 0;
-        color: #1F2937;
-        font-size: 0.95rem;
-        font-weight: 800;
-        line-height: 1.25;
-        word-break: break-word;
-    }
-    .peace-address-row {
+    .peace-card-top {
         display: flex;
         align-items: flex-start;
-        gap: 0.75rem;
-        padding: 0.9rem 0.95rem;
-        border-radius: 1rem;
-        background: #f8fafc;
-        border: 1px solid rgba(148, 163, 184, 0.18);
+        gap: 0.875rem;
+        padding: 1rem 1.125rem 0.875rem;
     }
-    .peace-address-icon {
-        width: 2.15rem;
-        height: 2.15rem;
-        border-radius: 0.8rem;
+    .peace-avatar {
+        flex-shrink: 0;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 800;
+        font-size: 1rem;
+        background: var(--color-primary);
+    }
+    .peace-card-main { flex: 1; min-width: 0; }
+    .peace-title-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.625rem;
+    }
+    .peace-family-name {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--color-dark);
+        line-height: 1.25;
+        letter-spacing: -0.01em;
+        margin: 0;
+    }
+    .peace-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem 0.75rem;
+        margin-top: 0.375rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+        line-height: 1.3;
+    }
+    .peace-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    .peace-meta-item i {
+        color: var(--color-primary);
+        opacity: 0.7;
+        font-size: 0.625rem;
+    }
+    .peace-card-actions-top {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        flex-shrink: 0;
+    }
+    .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.625rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .status-pill.is-scheduled {
+        background: rgba(201, 9, 5, 0.08);
+        color: var(--color-primary);
+    }
+    .status-pill.is-waiting {
+        background: rgba(245, 158, 11, 0.12);
+        color: #b45309;
+    }
+    .btn-share {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
+        border: none;
+        background: rgba(201, 9, 5, 0.08);
+        color: var(--color-primary);
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: rgba(107,163,216,0.1);
-        color: #6BA3D8;
+        cursor: pointer;
+        transition: background 0.15s ease;
         flex-shrink: 0;
     }
-    .peace-address-label {
-        margin: 0;
-        color: #94A3B8;
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-    }
-    .peace-address-value {
-        margin: 0.28rem 0 0;
-        color: #1F2937;
-        font-size: 0.95rem;
-        font-weight: 700;
-        line-height: 1.4;
+    .btn-share:hover { background: rgba(201, 9, 5, 0.14); }
+
+    .peace-card-body { padding: 0 1.125rem 1.125rem; }
+    .peace-card-body > .scheduled-callout:first-child { margin-top: 0; }
+    .peace-card-body > .peace-section:first-child {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: none;
     }
     .peace-section {
-        border: 1px solid rgba(107,163,216,0.15);
-        border-radius: 1rem;
-        background: #ffffff;
-        padding: 0.95rem;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid rgba(38, 2, 0, 0.06);
     }
     .peace-section-head {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.75rem;
-        margin-bottom: 0.75rem;
+        gap: 0.625rem;
+        margin-bottom: 0.5rem;
     }
-    .peace-section-title {
-        margin: 0;
-        color: #2E5F8E;
-        font-size: 0.76rem;
+    .peace-section-label {
+        font-size: 0.625rem;
         font-weight: 800;
+        letter-spacing: 0.07em;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
+        color: #9ca3af;
+        margin: 0;
     }
-    .peace-section-note {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.28rem 0.56rem;
+    .team-indicators { display: flex; align-items: center; gap: 0.35rem; }
+    .team-indicator-circle {
+        width: 0.625rem;
+        height: 0.625rem;
         border-radius: 999px;
-        background: rgba(107,163,216,0.08);
-        color: #6BA3D8;
-        font-size: 0.72rem;
-        font-weight: 800;
-        flex-shrink: 0;
+        background: #e5e7eb;
+        transition: background 0.2s ease;
     }
+    .team-indicator-circle.filled { background: var(--color-primary); }
+
     .peace-member-list {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.65rem;
+        gap: 0.375rem;
     }
-    .peace-member-pill {
+    .peace-member-button {
         display: inline-flex;
         align-items: center;
-        gap: 0.65rem;
-        min-width: 0;
+        gap: 0.5rem;
+        padding: 0.375rem 0.5rem 0.375rem 0.375rem;
+        border-radius: 9999px;
+        background: #f5f5f5;
+        border: 1px solid rgba(38, 2, 0, 0.06);
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
         max-width: 100%;
-        padding: 0.58rem 0.72rem;
-        border-radius: 0.95rem;
-        background: #f8fafc;
-        border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+    .peace-member-button:hover {
+        border-color: rgba(201, 9, 5, 0.2);
+        background: rgba(201, 9, 5, 0.04);
     }
     .peace-member-avatar {
-        width: 2rem;
-        height: 2rem;
+        width: 1.5rem;
+        height: 1.5rem;
         border-radius: 999px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         color: #fff;
-        background: #6BA3D8;
-        font-size: 0.82rem;
-        font-weight: 900;
+        background: var(--color-primary);
+        font-size: 0.6875rem;
+        font-weight: 800;
         flex-shrink: 0;
         overflow: hidden;
     }
-    .peace-member-avatar img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    .peace-member-meta {
-        min-width: 0;
-    }
+    .peace-member-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .peace-member-name {
         margin: 0;
-        color: #1F2937;
-        font-size: 0.9rem;
-        font-weight: 800;
+        color: #374151;
+        font-size: 0.75rem;
+        font-weight: 600;
         line-height: 1.2;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        max-width: 8rem;
     }
-    .peace-member-name.mt-1 {
-        margin-top: 0.25rem;
-    }
-    .peace-member-you {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.28rem;
-        margin-top: 0.22rem;
-        color: #6BA3D8;
-        font-size: 0.72rem;
-        font-weight: 800;
-    }
-    .peace-prayer-section {
-        padding-top: 0.1rem;
-    }
-    .peace-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-    }
-    .peace-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.35rem;
-        padding: 0.42rem 0.68rem;
-        border-radius: 999px;
-        background: rgba(107,163,216,0.08);
-        border: 1px solid rgba(107,163,216,0.14);
-        color: #6BA3D8;
-        font-size: 0.78rem;
-        font-weight: 800;
-    }
+
     .peace-disclosure {
-        border: 1px solid rgba(107,163,216,0.16);
-        border-radius: 1rem;
-        background: #fff;
+        margin-top: 0.75rem;
+        border-radius: 0.625rem;
+        background: #fafafa;
+        border: 1px solid rgba(38, 2, 0, 0.06);
         overflow: hidden;
     }
     .peace-disclosure summary {
@@ -261,850 +264,500 @@
         align-items: center;
         justify-content: space-between;
         gap: 0.75rem;
-        padding: 0.9rem 0.95rem;
+        padding: 0.75rem;
         cursor: pointer;
-        color: #334155;
-        font-size: 0.86rem;
-        font-weight: 800;
+        color: #374151;
+        font-size: 0.8125rem;
+        font-weight: 600;
     }
-    .peace-disclosure summary::-webkit-details-marker {
-        display: none;
-    }
-    .peace-disclosure-label {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
+    .peace-disclosure summary::-webkit-details-marker { display: none; }
     .peace-disclosure-caret {
-        color: #94A3B8;
+        color: #9ca3af;
+        font-size: 0.75rem;
         transition: transform 0.2s ease;
     }
-    .peace-disclosure[open] .peace-disclosure-caret {
-        transform: rotate(180deg);
-    }
+    .peace-disclosure[open] .peace-disclosure-caret { transform: rotate(180deg); }
     .peace-disclosure-body {
+        padding: 0 0.75rem 0.75rem;
         display: grid;
-        gap: 0.85rem;
-        padding: 1rem 0.95rem 0.95rem;
-        border-top: 1px solid rgba(107,163,216,0.15);
+        gap: 0.625rem;
+        border-top: 1px solid rgba(38, 2, 0, 0.06);
+        padding-top: 0.75rem;
+        margin: 0 0.75rem 0.75rem;
     }
-    .peace-actions {
-        display: flex;
-        gap: 0.7rem;
-        padding-top: 0.95rem;
-        border-top: 1px solid rgba(107,163,216,0.15);
-    }
-    .peace-actions > a,
-    .peace-actions > button {
-        width: 100%;
-        justify-content: center;
-    }
-    .btn-soft {
-        display: inline-flex;
-        align-items: center;
+    .peace-detail-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 0.5rem;
-        padding: 0.75rem 1rem;
-        border-radius: 0.875rem;
-        font-weight: 700;
-        font-size: 0.875rem;
-        color: #475569;
+    }
+    .peace-detail-item {
+        padding: 0.625rem 0.75rem;
+        border-radius: 0.5rem;
         background: #fff;
-        border: 1px solid rgba(148, 163, 184, 0.28);
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
-        cursor: pointer;
-        transition: all 0.25s ease;
+        border: 1px solid rgba(38, 2, 0, 0.06);
     }
-    .btn-soft:hover {
-        transform: translateY(-2px);
-        border-color: rgba(107,163,216,0.3);
-        color: #1F2937;
+    .peace-detail-label {
+        margin: 0;
+        font-size: 0.625rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #9ca3af;
     }
-    .btn-primary {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.75rem 1.25rem;
-        border-radius: 0.875rem;
+    .peace-detail-value {
+        margin: 0.25rem 0 0;
+        font-size: 0.8125rem;
         font-weight: 700;
-        font-size: 0.875rem;
-        color: white;
-        background: #6BA3D8;
-        border: none;
-        cursor: pointer;
-        transition: all 0.25s ease;
+        color: var(--color-dark);
+        line-height: 1.3;
+        word-break: break-word;
     }
-    .btn-primary:hover { transform: translateY(-2px); }
-    .btn-secondary {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.75rem 1.25rem;
-        border-radius: 0.875rem;
-        font-weight: 700;
-        font-size: 0.875rem;
-        color: #6BA3D8;
-        background: white;
-        border: 2px solid #6BA3D8;
-        cursor: pointer;
-        transition: all 0.25s ease;
+    .peace-detail-value a {
+        color: var(--color-primary);
+        text-decoration: none;
     }
-    .btn-secondary:hover { transform: translateY(-2px); background: rgba(107,163,216,0.05); }
+    .peace-address-block {
+        display: flex;
+        gap: 0.625rem;
+        padding: 0.625rem 0.75rem;
+        border-radius: 0.5rem;
+        background: #fff;
+        border: 1px solid rgba(38, 2, 0, 0.06);
+    }
+    .peace-address-block i {
+        color: var(--color-primary);
+        opacity: 0.75;
+        margin-top: 0.125rem;
+        flex-shrink: 0;
+    }
+    .peace-tags { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+    .peace-tag {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #4b5563;
+        background: #f5f5f5;
+        line-height: 1.2;
+    }
 
     .scheduled-callout {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 0.75rem;
-        border: 1px solid rgba(107,163,216,0.2);
-        border-radius: 0.75rem;
-        background: #ffffff;
-        padding: 0.78rem 0.92rem;
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 0.625rem;
+        background: rgba(201, 9, 5, 0.04);
+        border: 1px solid rgba(201, 9, 5, 0.08);
     }
     .scheduled-main {
         display: flex;
         align-items: center;
-        gap: 0.65rem;
+        gap: 0.625rem;
         min-width: 0;
     }
     .scheduled-icon {
-        width: 32px;
-        height: 32px;
-        border-radius: 999px;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: rgba(107,163,216,0.14);
-        color: #6BA3D8;
+        background: rgba(201, 9, 5, 0.1);
+        color: var(--color-primary);
         flex-shrink: 0;
+        font-size: 0.875rem;
     }
     .scheduled-label {
         margin: 0;
-        font-size: 0.72rem;
+        font-size: 0.625rem;
         font-weight: 800;
+        letter-spacing: 0.07em;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #2E5F8E;
-        line-height: 1;
+        color: #9ca3af;
     }
     .scheduled-date {
-        margin: 0.2rem 0 0;
-        font-size: 0.98rem;
-        font-weight: 900;
-        color: #1F2937;
-        line-height: 1.15;
+        margin: 0.125rem 0 0;
+        font-size: 0.9375rem;
+        font-weight: 700;
+        color: var(--color-dark);
     }
     .scheduled-chip {
         display: inline-flex;
         align-items: center;
-        gap: 0.35rem;
-        padding: 0.33rem 0.58rem;
-        border-radius: 999px;
-        background: rgba(107,163,216,0.08);
-        border: none;
-        color: #6BA3D8;
-        font-size: 0.74rem;
-        font-weight: 800;
+        gap: 0.25rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        background: var(--color-primary);
+        color: #fff;
+        font-size: 0.625rem;
+        font-weight: 700;
         flex-shrink: 0;
     }
 
-    .visit-popup {
-        width: min(560px, calc(100vw - 2rem));
-        border-radius: 1.25rem;
+    .peace-card-actions {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        padding-top: 0.875rem;
+        border-top: 1px solid rgba(38, 2, 0, 0.06);
+    }
+    .peace-card-actions > a,
+    .peace-card-actions > button { flex: 1; min-width: 0; }
+    .btn-accept,
+    .btn-primary-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.375rem;
+        padding: 0.75rem 1rem;
+        border: none;
+        border-radius: 0.625rem;
+        background: var(--color-primary);
+        color: #fff;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        line-height: 1;
+        cursor: pointer;
+        text-decoration: none;
+        transition: opacity 0.15s ease;
+    }
+    .btn-accept:hover,
+    .btn-primary-action:hover { opacity: 0.9; }
+    .btn-detail,
+    .btn-secondary-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.375rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.625rem;
+        border: 1px solid rgba(38, 2, 0, 0.12);
+        background: #fff;
+        color: #374151;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        text-decoration: none;
+        transition: background 0.15s ease;
+    }
+    .btn-detail:hover,
+    .btn-secondary-action:hover { background: #fafafa; }
+    .btn-ghost {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.375rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.625rem;
+        border: 1px solid rgba(38, 2, 0, 0.12);
+        background: #fff;
+        color: #374151;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        line-height: 1;
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+    .btn-ghost:hover { background: #fafafa; }
+
+    .hop-empty-icon {
+        width: 4rem;
+        height: 4rem;
+        margin: 0 auto 1rem;
+        border-radius: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(201, 9, 5, 0.06);
+        color: var(--color-primary);
+        font-size: 1.5rem;
+    }
+    .hop-empty-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.25rem;
+        border-radius: 0.625rem;
+        background: var(--color-primary);
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: opacity 0.15s ease;
+    }
+    .hop-empty-btn:hover { opacity: 0.9; }
+
+    .hop-filter-panel {
+        width: 16rem;
+        max-height: 70vh;
+        overflow-y: auto;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        box-shadow: 0 10px 25px rgba(38, 2, 0, 0.1);
+        padding: 1rem;
+        z-index: 50;
+    }
+    @media (min-width: 640px) {
+        .hop-filter-panel { width: 18rem; }
+    }
+
+    /* Modals (SweetAlert2) */
+    .hop-popup {
+        width: min(480px, calc(100vw - 2rem));
+        border-radius: 1rem;
         padding: 0;
         overflow: hidden;
-        box-shadow: 0 24px 64px rgba(15, 42, 66, 0.25);
+        box-shadow: 0 20px 50px rgba(38, 2, 0, 0.18);
+        z-index: 9999;
     }
-    .visit-sheet {
+    .hop-sheet {
         width: 100vw !important;
         max-width: 100vw !important;
         margin: 0 !important;
-        border-radius: 1.25rem 1.25rem 0 0 !important;
+        border-radius: 1rem 1rem 0 0 !important;
         padding: 0;
         align-self: end;
-        border-top: 1px solid rgba(20,143,119,0.18);
-        box-shadow: 0 -16px 48px rgba(15, 42, 66, 0.24);
+        border-top: 1px solid rgba(201, 9, 5, 0.12);
+        box-shadow: 0 -8px 30px rgba(38, 2, 0, 0.12);
+        z-index: 9999;
     }
-    .visit-sheet::before {
+    .hop-sheet::before {
         content: '';
         display: block;
         width: 44px;
         height: 5px;
         border-radius: 999px;
         background: rgba(107,114,128,0.35);
-        margin: 0.55rem auto 0.2rem;
+        margin: 0.55rem auto 0.25rem;
     }
-    .visit-sheet-container {
-        align-items: flex-end !important;
-        padding: 0 !important;
-    }
-    .visit-html-wrap {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    .visit-modal {
-        text-align: left;
+    .hop-sheet-container { align-items: flex-end !important; padding: 0 !important; }
+    .swal2-container { z-index: 9998; }
+    .hop-html-wrap { margin: 0 !important; padding: 0 !important; }
+    .hop-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin: 0;
+        padding: 0.875rem 1.125rem 1rem;
+        border-top: 1px solid rgba(38, 2, 0, 0.06);
         background: #fff;
     }
-    .visit-head {
-        display: flex;
-        align-items: center;
-        gap: 0.85rem;
-        padding: 1.5rem 1.3rem;
-        background: #f0f8fe;
-        border-bottom: 1px solid rgba(107,163,216,0.12);
+    @media (min-width: 480px) {
+        .hop-actions { flex-direction: row-reverse; }
     }
-    .visit-avatar {
-        width: 46px;
-        height: 46px;
-        border-radius: 0.85rem;
+    .hop-confirm,
+    .hop-cancel {
+        margin: 0 !important;
+        border-radius: 0.625rem !important;
+        padding: 0.75rem 1rem !important;
+        font-weight: 700 !important;
+        font-size: 0.8125rem !important;
+        width: 100% !important;
+        flex: 1 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        line-height: 1 !important;
+        box-shadow: none !important;
+    }
+    .hop-confirm {
+        background: var(--color-primary) !important;
+        color: #fff !important;
+        border: none !important;
+    }
+    .hop-cancel {
+        background: #fff !important;
+        color: #374151 !important;
+        border: 1px solid rgba(38, 2, 0, 0.12) !important;
+    }
+    .hop-modal { text-align: left; background: #fff; }
+    .hop-modal-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.875rem;
+        padding: 1.125rem 1.125rem 0.875rem;
+    }
+    .hop-modal-top-compact { padding-bottom: 0.625rem; }
+    .hop-modal-body {
+        padding: 0 1.125rem 0.25rem;
+        max-height: min(58vh, 520px);
+        overflow: auto;
+    }
+    .hop-modal-title {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--color-dark);
+        line-height: 1.25;
+    }
+    .hop-eyebrow {
+        margin: 0 0 0.25rem;
+        font-size: 0.625rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--color-primary);
+    }
+    .hop-confirm-icon {
+        flex-shrink: 0;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 0.75rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #fff;
-        background: #6BA3D8;
-        box-shadow: 0 8px 18px rgba(107,163,216,0.24);
+        background: rgba(201, 9, 5, 0.08);
+        color: var(--color-primary);
+        font-size: 1.125rem;
+    }
+    .hop-info-box {
+        display: flex;
+        gap: 0.625rem;
+        align-items: flex-start;
+        margin-top: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 0.625rem;
+        background: #fafafa;
+        border: 1px solid rgba(38, 2, 0, 0.06);
+    }
+    .hop-info-box > i {
         flex-shrink: 0;
+        margin-top: 0.125rem;
+        color: var(--color-primary);
+        opacity: 0.75;
     }
-    .visit-title {
+    .hop-info-box p {
         margin: 0;
-        color: #1F2937;
-        font-size: 1.55rem;
-        font-weight: 900;
-        line-height: 1.1;
+        font-size: 0.8125rem;
+        line-height: 1.55;
+        color: #4b5563;
     }
-    .visit-subtitle {
-        margin: 0.2rem 0 0;
-        color: #6B7280;
-        font-size: 0.93rem;
-        font-weight: 600;
-    }
-    .visit-body {
-        padding: 1rem 1.1rem 0.5rem;
-    }
-    .visit-label {
+    .hop-field-label {
         margin: 0 0 0.5rem;
-        color: #4B5563;
-        font-size: 0.9rem;
-        font-weight: 700;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #374151;
     }
-    .visit-date-input {
+    .hop-date-input {
         width: 100%;
-        padding: 0.78rem 0.95rem;
-        border: 2px solid #E5E7EB;
-        border-radius: 0.85rem;
+        padding: 0.75rem;
+        border: 1px solid rgba(38, 2, 0, 0.12);
+        border-radius: 0.625rem;
         font-size: 1rem;
         outline: none;
-        transition: border-color 0.2s ease, box-shadow 0.2s ease;
-        color: #1F2937;
+        color: var(--color-dark);
         background: #fff;
+        box-sizing: border-box;
     }
-    .visit-date-input:focus {
-        border-color: #6BA3D8;
-        box-shadow: 0 0 0 3px rgba(107,163,216,0.12);
+    .hop-date-input:focus {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
     }
-    .visit-actions {
+    .hop-option-list {
         display: flex;
-        flex-direction: row;
-        margin: 0;
-        padding: 0.8rem 1rem 0.85rem;
-        border-top: 1px solid rgba(107,163,216,0.12);
-        background: #fff;
-        gap: 0.6rem;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0 1.125rem 0.75rem;
     }
-    .visit-confirm,
-    .visit-cancel {
-        flex: 1;
-        margin: 0 !important;
-        border-radius: 0.85rem !important;
-        padding: 0.76rem 1rem !important;
-        font-weight: 800 !important;
-        font-size: 0.92rem !important;
-    }
-    .visit-confirm {
-        box-shadow: 0 9px 22px rgba(107,163,216,0.24);
-    }
-
-    .share-popup {
-        width: min(540px, calc(100vw - 2rem));
-        border-radius: 1.2rem;
-        padding: 0;
-        overflow: hidden;
-        box-shadow: 0 24px 64px rgba(15, 42, 66, 0.25);
-    }
-    .share-sheet {
-        width: 100vw !important;
-        max-width: 100vw !important;
-        margin: 0 !important;
-        border-radius: 1.2rem 1.2rem 0 0 !important;
-        padding: 0;
-        align-self: end;
-        border-top: 1px solid rgba(20,143,119,0.18);
-    }
-    .share-sheet::before {
-        content: '';
-        display: block;
-        width: 44px;
-        height: 5px;
-        border-radius: 999px;
-        background: rgba(107,114,128,0.35);
-        margin: 0.55rem auto 0.2rem;
-    }
-    .share-sheet-container {
-        align-items: flex-end !important;
-        padding: 0 !important;
-    }
-    .share-html-wrap {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-    .share-head {
+    .hop-option-btn {
         display: flex;
         align-items: center;
-        gap: 0.85rem;
-        padding: 1rem 1.1rem;
-        background: #f0f8fe;
-        border-bottom: 1px solid rgba(107,163,216,0.12);
+        gap: 0.75rem;
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid rgba(38, 2, 0, 0.08);
+        border-radius: 0.625rem;
+        background: #fff;
+        cursor: pointer;
+        text-align: left;
+        transition: border-color 0.15s ease, background 0.15s ease;
     }
-    .share-avatar {
-        width: 42px;
-        height: 42px;
-        border-radius: 0.85rem;
+    .hop-option-btn:hover {
+        border-color: rgba(201, 9, 5, 0.2);
+        background: rgba(201, 9, 5, 0.03);
+    }
+    .hop-option-btn.is-danger:hover {
+        border-color: rgba(220, 38, 38, 0.25);
+        background: rgba(220, 38, 38, 0.04);
+    }
+    .hop-option-icon {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #fff;
-        background: #6BA3D8;
         flex-shrink: 0;
+        font-size: 0.875rem;
     }
-    .share-title {
+    .hop-option-icon.is-primary { background: var(--color-primary); color: #fff; }
+    .hop-option-icon.is-soft { background: rgba(201, 9, 5, 0.08); color: var(--color-primary); }
+    .hop-option-icon.is-danger { background: rgba(220, 38, 38, 0.1); color: #dc2626; }
+    .hop-option-title {
         margin: 0;
-        color: #1F2937;
-        font-size: 1.45rem;
-        font-weight: 900;
-        line-height: 1.1;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        color: var(--color-dark);
     }
-    .share-subtitle {
-        margin: 0.18rem 0 0;
-        color: #6B7280;
-        font-size: 0.9rem;
-        font-weight: 600;
-    }
-    .share-body {
-        padding: 0.95rem 1.1rem;
+    .hop-option-desc {
+        margin: 0.125rem 0 0;
+        font-size: 0.75rem;
+        color: #9ca3af;
+        font-weight: 500;
     }
     .share-option {
         display: flex;
         align-items: center;
         gap: 0.75rem;
-        padding: 0.85rem 0.95rem;
-        border: 1px solid rgba(107,163,216,0.15);
-        border-radius: 0.9rem;
-        background: #ffffff;
+        padding: 0.75rem;
+        border: 1px solid rgba(38, 2, 0, 0.08);
+        border-radius: 0.625rem;
+        background: #fff;
         cursor: pointer;
-        transition: all 0.2s ease;
-        margin-bottom: 0.6rem;
+        transition: border-color 0.15s ease, background 0.15s ease;
+        margin-bottom: 0.5rem;
     }
-    .share-option:last-child {
-        margin-bottom: 0;
-    }
+    .share-option:last-child { margin-bottom: 0; }
     .share-option:hover {
-        border-color: #6BA3D8;
-        background: rgba(107,163,216,0.04);
-        transform: translateY(-1px);
+        border-color: rgba(201, 9, 5, 0.2);
+        background: rgba(201, 9, 5, 0.03);
     }
     .share-icon {
-        width: 38px;
-        height: 38px;
-        border-radius: 0.8rem;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 0.5rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 1.1rem;
+        font-size: 1rem;
         flex-shrink: 0;
     }
     .share-text h3 {
         margin: 0;
-        font-size: 0.95rem;
-        font-weight: 800;
-        color: #1F2937;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        color: var(--color-dark);
     }
     .share-text p {
-        margin: 0.15rem 0 0;
-        font-size: 0.83rem;
-        color: #6B7280;
-        font-weight: 500;
+        margin: 0.125rem 0 0;
+        font-size: 0.75rem;
+        color: #9ca3af;
     }
 
-    /* Typography & Best Practices */
-    body {
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        text-rendering: optimizeLegibility;
-    }
-    
-    button,
-    input,
-    select,
-    textarea {
-        font-family: inherit;
-        font-size: inherit;
-    }
-    
-    input,
-    button,
-    select {
-        /* Ensure minimum touch target size (Apple HIG: 44x44 minimum) */
-        min-height: 44px;
-    }
-    
-    #mylist-search-input:focus {
-        border-color: #6BA3D8 !important;
-    }
-    
-    /* Improve contrast for accessibility */
-    .peace-summary-label,
-    .peace-address-label {
-        color: #2E5F8E;
-    }
-    .peace-section-title {
-        color: #2E5F8E;
-    }
-    
-    /* Better line heights for readability */
-    .peace-summary-value,
-    .peace-address-value {
-        line-height: 1.5;
-    }
-    
-    /* Remove default tap highlight on iOS */
-    button,
-    a,
-    input {
-        -webkit-tap-highlight-color: transparent;
-    }
-    
-    /* Smooth scrolling */
-    html {
-        scroll-behavior: smooth;
-    }
-
-    @media (max-width: 767px) {
-        /* Header */
-        section.relative.p-4 {
-            padding: 1rem;
-        }
-        .text-2xl.sm\:text-3xl {
-            font-size: 1.5rem;
-            line-height: 2rem;
-        }
-        .text-sm {
-            font-size: 0.8125rem;
-            line-height: 1.25rem;
-        }
-        
-        /* Search & Filter */
-        #mylist-search-input {
-            font-size: 1rem;
-            padding: 0.7rem 1rem;
-            border-radius: 0.75rem;
-            height: 44px;
-        }
-        #mylist-filter-toggle {
-            font-size: 0.8125rem;
-            padding: 0.65rem 0.75rem;
-            height: 44px;
-            min-width: 44px;
-            border-radius: 0.75rem;
-        }
-        
-        /* Card Layout */
-        .peace-card {
-            border-radius: 1rem;
-            box-shadow: 0 2px 8px rgba(107,163,216,0.08);
-        }
-        .peace-card:active {
-            transform: scale(0.98);
-        }
-        
-        /* Header */
-        .peace-card-head {
-            padding: 0.75rem 0.9rem;
-            gap: 0.6rem;
-        }
-        .peace-card-head h3 {
-            font-size: 1rem;
-            font-weight: 900;
-        }
-        .peace-card-head p {
-            font-size: 0.8125rem;
-        }
-        
-        /* Body */
-        .peace-card-body {
-            padding: 0.75rem 0.9rem;
-            gap: 0.7rem;
-        }
-        
-        /* Summary Grid */
-        .peace-summary-grid {
-            grid-template-columns: 1fr !important;
-            gap: 0.5rem !important;
-        }
-        .peace-summary-item {
-            padding: 0.6rem 0.65rem;
-            border-radius: 0.75rem;
-        }
-        .peace-summary-item:last-child {
-            grid-column: auto;
-        }
-        .peace-summary-label {
-            font-size: 0.6875rem;
-            margin-bottom: 0.3rem;
-        }
-        .peace-summary-value {
-            font-size: 0.8125rem;
-            margin-top: 0.2rem;
-        }
-        
-        /* Address Row */
-        .peace-address-row {
-            padding: 0.7rem 0.8rem;
-            gap: 0.6rem;
-            border-radius: 0.8rem;
-        }
-        .peace-address-icon {
-            width: 1.75rem;
-            height: 1.75rem;
-            font-size: 0.75rem;
-            border-radius: 0.6rem;
-        }
-        .peace-address-label {
-            font-size: 0.6875rem;
-            margin-bottom: 0.2rem;
-        }
-        .peace-address-value {
-            font-size: 0.8125rem;
-            line-height: 1.35;
-        }
-        
-        /* Sections */
-        .peace-section {
-            padding: 0.75rem 0.8rem;
-            border-radius: 0.9rem;
-        }
-        .peace-section-head {
-            flex-direction: row;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.6rem;
-            margin-bottom: 0.6rem;
-        }
-        .peace-section-title {
-            font-size: 0.6875rem;
-            letter-spacing: 0.06em;
-            margin: 0;
-            flex: 1;
-        }
-        
-        /* Team Indicators */
-        .team-indicators {
-            gap: 0.35rem;
-            flex-shrink: 0;
-        }
-        .team-indicator-circle {
-            width: 24px;
-            height: 24px;
-            font-size: 0.65rem;
-            border-width: 2px;
-        }
-        
-        /* Member List */
-        .peace-member-list {
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-        .peace-member-button {
-            width: 100%;
-            max-width: 100%;
-            padding: 0.5rem 0.6rem;
-            min-height: 44px;
-            border-radius: 0.85rem;
-        }
-        .peace-member-avatar {
-            width: 1.75rem;
-            height: 1.75rem;
-            font-size: 0.75rem;
-            flex-shrink: 0;
-        }
-        .peace-member-meta {
-            min-width: 0;
-            flex: 1;
-        }
-        .peace-member-name {
-            font-size: 0.8125rem;
-            font-weight: 700;
-            line-height: 1.3;
-            margin: 0;
-        }
-        .peace-member-name.mt-1 {
-            margin-top: 0.15rem;
-        }
-        
-        /* Disclosure */
-        .peace-disclosure {
-            border-radius: 0.85rem;
-        }
-        .peace-disclosure summary {
-            padding: 0.8rem 0.8rem;
-            font-size: 0.8125rem;
-            gap: 0.5rem;
-            min-height: 44px;
-        }
-        .peace-disclosure-body {
-            padding: 0.8rem;
-            gap: 0.6rem;
-            border-top-width: 1px;
-        }
-        
-        /* Grid responsiveness */
-        .peace-summary-grid {
-            grid-template-columns: 1fr;
-            gap: 0.5rem;
-        }
-        .peace-summary-item:last-child {
-            grid-column: auto;
-        }
-        
-        /* Scheduled Callout */
-        .scheduled-callout {
-            padding: 0.65rem 0.75rem;
-            gap: 0.6rem;
-            border-radius: 0.85rem;
-        }
-        .scheduled-icon {
-            width: 28px;
-            height: 28px;
-            font-size: 0.8rem;
-        }
-        .scheduled-label {
-            font-size: 0.6875rem;
-        }
-        .scheduled-date {
-            font-size: 0.875rem;
-            margin-top: 0.15rem;
-        }
-        .scheduled-chip {
-            padding: 0.3rem 0.5rem;
-            font-size: 0.6875rem;
-        }
-        
-        /* Actions */
-        .peace-actions {
-            gap: 0.55rem;
-            padding-top: 0.75rem;
-            border-top-width: 1px;
-        }
-        .peace-actions .btn-three-cols {
-            width: 100% !important;
-            flex-basis: 100% !important;
-        }
-        .peace-actions .btn-two-cols {
-            width: calc(50% - 0.275rem) !important;
-        }
-        .btn-soft,
-        .btn-primary,
-        .btn-secondary {
-            padding: 0.65rem 0.9rem;
-            font-size: 0.8125rem;
-            min-height: 44px;
-            border-radius: 0.8rem;
-            font-weight: 700;
-        }
-        .btn-soft {
-            border-width: 1px;
-        }
-        .btn-primary,
-        .btn-secondary {
-            border-width: 2px;
-        }
-        /* Hide badge text on mobile, show only icon */
-        .badge-text {
-            display: none !important;
-        }
-        
-        /* Visit Modal */
-        .visit-head {
-            padding: 1rem 1rem;
-            gap: 0.7rem;
-        }
-        .visit-avatar {
-            width: 40px;
-            height: 40px;
-            font-size: 1rem;
-        }
-        .visit-title {
-            font-size: 1.1875rem;
-            margin: 0;
-        }
-        .visit-subtitle {
-            font-size: 0.8125rem;
-            margin-top: 0.15rem;
-        }
-        .visit-body {
-            padding: 0.8rem 0.9rem 0.4rem;
-        }
-        .visit-label {
-            font-size: 0.8125rem;
-            margin-bottom: 0.4rem;
-        }
-        .visit-date-input {
-            padding: 0.7rem 0.85rem;
-            font-size: 1rem;
-            border-radius: 0.75rem;
-        }
-        .visit-actions {
-            padding: 0.7rem 0.85rem 0.6rem;
-            gap: 0.5rem;
-        }
-        .visit-confirm,
-        .visit-cancel {
-            min-height: 44px;
-            font-size: 0.8125rem;
-        }
-        
-        /* Share Modal */
-        .share-head {
-            padding: 0.9rem 1rem;
-            gap: 0.7rem;
-        }
-        .share-avatar {
-            width: 38px;
-            height: 38px;
-            font-size: 0.9rem;
-        }
-        .share-title {
-            font-size: 1.125rem;
-            margin: 0;
-        }
-        .share-subtitle {
-            font-size: 0.8125rem;
-            margin-top: 0.15rem;
-        }
-        .share-body {
-            padding: 0.85rem 0.95rem;
-        }
-        .share-option {
-            padding: 0.75rem 0.85rem;
-            border-radius: 0.85rem;
-            gap: 0.65rem;
-            min-height: 44px;
-            margin-bottom: 0.5rem;
-        }
-        .share-icon {
-            width: 36px;
-            height: 36px;
-            font-size: 1rem;
-        }
-        .share-text h3 {
-            font-size: 0.875rem;
-            margin-bottom: 0.1rem;
-        }
-        .share-text p {
-            font-size: 0.75rem;
-            margin-top: 0.1rem;
-        }
-        
-        /* Tags */
-        .peace-tag {
-            padding: 0.35rem 0.55rem;
-            font-size: 0.7rem;
-            gap: 0.3rem;
-        }
-        
-        /* Member Popup */
-        .member-popup {
-            max-width: calc(100vw - 2rem);
-            width: 90vw;
-            max-height: 80vh;
-            border-radius: 1rem;
-            padding: 1rem;
-        }
-        .member-popup-header {
-            gap: 0.7rem;
-            margin-bottom: 0.85rem;
-        }
-        .member-popup-avatar {
-            width: 44px;
-            height: 44px;
-            font-size: 1.25rem;
-            border-radius: 0.8rem;
-        }
-        .member-popup-info h3 {
-            font-size: 0.875rem;
-        }
-        .member-popup-info p {
-            font-size: 0.75rem;
-            margin-top: 0.2rem;
-        }
-        .member-popup-actions {
-            gap: 0.5rem;
-        }
-        .member-popup-actions button {
-            min-height: 44px;
-            padding: 0.65rem;
-            font-size: 0.8125rem;
-        }
-    }
-
-    /* Team Indicators & Member Popup Styles */
-    .team-indicators {
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-    }
-    .team-indicator-circle {
-        width: 28px;
-        height: 28px;
-        border-radius: 999px;
-        border: 2.5px solid #E5E7EB;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.72rem;
-        font-weight: 800;
-        color: #94A3B8;
-        transition: all 0.2s ease;
-    }
-    .team-indicator-circle.filled {
-        background: #6BA3D8;
-        border-color: #6BA3D8;
-        color: white;
-    }
-    .peace-member-button {
-        display: flex;
-        align-items: center;
-        gap: 0.65rem;
-        min-width: 0;
-        max-width: 160px;
-        padding: 0.58rem 0.72rem;
-        border-radius: 0.95rem;
-        background: #f8fafc;
-        border: 1px solid rgba(148, 163, 184, 0.16);
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    .peace-member-button:hover {
-        border-color: #6BA3D8;
-        background: rgba(107,163,216,0.05);
-        transform: translateY(-1px);
-    }
+    /* Member popup */
     .member-popup {
         position: fixed;
-        background: white;
-        border-radius: 1.15rem;
-        padding: 1.15rem;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-        border: 1px solid rgba(107,163,216,0.1);
+        background: #fff;
+        border-radius: 1rem;
+        padding: 1rem;
+        box-shadow: 0 12px 40px rgba(38, 2, 0, 0.15);
+        border: 1px solid rgba(38, 2, 0, 0.08);
         z-index: 2147483646;
         display: none;
         max-width: 280px;
@@ -1114,166 +767,219 @@
         display: block;
         animation: popupFadeIn 0.2s ease;
     }
-    @keyframes popupFadeIn {
-        from { opacity: 0; transform: translateY(-8px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
     .member-popup-header {
         display: flex;
         align-items: center;
-        gap: 0.85rem;
-        margin-bottom: 1rem;
+        gap: 0.75rem;
+        margin-bottom: 0.875rem;
     }
     .member-popup-avatar {
-        width: 52px;
-        height: 52px;
-        border-radius: 0.9rem;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 0.75rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
-        background: #6BA3D8;
-        font-size: 1.4rem;
-        font-weight: 900;
+        color: #fff;
+        background: var(--color-primary);
+        font-size: 1rem;
+        font-weight: 800;
         flex-shrink: 0;
         overflow: hidden;
     }
-    .member-popup-avatar img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
+    .member-popup-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .member-popup-info h3 {
         margin: 0;
-        font-size: 0.95rem;
-        font-weight: 800;
-        color: #1F2937;
-        line-height: 1.2;
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: var(--color-dark);
     }
     .member-popup-info p {
-        margin: 0.25rem 0 0;
-        font-size: 0.8rem;
-        color: #94A3B8;
-    }
-    .member-popup-actions {
-        display: flex;
-        gap: 0.6rem;
-    }
-    .member-popup-actions button {
-        flex: 1;
-        padding: 0.75rem;
-        border: none;
-        border-radius: 0.8rem;
-        font-weight: 700;
-        font-size: 0.82rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.4rem;
+        margin: 0.125rem 0 0;
+        font-size: 0.75rem;
+        color: #9ca3af;
     }
     .btn-whatsapp-popup {
-        background: #6BA3D8;
-        color: white;
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.375rem;
+        padding: 0.75rem;
+        border: 1px solid rgba(38, 2, 0, 0.12);
+        border-radius: 0.625rem;
+        background: #fff;
+        color: #374151;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
     }
-    .btn-whatsapp-popup:hover {
-        transform: translateY(-2px);
+    .btn-whatsapp-popup:hover { background: #fafafa; }
+
+    button, input, select { -webkit-tap-highlight-color: transparent; font-family: inherit; }
+    #mylist-search-input:focus { border-color: var(--color-primary) !important; }
+
+    @media (max-width: 767px) {
+        .peace-card-top { padding: 0.875rem 0.875rem 0.75rem; }
+        .peace-card-body { padding: 0 0.875rem 0.875rem; }
+        .peace-family-name { font-size: 0.9375rem; }
+        .peace-detail-grid { grid-template-columns: 1fr; }
+        .peace-member-list { flex-direction: column; }
+        .peace-member-button { width: 100%; max-width: 100%; }
+        .peace-card-actions { flex-direction: column-reverse; gap: 0.4375rem; }
+        .peace-card-actions > a,
+        .peace-card-actions > button { width: 100%; flex: none; }
+        .status-pill .badge-text { display: none; }
+        .hop-sheet { max-height: 90vh; }
+        .hop-modal-body {
+            max-height: min(56vh, calc(100vh - 260px));
+            padding: 0 1rem 0.25rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
+<div class="hop-page pb-24">
+
     <!-- Header -->
-    <section class="relative p-4" style="background: #f5fbff;">
-        <div class="absolute inset-0" style="background: #f5fbff;"></div>
-        <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-32 opacity-30"
-             style="background: radial-gradient(circle, rgba(107,163,216,0.2), transparent);"></div>
-
-        <div class="relative z-10 py-6 sm:py-8">
-            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-5">
-                <div>
-                    <h1 class="text-2xl sm:text-3xl font-black text-gray-800 mb-1">Minhas Casas de Paz</h1>
-                    <p class="text-sm text-gray-500">Gerencie suas visitas de oração</p>
-                </div>
-                <a href="{% url 'member_dashboard' %}"
-                   class="hidden sm:flex items-center gap-2 px-4 py-2.5 text-gray-700 text-sm font-bold rounded-xl bg-white/70 shadow-lg hover:bg-white/90 transition-all">
-                    <i class="fas fa-arrow-left"></i>
-                    Voltar
-                </a>
+    <div class="hop-header">
+        <div class="flex gap-3 items-center">
+            <a href="{% url 'member_dashboard' %}" class="hop-back">
+                <i class="fas fa-arrow-left text-sm"></i>
+            </a>
+            <div class="min-w-0 flex-1">
+                <p class="text-[0.625rem] font-bold uppercase tracking-widest mb-0.5" style="color: #C90905;">Casa de Paz</p>
+                <h1 class="text-xl sm:text-2xl font-extrabold leading-tight tracking-tight" style="color: #260200;">Minhas Casas</h1>
+                <p class="text-xs text-gray-500 mt-0.5">Gerencie suas visitas de oração</p>
             </div>
+        </div>
+    </div>
 
-            <!-- Search + Filter Section -->
-            <div class="mt-6">
-                <div class="flex items-center gap-2 relative">
-                    <div class="relative flex-1 min-w-0">
-                        <input type="text" id="mylist-search-input" placeholder="Pesquisar por nome, bairro ou endereço..."
-                               class="w-full pl-4 pr-4 py-2.5 border-2 border-gray-200 rounded-lg focus:outline-none bg-white text-sm transition-all">
-                    </div>
+    <!-- Busca + Filtro -->
+    <div class="px-4 sm:px-6 py-4">
+        <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+                <div class="relative flex-1 min-w-0">
+                    <input type="text" id="mylist-search-input" placeholder="Buscar por família, bairro..."
+                           class="w-full pl-4 pr-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none bg-white text-sm transition-all"
+                           style="font-size: 16px; -webkit-appearance: none; appearance: none;">
+                </div>
 
+                <div class="relative flex-shrink-0">
                     <button type="button" id="mylist-filter-toggle"
-                            class="px-3 py-2.5 border-2 border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm font-medium flex-shrink-0">
+                            title="Filtros"
+                            class="relative flex-shrink-0 p-2.5 sm:px-3 sm:py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center justify-center sm:justify-start gap-0 sm:gap-2 text-sm">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
                         </svg>
-                        Filtros
-                        <span class="w-2 h-2 rounded-full hidden" id="mylist-filter-indicator" style="background-color: #6BA3D8;"></span>
+                        <span class="hidden sm:inline">Filtros</span>
+                        <span class="absolute top-1.5 right-1.5 sm:static w-2 h-2 rounded-full flex-shrink-0 hidden" id="mylist-filter-indicator" style="background-color: #C90905;"></span>
                     </button>
 
-                </div>
-            </div>
-
-        </div>
-    </section>
-
-    <!-- Conteúdo Ativas -->
-    <section id="content-active" class="relative z-20 px-4 sm:px-8 pb-24 space-y-4 animate-fade mt-[-1.5rem]">
-        {% if active_assignments %}
-            {% for assignment in active_assignments %}
-            <div class="peace-card" data-assignment-id="{{ assignment.id }}" data-search="{{ assignment.house_of_peace.requester_name|lower }} {{ assignment.house_of_peace.neighborhood.name|lower }} {{ assignment.house_of_peace.address|lower }}">
-                <!-- Header -->
-                <div class="peace-card-head">
-                    <div class="flex items-center justify-between gap-3">
-                        <div class="flex items-center gap-3 flex-1 min-w-0">
-                            <div class="flex-shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg"
-                                 style="background: #6BA3D8;">
-                                <span class="inline-block mt-1">{{ assignment.house_of_peace.requester_name|slice:":1"|upper }}</span>
+                    <div id="mylist-filter-panel" class="hop-filter-panel hidden absolute right-0 top-full mt-2">
+                        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1" for="mylist-filter-neighborhood">Bairro</label>
+                                <select id="mylist-filter-neighborhood" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm bg-white cursor-pointer">
+                                    <option value="">Todos</option>
+                                </select>
                             </div>
-                            <div class="min-w-0">
-                                <h3 class="text-lg font-black text-gray-900 truncate">Família {{ assignment.house_of_peace.requester_name }}</h3>
-                                <p class="text-sm text-gray-500 flex items-center gap-1">
-                                    <i class="fas fa-map-marker-alt text-xs" style="color: #6BA3D8;"></i>
-                                    {{ assignment.house_of_peace.neighborhood.name }}
-                                </p>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1" for="mylist-filter-family-size">Tamanho da Família</label>
+                                <select id="mylist-filter-family-size" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm bg-white cursor-pointer">
+                                    <option value="">Todos</option>
+                                    <option value="1-2">1-2 pessoas</option>
+                                    <option value="3-5">3-5 pessoas</option>
+                                    <option value="6">6+ pessoas</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-gray-700 mb-1" for="mylist-filter-sort">Ordenar por</label>
+                                <select id="mylist-filter-sort" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm bg-white cursor-pointer">
+                                    <option value="default">Padrão</option>
+                                    <option value="name-asc">Nome (A-Z)</option>
+                                    <option value="name-desc">Nome (Z-A)</option>
+                                </select>
                             </div>
                         </div>
-                        <!-- Status + Share -->
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            {% if assignment.status == 'scheduled' %}
-                            <span class="status-badge" style="background: rgba(107,163,216,0.1); color: #6BA3D8;" title="Agendada">
-                                <i class="fas fa-calendar-check text-xs"></i> <span class="badge-text inline-block">Agendada</span>
-                            </span>
-                            {% else %}
-                            <span class="status-badge" style="background: rgba(243,156,18,0.1); color: #B7770D;" title="Aguardando">
-                                <i class="fas fa-clock text-xs"></i> <span class="badge-text inline-block">Aguardando</span>
-                            </span>
-                            {% endif %}
-                            <button onclick="openShareModal('{{ assignment.house_of_peace.id }}', '{{ assignment.house_of_peace.requester_name|escapejs }}')"
-                                    title="Compartilhar"
-                                    style="width: 2.7rem; height: 2rem; box-sizing: border-box; padding: 0; border-radius: 0.5rem; background: rgba(107,163,216,0.1); border: none; cursor: pointer; color: #6BA3D8; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; flex-shrink: 0;"
-                                    onmouseover="this.style.background='rgba(107,163,216,0.15)'; this.style.transform='scale(1.05)';"
-                                    onmouseout="this.style.background='rgba(107,163,216,0.1)'; this.style.transform='scale(1)';">
-                                <i class="fas fa-share-alt text-xs"></i>
+                        <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                            <button type="button" id="mylist-clear-filters"
+                                    class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                Limpar
+                            </button>
+                            <button type="button" id="mylist-apply-filters"
+                                    class="flex-1 px-3 py-2 text-sm text-white rounded-lg hover:opacity-90 transition-all"
+                                    style="background-color: #C90905;">
+                                Aplicar
                             </button>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
 
-                <!-- Corpo -->
+    <!-- Lista -->
+    <div id="content-active" class="hop-list animate-fade">
+        {% if active_assignments %}
+            {% for assignment in active_assignments %}
+            <article class="peace-card" data-assignment-id="{{ assignment.id }}" data-search="{{ assignment.house_of_peace.requester_name|lower }} {{ assignment.house_of_peace.neighborhood.name|lower }} {{ assignment.house_of_peace.address|lower }}">
+                <div class="peace-card-top">
+                    <div class="peace-avatar">{{ assignment.house_of_peace.requester_name|slice:":1"|upper }}</div>
+                    <div class="peace-card-main">
+                        <div class="peace-title-row">
+                            <h3 class="peace-family-name truncate">Família {{ assignment.house_of_peace.requester_name }}</h3>
+                            <div class="peace-card-actions-top">
+                                {% if assignment.status == 'scheduled' %}
+                                <span class="status-pill is-scheduled" title="Agendada">
+                                    <i class="fas fa-calendar-check"></i>
+                                    <span class="badge-text">Agendada</span>
+                                </span>
+                                {% else %}
+                                <span class="status-pill is-waiting" title="Aguardando">
+                                    <i class="fas fa-clock"></i>
+                                    <span class="badge-text">Aguardando</span>
+                                </span>
+                                {% endif %}
+                                <button type="button" class="btn-share" onclick="openShareModal('{{ assignment.house_of_peace.id }}', '{{ assignment.house_of_peace.requester_name|escapejs }}')" title="Compartilhar">
+                                    <i class="fas fa-share-alt text-xs"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="peace-meta">
+                            <span class="peace-meta-item">
+                                <i class="fas fa-map-marker-alt"></i>{{ assignment.house_of_peace.neighborhood.name }}
+                            </span>
+                            <span class="peace-meta-item">
+                                <i class="fas fa-users"></i>{{ assignment.house_of_peace.family_size }} pessoa{{ assignment.house_of_peace.family_size|pluralize:"s" }}
+                            </span>
+                            <span class="peace-meta-item">
+                                <i class="fas fa-user-check"></i>{{ assignment.house_of_peace.assignments_count }}/3 irmãos
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="peace-card-body">
-                    <section class="peace-section">
+                    {% if assignment.scheduled_date %}
+                    <div class="scheduled-callout">
+                        <div class="scheduled-main">
+                            <span class="scheduled-icon"><i class="fas fa-calendar-check"></i></span>
+                            <div>
+                                <p class="scheduled-label">Visita agendada</p>
+                                <p class="scheduled-date">{{ assignment.scheduled_date|pt_date }}</p>
+                            </div>
+                        </div>
+                        <span class="scheduled-chip"><i class="fas fa-check"></i> Confirmada</span>
+                    </div>
+                    {% endif %}
+
+                    <div class="peace-section">
                         <div class="peace-section-head">
-                            <p class="peace-section-title">Equipe da visita</p>
+                            <p class="peace-section-label">Equipe da visita</p>
                             <div class="team-indicators">
                                 <div class="team-indicator-circle {% if assignment.house_of_peace.assignments_count >= 1 %}filled{% endif %}"></div>
                                 <div class="team-indicator-circle {% if assignment.house_of_peace.assignments_count >= 2 %}filled{% endif %}"></div>
@@ -1282,7 +988,7 @@
                         </div>
                         <div class="peace-member-list">
                             {% for member_assignment in assignment.house_of_peace.active_assignments %}
-                            <button type="button" class="peace-member-button" onclick="openMemberPopup(event, '{{ member_assignment.member.id }}', '{{ member_assignment.member.name|escapejs }}', '{{ member_assignment.member.phone|default:'' }}', '{% if member_assignment.member.profile_picture %}{{ member_assignment.member.profile_picture.url }}{% endif %}')" style="background: #f8fafc; border: 1px solid rgba(148, 163, 184, 0.16);">
+                            <button type="button" class="peace-member-button" onclick="openMemberPopup(event, '{{ member_assignment.member.id }}', '{{ member_assignment.member.name|escapejs }}', '{{ member_assignment.member.phone|default:'' }}', '{% if member_assignment.member.profile_picture %}{{ member_assignment.member.profile_picture.url }}{% endif %}')">
                                 <div class="peace-member-avatar">
                                     {% if member_assignment.member.profile_picture %}
                                         <img src="{{ member_assignment.member.profile_picture.url }}" alt="{{ member_assignment.member.name }}">
@@ -1290,172 +996,97 @@
                                         {{ member_assignment.member.name|slice:":1"|upper }}
                                     {% endif %}
                                 </div>
-                                <div class="peace-member-meta">
-                                    <p class="peace-member-name mt-1">{{ member_assignment.member.name|truncatewords:3 }}</p>
-                                </div>
+                                <p class="peace-member-name">{{ member_assignment.member.name|truncatewords:3 }}</p>
                             </button>
                             {% endfor %}
                         </div>
-                    </section>
+                    </div>
 
                     <details class="peace-disclosure">
                         <summary>
-                            <span class="peace-disclosure-label"><p class="mt-1">Mais detalhes da casa</p></span>
+                            <span>Mais detalhes da casa</span>
                             <i class="fas fa-chevron-down peace-disclosure-caret"></i>
                         </summary>
                         <div class="peace-disclosure-body">
-                            <div class="peace-summary-grid" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem;">
-                                <div class="peace-summary-item">
-                                    <p class="peace-summary-label">Telefone</p>
-                                    <a href="tel:{{ assignment.house_of_peace.phone }}"
-                                       class="peace-summary-value flex items-center gap-2" style="color: #6BA3D8;">
-                                        <i class="fas fa-phone text-xs"></i>
-                                        <span>{{ assignment.house_of_peace.phone }}</span>
-                                    </a>
+                            <div class="peace-detail-grid">
+                                <div class="peace-detail-item">
+                                    <p class="peace-detail-label">Telefone</p>
+                                    <p class="peace-detail-value">
+                                        <a href="tel:{{ assignment.house_of_peace.phone }}">{{ assignment.house_of_peace.phone }}</a>
+                                    </p>
                                 </div>
-                                <div class="peace-summary-item">
-                                    <p class="peace-summary-label">Família</p>
-                                    <p class="peace-summary-value">{{ assignment.house_of_peace.family_size }} pessoa{{ assignment.house_of_peace.family_size|pluralize:"s" }}</p>
+                                <div class="peace-detail-item">
+                                    <p class="peace-detail-label">Família</p>
+                                    <p class="peace-detail-value">{{ assignment.house_of_peace.family_size }} pessoa{{ assignment.house_of_peace.family_size|pluralize:"s" }}</p>
                                 </div>
-                                <div class="peace-summary-item">
-                                    <p class="peace-summary-label">Bairro</p>
-                                    <p class="peace-summary-value">{{ assignment.house_of_peace.neighborhood.name }}</p>
+                                <div class="peace-detail-item">
+                                    <p class="peace-detail-label">Bairro</p>
+                                    <p class="peace-detail-value">{{ assignment.house_of_peace.neighborhood.name }}</p>
                                 </div>
                             </div>
-                            <div class="peace-address-row">
-                                <span class="peace-address-icon"><i class="fas fa-location-dot"></i></span>
+                            <div class="peace-address-block">
+                                <i class="fas fa-location-dot"></i>
                                 <div>
-                                    <p class="peace-address-label">Endereço</p>
-                                    <p class="peace-address-value">{{ assignment.house_of_peace.address }}</p>
+                                    <p class="peace-detail-label">Endereço</p>
+                                    <p class="peace-detail-value">{{ assignment.house_of_peace.address }}</p>
                                 </div>
                             </div>
-
                             {% if assignment.house_of_peace.prayer_types_display %}
-                            <section class="peace-prayer-section">
-                                <p class="peace-section-title mb-2 ml-1">Pedidos de oração</p>
+                            <div>
+                                <p class="peace-section-label">Pedidos de oração</p>
                                 <div class="peace-tags">
                                     {% for pt in assignment.house_of_peace.prayer_types_display %}
-                                    <span class="peace-tag">
-                                        <i class="fas fa-pray text-xs"></i><span class="inline-block mt-1">{{ pt }}</span>
-                                    </span>
+                                    <span class="peace-tag">{{ pt }}</span>
                                     {% endfor %}
                                 </div>
-                            </section>
+                            </div>
                             {% endif %}
                         </div>
                     </details>
 
-                    {% if assignment.scheduled_date %}
-                    <div class="scheduled-callout">
-                        <div class="scheduled-main">
-                            <span class="scheduled-icon"><i class="fas fa-calendar-check"></i></span>
-                            <div>
-                                <p class="scheduled-label">Visita Agendada</p>
-                                <p class="scheduled-date">{{ assignment.scheduled_date|pt_date }}</p>
-                            </div>
-                        </div>
-                        <span class="scheduled-chip"><i class="fas fa-check-circle"></i>Confirmada</span>
-                    </div>
-                    {% endif %}
-
-                    <!-- Ações -->
-                    <div class="peace-actions">
+                    <div class="peace-card-actions">
                         {% if not assignment.scheduled_date %}
-                        <!-- Sem agendamento: 2 botões, 50% cada -->
-                        <a href="javascript:void(0)" onclick="openWhatsApp('{{ assignment.house_of_peace.phone|escapejs }}')"
-                           class="btn-primary btn-two-cols"
-                           style="background: #6BA3D8; flex: 1; width: 50%;">
-                            <i class="fab fa-whatsapp"></i>
-                            <span class="inline-block mt-1">Contato</span>
+                        <a href="javascript:void(0)" onclick="openWhatsApp('{{ assignment.house_of_peace.phone|escapejs }}')" class="btn-secondary-action">
+                            <i class="fab fa-whatsapp"></i> Contato
                         </a>
-                        <button onclick="scheduleVisit({{ assignment.id }})"
-                                class="btn-secondary btn-two-cols"
-                                style="flex: 1; width: 50%;">
-                            <i class="fas fa-calendar-plus"></i>
-                            <span class="inline-block mt-1">Registrar data</span>
+                        <button type="button" onclick="scheduleVisit({{ assignment.id }})" class="btn-primary-action">
+                            <i class="fas fa-calendar-plus"></i> Registrar data
                         </button>
                         {% else %}
-                        <!-- Com agendamento: 3 botões, 33.33% cada -->
-                        <button onclick="openAssignmentOptionsModal({{ assignment.id }}, '{{ assignment.house_of_peace.requester_name|escapejs }}', '{{ assignment.scheduled_date|date:'Y-m-d' }}')"
-                                class="btn-soft btn-three-cols"
-                                title="Mais opções"
-                                style="background: #6BA3D8; color: white; border: none; flex: 1; width: 33.33%;">
-                            <i class="fas fa-ellipsis-v"></i>
-                            <span class="inline-block mt-1">Opções</span>
+                        <button type="button" onclick="openAssignmentOptionsModal({{ assignment.id }}, '{{ assignment.house_of_peace.requester_name|escapejs }}', '{{ assignment.scheduled_date|date:'Y-m-d' }}')" class="btn-ghost" title="Mais opções">
+                            <i class="fas fa-ellipsis-h"></i> Opções
                         </button>
-                        <a href="javascript:void(0)" onclick="openWhatsApp('{{ assignment.house_of_peace.phone|escapejs }}')"
-                           class="btn-primary btn-three-cols"
-                           style="background: white; color: #6BA3D8; border: 1px solid rgba(107,163,216,0.2); flex: 1; width: 33.33%;">
-                            <i class="fab fa-whatsapp"></i>
-                            <span class="inline-block mt-1">Contato</span>
+                        <a href="javascript:void(0)" onclick="openWhatsApp('{{ assignment.house_of_peace.phone|escapejs }}')" class="btn-secondary-action">
+                            <i class="fab fa-whatsapp"></i> Contato
                         </a>
-                        <a href="{% url 'house_of_peace_complete' assignment.id %}"
-                           class="btn-primary btn-three-cols text-center"
-                           style="flex: 1; width: 33.33%;">
-                            <i class="fas fa-check"></i>
-                            <span class="inline-block mt-1">Concluído</span>
+                        <a href="{% url 'house_of_peace_complete' assignment.id %}" class="btn-primary-action">
+                            <i class="fas fa-check"></i> Concluído
                         </a>
                         {% endif %}
                     </div>
                 </div>
-            </div>
+            </article>
             {% endfor %}
         {% else %}
-            <div class="text-center py-16 px-6">
-                <div class="w-24 h-24 mx-auto mb-6 rounded-3xl flex items-center justify-center shadow-xl float-animation"
-                     style="background: rgba(107,163,216,0.1);">
-                    <i class="fas fa-home text-4xl" style="color: #6BA3D8;"></i>
+            <div class="text-center py-16 px-4">
+                <div class="hop-empty-icon">
+                    <i class="fas fa-home"></i>
                 </div>
-                <h3 class="text-2xl font-black text-gray-800 mb-3">Nenhuma casa ativa</h3>
-                <p class="text-base text-gray-600 mb-8 max-w-md mx-auto">
+                <h3 class="text-lg font-bold mb-1" style="color: #260200;">Nenhuma casa ativa</h3>
+                <p class="text-sm text-gray-500 mb-6 max-w-sm mx-auto leading-relaxed">
                     Você ainda não aceitou nenhuma Casa de Paz. Veja as disponíveis e ajude uma família!
                 </p>
-                <a href="{% url 'house_of_peace_available' %}"
-                   class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl shadow-xl transition-all duration-300 hover:-translate-y-1"
-                   style="background: #6BA3D8;">
+                <a href="{% url 'house_of_peace_available' %}" class="hop-empty-btn">
                     <i class="fas fa-search"></i>
                     Ver Casas Disponíveis
                 </a>
             </div>
         {% endif %}
-    </section>
+    </div>
 
-    <!-- Conteúdo Concluídas (oculto) -->
-    <section id="content-completed" class="hidden relative z-20 px-4 sm:px-8 pb-24 space-y-4 animate-fade mt-[-1.5rem]"></section>
+    <div id="content-completed" class="hidden hop-list animate-fade"></div>
 
     {% include 'parciais/member_bottom_nav.html' with nav_active='home' color_scheme='house_of_peace' %}
-
-    <!-- Filter Panel (fora de qualquer seção para evitar stacking context) -->
-    <div id="mylist-filter-panel" class="hidden"
-         style="position: fixed; z-index: 2147483647; width: 288px; max-height: 80vh; overflow-y: auto; background: #fff; border: 2px solid #E5E7EB; border-radius: 0.75rem; box-shadow: 0 20px 60px rgba(0,0,0,0.15); padding: 1rem;">
-        <div style="margin-bottom: 0.75rem;">
-            <label style="display: block; margin-bottom: 0.5rem; color: #475569; font-size: 0.76rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">Bairro</label>
-            <select id="mylist-filter-neighborhood" class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none text-sm bg-white cursor-pointer" style="color: #374151;">
-                <option value="">Todos</option>
-            </select>
-        </div>
-        <div style="margin-bottom: 0.75rem;">
-            <label style="display: block; margin-bottom: 0.5rem; color: #475569; font-size: 0.76rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">Tamanho da Família</label>
-            <select id="mylist-filter-family-size" class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none text-sm bg-white cursor-pointer" style="color: #374151;">
-                <option value="">Todas</option>
-                <option value="1-2">1-2 pessoas</option>
-                <option value="3-5">3-5 pessoas</option>
-                <option value="6">6+ pessoas</option>
-            </select>
-        </div>
-        <div style="margin-bottom: 0.75rem;">
-            <label style="display: block; margin-bottom: 0.5rem; color: #475569; font-size: 0.76rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">Ordenar por</label>
-            <select id="mylist-filter-sort" class="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:outline-none text-sm bg-white cursor-pointer" style="color: #374151;">
-                <option value="default">Padrão</option>
-                <option value="name-asc">Nome (A-Z)</option>
-                <option value="name-desc">Nome (Z-A)</option>
-            </select>
-        </div>
-        <div style="display: flex; gap: 0.6rem; margin-top: 1rem;">
-            <button id="mylist-clear-filters" style="flex: 1; padding: 0.65rem 1rem; border: 2px solid #E5E7EB; border-radius: 0.75rem; background: white; color: #475569; font-weight: 700; font-size: 0.875rem; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.borderColor='#6BA3D8'" onmouseout="this.style.borderColor='#E5E7EB'">Limpar</button>
-            <button id="mylist-apply-filters" style="flex: 1; padding: 0.65rem 1rem; border: none; border-radius: 0.75rem; background: #6BA3D8; color: white; font-weight: 700; font-size: 0.875rem; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.background='#5592C1'" onmouseout="this.style.background='#6BA3D8'">Aplicar</button>
-        </div>
-    </div>
 
     <!-- Member Popup Container -->
     <div id="member-popup" class="member-popup">
@@ -1508,18 +1139,26 @@
             neighborhoodSelect.appendChild(option);
         });
 
-        function positionPanel() {
-            const rect = filterToggle.getBoundingClientRect();
-            const clientW = document.documentElement.clientWidth;
-            const panelW = Math.min(288, rect.right - 16);
-            filterPanel.style.top = (rect.bottom + 8) + 'px';
-            filterPanel.style.right = (clientW - rect.right) + 'px';
-            filterPanel.style.width = panelW + 'px';
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
         }
 
-        filterToggle.addEventListener('click', () => {
+        searchInput.addEventListener('input', debounce(() => {
+            filterCards();
+            updateFilterIndicator();
+        }, 300));
+
+        filterToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
             filterPanel.classList.toggle('hidden');
-            if (!filterPanel.classList.contains('hidden')) positionPanel();
         });
 
         document.addEventListener('click', (e) => {
@@ -1528,21 +1167,13 @@
             }
         });
 
-        window.addEventListener('scroll', () => {
-            if (!filterPanel.classList.contains('hidden')) positionPanel();
-        });
-
         function updateFilterIndicator() {
             const neighborhood = document.getElementById('mylist-filter-neighborhood').value;
             const familySize = document.getElementById('mylist-filter-family-size').value;
             const search = searchInput.value.trim();
 
             const hasActiveFilters = neighborhood || familySize || search;
-            if (hasActiveFilters) {
-                filterIndicator.classList.remove('hidden');
-            } else {
-                filterIndicator.classList.add('hidden');
-            }
+            filterIndicator.classList.toggle('hidden', !hasActiveFilters);
         }
 
         function filterCards() {
@@ -1584,11 +1215,6 @@
             filterPanel.classList.add('hidden');
         });
 
-        searchInput.addEventListener('input', () => {
-            filterCards();
-            updateFilterIndicator();
-        });
-
         applyBtn.addEventListener('click', () => {
             filterCards();
             updateFilterIndicator();
@@ -1608,15 +1234,15 @@
             return window.matchMedia('(max-width: 767px)').matches;
         }
 
-        function visitModalClasses() {
+        function modalClasses() {
             const isMobile = isMobileViewport();
             return {
-                container: isMobile ? 'visit-sheet-container' : '',
-                popup: isMobile ? 'visit-sheet' : 'visit-popup',
-                actions: 'visit-actions',
-                confirmButton: 'visit-confirm',
-                cancelButton: 'visit-cancel',
-                htmlContainer: 'visit-html-wrap',
+                container: isMobile ? 'hop-sheet-container' : '',
+                popup: isMobile ? 'hop-sheet' : 'hop-popup',
+                actions: 'hop-actions',
+                confirmButton: 'hop-confirm',
+                cancelButton: 'hop-cancel',
+                htmlContainer: 'hop-html-wrap',
             };
         }
 
@@ -1628,28 +1254,27 @@
             Swal.fire({
                 title: '',
                 html: `
-                    <section class="visit-modal">
-                        <header class="visit-head" style="background: #f5fbff;">
-                            <div class="visit-avatar" style="background: #6BA3D8;"><i class="fas fa-calendar-check"></i></div>
-                            <div>
-                                <h2 class="visit-title" style="color: #2E5F8E;">Registrar Data da Visita</h2>
-                                <p class="visit-subtitle" style="color: #6BA3D8;">Defina o dia combinado com a família</p>
+                    <section class="hop-modal">
+                        <div class="hop-modal-top hop-modal-top-compact">
+                            <div class="hop-confirm-icon"><i class="fas fa-calendar-check"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <p class="hop-eyebrow">Agendar visita</p>
+                                <h2 class="hop-modal-title">Registrar data</h2>
                             </div>
-                        </header>
-                        <div class="visit-body">
-                            <p class="visit-label" style="color: #2E5F8E; font-weight: 800;">Qual data foi marcada para a visita?</p>
-                            <input type="date" id="visit-date" class="visit-date-input" min="${minDate}">
+                        </div>
+                        <div class="hop-modal-body">
+                            <p class="hop-field-label">Qual data foi combinada com a família?</p>
+                            <input type="date" id="visit-date" class="hop-date-input" min="${minDate}">
                         </div>
                     </section>
                 `,
                 showCancelButton: true,
                 position: isMobileViewport() ? 'bottom' : 'center',
-                confirmButtonColor: '#6BA3D8',
-                cancelButtonColor: '#6B7280',
-                confirmButtonText: '<i class="fas fa-save mr-2"></i><span class="inline-block mt-1">Salvar Data</span>',
-                cancelButtonText: '<span class="inline-block mt-1">Cancelar</span>',
-                width: isMobileViewport() ? undefined : 560,
-                customClass: visitModalClasses(),
+                confirmButtonText: 'Salvar data',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true,
+                width: isMobileViewport() ? undefined : 440,
+                customClass: modalClasses(),
                 preConfirm: () => {
                     const date = document.getElementById('visit-date').value;
                     if (!date) { Swal.showValidationMessage('Por favor, selecione uma data.'); return false; }
@@ -1673,6 +1298,25 @@
             });
         }
 
+        function resetSwalHtml(modal) {
+            const htmlContainer = modal.querySelector('.swal2-html-container');
+            if (htmlContainer) {
+                htmlContainer.style.padding = '0';
+                htmlContainer.style.margin = '0';
+            }
+            const popup = modal.querySelector('.swal2-popup');
+            if (popup) popup.style.padding = '0';
+        }
+
+        function bindOptionButtons(selector, handler) {
+            document.querySelectorAll(selector).forEach(btn => {
+                btn.addEventListener('click', function() {
+                    Swal.close();
+                    handler(this.dataset.action);
+                });
+            });
+        }
+
         function rescheduleVisit(assignmentId, currentDate) {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
@@ -1687,130 +1331,84 @@
             Swal.fire({
                 title: '',
                 html: `
-                    <section style="text-align: left; background: #fff; border-radius: 1rem; overflow: hidden;">
-                        <header style="background: #f5fbff; padding: 1.2rem 1.5rem; border-bottom: 1px solid rgba(107,163,216,0.1); display: flex; align-items: center; gap: 0.85rem;">
-                            <div style="width: 2.4rem; height: 2.4rem; border-radius: 0.85rem; background: rgba(107,163,216,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                <i class="fas fa-calendar-alt" style="color: #6BA3D8; font-size: 0.95rem;"></i>
+                    <section class="hop-modal">
+                        <div class="hop-modal-top hop-modal-top-compact">
+                            <div class="hop-confirm-icon"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <p class="hop-eyebrow">Remarcar visita</p>
+                                <h2 class="hop-modal-title">Agendada para ${currentFormatted}</h2>
                             </div>
-                            <div>
-                                <h2 style="color: #2E5F8E; font-size: 1rem; font-weight: 900; margin: 0; line-height: 1.2;">Remarcar Visita</h2>
-                                <p style="color: #6BA3D8; font-size: 0.8rem; margin: 0.25rem 0 0; font-weight: 600;">Agendada para ${currentFormatted}</p>
-                            </div>
-                        </header>
-                        <div style="padding: 1.2rem 1.5rem; display: flex; flex-direction: column; gap: 0.7rem;">
-                            <button type="button" class="reschedule-option" data-action="same-weekday" style="display: flex; align-items: center; gap: 0.85rem; width: 100%; padding: 0.95rem 1rem; border: 2px solid #E5E7EB; border-radius: 0.85rem; background: white; cursor: pointer; transition: all 0.2s ease; text-align: left;">
-                                <div style="width: 2rem; height: 2rem; border-radius: 0.65rem; background: #6BA3D8; display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; font-size: 0.85rem;">
-                                    <i class="fas fa-calendar-alt"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.88rem; font-weight: 800; color: #1F2937; text-transform: capitalize;">Próxima ${weekdayName}</div>
-                                    <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 0.15rem; font-weight: 600;">${nextWeekdayStr}</div>
-                                </div>
+                        </div>
+                        <div class="hop-option-list">
+                            <button type="button" class="hop-option-btn reschedule-option" data-action="same-weekday">
+                                <span class="hop-option-icon is-primary"><i class="fas fa-calendar-alt"></i></span>
+                                <span>
+                                    <p class="hop-option-title" style="text-transform: capitalize;">Próxima ${weekdayName}</p>
+                                    <p class="hop-option-desc">${nextWeekdayStr}</p>
+                                </span>
                             </button>
-                            <button type="button" class="reschedule-option" data-action="choose-date" style="display: flex; align-items: center; gap: 0.85rem; width: 100%; padding: 0.95rem 1rem; border: 2px solid #E5E7EB; border-radius: 0.85rem; background: white; cursor: pointer; transition: all 0.2s ease; text-align: left;">
-                                <div style="width: 2rem; height: 2rem; border-radius: 0.65rem; background: rgba(107,163,216,0.1); display: flex; align-items: center; justify-content: center; color: #6BA3D8; flex-shrink: 0; font-size: 0.85rem;">
-                                    <i class="fas fa-edit"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.88rem; font-weight: 800; color: #1F2937;">Escolher outra data</div>
-                                    <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 0.15rem; font-weight: 600;">Outro dia da semana</div>
-                                </div>
+                            <button type="button" class="hop-option-btn reschedule-option" data-action="choose-date">
+                                <span class="hop-option-icon is-soft"><i class="fas fa-edit"></i></span>
+                                <span>
+                                    <p class="hop-option-title">Escolher outra data</p>
+                                    <p class="hop-option-desc">Outro dia da semana</p>
+                                </span>
                             </button>
-                            <button type="button" class="reschedule-option" data-action="cancel" style="display: flex; align-items: center; gap: 0.85rem; width: 100%; padding: 0.95rem 1rem; border: 2px solid #E5E7EB; border-radius: 0.85rem; background: white; cursor: pointer; transition: all 0.2s ease; text-align: left;">
-                                <div style="width: 2rem; height: 2rem; border-radius: 0.65rem; background: rgba(107,163,216,0.1); display: flex; align-items: center; justify-content: center; color: #6BA3D8; flex-shrink: 0; font-size: 0.85rem;">
-                                    <i class="fas fa-times-circle"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.88rem; font-weight: 800; color: #1F2937;">Desmarcar visita</div>
-                                    <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 0.15rem; font-weight: 600;">Você agenda depois</div>
-                                </div>
+                            <button type="button" class="hop-option-btn reschedule-option is-danger" data-action="cancel">
+                                <span class="hop-option-icon is-danger"><i class="fas fa-times-circle"></i></span>
+                                <span>
+                                    <p class="hop-option-title">Desmarcar visita</p>
+                                    <p class="hop-option-desc">Você agenda depois</p>
+                                </span>
                             </button>
                         </div>
                     </section>
                 `,
                 showCancelButton: false,
                 showConfirmButton: false,
-                position: 'center',
-                width: 500,
+                position: isMobileViewport() ? 'bottom' : 'center',
+                width: isMobileViewport() ? undefined : 440,
+                customClass: modalClasses(),
                 allowOutsideClick: true,
                 didOpen: (modal) => {
-                    const htmlContainer = modal.querySelector('.swal2-html-container');
-                    if (htmlContainer) {
-                        htmlContainer.style.padding = '0';
-                        htmlContainer.style.margin = '0';
-                    }
-                    const popup = modal.querySelector('.swal2-popup');
-                    if (popup) {
-                        popup.style.padding = '0';
-                    }
-
-                    document.querySelectorAll('.reschedule-option').forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            const action = this.dataset.action;
-                            Swal.close();
-                            
-                            if (action === 'same-weekday') {
-                                submitReschedule(assignmentId, nextWeekdayStr);
-                            } else if (action === 'choose-date') {
-                                rescheduleCustomDate(assignmentId, minDate);
-                            } else if (action === 'cancel') {
-                                cancelSchedule(assignmentId);
-                            }
-                        });
-                        
-                        btn.addEventListener('mouseenter', function() {
-                            this.style.borderColor = '#6BA3D8';
-                            this.style.background = '#f5fbff';
-                            this.style.transform = 'translateX(4px)';
-                        });
-                        
-                        btn.addEventListener('mouseleave', function() {
-                            this.style.borderColor = '#E5E7EB';
-                            this.style.background = 'white';
-                            this.style.transform = 'translateX(0)';
-                        });
+                    resetSwalHtml(modal);
+                    bindOptionButtons('.reschedule-option', (action) => {
+                        if (action === 'same-weekday') submitReschedule(assignmentId, nextWeekdayStr);
+                        else if (action === 'choose-date') rescheduleCustomDate(assignmentId, minDate, currentDate);
+                        else if (action === 'cancel') cancelSchedule(assignmentId);
                     });
                 }
             });
         }
 
-        function rescheduleCustomDate(assignmentId, minDate) {
+        function rescheduleCustomDate(assignmentId, minDate, currentDate) {
             Swal.fire({
                 title: '',
                 html: `
-                    <section style="text-align: left; background: #fff; border-radius: 1rem; overflow: hidden;">
-                        <header style="background: #f5fbff; padding: 1.2rem 1.5rem; border-bottom: 1px solid rgba(107,163,216,0.1); display: flex; align-items: center; gap: 0.85rem;">
-                            <div style="width: 2.4rem; height: 2.4rem; border-radius: 0.85rem; background: rgba(107,163,216,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                <i class="fas fa-calendar-alt" style="color: #6BA3D8; font-size: 0.95rem;"></i>
+                    <section class="hop-modal">
+                        <div class="hop-modal-top hop-modal-top-compact">
+                            <div class="hop-confirm-icon"><i class="fas fa-calendar-alt"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <p class="hop-eyebrow">Nova data</p>
+                                <h2 class="hop-modal-title">Escolher data</h2>
                             </div>
-                            <div>
-                                <h2 style="color: #2E5F8E; font-size: 1rem; font-weight: 900; margin: 0; line-height: 1.2;">Escolher Data</h2>
-                                <p style="color: #6BA3D8; font-size: 0.8rem; margin: 0.25rem 0 0; font-weight: 600;">Qual será a nova data?</p>
-                            </div>
-                        </header>
-                        <div style="padding: 1.2rem 1.5rem;">
-                            <input type="date" id="reschedule-date" min="${minDate}" style="width: 100%; padding: 0.75rem 1rem; border: 2px solid #E5E7EB; border-radius: 0.75rem; font-size: 0.95rem; outline: none; box-sizing: border-box;" required>
+                        </div>
+                        <div class="hop-modal-body">
+                            <p class="hop-field-label">Qual será a nova data da visita?</p>
+                            <input type="date" id="reschedule-date" class="hop-date-input" min="${minDate}">
                         </div>
                     </section>
                 `,
                 showCancelButton: true,
-                confirmButtonColor: '#6BA3D8',
-                cancelButtonColor: '#6B7280',
-                confirmButtonText: '<i class="fas fa-check mr-2"></i><span class="inline-block mt-1">Confirmar</span>',
-                cancelButtonText: '<span class="inline-block mt-1">Voltar</span>',
-                position: 'center',
-                width: 500,
+                confirmButtonText: 'Confirmar',
+                cancelButtonText: 'Voltar',
+                reverseButtons: true,
+                position: isMobileViewport() ? 'bottom' : 'center',
+                width: isMobileViewport() ? undefined : 440,
+                customClass: modalClasses(),
                 allowOutsideClick: false,
                 didOpen: (modal) => {
-                    const htmlContainer = modal.querySelector('.swal2-html-container');
-                    if (htmlContainer) {
-                        htmlContainer.style.padding = '0';
-                        htmlContainer.style.margin = '0';
-                    }
-                    const popup = modal.querySelector('.swal2-popup');
-                    if (popup) {
-                        popup.style.padding = '0';
-                    }
+                    resetSwalHtml(modal);
                     document.getElementById('reschedule-date').focus();
                 },
                 preConfirm: () => {
@@ -1824,8 +1422,7 @@
             }).then(result => {
                 if (result.isConfirmed) {
                     submitReschedule(assignmentId, result.value);
-                } else {
-                    // User cancelled, show reschedule modal again
+                } else if (currentDate) {
                     setTimeout(() => rescheduleVisit(assignmentId, currentDate), 100);
                 }
             });
@@ -1849,14 +1446,32 @@
 
         function cancelSchedule(assignmentId) {
             Swal.fire({
-                title: 'Desmarcar Visita?',
-                html: '<p style="color: #6B7280; font-weight: 600;">A visita será desmarcada e você poderá agendar uma nova data depois.</p>',
-                icon: 'warning',
+                title: '',
+                html: `
+                    <section class="hop-modal">
+                        <div class="hop-modal-top hop-modal-top-compact">
+                            <div class="hop-confirm-icon" style="background: rgba(220,38,38,0.1); color: #dc2626;"><i class="fas fa-calendar-xmark"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <p class="hop-eyebrow">Desmarcar</p>
+                                <h2 class="hop-modal-title">Desmarcar visita?</h2>
+                            </div>
+                        </div>
+                        <div class="hop-modal-body">
+                            <div class="hop-info-box">
+                                <i class="fas fa-circle-info"></i>
+                                <p>A visita será desmarcada e você poderá agendar uma nova data depois.</p>
+                            </div>
+                        </div>
+                    </section>
+                `,
                 showCancelButton: true,
-                confirmButtonColor: '#DC2626',
-                cancelButtonColor: '#6B7280',
-                confirmButtonText: '<i class="fas fa-trash mr-2"></i><span class="inline-block mt-1">Desmarcar</span>',
-                cancelButtonText: '<span class="inline-block mt-1">Manter Agendamento</span>',
+                confirmButtonText: 'Desmarcar',
+                cancelButtonText: 'Manter agendamento',
+                reverseButtons: true,
+                customClass: modalClasses(),
+                width: isMobileViewport() ? undefined : 440,
+                position: isMobileViewport() ? 'bottom' : 'center',
+                didOpen: resetSwalHtml,
             }).then(result => {
                 if (result.isConfirmed) {
                     const form = document.createElement('form');
@@ -1876,77 +1491,43 @@
             Swal.fire({
                 title: '',
                 html: `
-                    <section style="text-align: left; background: #fff; border-radius: 1rem; overflow: hidden;">
-                        <header style="background: #f5fbff; padding: 1.2rem 1.5rem; border-bottom: 1px solid rgba(107,163,216,0.1); display: flex; align-items: center; gap: 0.85rem;">
-                            <div style="width: 2.4rem; height: 2.4rem; border-radius: 0.85rem; background: rgba(107,163,216,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                <i class="fas fa-cog" style="color: #6BA3D8; font-size: 0.95rem;"></i>
+                    <section class="hop-modal">
+                        <div class="hop-modal-top hop-modal-top-compact">
+                            <div class="hop-confirm-icon"><i class="fas fa-sliders"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <p class="hop-eyebrow">Opções</p>
+                                <h2 class="hop-modal-title">Família ${familyName}</h2>
                             </div>
-                            <div>
-                                <h2 style="color: #2E5F8E; font-size: 1rem; font-weight: 900; margin: 0; line-height: 1.2;">Opções da Visita</h2>
-                                <p style="color: #6BA3D8; font-size: 0.8rem; margin: 0.25rem 0 0; font-weight: 600;">Família ${familyName}</p>
-                            </div>
-                        </header>
-                        <div style="padding: 1.2rem 1.5rem; display: flex; flex-direction: column; gap: 0.7rem;">
-                            <button type="button" class="assignment-option" data-action="reschedule" style="display: flex; align-items: center; gap: 0.85rem; width: 100%; padding: 0.95rem 1rem; border: 2px solid #E5E7EB; border-radius: 0.85rem; background: white; cursor: pointer; transition: all 0.2s ease; text-align: left;">
-                                <div style="width: 2rem; height: 2rem; border-radius: 0.65rem; background: #6BA3D8; display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; font-size: 0.85rem;">
-                                    <i class="fas fa-calendar-alt"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.88rem; font-weight: 800; color: #1F2937;">Remarcar Visita</div>
-                                    <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 0.15rem; font-weight: 600;">Escolha outra data</div>
-                                </div>
+                        </div>
+                        <div class="hop-option-list">
+                            <button type="button" class="hop-option-btn assignment-option" data-action="reschedule">
+                                <span class="hop-option-icon is-primary"><i class="fas fa-calendar-alt"></i></span>
+                                <span>
+                                    <p class="hop-option-title">Remarcar visita</p>
+                                    <p class="hop-option-desc">Escolha outra data</p>
+                                </span>
                             </button>
-                            <button type="button" class="assignment-option" data-action="leave" style="display: flex; align-items: center; gap: 0.85rem; width: 100%; padding: 0.95rem 1rem; border: 2px solid #E5E7EB; border-radius: 0.85rem; background: white; cursor: pointer; transition: all 0.2s ease; text-align: left;">
-                                <div style="width: 2rem; height: 2rem; border-radius: 0.65rem; background: rgba(220,38,38,0.1); display: flex; align-items: center; justify-content: center; color: #DC2626; flex-shrink: 0; font-size: 0.85rem;">
-                                    <i class="fas fa-sign-out-alt"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 0.88rem; font-weight: 800; color: #1F2937;">Sair da Casa de Paz</div>
-                                    <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 0.15rem; font-weight: 600;">Remover dessa visita</div>
-                                </div>
+                            <button type="button" class="hop-option-btn assignment-option is-danger" data-action="leave">
+                                <span class="hop-option-icon is-danger"><i class="fas fa-sign-out-alt"></i></span>
+                                <span>
+                                    <p class="hop-option-title">Sair da Casa de Paz</p>
+                                    <p class="hop-option-desc">Remover dessa visita</p>
+                                </span>
                             </button>
                         </div>
                     </section>
                 `,
                 showCancelButton: false,
                 showConfirmButton: false,
-                position: 'center',
-                width: 500,
+                position: isMobileViewport() ? 'bottom' : 'center',
+                width: isMobileViewport() ? undefined : 440,
+                customClass: modalClasses(),
                 allowOutsideClick: true,
                 didOpen: (modal) => {
-                    const htmlContainer = modal.querySelector('.swal2-html-container');
-                    if (htmlContainer) {
-                        htmlContainer.style.padding = '0';
-                        htmlContainer.style.margin = '0';
-                    }
-                    const popup = modal.querySelector('.swal2-popup');
-                    if (popup) {
-                        popup.style.padding = '0';
-                    }
-
-                    document.querySelectorAll('.assignment-option').forEach(btn => {
-                        btn.addEventListener('click', function() {
-                            const action = this.dataset.action;
-                            Swal.close();
-                            
-                            if (action === 'reschedule') {
-                                rescheduleVisit(assignmentId, scheduledDate);
-                            } else if (action === 'leave') {
-                                leaveAssignment(assignmentId, familyName);
-                            }
-                        });
-                        
-                        btn.addEventListener('mouseenter', function() {
-                            this.style.borderColor = '#6BA3D8';
-                            this.style.background = '#f5fbff';
-                            this.style.transform = 'translateX(4px)';
-                        });
-                        
-                        btn.addEventListener('mouseleave', function() {
-                            this.style.borderColor = '#E5E7EB';
-                            this.style.background = 'white';
-                            this.style.transform = 'translateX(0)';
-                        });
+                    resetSwalHtml(modal);
+                    bindOptionButtons('.assignment-option', (action) => {
+                        if (action === 'reschedule') rescheduleVisit(assignmentId, scheduledDate);
+                        else if (action === 'leave') leaveAssignment(assignmentId, familyName);
                     });
                 }
             });
@@ -1956,64 +1537,31 @@
             Swal.fire({
                 title: '',
                 html: `
-                    <section style="text-align: left; background: #fff; border-radius: 1rem; overflow: hidden;">
-                        <header style="background: #f5fbff; padding: 1.2rem 1.5rem; border-bottom: 1px solid rgba(107,163,216,0.1); display: flex; align-items: center; gap: 0.85rem;">
-                            <div style="width: 2.4rem; height: 2.4rem; border-radius: 0.85rem; background: rgba(220,38,38,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                                <i class="fas fa-exclamation-triangle" style="color: #DC2626; font-size: 0.95rem;"></i>
+                    <section class="hop-modal">
+                        <div class="hop-modal-top hop-modal-top-compact">
+                            <div class="hop-confirm-icon" style="background: rgba(220,38,38,0.1); color: #dc2626;"><i class="fas fa-exclamation-triangle"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <p class="hop-eyebrow">Confirmar saída</p>
+                                <h2 class="hop-modal-title">Família ${familyName}</h2>
                             </div>
-                            <div>
-                                <h2 style="color: #2E5F8E; font-size: 1rem; font-weight: 900; margin: 0; line-height: 1.2;">Sair da Casa de Paz?</h2>
-                                <p style="color: #6BA3D8; font-size: 0.8rem; margin: 0.25rem 0 0; font-weight: 600;">Família ${familyName}</p>
+                        </div>
+                        <div class="hop-modal-body">
+                            <div class="hop-info-box">
+                                <i class="fas fa-circle-info"></i>
+                                <p>Você será removido dessa visita. Essa ação não pode ser desfeita.</p>
                             </div>
-                        </header>
-                        <div style="padding: 1.2rem 1.5rem;">
-                            <p style="color: #6B7280; font-weight: 600; margin: 0; line-height: 1.5;">Você será removido dessa visita. Essa ação não pode ser desfeita.</p>
                         </div>
                     </section>
                 `,
                 showCancelButton: true,
-                confirmButtonColor: '#DC2626',
-                cancelButtonColor: '#6B7280',
-                confirmButtonText: '<i class="fas fa-sign-out-alt mr-2"></i><span class="inline-block mt-1">Sair</span>',
-                cancelButtonText: '<span class="inline-block mt-1">Cancelar</span>',
-                position: 'center',
-                width: 500,
+                confirmButtonText: 'Sair',
+                cancelButtonText: 'Cancelar',
+                reverseButtons: true,
+                position: isMobileViewport() ? 'bottom' : 'center',
+                width: isMobileViewport() ? undefined : 440,
+                customClass: modalClasses(),
                 allowOutsideClick: false,
-                customClass: {
-                    confirmButton: 'swal2-confirm-half',
-                    cancelButton: 'swal2-cancel-half'
-                },
-                didOpen: (modal) => {
-                    const htmlContainer = modal.querySelector('.swal2-html-container');
-                    if (htmlContainer) {
-                        htmlContainer.style.padding = '0';
-                        htmlContainer.style.margin = '0';
-                    }
-                    const popup = modal.querySelector('.swal2-popup');
-                    if (popup) {
-                        popup.style.padding = '0';
-                    }
-                    
-                    const confirmBtn = modal.querySelector('.swal2-confirm-half');
-                    const cancelBtn = modal.querySelector('.swal2-cancel-half');
-                    if (confirmBtn && cancelBtn) {
-                        const actionsContainer = modal.querySelector('.swal2-actions');
-                        if (actionsContainer) {
-                            actionsContainer.style.display = 'flex';
-                            actionsContainer.style.gap = '0';
-                            actionsContainer.style.padding = '0.75rem 1.5rem 1.2rem 1.5rem';
-                            actionsContainer.style.flexWrap = 'nowrap';
-                            actionsContainer.style.width = '100%';
-                            actionsContainer.style.boxSizing = 'border-box';
-                        }
-                        confirmBtn.style.width = 'calc(50% - 0.375rem)';
-                        cancelBtn.style.width = 'calc(50% - 0.375rem)';
-                        confirmBtn.style.margin = '0';
-                        cancelBtn.style.margin = '0 0 0 0.75rem';
-                        confirmBtn.style.boxSizing = 'border-box';
-                        cancelBtn.style.boxSizing = 'border-box';
-                    }
-                }
+                didOpen: resetSwalHtml,
             }).then(result => {
                 if (result.isConfirmed) {
                     const form = document.createElement('form');
@@ -2033,29 +1581,20 @@
             });
         }
 
-        function shareModalClasses() {
-            const isMobile = isMobileViewport();
-            return {
-                container: isMobile ? 'share-sheet-container' : '',
-                popup: isMobile ? 'share-sheet' : 'share-popup',
-                htmlContainer: 'share-html-wrap',
-            };
-        }
-
         function shareMarkup(houseId, familyName) {
             const shareUrl = `${window.location.origin}/house-of-peace/${houseId}/details/`;
             const shareText = `Convite para acompanhar a Casa de Paz da Família ${familyName}. Clique para participar: `;
 
             return `
-                <section style="text-align: left; background: #fff;">
-                    <header class="share-head">
-                        <div class="share-avatar"><i class="fas fa-handshake"></i></div>
-                        <div>
-                            <h2 class="share-title" style="color: #2E5F8E; font-size: 1rem; font-weight: 900;">Compartilhar Casa</h2>
-                            <p class="share-subtitle" style="color: #6BA3D8; font-size: 0.8rem;">Convide outro membro para participar</p>
+                <section class="hop-modal">
+                    <div class="hop-modal-top hop-modal-top-compact">
+                        <div class="hop-confirm-icon"><i class="fas fa-share-nodes"></i></div>
+                        <div class="min-w-0 flex-1">
+                            <p class="hop-eyebrow">Compartilhar</p>
+                            <h2 class="hop-modal-title">Família ${familyName}</h2>
                         </div>
-                    </header>
-                    <div class="share-body">
+                    </div>
+                    <div class="hop-modal-body">
                         <div class="share-option" onclick="shareViaWhatsApp('${shareText}', '${shareUrl}')">
                             <div class="share-icon" style="background: #25D366; color: #fff;"><i class="fab fa-whatsapp"></i></div>
                             <div class="share-text">
@@ -2064,10 +1603,10 @@
                             </div>
                         </div>
                         <div class="share-option" onclick="copyToClipboard('${shareUrl}')">
-                            <div class="share-icon" style="background: #6BA3D8; color: #fff;"><i class="fas fa-copy"></i></div>
+                            <div class="share-icon" style="background: var(--color-primary); color: #fff;"><i class="fas fa-copy"></i></div>
                             <div class="share-text">
-                                <h3>Copiar Link</h3>
-                                <p>Copie o link e compartilhe</p>
+                                <h3>Copiar link</h3>
+                                <p>Copie e compartilhe manualmente</p>
                             </div>
                         </div>
                     </div>
@@ -2082,25 +1621,10 @@
                 showCancelButton: false,
                 position: isMobileViewport() ? 'bottom' : 'center',
                 showConfirmButton: false,
-                width: isMobileViewport() ? undefined : 540,
-                customClass: shareModalClasses(),
+                width: isMobileViewport() ? undefined : 440,
+                customClass: modalClasses(),
                 allowOutsideClick: true,
-                didOpen: (modal) => {
-                    const htmlContainer = modal.querySelector('.swal2-html-container');
-                    if (htmlContainer) {
-                        htmlContainer.style.padding = '0';
-                        htmlContainer.style.margin = '0';
-                    }
-                    const popup = modal.querySelector('.swal2-popup');
-                    if (popup) {
-                        popup.style.padding = '0';
-                    }
-                    modal.addEventListener('click', (e) => {
-                        if (e.target === modal.parentElement) {
-                            Swal.close();
-                        }
-                    });
-                },
+                didOpen: resetSwalHtml,
             });
         }
 
@@ -2115,37 +1639,19 @@
                 Swal.fire({
                     title: '',
                     html: `
-                        <section style="text-align: center; background: #fff;">
-                            <div style="width: 60px; height: 60px; margin: 1.2rem auto 0.8rem; border-radius: 50%; background: rgba(107,163,216,0.1); display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-check" style="font-size: 1.8rem; color: #6BA3D8;"></i>
+                        <section class="hop-modal">
+                            <div class="hop-modal-top hop-modal-top-compact" style="justify-content: center; text-align: center; flex-direction: column; align-items: center;">
+                                <div class="peace-avatar" style="margin-bottom: 0.5rem;"><i class="fas fa-check"></i></div>
+                                <h2 class="hop-modal-title">Link copiado</h2>
+                                <p class="text-sm text-gray-500 mt-1">Copiado para a área de transferência</p>
                             </div>
-                            <h2 style="color: #2E5F8E; font-size: 1.1rem; font-weight: 900; margin: 0; line-height: 1.2;">Link Copiado!</h2>
-                            <p style="color: #6B7280; font-size: 0.85rem; font-weight: 500; margin: 0.35rem 0 0; line-height: 1.4;">Copiado para a área de transferência</p>
                         </section>
                     `,
-                    icon: false,
                     position: isMobileViewport() ? 'bottom' : 'center',
-                    confirmButtonColor: '#6BA3D8',
-                    confirmButtonText: '<span class="inline-block mt-1">OK</span>',
-                    width: isMobileViewport() ? undefined : 480,
-                    customClass: shareModalClasses(),
-                    didOpen: (modal) => {
-                        const actions = modal.querySelector('.swal2-actions');
-                        if (actions) {
-                            actions.style.display = 'flex';
-                            actions.style.flexDirection = 'column';
-                            actions.style.padding = '0.8rem 1rem';
-                            actions.style.borderTop = '1px solid rgba(107,163,216,0.12)';
-                            actions.style.gap = '0';
-                            actions.style.margin = '0';
-                        }
-                        const confirmBtn = modal.querySelector('.swal2-confirm');
-                        if (confirmBtn) {
-                            confirmBtn.style.width = '100%';
-                            confirmBtn.style.margin = '0';
-                            confirmBtn.style.padding = '0.65rem 1rem';
-                        }
-                    },
+                    confirmButtonText: 'OK',
+                    width: isMobileViewport() ? undefined : 360,
+                    customClass: modalClasses(),
+                    didOpen: resetSwalHtml,
                 });
             });
         }
@@ -2249,4 +1755,5 @@
             }
         });
     </script>
+</div>
 {% endblock %}

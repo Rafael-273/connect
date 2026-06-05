@@ -13,16 +13,16 @@
     consolidation → amber   #F59E0B  rgb(245,158,11)
     curas         → red     #C90905  rgb(201,9,5)
     profile       → indigo  #6366F1  rgb(99,102,241)
-    house_of_peace → blue   #6BA3D8  rgb(107,163,216)
+    house_of_peace → red     #C90905  rgb(201,9,5)
 {% endcomment %}
 
 <nav id="bottomNav"
      class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out
             {% if can_consolidate and is_ministration_member %}w-[90%] max-w-lg justify-around{% else %}w-auto gap-2 justify-center{% endif %}"
-     style="--accent: {% if color_scheme == 'house_of_peace' %}#6BA3D8{% elif nav_active == 'consolidation' %}#F59E0B{% elif nav_active == 'profile' %}#6366F1{% else %}#C90905{% endif %};
-            --ar: {% if color_scheme == 'house_of_peace' %}107{% elif nav_active == 'consolidation' %}245{% elif nav_active == 'profile' %}99{% else %}201{% endif %};
-            --ag: {% if color_scheme == 'house_of_peace' %}163{% elif nav_active == 'consolidation' %}158{% elif nav_active == 'profile' %}102{% else %}9{% endif %};
-            --ab: {% if color_scheme == 'house_of_peace' %}216{% elif nav_active == 'consolidation' %}11{% elif nav_active == 'profile' %}241{% else %}5{% endif %};
+     style="--accent: {% if color_scheme == 'house_of_peace' %}#C90905{% elif nav_active == 'consolidation' %}#F59E0B{% elif nav_active == 'profile' %}#6366F1{% else %}#C90905{% endif %};
+            --ar: {% if color_scheme == 'house_of_peace' %}201{% elif nav_active == 'consolidation' %}245{% elif nav_active == 'profile' %}99{% else %}201{% endif %};
+            --ag: {% if color_scheme == 'house_of_peace' %}9{% elif nav_active == 'consolidation' %}158{% elif nav_active == 'profile' %}102{% else %}9{% endif %};
+            --ab: {% if color_scheme == 'house_of_peace' %}5{% elif nav_active == 'consolidation' %}11{% elif nav_active == 'profile' %}241{% else %}5{% endif %};
             background: linear-gradient(to bottom right, rgba(255,255,255,0.98), rgba(249,250,251,0.98));
             backdrop-filter: blur(20px);
             border-color: rgba(var(--ar),var(--ag),var(--ab),0.2);">
