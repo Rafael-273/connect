@@ -1,0 +1,119 @@
+  <div class="module-section" id="admin-overview">
+    <div class="module-header mod-admin">
+      <span class="icon">🖥️</span>
+      <h2>4. Painel Admin — Visão Geral</h2>
+      <span class="access-badge badge-admin">Acesso: has_admin_access + staff</span>
+    </div>
+    <div class="info-box">
+      <strong>URL base:</strong> <code>/admin-panel/</code> · Login unificado em <code>/login/</code> ou <code>/admin-login/</code>.<br>
+      O menu lateral exibe itens conforme o grupo de permissão (<code>user_type</code>) do usuário logado.
+    </div>
+    <table>
+      <thead><tr><th>Item do menu</th><th>Quem vê</th><th>URL principal</th></tr></thead>
+      <tbody>
+        <tr><td>Dashboard</td><td>admin, superuser</td><td><code>/admin-panel/</code></td></tr>
+        <tr><td>Membros</td><td>admin, superuser</td><td><code>/admin-panel/members/</code></td></tr>
+        <tr><td>Visitantes</td><td>admin, superuser, visitors</td><td><code>/admin-panel/visitors/</code></td></tr>
+        <tr><td>Consolidação (submenu)</td><td>admin, superuser, consolidation</td><td>followups, templates, reports</td></tr>
+        <tr><td>Eventos</td><td>admin, superuser, events</td><td><code>/admin-panel/events/</code></td></tr>
+        <tr><td>Testemunhos, Roteiro, Ministérios, Música, Casas de Paz</td><td>admin, superuser</td><td>rotas respectivas</td></tr>
+        <tr><td>Escalas (submenu)</td><td>admin, superuser (staff)</td><td>escalas + equipes</td></tr>
+        <tr><td>Ministração (submenu)</td><td>admin, superuser (staff)</td><td>palavras + curas</td></tr>
+        <tr><td>Bairros, Usuários</td><td>admin (+ superuser)</td><td>respectivas</td></tr>
+        <tr><td>Área de Membros</td><td>Todos logados</td><td><code>/dashboard/</code></td></tr>
+      </tbody>
+    </table>
+    <ul class="notes"><li>Cursos de Frequência: <code>/admin-panel/attendance-courses/</code> — acesso direto pela URL (não está no menu lateral).</li></ul>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="admin-people">
+    <div class="module-header mod-admin">
+      <span class="icon">🗂️</span>
+      <h2>5. Admin — Pessoas e Cadastros</h2>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📈 5.1 — Dashboard Administrativo</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond"><li><code>user_type=admin</code> ou <code>is_superuser=True</code>.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Login → redirecionamento para o painel.</li>
+          <li>Visualizar métricas: membros, visitantes, eventos, consolidações.</li>
+          <li>Verificar gráficos e indicadores.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Números batem com as listas; gráficos sem erros JS.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">👥 5.2 — Membros (CRUD completo)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/members/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/edit/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond"><li>admin ou superuser.</li></ul>
+        <div class="flow-title">Fluxo — Criar</div>
+        <ol class="flow">
+          <li>Preencher: nome, e-mail, telefone, bairro, foto, gênero, conversão.</li>
+          <li>Flags: <code>is_approver</code>, <code>is_available_to_consolidate</code>, <code>is_consolidated</code>.</li>
+          <li>Definir <code>user_type</code> — cria User + Member (senha padrão <code>123</code>).</li>
+        </ol>
+        <div class="flow-title">Fluxo — Editar / excluir</div>
+        <ol class="flow">
+          <li>Editar dados, vincular cônjuge, alterar flags.</li>
+          <li>Soft delete via <code>/admin-panel/api/delete/</code>.</li>
+          <li>API JSON: <code>/admin-panel/api/member/&lt;id&gt;/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>E-mail duplicado rejeitado; soft delete remove das listas.</li>
+          <li>Flags refletem no portal do membro.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🚶 5.3 — Visitantes</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/visitors/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond"><li>admin, superuser ou <code>user_type=visitors</code>.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>CRUD: nome, telefone, bairro, decisão por Jesus, conversão, visita domiciliar.</li>
+          <li>Visitante com decisão pode ser convertido automaticamente em membro.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🗺️ 5.4 — Bairros</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/neighborhoods/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>CRUD de bairros; API <code>/admin-panel/api/neighborhood/</code>.</li>
+          <li>Bairros ativos aparecem nos formulários de cadastro.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🔒 5.5 — Usuários do sistema</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/users/</span> <span class="url-tag">/admin-panel/change-password/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond"><li>Gestão de usuários: apenas <code>user_type=admin</code>.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar usuários; resetar senha → <code>123</code>.</li>
+          <li>Trocar própria senha.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />

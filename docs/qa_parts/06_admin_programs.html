@@ -1,0 +1,111 @@
+  <div class="module-section" id="admin-programs">
+    <div class="module-header mod-admin">
+      <span class="icon">📋</span>
+      <h2>5. Painel Admin — Programas</h2>
+      <span class="access-badge badge-admin">Acesso: admin / roles específicos</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📅 5.1 — Gestão de Eventos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/events/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/edit/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Usuário <code>user_type=events</code> ou admin: CRUD de eventos.</li>
+          <li>Criar com título, slug, banner, datas, recorrência, link de inscrição.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Evento aparece no site público se dentro da janela de datas.</li>
+          <li>Slug duplicado rejeitado.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🌱 5.2 — Follow-ups de Consolidação</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/followups/</span> e sub-rotas</p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Criar follow-up: pessoa, responsável, template.</li>
+          <li>Ver detalhe e relatórios submetidos pelo consolidador.</li>
+          <li>Editar e soft-deletar.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Follow-up aparece na lista do consolidador em <code>/consolidation/</code>.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📝 5.3 — Templates de Acompanhamento</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/templates/</span> e sub-rotas</p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Criar template com passos semanais.</li>
+          <li>Editar, ver detalhe e excluir.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📊 5.4 — Relatórios de Consolidação</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/reports/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow"><li>Dashboard agregado de indicadores espirituais por período.</li></ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🎓 5.5 — Cursos de Frequência</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/attendance-courses/</span> e sub-rotas</p>
+        <div class="flow-title">Fluxo completo</div>
+        <ol class="flow">
+          <li>Criar curso com recorrência.</li>
+          <li>Adicionar participantes (vínculo opcional com Membro).</li>
+          <li>Criar aulas com flag <code>was_held</code>.</li>
+          <li>Marcar frequência por aula: presente / ausente / justificado.</li>
+          <li>Exportar CSV: <code>.../report/export/</code>.</li>
+          <li>Imprimir relatório do curso ou da aula.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Frequência calculada corretamente.</li>
+          <li>CSV com colunas corretas.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">✨ 5.6 — Moderação de Testemunhos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/testimonies/</span> <span class="url-tag">...&lt;id&gt;/toggle/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Criar, editar, excluir testemunhos.</li>
+          <li>Toggle <code>is_approved</code> e <code>show_on_home</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Aprovado aparece em <code>/testemunhos/</code>.</li>
+          <li>Com <code>show_on_home</code> aparece no carrossel da home.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🏡 5.7 — Casa da Paz (Admin)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/house-of-peace/</span> <span class="url-tag">...&lt;id&gt;/status/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar solicitações, ver detalhe com histórico de visitas.</li>
+          <li>Alterar status e soft-deletar.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />

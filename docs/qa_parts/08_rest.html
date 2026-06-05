@@ -1,0 +1,125 @@
+  <div class="module-section" id="translator">
+    <div class="module-header mod-tech">
+      <span class="icon">🎙️</span>
+      <h2>8. Tradução ao Vivo (WebSocket)</h2>
+      <span class="access-badge badge-tech">Acesso: Sem login</span>
+    </div>
+
+    <div class="info-box">
+      <strong>Atenção:</strong> Usa WebSockets (Django Channels), Azure Speech Recognition e Google Translate (PT→EN/NL). Requer ASGI e serviços configurados.
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🎤 8.1 — Gravador de Áudio (Operador)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/translator/recorder/</span> <span class="url-tag">ws://…/ws/audio/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/translator/recorder/</code> sem login.</li>
+          <li>Conceder permissão de microfone.</li>
+          <li>Iniciar captura — WebSocket com Azure Speech.</li>
+          <li>Transcrição PT traduzida para EN e NL via <code>ws/transcript/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Conexão WebSocket sem erros.</li>
+          <li>Parar encerra o stream limpo.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📺 8.2 — Exibição de Transcrição</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/translator/</span> <span class="url-tag">ws://…/ws/transcript/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Abrir <code>/translator/</code> em dispositivo da congregação.</li>
+          <li>Texto traduzido aparece em tempo real.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Múltiplos dispositivos recebem o mesmo texto.</li>
+          <li>Perda de conexão exibe mensagem adequada.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section">
+    <div class="module-header mod-ops">
+      <span class="icon">🔌</span>
+      <h2>9. APIs Internas do Admin Panel</h2>
+      <span class="access-badge badge-ops">Acesso: admin (sessão)</span>
+    </div>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Método</th><th>Função</th><th>Observação</th></tr></thead>
+      <tbody>
+        <tr><td><code>/admin-panel/api/delete/</code></td><td>POST</td><td>Soft-delete member/visitor/event/ministry/neighborhood</td><td>⚠ CSRF-exempt</td></tr>
+        <tr><td><code>/admin-panel/api/ministry/</code></td><td>POST</td><td>Criar/editar ministério via AJAX</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/api/neighborhood/</code></td><td>POST</td><td>Criar/editar bairro via AJAX</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/api/member/&lt;id&gt;/</code></td><td>GET</td><td>JSON com dados do membro</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/api/visitor/&lt;id&gt;/</code></td><td>GET</td><td>JSON com dados do visitante</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/schedules/check-conflict/</code></td><td>POST</td><td>Conflito de membro em escala</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/roteiro/anuncios/reorder/</code></td><td>POST</td><td>Reordenar anúncios</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <div class="warn-box"><strong>Ponto de atenção:</strong> <code>/admin-panel/api/delete/</code> é CSRF-exempt — testar autenticação.</div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="out-of-scope">
+    <div class="module-header" style="background:#f7fafc;border-left:4px solid #a0aec0;">
+      <span class="icon">🚫</span>
+      <h2>10. Fora do Escopo — Não Testar</h2>
+    </div>
+    <div class="danger-box">Funcionalidades no código mas <strong>sem rotas na branch production</strong>:</div>
+    <table>
+      <thead><tr><th>Módulo</th><th>Status</th><th>Razão</th></tr></thead>
+      <tbody>
+        <tr><td>Cantina (Canteen)</td><td>Views existem, URLs comentadas</td><td>Módulo incompleto</td></tr>
+        <tr><td>Media Planning</td><td>Templates existem, sem views/URLs</td><td>Em desenvolvimento</td></tr>
+        <tr><td>WeeklySchedule views</td><td>Sem URLs</td><td>Substituído por MonthlySchedule</td></tr>
+        <tr><td>Rotas avançadas de follow-up steps</td><td>Comentadas no urls.py</td><td>TODO pendente</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="checklist">
+    <div class="module-header mod-ops">
+      <span class="icon">✅</span>
+      <h2>11. Checklist Rápido de Sanidade</h2>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Verificação</th><th>Resultado Esperado</th><th>OK?</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Login com credenciais válidas</td><td>Redirect correto por tipo</td><td>☐</td></tr>
+        <tr><td>2</td><td>Login com credenciais inválidas</td><td>Erro, sem redirect</td><td>☐</td></tr>
+        <tr><td>3</td><td>Anônimo acessa <code>/dashboard/</code></td><td>Redirect para login</td><td>☐</td></tr>
+        <tr><td>4</td><td>Membro acessa <code>/admin-panel/</code></td><td>403 ou redirect</td><td>☐</td></tr>
+        <tr><td>5</td><td>Admin events acessa gestão de usuários</td><td>403</td><td>☐</td></tr>
+        <tr><td>6</td><td>Formulário visitante com campos vazios</td><td>Validação exibe erros</td><td>☐</td></tr>
+        <tr><td>7</td><td>Cadastro membro com e-mail duplicado</td><td>Erro de validação</td><td>☐</td></tr>
+        <tr><td>8</td><td>Casa da Paz — 4º membro tenta aceitar</td><td>Bloqueado (limite 3)</td><td>☐</td></tr>
+        <tr><td>9</td><td>Palavra pendente em <code>/words/service/</code></td><td>Não aparece</td><td>☐</td></tr>
+        <tr><td>10</td><td>Escala não publicada para membro</td><td>Não visível</td><td>☐</td></tr>
+        <tr><td>11</td><td>Soft-delete de membro</td><td>Não reaparece nas listas</td><td>☐</td></tr>
+        <tr><td>12</td><td>Reset senha admin → <code>123</code></td><td>Login funciona</td><td>☐</td></tr>
+        <tr><td>13</td><td>Exportar CSV de frequência</td><td>Arquivo correto</td><td>☐</td></tr>
+        <tr><td>14</td><td>Conflito de escala via AJAX</td><td>Alerta exibido</td><td>☐</td></tr>
+        <tr><td>15</td><td>Testemunho sem <code>show_on_home</code> na home</td><td>Não no carrossel</td><td>☐</td></tr>
+        <tr><td>16</td><td>API delete sem sessão</td><td>401/403</td><td>☐</td></tr>
+        <tr><td>17</td><td>Upload foto no perfil</td><td>Foto salva e exibida</td><td>☐</td></tr>
+        <tr><td>18</td><td>Link reset senha expirado</td><td>Erro adequado</td><td>☐</td></tr>
+        <tr><td>19</td><td>Anúncio roteiro fora do período</td><td>Não visível</td><td>☐</td></tr>
+        <tr><td>20</td><td>WebSocket tradução múltiplos clientes</td><td>Todos recebem texto</td><td>☐</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="doc-footer">
+    Filadélfia Connect — Documento de QA | Branch: production | Junho 2026<br>
+    Gerado a partir da análise do código-fonte. Revisar com a equipe de desenvolvimento antes dos testes.
+  </div>

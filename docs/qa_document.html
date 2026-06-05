@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Filadélfia Connect — Documento de QA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --primary: #C90905;
+    --primary-dark: #8C0910;
+    --dark: #260200;
+    --accent: #FDDEB9;
+    --text: #0e0e0e;
+    --muted: #5c5c5c;
+    --border: #e5e5e5;
+    --surface: #fafafa;
+    --surface-alt: #f5f5f5;
+    --font: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+    --mono: 'Consolas', 'Liberation Mono', 'Courier New', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.65;
+    color: var(--text);
+    background: #fff;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container { max-width: 900px; margin: 0 auto; padding: 28px 36px 48px; }
+  .print-hint {
+    font-size: 11px;
+    color: var(--muted);
+    border: 1px dashed var(--border);
+    padding: 10px 14px;
+    margin-bottom: 24px;
+    background: var(--surface);
+  }
+  .cover {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 72px 48px;
+    background: var(--dark);
+    color: #fff;
+    text-align: center;
+  }
+  .cover-mark { width: 56px; height: 4px; background: var(--primary); margin-bottom: 28px; }
+  .cover-logo {
+    width: 240px;
+    max-width: 72vw;
+    height: auto;
+    margin-bottom: 20px;
+    object-fit: contain;
+  }
+  .cover h1 {
+    font-family: var(--font);
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+    color: #fff;
+  }
+  .cover .subtitle { font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.75); margin-bottom: 36px; line-height: 1.55; }
+  .cover .badge {
+    display: inline-block;
+    border: 1px solid var(--primary);
+    color: var(--accent);
+    padding: 4px 14px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .cover .meta {
+    display: flex;
+    justify-content: center;
+    gap: 36px;
+    flex-wrap: wrap;
+    margin-top: 40px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+  .cover .meta-item { text-align: center; }
+  .cover .meta-item .label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    color: rgba(255,255,255,0.5); margin-bottom: 4px;
+  }
+  .cover .meta-item .value { font-size: 14px; font-weight: 600; color: #fff; }
+  .toc { background: var(--surface); border: 1px solid var(--border); padding: 24px 28px; margin: 0 0 36px; }
+  .toc h2 { font-size: 13px; font-weight: 700; margin-bottom: 14px; color: var(--dark); letter-spacing: 0.01em; }
+  .toc ol { padding-left: 18px; }
+  .toc li { margin-bottom: 4px; font-size: 13px; font-weight: 500; }
+  .toc a { color: var(--primary); text-decoration: none; }
+  .toc .sub { list-style: none; padding-left: 14px; margin-top: 2px; }
+  .toc .sub li { font-size: 11px; color: var(--muted); }
+  .module-section { margin: 36px 0 28px; }
+  .module-header {
+    display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px;
+    padding: 0 0 10px; margin-bottom: 18px; border-bottom: 2px solid var(--primary);
+  }
+  .module-header h2 { font-size: 18px; font-weight: 700; color: var(--dark); letter-spacing: -0.01em; }
+  .module-header .access-badge {
+    margin-left: auto; font-size: 11px; padding: 2px 8px;
+    border: 1px solid var(--border); border-radius: 2px;
+    font-weight: 500; color: var(--muted); background: var(--surface);
+  }
+  .mod-public, .mod-member, .mod-admin, .mod-ops, .mod-tech { background: none; }
+  .feature { border: 1px solid var(--border); margin-bottom: 14px; background: #fff; }
+  .feature-title {
+    background: var(--surface); padding: 9px 14px; font-weight: 600;
+    font-size: 14px; color: var(--dark); border-bottom: 1px solid var(--border);
+  }
+  .feature-body { padding: 14px 16px; font-size: 13px; }
+  .flow-title {
+    font-size: 11px; font-weight: 600;
+    color: var(--muted); margin: 12px 0 6px;
+  }
+  ol.flow { padding-left: 18px; margin-bottom: 10px; }
+  ol.flow li { margin-bottom: 4px; }
+  ul.notes, ul.expects, ul.precond { padding-left: 0; list-style: none; margin-bottom: 10px; }
+  ul.notes li, ul.expects li, ul.precond li {
+    margin-bottom: 4px; font-size: 13px; padding-left: 10px; margin-left: 2px; line-height: 1.55;
+  }
+  ul.notes li { color: var(--muted); border-left: 2px solid #ccc; }
+  ul.expects li { color: #333; border-left: 2px solid var(--primary); }
+  ul.precond li { color: #333; border-left: 2px solid var(--dark); }
+  .url-tag {
+    display: inline-block; background: var(--surface-alt); color: var(--muted);
+    font-family: var(--mono); font-size: 11px; font-weight: 400;
+    padding: 1px 6px; border: 1px solid var(--border); border-radius: 2px; margin: 0 3px 3px 0;
+  }
+  .method-tag { display: inline-block; font-family: var(--font); font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 2px; margin-right: 3px; }
+  .get { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+  .post { background: var(--dark); color: #fff; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; }
+  thead { display: table-header-group; }
+  th {
+    background: var(--dark); color: #fff; padding: 8px 10px; text-align: left;
+    font-family: var(--font); font-weight: 600; font-size: 11px; letter-spacing: 0;
+  }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; font-size: 12px; }
+  tr:nth-child(even) td { background: var(--surface); }
+  td .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .dot-yes { background: var(--primary); }
+  .dot-no { background: #ccc; }
+  hr.section-divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+  .info-box, .warn-box, .danger-box {
+    padding: 10px 14px; margin: 12px 0; font-size: 12px;
+    border-left: 3px solid var(--primary); background: var(--surface);
+  }
+  .warn-box { border-left-color: #999; }
+  .danger-box { border-left-color: var(--primary-dark); background: #fff8f8; }
+  .doc-footer {
+    text-align: center; padding: 24px 0 8px; color: var(--muted);
+    font-size: 10px; border-top: 1px solid var(--border); margin-top: 36px;
+  }
+  .persona {
+    display: inline-block; font-size: 10px; padding: 2px 7px;
+    border: 1px solid var(--border); border-radius: 2px; font-weight: 500; margin: 2px;
+    color: var(--muted); background: var(--surface);
+  }
+  code {
+    font-family: var(--mono); font-size: 12px; font-weight: 400;
+    background: var(--surface-alt); padding: 1px 4px; border-radius: 2px;
+  }
+  th code { background: transparent; color: inherit; padding: 0; font-size: inherit; font-family: var(--mono); }
+  h3 { font-size: 14px; font-weight: 700; color: var(--dark); }
+  strong { font-weight: 600; }
+  @media print {
+    @page { margin: 18mm 16mm; size: A4; }
+    html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-size: 11px; }
+    .no-print { display: none !important; }
+    .cover {
+      min-height: auto; height: 100vh; page-break-after: always; break-after: page;
+      background: var(--dark) !important; -webkit-print-color-adjust: exact !important;
+    }
+    .cover h1, .cover .meta-item .value { color: #fff !important; }
+    .cover .badge { border-color: var(--primary) !important; color: var(--accent) !important; }
+    .cover-mark { background: var(--primary) !important; }
+    .cover-logo { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .container { padding: 0; max-width: none; }
+    .module-section { break-inside: auto; page-break-inside: auto; margin: 24px 0 16px; }
+    .module-header { break-after: avoid; page-break-after: avoid; }
+    .feature { break-inside: auto; page-break-inside: auto; }
+    .feature-title { break-after: avoid; page-break-after: avoid; }
+    table { break-inside: auto; page-break-inside: auto; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    th { background: var(--dark) !important; color: #fff !important; -webkit-print-color-adjust: exact !important; }
+    th code { background: transparent !important; color: #fff !important; }
+    .info-box, .warn-box, .danger-box { break-inside: avoid; page-break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <img class="cover-logo" src="data:image/png;base64,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" alt="Igreja Filadélfia" />
+  <div class="cover-mark"></div>
+  <div class="badge">Branch: production</div>
+  <p class="subtitle">Documento de Funcionalidades<br>Plataforma de Gestão da Igreja</p>
+  <div class="meta">
+    <div class="meta-item"><div class="label">Versão</div><div class="value">Production</div></div>
+    <div class="meta-item"><div class="label">Data</div><div class="value">Junho 2026</div></div>
+    <div class="meta-item"><div class="label">Seções</div><div class="value">13 módulos</div></div>
+    <div class="meta-item"><div class="label">Funcionalidades</div><div class="value">80+ fluxos</div></div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="print-hint no-print">
+    Para exportar em PDF: Ctrl+P → marque <strong>Gráficos de segundo plano</strong> (Background graphics) para imprimir as cores da capa e dos cabeçalhos.
+  </div>
+
+  <div class="toc no-print">
+    <h2>Sumário</h2>
+    <ol>
+      <li><a href="#permission-groups">Grupos de Permissão</a></li>
+      <li><a href="#public">Site Público</a>
+        <ul class="sub"><li>Página inicial, eventos, testemunhos, contato</li><li>Formulários públicos</li></ul>
+      </li>
+      <li><a href="#auth">Autenticação e Redefinição de Senha</a></li>
+      <li><a href="#member">Portal do Membro</a></li>
+      <li><a href="#admin-overview">Painel Admin — Visão Geral</a></li>
+      <li><a href="#admin-people">Admin — Pessoas e Cadastros</a></li>
+      <li><a href="#admin-consolidation">Admin — Consolidação</a>
+        <ul class="sub"><li>Follow-ups, templates, relatórios</li></ul>
+      </li>
+      <li><a href="#admin-schedules">Admin — Escalas</a>
+        <ul class="sub"><li>Equipes, dias, divisões, impressão</li></ul>
+      </li>
+      <li><a href="#admin-ministration">Admin — Ministração</a></li>
+      <li><a href="#admin-other">Admin — Outros Módulos</a>
+        <ul class="sub"><li>Eventos, testemunhos, roteiro, ministérios, música, casa da paz, cursos</li></ul>
+      </li>
+      <li><a href="#translator">Tradução ao Vivo</a></li>
+      <li><a href="#out-of-scope">Fora do Escopo</a></li>
+      <li><a href="#checklist">Checklist Rápido</a></li>
+    </ol>
+  </div>
+
+
+  <div class="module-section" id="permission-groups">
+    <div class="module-header mod-ops">
+      <h2>Grupos de Permissão</h2>
+    </div>
+    <p style="margin-bottom:12px">Cada usuário pertence a um <strong>grupo de permissão</strong> (campo <code>user_type</code> no cadastro). Esse grupo define o que a pessoa pode acessar no sistema após o login:</p>
+    <table>
+      <thead><tr><th>Grupo (<code>user_type</code>)</th><th>Nome no sistema</th><th>Portal Membro</th><th>Painel Admin</th><th>Módulos liberados</th><th>Gestão de usuários</th></tr></thead>
+      <tbody>
+        <tr><td><strong>—</strong></td><td>Anônimo (sem login)</td><td><span class="dot dot-no"></span>Não</td><td><span class="dot dot-no"></span>Não</td><td>Site público</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>member</strong></td><td>Membro</td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-no"></span>Não</td><td>Portal do membro</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>visitors</strong></td><td>Visitantes</td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-yes"></span>Parcial</td><td>Visitantes</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>consolidation</strong></td><td>Consolidação</td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-yes"></span>Parcial</td><td>Consolidação / follow-ups</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>events</strong></td><td>Eventos</td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-yes"></span>Parcial</td><td>Eventos</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>admin</strong></td><td>Administrador</td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-yes"></span>Total</td><td>Todos</td><td><span class="dot dot-yes"></span>Sim</td></tr>
+        <tr><td><strong>superuser</strong></td><td>Superusuário (Django)</td><td>Redireciona admin</td><td><span class="dot dot-yes"></span>Total</td><td>Todos</td><td><span class="dot dot-yes"></span>Sim</td></tr>
+      </tbody>
+    </table>
+    <div class="info-box" style="margin-top:16px">
+      <strong>Como testar:</strong> crie (ou peça ao dev) uma conta para cada grupo acima e valide se consegue acessar apenas os módulos permitidos.
+    </div>
+    <p style="margin:16px 0 10px"><strong>Permissões extras no cadastro de membro</strong> (além do grupo):</p>
+    <table>
+      <thead><tr><th>Flag / Condição</th><th>Habilita</th></tr></thead>
+      <tbody>
+        <tr><td><code>is_approver</code></td><td>Aprovar/rejeitar Palavras de Conhecimento</td></tr>
+        <tr><td><code>is_available_to_consolidate</code></td><td>Receber acompanhamentos de consolidação</td></tr>
+        <tr><td><code>is_consolidated</code></td><td>Indica que já passou pelo processo de consolidação</td></tr>
+        <tr><td>Ministério "Ministração"</td><td>Aba de palavras/curas no dashboard</td></tr>
+        <tr><td>Ministério "Boas Vindas"</td><td>Cadastro de visitantes no dashboard</td></tr>
+        <tr><td>Qualquer ministério ativo</td><td>Card de escala no dashboard</td></tr>
+      </tbody>
+    </table>
+    <div class="warn-box"><strong>Senhas padrão:</strong> Ao criar usuário pelo admin ou resetar senha, a senha padrão é <code>123</code>.</div>
+    <h3 style="margin:20px 0 10px">Contas sugeridas para o QA</h3>
+    <p style="margin-bottom:10px;font-size:12px;color:var(--muted)">Usuários de exemplo — um login por combinação que o QA precisa validar:</p>
+    <p>
+      <span class="persona">Sem login</span>
+      <span class="persona">member — membro comum</span>
+      <span class="persona">member + ministério Boas Vindas</span>
+      <span class="persona">member + ministério Ministração</span>
+      <span class="persona">member + is_approver</span>
+      <span class="persona">member + consolidador</span>
+      <span class="persona">visitors</span>
+      <span class="persona">consolidation</span>
+      <span class="persona">events</span>
+      <span class="persona">admin</span>
+    </p>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="public">
+    <div class="module-header mod-public">
+      <h2>1. Site Público</h2>
+      <span class="access-badge badge-public">Acesso: Anônimo</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.1 — Página Inicial</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/</span> <span class="method-tag get">GET</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar a URL raiz do sistema.</li>
+          <li>Página carrega com cabeçalho, carrossel de testemunhos aprovados (<code>show_on_home=True</code>) e links de navegação.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Página renderiza sem erros.</li>
+          <li>Apenas testemunhos marcados para home aparecem no carrossel.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.2 — Galeria de Testemunhos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/testemunhos/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/testemunhos/</code>.</li>
+          <li>Lista exibe testemunhos com <code>is_approved=True</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Somente testemunhos aprovados aparecem.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.3 — Página de Contato</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/contato/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow"><li>Acessar <code>/contato/</code>.</li><li>Ver informações estáticas de contato da igreja.</li></ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Página carrega sem erros.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.4 — Lista e Detalhe de Eventos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/event/list</span> <span class="url-tag">/event/&lt;slug&gt;/</span></p>
+        <div class="flow-title">Fluxo — Lista</div>
+        <ol class="flow">
+          <li>Acessar <code>/event/list</code>.</li>
+          <li>Eventos visíveis dentro da janela de datas são exibidos em cards.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Detalhe</div>
+        <ol class="flow">
+          <li>Clicar em um evento.</li>
+          <li>Detalhe exibe banner, data, descrição e link de inscrição (se configurado).</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Eventos futuros exibidos conforme regra de recorrência.</li>
+          <li>Slug inválido retorna 404.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.5 — Cadastro de Visitante (Público)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/visitor/</span> <span class="method-tag post">POST</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/visitor/</code>.</li>
+          <li>Preencher: nome, telefone, bairro, data de nascimento, decisão por Jesus, deseja visita domiciliar.</li>
+          <li>Submeter o formulário.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Mensagem de sucesso após envio.</li>
+          <li>Visitante aparece no painel admin.</li>
+          <li>Campos obrigatórios validados.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.6 — Auto-cadastro de Membro</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/member/register/</span> <span class="method-tag post">POST</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/member/register/</code>.</li>
+          <li>Preencher nome, e-mail, telefone, bairro, data de nascimento, foto (opcional).</li>
+          <li>Submeter — sistema cria User + Member com senha padrão <code>123</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Novo membro aparece na lista do painel admin.</li>
+          <li>E-mail duplicado rejeitado.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.7 — Evangelização</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/evangelism/</span> <span class="url-tag">/evangelism/list/</span> <span class="url-tag">/new_converts/list/</span></p>
+        <div class="flow-title">Fluxo — Criar</div>
+        <ol class="flow">
+          <li>Acessar <code>/evangelism/</code>.</li>
+          <li>Preencher dados da pessoa evangelizada e submeter.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Listar</div>
+        <ol class="flow">
+          <li><code>/evangelism/list/</code> — todas as pessoas evangelizadas.</li>
+          <li><code>/new_converts/list/</code> — novos convertidos.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.8 — Pedido de Oração</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/prayer-request/</span> <span class="url-tag">/prayer-request/list</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/prayer-request/</code>, preencher nome e conteúdo, submeter.</li>
+          <li>Ver lista em <code>/prayer-request/list</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Pedido registrado e exibido na lista.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">1.9 — Solicitação de Casa da Paz (Público)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/house-of-peace/</span> <span class="method-tag post">POST</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/house-of-peace/</code> sem login.</li>
+          <li>Família preenche dados para solicitar visita de oração domiciliar.</li>
+          <li>Submeter — cria <code>HouseOfPeace</code> com status inicial.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Página de sucesso após envio.</li>
+          <li>Solicitação aparece no painel admin.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="auth">
+    <div class="module-header mod-member">
+      <h2>2. Autenticação e Redefinição de Senha</h2>
+      <span class="access-badge badge-member">Acesso: Todos</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">2.1 — Login</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/login/</span> <span class="url-tag">/admin-login/</span></p>
+        <div class="flow-title">Fluxo — Login válido</div>
+        <ol class="flow">
+          <li>Acessar <code>/login/</code> e inserir e-mail e senha.</li>
+          <li>Sistema autentica via <code>website.User</code> (e-mail como username).</li>
+          <li>Redireciona para <code>/redirect-after-login/</code>: superuser → <code>/admin/</code>; admin/staff → <code>/admin-panel/</code>; membro → <code>/dashboard/</code>.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Credenciais inválidas</div>
+        <ol class="flow"><li>Inserir e-mail ou senha errada — exibe erro, sem redirect.</li></ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Redirecionamento correto por tipo de usuário.</li>
+          <li>Parâmetro <code>?next=</code> respeitado após login.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">2.2 — Logout</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/logout/</span> <span class="url-tag">/admin-logout/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Usuário logado clica em "Sair".</li>
+          <li>Sessão encerrada, redirect para <code>/login/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Área protegida redireciona para login após logout.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">2.3 — Redefinição de Senha por E-mail</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/password-reset/</span> → <span class="url-tag">/password-reset/sent/</span> → <span class="url-tag">/password-reset/confirm/&lt;uid&gt;/&lt;token&gt;/</span> → <span class="url-tag">/password-reset/complete/</span></p>
+        <div class="flow-title">Fluxo completo</div>
+        <ol class="flow">
+          <li>Solicitar reset em <code>/password-reset/</code> com e-mail cadastrado.</li>
+          <li>Confirmar envio em <code>/password-reset/sent/</code>.</li>
+          <li>Abrir link do e-mail e definir nova senha.</li>
+          <li>Confirmar sucesso em <code>/password-reset/complete/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Link expirado/inválido exibe mensagem adequada.</li>
+          <li>Login com nova senha funciona após redefinição.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">2.4 — Troca de Própria Senha (Admin)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/change-password/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Admin logado acessa a página, preenche senha atual e nova senha.</li>
+          <li>Submeter.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Senha alterada com sessão mantida.</li>
+          <li>Senha atual incorreta ou confirmação divergente exibe erro.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="member">
+    <div class="module-header mod-member">
+      <h2>3. Portal do Membro</h2>
+      <span class="access-badge badge-member">Acesso: user_type=member (logado)</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.1 — Dashboard do Membro</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/dashboard/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Login como membro → redirect para <code>/dashboard/</code>.</li>
+          <li>Cards condicionais por ministério: escala, consolidação, palavras (Ministração), visitantes (Boas Vindas), Casa da Paz.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Cards exibidos conforme ministérios do membro.</li>
+          <li>Contagem de consolidações pendentes correta.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.2 — Edição de Perfil</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/profile/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Editar nome, telefone, bairro, foto, cônjuge, data de nascimento.</li>
+          <li>Salvar alterações.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Dados atualizados imediatamente.</li>
+          <li>Upload de foto funciona.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.3 — Roteiro de Culto</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/roteiro-culto/</span></p>
+        <div class="flow-title">Pré-condição — card no dashboard</div>
+        <ul class="precond">
+          <li>Usuário logado com registro de <code>Member</code> vinculado.</li>
+          <li>Membro com vínculo <strong>ativo</strong> (<code>MinistryMembership.is_active=True</code>) em ministério cujo nome contém <strong>"modera"</strong> (Ministério de Moderação).</li>
+        </ul>
+        <div class="flow-title">Pré-condição — conteúdo na tela</div>
+        <ul class="precond">
+          <li>Admin cadastrou anúncios em <code>/admin-panel/roteiro/</code>.</li>
+          <li>Anúncio ainda vigente: última data programada é futura, ou <code>data_expiracao</code> ainda não passou.</li>
+        </ul>
+        <ul class="notes"><li>A URL <code>/roteiro-culto/</code> abre para qualquer membro logado, mesmo sem o card no dashboard.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>No dashboard, expandir o card <strong>Ministério de Moderação</strong> e clicar em "Roteiro de Culto".</li>
+          <li>Ou acessar <code>/roteiro-culto/</code> diretamente.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Apenas anúncios não expirados aparecem.</li>
+          <li>Ordem segue o campo <code>ordem</code> configurado no admin.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.4 — Escala de Ministério</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/schedule/&lt;schedule_id&gt;/</span></p>
+        <div class="flow-title">Pré-condição — card no dashboard</div>
+        <ul class="precond">
+          <li>Membro com vínculo ativo em pelo menos um ministério.</li>
+          <li>Existe escala (<code>MonthlySchedule</code>) daquele ministério para o <strong>mês atual</strong> ou o <strong>próximo mês</strong>.</li>
+        </ul>
+        <div class="flow-title">Pré-condição — conteúdo útil na escala</div>
+        <ul class="precond">
+          <li>Admin criou dias na escala e escalou o membro (direto, via time ou divisão).</li>
+          <li>Campo <code>is_published</code> existe no modelo — validar se escalas não publicadas aparecem ou não (comportamento a confirmar no teste).</li>
+        </ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>No dashboard, expandir o card <strong>Escalas do Mês</strong> e clicar na escala desejada.</li>
+          <li>Visualizar calendário com dias de serviço e dias cancelados.</li>
+          <li>Verificar dias/divisões em que o membro está escalado (destaque visual).</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Card só aparece se houver escala no mês atual ou seguinte para ministério do membro.</li>
+          <li>Dias cancelados marcados visualmente.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.5 — Boas-Vindas: Cadastro de Visitante</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/register-visitor/</span> <span class="url-tag">/visitors/</span></p>
+        <div class="flow-title">Pré-condição — card no dashboard</div>
+        <ul class="precond">
+          <li>Membro com vínculo ativo em ministério cujo nome contém <strong>"boas vindas"</strong>.</li>
+        </ul>
+        <div class="flow-title">Pré-condição — acesso às URLs</div>
+        <ul class="precond">
+          <li><code>/visitors/</code> — exige ministério Boas Vindas; caso contrário redireciona ao dashboard.</li>
+          <li><code>/register-visitor/</code> — exige apenas login como membro (validar se isso é intencional).</li>
+        </ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>No dashboard, expandir o card <strong>Ministério de Boas Vindas</strong>.</li>
+          <li>Cadastrar visitante em <code>/register-visitor/</code>.</li>
+          <li>Listar visitantes em <code>/visitors/</code> (todos os visitantes do sistema, não só os do membro).</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Visitante criado aparece na lista e no painel admin.</li>
+          <li>Membro sem Boas Vindas não vê o card e não acessa <code>/visitors/</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.6 — Palavras de Conhecimento</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/words/</span> <span class="url-tag">/words/create/</span> <span class="url-tag">/words/service/</span> <span class="url-tag">/words/&lt;id&gt;/mark-healed/</span></p>
+        <div class="flow-title">Pré-condição — card no dashboard</div>
+        <ul class="precond">
+          <li>Membro com vínculo ativo em ministério cujo nome contém <strong>"ministração"</strong>.</li>
+        </ul>
+        <div class="flow-title">Pré-condição — conteúdo em /words/service/</div>
+        <ul class="precond">
+          <li>Existem palavras com status <strong>aprovado</strong>.</li>
+          <li>Palavras dentro da janela do culto atual (quarta ou domingo da semana corrente).</li>
+        </ul>
+        <ul class="notes"><li>As URLs de palavras exigem apenas login; validar se membro fora da Ministração consegue acessar diretamente.</li></ul>
+        <div class="flow-title">Fluxo — Submeter</div>
+        <ol class="flow">
+          <li>No dashboard, usar o formulário rápido do card ou acessar <code>/words/create/</code>.</li>
+          <li>Sistema preenche <code>service_type</code> e <code>service_date</code> do próximo culto (quarta ou domingo).</li>
+          <li>Palavra fica <strong>pendente</strong> até aprovação.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Culto atual</div>
+        <ol class="flow"><li><code>/words/service/</code> exibe palavras aprovadas para o culto da semana.</li></ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Pendentes não aparecem em <code>/words/service/</code>.</li>
+          <li>Toggle "resultou em cura" só funciona nas próprias palavras do membro.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.7 — Registro de Cura</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/words/healing/create/</span></p>
+        <div class="flow-title">Pré-condição — card no dashboard</div>
+        <ul class="precond">
+          <li>Mesmo do item 3.6: membro ativo no ministério <strong>Ministração</strong> (links dentro do card de Palavras).</li>
+        </ul>
+        <div class="flow-title">Pré-condição — vincular a palavra (opcional)</div>
+        <ul class="precond">
+          <li>Membro já registrou ao menos uma Palavra de Conhecimento própria.</li>
+        </ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar via card de Ministração ou <code>/words/healing/create/</code>.</li>
+          <li>Descrever a cura e, se quiser, vincular a uma palavra existente.</li>
+          <li>Submeter.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Cura registrada e visível no painel admin de Ministração.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.8 — Aprovar / Rejeitar Palavras (Aprovador)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/words/approve/&lt;id&gt;/</span> <span class="url-tag">/words/reject/&lt;id&gt;/</span></p>
+        <div class="flow-title">Pré-condição — permissão de aprovador</div>
+        <ul class="precond">
+          <li>Campo <code>Member.is_approver=True</code> (habilitado pelo admin em <code>/admin-panel/ministration/members/</code> → toggle aprovador).</li>
+          <li>Ou usuário com <code>is_staff=True</code>.</li>
+        </ul>
+        <div class="flow-title">Pré-condição — conteúdo para aprovar</div>
+        <ul class="precond">
+          <li>Existe palavra com status <strong>pendente</strong> aguardando aprovação.</li>
+        </ul>
+        <ul class="notes"><li>Não há card dedicado no dashboard — o aprovador usa link/botão na listagem de palavras ou URL direta.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Com perfil de aprovador, acessar palavra pendente e clicar Aprovar ou Rejeitar.</li>
+          <li>POST em <code>/words/approve/&lt;id&gt;/</code> ou <code>/words/reject/&lt;id&gt;/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Membro sem <code>is_approver</code> recebe acesso negado.</li>
+          <li>Palavra aprovada passa a aparecer em <code>/words/service/</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.9 — Consolidação (Consolidador)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/consolidation/</span> <span class="url-tag">/consolidation/&lt;id&gt;/</span> <span class="url-tag">/consolidation/&lt;id&gt;/report/</span> <span class="url-tag">/consolidation/guide/</span> <span class="url-tag">/consolidation/assignments/</span> <span class="url-tag">/consolidation/request/&lt;person_id&gt;/</span></p>
+        <div class="flow-title">Pré-condição — card no dashboard</div>
+        <ul class="precond">
+          <li>Campo <code>Member.is_available_to_consolidate=True</code> no cadastro do membro.</li>
+        </ul>
+        <div class="flow-title">Pré-condição — ver acompanhamentos na lista</div>
+        <ul class="precond">
+          <li>Admin criou follow-up em <code>/admin-panel/followups/new/</code> com este membro como <strong>responsável</strong>.</li>
+          <li>Follow-up ativo (<code>is_active=True</code>, sem data de encerramento).</li>
+        </ul>
+        <div class="flow-title">Pré-condição — submeter relatório</div>
+        <ul class="precond">
+          <li>Membro é o responsável daquele follow-up específico.</li>
+          <li>Ainda não enviou relatório da semana atual (<code>current_week</code>).</li>
+        </ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>No dashboard, expandir card <strong>Ministério de Consolidação</strong> → "Ver Consolidados".</li>
+          <li>Listar acompanhamentos em <code>/consolidation/</code>.</li>
+          <li>Ver detalhe e progresso semanal em <code>/consolidation/&lt;id&gt;/</code>.</li>
+          <li>Submeter relatório em <code>/consolidation/&lt;id&gt;/report/</code>.</li>
+          <li>Em <code>/consolidation/assignments/</code>, ver pessoas elegíveis para novo acompanhamento.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Consolidador vê apenas follow-ups em que é responsável.</li>
+          <li>Relatório enviado incrementa <code>current_week</code>.</li>
+          <li>Segundo relatório na mesma semana é bloqueado.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.10 — Casa da Paz (Membro)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/house-of-peace/available/</span> <span class="url-tag">/house-of-peace/&lt;id&gt;/accept/</span> <span class="url-tag">/house-of-peace/my/</span> <span class="url-tag">/house-of-peace/assignment/&lt;id&gt;/schedule/</span></p>
+        <div class="flow-title">Pré-condição — card no dashboard</div>
+        <ul class="precond">
+          <li>Membro com vínculo ativo em <strong>qualquer ministério</strong> (<code>MinistryMembership.is_active=True</code>).</li>
+        </ul>
+        <div class="flow-title">Pré-condição — casas disponíveis para aceitar</div>
+        <ul class="precond">
+          <li>Existe solicitação pública ou cadastro admin com status <code>available</code>.</li>
+          <li>Casa com menos de 3 membros aceitos (<code>can_accept_more</code>).</li>
+          <li>Membro ainda não aceitou aquela casa específica.</li>
+        </ul>
+        <div class="flow-title">Fluxo completo</div>
+        <ol class="flow">
+          <li>No dashboard, expandir card <strong>Casa de Paz</strong>.</li>
+          <li>Listar casas em <code>/house-of-peace/available/</code> e aceitar uma.</li>
+          <li>Gerenciar em <code>/house-of-peace/my/</code>: agendar, reagendar, cancelar ou concluir visita.</li>
+          <li>Na conclusão, preencher relatório (cura, testemunho, continuar visitas).</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Casa com 3 membros some da lista de disponíveis.</li>
+          <li>Relatório de conclusão salva cura e testemunho corretamente.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">3.11 — Cifras / Louvor</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/ministerio-louvor/</span></p>
+        <div class="flow-title">Pré-condição — card no dashboard</div>
+        <ul class="precond">
+          <li>Membro com vínculo ativo em <strong>qualquer ministério</strong> (mesma regra do card Casa de Paz).</li>
+          <li><em>Obs.:</em> o card aparece como "Ministério de Louvor", mas o código não exige ministério de louvor especificamente — validar se isso é intencional.</li>
+        </ul>
+        <div class="flow-title">Pré-condição — conteúdo na lista</div>
+        <ul class="precond">
+          <li>Admin cadastrou músicas em <code>/admin-panel/music/</code> com cifras PDF (<code>ChordSheet</code>) por tom.</li>
+        </ul>
+        <ul class="notes"><li>A URL abre para qualquer usuário logado com <code>Member</code>, independente de ministério.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>No dashboard, expandir card <strong>Ministério de Louvor</strong> → "Ver Repertório".</li>
+          <li>Buscar música e abrir/baixar PDF da cifra no tom desejado.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>PDFs de cifras abrem corretamente.</li></ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="admin-overview">
+    <div class="module-header mod-admin">
+      <h2>4. Painel Admin — Visão Geral</h2>
+      <span class="access-badge badge-admin">Acesso: has_admin_access + staff</span>
+    </div>
+    <div class="info-box">
+      <strong>URL base:</strong> <code>/admin-panel/</code> · Login unificado em <code>/login/</code> ou <code>/admin-login/</code>.<br>
+      O menu lateral exibe itens conforme o grupo de permissão (<code>user_type</code>) do usuário logado.
+    </div>
+    <table>
+      <thead><tr><th>Item do menu</th><th>Quem vê</th><th>URL principal</th></tr></thead>
+      <tbody>
+        <tr><td>Dashboard</td><td>admin, superuser</td><td><code>/admin-panel/</code></td></tr>
+        <tr><td>Membros</td><td>admin, superuser</td><td><code>/admin-panel/members/</code></td></tr>
+        <tr><td>Visitantes</td><td>admin, superuser, visitors</td><td><code>/admin-panel/visitors/</code></td></tr>
+        <tr><td>Consolidação (submenu)</td><td>admin, superuser, consolidation</td><td>followups, templates, reports</td></tr>
+        <tr><td>Eventos</td><td>admin, superuser, events</td><td><code>/admin-panel/events/</code></td></tr>
+        <tr><td>Testemunhos, Roteiro, Ministérios, Música, Casas de Paz</td><td>admin, superuser</td><td>rotas respectivas</td></tr>
+        <tr><td>Escalas (submenu)</td><td>admin, superuser (staff)</td><td>escalas + equipes</td></tr>
+        <tr><td>Ministração (submenu)</td><td>admin, superuser (staff)</td><td>palavras + curas</td></tr>
+        <tr><td>Bairros, Usuários</td><td>admin (+ superuser)</td><td>respectivas</td></tr>
+        <tr><td>Área de Membros</td><td>Todos logados</td><td><code>/dashboard/</code></td></tr>
+      </tbody>
+    </table>
+    <ul class="notes"><li>Cursos de Frequência: <code>/admin-panel/attendance-courses/</code> — acesso direto pela URL (não está no menu lateral).</li></ul>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="admin-people">
+    <div class="module-header mod-admin">
+      <h2>5. Admin — Pessoas e Cadastros</h2>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">5.1 — Dashboard Administrativo</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond"><li><code>user_type=admin</code> ou <code>is_superuser=True</code>.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Login → redirecionamento para o painel.</li>
+          <li>Visualizar métricas: membros, visitantes, eventos, consolidações.</li>
+          <li>Verificar gráficos e indicadores.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Números batem com as listas; gráficos sem erros JS.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">5.2 — Membros (CRUD completo)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/members/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/edit/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond"><li>admin ou superuser.</li></ul>
+        <div class="flow-title">Fluxo — Criar</div>
+        <ol class="flow">
+          <li>Preencher: nome, e-mail, telefone, bairro, foto, gênero, conversão.</li>
+          <li>Flags: <code>is_approver</code>, <code>is_available_to_consolidate</code>, <code>is_consolidated</code>.</li>
+          <li>Definir <code>user_type</code> — cria User + Member (senha padrão <code>123</code>).</li>
+        </ol>
+        <div class="flow-title">Fluxo — Editar / excluir</div>
+        <ol class="flow">
+          <li>Editar dados, vincular cônjuge, alterar flags.</li>
+          <li>Soft delete via <code>/admin-panel/api/delete/</code>.</li>
+          <li>API JSON: <code>/admin-panel/api/member/&lt;id&gt;/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>E-mail duplicado rejeitado; soft delete remove das listas.</li>
+          <li>Flags refletem no portal do membro.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">5.3 — Visitantes</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/visitors/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond"><li>admin, superuser ou <code>user_type=visitors</code>.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>CRUD: nome, telefone, bairro, decisão por Jesus, conversão, visita domiciliar.</li>
+          <li>Visitante com decisão pode ser convertido automaticamente em membro.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">5.4 — Bairros</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/neighborhoods/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>CRUD de bairros; API <code>/admin-panel/api/neighborhood/</code>.</li>
+          <li>Bairros ativos aparecem nos formulários de cadastro.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">5.5 — Usuários do sistema</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/users/</span> <span class="url-tag">/admin-panel/change-password/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond"><li>Gestão de usuários: apenas <code>user_type=admin</code>.</li></ul>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar usuários; resetar senha → <code>123</code>.</li>
+          <li>Trocar própria senha.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+  <div class="module-section" id="admin-consolidation">
+    <div class="module-header mod-admin">
+      <h2>6. Admin — Consolidação</h2>
+      <span class="access-badge badge-admin">admin · superuser · consolidation</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">6.1 — Lista de Consolidações (Follow-ups)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/followups/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/edit/</span> <span class="url-tag">delete/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond">
+          <li>Grupo consolidation, admin ou superuser.</li>
+          <li>Membros com <code>is_available_to_consolidate=True</code> como responsáveis.</li>
+          <li>Template criado (item 6.3).</li>
+        </ul>
+        <div class="flow-title">Fluxo — Criar</div>
+        <ol class="flow">
+          <li>Menu Consolidação → Consolidações → Novo.</li>
+          <li>Selecionar acompanhado, responsável, template, data início.</li>
+          <li>Salvar — <code>current_week=1</code>.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Listar</div>
+        <ol class="flow">
+          <li>Filtrar por nome, responsável, status (ativo/encerrado).</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Aparece em <code>/consolidation/</code> do responsável.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">6.2 — Detalhe e relatórios</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/followups/&lt;id&gt;/detail/</span> <span class="url-tag">.../report/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Ver acompanhado, responsável, template, semana atual, passos.</li>
+          <li>Histórico de relatórios do consolidador.</li>
+          <li>Admin adiciona relatório manualmente se necessário.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">6.3 — Templates de Consolidação</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/templates/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Criar template: nome, descrição, passos semanais (título + orientações).</li>
+          <li>Duplicar via <code>?duplicate_from=&lt;id&gt;</code>.</li>
+          <li>Editar, ver detalhe, excluir.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Template disponível ao criar follow-up.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">6.4 — Relatórios agregados</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/reports/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Menu Consolidação → Relatórios.</li>
+          <li>Dashboard de indicadores espirituais por período.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="admin-schedules">
+    <div class="module-header mod-ops">
+      <h2>7. Admin — Escalas de Serviço</h2>
+      <span class="access-badge badge-ops">admin · superuser (staff)</span>
+    </div>
+
+    <div class="info-box">Fluxo típico: equipes → escala com divisões → dias → escalonar membros → imprimir → membro vê no portal.</div>
+
+    <div class="feature">
+      <div class="feature-title">7.1 — Equipes</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/teams/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/edit/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Menu Escalas → Equipes.</li>
+          <li>Criar: nome, ministério, líder, membros.</li>
+          <li>Filtrar por ministério; editar ou excluir.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">7.2 — Criar escala (mensal ou semanal)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/schedules/new/</span></p>
+        <div class="flow-title">Fluxo — Mensal</div>
+        <ol class="flow">
+          <li>Ministério, título, mês/ano, revezamento de equipes.</li>
+          <li>Divisões (ex.: Palavra, Recepção) — até 3 níveis.</li>
+          <li>Orientações gerais; salvar → detalhe da escala.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Semanal</div>
+        <ol class="flow">
+          <li>Data início/fim, dias da semana (ex.: quarta, domingo).</li>
+          <li>Sistema gera <code>ScheduleDay</code> automaticamente no intervalo.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">7.3 — Detalhe — dias e membros</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/schedules/&lt;id&gt;/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Adicionar dia: <code>.../days/new/</code> — data, turnos, equipe ou membros.</li>
+          <li>Editar dia: <code>.../days/&lt;day_id&gt;/edit/</code>.</li>
+          <li>Atribuir divisões: <code>.../days/&lt;day_id&gt;/divisions/</code>.</li>
+          <li>Conflito AJAX: <code>/admin-panel/schedules/check-conflict/</code>.</li>
+          <li>Cancelar dia: <code>.../toggle-cancel/</code>; excluir: <code>.../delete/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Membros escalados veem em <code>/schedule/&lt;id&gt;/</code>.</li>
+          <li>Alerta se membro duplicado na mesma data.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">7.4 — Divisões hierárquicas</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/schedules/&lt;id&gt;/divisions/new/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Criar/editar/excluir divisões (máx. 3 níveis).</li>
+          <li>Listar por ministério: <code>/admin-panel/ministries/&lt;id&gt;/divisions/</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">7.5 — Imprimir / editar / excluir escala</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/schedules/&lt;id&gt;/print/</span> <span class="url-tag">edit/</span> <span class="url-tag">delete/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Imprimir versão formatada (Ctrl+P).</li>
+          <li>Editar metadados e divisões; excluir escala (soft delete).</li>
+          <li>Listar com filtros: ministério, ano, mês, tipo, busca.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+  <div class="module-section" id="admin-ministration">
+    <div class="module-header mod-admin">
+      <h2>8. Admin — Ministração</h2>
+      <span class="access-badge badge-admin">admin · superuser (staff)</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">8.1 — Dashboard de Ministração</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Totais de palavras, curas, membros do ministério Ministração.</li>
+          <li>Escala da semana e próximas semanas.</li>
+          <li>Gráfico de curas por mês; últimas palavras e curas.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">8.2 — Palavras de Conhecimento</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/words/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar todas com paginação.</li>
+          <li>Filtrar: busca, culto (quarta/domingo), datas, status.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">8.3 — Fila de aprovação</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/words/pending/</span> <span class="url-tag">approve/</span> <span class="url-tag">reject/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Revisar pendentes; aprovar ou rejeitar.</li>
+          <li>Aprovada → visível em <code>/words/service/</code> no portal.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Aprovador membro (<code>is_approver</code>) também aprova via portal.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">8.4 — Curas</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/healings/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar curas; filtrar por nome, condição, datas, parte do corpo.</li>
+          <li>Ver vínculo opcional com Palavra de Conhecimento.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">8.5 — Membros e aprovadores</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/members/</span> <span class="url-tag">toggle-approver/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Adicionar/remover membros da Ministração.</li>
+          <li>Toggle <code>is_approver</code> — habilita aprovação no portal.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="admin-other">
+    <div class="module-header mod-admin">
+      <h2>9. Admin — Outros Módulos</h2>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">9.1 — Eventos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/events/</span></p>
+        <ul class="precond"><li>admin, superuser ou events.</li></ul>
+        <ol class="flow">
+          <li>CRUD: título, slug, banner, datas, recorrência, link inscrição.</li>
+          <li>Publicado → aparece em <code>/event/list</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">9.2 — Testemunhos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/testimonies/</span> <span class="url-tag">toggle/</span></p>
+        <ol class="flow">
+          <li>CRUD; toggle <code>is_approved</code> e <code>show_on_home</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">9.3 — Roteiro de Culto</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/roteiro/</span></p>
+        <ol class="flow">
+          <li>CRUD anúncios: fotos, datas, ordem, expiração.</li>
+          <li>Reordenar drag-and-drop; imprimir em <code>/roteiro/print/</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">9.4 — Ministérios</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministries/</span></p>
+        <ol class="flow">
+          <li>CRUD; gerenciar membros (add/remove, líder, ativo).</li>
+          <li>Nomes controlam cards no portal (Ministração, Boas Vindas, Moderação).</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">9.5 — Música / Cifras</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/music/</span></p>
+        <ol class="flow">
+          <li>CRUD músicas; upload PDF de cifras por tom (<code>ChordSheet</code>).</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">9.6 — Casas de Paz</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/house-of-peace/</span></p>
+        <ol class="flow">
+          <li>Listar, detalhe com visitas, alterar status, soft delete.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">9.7 — Cursos de Frequência</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/attendance-courses/</span></p>
+        <ol class="flow">
+          <li>Criar curso → participantes → aulas → marcar frequência por aula.</li>
+          <li>Exportar CSV; imprimir relatório do curso ou da aula.</li>
+        </ol>
+        <ul class="expects"><li>Frequência e CSV corretos.</li></ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="translator">
+    <div class="module-header mod-tech">
+      <h2>10. Tradução ao Vivo (WebSocket)</h2>
+      <span class="access-badge badge-tech">Acesso: Sem login</span>
+    </div>
+
+    <div class="info-box">
+      <strong>Atenção:</strong> Usa WebSockets (Django Channels), Azure Speech Recognition e Google Translate (PT→EN/NL). Requer ASGI e serviços configurados.
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">8.1 — Gravador de Áudio (Operador)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/translator/recorder/</span> <span class="url-tag">ws://…/ws/audio/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/translator/recorder/</code> sem login.</li>
+          <li>Conceder permissão de microfone.</li>
+          <li>Iniciar captura — WebSocket com Azure Speech.</li>
+          <li>Transcrição PT traduzida para EN e NL via <code>ws/transcript/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Conexão WebSocket sem erros.</li>
+          <li>Parar encerra o stream limpo.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">8.2 — Exibição de Transcrição</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/translator/</span> <span class="url-tag">ws://…/ws/transcript/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Abrir <code>/translator/</code> em dispositivo da congregação.</li>
+          <li>Texto traduzido aparece em tempo real.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Múltiplos dispositivos recebem o mesmo texto.</li>
+          <li>Perda de conexão exibe mensagem adequada.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section">
+    <div class="module-header mod-ops">
+      <h2>11. APIs Internas do Admin Panel</h2>
+      <span class="access-badge badge-ops">Acesso: admin (sessão)</span>
+    </div>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Método</th><th>Função</th><th>Observação</th></tr></thead>
+      <tbody>
+        <tr><td><code>/admin-panel/api/delete/</code></td><td>POST</td><td>Soft-delete member/visitor/event/ministry/neighborhood</td><td>CSRF-exempt</td></tr>
+        <tr><td><code>/admin-panel/api/ministry/</code></td><td>POST</td><td>Criar/editar ministério via AJAX</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/api/neighborhood/</code></td><td>POST</td><td>Criar/editar bairro via AJAX</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/api/member/&lt;id&gt;/</code></td><td>GET</td><td>JSON com dados do membro</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/api/visitor/&lt;id&gt;/</code></td><td>GET</td><td>JSON com dados do visitante</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/schedules/check-conflict/</code></td><td>POST</td><td>Conflito de membro em escala</td><td>—</td></tr>
+        <tr><td><code>/admin-panel/roteiro/anuncios/reorder/</code></td><td>POST</td><td>Reordenar anúncios</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <div class="warn-box"><strong>Ponto de atenção:</strong> <code>/admin-panel/api/delete/</code> é CSRF-exempt — testar autenticação.</div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="out-of-scope">
+    <div class="module-header" >
+      <h2>12. Fora do Escopo — Não Testar</h2>
+    </div>
+    <div class="danger-box">Funcionalidades no código mas <strong>sem rotas na branch production</strong>:</div>
+    <table>
+      <thead><tr><th>Módulo</th><th>Status</th><th>Razão</th></tr></thead>
+      <tbody>
+        <tr><td>Cantina (Canteen)</td><td>Views existem, URLs comentadas</td><td>Módulo incompleto</td></tr>
+        <tr><td>Media Planning</td><td>Templates existem, sem views/URLs</td><td>Em desenvolvimento</td></tr>
+        <tr><td>WeeklySchedule views</td><td>Sem URLs</td><td>Substituído por MonthlySchedule</td></tr>
+        <tr><td>Rotas avançadas de follow-up steps</td><td>Comentadas no urls.py</td><td>TODO pendente</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="checklist">
+    <div class="module-header mod-ops">
+      <h2>13. Checklist Rápido de Sanidade</h2>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>Verificação</th><th>Resultado Esperado</th><th>OK?</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Login com credenciais válidas</td><td>Redirect correto por tipo</td><td></td></tr>
+        <tr><td>2</td><td>Login com credenciais inválidas</td><td>Erro, sem redirect</td><td></td></tr>
+        <tr><td>3</td><td>Anônimo acessa <code>/dashboard/</code></td><td>Redirect para login</td><td></td></tr>
+        <tr><td>4</td><td>Membro acessa <code>/admin-panel/</code></td><td>403 ou redirect</td><td></td></tr>
+        <tr><td>5</td><td>Admin events acessa gestão de usuários</td><td>403</td><td></td></tr>
+        <tr><td>6</td><td>Formulário visitante com campos vazios</td><td>Validação exibe erros</td><td></td></tr>
+        <tr><td>7</td><td>Cadastro membro com e-mail duplicado</td><td>Erro de validação</td><td></td></tr>
+        <tr><td>8</td><td>Casa da Paz — aceitar casa que já tem 3 membros</td><td>Sistema bloqueia o 4º aceite</td><td></td></tr>
+        <tr><td>9</td><td>Palavra pendente em <code>/words/service/</code></td><td>Não aparece</td><td></td></tr>
+        <tr><td>10</td><td>Escala não publicada para membro</td><td>Não visível</td><td></td></tr>
+        <tr><td>11</td><td>Soft-delete de membro</td><td>Não reaparece nas listas</td><td></td></tr>
+        <tr><td>12</td><td>Reset senha admin → <code>123</code></td><td>Login funciona</td><td></td></tr>
+        <tr><td>13</td><td>Exportar CSV de frequência</td><td>Arquivo correto</td><td></td></tr>
+        <tr><td>14</td><td>Conflito de escala via AJAX</td><td>Alerta exibido</td><td></td></tr>
+        <tr><td>15</td><td>Testemunho sem <code>show_on_home</code> na home</td><td>Não no carrossel</td><td></td></tr>
+        <tr><td>16</td><td>API delete sem sessão</td><td>401/403</td><td></td></tr>
+        <tr><td>17</td><td>Upload foto no perfil</td><td>Foto salva e exibida</td><td></td></tr>
+        <tr><td>18</td><td>Link reset senha expirado</td><td>Erro adequado</td><td></td></tr>
+        <tr><td>19</td><td>Anúncio roteiro fora do período</td><td>Não visível</td><td></td></tr>
+        <tr><td>20</td><td>WebSocket tradução múltiplos clientes</td><td>Todos recebem texto</td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="doc-footer">
+    Filadélfia Connect — Documento de QA | Branch: production | Junho 2026<br>
+    Gerado a partir da análise do código-fonte. Revisar com a equipe de desenvolvimento antes dos testes.
+  </div>
+</div>
+</body>
+</html>

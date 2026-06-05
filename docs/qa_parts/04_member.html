@@ -1,0 +1,194 @@
+  <div class="module-section" id="member">
+    <div class="module-header mod-member">
+      <span class="icon">🧑‍🤝‍🧑</span>
+      <h2>3. Portal do Membro</h2>
+      <span class="access-badge badge-member">Acesso: user_type=member (logado)</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📊 3.1 — Dashboard do Membro</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/dashboard/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Login como membro → redirect para <code>/dashboard/</code>.</li>
+          <li>Cards condicionais por ministério: escala, consolidação, palavras (Ministração), visitantes (Boas Vindas), Casa da Paz.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Cards exibidos conforme ministérios do membro.</li>
+          <li>Contagem de consolidações pendentes correta.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">👤 3.2 — Edição de Perfil</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/profile/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Editar nome, telefone, bairro, foto, cônjuge, data de nascimento.</li>
+          <li>Salvar alterações.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Dados atualizados imediatamente.</li>
+          <li>Upload de foto funciona.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📜 3.3 — Roteiro de Culto</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/roteiro-culto/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Membro acessa roteiro ativo com anúncios vigentes.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Apenas anúncios dentro do período de exibição aparecem.</li>
+          <li>Ordem segue configuração do admin.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📆 3.4 — Escala de Ministério</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/schedule/&lt;schedule_id&gt;/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Clicar no card de escala no dashboard.</li>
+          <li>Visualizar calendário mensal com dias de serviço e dias cancelados.</li>
+          <li>Verificar dias/divisões em que o membro está escalado.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Apenas escalas publicadas (<code>is_published=True</code>) visíveis.</li>
+          <li>Dias cancelados marcados visualmente.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🤝 3.5 — Boas-Vindas: Cadastro de Visitante</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/register-visitor/</span> <span class="url-tag">/visitors/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Cadastrar visitante em <code>/register-visitor/</code>.</li>
+          <li>Listar em <code>/visitors/</code> os visitantes do membro logado.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Visitante criado aparece na lista do membro e no admin.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">💡 3.6 — Palavras de Conhecimento</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/words/</span> <span class="url-tag">/words/create/</span> <span class="url-tag">/words/service/</span> <span class="url-tag">/words/&lt;id&gt;/mark-healed/</span></p>
+        <div class="flow-title">Fluxo — Submeter</div>
+        <ol class="flow">
+          <li>Criar palavra em <code>/words/create/</code>.</li>
+          <li>Sistema preenche <code>service_type</code> e <code>service_date</code> automaticamente.</li>
+          <li>Palavra fica pendente até aprovação.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Culto atual</div>
+        <ol class="flow"><li><code>/words/service/</code> exibe palavras aprovadas para o culto atual.</li></ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Pendentes não aparecem em <code>/words/service/</code>.</li>
+          <li>Toggle "resultou em cura" funciona.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">✝️ 3.7 — Registro de Cura</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/words/healing/create/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Descrever cura, opcionalmente vincular a uma Palavra de Conhecimento.</li>
+          <li>Submeter.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Cura registrada no painel admin de Ministração.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">✅ 3.8 — Aprovar / Rejeitar Palavras (Aprovador)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/words/approve/&lt;id&gt;/</span> <span class="url-tag">/words/reject/&lt;id&gt;/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Membro com <code>is_approver=True</code> aprova ou rejeita palavras pendentes.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Membro sem <code>is_approver</code> recebe 403.</li>
+          <li>Palavra aprovada aparece em <code>/words/service/</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🌱 3.9 — Consolidação (Consolidador)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/consolidation/</span> <span class="url-tag">/consolidation/&lt;id&gt;/</span> <span class="url-tag">/consolidation/&lt;id&gt;/report/</span> <span class="url-tag">/consolidation/guide/</span> <span class="url-tag">/consolidation/assignments/</span> <span class="url-tag">/consolidation/request/&lt;person_id&gt;/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar acompanhamentos em <code>/consolidation/</code>.</li>
+          <li>Ver detalhe com progresso semanal em <code>/consolidation/&lt;id&gt;/</code>.</li>
+          <li>Submeter relatório semanal em <code>/consolidation/&lt;id&gt;/report/</code>.</li>
+          <li>Solicitar consolidação para pessoa em <code>/consolidation/request/&lt;person_id&gt;/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Consolidador vê apenas seus acompanhamentos.</li>
+          <li>Relatório incrementa <code>current_week</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🏘️ 3.10 — Casa da Paz (Membro)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/house-of-peace/available/</span> <span class="url-tag">/house-of-peace/&lt;id&gt;/accept/</span> <span class="url-tag">/house-of-peace/my/</span> <span class="url-tag">/house-of-peace/assignment/&lt;id&gt;/schedule/</span></p>
+        <div class="flow-title">Fluxo completo</div>
+        <ol class="flow">
+          <li>Listar casas disponíveis em <code>/house-of-peace/available/</code>.</li>
+          <li>Aceitar casa (máx. 3 membros por casa).</li>
+          <li>Ver atribuições em <code>/house-of-peace/my/</code>.</li>
+          <li>Agendar, reagendar ou cancelar visita.</li>
+          <li>Concluir visita com relatório pós-visita (cura, testemunho, continuar visitas).</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Casa com 3 membros não aparece como disponível.</li>
+          <li>Relatório de conclusão salva cura e testemunho corretamente.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🎵 3.11 — Cifras / Louvor</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/ministerio-louvor/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Membro de louvor acessa lista de músicas com cifras em PDF por tom.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>PDFs de cifras abrem corretamente.</li></ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />

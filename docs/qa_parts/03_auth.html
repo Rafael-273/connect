@@ -1,0 +1,78 @@
+  <div class="module-section" id="auth">
+    <div class="module-header mod-member">
+      <span class="icon">🔐</span>
+      <h2>2. Autenticação e Redefinição de Senha</h2>
+      <span class="access-badge badge-member">Acesso: Todos</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🔑 2.1 — Login</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/login/</span> <span class="url-tag">/admin-login/</span></p>
+        <div class="flow-title">Fluxo — Login válido</div>
+        <ol class="flow">
+          <li>Acessar <code>/login/</code> e inserir e-mail e senha.</li>
+          <li>Sistema autentica via <code>website.User</code> (e-mail como username).</li>
+          <li>Redireciona para <code>/redirect-after-login/</code>: superuser → <code>/admin/</code>; admin/staff → <code>/admin-panel/</code>; membro → <code>/dashboard/</code>.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Credenciais inválidas</div>
+        <ol class="flow"><li>Inserir e-mail ou senha errada — exibe erro, sem redirect.</li></ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Redirecionamento correto por tipo de usuário.</li>
+          <li>Parâmetro <code>?next=</code> respeitado após login.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🚪 2.2 — Logout</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/logout/</span> <span class="url-tag">/admin-logout/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Usuário logado clica em "Sair".</li>
+          <li>Sessão encerrada, redirect para <code>/login/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Área protegida redireciona para login após logout.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📧 2.3 — Redefinição de Senha por E-mail</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/password-reset/</span> → <span class="url-tag">/password-reset/sent/</span> → <span class="url-tag">/password-reset/confirm/&lt;uid&gt;/&lt;token&gt;/</span> → <span class="url-tag">/password-reset/complete/</span></p>
+        <div class="flow-title">Fluxo completo</div>
+        <ol class="flow">
+          <li>Solicitar reset em <code>/password-reset/</code> com e-mail cadastrado.</li>
+          <li>Confirmar envio em <code>/password-reset/sent/</code>.</li>
+          <li>Abrir link do e-mail e definir nova senha.</li>
+          <li>Confirmar sucesso em <code>/password-reset/complete/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Link expirado/inválido exibe mensagem adequada.</li>
+          <li>Login com nova senha funciona após redefinição.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🔧 2.4 — Troca de Própria Senha (Admin)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/change-password/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Admin logado acessa a página, preenche senha atual e nova senha.</li>
+          <li>Submeter.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Senha alterada com sessão mantida.</li>
+          <li>Senha atual incorreta ou confirmação divergente exibe erro.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
