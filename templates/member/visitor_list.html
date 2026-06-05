@@ -244,13 +244,14 @@
 
             <div class="relative flex-shrink-0">
                 <button type="button" id="filter-toggle"
-                        class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                        title="Filtros"
+                        class="relative flex-shrink-0 p-2.5 sm:px-3 sm:py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center justify-center sm:justify-start gap-0 sm:gap-2 text-sm">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
                     </svg>
-                    Filtros
+                    <span class="hidden sm:inline">Filtros</span>
                     {% if period != 'all' %}
-                    <span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: #C90905;"></span>
+                    <span class="absolute top-1.5 right-1.5 sm:static w-2 h-2 rounded-full flex-shrink-0" style="background-color: #C90905;"></span>
                     {% endif %}
                 </button>
 
@@ -339,8 +340,8 @@
                        rel="noopener noreferrer"
                        class="visitor-contact-btn">
                         <span class="visitor-contact-btn-icon"><i class="fab fa-whatsapp"></i></span>
-                        <span>Enviar mensagem de boas-vindas</span>
-                        <i class="fas fa-arrow-right visitor-contact-btn-arrow"></i>
+                        <span class="mt-2">Enviar mensagem de boas-vindas</span>
+                        <i class="fas fa-arrow-right visitor-contact-btn-arrow mr-1"></i>
                     </a>
                     {% endif %}
                 </div>
