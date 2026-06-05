@@ -1,4 +1,5 @@
 from collections import defaultdict
+import json
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q
@@ -29,17 +30,18 @@ class TeamFormContextMixin:
 
         new_membership_qs = MinistryMembership.objects.filter(
             is_active=True,
+            deleted__isnull=True,
         ).values_list('member_id', 'ministry_id')
 
         new_system_map = defaultdict(set)
         for member_id, ministry_id in new_membership_qs:
             new_system_map[member_id].add(ministry_id)
 
-        members_with_ministries = [
+        members_payload = [
             {
                 'id': member.id,
                 'name': member.name,
-                'ministry_ids': list(new_system_map[member.id]),
+                'ministries': sorted(new_system_map[member.id]),
             }
             for member in all_members
             if new_system_map[member.id]
@@ -48,7 +50,8 @@ class TeamFormContextMixin:
         return {
             'ministries': ministries,
             'members': all_members,
-            'members_with_ministries': members_with_ministries,
+            'members_with_ministries': members_payload,
+            'members_with_ministries_json': json.dumps(members_payload),
         }
 
 
