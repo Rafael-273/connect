@@ -61,6 +61,7 @@ class MemberVisitorListView(MemberRequiredMixin, ListView):
     model = Visitor
     template_name = 'member/visitor_list.html'
     context_object_name = 'visitors'
+    paginate_by = 10
 
     def dispatch(self, request, *args, **kwargs):
         member = getattr(self, 'member', None)
@@ -109,5 +110,9 @@ class MemberVisitorListView(MemberRequiredMixin, ListView):
             v.first_name = (v.name or '').split()[0] if v.name else ''
         context['query'] = self.request.GET.get('q', '')
         context['period'] = self.request.GET.get('period', 'all')
-        context['total'] = visitors.count() if hasattr(visitors, 'count') else len(visitors)
+        page_obj = context.get('page_obj')
+        if page_obj:
+            context['total'] = page_obj.paginator.count
+        else:
+            context['total'] = len(visitors)
         return context
