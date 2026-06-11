@@ -44,7 +44,11 @@ class HouseOfPeace(BaseModel):
     )
 
     # Informações sobre a família
-    family_size = models.PositiveIntegerField(verbose_name='Número de membros na família')
+    family_size = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name='Número de membros na família',
+    )
 
     # O que deseja oração / mais informações
     prayer_types = models.CharField(

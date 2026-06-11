@@ -5,63 +5,305 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solicitação Enviada — Casa de Paz</title>
+    <meta name="theme-color" content="#C90905">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @keyframes scaleIn {
-            from { transform: scale(0.7); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
+        :root {
+            --color-primary: #C90905;
+            --color-dark: #260200;
+            --color-accent: #FDDEB9;
         }
-        @keyframes float {
-            0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            color: #374151;
         }
-        .scale-in { animation: scaleIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both; }
-        .float-icon { animation: float 3s ease-in-out infinite; }
+
+        @keyframes fadeInUp {
+            from { transform: translateY(16px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes pulseSoft {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+        .animate-fadeInUp { animation: fadeInUp 0.6s ease-out both; }
+        .animate-pulseSoft { animation: pulseSoft 3s ease-in-out infinite; }
+
+        .cop-header {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(155deg, #C90905 0%, #9a0704 45%, #260200 100%);
+            padding: 3rem 1.5rem 3.25rem;
+            text-align: center;
+        }
+        .cop-header-bg {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+        .cop-header-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(40px);
+        }
+        .cop-header-orb--1 {
+            width: 14rem;
+            height: 14rem;
+            top: -4rem;
+            right: -3rem;
+            background: rgba(253, 222, 185, 0.18);
+        }
+        .cop-header-orb--2 {
+            width: 10rem;
+            height: 10rem;
+            bottom: -3rem;
+            left: -2rem;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .cop-header-inner {
+            position: relative;
+            z-index: 1;
+            max-width: 24rem;
+            margin: 0 auto;
+        }
+        .cop-header-eyebrow {
+            display: inline-block;
+            font-size: 0.625rem;
+            font-weight: 700;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--color-accent);
+            margin-bottom: 1.125rem;
+            opacity: 0.95;
+        }
+        .cop-header-icon-wrap {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.125rem;
+        }
+        .cop-header-icon {
+            width: 4rem;
+            height: 4rem;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 1.4rem;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .cop-header h1 {
+            font-size: 1.875rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            margin-bottom: 0.75rem;
+        }
+        .cop-header h1 span { color: var(--color-accent); }
+        .cop-header-divider {
+            width: 2rem;
+            height: 2px;
+            background: var(--color-accent);
+            opacity: 0.6;
+            margin: 0 auto 0.875rem;
+            border-radius: 1px;
+        }
+        .cop-header p {
+            font-size: 0.875rem;
+            line-height: 1.65;
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 500;
+        }
+        @media (min-width: 640px) {
+            .cop-header { padding: 3.5rem 2rem 3.75rem; }
+            .cop-header h1 { font-size: 2.25rem; }
+        }
+
+        .cop-page {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 1.25rem 1rem 2rem;
+        }
+        @media (min-width: 640px) {
+            .cop-page { padding: 1.5rem 2rem 2.5rem; }
+        }
+        @media (min-width: 1024px) {
+            .cop-page { padding: 1.75rem 3rem 3rem; }
+        }
+
+        .cop-success-card {
+            background: #fff;
+            border-radius: 1rem;
+            border: 1px solid rgba(201, 9, 5, 0.12);
+            box-shadow: 0 4px 20px rgba(38, 2, 0, 0.06);
+            padding: 2rem 1.25rem;
+            text-align: center;
+            max-width: 62rem;
+            margin: 0 auto;
+        }
+        .cop-success-icon {
+            width: 4.25rem;
+            height: 4.25rem;
+            margin: 0 auto 1.25rem;
+            border-radius: 50%;
+            background: rgba(201, 9, 5, 0.08);
+            color: var(--color-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+        }
+        .cop-success-card h2 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--color-dark);
+            margin-bottom: 0.75rem;
+            letter-spacing: -0.02em;
+        }
+        .cop-success-card p {
+            font-size: 0.9375rem;
+            line-height: 1.7;
+            color: #4b5563;
+            margin-bottom: 0.5rem;
+        }
+        .cop-success-name {
+            color: var(--color-primary);
+            font-weight: 800;
+        }
+        .cop-info-grid {
+            display: grid;
+            gap: 0.875rem;
+            margin: 1.75rem auto 1.5rem;
+            max-width: 46rem;
+        }
+        @media (min-width: 640px) {
+            .cop-info-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        .cop-info-card {
+            background: #fff;
+            border-radius: 1rem;
+            padding: 1.25rem 1rem;
+            border: 1px solid rgba(38, 2, 0, 0.08);
+            box-shadow: 0 6px 20px rgba(38, 2, 0, 0.05);
+            min-height: 9.5rem;
+        }
+        .cop-info-card:nth-child(1) { border-color: rgba(201, 9, 5, 0.14); }
+        .cop-info-card:nth-child(2) { border-color: rgba(38, 2, 0, 0.10); }
+        .cop-info-card:nth-child(3) { border-color: rgba(253, 222, 185, 0.8); }
+        .cop-info-icon {
+            width: 2.75rem;
+            height: 2.75rem;
+            margin: 0 auto 0.875rem;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+        .cop-info-card:nth-child(1) .cop-info-icon { color: #1d8c75; background: rgba(29, 140, 117, 0.08); }
+        .cop-info-card:nth-child(2) .cop-info-icon { color: #1f4f7a; background: rgba(31, 79, 122, 0.08); }
+        .cop-info-card:nth-child(3) .cop-info-icon { color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+        .cop-info-title {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #374151;
+            line-height: 1.35;
+            margin-bottom: 0.35rem;
+        }
+        .cop-info-text {
+            font-size: 0.8rem;
+            line-height: 1.55;
+            color: #6b7280;
+        }
+        .cop-btn-home {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.55rem;
+            margin-top: 0.5rem;
+            padding: 0.9rem 1.6rem;
+            border-radius: 1rem;
+            background: var(--color-primary);
+            color: #fff;
+            font-weight: 800;
+            font-size: 0.95rem;
+            text-decoration: none;
+            box-shadow: 0 10px 24px rgba(201, 9, 5, 0.18);
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+        .cop-btn-home:hover {
+            transform: translateY(-1px);
+            opacity: 0.96;
+        }
     </style>
 </head>
-<body style="background: linear-gradient(135deg, #EBF5FB 0%, #FDFEFE 50%, #E8F8F5 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center;">
-    <div class="text-center px-6 py-12 max-w-lg mx-auto">
-        <!-- Ícone de sucesso -->
-        <div class="scale-in w-28 h-28 mx-auto mb-6 rounded-full flex items-center justify-center shadow-2xl float-icon"
-             style="background: linear-gradient(135deg, #148F77, #1A5276);">
-            <i class="fas fa-check text-white text-5xl"></i>
+<body>
+    <header class="cop-header">
+        <div class="cop-header-bg">
+            <div class="cop-header-orb cop-header-orb--1"></div>
+            <div class="cop-header-orb cop-header-orb--2"></div>
         </div>
-
-        <h1 class="text-3xl font-black text-gray-900 mb-3">Solicitação Enviada!</h1>
-        <p class="text-lg text-gray-600 mb-2">
-            Obrigado, <strong style="color: #148F77;">{{ requester_name }}</strong>!
-        </p>
-        <p class="text-base text-gray-600 mb-8 leading-relaxed">
-            Sua solicitação de Casa de Paz foi recebida com sucesso. 
-            Em breve, irmãos da Igreja Filadélfia entrarão em contato pelo telefone cadastrado para agendar a visita.
-        </p>
-
-        <!-- Cards de informação -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <div class="bg-white rounded-2xl p-5 shadow-lg border-2" style="border-color: rgba(20,143,119,0.2);">
-                <i class="fas fa-phone text-2xl mb-2" style="color: #148F77;"></i>
-                <p class="text-sm font-bold text-gray-700">Contato em breve</p>
-                <p class="text-xs text-gray-500">Via WhatsApp ou ligação</p>
+        <div class="cop-header-inner">
+            <span class="cop-header-eyebrow">Igreja Filadélfia</span>
+            <div class="cop-header-icon-wrap">
+                <div class="cop-header-icon animate-pulseSoft">
+                    <i class="fas fa-check"></i>
+                </div>
             </div>
-            <div class="bg-white rounded-2xl p-5 shadow-lg border-2" style="border-color: rgba(26,82,118,0.2);">
-                <i class="fas fa-praying-hands text-2xl mb-2" style="color: #1A5276;"></i>
-                <p class="text-sm font-bold text-gray-700">Oração em casa</p>
-                <p class="text-xs text-gray-500">2 a 3 irmãos visitarão você</p>
-            </div>
-            <div class="bg-white rounded-2xl p-5 shadow-lg border-2" style="border-color: rgba(243,156,18,0.2);">
-                <i class="fas fa-heart text-2xl mb-2" style="color: #F39C12;"></i>
-                <p class="text-sm font-bold text-gray-700">Com amor</p>
-                <p class="text-xs text-gray-500">Família Filadélfia</p>
-            </div>
+            <h1>Casa de <span>Paz</span></h1>
+            <div class="cop-header-divider"></div>
+            <p>Sua solicitação foi recebida com sucesso. Em breve nossa equipe entrará em contato para organizar a visita.</p>
         </div>
+    </header>
 
-        <a href="{% url 'home' %}"
-           class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl shadow-xl transition-all duration-300 hover:-translate-y-1"
-           style="background: linear-gradient(135deg, #1A5276, #148F77);">
-            <i class="fas fa-home"></i>
-            Voltar ao início
-        </a>
-    </div>
+    <main class="cop-page">
+        <section class="cop-success-card animate-fadeInUp">
+            <div class="cop-success-icon">
+                <i class="fas fa-check"></i>
+            </div>
+            <h2>Solicitação Enviada!</h2>
+            <p>Obrigado, <strong class="cop-success-name">{{ submitted_name }}</strong>!</p>
+            <p>
+                Sua solicitação de Casa de Paz foi recebida com sucesso.
+                Em breve, irmãos da Igreja Filadélfia entrarão em contato pelo telefone cadastrado para agendar a visita.
+            </p>
+
+            <div class="cop-info-grid">
+                <article class="cop-info-card">
+                    <div class="cop-info-icon"><i class="fas fa-phone"></i></div>
+                    <div class="cop-info-title">Contato em breve</div>
+                    <div class="cop-info-text">Via WhatsApp ou ligação</div>
+                </article>
+                <article class="cop-info-card">
+                    <div class="cop-info-icon"><i class="fas fa-praying-hands"></i></div>
+                    <div class="cop-info-title">Oração em casa</div>
+                    <div class="cop-info-text">2 a 3 irmãos visitarão você</div>
+                </article>
+                <article class="cop-info-card">
+                    <div class="cop-info-icon"><i class="fas fa-heart"></i></div>
+                    <div class="cop-info-title">Com amor</div>
+                    <div class="cop-info-text">Família Filadélfia</div>
+                </article>
+            </div>
+
+            <a href="{% url back_url %}" class="cop-btn-home">
+                <i class="fas fa-home"></i>
+                Voltar ao início
+            </a>
+        </section>
+    </main>
 </body>
 </html>

@@ -126,45 +126,105 @@
         opacity: 0.7;
         font-size: 0.625rem;
     }
+    .peace-location {
+        margin-top: 0.5rem;
+        padding: 0.7rem 0.8rem;
+        border-radius: 0.75rem;
+        background: #fafafa;
+        border: 1px solid rgba(38, 2, 0, 0.05);
+    }
+    .peace-location-label {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-size: 0.625rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #9ca3af;
+    }
+    .peace-location-title {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--color-dark);
+        margin-bottom: 0.3rem;
+    }
+    .peace-location-title i {
+        color: var(--color-primary);
+        font-size: 0.72rem;
+        opacity: 0.85;
+        flex-shrink: 0;
+    }
+    .peace-location-endereco {
+        font-size: 0.75rem;
+        line-height: 1.45;
+        color: #6b7280;
+    }
+    .peace-location-endereco span {
+        word-break: break-word;
+    }
     .peace-card-actions-top {
         display: flex;
         align-items: center;
-        gap: 0.375rem;
+        justify-content: flex-end;
+        gap: 0.5rem;
         flex-shrink: 0;
     }
-    .status-pill {
+    .btn-share {
         display: inline-flex;
         align-items: center;
-        gap: 0.3rem;
-        padding: 0.2rem 0.5rem;
+        gap: 0.45rem;
+        padding: 0.45rem 0.65rem;
         border-radius: 9999px;
-        font-size: 0.625rem;
+        border: 1px solid rgba(201, 9, 5, 0.12);
+        background: rgba(201, 9, 5, 0.06);
+        color: var(--color-primary);
+        font-size: 0.6875rem;
         font-weight: 700;
+        line-height: 1;
         white-space: nowrap;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+        flex-shrink: 0;
     }
-    .status-pill.is-scheduled {
-        background: rgba(201, 9, 5, 0.08);
-        color: var(--color-primary);
+    .btn-share:hover {
+        background: rgba(201, 9, 5, 0.12);
+        border-color: rgba(201, 9, 5, 0.18);
+        transform: translateY(-1px);
     }
-    .status-pill.is-waiting {
-        background: rgba(245, 158, 11, 0.12);
-        color: #b45309;
+    .btn-share--icon {
+        width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        justify-content: center;
     }
-    .btn-share {
-        width: 2rem;
-        height: 2rem;
-        border-radius: 0.5rem;
-        border: none;
-        background: rgba(201, 9, 5, 0.08);
-        color: var(--color-primary);
+    .btn-share--icon span { display: none; }
+    .btn-share i {
+        font-size: 0.75rem;
+    }
+    .btn-options-top {
+        width: 2.25rem;
+        height: 2.25rem;
+        padding: 0;
+        border-radius: 9999px;
+        border: 1px solid rgba(38, 2, 0, 0.12);
+        background: #fff;
+        color: #374151;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: background 0.15s ease;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
         flex-shrink: 0;
     }
-    .btn-share:hover { background: rgba(201, 9, 5, 0.14); }
+    .btn-options-top:hover {
+        background: #fafafa;
+        border-color: rgba(201, 9, 5, 0.18);
+        transform: translateY(-1px);
+    }
 
     .peace-card-body { padding: 0 1.125rem 1.125rem; }
     .peace-card-body > .scheduled-callout:first-child { margin-top: 0; }
@@ -172,6 +232,9 @@
         margin-top: 0;
         padding-top: 0;
         border-top: none;
+    }
+    .peace-card-body > .peace-location:first-child {
+        margin-top: 0;
     }
     .peace-section {
         margin-top: 0.75rem;
@@ -204,36 +267,41 @@
     .team-indicator-circle.filled { background: var(--color-primary); }
 
     .peace-member-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.375rem;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.5rem;
+        justify-items: stretch;
     }
     .peace-member-button {
-        display: inline-flex;
-        align-items: center;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
         gap: 0.5rem;
-        padding: 0.375rem 0.5rem 0.375rem 0.375rem;
-        border-radius: 9999px;
+        padding: 0.7rem 0.85rem 0.6rem;
+        border-radius: 0.75rem;
         background: #f5f5f5;
         border: 1px solid rgba(38, 2, 0, 0.06);
         cursor: pointer;
-        transition: border-color 0.15s ease, background 0.15s ease;
+        transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
         max-width: 100%;
+        min-width: 0;
+        width: 100%;
     }
     .peace-member-button:hover {
         border-color: rgba(201, 9, 5, 0.2);
         background: rgba(201, 9, 5, 0.04);
+        transform: translateY(-1px);
     }
     .peace-member-avatar {
-        width: 1.5rem;
-        height: 1.5rem;
+        width: 2.25rem;
+        height: 2.25rem;
         border-radius: 999px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         color: #fff;
         background: var(--color-primary);
-        font-size: 0.6875rem;
+        font-size: 0.8rem;
         font-weight: 800;
         flex-shrink: 0;
         overflow: hidden;
@@ -242,13 +310,20 @@
     .peace-member-name {
         margin: 0;
         color: #374151;
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         font-weight: 600;
         line-height: 1.2;
+        text-align: left;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 8rem;
+        width: 100%;
+    }
+
+    @media (max-width: 767px) {
+        .peace-member-list {
+            grid-template-columns: 1fr;
+        }
     }
 
     .peace-disclosure {
@@ -278,35 +353,34 @@
     }
     .peace-disclosure[open] .peace-disclosure-caret { transform: rotate(180deg); }
     .peace-disclosure-body {
-        padding: 0 0.75rem 0.75rem;
+        padding: 0 0.5rem 0.5rem;
         display: grid;
-        gap: 0.625rem;
+        gap: 0.5rem;
         border-top: 1px solid rgba(38, 2, 0, 0.06);
-        padding-top: 0.75rem;
-        margin: 0 0.75rem 0.75rem;
+        padding-top: 0.65rem;
     }
     .peace-detail-grid {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 0.5rem;
+        grid-template-columns: 1fr;
+        gap: 0.45rem;
     }
     .peace-detail-item {
-        padding: 0.625rem 0.75rem;
-        border-radius: 0.5rem;
+        padding: 0.55rem 0.65rem;
+        border-radius: 0.625rem;
         background: #fff;
         border: 1px solid rgba(38, 2, 0, 0.06);
     }
     .peace-detail-label {
         margin: 0;
-        font-size: 0.625rem;
+        font-size: 0.6rem;
         font-weight: 800;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: #9ca3af;
     }
     .peace-detail-value {
-        margin: 0.25rem 0 0;
-        font-size: 0.8125rem;
+        margin: 0.2rem 0 0;
+        font-size: 0.8rem;
         font-weight: 700;
         color: var(--color-dark);
         line-height: 1.3;
@@ -330,74 +404,79 @@
         margin-top: 0.125rem;
         flex-shrink: 0;
     }
-    .peace-tags { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+    .peace-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+    }
     .peace-tag {
-        display: inline-block;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.375rem;
-        font-size: 0.6875rem;
-        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.42rem 0.62rem;
+        border-radius: 9999px;
+        font-size: 0.72rem;
+        font-weight: 700;
         color: #4b5563;
-        background: #f5f5f5;
+        background: #fafafa;
+        border: 1px solid rgba(38, 2, 0, 0.06);
         line-height: 1.2;
+    }
+    .peace-tag::before {
+        content: '';
+        width: 0.35rem;
+        height: 0.35rem;
+        border-radius: 9999px;
+        background: var(--color-primary);
+        opacity: 0.85;
+        flex-shrink: 0;
     }
 
     .scheduled-callout {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 0.75rem;
+        gap: 0.875rem;
         margin-top: 0.75rem;
-        padding: 0.75rem;
-        border-radius: 0.625rem;
-        background: rgba(201, 9, 5, 0.04);
-        border: 1px solid rgba(201, 9, 5, 0.08);
+        padding: 0.875rem 0.925rem;
+        border-radius: 0.875rem;
+        background: linear-gradient(135deg, rgba(201, 9, 5, 0.03), rgba(201, 9, 5, 0.07));
+        border: 1px solid rgba(201, 9, 5, 0.1);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
     }
     .scheduled-main {
         display: flex;
         align-items: center;
-        gap: 0.625rem;
+        gap: 0.75rem;
         min-width: 0;
     }
     .scheduled-icon {
-        width: 2rem;
-        height: 2rem;
-        border-radius: 0.5rem;
+        width: 2.3rem;
+        height: 2.3rem;
+        border-radius: 0.7rem;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        background: rgba(201, 9, 5, 0.1);
+        background: rgba(201, 9, 5, 0.08);
         color: var(--color-primary);
         flex-shrink: 0;
-        font-size: 0.875rem;
+        font-size: 0.95rem;
     }
     .scheduled-label {
         margin: 0;
-        font-size: 0.625rem;
+        font-size: 0.6rem;
         font-weight: 800;
         letter-spacing: 0.07em;
         text-transform: uppercase;
         color: #9ca3af;
     }
     .scheduled-date {
-        margin: 0.125rem 0 0;
-        font-size: 0.9375rem;
-        font-weight: 700;
+        margin: 0.18rem 0 0;
+        font-size: 0.95rem;
+        font-weight: 800;
         color: var(--color-dark);
+        letter-spacing: -0.02em;
     }
-    .scheduled-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-        padding: 0.2rem 0.5rem;
-        border-radius: 9999px;
-        background: var(--color-primary);
-        color: #fff;
-        font-size: 0.625rem;
-        font-weight: 700;
-        flex-shrink: 0;
-    }
-
     .peace-card-actions {
         display: flex;
         gap: 0.5rem;
@@ -723,7 +802,9 @@
         transition: border-color 0.15s ease, background 0.15s ease;
         margin-bottom: 0.5rem;
     }
-    .share-option:last-child { margin-bottom: 0; }
+    .share-option:last-child {
+        margin-bottom: 0.75rem;
+    }
     .share-option:hover {
         border-color: rgba(201, 9, 5, 0.2);
         background: rgba(201, 9, 5, 0.03);
@@ -737,6 +818,10 @@
         justify-content: center;
         font-size: 1rem;
         flex-shrink: 0;
+    }
+    .share-option--whatsapp .share-icon {
+        background: rgba(201, 9, 5, 0.08) !important;
+        color: var(--color-primary) !important;
     }
     .share-text h3 {
         margin: 0;
@@ -825,12 +910,9 @@
         .peace-card-body { padding: 0 0.875rem 0.875rem; }
         .peace-family-name { font-size: 0.9375rem; }
         .peace-detail-grid { grid-template-columns: 1fr; }
-        .peace-member-list { flex-direction: column; }
-        .peace-member-button { width: 100%; max-width: 100%; }
         .peace-card-actions { flex-direction: column-reverse; gap: 0.4375rem; }
         .peace-card-actions > a,
         .peace-card-actions > button { width: 100%; flex: none; }
-        .status-pill .badge-text { display: none; }
         .hop-sheet { max-height: 90vh; }
         .hop-modal-body {
             max-height: min(56vh, calc(100vh - 260px));
@@ -933,37 +1015,37 @@
                         <div class="peace-title-row">
                             <h3 class="peace-family-name truncate">Família {{ assignment.house_of_peace.requester_name }}</h3>
                             <div class="peace-card-actions-top">
-                                {% if assignment.status == 'scheduled' %}
-                                <span class="status-pill is-scheduled" title="Agendada">
-                                    <i class="fas fa-calendar-check"></i>
-                                    <span class="badge-text">Agendada</span>
-                                </span>
-                                {% else %}
-                                <span class="status-pill is-waiting" title="Aguardando">
-                                    <i class="fas fa-clock"></i>
-                                    <span class="badge-text">Aguardando</span>
-                                </span>
+                                {% if assignment.scheduled_date %}
+                                <button type="button" class="btn-options-top" onclick="openAssignmentOptionsModal({{ assignment.id }}, '{{ assignment.house_of_peace.requester_name|escapejs }}', '{{ assignment.scheduled_date|date:'Y-m-d' }}')" title="Mais opções">
+                                    <i class="fas fa-ellipsis-h"></i>
+                                </button>
                                 {% endif %}
-                                <button type="button" class="btn-share" onclick="openShareModal('{{ assignment.house_of_peace.id }}', '{{ assignment.house_of_peace.requester_name|escapejs }}')" title="Compartilhar">
-                                    <i class="fas fa-share-alt text-xs"></i>
+                                <button type="button" class="btn-share btn-share--icon" onclick="openShareModal('{{ assignment.house_of_peace.id }}', '{{ assignment.house_of_peace.requester_name|escapejs }}')" title="Compartilhar">
+                                    <i class="fas fa-share-alt"></i>
+                                    <span>Compartilhar</span>
                                 </button>
                             </div>
                         </div>
                         <div class="peace-meta">
-                            <span class="peace-meta-item">
-                                <i class="fas fa-map-marker-alt"></i>{{ assignment.house_of_peace.neighborhood.name }}
-                            </span>
+                            {% if assignment.house_of_peace.family_size %}
                             <span class="peace-meta-item">
                                 <i class="fas fa-users"></i>{{ assignment.house_of_peace.family_size }} pessoa{{ assignment.house_of_peace.family_size|pluralize:"s" }}
                             </span>
-                            <span class="peace-meta-item">
-                                <i class="fas fa-user-check"></i>{{ assignment.house_of_peace.assignments_count }}/3 irmãos
-                            </span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
 
                 <div class="peace-card-body">
+                    <div class="peace-location">
+                        <div class="peace-location-label">Onde será a visita</div>
+                        <div class="peace-location-title">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <span>{{ assignment.house_of_peace.neighborhood.name }}</span>
+                        </div>
+                        <div class="peace-location-endereco">{{ assignment.house_of_peace.address|default:"Endereço não informado" }}</div>
+                    </div>
+
                     {% if assignment.scheduled_date %}
                     <div class="scheduled-callout">
                         <div class="scheduled-main">
@@ -973,7 +1055,6 @@
                                 <p class="scheduled-date">{{ assignment.scheduled_date|pt_date }}</p>
                             </div>
                         </div>
-                        <span class="scheduled-chip"><i class="fas fa-check"></i> Confirmada</span>
                     </div>
                     {% endif %}
 
@@ -992,11 +1073,11 @@
                                 <div class="peace-member-avatar">
                                     {% if member_assignment.member.profile_picture %}
                                         <img src="{{ member_assignment.member.profile_picture.url }}" alt="{{ member_assignment.member.name }}">
-                                    {% else %}
-                                        {{ member_assignment.member.name|slice:":1"|upper }}
-                                    {% endif %}
+                                {% else %}
+                                    {{ member_assignment.member.name|slice:":1"|upper }}
+                                {% endif %}
                                 </div>
-                                <p class="peace-member-name">{{ member_assignment.member.name|truncatewords:3 }}</p>
+                                <p class="peace-member-name">{{ member_assignment.member.name|truncatewords:1 }}</p>
                             </button>
                             {% endfor %}
                         </div>
@@ -1008,32 +1089,18 @@
                             <i class="fas fa-chevron-down peace-disclosure-caret"></i>
                         </summary>
                         <div class="peace-disclosure-body">
-                            <div class="peace-detail-grid">
+                            <div class="peace-detail-grid" style="grid-template-columns: 1fr;">
                                 <div class="peace-detail-item">
                                     <p class="peace-detail-label">Telefone</p>
                                     <p class="peace-detail-value">
                                         <a href="tel:{{ assignment.house_of_peace.phone }}">{{ assignment.house_of_peace.phone }}</a>
                                     </p>
                                 </div>
-                                <div class="peace-detail-item">
-                                    <p class="peace-detail-label">Família</p>
-                                    <p class="peace-detail-value">{{ assignment.house_of_peace.family_size }} pessoa{{ assignment.house_of_peace.family_size|pluralize:"s" }}</p>
-                                </div>
-                                <div class="peace-detail-item">
-                                    <p class="peace-detail-label">Bairro</p>
-                                    <p class="peace-detail-value">{{ assignment.house_of_peace.neighborhood.name }}</p>
-                                </div>
-                            </div>
-                            <div class="peace-address-block">
-                                <i class="fas fa-location-dot"></i>
-                                <div>
-                                    <p class="peace-detail-label">Endereço</p>
-                                    <p class="peace-detail-value">{{ assignment.house_of_peace.address }}</p>
-                                </div>
                             </div>
                             {% if assignment.house_of_peace.prayer_types_display %}
-                            <div>
+                            <div class="px-2 pt-1">
                                 <p class="peace-section-label">Pedidos de oração</p>
+                                <p class="text-xs text-gray-500 mt-1 mb-2 leading-relaxed">Motivos compartilhados pela família para receber oração.</p>
                                 <div class="peace-tags">
                                     {% for pt in assignment.house_of_peace.prayer_types_display %}
                                     <span class="peace-tag">{{ pt }}</span>
@@ -1053,9 +1120,6 @@
                             <i class="fas fa-calendar-plus"></i> Registrar data
                         </button>
                         {% else %}
-                        <button type="button" onclick="openAssignmentOptionsModal({{ assignment.id }}, '{{ assignment.house_of_peace.requester_name|escapejs }}', '{{ assignment.scheduled_date|date:'Y-m-d' }}')" class="btn-ghost" title="Mais opções">
-                            <i class="fas fa-ellipsis-h"></i> Opções
-                        </button>
                         <a href="javascript:void(0)" onclick="openWhatsApp('{{ assignment.house_of_peace.phone|escapejs }}')" class="btn-secondary-action">
                             <i class="fab fa-whatsapp"></i> Contato
                         </a>
@@ -1114,7 +1178,7 @@
                 requester_name: "{{ assignment.house_of_peace.requester_name|escapejs }}",
                 neighborhood_id: {{ assignment.house_of_peace.neighborhood.id }},
                 neighborhood_name: "{{ assignment.house_of_peace.neighborhood.name|escapejs }}",
-                family_size: {{ assignment.house_of_peace.family_size }},
+                family_size: {% if assignment.house_of_peace.family_size %}{{ assignment.house_of_peace.family_size }}{% else %}null{% endif %},
                 address: "{{ assignment.house_of_peace.address|escapejs }}"
             },
             {% endfor %}
@@ -1186,9 +1250,11 @@
                 const matchesSearch = search === '' || `${a.requester_name} ${a.neighborhood_name} ${a.address}`.toLowerCase().includes(search);
                 const matchesNeighborhood = neighborhood === '' || a.neighborhood_id == neighborhood;
                 const matchesFamilySize = familySize === '' || (
-                    (familySize === '1-2' && a.family_size <= 2) ||
-                    (familySize === '3-5' && a.family_size >= 3 && a.family_size <= 5) ||
-                    (familySize === '6' && a.family_size >= 6)
+                    a.family_size != null && (
+                        (familySize === '1-2' && a.family_size <= 2) ||
+                        (familySize === '3-5' && a.family_size >= 3 && a.family_size <= 5) ||
+                        (familySize === '6' && a.family_size >= 6)
+                    )
                 );
                 return matchesSearch && matchesNeighborhood && matchesFamilySize;
             });
@@ -1197,6 +1263,8 @@
                 filtered.sort((a, b) => a.requester_name.localeCompare(b.requester_name));
             } else if (sort === 'name-desc') {
                 filtered.sort((a, b) => b.requester_name.localeCompare(a.requester_name));
+            } else if (sort === 'default') {
+                filtered.sort((a, b) => (b.id || 0) - (a.id || 0));
             }
 
             document.querySelectorAll('[data-assignment-id]').forEach(card => {
@@ -1590,13 +1658,13 @@
                     <div class="hop-modal-top hop-modal-top-compact">
                         <div class="hop-confirm-icon"><i class="fas fa-share-nodes"></i></div>
                         <div class="min-w-0 flex-1">
-                            <p class="hop-eyebrow">Compartilhar</p>
+                            <p class="hop-eyebrow">Compartilhar essa Casa de Paz!</p>
                             <h2 class="hop-modal-title">Família ${familyName}</h2>
                         </div>
                     </div>
                     <div class="hop-modal-body">
-                        <div class="share-option" onclick="shareViaWhatsApp('${shareText}', '${shareUrl}')">
-                            <div class="share-icon" style="background: #25D366; color: #fff;"><i class="fab fa-whatsapp"></i></div>
+                        <div class="share-option share-option--whatsapp" onclick="shareViaWhatsApp('${shareText}', '${shareUrl}')">
+                            <div class="share-icon"><i class="fab fa-whatsapp"></i></div>
                             <div class="share-text">
                                 <h3>WhatsApp</h3>
                                 <p>Envie o convite via WhatsApp</p>

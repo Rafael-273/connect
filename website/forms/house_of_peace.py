@@ -11,7 +11,8 @@ class HouseOfPeacePublicForm(forms.ModelForm):
         choices=HouseOfPeace.PRAYER_TYPE_CHOICES,
         widget=forms.CheckboxSelectMultiple,
         label='Pedidos de Oração',
-        help_text='Selecione os motivos (pode marcar vários)',
+        help_text='Selecione os motivos (opcional, pode marcar vários)',
+        required=False,
     )
 
     class Meta:
@@ -88,18 +89,23 @@ class HouseOfPeacePublicForm(forms.ModelForm):
         return phone
 
     def clean_prayer_types(self):
-        """Ensure at least one prayer type is selected."""
+        """Allow prayer types to be optional."""
         prayer_types = self.cleaned_data.get('prayer_types')
-        if not prayer_types:
-            raise ValidationError('Selecione pelo menos um motivo de oração.')
         return prayer_types
+
+    def clean_family_size(self):
+        """Allow family size to be optional."""
+        family_size = self.cleaned_data.get('family_size')
+        if family_size in ('', None):
+            return None
+        return family_size
 
     def clean(self):
         """Additional validation."""
         cleaned_data = super().clean()
         family_size = cleaned_data.get('family_size')
-        
-        if family_size and (family_size < 1 or family_size > 30):
+
+        if family_size is not None and (family_size < 1 or family_size > 30):
             self.add_error('family_size', 'O número de pessoas deve estar entre 1 e 30.')
         
         return cleaned_data

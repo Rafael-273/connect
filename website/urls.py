@@ -71,6 +71,7 @@ from .views.schedules import (
 from .views.prayer_request import PrayerRequestCreateView, PrayerRequestListView
 from .views.house_of_peace import (
     HouseOfPeacePublicCreateView,
+    HouseOfPeacePublicSuccessView,
     HouseOfPeaceAvailableListView,
     HouseOfPeaceAcceptView,
     HouseOfPeaceMyListView,
@@ -108,6 +109,7 @@ urlpatterns = [
 
     # House of Peace — public form (no login)
     path('house-of-peace/', HouseOfPeacePublicCreateView.as_view(), name='house_of_peace_public_form'),
+    path('house-of-peace/sucesso/', HouseOfPeacePublicSuccessView.as_view(), name='house_of_peace_public_success'),
 
     # House of Peace — member area
     path('house-of-peace/available/', HouseOfPeaceAvailableListView.as_view(), name='house_of_peace_available'),

@@ -37,10 +37,12 @@ class HouseOfPeacePublicCreateView(View):
         form = HouseOfPeacePublicForm()
         return render(request, 'house_of_peace/public_form.html', {
             'form': form,
+            'back_url': self._get_back_url(request),
         })
 
     def post(self, request):
         form = HouseOfPeacePublicForm(request.POST)
+        back_url = self._get_back_url(request)
         
         if form.is_valid():
             # Form already handles saving and converting prayer_types to string
@@ -48,20 +50,35 @@ class HouseOfPeacePublicCreateView(View):
             casa.status = 'available'
             casa.save()
             
-            messages.success(
-                request,
-                f'Obrigado, {casa.family_name}! Sua solicitação foi registrada. '
-                'Entraremos em contato em breve!'
-            )
-            return render(request, 'house_of_peace/public_form.html', {
-                'form': form,
-                'success': True,
+            request.session['house_of_peace_public_success'] = {
                 'submitted_name': casa.family_name,
-            })
+                'back_url': back_url,
+            }
+            return redirect('house_of_peace_public_success')
         
         # If form is invalid, show errors
         return render(request, 'house_of_peace/public_form.html', {
             'form': form,
+            'back_url': back_url,
+        })
+
+    def _get_back_url(self, request):
+        if request.user.is_authenticated and hasattr(request.user, 'member'):
+            return 'member_dashboard'
+        return 'home'
+
+
+class HouseOfPeacePublicSuccessView(View):
+    """Confirmation page shown after a successful public submission."""
+
+    def get(self, request):
+        success_data = request.session.get('house_of_peace_public_success')
+        if not success_data:
+            return redirect('house_of_peace_public_form')
+
+        return render(request, 'house_of_peace/public_success.html', {
+            'submitted_name': success_data.get('submitted_name'),
+            'back_url': success_data.get('back_url', 'home'),
         })
 
 
@@ -333,7 +350,7 @@ class HouseOfPeaceDetailView(MemberRequiredMixin, MinistrationContextMixin, View
                 'family_name': casa.family_name,
                 'requester_name': casa.requester_name,
                 'neighborhood': casa.neighborhood.name if casa.neighborhood else '',
-                'address': casa.address if show_phone else None,
+                'address': casa.address or '',
                 'phone': casa.phone if show_phone else None,
                 'family_size': casa.family_size,
                 'prayer_types': prayer_types_display,

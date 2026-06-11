@@ -277,6 +277,10 @@
         .cop-submit:hover {
             opacity: 0.9;
         }
+        .cop-submit:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
         .cop-privacy {
             text-align: center;
             font-size: 0.75rem;
@@ -355,6 +359,43 @@
             transition: opacity 0.15s ease;
         }
         .cop-success-card .cop-btn-home:hover { opacity: 0.9; }
+
+        .cop-submit-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(38, 2, 0, 0.52);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        .cop-submit-overlay.is-active {
+            display: flex;
+        }
+        .cop-submit-overlay-card {
+            display: flex;
+            align-items: center;
+            gap: 0.875rem;
+            padding: 1rem 1.25rem;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.96);
+            color: var(--color-dark);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+            font-weight: 700;
+        }
+        .cop-spinner {
+            width: 1.15rem;
+            height: 1.15rem;
+            border-radius: 50%;
+            border: 2px solid rgba(201, 9, 5, 0.18);
+            border-top-color: var(--color-primary);
+            animation: copSpin 0.8s linear infinite;
+        }
+        @keyframes copSpin {
+            to { transform: rotate(360deg); }
+        }
 
         /* Select2 */
         .select2-container--default .select2-selection--single {
@@ -448,7 +489,7 @@
                 Em breve entraremos em contato para agendar uma visita de oração
                 para você e sua família.
             </p>
-            <a href="/" class="cop-btn-home">
+            <a href="{% url back_url %}" class="cop-btn-home">
                 <i class="fas fa-arrow-left"></i>
                 Voltar ao início
             </a>
@@ -457,7 +498,7 @@
     {% else %}
 
     <div class="cop-form-wrap animate-fadeInUp">
-        <form method="post">
+        <form method="post" id="cop-form">
             {% csrf_token %}
 
             <!-- Dados da Pessoa -->
@@ -500,7 +541,7 @@
 
                 <div class="cop-field">
                     <label class="form-label" for="{{ form.family_size.id_for_label }}">
-                        {{ form.family_size.label }} <span class="req">*</span>
+                        {{ form.family_size.label }} <span class="text-gray-400 text-xs font-semibold">opcional</span>
                     </label>
                     {% if form.family_size.errors %}
                         {{ form.family_size }}
@@ -555,7 +596,7 @@
                 <div class="cop-section-head">
                     <div class="cop-section-icon"><i class="fas fa-praying-hands"></i></div>
                     <div>
-                        <p class="cop-section-title">{{ form.prayer_types.label }}</p>
+                        <p class="cop-section-title">{{ form.prayer_types.label }} <span class="text-gray-400 text-xs font-semibold">opcional</span></p>
                         <p class="cop-section-sub">{{ form.prayer_types.help_text }}</p>
                     </div>
                 </div>
@@ -614,7 +655,7 @@
                 </div>
             </div>
 
-            <button type="submit" class="cop-submit">
+            <button type="submit" class="cop-submit" id="cop-submit-btn">
                 <i class="fas fa-hand-holding-heart mr-1"></i>
                 Quero receber a visita
             </button>
@@ -625,6 +666,13 @@
         </form>
     </div>
     {% endif %}
+
+    <div class="cop-submit-overlay" id="cop-submit-overlay" aria-hidden="true">
+        <div class="cop-submit-overlay-card">
+            <div class="cop-spinner" aria-hidden="true"></div>
+            <span>Enviando sua solicitação...</span>
+        </div>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
@@ -674,6 +722,28 @@
                 field.classList.add('error');
             }
         });
+
+        const form = document.getElementById('cop-form');
+        const submitBtn = document.getElementById('cop-submit-btn');
+        const submitOverlay = document.getElementById('cop-submit-overlay');
+
+        if (form && submitBtn && submitOverlay) {
+            form.addEventListener('submit', function() {
+                if (submitBtn.disabled) return;
+
+                submitBtn.disabled = true;
+                submitOverlay.classList.add('is-active');
+                submitOverlay.setAttribute('aria-hidden', 'false');
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Enviando...';
+            });
+
+            window.addEventListener('pageshow', function() {
+                submitBtn.disabled = false;
+                submitOverlay.classList.remove('is-active');
+                submitOverlay.setAttribute('aria-hidden', 'true');
+                submitBtn.innerHTML = '<i class="fas fa-hand-holding-heart mr-1"></i> Quero receber a visita';
+            });
+        }
     </script>
 </body>
 </html>

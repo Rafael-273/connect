@@ -106,25 +106,47 @@
     }
     .peace-vagas {
         flex-shrink: 0;
-        padding: 0.2rem 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.3rem 0.35rem;
         border-radius: 9999px;
-        font-size: 0.625rem;
-        font-weight: 700;
-        letter-spacing: 0.02em;
+        background: rgba(201, 9, 5, 0.06);
+        border: 1px solid rgba(201, 9, 5, 0.1);
         white-space: nowrap;
-        background: rgba(201, 9, 5, 0.08);
-        color: var(--color-primary);
     }
-    .peace-vagas.is-urgent {
+    .peace-vagas-slot {
+        width: 0.45rem;
+        height: 0.45rem;
+        border-radius: 9999px;
+        background: rgba(201, 9, 5, 0.16);
+        box-shadow: inset 0 0 0 1px rgba(201, 9, 5, 0.14);
+        transform: scale(0.94);
+    }
+    .peace-vagas-slot.is-filled {
         background: var(--color-primary);
-        color: #fff;
+        box-shadow: none;
+        animation: peaceVacancyFill 0.55s ease-out both;
+        animation-delay: var(--delay, 0ms);
+    }
+    .peace-vagas-slot.is-empty {
+        opacity: 0.55;
+    }
+    @keyframes peaceVacancyFill {
+        from {
+            transform: scale(0.4);
+            opacity: 0.2;
+        }
+        to {
+            transform: scale(1);
+            opacity: 1;
+        }
     }
     .peace-meta {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 0.35rem 0.75rem;
-        margin-top: 0.375rem;
         font-size: 0.75rem;
         color: #6b7280;
         line-height: 1.3;
@@ -138,6 +160,45 @@
         color: var(--color-primary);
         opacity: 0.7;
         font-size: 0.625rem;
+    }
+    .peace-location {
+        margin-top: 0.5rem;
+        padding: 0.7rem 0.8rem;
+        border-radius: 0.75rem;
+        background: #fafafa;
+        border: 1px solid rgba(38, 2, 0, 0.05);
+    }
+    .peace-location-label {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-size: 0.625rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #9ca3af;
+    }
+    .peace-location-title {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--color-dark);
+        margin-bottom: 0.3rem;
+    }
+    .peace-location-title i {
+        color: var(--color-primary);
+        font-size: 0.72rem;
+        opacity: 0.85;
+        flex-shrink: 0;
+    }
+    .peace-location-endereco {
+        font-size: 0.75rem;
+        line-height: 1.45;
+        color: #6b7280;
+    }
+    .peace-location-endereco span {
+        word-break: break-word;
     }
 
     .peace-card-body {
@@ -417,6 +478,33 @@
         padding-top: 0.75rem;
         border-top: 1px solid rgba(38, 2, 0, 0.06);
     }
+    .hop-modal-address {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+    .hop-modal-address-line {
+        padding: 0.75rem;
+        border-radius: 0.75rem;
+        background: #fafafa;
+        border: 1px solid rgba(38, 2, 0, 0.06);
+    }
+    .hop-modal-address-line strong {
+        display: block;
+        font-size: 0.6875rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #9ca3af;
+        margin-bottom: 0.15rem;
+    }
+    .hop-modal-address-line span {
+        display: block;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #374151;
+        word-break: break-word;
+    }
     .hop-modal-label {
         font-size: 0.625rem;
         font-weight: 800;
@@ -431,14 +519,32 @@
         gap: 0.375rem;
     }
     .hop-modal-tag {
-        display: inline-block;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.375rem;
-        font-size: 0.6875rem;
-        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.45rem 0.7rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 700;
         color: #4b5563;
-        background: #f5f5f5;
+        background: #fafafa;
+        border: 1px solid rgba(38, 2, 0, 0.06);
         line-height: 1.2;
+    }
+    .hop-modal-tag i {
+        color: var(--color-primary);
+        opacity: 0.8;
+        font-size: 0.65rem;
+    }
+    .hop-modal-tag-empty {
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.75rem;
+        background: rgba(201, 9, 5, 0.04);
+        border: 1px dashed rgba(201, 9, 5, 0.18);
+        color: #6b7280;
+        font-size: 0.8rem;
+        font-weight: 600;
+        width: 100%;
     }
     .hop-modal-desc {
         margin: 0.75rem 0 0;
@@ -679,46 +785,33 @@
                     <div class="peace-card-main">
                         <div class="peace-title-row">
                             <h3 class="peace-family-name truncate">Família {{ house.requester_name|truncatewords:3 }}</h3>
-                            {% if house.assignments_count == 2 %}
-                            <span class="peace-vagas is-urgent">1 vaga</span>
-                            {% elif house.assignments_count == 1 %}
-                            <span class="peace-vagas">2 vagas</span>
-                            {% else %}
-                            <span class="peace-vagas">3 vagas</span>
-                            {% endif %}
+                            <span class="peace-vagas" title="Ocupação da casa" aria-label="Ocupação da casa">
+                                <span class="peace-vagas-slot {% if house.assignments_count >= 1 %}is-filled{% else %}is-empty{% endif %}" style="--delay:0ms"></span>
+                                <span class="peace-vagas-slot {% if house.assignments_count >= 2 %}is-filled{% else %}is-empty{% endif %}" style="--delay:120ms"></span>
+                                <span class="peace-vagas-slot {% if house.assignments_count >= 3 %}is-filled{% else %}is-empty{% endif %}" style="--delay:240ms"></span>
+                            </span>
                         </div>
                         <div class="peace-meta">
-                            <span class="peace-meta-item">
-                                <i class="fas fa-map-marker-alt"></i>{{ house.neighborhood.name }}
-                            </span>
+                            {% if house.family_size %}
                             <span class="peace-meta-item">
                                 <i class="fas fa-users"></i>{{ house.family_size }} pessoa{{ house.family_size|pluralize:"s" }}
                             </span>
-                            <span class="peace-meta-item">
-                                <i class="fas fa-user-check"></i>{{ house.assignments_count }}/3 irmãos
-                            </span>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
 
                 <div class="peace-card-body">
-                    {% if house.prayer_types_display %}
                     <div class="peace-section">
-                        <p class="peace-section-label">Pedidos de oração</p>
-                        <div class="peace-tags">
-                            {% for pt in house.prayer_types_display|slice:":3" %}
-                            <span class="peace-tag">{{ pt }}</span>
-                            {% endfor %}
-                            {% if house.prayer_types_display|length > 3 %}
-                            <span class="peace-tag peace-tag-more">+{{ house.prayer_types_display|length|add:"-3" }}</span>
-                            {% endif %}
+                        <p class="peace-section-label">Onde será a visita</p>
+                        <div class="peace-location">
+                            <div class="peace-location-title">
+                                <i class="fas fa-map-marker-alt"></i>
+                                <span>{{ house.neighborhood.name }}</span>
+                            </div>
+                            <div class="peace-location-endereco">{{ house.address|default:"Endereço não informado" }}</div>
                         </div>
                     </div>
-                    {% endif %}
-
-                    {% if house.prayer_description %}
-                    <p class="peace-desc">{{ house.prayer_description|truncatechars:140 }}</p>
-                    {% endif %}
 
                     <div class="peace-card-actions">
                         <button type="button" onclick="acceptHouseOfPeace({{ house.id }}, '{{ house.requester_name|escapejs }}')" class="btn-accept">
@@ -760,7 +853,7 @@
                 requester_name: "{{ house.requester_name|escapejs }}",
                 neighborhood_id: {{ house.neighborhood.id }},
                 neighborhood_name: "{{ house.neighborhood.name|escapejs }}",
-                family_size: {{ house.family_size }},
+                family_size: {% if house.family_size %}{{ house.family_size }}{% else %}null{% endif %},
                 assignments_count: {{ house.assignments_count }},
                 prayer_types: [{% for pt in house.prayer_types_display %}"{{ pt|escapejs }}"{% if not forloop.last %},{% endif %}{% endfor %}],
                 address: "{{ house.address|escapejs }}"
@@ -865,6 +958,7 @@
                     const [min, max] = familySize === '6+' 
                         ? [6, Infinity]
                         : familySize.split('-').map(Number);
+                    if (house.family_size === null || house.family_size === undefined) return false;
                     if (house.family_size < min || house.family_size > max) return false;
                 }
 
@@ -884,9 +978,19 @@
             } else if (sort === 'slots-desc') {
                 filtered.sort((a, b) => (3 - b.assignments_count) - (3 - a.assignments_count));
             } else if (sort === 'family-asc') {
-                filtered.sort((a, b) => a.family_size - b.family_size);
+                filtered.sort((a, b) => {
+                    if (a.family_size == null && b.family_size == null) return 0;
+                    if (a.family_size == null) return 1;
+                    if (b.family_size == null) return -1;
+                    return a.family_size - b.family_size;
+                });
             } else if (sort === 'family-desc') {
-                filtered.sort((a, b) => b.family_size - a.family_size);
+                filtered.sort((a, b) => {
+                    if (a.family_size == null && b.family_size == null) return 0;
+                    if (a.family_size == null) return 1;
+                    if (b.family_size == null) return -1;
+                    return b.family_size - a.family_size;
+                });
             }
 
             // Update visibility
@@ -955,22 +1059,34 @@
 
         function vagasBadgeMarkup(assignmentsCount) {
             const count = assignmentsCount || 0;
-            if (count === 2) {
-                return '<span class="peace-vagas is-urgent">1 vaga</span>';
-            }
-            if (count === 1) {
-                return '<span class="peace-vagas">2 vagas</span>';
-            }
-            return '<span class="peace-vagas">3 vagas</span>';
+            const slots = Array.from({ length: 3 }, (_, index) => {
+                const filled = index < count;
+                return `<span class="peace-vagas-slot ${filled ? 'is-filled' : 'is-empty'}" style="--delay:${index * 120}ms"></span>`;
+            }).join('');
+            const remaining = Math.max(3 - count, 0);
+            return `<span class="peace-vagas" title="${remaining} vaga${remaining === 1 ? '' : 's'} restantes" aria-label="${remaining} vaga${remaining === 1 ? '' : 's'} restantes">${slots}</span>`;
         }
 
         function tagsMarkup(prayerTypes) {
             if (!prayerTypes || !prayerTypes.length) {
-                return '<span class="hop-modal-tag">Não especificado</span>';
+                return '<div class="hop-modal-tag-empty">Nenhum pedido específico foi informado. Vamos orar pela família com carinho.</div>';
             }
 
+            const iconForTag = (label) => {
+                const value = (label || '').toLowerCase();
+                if (value.includes('família')) return 'fa-users';
+                if (value.includes('saúde') || value.includes('cura')) return 'fa-heartbeat';
+                if (value.includes('finance')) return 'fa-dollar-sign';
+                if (value.includes('relacion')) return 'fa-handshake';
+                if (value.includes('espiritual')) return 'fa-cross';
+                if (value.includes('filh')) return 'fa-child';
+                if (value.includes('casamento')) return 'fa-ring';
+                if (value.includes('trabalho')) return 'fa-briefcase';
+                return 'fa-heart';
+            };
+
             return prayerTypes
-                .map((item) => `<span class="hop-modal-tag">${item}</span>`)
+                .map((item) => `<span class="hop-modal-tag"><i class="fas ${iconForTag(item)}"></i>${item}</span>`)
                 .join('');
         }
 
@@ -979,7 +1095,13 @@
             const nameParts = (data.requester_name || '').split(' ');
             const displayName = nameParts.slice(0, 2).join(' ');
             const assignmentsCount = data.assignments_count || 0;
-            const familySize = data.family_size || 0;
+            const familySize = data.family_size;
+            const hasFamilySize = familySize !== null && familySize !== undefined && familySize !== '';
+            const neighborhood = data.neighborhood_name || data.neighborhood || 'Bairro não informado';
+            const address = data.address || '';
+            const addressParts = address ? address.split(',').map((part) => part.trim()).filter(Boolean) : [];
+            const addressLine = addressParts.length ? addressParts[0] : 'Endereço não informado';
+            const addressExtra = addressParts.slice(1).join(', ');
 
             return `
                 <section class="hop-modal">
@@ -992,21 +1114,41 @@
                             </div>
                             <div class="hop-modal-meta">
                                 <span class="hop-modal-meta-item">
-                                    <i class="fas fa-map-marker-alt"></i>${data.neighborhood || 'Bairro não informado'}
+                                    <i class="fas fa-map-marker-alt"></i>${neighborhood}
                                 </span>
+                                ${hasFamilySize ? `
                                 <span class="hop-modal-meta-item">
-                                    <i class="fas fa-users"></i>${familySize} pessoa${familySize !== 1 ? 's' : ''}
+                                    ${familySize} pessoa${familySize !== 1 ? 's' : ''}
                                 </span>
-                                <span class="hop-modal-meta-item">
-                                    <i class="fas fa-user-check"></i>${assignmentsCount}/3 irmãos
-                                </span>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
 
                     <div class="hop-modal-body">
                         <div class="hop-modal-section">
+                            <p class="hop-modal-label">Localização</p>
+                            <div class="hop-modal-address">
+                                <div class="hop-modal-address-line">
+                                    <div>
+                                        <strong>Bairro</strong>
+                                        <span>${neighborhood}</span>
+                                    </div>
+                                </div>
+                                <div class="hop-modal-address-line">
+                                    <div>
+                                        <strong>Endereço</strong>
+                                        <span>${addressLine}${addressExtra ? `, ${addressExtra}` : ''}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="hop-modal-section">
                             <p class="hop-modal-label">Pedidos de oração</p>
+                            <p class="hop-modal-desc" style="margin-top: 0; margin-bottom: 0.5rem;">
+                                Motivos informados pela família para receber apoio e oração.
+                            </p>
                             <div class="hop-modal-tags">${tagsMarkup(data.prayer_types)}</div>
                         </div>
 
