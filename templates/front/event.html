@@ -170,6 +170,16 @@
                             {{ event.event_date|date:"d/m" }} • 
                             {{ event.event_time|time:"H" }}h
                         </div>
+                        {% if event.dates.all %}
+                        <div class="flex flex-wrap gap-2">
+                            {% for date_item in event.dates.all %}
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sm text-gray-200">
+                                <ion-icon name="calendar-outline" class="text-[var(--color-danger)]"></ion-icon>
+                                {{ date_item.event_date|date:"d/m" }}{% if date_item.event_time %} • {{ date_item.event_time|time:"H" }}h{% endif %}
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                         
                         <h1 class="event-title text-4xl sm:text-5xl">
                             {{ event.title }}

@@ -99,9 +99,15 @@
 
     .peace-wrap {
         width: 100%;
-        max-width: 72rem;
         margin: 0 auto;
         padding: 1rem 1rem 2.25rem;
+    }
+    @media (min-width: 1024px) {
+        .peace-wrap {
+            max-width: none;
+            padding-left: 2rem;
+            padding-right: 2rem;
+        }
     }
     .peace-card {
         background: #fff;
@@ -237,11 +243,11 @@
     /* SweetAlert2 bottom sheet */
     .hop-popup {
         width: min(480px, calc(100vw - 2rem));
-        border-radius: 1rem 1rem 0 0;
+        border-radius: 1rem;
         padding: 0;
         overflow: hidden;
-        box-shadow: 0 -8px 30px rgba(38, 2, 0, 0.12);
-        border-top: 1px solid rgba(201, 9, 5, 0.12);
+        box-shadow: 0 20px 50px rgba(38, 2, 0, 0.18);
+        border: 1px solid rgba(201, 9, 5, 0.12);
         z-index: 9999;
     }
     .hop-sheet {
@@ -270,9 +276,9 @@
     .hop-actions {
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
+        gap: 0.65rem;
         margin: 0;
-        padding: 0.875rem 1.125rem 1rem;
+        padding: 0.875rem 1.125rem 1.25rem;
         border-top: 1px solid rgba(38, 2, 0, 0.06);
         background: #fff;
     }
@@ -316,7 +322,10 @@
     }
     .hop-modal-top-compact { padding-bottom: 0.625rem; }
     .hop-modal-body {
-        padding: 0 1.125rem 0.25rem;
+        padding: 0 1.125rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
         max-height: min(58vh, 520px);
         overflow: auto;
     }
@@ -370,6 +379,41 @@
     .hop-date-input:focus {
         border-color: var(--color-primary);
         box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.08);
+    }
+    .continuity-summary {
+        margin-top: 0.85rem;
+        padding: 0.85rem 1rem;
+        border-radius: 0.85rem;
+        border: 1px solid rgba(201, 9, 5, 0.10);
+        background: rgba(201, 9, 5, 0.03);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+    .continuity-summary-label {
+        font-size: 0.7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #9ca3af;
+        margin-bottom: 0.2rem;
+    }
+    .continuity-summary-date {
+        font-size: 0.95rem;
+        font-weight: 800;
+        color: var(--color-dark);
+    }
+    .continuity-summary-icon {
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 0.7rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(201, 9, 5, 0.08);
+        color: var(--color-primary);
+        flex-shrink: 0;
     }
 </style>
 {% endblock %}
@@ -505,6 +549,15 @@
                         <span class="toggle-track"></span>
                     </span>
                 </label>
+                <div id="continuity-summary" class="continuity-summary hidden">
+                    <div>
+                        <div class="continuity-summary-label">Próxima visita</div>
+                        <div id="continuity-summary-date" class="continuity-summary-date"></div>
+                    </div>
+                    <div class="continuity-summary-icon">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -530,6 +583,11 @@
         const date = new Date(dateStr + 'T00:00:00');
         date.setDate(date.getDate() + daysToAdd);
         return date.toISOString().split('T')[0];
+    }
+
+    function formatBrazilianDate(dateStr) {
+        const [year, month, day] = dateStr.split('-');
+        return `${day}/${month}/${year}`;
     }
 
     function isMobileViewport() {
@@ -561,11 +619,59 @@
         }
     }
 
+    function enableBackdropClose(onBackdropClose) {
+        const container = Swal.getContainer();
+        if (!container) return;
+
+        const closeOnBackdropClick = (event) => {
+            if (event.target === container) {
+                if (typeof onBackdropClose === 'function') {
+                    onBackdropClose();
+                }
+                Swal.close();
+            }
+        };
+
+        container.addEventListener('pointerdown', closeOnBackdropClick, { once: true });
+        container.addEventListener('click', closeOnBackdropClick, { once: true });
+    }
+
+    function setContinueToggle(checked) {
+        const toggle = document.getElementById('toggle-continue');
+        if (toggle && toggle.checked !== checked) {
+            toggle.checked = checked;
+        }
+    }
+
+    function updateContinuitySummary(dateStr) {
+        const summary = document.getElementById('continuity-summary');
+        const summaryDate = document.getElementById('continuity-summary-date');
+        if (!summary || !summaryDate) return;
+
+        if (dateStr) {
+            summaryDate.textContent = formatBrazilianDate(dateStr);
+            summary.classList.remove('hidden');
+        } else {
+            summaryDate.textContent = '';
+            summary.classList.add('hidden');
+        }
+    }
+
+    function clearContinueSchedule() {
+        const nextVisitDate = document.getElementById('next-visit-date');
+        if (nextVisitDate) {
+            nextVisitDate.value = '';
+        }
+        updateContinuitySummary('');
+        setContinueToggle(false);
+    }
+
     function showScheduleNextVisitModal() {
         if (!LAST_VISIT_DATE) return;
 
         const weekday = getWeekdayName(LAST_VISIT_DATE);
         const nextSameWeekday = getNextDateOfWeekday(LAST_VISIT_DATE);
+        let scheduleActionChosen = false;
 
         Swal.fire({
             title: '',
@@ -587,7 +693,7 @@
                             </div>
                             <div>
                                 <div style="font-size: 0.88rem; font-weight: 800; color: #1F2937; text-transform: capitalize;">Próxima ${weekday}</div>
-                                <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 0.15rem; font-weight: 600;">${nextSameWeekday}</div>
+                                <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 0.15rem; font-weight: 600;">${formatBrazilianDate(nextSameWeekday)}</div>
                             </div>
                         </button>
                         <button type="button" class="schedule-option" data-action="choose-date" style="display: flex; align-items: center; gap: 0.85rem; width: 100%; padding: 0.95rem 1rem; border: 1px solid rgba(201,9,5,0.12); border-radius: 0.85rem; background: white; cursor: pointer; transition: all 0.2s ease; text-align: left;">
@@ -613,20 +719,27 @@
             `,
             showCancelButton: false,
             showConfirmButton: false,
-            position: 'bottom',
+            position: isMobileViewport() ? 'bottom' : 'center',
             width: isMobileViewport() ? undefined : 500,
             customClass: modalClasses(),
-            allowOutsideClick: false,
+            allowOutsideClick: true,
             didOpen: (modal) => {
                 applySwalTheme(modal);
+                enableBackdropClose(clearContinueSchedule);
                 document.querySelectorAll('.schedule-option').forEach(btn => {
                     btn.addEventListener('click', function() {
                         const action = this.dataset.action;
+                        scheduleActionChosen = true;
                         Swal.close();
                         if (action === 'same-weekday') {
                             document.getElementById('next-visit-date').value = nextSameWeekday;
+                            updateContinuitySummary(nextSameWeekday);
+                            setContinueToggle(true);
                         } else if (action === 'choose-date') {
                             showDatePickerModal();
+                        }
+                        if (action === 'later') {
+                            clearContinueSchedule();
                         }
                     });
                     btn.addEventListener('mouseenter', function() {
@@ -640,6 +753,10 @@
                         this.style.transform = 'translateX(0)';
                     });
                 });
+            }
+        }).then((result) => {
+            if (result.dismiss && !scheduleActionChosen) {
+                clearContinueSchedule();
             }
         });
     }
@@ -672,12 +789,13 @@
             confirmButtonText: '<i class="fas fa-check mr-2"></i><span class="inline-block mt-1">Confirmar</span>',
             cancelButtonText: '<span class="inline-block mt-1">Cancelar</span>',
             reverseButtons: true,
-            position: 'bottom',
+            position: isMobileViewport() ? 'bottom' : 'center',
             width: isMobileViewport() ? undefined : 500,
             customClass: modalClasses(),
-            allowOutsideClick: false,
+            allowOutsideClick: true,
             didOpen: (modal) => {
                 applySwalTheme(modal);
+                enableBackdropClose(clearContinueSchedule);
                 document.getElementById('custom-date').focus();
             },
             preConfirm: () => {
@@ -691,8 +809,10 @@
         }).then(result => {
             if (result.isConfirmed) {
                 document.getElementById('next-visit-date').value = result.value;
+                updateContinuitySummary(result.value);
+                setContinueToggle(true);
             } else {
-                showScheduleNextVisitModal();
+                clearContinueSchedule();
             }
         });
     }
@@ -704,7 +824,67 @@
         document.getElementById('testimony-detail').classList.toggle('hidden', !this.checked);
     });
     document.getElementById('toggle-continue').addEventListener('change', function () {
-        if (this.checked) showScheduleNextVisitModal();
+        if (this.checked) {
+            showScheduleNextVisitModal();
+        } else {
+            clearContinueSchedule();
+        }
+    });
+
+    const existingNextVisitDate = document.getElementById('next-visit-date').value;
+    if (existingNextVisitDate) {
+        updateContinuitySummary(existingNextVisitDate);
+    }
+
+    const completeForm = document.querySelector('form[method="post"]');
+    let bypassFinalConfirmation = false;
+
+    completeForm?.addEventListener('submit', function (event) {
+        const willContinue = document.getElementById('toggle-continue').checked;
+        if (bypassFinalConfirmation || willContinue) return;
+
+        event.preventDefault();
+
+        Swal.fire({
+            title: '',
+            html: `
+                    <section class="hop-modal">
+                        <header class="hop-modal-top hop-modal-top-compact">
+                        <div class="hop-confirm-icon" style="background: rgba(201, 9, 5, 0.08); color: var(--color-primary); border-color: rgba(201, 9, 5, 0.12);">
+                            <i class="fas fa-redo"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="hop-eyebrow">Confirmar conclusão</p>
+                            <h2 class="hop-modal-title" style="font-size: 1.15rem; line-height: 1.2;">Concluir sem continuidade?</h2>
+                        </div>
+                    </header>
+                    <div class="hop-modal-body">
+                        <p style="margin: 0; color: #374151; font-size: 0.92rem; line-height: 1.55;">
+                            Você marcou que não haverá outras visitas com essa família. Tem certeza de que deseja concluir agora?
+                        </p>
+                    </div>
+                </section>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Sim, concluir',
+            cancelButtonText: 'Voltar',
+            reverseButtons: true,
+            position: isMobileViewport() ? 'bottom' : 'center',
+            width: isMobileViewport() ? undefined : 500,
+            customClass: modalClasses(),
+            allowOutsideClick: true,
+            didOpen: (modal) => {
+                applySwalTheme(modal);
+                enableBackdropClose(clearContinueSchedule);
+            },
+        }).then((result) => {
+            if (result.isConfirmed) {
+                bypassFinalConfirmation = true;
+                completeForm.submit();
+            } else if (result.dismiss) {
+                clearContinueSchedule();
+            }
+        });
     });
 </script>
 {% endblock %}

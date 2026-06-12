@@ -5,7 +5,7 @@ Flow:
   - Public form (HouseOfPeacePublicCreateView) — anyone registers the family.
   - Member dashboard shows "House of Peace" card.
   - HouseOfPeaceAvailableListView — lists available houses for member to accept.
-  - HouseOfPeaceAcceptView — member accepts a house (max 3 per house).
+  - HouseOfPeaceAcceptView — member accepts a house.
   - HouseOfPeaceMyListView — lists houses linked to member (active and completed).
   - HouseOfPeaceScheduleView — member registers scheduled day.
   - HouseOfPeaceCompleteView — member registers report, healing/testimony and continuity.
@@ -16,6 +16,7 @@ from django.views import View
 from django.contrib import messages
 from django.http import JsonResponse
 from django.utils import timezone
+from django.db.models import Count, Q
 
 from ..models.house_of_peace import HouseOfPeace, HouseOfPeaceAssignment
 from ..forms.house_of_peace import HouseOfPeacePublicForm
@@ -92,9 +93,19 @@ class HouseOfPeaceAvailableListView(MemberRequiredMixin, MinistrationContextMixi
     def get(self, request):
         member = self.member
 
-        # Available houses (status=available, still accept more members)
-        all_available = HouseOfPeace.objects.filter(status='available').prefetch_related('assignments')
-        available = [c for c in all_available if c.can_accept_more]
+        active_count = Count(
+            'assignments',
+            filter=Q(assignments__status__in=['accepted', 'scheduled'])
+        )
+
+        # Available houses ordered from the smallest team to the largest team
+        all_available = (
+            HouseOfPeace.objects
+            .filter(status='available')
+            .annotate(team_members_count=active_count)
+            .prefetch_related('assignments')
+            .order_by('team_members_count', '-created_at')
+        )
 
         # IDs of houses that the member already accepted
         my_ids = set(
@@ -103,7 +114,7 @@ class HouseOfPeaceAvailableListView(MemberRequiredMixin, MinistrationContextMixi
         )
 
         # Filter houses that the member hasn't accepted yet
-        not_mine = [c for c in available if c.id not in my_ids]
+        not_mine = [c for c in all_available if c.id not in my_ids]
 
         context = {
             'available_houses': not_mine,
@@ -129,23 +140,11 @@ class HouseOfPeaceAcceptView(MemberRequiredMixin, View):
             messages.warning(request, 'You already accepted this House of Peace.')
             return redirect('house_of_peace_available')
 
-        # Check limit of 3 members
-        if not casa.can_accept_more:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'error': 'This House of Peace has already reached the limit of 3 members.'})
-            messages.error(request, 'This House of Peace has already reached the limit of 3 members.')
-            return redirect('house_of_peace_available')
-
         assignment = HouseOfPeaceAssignment.objects.create(
             house_of_peace=casa,
             member=member,
             status='accepted',
         )
-
-        # If reached 3 members, change status to in_progress
-        if casa.assignments.count() >= 3:
-            casa.status = 'in_progress'
-            casa.save()
 
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({
@@ -164,15 +163,15 @@ class HouseOfPeaceMyListView(MemberRequiredMixin, MinistrationContextMixin, View
 
     def get(self, request):
         member = self.member
-        assignments = (
+        member_assignments = (
             HouseOfPeaceAssignment.objects
             .filter(member=member)
             .select_related('house_of_peace')
             .order_by('-accepted_at')
         )
 
-        active = [a for a in assignments if a.status in ('accepted', 'scheduled')]
-        completed = [a for a in assignments if a.status == 'completed']
+        active = [a for a in member_assignments if a.status in ('accepted', 'scheduled')]
+        completed = [a for a in member_assignments if a.status == 'completed']
 
         context = {
             'active_assignments': active,
@@ -201,6 +200,11 @@ class HouseOfPeaceScheduleView(MemberRequiredMixin, View):
         assignment.scheduled_date = scheduled_date
         assignment.status = 'scheduled'
         assignment.save()
+
+        house = assignment.house_of_peace
+        if house.status == 'available':
+            house.status = 'in_progress'
+            house.save(update_fields=['status'])
 
         messages.success(request, 'Visit date registered successfully!')
         return redirect('house_of_peace_my_list')
@@ -357,7 +361,6 @@ class HouseOfPeaceDetailView(MemberRequiredMixin, MinistrationContextMixin, View
                 'prayer_description': casa.prayer_description or '',
                 'status': casa.get_status_display(),
                 'assignments_count': casa.assignments_count,
-                'can_accept_more': casa.can_accept_more,
                 'show_phone': show_phone,
             })
 

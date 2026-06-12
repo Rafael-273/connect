@@ -78,6 +78,10 @@ class Member(BaseModel):
         return self.user.email if self.user else None
 
     @property
+    def first_name(self):
+        return (self.name or '').split()[0] if self.name else ''
+
+    @property
     def is_admin(self):
         return self.user.is_staff if self.user else False
     

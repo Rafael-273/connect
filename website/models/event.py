@@ -110,3 +110,21 @@ class Event(BaseModel):
             return self.get_weekday_name()
         else:
             return self.event_date.strftime("%d/%m/%Y") if self.event_date else ""
+
+
+class EventDate(BaseModel):
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name='dates',
+    )
+    event_date = models.DateField()
+    event_time = models.TimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['event_date', 'event_time', 'created_at']
+
+    def __str__(self):
+        date_str = self.event_date.strftime("%d/%m/%Y") if self.event_date else ""
+        time_str = self.event_time.strftime("%H:%M") if self.event_time else ""
+        return f"{self.event.title} - {date_str} {time_str}".strip()
