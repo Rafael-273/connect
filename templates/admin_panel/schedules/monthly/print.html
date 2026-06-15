@@ -6,840 +6,767 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Escala - {{ schedule.ministry.name }} - {{ schedule.title }}</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
-
-        /* ===== Design Tokens ===== */
-        :root {
-            --bg: #f6f7fb;
-            --card: #ffffff;
-            --ink: #0f172a;
-            --muted: #475569;
-            --primary: #c90905;
-            --primary-dark: #991b1b;
-            --accent: #f59e0b;
-            --border: #e2e8f0;
-            --soft: #fef2f2;
-            --shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+        @font-face {
+            font-family: 'Giga Sans';
+            src: url('{% static "fonts/GigaSansRegular.otf" %}') format('opentype');
+            font-weight: 400;
+            font-style: normal;
         }
 
-        /* ===== Reset & Base ===== */
+        @font-face {
+            font-family: 'Giga Sans';
+            src: url('{% static "fonts/GigaSansMedium.otf" %}') format('opentype');
+            font-weight: 600;
+            font-style: normal;
+        }
+
+        :root {
+            --bg: #f4f5f7;
+            --sheet: #ffffff;
+            --ink: #111827;
+            --muted: #6b7280;
+            --subtle: #9ca3af;
+            --primary: #C90905;
+            --primary-dark: #260200;
+            --primary-danger: #8C0910;
+            --primary-accent: #FDDEB9;
+            --border: #e5e7eb;
+            --soft: #f9fafb;
+            --soft-red: rgba(201, 9, 5, 0.08);
+            --soft-amber: #fff7ed;
+            --soft-slate: #f8fafc;
+            --shadow: 0 22px 70px rgba(15, 23, 42, 0.10);
+            --radius-xl: 28px;
+            --radius-lg: 20px;
+            --radius-md: 14px;
+        }
+
         *, *::before, *::after {
             box-sizing: border-box;
+        }
+
+        html, body {
             margin: 0;
             padding: 0;
         }
 
         body {
-            font-family: 'Poppins', 'Helvetica Neue', Arial, sans-serif;
+            font-family: 'Giga Sans', 'Helvetica Neue', Arial, sans-serif;
             color: var(--ink);
-            line-height: 1.7;
-            font-size: 11pt;
-            background: radial-gradient(circle at 20% 20%, #ffeaea 0%, transparent 35%),
-                        radial-gradient(circle at 80% 0%, #fff6d9 0%, transparent 32%),
-                        var(--bg);
+            background: var(--bg);
+            line-height: 1.55;
         }
 
-        /* ===== Screen-only wrapper ===== */
-        .print-page {
-            max-width: 880px;
-            margin: 0 auto 32px;
-            background: var(--card);
-            padding: 44px 52px;
-            border-radius: 24px;
-            box-shadow: var(--shadow);
-        }
-
-        /* ===== Toolbar (hidden on print) ===== */
         .toolbar {
-            background: #0f172a;
-            color: white;
-            padding: 14px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 20;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
+            gap: 16px;
+            padding: 16px 24px;
+            background: rgba(17, 24, 39, 0.94);
+            color: white;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
         }
 
-        .toolbar a {
-            color: #e2e8f0;
+        .toolbar a,
+        .toolbar button {
+            font: inherit;
+        }
+
+        .toolbar-link {
+            color: #e5e7eb;
             text-decoration: none;
             font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
             font-weight: 600;
-            letter-spacing: 0.01em;
         }
 
-        .toolbar a:hover {
-            color: #ffffff;
+        .toolbar-link:hover {
+            color: white;
+        }
+
+        .toolbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .btn-print {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border: 0;
+            border-radius: 999px;
+            background: var(--primary);
             color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 12px;
+            padding: 11px 18px;
             font-size: 14px;
             font-weight: 700;
             cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 12px 24px rgba(201, 9, 5, 0.25);
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
 
         .btn-print:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 16px 28px rgba(201, 9, 5, 0.32);
+            filter: brightness(1.04);
         }
 
-        /* ===== Logo ===== */
-        .logo-container {
-            text-align: center;
-            margin-bottom: 18px;
-        }
-
-        .logo-container img {
-            width: 110px;
-            height: auto;
-            filter: drop-shadow(0 6px 14px rgba(0,0,0,0.08));
-        }
-
-        /* ===== Header ===== */
-        .header {
-            text-align: center;
-            margin-bottom: 28px;
-            padding-bottom: 16px;
-            border-bottom: 3px solid var(--border);
-        }
-
-        .header h1 {
-            color: var(--primary);
-            font-size: 22pt;
-            margin: 6px 0 4px;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
-
-        .header h2 {
-            color: var(--muted);
-            font-size: 13pt;
-            margin: 0;
-            font-weight: 500;
-        }
-
-        /* ===== Info Box ===== */
-        .info-box {
-            background: linear-gradient(135deg, #fff7f7 0%, #fff8ed 100%);
-            border: 1px solid #fde2e2;
-            margin: 22px 0;
-            border-radius: 16px;
+        .sheet {
+            width: min(1120px, calc(100vw - 32px));
+            margin: 20px auto 36px;
+            background: var(--sheet);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(229, 231, 235, 0.9);
             overflow: hidden;
         }
 
-        .info-header {
-            background: var(--primary);
-            color: white;
-            padding: 12px 18px;
+        .sheet-inner {
+            padding: 36px;
+        }
+
+        .hero {
+            padding-bottom: 18px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .hero-copy {
+            min-width: 0;
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: var(--soft-red);
+            color: var(--primary);
+            border: 1px solid rgba(201, 9, 5, 0.18);
+            font-size: 11px;
             font-weight: 700;
-            font-size: 11pt;
-            letter-spacing: 0.01em;
-        }
-
-        .info-body {
-            padding: 18px 20px 16px;
-        }
-
-        .meta-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 12px 16px;
-        }
-
-        .meta-item {
-            padding: 12px 14px;
-            background: rgba(255,255,255,0.65);
-            border: 1px solid #f1f5f9;
-            border-radius: 12px;
-        }
-
-        .meta-label {
-            font-size: 10pt;
-            color: var(--muted);
-            font-weight: 600;
             text-transform: uppercase;
-            letter-spacing: 0.04em;
+            letter-spacing: 0.08em;
         }
 
-        .meta-value {
-            font-size: 11pt;
-            font-weight: 700;
-            color: var(--ink);
-            margin-top: 4px;
+        .title {
+            margin: 14px 0 10px;
+            font-size: 28px;
+            line-height: 1.12;
+            letter-spacing: -0.03em;
         }
 
-        .guidelines-section {
-            margin-top: 14px;
-            padding-top: 14px;
-            border-top: 1px dashed #f8c4c4;
+        .subtitle {
+            margin: 0;
+            font-size: 14px;
+            color: var(--muted);
+            max-width: 72ch;
+        }
+
+        .guidelines {
+            margin: 24px 0 28px;
+            padding: 14px 16px;
+            border-radius: var(--radius-lg);
+            background: #fafafa;
+            border: 1px solid rgba(229, 231, 235, 0.95);
         }
 
         .guidelines-title {
-            color: var(--primary);
+            margin: 0 0 10px;
+            font-size: 11px;
             font-weight: 700;
-            font-size: 10pt;
-            margin-bottom: 8px;
-        }
-
-        .guidelines-content {
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
             color: var(--muted);
-            line-height: 1.7;
-            padding-left: 6px;
         }
 
-        /* ===== Section Title ===== */
+        .guidelines-body {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
         .section-title {
-            color: var(--ink);
-            font-size: 15pt;
-            font-weight: 700;
-            margin: 28px 0 14px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            letter-spacing: -0.01em;
+            margin: 10px 0 16px;
+            font-size: 18px;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
         }
 
-        /* ===== Day Cards ===== */
-        .day-card {
-            margin: 18px 0;
-            border: 1px solid #f1f5f9;
-            border-radius: 16px;
+        .schedule-table-wrap {
+            border: 1px solid rgba(201, 9, 5, 0.16);
+            border-radius: var(--radius-lg);
             overflow: hidden;
-            background: var(--card);
-            box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+            background: white;
             break-inside: avoid;
+            page-break-inside: avoid;
         }
 
-        .day-card.cancelled {
-            border-color: #fecdd3;
-            background-color: #fff5f5;
-        }
-
-        .day-header {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-            color: white;
-            padding: 14px 18px;
-            font-weight: 700;
-            font-size: 11pt;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-        }
-
-        .day-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .day-badge {
-            padding: 4px 10px;
-            background: rgba(255,255,255,0.16);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 999px;
-            font-size: 9pt;
-            font-weight: 600;
-            letter-spacing: 0.02em;
-        }
-
-        .day-badge.cancelled {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.25);
-        }
-
-        .day-card.cancelled .day-header {
-            background: linear-gradient(135deg, #b91c1c, #7f1d1d);
-        }
-
-        .day-body {
-            padding: 16px 18px 18px;
-        }
-
-        .assignment-section {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .team-box {
-            background: #f8fafc;
-            padding: 12px 14px;
-            border: 1px solid #e2e8f0;
-            border-left: 5px solid var(--primary);
-            border-radius: 12px;
-            font-weight: 700;
-            color: var(--ink);
-            min-width: 220px;
-        }
-
-        .member-item {
-            background: #fff7f7;
-            border: 1px solid #fde2e2;
-            padding: 8px 12px;
-            border-radius: 999px;
-            font-size: 10pt;
-            font-weight: 600;
-            color: var(--primary-dark);
-        }
-
-        .notes-box {
-            background: #fffaf0;
-            border: 1px solid #fdecc8;
-            border-left: 5px solid var(--accent);
-            padding: 12px 14px;
-            margin: 14px 0 0 0;
-            font-size: 10pt;
-            color: #92400e;
-            line-height: 1.6;
-            border-radius: 12px;
-        }
-
-        .notes-box strong {
-            color: #b45309;
-        }
-
-        .cancellation-box {
-            background: #fff1f2;
-            border: 1px solid #fecdd3;
-            border-left: 5px solid #b91c1c;
-            padding: 12px 14px;
-            margin: 10px 0;
-            font-size: 10pt;
-            color: #7f1d1d;
-            font-weight: 700;
-            border-radius: 12px;
-        }
-
-        .no-assignment {
-            color: var(--muted);
-            font-style: italic;
-            font-size: 10pt;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 50px 30px;
-            color: var(--muted);
-            font-style: italic;
-            background: #fff7f7;
-            border: 1px dashed #fde2e2;
-            border-radius: 16px;
-        }
-
-        /* ===== Division Table Layout ===== */
-        .division-table-wrapper {
-            overflow-x: auto;
-            margin: 4px 0 0 0;
-            border-radius: 16px;
-            border: 2px solid var(--primary);
-            box-shadow: 0 10px 30px rgba(201, 9, 5, 0.1);
-        }
-
-        .division-table {
+        .schedule-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 9.5pt;
-            background: white;
+            table-layout: fixed;
         }
 
-        .division-table thead tr th {
-            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+        .schedule-table thead th {
+            padding: 12px 10px;
+            border-bottom: 1px solid rgba(38, 2, 0, 0.12);
+            border-right: 1px solid rgba(255, 255, 255, 0.16);
+            background: var(--primary);
             color: white;
-            padding: 10px 12px;
-            text-align: left;
+            font-size: 11px;
             font-weight: 700;
-            letter-spacing: 0.03em;
-            font-size: 9pt;
             text-transform: uppercase;
-            white-space: nowrap;
-            border-right: 1px solid rgba(255,255,255,0.15);
+            letter-spacing: 0.08em;
+            text-align: left;
         }
 
-        .division-table thead tr th:last-child {
+        .schedule-table thead th:last-child {
             border-right: none;
         }
 
-        .division-table thead tr th.col-date {
-            min-width: 90px;
+        .schedule-table tbody td {
+            padding: 12px 10px;
+            border-bottom: 1px solid rgba(201, 9, 5, 0.10);
+            border-right: 1px solid rgba(201, 9, 5, 0.10);
+            vertical-align: top;
+            font-size: 13px;
         }
 
-        .division-table thead tr th.col-desc {
-            min-width: 120px;
-        }
-
-        .division-table thead tr th.col-div {
-            min-width: 130px;
-        }
-
-        .division-table thead tr th.col-notes {
-            min-width: 120px;
-        }
-
-        .division-table tbody tr {
-            border-bottom: 1px solid #f1f5f9;
-        }
-
-        .division-table tbody tr:nth-child(even) {
-            background: #fdfafa;
-        }
-
-        .division-table tbody tr:nth-child(odd) {
-            background: #ffffff;
-        }
-
-        .division-table tbody tr.row-cancelled {
-            background: #fff1f2 !important;
-        }
-
-        .division-table tbody tr:last-child {
+        .schedule-table tbody tr:last-child td {
             border-bottom: none;
         }
 
-        .division-table tbody tr:hover {
-            background: #fff7f7;
-        }
-
-        .division-table td {
-            padding: 10px 12px;
-            vertical-align: top;
-            border-right: 1px solid #f1f5f9;
-            line-height: 1.5;
-        }
-
-        .division-table td:last-child {
+        .schedule-table tbody td:last-child {
             border-right: none;
         }
 
-        .tbl-date {
+        .schedule-table tbody tr.cancelled-row {
+            background: rgba(140, 9, 16, 0.06);
+        }
+
+        .col-day {
+            width: 170px;
+        }
+
+        .col-notes {
+            width: 170px;
+        }
+
+        .day-date {
+            font-size: 13px;
             font-weight: 700;
-            color: var(--primary-dark);
-            white-space: nowrap;
-            font-size: 9.5pt;
-        }
-
-        .tbl-day {
-            font-size: 8.5pt;
-            color: var(--muted);
-            margin-top: 2px;
-        }
-
-        .tbl-desc {
-            font-weight: 600;
             color: var(--ink);
-            font-size: 9.5pt;
+            line-height: 1.25;
+            margin-bottom: 4px;
         }
 
-        .tbl-member {
-            display: inline-block;
-            background: #fff7f7;
-            border: 1px solid #fde2e2;
-            padding: 2px 8px;
-            border-radius: 999px;
-            font-size: 8.5pt;
-            font-weight: 600;
-            color: var(--primary-dark);
-            margin: 1px 2px 1px 0;
-            white-space: nowrap;
-        }
-
-        .tbl-no-member {
-            color: #cbd5e1;
-            font-style: italic;
-            font-size: 8.5pt;
-        }
-
-        .tbl-cancelled-cell {
-            color: #b91c1c;
-            font-weight: 700;
-            font-size: 9pt;
-        }
-
-        .tbl-notes {
-            color: #92400e;
-            font-size: 8.5pt;
-            background: #fffbeb;
-            padding: 4px 6px;
-            border-radius: 6px;
-            border-left: 3px solid var(--accent);
-        }
-
-        .div-col-header-icon {
-            margin-right: 4px;
-            opacity: 0.85;
-        }
-
-        /* ===== Footer ===== */
-        .footer {
-            text-align: center;
-            margin-top: 40px;
-            padding-top: 16px;
-            border-top: 1px solid #e2e8f0;
+        .day-meta-line {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
             color: var(--muted);
-            font-size: 9pt;
-            letter-spacing: 0.01em;
+            font-size: 12px;
+        }
+
+        .day-chip {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            background: rgba(201, 9, 5, 0.10);
+            color: var(--primary);
+            border: 1px solid rgba(201, 9, 5, 0.18);
+            margin-top: 6px;
+        }
+
+        .day-chip.cancelled {
+            background: rgba(140, 9, 16, 0.10);
+            color: var(--primary-danger);
+            border-color: rgba(140, 9, 16, 0.18);
+        }
+
+        .assignment-stack {
+            display: grid;
+            gap: 8px;
+        }
+
+        .assignment-line {
+            border: 1px solid rgba(201, 9, 5, 0.14);
+            border-radius: 12px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .assignment-label {
+            padding: 6px 10px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--primary);
+            background: rgba(201, 9, 5, 0.07);
+            border-bottom: 1px solid rgba(201, 9, 5, 0.14);
+        }
+
+        .assignment-label.morning {
+            color: var(--primary);
+            background: rgba(201, 9, 5, 0.11);
+        }
+
+        .assignment-label.evening {
+            color: var(--primary-danger);
+            background: rgba(140, 9, 16, 0.08);
+        }
+
+        .assignment-body {
+            padding: 8px 10px;
+        }
+
+        .pill-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            min-height: 30px;
+            padding: 4px 9px 4px 5px;
+            border-radius: 999px;
+            border: 1px solid rgba(201, 9, 5, 0.16);
+            background: rgba(201, 9, 5, 0.06);
+            color: var(--primary);
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .pill-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 999px;
+            overflow: hidden;
+            flex-shrink: 0;
+            background: rgba(201, 9, 5, 0.12);
+            border: 1px solid rgba(201, 9, 5, 0.16);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .pill-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .pill-text {
+            line-height: 1.2;
+        }
+
+        .cell-empty {
+            color: var(--primary-danger);
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .empty-state {
+            padding: 28px 20px;
+            border-radius: var(--radius-lg);
+            border: 1px dashed rgba(201, 9, 5, 0.24);
+            background: rgba(201, 9, 5, 0.05);
+            color: var(--primary);
+            text-align: center;
+            font-size: 14px;
+        }
+
+        .footer {
+            padding: 18px 36px 30px;
+            border-top: 1px solid rgba(201, 9, 5, 0.16);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            color: var(--primary);
+            font-size: 12px;
         }
 
         .footer-brand {
-            margin: 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
         }
 
         .footer-brand img {
-            width: 90px;
+            width: 86px;
             height: auto;
-            filter: drop-shadow(0 4px 10px rgba(0,0,0,0.08));
+            display: block;
         }
 
-        /* ===== Print Styles ===== */
+        .footer-copy {
+            text-align: right;
+        }
+
+        @media (max-width: 900px) {
+            .sheet {
+                width: calc(100vw - 20px);
+            }
+
+            .sheet-inner {
+                padding: 22px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .toolbar {
+                padding: 14px 16px;
+            }
+
+            .toolbar-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .sheet {
+                width: calc(100vw - 14px);
+                margin-top: 10px;
+                border-radius: 20px;
+            }
+
+            .sheet-inner {
+                padding: 16px;
+            }
+
+            .footer-copy {
+                text-align: left;
+            }
+
+            .schedule-table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+
         @media print {
             @page {
                 size: A4;
-                margin: 1.5cm 2cm;
+                margin: 12mm 12mm 14mm;
             }
 
             body {
                 background: white;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
-                color-adjust: exact !important;
             }
 
             .toolbar {
                 display: none !important;
             }
 
-            .print-page {
-                max-width: none;
-                padding: 0;
+            .sheet {
+                width: auto;
                 margin: 0;
+                border-radius: 0;
                 box-shadow: none;
+                border: 0;
             }
 
-            .day-card {
+            .sheet-inner {
+                padding: 0;
+            }
+
+            .schedule-table-wrap,
+            .guidelines {
                 break-inside: avoid;
+                page-break-inside: avoid;
             }
 
-            .header {
-                border-bottom-color: var(--primary) !important;
+            .footer {
+                padding: 14px 0 0;
             }
 
-            .day-header {
-                background: var(--primary) !important;
-                color: white !important;
-            }
-
-            .day-card.cancelled .day-header {
-                background: var(--primary-dark) !important;
-            }
-
-            .info-header {
-                background: var(--primary) !important;
-                color: white !important;
-            }
-
-            .info-box {
-                background-color: #fff7f7 !important;
-            }
-
-            .team-box {
-                background-color: #f8fafc !important;
-                border-left-color: var(--primary) !important;
-            }
-
-            .member-item {
-                background-color: #fff7f7 !important;
-                border-color: #fde2e2 !important;
-            }
-
-            .notes-box {
-                background-color: #fffaf0 !important;
-                border-left-color: var(--accent) !important;
-            }
-
-            .cancellation-box {
-                background-color: #fff1f2 !important;
-                border-left-color: var(--primary-dark) !important;
-            }
-
-            /* Division table print */
-            .division-table-wrapper {
-                border: 2px solid var(--primary) !important;
+            .day-chip,
+            .pill,
+            .notice,
+            .notes,
+            .assignment-line {
                 box-shadow: none !important;
             }
 
-            .division-table thead tr th {
-                background: var(--primary) !important;
-                color: white !important;
+            .schedule-table thead th,
+            .day-chip,
+            .pill,
+            .guidelines,
+            .empty-state {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
-            }
-
-            .division-table tbody tr:nth-child(even) {
-                background: #fdfafa !important;
-            }
-
-            .tbl-member {
-                background-color: #fff7f7 !important;
-                border-color: #fde2e2 !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-
-            .tbl-notes {
-                background-color: #fffbeb !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-
-            .division-table tbody tr.row-cancelled {
-                background: #fff1f2 !important;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Toolbar (hidden on print) -->
     <div class="toolbar">
-        <a href="{% url 'schedule_detail' schedule.id %}">
-            ← Voltar para a escala
-        </a>
-        <button class="btn-print" onclick="window.print()">
-            Exportar PDF
-        </button>
+        <a class="toolbar-link" href="{% url 'schedule_detail' schedule.id %}">Voltar para a escala</a>
+        <div class="toolbar-actions">
+            <button class="btn-print" type="button" onclick="window.print()">Exportar PDF</button>
+        </div>
     </div>
 
-    <!-- Printable Content -->
-    <div class="print-page">
-        <!-- Header -->
-        <div class="header">
-            <h1>{{ schedule.ministry.name }} - {{ schedule.title }}</h1>
-            <h2>{{ month_name }} / {{ schedule.year }}</h2>
-        </div>
-
-        <!-- Info Box -->
-        <div class="info-box">
-            <div class="info-header">
-                ℹ️ INFORMAÇÕES DA ESCALA
-            </div>
-            <div class="info-body">
-                <p><strong>Ministério:</strong> {{ schedule.ministry.name }}</p>
-                <p><strong>Período:</strong> {{ month_name }}/{{ schedule.year }}</p>
-                <p><strong>Modo:</strong> {% if use_team_rotation %}Rotação de Equipes{% else %}Membros Diretos{% endif %}</p>
-
-                {% if schedule.guidelines %}
-                <div class="guidelines-section">
-                    <div class="guidelines-title">📋 Orientações Gerais:</div>
-                    <div class="guidelines-content">
-                        {{ schedule.guidelines|linebreaks }}
-                    </div>
+    <div class="sheet">
+        <div class="sheet-inner">
+            <header class="hero">
+                <div class="hero-copy">
+                    <div class="eyebrow">{{ schedule.ministry.name }}</div>
+                    <h1 class="title">{{ schedule.title }}</h1>
+                    <p class="subtitle">Escala de serviço para {{ period_label }}.</p>
                 </div>
-                {% endif %}
-            </div>
-        </div>
+            </header>
 
-        <!-- Schedule Days -->
-        <h3 class="section-title">📅 Escala do Mês</h3>
-
-        {% if days %}
-            {% if divisions %}
-            <!-- ===== DIVISION TABLE LAYOUT ===== -->
-            <div class="division-table-wrapper">
-                <table class="division-table">
-                    <thead>
-                        <tr>
-                            <th class="col-date">📅 Data</th>
-                            <th class="col-desc">📝 Descrição</th>
-                            {% for division in divisions %}
-                            <th class="col-div">⟁ {{ division.name }}</th>
-                            {% endfor %}
-                            <th class="col-notes">💬 Obs.</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for day in days %}
-                        <tr {% if day.is_cancelled %}class="row-cancelled"{% endif %}>
-                            <!-- Date -->
-                            <td>
-                                <div class="tbl-date">{{ day.date_str }}</div>
-                                <div class="tbl-day">{{ day.day_name }}</div>
-                            </td>
-                            <!-- Description -->
-                            <td>
-                                {% if day.is_cancelled %}
-                                    <span class="tbl-cancelled-cell">❌ Cancelado</span>
-                                {% else %}
-                                    <span class="tbl-desc">{{ day.description|default:"—" }}</span>
-                                {% endif %}
-                            </td>
-                            <!-- One column per division -->
-                            {% for division in divisions %}
-                            <td>
-                                {% if day.is_cancelled %}
-                                    <span class="tbl-no-member">—</span>
-                                {% elif day.has_shift_divisions %}
-                                    {% with mrn=day.div_members_map_morning|get_item:division.id eve=day.div_members_map_evening|get_item:division.id %}
-                                        {% if mrn %}
-                                            <div style="margin-bottom:2px;"><span style="font-size:7pt;font-weight:700;color:#C90905;">☀</span>
-                                            {% for m in mrn %}<span class="tbl-member">{{ m.name }}</span>{% endfor %}</div>
-                                        {% endif %}
-                                        {% if eve %}
-                                            <div><span style="font-size:7pt;font-weight:700;color:#555;">🌙</span>
-                                            {% for m in eve %}<span class="tbl-member">{{ m.name }}</span>{% endfor %}</div>
-                                        {% endif %}
-                                        {% if not mrn and not eve %}
-                                            <span class="tbl-no-member">—</span>
-                                        {% endif %}
-                                    {% endwith %}
-                                {% else %}
-                                    {% with members=day.div_members_map|get_item:division.id %}
-                                        {% if members %}
-                                            {% for member in members %}
-                                                <span class="tbl-member">{{ member.name }}</span>
-                                            {% endfor %}
-                                        {% else %}
-                                            <span class="tbl-no-member">—</span>
-                                        {% endif %}
-                                    {% endwith %}
-                                {% endif %}
-                            </td>
-                            {% endfor %}
-                            <!-- Notes -->
-                            <td>
-                                {% if day.notes and not day.is_cancelled %}
-                                    <span class="tbl-notes">{{ day.notes }}</span>
-                                {% elif day.is_cancelled and day.cancellation_reason %}
-                                    <span class="tbl-cancelled-cell" style="font-size:8pt;">{{ day.cancellation_reason }}</span>
-                                {% else %}
-                                    <span class="tbl-no-member">—</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-
-            {% else %}
-            <!-- ===== CARD LAYOUT (no divisions) ===== -->
-            {% for day in days %}
-            <div class="day-card {% if day.is_cancelled %}cancelled{% endif %}">
-                <div class="day-header">
-                    <div class="day-title">
-                        <span>{{ day.date_str }} - {{ day.day_name }}</span>
-                    </div>
-                    <div class="day-meta">
-                        {% if day.is_cancelled %}
-                            <span class="day-badge cancelled">❌ Cancelado</span>
-                        {% elif day.description %}
-                            <span class="day-badge">{{ day.description }}</span>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <div class="day-body">
-                    {% if day.is_cancelled %}
-                        <div class="cancellation-box">
-                            <strong>Motivo do cancelamento:</strong> {{ day.cancellation_reason|default:"Não informado" }}
-                        </div>
-                    {% else %}
-                        <div class="assignment-section">
-                            {% if use_team_rotation %}
-                                {% if day.team %}
-                                    <div class="team-box">
-                                        🔷 {{ day.team.name }}
-                                    </div>
-                                {% else %}
-                                    <div class="no-assignment">Nenhuma equipe atribuída</div>
-                                {% endif %}
-                            {% elif day.has_shifts %}
-                                <div style="width:100%; display:flex; flex-direction:column; gap:8px;">
-                                    <!-- Manhã -->
-                                    <div style="border:1.5px solid #C90905; border-radius:10px; overflow:hidden;">
-                                        <div style="background:#C90905; padding:4px 10px; display:flex; align-items:center; gap:6px;">
-                                            <span style="color:white; font-size:8pt; font-weight:700; letter-spacing:0.04em;">&#9788; MANHÃ</span>
-                                        </div>
-                                        <div style="padding:8px 10px; display:flex; flex-wrap:wrap; gap:6px; background:white;">
-                                        {% for member in day.members_morning %}
-                                            <div class="member-item">👤 {{ member.name }}</div>
-                                        {% empty %}
-                                            <div class="no-assignment" style="font-size:8pt;">Nenhum membro</div>
-                                        {% endfor %}
-                                        </div>
-                                    </div>
-                                    <!-- Noite -->
-                                    <div style="border:1.5px solid #C90905; border-radius:10px; overflow:hidden;">
-                                        <div style="background:#C90905; padding:4px 10px; display:flex; align-items:center; gap:6px;">
-                                            <span style="color:white; font-size:8pt; font-weight:700; letter-spacing:0.04em;">&#9790; NOITE</span>
-                                        </div>
-                                        <div style="padding:8px 10px; display:flex; flex-wrap:wrap; gap:6px; background:white;">
-                                        {% for member in day.members_evening %}
-                                            <div class="member-item">👤 {{ member.name }}</div>
-                                        {% empty %}
-                                            <div class="no-assignment" style="font-size:8pt;">Nenhum membro</div>
-                                        {% endfor %}
-                                        </div>
-                                    </div>
-                                </div>
-                            {% else %}
-                                {% if day.members %}
-                                    {% for member in day.members %}
-                                        <div class="member-item">👤 {{ member.name }}</div>
-                                    {% endfor %}
-                                {% else %}
-                                    <div class="no-assignment">Nenhum membro atribuído</div>
-                                {% endif %}
-                            {% endif %}
-                        </div>
-
-                        {% if day.notes %}
-                        <div class="notes-box">
-                            <strong>📝 Observações:</strong> {{ day.notes }}
-                        </div>
-                        {% endif %}
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
+            {% if schedule.guidelines %}
+            <section class="guidelines">
+                <div class="guidelines-title">Orientações</div>
+                <div class="guidelines-body">{{ schedule.guidelines|linebreaks }}</div>
+            </section>
             {% endif %}
-        {% else %}
-            <div class="empty-state">
-                <p>📭 Nenhum dia foi configurado nesta escala.</p>
-            </div>
-        {% endif %}
 
-        <!-- Footer -->
-        <div class="footer">
-            <div class="footer-brand">
-                <img src="{% static 'assets/red_logo.png' %}" alt="Logo Igreja Filadélfia">
-            </div>
-            <p>Documento gerado em {{ generated_at }} • Igreja Filadélfia</p>
+            <h2 class="section-title">Escala</h2>
+
+            {% if days %}
+                <div class="schedule-table-wrap">
+                    <table class="schedule-table">
+                        <thead>
+                            <tr>
+                                <th class="col-day">Dia</th>
+                                <th class="col-notes">Obs.</th>
+                                {% if divisions %}
+                                    {% for division in divisions %}
+                                        <th>{{ division.name }}</th>
+                                    {% endfor %}
+                                {% elif schedule.use_team_rotation %}
+                                    <th>Equipe</th>
+                                {% elif has_any_shifts %}
+                                    <th>Manhã</th>
+                                    <th>Noite</th>
+                                {% else %}
+                                    <th>Servidores</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for day in days %}
+                            <tr class="{% if day.is_cancelled %}cancelled-row{% endif %}">
+                                <td>
+                                    <div class="day-date">{{ day.date_str }}</div>
+                                    <div class="day-meta-line">
+                                        <span>{{ day.day_name }}</span>
+                                        {% if day.description %}
+                                            <span>{{ day.description }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if day.is_cancelled %}
+                                        <span class="day-chip cancelled">Cancelado</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if day.notes %}
+                                        <div class="cell-empty" style="color:var(--primary-dark);font-style:normal;">{{ day.notes }}</div>
+                                    {% elif day.cancellation_reason %}
+                                        <div class="cell-empty" style="color:var(--primary-danger);font-style:normal;">{{ day.cancellation_reason }}</div>
+                                    {% else %}
+                                        <span class="cell-empty">-</span>
+                                    {% endif %}
+                                </td>
+
+                                {% if divisions %}
+                                    {% for division in divisions %}
+                                    <td>
+                                        {% with block=day.division_blocks_map|get_item:division.id %}
+                                            {% if day.is_cancelled %}
+                                                <span class="cell-empty">-</span>
+                                            {% elif block %}
+                                                {% if block.morning_members or block.evening_members %}
+                                                    <div class="assignment-stack">
+                                                        <div class="assignment-line">
+                                                            <div class="assignment-label morning">Manhã</div>
+                                                            <div class="assignment-body">
+                                                                {% if block.morning_members %}
+                                                                    <div class="pill-list">
+                                                                        {% for member in block.morning_members %}
+                                                                            <span class="pill">
+                                                                                <span class="pill-avatar">
+                                                                                    {% if member.profile_picture %}
+                                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                                    {% else %}
+                                                                                        {{ member.name|slice:":1"|upper }}
+                                                                                    {% endif %}
+                                                                                </span>
+                                                                                <span class="pill-text">{{ member.name }}</span>
+                                                                            </span>
+                                                                        {% endfor %}
+                                                                    </div>
+                                                                {% else %}
+                                                                    <span class="cell-empty">Sem membros</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                        <div class="assignment-line">
+                                                            <div class="assignment-label evening">Noite</div>
+                                                            <div class="assignment-body">
+                                                                {% if block.evening_members %}
+                                                                    <div class="pill-list">
+                                                                        {% for member in block.evening_members %}
+                                                                            <span class="pill">
+                                                                                <span class="pill-avatar">
+                                                                                    {% if member.profile_picture %}
+                                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                                    {% else %}
+                                                                                        {{ member.name|slice:":1"|upper }}
+                                                                                    {% endif %}
+                                                                                </span>
+                                                                                <span class="pill-text">{{ member.name }}</span>
+                                                                            </span>
+                                                                        {% endfor %}
+                                                                    </div>
+                                                                {% else %}
+                                                                    <span class="cell-empty">Sem membros</span>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                {% elif block.members %}
+                                                    <div class="pill-list">
+                                                        {% for member in block.members %}
+                                                            <span class="pill">
+                                                                <span class="pill-avatar">
+                                                                    {% if member.profile_picture %}
+                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                    {% else %}
+                                                                        {{ member.name|slice:":1"|upper }}
+                                                                    {% endif %}
+                                                                </span>
+                                                                <span class="pill-text">{{ member.name }}</span>
+                                                            </span>
+                                                        {% endfor %}
+                                                    </div>
+                                                {% else %}
+                                                    <span class="cell-empty">-</span>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="cell-empty">-</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    </td>
+                                    {% endfor %}
+                                {% elif schedule.use_team_rotation %}
+                                    <td>
+                                        {% if day.is_cancelled %}
+                                            <span class="cell-empty">-</span>
+                                        {% elif day.team_name %}
+                                            <div class="pill-list">
+                                                <span class="pill">{{ day.team_name }}</span>
+                                            </div>
+                                        {% else %}
+                                            <span class="cell-empty">-</span>
+                                        {% endif %}
+                                    </td>
+                                {% elif has_any_shifts %}
+                                    <td>
+                                        {% if day.morning_members %}
+                                            <div class="pill-list">
+                                                {% for member in day.morning_members %}
+                                                    <span class="pill">
+                                                        <span class="pill-avatar">
+                                                            {% if member.profile_picture %}
+                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                            {% else %}
+                                                                {{ member.name|slice:":1"|upper }}
+                                                            {% endif %}
+                                                        </span>
+                                                        <span class="pill-text">{{ member.name }}</span>
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <span class="cell-empty">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if day.evening_members %}
+                                            <div class="pill-list">
+                                                {% for member in day.evening_members %}
+                                                    <span class="pill">
+                                                        <span class="pill-avatar">
+                                                            {% if member.profile_picture %}
+                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                            {% else %}
+                                                                {{ member.name|slice:":1"|upper }}
+                                                            {% endif %}
+                                                        </span>
+                                                        <span class="pill-text">{{ member.name }}</span>
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <span class="cell-empty">-</span>
+                                        {% endif %}
+                                    </td>
+                                {% else %}
+                                    <td>
+                                        {% if day.direct_members %}
+                                            <div class="pill-list">
+                                                {% for member in day.direct_members %}
+                                                    <span class="pill">
+                                                        <span class="pill-avatar">
+                                                            {% if member.profile_picture %}
+                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                            {% else %}
+                                                                {{ member.name|slice:":1"|upper }}
+                                                            {% endif %}
+                                                        </span>
+                                                        <span class="pill-text">{{ member.name }}</span>
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <span class="cell-empty">-</span>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state">Nenhum dia foi configurado nesta escala.</div>
+            {% endif %}
         </div>
+
+        <footer class="footer">
+            <div class="footer-brand">
+                <img src="{% static 'assets/red_logo.png' %}" alt="Igreja Filadélfia">
+            </div>
+            <div class="footer-copy">
+                <div>Documento gerado em {{ generated_at }}</div>
+                <div>Igreja Filadélfia</div>
+            </div>
+        </footer>
     </div>
 
     <script>
-        // Auto-trigger print dialog after page loads
-        window.addEventListener('load', function() {
-            // Small delay to ensure all resources (logo) are loaded
-            setTimeout(function() {
+        window.addEventListener('load', function () {
+            setTimeout(function () {
                 window.print();
-            }, 500);
+            }, 450);
         });
     </script>
 </body>

@@ -1,9 +1,11 @@
+from collections import OrderedDict
 from datetime import datetime, timedelta, date
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import Http404, JsonResponse
 from django.db.models import Prefetch, Q
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -372,7 +374,12 @@ class ScheduleDeleteView(LoginRequiredMixin, StaffRequiredMixin, View):
 @login_required
 def schedule_print_view(request, schedule_id):
     """Exibe a escala em formato printável para impressão nativa do navegador."""
-    schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+    try:
+        schedule = get_object_or_404(MonthlySchedule, id=schedule_id, deleted__isnull=True)
+    except Http404:
+        messages.warning(request, 'A escala solicitada não foi encontrada. Use a lista de escalas para abrir a versão atual.')
+        return redirect('schedule_list')
+
     days = ScheduleDay.objects.filter(
         schedule=schedule,
         deleted__isnull=True,
@@ -396,13 +403,26 @@ def schedule_print_view(request, schedule_id):
     day_names = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
 
     processed_days = []
+    has_any_shifts = False
     for day in days:
-        div_members_map = {}
+        division_blocks = OrderedDict()
+        has_division_shifts = False
         for assignment in day.division_assignments.all():
-            did = assignment.division_id
-            if did not in div_members_map:
-                div_members_map[did] = []
-            div_members_map[did].append(assignment.member)
+            block = division_blocks.setdefault(assignment.division_id, {
+                'division': assignment.division,
+                'members': [],
+                'morning_members': [],
+                'evening_members': [],
+            })
+
+            if assignment.shift == 'morning':
+                block['morning_members'].append(assignment.member)
+                has_division_shifts = True
+            elif assignment.shift == 'evening':
+                block['evening_members'].append(assignment.member)
+                has_division_shifts = True
+            else:
+                block['members'].append(assignment.member)
 
         day_data = {
             'date': day.date,
@@ -412,25 +432,44 @@ def schedule_print_view(request, schedule_id):
             'notes': day.notes,
             'is_cancelled': day.is_cancelled,
             'cancellation_reason': day.cancellation_reason,
-            'div_members_map': div_members_map,
+            'team_name': day.team.name if day.team else '',
+            'team_color': getattr(day.team, 'color', '') if day.team else '',
+            'has_shifts': day.has_shifts,
+            'has_division_shifts': has_division_shifts,
+            'direct_members': list(day.members.all()),
+            'morning_members': list(day.members_morning.all()) if day.has_shifts else [],
+            'evening_members': list(day.members_evening.all()) if day.has_shifts else [],
+            'division_blocks': list(division_blocks.values()),
+            'division_blocks_map': division_blocks,
+            'has_divisions': bool(division_blocks),
         }
 
-        if schedule.use_team_rotation:
-            day_data['team'] = day.team
-        else:
-            day_data['members'] = list(day.members.all())
-            day_data['has_shifts'] = day.has_shifts
-            day_data['members_morning'] = list(day.members_morning.all()) if day.has_shifts else []
-            day_data['members_evening'] = list(day.members_evening.all()) if day.has_shifts else []
+        if day_data['has_shifts'] or day_data['has_division_shifts']:
+            has_any_shifts = True
 
         processed_days.append(day_data)
 
-    month_name = month_names[schedule.month - 1] if schedule.month else ''
+    if schedule.is_weekly:
+        if schedule.start_date and schedule.end_date:
+            period_label = f"{schedule.start_date.strftime('%d/%m/%Y')} a {schedule.end_date.strftime('%d/%m/%Y')}"
+        elif schedule.start_date:
+            period_label = f"A partir de {schedule.start_date.strftime('%d/%m/%Y')}"
+        else:
+            period_label = 'Escala semanal'
+        month_name = 'Escala semanal'
+    else:
+        month_name = month_names[schedule.month - 1] if schedule.month else ''
+        period_label = f"{month_name} de {schedule.year}" if month_name and schedule.year else schedule.title
+
     return render(request, 'admin_panel/schedules/monthly/print.html', {
         'schedule': schedule,
         'days': processed_days,
         'divisions': divisions,
         'month_name': month_name,
+        'period_label': period_label,
+        'schedule_type_label': 'Escala semanal' if schedule.is_weekly else 'Escala mensal',
+        'assignment_mode_label': 'Rotação de equipes' if schedule.use_team_rotation else 'Membros diretos',
+        'has_any_shifts': has_any_shifts,
         'generated_at': datetime.now().strftime('%d/%m/%Y às %H:%M'),
         'use_team_rotation': schedule.use_team_rotation,
     })
