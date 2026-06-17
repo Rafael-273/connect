@@ -406,6 +406,11 @@ def schedule_print_view(request, schedule_id):
     has_any_shifts = False
     has_notes_column = False
     for day in days:
+        morning_members = list(day.members_morning.all())
+        evening_members = list(day.members_evening.all())
+        direct_members = list(day.members.all())
+        day_has_direct_shifts = bool(morning_members or evening_members or day.has_shifts)
+
         division_blocks = OrderedDict()
         has_division_shifts = False
         for assignment in day.division_assignments.all():
@@ -435,11 +440,11 @@ def schedule_print_view(request, schedule_id):
             'cancellation_reason': day.cancellation_reason,
             'team_name': day.team.name if day.team else '',
             'team_color': getattr(day.team, 'color', '') if day.team else '',
-            'has_shifts': day.has_shifts,
+            'has_shifts': day_has_direct_shifts,
             'has_division_shifts': has_division_shifts,
-            'direct_members': list(day.members.all()),
-            'morning_members': list(day.members_morning.all()) if day.has_shifts else [],
-            'evening_members': list(day.members_evening.all()) if day.has_shifts else [],
+            'direct_members': direct_members,
+            'morning_members': morning_members,
+            'evening_members': evening_members,
             'division_blocks': list(division_blocks.values()),
             'division_blocks_map': division_blocks,
             'has_divisions': bool(division_blocks),

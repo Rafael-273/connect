@@ -1,4 +1,4 @@
-{% load static pt_date %}
+{% load static pt_date name_tags %}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -608,12 +608,12 @@
                                                                             <span class="pill">
                                                                                 <span class="pill-avatar">
                                                                                     {% if member.profile_picture %}
-                                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
                                                                                     {% else %}
                                                                                         {{ member.name|slice:":1"|upper }}
                                                                                     {% endif %}
                                                                                 </span>
-                                                                                <span class="pill-text">{{ member.name }}</span>
+                                                                                <span class="pill-text">{{ member.name|first_two_names }}</span>
                                                                             </span>
                                                                         {% endfor %}
                                                                     </div>
@@ -631,12 +631,12 @@
                                                                             <span class="pill">
                                                                                 <span class="pill-avatar">
                                                                                     {% if member.profile_picture %}
-                                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
                                                                                     {% else %}
                                                                                         {{ member.name|slice:":1"|upper }}
                                                                                     {% endif %}
                                                                                 </span>
-                                                                                <span class="pill-text">{{ member.name }}</span>
+                                                                                <span class="pill-text">{{ member.name|first_two_names }}</span>
                                                                             </span>
                                                                         {% endfor %}
                                                                     </div>
@@ -652,12 +652,12 @@
                                                             <span class="pill">
                                                                 <span class="pill-avatar">
                                                                     {% if member.profile_picture %}
-                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                        <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
                                                                     {% else %}
                                                                         {{ member.name|slice:":1"|upper }}
                                                                     {% endif %}
                                                                 </span>
-                                                                <span class="pill-text">{{ member.name }}</span>
+                                                                <span class="pill-text">{{ member.name|first_two_names }}</span>
                                                             </span>
                                                         {% endfor %}
                                                     </div>
@@ -690,12 +690,12 @@
                                                     <span class="pill">
                                                         <span class="pill-avatar">
                                                             {% if member.profile_picture %}
-                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
                                                             {% else %}
                                                                 {{ member.name|slice:":1"|upper }}
                                                             {% endif %}
                                                         </span>
-                                                        <span class="pill-text">{{ member.name }}</span>
+                                                        <span class="pill-text">{{ member.name|first_two_names }}</span>
                                                     </span>
                                                 {% endfor %}
                                             </div>
@@ -710,12 +710,27 @@
                                                     <span class="pill">
                                                         <span class="pill-avatar">
                                                             {% if member.profile_picture %}
-                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
                                                             {% else %}
                                                                 {{ member.name|slice:":1"|upper }}
                                                             {% endif %}
                                                         </span>
-                                                        <span class="pill-text">{{ member.name }}</span>
+                                                        <span class="pill-text">{{ member.name|first_two_names }}</span>
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
+                                        {% elif day.direct_members %}
+                                            <div class="pill-list">
+                                                {% for member in day.direct_members %}
+                                                    <span class="pill">
+                                                        <span class="pill-avatar">
+                                                            {% if member.profile_picture %}
+                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
+                                                            {% else %}
+                                                                {{ member.name|slice:":1"|upper }}
+                                                            {% endif %}
+                                                        </span>
+                                                        <span class="pill-text">{{ member.name|first_two_names }}</span>
                                                     </span>
                                                 {% endfor %}
                                             </div>
@@ -731,12 +746,12 @@
                                                     <span class="pill">
                                                         <span class="pill-avatar">
                                                             {% if member.profile_picture %}
-                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
+                                                                <img src="{{ member.profile_picture.url }}" alt="{{ member.name|first_two_names }}">
                                                             {% else %}
                                                                 {{ member.name|slice:":1"|upper }}
                                                             {% endif %}
                                                         </span>
-                                                        <span class="pill-text">{{ member.name }}</span>
+                                                        <span class="pill-text">{{ member.name|first_two_names }}</span>
                                                     </span>
                                                 {% endfor %}
                                             </div>
