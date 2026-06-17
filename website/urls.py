@@ -97,6 +97,14 @@ from .views.admin_panel import (
     AdminHouseOfPeaceListView, AdminHouseOfPeaceDetailView,
     AdminHouseOfPeaceStatusView, AdminHouseOfPeaceDeleteView,
 )
+from .views.prosperar import (
+    ProsperarCompanyRegisterView,
+    ProsperarCompanyRegisterSuccessView,
+    ProsperarLoginView,
+    ProsperarLogoutView,
+    ProsperarDashboardView,
+    ProsperarProfileView,
+)
 
 urlpatterns = [
     path('', HomeView.as_view(), name='home'),
@@ -110,6 +118,9 @@ urlpatterns = [
     # House of Peace — public form (no login)
     path('house-of-peace/', HouseOfPeacePublicCreateView.as_view(), name='house_of_peace_public_form'),
     path('house-of-peace/sucesso/', HouseOfPeacePublicSuccessView.as_view(), name='house_of_peace_public_success'),
+    path('prosperar/register/', ProsperarCompanyRegisterView.as_view(), name='prosperar_company_register'),
+    path('prosperar/register/success/', ProsperarCompanyRegisterSuccessView.as_view(), name='prosperar_register_success'),
+    path('prosperar/login/', ProsperarLoginView.as_view(), name='prosperar_login'),
 
     # House of Peace — member area
     path('house-of-peace/available/', HouseOfPeaceAvailableListView.as_view(), name='house_of_peace_available'),
@@ -152,7 +163,10 @@ urlpatterns = [
     path('admin-login/', MemberLoginView.as_view(), name='admin_login'),  # Redirect old admin login to unified login
     path('redirect-after-login/', RedirectAfterLoginView.as_view(), name='redirect_after_login'),
     path('dashboard/', MemberDashboardView.as_view(), name='member_dashboard'),
+    path('prosperar/dashboard/', ProsperarDashboardView.as_view(), name='prosperar_dashboard'),
+    path('prosperar/profile/', ProsperarProfileView.as_view(), name='prosperar_profile'),
     path('logout/', MemberLogoutView.as_view(), name='member_logout'),
+    path('prosperar/logout/', ProsperarLogoutView.as_view(), name='prosperar_logout'),
     path('admin-logout/', MemberLogoutView.as_view(), name='admin_logout'),
     path('profile/', MemberProfileView.as_view(), name='member_profile'),
     path('roteiro-culto/', MemberRoteiroView.as_view(), name='member_roteiro'),

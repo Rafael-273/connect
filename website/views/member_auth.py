@@ -13,17 +13,24 @@ from ..models.member import Member
 from ..models.ministry_membership import MinistryMembership
 from ..models.schedule import MonthlySchedule
 from .mixins import MemberRequiredMixin, ApproverRequiredMixin, MinistrationContextMixin
+from .prosperar import get_user_landing_route
 
 
 class MemberLoginView(View):
     def get(self, request):
         if request.user.is_authenticated:
-            return redirect('member_dashboard')
+            landing_route = get_user_landing_route(request.user)
+            if landing_route:
+                return redirect(landing_route)
+            logout(request)
         return render(request, 'member/login.html')
 
     def post(self, request):
         if request.user.is_authenticated:
-            return redirect('member_dashboard')
+            landing_route = get_user_landing_route(request.user)
+            if landing_route:
+                return redirect(landing_route)
+            logout(request)
 
         email = request.POST.get('email', '').strip()
         password = request.POST.get('password', '')
@@ -48,7 +55,12 @@ class MemberLoginView(View):
         next_url = request.POST.get('next') or request.GET.get('next', '')
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
             return redirect(next_url)
-        return redirect('member_dashboard')
+        landing_route = get_user_landing_route(user)
+        if landing_route:
+            return redirect(landing_route)
+        messages.error(request, 'Acesso negado. Seu usuario nao possui uma area vinculada.')
+        logout(request)
+        return render(request, 'member/login.html', {'email': email})
 
 
 class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
@@ -304,13 +316,10 @@ class RedirectAfterLoginView(LoginRequiredMixin, View):
 
     def get(self, request):
         user = request.user
+        landing_route = get_user_landing_route(user)
+        if landing_route:
+            return redirect(landing_route)
 
-        if user.has_admin_access():
-            return redirect('admin_dashboard')
-
-        if hasattr(user, 'member'):
-            return redirect('member_dashboard')
-
-        messages.error(request, 'Acesso negado. Você precisa estar cadastrado como membro ou ter permissões de administrador.')
+        messages.error(request, 'Acesso negado. Seu usuario precisa estar vinculado a uma area valida do sistema.')
         logout(request)
         return redirect('member_login')

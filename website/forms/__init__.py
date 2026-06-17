@@ -3,6 +3,7 @@ from .follow_up import FollowUpForm, FollowUpReportForm
 from .member import MemberForm
 from .ministry import MinistryForm
 from .neighborhood import NeighborhoodForm
+from .prosperar import ProsperarCompanyRegistrationForm
 from .template import FollowUpTemplateForm, FollowUpTemplateStepForm
 from .visitor import VisitorForm, VisitorAdminForm
 from .word_of_knowledge import WordOfKnowledgeForm, HealingForm
@@ -14,6 +15,7 @@ __all__ = [
     'MemberForm',
     'MinistryForm',
     'NeighborhoodForm',
+    'ProsperarCompanyRegistrationForm',
     'FollowUpTemplateForm',
     'FollowUpTemplateStepForm',
     'VisitorForm',
@@ -21,4 +23,3 @@ __all__ = [
     'WordOfKnowledgeForm',
     'HealingForm',
 ]
-

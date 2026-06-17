@@ -174,6 +174,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 os.makedirs(os.path.join(MEDIA_ROOT, 'avatars'), exist_ok=True)
 os.makedirs(os.path.join(MEDIA_ROOT, 'event_banners'), exist_ok=True)
 os.makedirs(os.path.join(MEDIA_ROOT, 'profile_pictures'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'prosperar_logos'), exist_ok=True)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field

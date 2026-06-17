@@ -404,6 +404,7 @@ def schedule_print_view(request, schedule_id):
 
     processed_days = []
     has_any_shifts = False
+    has_notes_column = False
     for day in days:
         division_blocks = OrderedDict()
         has_division_shifts = False
@@ -446,6 +447,8 @@ def schedule_print_view(request, schedule_id):
 
         if day_data['has_shifts'] or day_data['has_division_shifts']:
             has_any_shifts = True
+        if day_data['notes'] or day_data['cancellation_reason']:
+            has_notes_column = True
 
         processed_days.append(day_data)
 
@@ -470,6 +473,7 @@ def schedule_print_view(request, schedule_id):
         'schedule_type_label': 'Escala semanal' if schedule.is_weekly else 'Escala mensal',
         'assignment_mode_label': 'Rotação de equipes' if schedule.use_team_rotation else 'Membros diretos',
         'has_any_shifts': has_any_shifts,
+        'has_notes_column': has_notes_column,
         'generated_at': datetime.now().strftime('%d/%m/%Y às %H:%M'),
         'use_team_rotation': schedule.use_team_rotation,
     })

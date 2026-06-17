@@ -29,6 +29,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         ('visitors', 'Visitantes (Gerencia visitantes)'),
         ('consolidation', 'Consolidação (Gerencia acompanhamentos)'),
         ('events', 'Eventos (Gerencia eventos)'),
+        ('prosperar', 'Prosperar (Area de empresas)'),
     )
     
     email = models.EmailField(unique=True)

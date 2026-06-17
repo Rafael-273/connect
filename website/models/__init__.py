@@ -22,3 +22,4 @@ from .canteen import CanteenDebtor
 from .course_attendance import AttendanceCourse, CourseParticipant, CourseLesson, CourseAttendance
 from .roteiro import Roteiro, AnuncioRoteiro, AnuncioRoteiroData
 from .house_of_peace import HouseOfPeace, HouseOfPeaceAssignment
+from .prosperar import ProsperarCompany

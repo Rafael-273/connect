@@ -546,7 +546,9 @@
                         <thead>
                             <tr>
                                 <th class="col-day">Dia</th>
-                                <th class="col-notes">Obs.</th>
+                                {% if has_notes_column %}
+                                    <th class="col-notes">Obs.</th>
+                                {% endif %}
                                 {% if divisions %}
                                     {% for division in divisions %}
                                         <th>{{ division.name }}</th>
@@ -576,15 +578,17 @@
                                         <span class="day-chip cancelled">Cancelado</span>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    {% if day.notes %}
-                                        <div class="cell-empty" style="color:var(--primary-dark);font-style:normal;">{{ day.notes }}</div>
-                                    {% elif day.cancellation_reason %}
-                                        <div class="cell-empty" style="color:var(--primary-danger);font-style:normal;">{{ day.cancellation_reason }}</div>
-                                    {% else %}
-                                        <span class="cell-empty">-</span>
-                                    {% endif %}
-                                </td>
+                                {% if has_notes_column %}
+                                    <td>
+                                        {% if day.notes %}
+                                            <div class="cell-empty" style="color:var(--primary-dark);font-style:normal;">{{ day.notes }}</div>
+                                        {% elif day.cancellation_reason %}
+                                            <div class="cell-empty" style="color:var(--primary-danger);font-style:normal;">{{ day.cancellation_reason }}</div>
+                                        {% else %}
+                                            <span class="cell-empty">-</span>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
 
                                 {% if divisions %}
                                     {% for division in divisions %}

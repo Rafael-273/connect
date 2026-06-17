@@ -1,0 +1,254 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Prosperar - Perfil{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --prosperar-primary: #cfa370;
+        --prosperar-secondary: #4c2f24;
+        --prosperar-dark: #241612;
+        --prosperar-soft: #fffaf5;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-fade { animation: fadeIn 0.6s ease-out; }
+    .nav-hidden { transform: translate(-50%, 120%) !important; opacity: 0.7 !important; }
+    .nav-visible { transform: translate(-50%, 0) !important; opacity: 1 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="relative bg-gradient-to-br from-[#faf7f2] to-white">
+    <div class="px-6 py-6">
+        <div class="p-4 text-center">
+            <div class="relative mb-6 inline-block">
+                <div class="mx-auto flex h-52 w-52 items-center justify-center overflow-hidden rounded-full shadow-lg">
+                    {% if company.logo %}
+                    <img src="{{ company.logo.url }}" alt="{{ company.company_name }}" class="h-full w-full object-cover">
+                    {% else %}
+                    <div class="flex h-full w-full items-center justify-center bg-[#f3e6d2]">
+                        <i class="fas fa-briefcase text-6xl text-[#4c2f24]"></i>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="absolute bottom-4 right-4 h-6 w-6 rounded-full border-4 border-white bg-green-400 shadow-md"></div>
+            </div>
+
+            <h2 class="mb-2 text-xl font-bold text-gray-800">{{ company.company_name }}</h2>
+            <p class="mb-4 text-sm text-gray-500">Empresa cadastrada no Prosperar</p>
+            <img src="{% static 'assets/logotype.jpg' %}" alt="Igreja Filadelfia" class="mx-auto h-12 w-12 rounded-full object-cover shadow-md">
+        </div>
+    </div>
+</section>
+
+{% if messages %}
+<div class="px-6 pt-4">
+    {% for message in messages %}
+    <div class="mb-3 rounded-2xl border px-4 py-3 text-sm font-medium
+        {% if message.tags == 'error' %}border-red-100 bg-red-50 text-red-600
+        {% elif message.tags == 'success' %}border-green-100 bg-green-50 text-green-600
+        {% else %}border-blue-100 bg-blue-50 text-blue-600{% endif %}">
+        <i class="fas fa-{% if message.tags == 'error' %}exclamation-circle{% elif message.tags == 'success' %}check-circle{% else %}info-circle{% endif %} mr-2"></i>
+        {{ message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<main class="space-y-6 px-6 pb-24">
+    <div class="rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div class="border-b border-gray-100 p-6">
+            <h3 class="flex items-center gap-2 text-lg font-semibold text-gray-800">
+                <i class="fas fa-store text-[#4c2f24]"></i>
+                Perfil da Empresa
+            </h3>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="p-6">
+            {% csrf_token %}
+            <input type="hidden" name="form_type" value="company_info">
+
+            <div class="space-y-5">
+                <div class="grid gap-5 md:grid-cols-2">
+                    <div>
+                        <label for="{{ profile_form.company_name.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ profile_form.company_name.label }}</label>
+                        {{ profile_form.company_name }}
+                        {% if profile_form.company_name.errors %}
+                        <p class="mt-1 text-xs text-red-500">{{ profile_form.company_name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label for="{{ profile_form.business_sector.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ profile_form.business_sector.label }}</label>
+                        {{ profile_form.business_sector }}
+                        {% if profile_form.business_sector.errors %}
+                        <p class="mt-1 text-xs text-red-500">{{ profile_form.business_sector.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="{{ profile_form.logo.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ profile_form.logo.label }}</label>
+                    <div class="rounded-2xl border border-[rgba(207,163,112,0.18)] bg-[#fffaf5] p-4">
+                        {{ profile_form.logo }}
+                        <p class="mt-2 text-xs text-gray-500">Use JPG, PNG ou WebP com ate 5MB para destacar melhor sua empresa.</p>
+                    </div>
+                    {% if profile_form.logo.errors %}
+                    <p class="mt-1 text-xs text-red-500">{{ profile_form.logo.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="grid gap-5 md:grid-cols-2">
+                    <div>
+                        <label for="{{ profile_form.neighborhood.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ profile_form.neighborhood.label }}</label>
+                        {{ profile_form.neighborhood }}
+                        {% if profile_form.neighborhood.errors %}
+                        <p class="mt-1 text-xs text-red-500">{{ profile_form.neighborhood.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label for="{{ profile_form.phone.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ profile_form.phone.label }}</label>
+                        {{ profile_form.phone }}
+                        {% if profile_form.phone.errors %}
+                        <p class="mt-1 text-xs text-red-500">{{ profile_form.phone.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div>
+                    <label for="{{ profile_form.address.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ profile_form.address.label }}</label>
+                    {{ profile_form.address }}
+                    {% if profile_form.address.errors %}
+                    <p class="mt-1 text-xs text-red-500">{{ profile_form.address.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="grid gap-5 md:grid-cols-2">
+                    <div>
+                        <label for="{{ profile_form.instagram_url.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ profile_form.instagram_url.label }}</label>
+                        {{ profile_form.instagram_url }}
+                        {% if profile_form.instagram_url.errors %}
+                        <p class="mt-1 text-xs text-red-500">{{ profile_form.instagram_url.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="mb-3 block text-sm font-medium text-gray-700">Email de acesso</label>
+                        <input type="email" value="{{ company.user.email }}" disabled class="w-full rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-500">
+                        <p class="mt-2 text-xs text-gray-500">Esse email e usado para acessar sua conta no Prosperar.</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="{{ profile_form.description.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ profile_form.description.label }}</label>
+                    {{ profile_form.description }}
+                    {% if profile_form.description.errors %}
+                    <p class="mt-1 text-xs text-red-500">{{ profile_form.description.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                {% if company.member %}
+                <div>
+                    <label class="mb-3 block text-sm font-medium text-gray-700">Conta vinculada</label>
+                    <input type="text" value="{{ company.member.name }}" disabled class="w-full rounded-xl border border-gray-200 bg-gray-100 px-4 py-3 text-gray-500">
+                    <p class="mt-2 text-xs text-gray-500">Esta empresa esta vinculada a uma conta de membro da Filadelfia.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="mt-8 flex justify-end">
+                <button type="submit" class="w-full rounded-xl bg-[#4c2f24] px-6 py-3 font-medium text-white shadow-sm transition-all duration-300 hover:bg-[#241612] hover:shadow-md sm:w-auto">
+                    <i class="fas fa-save mr-2"></i>Salvar Alteracoes
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <div class="rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <button type="button" onclick="togglePasswordForm()" class="w-full border-b border-gray-100 p-6 text-left transition-colors hover:bg-gray-50">
+            <h3 class="flex items-center justify-between text-lg font-semibold text-gray-800">
+                <span class="flex items-center gap-2">
+                    <i class="fas fa-key text-[#4c2f24]"></i>
+                    Alterar Senha
+                </span>
+                <i id="passwordToggleIcon" class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+            </h3>
+        </button>
+
+        <div id="passwordForm" class="hidden">
+            <form method="post" class="p-6">
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="change_password">
+
+                <div class="space-y-5">
+                    {% for field in password_form %}
+                    <div>
+                        <label for="{{ field.id_for_label }}" class="mb-3 block text-sm font-medium text-gray-700">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                        <p class="mt-1 text-xs text-red-500">{{ field.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="mt-8 flex justify-end">
+                    <button type="submit" class="w-full rounded-xl bg-[#cfa370] px-6 py-3 font-medium text-[#241612] shadow-sm transition-all duration-300 hover:bg-[#d8ab72] hover:shadow-md sm:w-auto">
+                        <i class="fas fa-shield-alt mr-2"></i>Alterar Senha
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <a href="{% url 'prosperar_logout' %}" class="group block border-l-4 border-transparent p-4 transition-all duration-300 hover:border-[#4c2f24] hover:bg-[#fffaf5] sm:p-5">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-red-50 transition-colors group-hover:bg-red-100 sm:h-12 sm:w-12">
+                        <i class="fas fa-sign-out-alt text-lg text-red-600 sm:text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-gray-800 transition-colors group-hover:text-[#4c2f24] sm:text-lg">Sair da Conta</h3>
+                        <p class="text-xs text-gray-500 sm:text-sm">Encerrar sua sessao no Prosperar</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-right text-gray-400 transition-all group-hover:translate-x-1 group-hover:text-[#4c2f24]"></i>
+            </div>
+        </a>
+    </div>
+</main>
+
+{% include 'parciais/prosperar_bottom_nav.html' with nav_active='profile' %}
+
+<script>
+    function togglePasswordForm() {
+        const form = document.getElementById('passwordForm');
+        const icon = document.getElementById('passwordToggleIcon');
+
+        if (form.classList.contains('hidden')) {
+            form.classList.remove('hidden');
+            icon.classList.add('rotate-180');
+        } else {
+            form.classList.add('hidden');
+            icon.classList.remove('rotate-180');
+        }
+    }
+
+    {% if password_form.errors %}
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('passwordForm');
+        const icon = document.getElementById('passwordToggleIcon');
+        form.classList.remove('hidden');
+        if (icon) icon.classList.add('rotate-180');
+    });
+    {% endif %}
+</script>
+{% endblock %}
