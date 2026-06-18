@@ -16,10 +16,17 @@ from .mixins import MemberRequiredMixin, ApproverRequiredMixin, MinistrationCont
 from .prosperar import get_user_landing_route
 
 
+def get_member_login_landing_route(user):
+    """Prioritize the Filadelfia member area for the member login flow."""
+    if hasattr(user, 'member'):
+        return 'member_dashboard'
+    return get_user_landing_route(user)
+
+
 class MemberLoginView(View):
     def get(self, request):
         if request.user.is_authenticated:
-            landing_route = get_user_landing_route(request.user)
+            landing_route = get_member_login_landing_route(request.user)
             if landing_route:
                 return redirect(landing_route)
             logout(request)
@@ -27,7 +34,7 @@ class MemberLoginView(View):
 
     def post(self, request):
         if request.user.is_authenticated:
-            landing_route = get_user_landing_route(request.user)
+            landing_route = get_member_login_landing_route(request.user)
             if landing_route:
                 return redirect(landing_route)
             logout(request)
@@ -55,7 +62,7 @@ class MemberLoginView(View):
         next_url = request.POST.get('next') or request.GET.get('next', '')
         if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
             return redirect(next_url)
-        landing_route = get_user_landing_route(user)
+        landing_route = get_member_login_landing_route(user)
         if landing_route:
             return redirect(landing_route)
         messages.error(request, 'Acesso negado. Seu usuario nao possui uma area vinculada.')
@@ -316,7 +323,7 @@ class RedirectAfterLoginView(LoginRequiredMixin, View):
 
     def get(self, request):
         user = request.user
-        landing_route = get_user_landing_route(user)
+        landing_route = get_member_login_landing_route(user)
         if landing_route:
             return redirect(landing_route)
 
