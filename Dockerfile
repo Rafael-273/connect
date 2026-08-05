@@ -3,6 +3,9 @@ FROM python:3.10.5
 EXPOSE 8000
 WORKDIR /usr/src/platform
 
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt /usr/src/platform/
     
 RUN pip install -r requirements.txt

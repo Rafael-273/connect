@@ -34,7 +34,7 @@ Sistema web completo de gestão eclesiástica desenvolvido para a Igreja Filadé
 | **Servidor WSGI** | Gunicorn 23.0.0 |
 | **WebSockets** | Django Channels 4.0.0 + channels-redis 4.2.0 |
 | **Banco de dados** | PostgreSQL (psycopg2-binary 2.9.9) |
-| **Cache / Channel Layer** | Redis (redis-stack-server) |
+| **Cache / filas / Channel Layer** | Redis + Celery |
 | **Arquivos estáticos** | WhiteNoise 6.8.2 (comprimido + manifesto) |
 | **Armazenamento de mídia** | Filesystem local ou AWS S3 (django-storages + boto3) |
 | **Soft-delete** | django-safedelete 1.4.0 |
@@ -42,7 +42,8 @@ Sistema web completo de gestão eclesiástica desenvolvido para a Igreja Filadé
 | **Editor rich text** | django-ckeditor 6.7.2 |
 | **Geração de PDF** | xhtml2pdf 0.2.16 + reportlab 4.0.7 |
 | **Speech-to-text** | azure-cognitiveservices-speech 1.25.0 |
-| **Tradução** | googletrans 4.0.0-rc1 |
+| **IA / transcrição de arquivos** | OpenAI Responses API + Audio Transcriptions API |
+| **Tradução** | googletrans 4.0.2 (ao vivo) + OpenAI (legendas) |
 | **Secrets** | Azure Key Vault (azure-keyvault-secrets 4.9.0) |
 | **Widgets de select** | django-select2 8.2.1 |
 
@@ -105,6 +106,28 @@ Sistema web completo de gestão eclesiástica desenvolvido para a Igreja Filadé
 - Tradução simultânea para Inglês e Holandês via Google Translate
 - Transmissão ao vivo para espectadores via WebSocket
 
+### Mídia Externa
+- Acesso exclusivo aos membros do ministério com código `midia_externa`
+- Arquitetura `Template → Versão → Projeto → Pipeline`, com projetos antigos presos à versão usada
+- Templates, blocos, plugins, arquivos padrão, LUT, música, formato e legenda configurados no Painel Administrativo
+- Projetos guiados na Área de Membros, uploads por bloco, duplicação e histórico
+- Extração e divisão de áudio com FFmpeg para suportar cultos longos
+- Transcrição com `whisper-1`, incluindo timestamps de palavras e geração de blocos sincronizados
+- Tradução idiomática por IA com glossário fixo da igreja e validação rígida por `cue_id`
+- Editor que permite alterar texto e quebras de linha, nunca timestamps
+- Renderização assíncrona de vídeos PT/EN e downloads privados em MP4, SRT e VTT
+- Presets configuráveis para YouTube, Reels, Stories, Feed, TikTok e Telão
+- Auto Reframe com OpenCV, prioridade em rosto ou corpo, múltiplas pessoas e movimento suavizado
+- Enquadramento `cover` em toda saída, sem barras pretas ou áreas vazias
+- Progresso automático por polling e processamento em worker Celery
+- Templates iniciais: Tradução de Vídeo, Stories da Pregação, Reels e Anúncio Mensal
+
+Os plugins de legenda, tradução, montagem de blocos, intro/outro, LUT, música e
+Auto Reframe possuem execução local. Corte inteligente de silêncio e remoção de
+vícios de fala têm contratos de serviço próprios, mas ainda exigem um processador
+especializado no worker; enquanto não configurados, a etapa fica marcada como
+ignorada no histórico do projeto.
+
 ---
 
 ## Arquitetura
@@ -117,6 +140,7 @@ connect/               # Configuração do projeto Django
 └── wsgi.py            # Entrada WSGI
 
 website/               # App principal
+├── ai/                # Gateway compartilhado de IA e transcrição de arquivos
 ├── models/            # Todos os modelos de domínio
 ├── views/             # Views organizadas por módulo
 ├── forms/             # Formulários Django
@@ -244,6 +268,7 @@ Dois consumers em `website/consumers.py`:
 - Fontes customizadas: GigaSans, Integral, TuskerGrotesk
 - PWA: manifesto (`manifest.json`) + service worker (`sw.js`)
 - **Mídia**: filesystem local por padrão (`media/avatars/`, `event_banners/`, `profile_pictures/`); muda para **AWS S3** quando `USE_S3=TRUE`
+- **Mídia Externa**: usa um storage dedicado; no S3 os objetos ficam em `private_media/` com URLs assinadas e downloads autorizados pelo Django
 
 ---
 
@@ -254,11 +279,21 @@ Dois consumers em `website/consumers.py`:
 | `SECRET_KEY` | Chave secreta do Django |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | Conexão PostgreSQL |
 | `REDIS_URL` | Channel layer Redis (opcional; fallback in-memory) |
+| `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Redis usado pela fila de Mídia Externa |
 | `DOMAIN` | Host permitido no deploy |
 | `HOSTNAME`, `PORT` | Binding do servidor Docker (dev) |
 | `USE_S3` | `TRUE` para usar S3 como storage de mídia |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME` | Credenciais AWS S3 |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_KEY_VAULT_NAME` | Autenticação Azure Key Vault |
+| `OPENAI_API_KEY` | Chave da OpenAI usada somente no backend |
+| `OPENAI_TRANSCRIPTION_MODEL` | Modelo de transcrição (padrão: `whisper-1`) |
+| `EXTERNAL_MEDIA_MAX_UPLOAD_MB` | Limite de upload de vídeo (padrão: 2048 MB) |
+| `EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS` | Duração dos blocos de áudio enviados ao Whisper (padrão: 1200 s) |
+| `EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE` | Quantidade de legendas traduzidas por chamada (padrão: 40) |
+| `EXTERNAL_MEDIA_FFMPEG_TIMEOUT` | Limite por processo FFmpeg em segundos |
+| `EXTERNAL_MEDIA_FFMPEG_PRESET` | Velocidade do encode H.264 (padrão: `veryfast`) |
+| `EXTERNAL_MEDIA_AUTO_REFRAME_INTERVAL_FRAMES` | Intervalo entre análises de pessoa/rosto (padrão: 10 frames) |
+| `EXTERNAL_MEDIA_AUTO_REFRAME_MAX_ANALYSIS_WIDTH` | Largura máxima usada pelo detector para reduzir CPU (padrão: 640 px) |
 | `EMAIL_BACKEND`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`, `SITE_DOMAIN` | E-mail / redefinição de senha |
 
 ---
@@ -270,6 +305,7 @@ Dois consumers em `website/consumers.py`:
 | **Azure Cognitive Services Speech** | Reconhecimento de fala PT-BR em tempo real no tradutor |
 | **Azure Key Vault** (`kvfiladelfia`) | Armazena a chave da API de fala; buscada na inicialização via `ClientSecretCredential` |
 | **Google Translate** (googletrans) | Traduz o texto reconhecido de PT-BR para Inglês e Holandês |
+| **OpenAI** | Geração de texto via Responses API e transcrição de arquivos de áudio |
 | **AWS S3** | Armazenamento opcional de arquivos de mídia |
 | **SMTP (Gmail)** | E-mails de redefinição de senha |
 
@@ -291,13 +327,46 @@ cd connect
 # Crie um arquivo .env com as variáveis necessárias
 cp .env.example .env   # ajuste os valores
 
-# Suba os serviços (PostgreSQL, Redis e Django)
+# Suba PostgreSQL, Redis, Django e o worker de mídia
 docker compose up --build
 ```
 
 O `docker-compose.yml` executa automaticamente `collectstatic`, `migrate` e inicia o servidor de desenvolvimento.
 
 A aplicação ficará disponível em `http://localhost:8000`.
+
+### Usando a camada compartilhada de IA
+
+Views, consumers e tarefas podem acessar a mesma interface sem criar clientes da
+OpenAI diretamente:
+
+```python
+from website.ai import get_ai_service
+
+ai = get_ai_service()
+
+resposta = ai.generate_text(
+    "Crie um resumo desta solicitação.",
+    model="gpt-4.1-mini",
+    instructions="Responda em português do Brasil.",
+)
+
+transcricao = ai.transcribe(
+    request.FILES["audio"],
+    language="pt",
+    prompt="Culto cristão em português do Brasil.",
+)
+```
+
+A chave nunca deve ser enviada ao navegador; somente o backend deve usar esse
+serviço. Para texto, cada fluxo escolhe o `model` explicitamente; apenas a
+transcrição fica centralizada na `env`.
+
+O módulo de Mídia Externa escolhe `gpt-4.1-mini` no próprio fluxo de tradução,
+enquanto o Whisper permanece configurável por `OPENAI_TRANSCRIPTION_MODEL`.
+Na renderização, os presets padrão usam H.264 com `CRF 23`, `preset veryfast`
+e áudio copiado quando possível. Vídeos HDR, comuns em iPhone, são convertidos
+explicitamente para SDR/Rec.709 para evitar cores lavadas após queimar a legenda.
 
 ### Sem Docker (ambiente virtual)
 

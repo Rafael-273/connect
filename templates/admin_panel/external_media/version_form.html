@@ -1,0 +1,1087 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}{{ title }} - Versão de Template{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+    .admin-card { background: white; border-radius: 14px; box-shadow: 0 2px 16px rgba(0,0,0,0.07); }
+    .section-title { display: flex; align-items: center; gap: .6rem; padding-bottom: .75rem; margin-bottom: 1.25rem; border-bottom: 1px solid #f1f5f9; font-weight: 800; color: #374151; }
+    .section-title ion-icon { color: var(--color-primary); font-size: 1.2rem; }
+    .form-label { display: block; font-weight: 700; color: #374151; margin-bottom: .375rem; font-size: .8rem; }
+    .inline-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fafafa; }
+    .manage-select { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: start; }
+    .manage-btn { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(201,9,5,.08); color: var(--color-primary); transition: background .15s; }
+    .manage-btn:hover { background: rgba(201,9,5,.16); }
+    .media-modal { position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(17,24,39,.55); }
+    .media-modal.active { display: flex; }
+    .media-modal-panel { width: min(1040px, 100%); max-height: 90vh; overflow-y: auto; background: white; border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.22); }
+    .modal-table th { padding: .75rem 1rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; background: #f8fafc; text-align: left; }
+    .modal-table td { padding: .85rem 1rem; border-top: 1px solid #f1f5f9; vertical-align: middle; }
+    .asset-action { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: #f8fafc; color: #4b5563; }
+    .asset-action:hover { background: #eef2ff; color: #1f2937; }
+    .asset-action-danger:hover { background: #fee2e2; color: #dc2626; }
+    .language-help { border: 1px solid #e5e7eb; border-radius: 12px; background: #f8fafc; padding: .9rem 1rem; color: #4b5563; font-size: .82rem; line-height: 1.45; }
+    .block-help { border: 1px solid #e5e7eb; border-radius: 12px; background: #f8fafc; padding: .85rem 1rem; color: #4b5563; font-size: .82rem; line-height: 1.45; }
+    .block-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fafafa; transition: border-color .15s, box-shadow .15s, opacity .15s; }
+    .block-card.dragging { opacity: .55; border-color: var(--color-primary); box-shadow: 0 12px 28px rgba(0,0,0,.08); }
+    .drag-handle { width: 36px; height: 36px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: white; border: 1px solid #e5e7eb; color: #6b7280; cursor: grab; }
+    .drag-handle:active { cursor: grabbing; }
+    .block-position-badge { min-width: 36px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: rgba(201,9,5,.08); color: var(--color-primary); font-size: .75rem; font-weight: 800; }
+    .block-remove-btn { display: inline-flex; align-items: center; gap: .35rem; color: #dc2626; font-size: .9rem; font-weight: 700; }
+    .media-modal-panel.media-modal-panel-wide { width: min(1480px, 100%); }
+    .style-preview-shell { border: 1px solid #e5e7eb; border-radius: 18px; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); padding: 18px; }
+    .style-preview-stage { position: relative; width: 100%; border-radius: 18px; overflow: hidden; background:
+        radial-gradient(circle at 75% 18%, rgba(148,163,184,.22), transparent 16%),
+        linear-gradient(135deg, rgba(15,23,42,.96), rgba(30,41,59,.82)); }
+    .style-preview-stage::before { content: ""; display: block; padding-top: var(--preview-ratio, 56.25%); }
+    .style-preview-overlay { position: absolute; inset: 0; }
+    .style-preview-subtitle {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        width: min(92%, calc(100% - 40px)); text-align: center; line-height: 1.18;
+        letter-spacing: .01em; white-space: pre-wrap; word-break: break-word;
+    }
+    .style-preview-subtitle.single-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .style-preview-frame-label { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .65rem; border-radius: 999px; background: rgba(255,255,255,.12); color: rgba(255,255,255,.9); font-size: .72rem; font-weight: 700; }
+    .style-preview-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(380px, .9fr); gap: 1.25rem; }
+    .style-preview-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+    .style-preview-meta-card { border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; padding: .85rem 1rem; }
+    .style-font-chip { display: inline-flex; align-items: center; gap: .45rem; border-radius: 999px; background: #f8fafc; padding: .3rem .7rem; font-size: .75rem; color: #475569; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="flex items-center justify-between gap-3 mb-5">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center shadow-sm">
+                        <ion-icon name="film-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <a href="{% url 'admin_external_media_template_detail' template.id %}" class="text-xs text-gray-500 hover:underline">{{ template.name }}</a>
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{{ title }}</h1>
+                    </div>
+                </div>
+                <a href="{% url 'admin_external_media_template_detail' template.id %}" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                    <ion-icon name="arrow-back-outline"></ion-icon>
+                    Voltar
+                </a>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" class="space-y-6">
+                {% csrf_token %}
+
+                <div class="admin-card p-6">
+                    <div class="section-title"><ion-icon name="settings-outline"></ion-icon><span>Configuração da versão</span></div>
+                    {% if form.non_field_errors %}
+                    <div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ form.non_field_errors }}</div>
+                    {% endif %}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="md:col-span-2">
+                            <label class="form-label">{{ form.changelog.label }}</label>
+                            {{ form.changelog }}
+                            {% if form.changelog.errors %}<p class="text-xs text-red-600 mt-1">{{ form.changelog.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="form-label">{{ form.preset.label }}</label>
+                            <div class="manage-select">
+                                {{ form.preset }}
+                                <button type="button" class="manage-btn" data-open-modal="preset-modal" title="Gerenciar presets">
+                                    <ion-icon name="options-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            {% if form.preset.errors %}<p class="text-xs text-red-600 mt-1">{{ form.preset.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="form-label">{{ form.subtitle_style.label }}</label>
+                            <div class="manage-select">
+                                {{ form.subtitle_style }}
+                                <button type="button" class="manage-btn" data-open-modal="style-modal" title="Gerenciar estilos de legenda">
+                                    <ion-icon name="color-palette-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Esse estilo será usado na legenda principal do vídeo.</p>
+                            {% if form.subtitle_style.errors %}<p class="text-xs text-red-600 mt-1">{{ form.subtitle_style.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="translated-style-field">
+                            <label class="form-label">{{ form.translated_subtitle_style.label }}</label>
+                            <div class="manage-select">
+                                {{ form.translated_subtitle_style }}
+                                <button type="button" class="manage-btn" data-open-modal="style-modal" title="Gerenciar estilos de legenda">
+                                    <ion-icon name="layers-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Opcional. Se deixar em branco, a tradução usa o mesmo estilo da legenda original.</p>
+                            {% if form.translated_subtitle_style.errors %}<p class="text-xs text-red-600 mt-1">{{ form.translated_subtitle_style.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="form-label">{{ form.original_language.label }}</label>
+                            {{ form.original_language }}
+                            {% if form.original_language.errors %}<p class="text-xs text-red-600 mt-1">{{ form.original_language.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="form-label">{{ form.language_mode.label }}</label>
+                            {{ form.language_mode }}
+                            {% if form.language_mode.errors %}<p class="text-xs text-red-600 mt-1">{{ form.language_mode.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="spoken-languages-field">
+                            <label class="form-label">{{ form.spoken_languages.label }}</label>
+                            <div class="flex flex-wrap gap-4 text-sm text-gray-700">
+                                {% for choice in form.spoken_languages %}
+                                <label class="inline-flex items-center gap-2">{{ choice.tag }} {{ choice.choice_label }}</label>
+                                {% endfor %}
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">{{ form.spoken_languages.help_text }}</p>
+                            {% if form.spoken_languages.errors %}<p class="text-xs text-red-600 mt-1">{{ form.spoken_languages.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="translated-language-field">
+                            <label class="form-label">{{ form.translated_language.label }}</label>
+                            {{ form.translated_language }}
+                            {% if form.translated_language.errors %}<p class="text-xs text-red-600 mt-1">{{ form.translated_language.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div class="md:col-span-2 language-help">
+                            <strong>Apenas um idioma:</strong> use quando o vídeo e a legenda final devem ficar só no idioma padrão.
+                            <br>
+                            <strong>Idioma padrão + legendas traduzidas:</strong> use quando o vídeo tem uma língua principal e você quer gerar uma segunda legenda em outro idioma.
+                            <br>
+                            <strong>Dois idiomas falados no mesmo vídeo:</strong> use quando o áudio já mistura português e inglês. Nesse modo a transcrição deixa o modelo detectar os idiomas falados.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card p-6">
+                    <div class="section-title"><ion-icon name="color-filter-outline"></ion-icon><span>Assets e áudio</span></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div><label class="form-label">{{ form.lut_file.label }}</label>{{ form.lut_file }}</div>
+                        <div>
+                            <label class="form-label">{{ form.background_music.label }}</label>
+                            <div class="manage-select">
+                                {{ form.background_music }}
+                                <button type="button" class="manage-btn" data-open-modal="music-modal" title="Gerenciar músicas">
+                                    <ion-icon name="musical-notes-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            {% if form.background_music.errors %}<p class="text-xs text-red-600 mt-1">{{ form.background_music.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card p-6">
+                    <div class="section-title"><ion-icon name="albums-outline"></ion-icon><span>Blocos do projeto</span></div>
+                    <div class="block-help mb-4">
+                        Cada bloco novo já nasce preparado para aceitar <strong>até 4 vídeos</strong>. Você só precisa definir o nome, a descrição e a ordem das partes do projeto.
+                    </div>
+                    {{ block_formset.management_form }}
+                    {% if block_formset.non_form_errors %}<div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ block_formset.non_form_errors }}</div>{% endif %}
+                    <div id="blocks-container" class="space-y-4">
+                        {% for block_form in block_formset %}
+                        <div class="block-card" draggable="true" data-block-form>
+                            {{ block_form.id }}
+                            {{ block_form.key }}
+                            {{ block_form.order }}
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex items-center gap-3">
+                                    <button type="button" class="drag-handle" title="Arrastar bloco"><ion-icon name="reorder-three-outline" class="text-xl"></ion-icon></button>
+                                    <span class="block-position-badge" data-block-position>{{ forloop.counter }}</span>
+                                    <span class="text-sm font-bold text-gray-700">Bloco</span>
+                                </div>
+                                {{ block_form.allows_multiple }}
+                                {% if block_form.DELETE %}
+                                <div class="hidden">{{ block_form.DELETE }}</div>
+                                <button type="button" class="block-remove-btn" data-remove-block><ion-icon name="trash-outline"></ion-icon> Remover</button>
+                                {% endif %}
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2"><label class="form-label">{{ block_form.name.label }}</label>{{ block_form.name }}{% if block_form.name.errors %}<p class="text-xs text-red-600 mt-1">{{ block_form.name.errors.0 }}</p>{% endif %}</div>
+                                <div><label class="form-label">{{ block_form.default_video.label }}</label>{{ block_form.default_video }}</div>
+                                <div class="md:col-span-3"><label class="form-label">{{ block_form.description.label }}</label>{{ block_form.description }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.is_required }} {{ block_form.is_required.label }}</label>
+                                {{ block_form.min_occurrences }}
+                                {{ block_form.max_occurrences }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <template id="empty-block-template">
+                        <div class="block-card" draggable="true" data-block-form>
+                            {{ block_formset.empty_form.id }}
+                            {{ block_formset.empty_form.key }}
+                            {{ block_formset.empty_form.order }}
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex items-center gap-3">
+                                    <button type="button" class="drag-handle" title="Arrastar bloco"><ion-icon name="reorder-three-outline" class="text-xl"></ion-icon></button>
+                                    <span class="block-position-badge" data-block-position>1</span>
+                                    <span class="text-sm font-bold text-gray-700">Bloco</span>
+                                </div>
+                                {{ block_formset.empty_form.allows_multiple }}
+                                <div class="hidden">{{ block_formset.empty_form.DELETE }}</div>
+                                <button type="button" class="block-remove-btn" data-remove-block><ion-icon name="trash-outline"></ion-icon> Remover</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2"><label class="form-label">{{ block_formset.empty_form.name.label }}</label>{{ block_formset.empty_form.name }}</div>
+                                <div><label class="form-label">{{ block_formset.empty_form.default_video.label }}</label>{{ block_formset.empty_form.default_video }}</div>
+                                <div class="md:col-span-3"><label class="form-label">{{ block_formset.empty_form.description.label }}</label>{{ block_formset.empty_form.description }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.is_required }} {{ block_formset.empty_form.is_required.label }}</label>
+                                {{ block_formset.empty_form.min_occurrences }}
+                                {{ block_formset.empty_form.max_occurrences }}
+                            </div>
+                        </div>
+                    </template>
+                    <div class="mt-4">
+                        <button type="button" id="add-block-button" class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">
+                            <ion-icon name="add-outline"></ion-icon>
+                            Adicionar bloco
+                        </button>
+                    </div>
+                </div>
+
+                <div class="admin-card p-6">
+                    <div class="section-title"><ion-icon name="construct-outline"></ion-icon><span>Ajustes extras do pipeline</span></div>
+                    <div class="block-help mb-4">
+                        Aqui ficam só os processamentos <strong>extras</strong> do vídeo.
+                        Legendas, tradução, LUT e música já são definidos nas seções acima e não precisam ser escolhidos de novo aqui.
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {% for choice in form.advanced_plugins %}
+                        <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                            <div class="pt-1">{{ choice.tag }}</div>
+                            <div>
+                                <p class="font-semibold text-gray-900">{{ choice.choice_label }}</p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    {% if choice.data.value == 'silence_removal' %}
+                                    Tenta cortar pausas silenciosas para deixar o vídeo mais direto.
+                                    {% elif choice.data.value == 'filler_removal' %}
+                                    Tenta limpar vícios de fala como “é…”, “ahn…” e repetições desnecessárias.
+                                    {% elif choice.data.value == 'auto_tracking' %}
+                                    Preenche todo o formato e acompanha automaticamente uma ou várias pessoas.
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div id="auto-reframe-settings" class="mt-4 inline-card bg-white">
+                        <label class="form-label">{{ form.auto_reframe_priority.label }}</label>
+                        {{ form.auto_reframe_priority }}
+                        <p class="text-xs text-gray-500 mt-2">
+                            Rosto mantém o locutor em destaque. Corpo abre mais o quadro para preservar gestos e movimento.
+                            O sistema usa margem de segurança de 15% e acompanha várias pessoas quando elas aparecem juntas.
+                        </p>
+                        {% if form.auto_reframe_priority.errors %}<p class="text-xs text-red-600 mt-2">{{ form.auto_reframe_priority.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div id="speech-edit-settings" class="mt-4 inline-card bg-white">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">{{ form.speech_edit_profile.label }}</label>
+                                {{ form.speech_edit_profile }}
+                                <p class="text-xs text-gray-500 mt-2">
+                                    Conservador mantém mais pausas; Equilibrado é o padrão; Dinâmico deixa vídeos curtos mais diretos.
+                                </p>
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.filler_words.label }}</label>
+                                {{ form.filler_words }}
+                                <p class="text-xs text-gray-500 mt-2">{{ form.filler_words.help_text }}</p>
+                            </div>
+                        </div>
+                        <div class="block-help mt-4">
+                            A proteção de 100 ms ao redor das palavras é sempre aplicada. Respirações e pausas após frases
+                            recebem espaço extra; se houver dúvida sobre uma sílaba, o trecho é mantido.
+                        </div>
+                        {% if form.speech_edit_profile.errors %}<p class="text-xs text-red-600 mt-2">{{ form.speech_edit_profile.errors.0 }}</p>{% endif %}
+                        {% if form.filler_words.errors %}<p class="text-xs text-red-600 mt-2">{{ form.filler_words.errors.0 }}</p>{% endif %}
+                    </div>
+                    {% if form.advanced_plugins.errors %}<p class="text-xs text-red-600 mt-3">{{ form.advanced_plugins.errors.0 }}</p>{% endif %}
+                    <p class="text-xs text-gray-500 mt-3">
+                        Você pode ativar vários ao mesmo tempo ou deixar todos desligados.
+                        Eles funcionam só como complementos ao template.
+                    </p>
+                </div>
+
+                <div class="admin-card p-4 flex flex-col sm:flex-row justify-end gap-3 sticky bottom-4">
+                    <a href="{% url 'admin_external_media_template_detail' template.id %}" class="px-5 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-lg text-center font-semibold">Cancelar</a>
+                    <button class="px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-lg font-semibold">Salvar Rascunho</button>
+                </div>
+            </form>
+
+            <div id="preset-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel media-modal-panel-wide">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Presets de renderização</h2>
+                            <p class="text-sm text-gray-500">Crie, edite, visualize ou remova presets usados nos templates.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="preset-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+
+                    <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <form method="post" action="{% url 'admin_external_media_preset_save' %}" class="inline-card bg-white">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="preset_id" id="preset-id">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 id="preset-form-title" class="font-bold text-gray-900">Novo preset</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-preset>Limpar</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="md:col-span-2"><label class="form-label">{{ preset_form.name.label }}</label>{{ preset_form.name }}</div>
+                                <div><label class="form-label">{{ preset_form.width.label }}</label>{{ preset_form.width }}</div>
+                                <div><label class="form-label">{{ preset_form.height.label }}</label>{{ preset_form.height }}</div>
+                                <div><label class="form-label">{{ preset_form.video_codec.label }}</label>{{ preset_form.video_codec }}</div>
+                                <div><label class="form-label">{{ preset_form.audio_codec.label }}</label>{{ preset_form.audio_codec }}</div>
+                                <div><label class="form-label">{{ preset_form.video_crf.label }}</label>{{ preset_form.video_crf }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 mt-7">{{ preset_form.is_active }} {{ preset_form.is_active.label }}</label>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">{{ preset_form.extra_ffmpeg_args_raw.label }}</label>
+                                    {{ preset_form.extra_ffmpeg_args_raw }}
+                                    <p class="text-xs text-gray-500 mt-1">{{ preset_form.extra_ffmpeg_args_raw.help_text }}</p>
+                                </div>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar preset</button>
+                            </div>
+                        </form>
+
+                        <div class="inline-card bg-white">
+                            <h3 class="font-bold text-gray-900 mb-4">Presets cadastrados</h3>
+                            <div id="preset-details" class="hidden mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"></div>
+                            <div class="overflow-x-auto">
+                                <table class="modal-table w-full">
+                                    <thead><tr><th>Preset</th><th>Saída</th><th>Status</th><th class="text-right">Ações</th></tr></thead>
+                                    <tbody>
+                                        {% for row in render_preset_rows %}
+                                        {% with preset=row.preset %}
+                                        <tr>
+                                            <td>
+                                                <p class="font-bold text-gray-900">{{ preset.name }}</p>
+                                                <p class="text-xs text-gray-500">{{ preset.video_codec }} · áudio {{ preset.audio_codec }} · CRF {{ preset.video_crf }}</p>
+                                            </td>
+                                            <td class="text-sm text-gray-600">{% if preset.width and preset.height %}{{ preset.width }}x{{ preset.height }}{% else %}Original{% endif %}</td>
+                                            <td class="text-sm {% if preset.is_active %}text-green-700{% else %}text-gray-500{% endif %}">{% if preset.is_active %}Ativo{% else %}Inativo{% endif %}</td>
+                                            <td class="text-right">
+                                                <div class="inline-flex gap-1">
+                                                    <button type="button" class="asset-action"
+                                                            data-view-preset
+                                                            data-name="{{ preset.name }}"
+                                                            data-size="{% if preset.width and preset.height %}{{ preset.width }}x{{ preset.height }}{% else %}Original{% endif %}"
+                                                            data-video-codec="{{ preset.video_codec }}"
+                                                            data-audio-codec="{{ preset.audio_codec }}"
+                                                            data-crf="{{ preset.video_crf }}"
+                                                            data-extra="{{ row.extra_args_json|escape }}"
+                                                            title="Visualizar"><ion-icon name="eye-outline"></ion-icon></button>
+                                                    <button type="button" class="asset-action"
+                                                            data-edit-preset
+                                                            data-id="{{ preset.id }}"
+                                                            data-name="{{ preset.name }}"
+                                                            data-width="{{ preset.width|default:'' }}"
+                                                            data-height="{{ preset.height|default:'' }}"
+                                                            data-video-codec="{{ preset.video_codec }}"
+                                                            data-audio-codec="{{ preset.audio_codec }}"
+                                                            data-crf="{{ preset.video_crf }}"
+                                                            data-extra="{{ row.extra_args_json|escape }}"
+                                                            data-active="{% if preset.is_active %}true{% else %}false{% endif %}"
+                                                            title="Editar"><ion-icon name="create-outline"></ion-icon></button>
+                                                    <form method="post" action="{% url 'admin_external_media_preset_delete' preset.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                        <button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endwith %}
+                                        {% empty %}
+                                        <tr><td colspan="4" class="text-center text-gray-500 py-8">Nenhum preset cadastrado.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="style-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Estilos de legenda</h2>
+                            <p class="text-sm text-gray-500">Configure fonte, cores, contorno e limites usados na renderização.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="style-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+
+                    <div class="p-5 style-preview-grid">
+                        <form method="post" action="{% url 'admin_external_media_subtitle_style_save' %}" class="inline-card bg-white">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="style_id" id="style-id">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 id="style-form-title" class="font-bold text-gray-900">Novo estilo</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-style>Limpar</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label class="form-label">{{ style_form.name.label }}</label>{{ style_form.name }}</div>
+                                <div><label class="form-label">{{ style_form.font_name.label }}</label>{{ style_form.font_name }}</div>
+                                <div><label class="form-label">{{ style_form.font_size.label }}</label>{{ style_form.font_size }}</div>
+                                <div><label class="form-label">{{ style_form.margin_bottom.label }}</label>{{ style_form.margin_bottom }}</div>
+                                <div><label class="form-label">{{ style_form.primary_color.label }}</label>{{ style_form.primary_color }}</div>
+                                <div><label class="form-label">{{ style_form.outline_color.label }}</label>{{ style_form.outline_color }}</div>
+                                <div><label class="form-label">{{ style_form.outline_width.label }}</label>{{ style_form.outline_width }}</div>
+                                <div><label class="form-label">{{ style_form.shadow.label }}</label>{{ style_form.shadow }}</div>
+                                <div><label class="form-label">{{ style_form.alignment.label }}</label>{{ style_form.alignment }}</div>
+                                <div><label class="form-label">{{ style_form.max_lines.label }}</label>{{ style_form.max_lines }}</div>
+                                <div><label class="form-label">{{ style_form.max_characters.label }}</label>{{ style_form.max_characters }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 mt-7">{{ style_form.is_active }} {{ style_form.is_active.label }}</label>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar estilo</button>
+                            </div>
+                        </form>
+
+                        <div class="space-y-5">
+                            <div class="inline-card bg-white">
+                                <div class="flex items-center justify-between gap-3 mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-gray-900">Preview do estilo</h3>
+                                        <p class="text-sm text-gray-500">Veja a posição da legenda no formato final e compare original + tradução no mesmo quadro.</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="form-label">Formato do preview</label>
+                                        <select id="style-preview-preset" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                                            {% for row in render_preset_rows %}
+                                            {% with preset=row.preset %}
+                                            <option value="{{ preset.id }}"
+                                                    data-width="{{ preset.width|default:'1920' }}"
+                                                    data-height="{{ preset.height|default:'1080' }}"
+                                                    {% if forloop.first %}selected{% endif %}>
+                                                {{ preset.name }} {% if preset.width and preset.height %}({{ preset.width }}x{{ preset.height }}){% else %}(Original){% endif %}
+                                            </option>
+                                            {% endwith %}
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Comparar tradução com</label>
+                                        <select id="style-preview-compare" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                                            <option value="">Usar o mesmo estilo acima</option>
+                                            {% for style in subtitle_styles %}
+                                            <option value="{{ style.id }}"
+                                                    data-name="{{ style.name }}"
+                                                    data-font="{{ style.font_name }}"
+                                                    data-font-size="{{ style.font_size }}"
+                                                    data-primary="{{ style.primary_color }}"
+                                                    data-outline="{{ style.outline_color }}"
+                                                    data-outline-width="{{ style.outline_width }}"
+                                                    data-shadow="{{ style.shadow }}"
+                                                    data-margin="{{ style.margin_bottom }}"
+                                                    data-alignment="{{ style.alignment }}"
+                                                    data-lines="{{ style.max_lines }}"
+                                                    data-chars="{{ style.max_characters }}">
+                                                {{ style.name }} · {{ style.font_name }} · {{ style.font_size }}px
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="md:col-span-2 flex flex-wrap gap-3">
+                                        <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                                            <input type="checkbox" id="style-preview-show-translation" class="h-4 w-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]" checked>
+                                            Mostrar legenda traduzida junto
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="style-preview-shell">
+                                    <div class="flex items-center justify-between gap-3 mb-3">
+                                        <span id="style-preview-format-label" class="style-preview-frame-label">16:9 · 1920x1080</span>
+                                        <span class="style-preview-frame-label">Preview aproximado do render final</span>
+                                    </div>
+                                    <div id="style-preview-stage" class="style-preview-stage" style="--preview-ratio: 56.25%;">
+                                        <div class="style-preview-overlay">
+                                            <div class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent"></div>
+                                            <div id="style-preview-original" class="style-preview-subtitle">Hoje queremos convidar você para estar conosco.</div>
+                                            <div id="style-preview-translated" class="style-preview-subtitle">Today we want to invite you to join us.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="style-preview-meta mt-4">
+                                    <div class="style-preview-meta-card">
+                                        <p class="text-xs uppercase tracking-[0.18em] text-gray-400 mb-2">Legenda original</p>
+                                        <div id="style-preview-original-meta" class="text-sm text-gray-700"></div>
+                                    </div>
+                                    <div class="style-preview-meta-card">
+                                        <p class="text-xs uppercase tracking-[0.18em] text-gray-400 mb-2">Legenda traduzida</p>
+                                        <div id="style-preview-translated-meta" class="text-sm text-gray-700"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="inline-card bg-white">
+                                <h3 class="font-bold text-gray-900 mb-4">Estilos cadastrados</h3>
+                                <div id="style-details" class="hidden mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"></div>
+                                <div class="overflow-x-auto">
+                                    <table class="modal-table w-full">
+                                        <thead><tr><th>Estilo</th><th>Aparência</th><th>Status</th><th class="text-right">Ações</th></tr></thead>
+                                        <tbody>
+                                            {% for style in subtitle_styles %}
+                                            <tr>
+                                                <td>
+                                                    <p class="font-bold text-gray-900">{{ style.name }}</p>
+                                                    <div class="mt-1 flex flex-wrap gap-2">
+                                                        <span class="style-font-chip">{{ style.font_name }}</span>
+                                                        <span class="style-font-chip">{{ style.font_size }}px</span>
+                                                        <span class="style-font-chip">{{ style.max_lines }} linhas</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="w-6 h-6 rounded border border-gray-200" style="background: {{ style.primary_color }}"></span>
+                                                        <span class="w-6 h-6 rounded border border-gray-200" style="background: {{ style.outline_color }}"></span>
+                                                        <span class="text-xs text-gray-500">contorno {{ style.outline_width }}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="text-sm {% if style.is_active %}text-green-700{% else %}text-gray-500{% endif %}">{% if style.is_active %}Ativo{% else %}Inativo{% endif %}</td>
+                                                <td class="text-right">
+                                                    <div class="inline-flex gap-1">
+                                                        <button type="button" class="asset-action"
+                                                                data-view-style
+                                                                data-id="{{ style.id }}"
+                                                                data-name="{{ style.name }}"
+                                                                data-font="{{ style.font_name }}"
+                                                                data-font-size="{{ style.font_size }}"
+                                                                data-primary="{{ style.primary_color }}"
+                                                                data-outline="{{ style.outline_color }}"
+                                                                data-outline-width="{{ style.outline_width }}"
+                                                                data-shadow="{{ style.shadow }}"
+                                                                data-margin="{{ style.margin_bottom }}"
+                                                                data-alignment="{{ style.alignment }}"
+                                                                data-lines="{{ style.max_lines }}"
+                                                                data-chars="{{ style.max_characters }}"
+                                                                title="Visualizar"><ion-icon name="eye-outline"></ion-icon></button>
+                                                        <button type="button" class="asset-action"
+                                                                data-edit-style
+                                                                data-id="{{ style.id }}"
+                                                                data-name="{{ style.name }}"
+                                                                data-font="{{ style.font_name }}"
+                                                                data-font-size="{{ style.font_size }}"
+                                                                data-primary="{{ style.primary_color }}"
+                                                                data-outline="{{ style.outline_color }}"
+                                                                data-outline-width="{{ style.outline_width }}"
+                                                                data-shadow="{{ style.shadow }}"
+                                                                data-margin="{{ style.margin_bottom }}"
+                                                                data-alignment="{{ style.alignment }}"
+                                                                data-lines="{{ style.max_lines }}"
+                                                                data-chars="{{ style.max_characters }}"
+                                                                data-active="{% if style.is_active %}true{% else %}false{% endif %}"
+                                                                title="Editar"><ion-icon name="create-outline"></ion-icon></button>
+                                                        <form method="post" action="{% url 'admin_external_media_subtitle_style_delete' style.id %}">
+                                                            {% csrf_token %}
+                                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                            <button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button>
+                                                        </form>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% empty %}
+                                            <tr><td colspan="4" class="text-center text-gray-500 py-8">Nenhum estilo cadastrado.</td></tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="music-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Músicas de fundo</h2>
+                            <p class="text-sm text-gray-500">Cadastre, edite, visualize ou remova as trilhas disponíveis para os templates.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="music-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+
+                    <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <form method="post" action="{% url 'admin_external_media_background_music_save' %}" enctype="multipart/form-data" class="inline-card bg-white">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="bgmusic_id" id="bgmusic-id">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 id="bgmusic-form-title" class="font-bold text-gray-900">Nova música</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-bgmusic>Limpar</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label class="form-label">{{ music_form.name.label }}</label>{{ music_form.name }}</div>
+                                <div><label class="form-label">{{ music_form.singer.label }}</label>{{ music_form.singer }}</div>
+                                <div><label class="form-label">{{ music_form.tempo.label }}</label>{{ music_form.tempo }}</div>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">{{ music_form.audio_file.label }}</label>
+                                    {{ music_form.audio_file }}
+                                </div>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar música</button>
+                            </div>
+                        </form>
+
+                        <div class="inline-card bg-white">
+                            <h3 class="font-bold text-gray-900 mb-4">Músicas cadastradas</h3>
+                            <div id="music-details" class="hidden mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"></div>
+                            <div class="overflow-x-auto">
+                                <table class="modal-table w-full">
+                                    <thead><tr><th>Música</th><th>Andamento</th><th>Áudio</th><th class="text-right">Ações</th></tr></thead>
+                                    <tbody>
+                                        {% for music in background_music_rows %}
+                                        <tr>
+                                            <td>
+                                                <p class="font-bold text-gray-900">{{ music.name }}</p>
+                                                <p class="text-xs text-gray-500">{{ music.singer|default:"—" }}</p>
+                                            </td>
+                                            <td class="text-sm text-gray-600">{{ music.get_tempo_display|default:"—" }}</td>
+                                            <td class="text-sm {% if music.audio_file %}text-green-700{% else %}text-amber-700{% endif %}">
+                                                {% if music.audio_file %}Disponível{% else %}Sem arquivo{% endif %}
+                                            </td>
+                                            <td class="text-right">
+                                                <div class="inline-flex gap-1">
+                                                    <button type="button" class="asset-action"
+                                                            data-view-bgmusic
+                                                            data-name="{{ music.name }}"
+                                                            data-singer="{{ music.singer }}"
+                                                            data-tempo="{{ music.get_tempo_display|default:'Não definido' }}"
+                                                            data-audio="{% if music.audio_file %}{{ music.audio_file.name }}{% else %}Sem arquivo{% endif %}"
+                                                            title="Visualizar"><ion-icon name="eye-outline"></ion-icon></button>
+                                                    <button type="button" class="asset-action"
+                                                            data-edit-bgmusic
+                                                            data-id="{{ music.id }}"
+                                                            data-name="{{ music.name }}"
+                                                            data-singer="{{ music.singer }}"
+                                                            data-tempo="{{ music.tempo }}"
+                                                            data-audio="{% if music.audio_file %}{{ music.audio_file.name }}{% endif %}"
+                                                            title="Editar"><ion-icon name="create-outline"></ion-icon></button>
+                                                    <form method="post" action="{% url 'admin_external_media_background_music_delete' music.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                        <button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr><td colspan="4" class="text-center text-gray-500 py-8">Nenhuma música cadastrada.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function byId(id) { return document.getElementById(id); }
+    function setValue(id, value) { const el = byId(id); if (el) el.value = value || ''; }
+    function setChecked(id, value) { const el = byId(id); if (el) el.checked = value === true || value === 'true'; }
+
+    document.querySelectorAll('[data-open-modal]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const modal = byId(button.dataset.openModal);
+            if (modal) modal.classList.add('active');
+        });
+    });
+    document.querySelectorAll('[data-close-modal]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const modal = byId(button.dataset.closeModal);
+            if (modal) modal.classList.remove('active');
+        });
+    });
+    document.querySelectorAll('.media-modal').forEach((modal) => {
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) modal.classList.remove('active');
+        });
+    });
+
+    function resetPresetForm() {
+        byId('preset-form-title').textContent = 'Novo preset';
+        setValue('preset-id', '');
+        setValue('id_preset-name', '');
+        setValue('id_preset-width', '');
+        setValue('id_preset-height', '');
+        setValue('id_preset-video_codec', 'libx264');
+        setValue('id_preset-audio_codec', 'copy');
+        setValue('id_preset-video_crf', '23');
+        setValue('id_preset-extra_ffmpeg_args_raw', '[]');
+        setChecked('id_preset-is_active', true);
+    }
+    document.querySelector('[data-reset-preset]')?.addEventListener('click', resetPresetForm);
+    document.querySelectorAll('[data-edit-preset]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('preset-form-title').textContent = `Editar preset: ${button.dataset.name}`;
+            setValue('preset-id', button.dataset.id);
+            setValue('id_preset-name', button.dataset.name);
+            setValue('id_preset-width', button.dataset.width);
+            setValue('id_preset-height', button.dataset.height);
+            setValue('id_preset-video_codec', button.dataset.videoCodec);
+            setValue('id_preset-audio_codec', button.dataset.audioCodec);
+            setValue('id_preset-video_crf', button.dataset.crf);
+            setValue('id_preset-extra_ffmpeg_args_raw', button.dataset.extra || '[]');
+            setChecked('id_preset-is_active', button.dataset.active);
+        });
+    });
+    document.querySelectorAll('[data-view-preset]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const target = byId('preset-details');
+            target.classList.remove('hidden');
+            target.innerHTML = `<strong>${button.dataset.name}</strong><br>Saída: ${button.dataset.size}<br>Vídeo: ${button.dataset.videoCodec}<br>Áudio: ${button.dataset.audioCodec}<br>CRF: ${button.dataset.crf}<br>Extras: <code>${button.dataset.extra || '[]'}</code>`;
+        });
+    });
+
+    function resetStyleForm() {
+        byId('style-form-title').textContent = 'Novo estilo';
+        setValue('style-id', '');
+        setValue('id_style-name', '');
+        setValue('id_style-font_name', 'Arial');
+        setValue('id_style-font_size', '48');
+        setValue('id_style-primary_color', '#FFFFFF');
+        setValue('id_style-outline_color', '#000000');
+        setValue('id_style-outline_width', '3');
+        setValue('id_style-shadow', '1');
+        setValue('id_style-margin_bottom', '60');
+        setValue('id_style-alignment', '2');
+        setValue('id_style-max_lines', '2');
+        setValue('id_style-max_characters', '42');
+        setChecked('id_style-is_active', true);
+        setValue('style-preview-compare', '');
+        setChecked('style-preview-show-translation', true);
+        updateStylePreview();
+    }
+
+    function styleDataFromForm() {
+        return {
+            name: byId('id_style-name')?.value || 'Legenda original',
+            font: byId('id_style-font_name')?.value || 'Arial',
+            fontSize: parseInt(byId('id_style-font_size')?.value || '48', 10),
+            primary: byId('id_style-primary_color')?.value || '#FFFFFF',
+            outline: byId('id_style-outline_color')?.value || '#000000',
+            outlineWidth: parseInt(byId('id_style-outline_width')?.value || '3', 10),
+            shadow: parseInt(byId('id_style-shadow')?.value || '1', 10),
+            margin: parseInt(byId('id_style-margin_bottom')?.value || '60', 10),
+            alignment: parseInt(byId('id_style-alignment')?.value || '2', 10),
+            lines: parseInt(byId('id_style-max_lines')?.value || '2', 10),
+            chars: parseInt(byId('id_style-max_characters')?.value || '42', 10),
+        };
+    }
+
+    function styleDataFromOption(option, fallback) {
+        if (!option || !option.value) return fallback;
+        return {
+            name: option.dataset.name || fallback.name,
+            font: option.dataset.font || fallback.font,
+            fontSize: parseInt(option.dataset.fontSize || fallback.fontSize, 10),
+            primary: option.dataset.primary || fallback.primary,
+            outline: option.dataset.outline || fallback.outline,
+            outlineWidth: parseInt(option.dataset.outlineWidth || fallback.outlineWidth, 10),
+            shadow: parseInt(option.dataset.shadow || fallback.shadow, 10),
+            margin: parseInt(option.dataset.margin || fallback.margin, 10),
+            alignment: parseInt(option.dataset.alignment || fallback.alignment, 10),
+            lines: parseInt(option.dataset.lines || fallback.lines, 10),
+            chars: parseInt(option.dataset.chars || fallback.chars, 10),
+        };
+    }
+
+    function previewText(text, style) {
+        const clean = String(text || '').replace(/\s+/g, ' ').trim();
+        if (style.lines <= 1) return clean;
+        const limit = Math.max(12, style.chars || 42);
+        if (clean.length <= limit) return clean;
+        const slice = clean.slice(0, limit);
+        const pivot = slice.lastIndexOf(' ');
+        const breakpoint = pivot > Math.floor(limit * 0.45) ? pivot : limit;
+        return `${slice.slice(0, breakpoint).trim()}\n${clean.slice(breakpoint).trim()}`;
+    }
+
+    function ratioLabel(width, height) {
+        const gcdValue = (a, b) => (b ? gcdValue(b, a % b) : a);
+        const divisor = gcdValue(width, height);
+        return `${width / divisor}:${height / divisor}`;
+    }
+
+    function applyPreviewStyle(element, style, text, metrics, singleLine=false) {
+        if (!element) return;
+        element.textContent = previewText(text, style);
+        element.style.fontFamily = style.font;
+        const fontScale = metrics?.fontScale || 1;
+        const verticalScale = metrics?.verticalScale || 1;
+        const outlineScale = metrics?.outlineScale || 1;
+        const shadowScale = metrics?.shadowScale || 1;
+        element.style.fontSize = `${Math.max(1, style.fontSize * fontScale)}px`;
+        element.style.color = style.primary;
+        element.style.bottom = `${Math.max(0, style.margin * verticalScale)}px`;
+        element.style.textShadow = [
+            `0 0 ${Math.max(0.4, style.outlineWidth * outlineScale)}px ${style.outline}`,
+            `0 0 ${Math.max(0.8, style.outlineWidth * outlineScale * 2)}px ${style.outline}`,
+            `${Math.max(0.4, style.shadow * shadowScale)}px ${Math.max(0.4, style.shadow * shadowScale)}px ${Math.max(0.8, style.shadow * shadowScale * 2)}px rgba(0,0,0,.75)`,
+        ].join(', ');
+        element.classList.toggle('single-line', singleLine || style.lines <= 1);
+    }
+
+    function updateStylePreviewMeta(targetId, style) {
+        const target = byId(targetId);
+        if (!target) return;
+        target.innerHTML = `
+            <div class="flex flex-wrap gap-2 mb-2">
+                <span class="style-font-chip">${style.name}</span>
+                <span class="style-font-chip">${style.font}</span>
+                <span class="style-font-chip">${style.fontSize}px</span>
+            </div>
+            <div class="text-xs text-gray-500">
+                margem ${style.margin}px · até ${style.lines} linha(s) · ${style.chars} caracteres
+            </div>
+        `;
+    }
+
+    function updateStylePreview() {
+        const originalStyle = styleDataFromForm();
+        const compareOption = byId('style-preview-compare')?.selectedOptions?.[0];
+        const translatedStyle = styleDataFromOption(compareOption, originalStyle);
+        const presetOption = byId('style-preview-preset')?.selectedOptions?.[0];
+        const width = parseInt(presetOption?.dataset.width || '1920', 10);
+        const height = parseInt(presetOption?.dataset.height || '1080', 10);
+        const stage = byId('style-preview-stage');
+        const original = byId('style-preview-original');
+        const translated = byId('style-preview-translated');
+        const showTranslation = !!byId('style-preview-show-translation')?.checked;
+
+        if (stage) {
+            stage.style.setProperty('--preview-ratio', `${(height / width) * 100}%`);
+        }
+        const label = byId('style-preview-format-label');
+        if (label) {
+            label.textContent = `${ratioLabel(width, height)} · ${width}x${height}`;
+        }
+
+        requestAnimationFrame(() => {
+            const stageWidth = stage?.clientWidth || width;
+            const stageHeight = stage?.clientHeight || height;
+            const metrics = {
+                fontScale: stageWidth / width,
+                verticalScale: stageHeight / height,
+                outlineScale: stageWidth / width,
+                shadowScale: stageWidth / width,
+            };
+
+            applyPreviewStyle(
+                original,
+                originalStyle,
+                'Hoje queremos convidar você para estar conosco.',
+                metrics,
+                false,
+            );
+            if (translated) {
+                translated.style.display = showTranslation ? 'block' : 'none';
+                if (showTranslation) {
+                    applyPreviewStyle(
+                        translated,
+                        translatedStyle,
+                        'Today we want to invite you to join us.',
+                        metrics,
+                        true,
+                    );
+                }
+            }
+
+            updateStylePreviewMeta('style-preview-original-meta', originalStyle);
+            updateStylePreviewMeta('style-preview-translated-meta', translatedStyle);
+        });
+    }
+
+    document.querySelector('[data-reset-style]')?.addEventListener('click', resetStyleForm);
+    document.querySelectorAll('[data-edit-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('style-form-title').textContent = `Editar estilo: ${button.dataset.name}`;
+            setValue('style-id', button.dataset.id);
+            setValue('id_style-name', button.dataset.name);
+            setValue('id_style-font_name', button.dataset.font);
+            setValue('id_style-font_size', button.dataset.fontSize);
+            setValue('id_style-primary_color', button.dataset.primary);
+            setValue('id_style-outline_color', button.dataset.outline);
+            setValue('id_style-outline_width', button.dataset.outlineWidth);
+            setValue('id_style-shadow', button.dataset.shadow);
+            setValue('id_style-margin_bottom', button.dataset.margin);
+            setValue('id_style-alignment', button.dataset.alignment);
+            setValue('id_style-max_lines', button.dataset.lines);
+            setValue('id_style-max_characters', button.dataset.chars);
+            setChecked('id_style-is_active', button.dataset.active);
+            updateStylePreview();
+        });
+    });
+    document.querySelectorAll('[data-view-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const target = byId('style-details');
+            target.classList.remove('hidden');
+            target.innerHTML = `<strong>${button.dataset.name}</strong><br>Fonte: ${button.dataset.font}, ${button.dataset.fontSize}px<br>Cores: ${button.dataset.primary} / ${button.dataset.outline}<br>Contorno: ${button.dataset.outlineWidth}, sombra ${button.dataset.shadow}<br>Margem: ${button.dataset.margin}, alinhamento ${button.dataset.alignment}<br>Texto: ${button.dataset.lines} linhas, ${button.dataset.chars} caracteres`;
+            setValue('style-preview-compare', button.dataset.id);
+            updateStylePreview();
+        });
+    });
+    [
+        'id_style-name',
+        'id_style-font_name',
+        'id_style-font_size',
+        'id_style-primary_color',
+        'id_style-outline_color',
+        'id_style-outline_width',
+        'id_style-shadow',
+        'id_style-margin_bottom',
+        'id_style-alignment',
+        'id_style-max_lines',
+        'id_style-max_characters',
+        'style-preview-preset',
+        'style-preview-compare',
+        'style-preview-show-translation',
+    ].forEach((id) => {
+        byId(id)?.addEventListener('input', updateStylePreview);
+        byId(id)?.addEventListener('change', updateStylePreview);
+    });
+
+    function resetBackgroundMusicForm() {
+        byId('bgmusic-form-title').textContent = 'Nova música';
+        setValue('bgmusic-id', '');
+        setValue('id_bgmusic-name', '');
+        setValue('id_bgmusic-singer', '');
+        setValue('id_bgmusic-tempo', '');
+        const fileInput = byId('id_bgmusic-audio_file');
+        if (fileInput) fileInput.value = '';
+    }
+    document.querySelector('[data-reset-bgmusic]')?.addEventListener('click', resetBackgroundMusicForm);
+    document.querySelectorAll('[data-edit-bgmusic]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('bgmusic-form-title').textContent = `Editar música: ${button.dataset.name}`;
+            setValue('bgmusic-id', button.dataset.id);
+            setValue('id_bgmusic-name', button.dataset.name);
+            setValue('id_bgmusic-singer', button.dataset.singer);
+            setValue('id_bgmusic-tempo', button.dataset.tempo);
+            const details = byId('music-details');
+            details.classList.remove('hidden');
+            details.innerHTML = `<strong>${button.dataset.name}</strong><br>Arquivo atual: ${button.dataset.audio || 'Sem arquivo enviado'}`;
+        });
+    });
+    document.querySelectorAll('[data-view-bgmusic]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const target = byId('music-details');
+            target.classList.remove('hidden');
+            target.innerHTML = `<strong>${button.dataset.name}</strong><br>Artista: ${button.dataset.singer || '—'}<br>Andamento: ${button.dataset.tempo}<br>Áudio: ${button.dataset.audio}`;
+        });
+    });
+
+    function syncLanguageModeUI() {
+        const mode = byId('id_language_mode')?.value;
+        const spoken = byId('spoken-languages-field');
+        const translated = byId('translated-language-field');
+        const translatedStyle = byId('translated-style-field');
+        if (spoken) spoken.classList.toggle('hidden', mode !== 'bilingual_source');
+        if (translated) translated.classList.toggle('hidden', mode === 'single');
+        if (translatedStyle) translatedStyle.classList.toggle('hidden', mode === 'single');
+    }
+    function syncAutoReframeUI() {
+        const checkbox = document.querySelector(
+            'input[name="advanced_plugins"][value="auto_tracking"]'
+        );
+        const settings = byId('auto-reframe-settings');
+        if (settings) settings.classList.toggle('hidden', !checkbox?.checked);
+    }
+    function syncSpeechEditUI() {
+        const silence = document.querySelector(
+            'input[name="advanced_plugins"][value="silence_removal"]'
+        );
+        const fillers = document.querySelector(
+            'input[name="advanced_plugins"][value="filler_removal"]'
+        );
+        const settings = byId('speech-edit-settings');
+        if (settings) settings.classList.toggle('hidden', !silence?.checked && !fillers?.checked);
+    }
+    function visibleBlockCards() {
+        return Array.from(document.querySelectorAll('#blocks-container [data-block-form]'))
+            .filter((card) => card.style.display !== 'none');
+    }
+    function updateBlockOrder() {
+        visibleBlockCards().forEach((card, index) => {
+            const orderInput = card.querySelector('input[name$="-order"]');
+            const badge = card.querySelector('[data-block-position]');
+            if (orderInput) orderInput.value = index + 1;
+            if (badge) badge.textContent = index + 1;
+        });
+    }
+    function bindBlockCard(card) {
+        if (card.dataset.boundBlock === 'true') return;
+        card.dataset.boundBlock = 'true';
+        card.addEventListener('dragstart', () => card.classList.add('dragging'));
+        card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            updateBlockOrder();
+        });
+        card.querySelector('[data-remove-block]')?.addEventListener('click', () => {
+            const deleteInput = card.querySelector('input[name$="-DELETE"]');
+            if (deleteInput) deleteInput.checked = true;
+            card.style.display = 'none';
+            updateBlockOrder();
+        });
+    }
+    function bindBlockDragAndDrop() {
+        const container = byId('blocks-container');
+        if (!container || container.dataset.boundDrag === 'true') return;
+        container.dataset.boundDrag = 'true';
+        container.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            const dragging = container.querySelector('.dragging');
+            if (!dragging) return;
+            const siblings = visibleBlockCards().filter((card) => card !== dragging);
+            const next = siblings.find((card) => event.clientY <= card.getBoundingClientRect().top + card.offsetHeight / 2);
+            container.insertBefore(dragging, next || null);
+        });
+    }
+    function addBlockForm() {
+        const container = byId('blocks-container');
+        const template = byId('empty-block-template');
+        const totalInput = byId('id_blocks-TOTAL_FORMS');
+        if (!container || !template || !totalInput) return;
+        const index = parseInt(totalInput.value, 10);
+        const html = template.innerHTML.replace(/__prefix__/g, index);
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = html.trim();
+        const card = wrapper.firstElementChild;
+        container.appendChild(card);
+        totalInput.value = index + 1;
+        bindBlockCard(card);
+        updateBlockOrder();
+    }
+    byId('id_language_mode')?.addEventListener('change', syncLanguageModeUI);
+    document.querySelector('input[name="advanced_plugins"][value="auto_tracking"]')
+        ?.addEventListener('change', syncAutoReframeUI);
+    document.querySelectorAll(
+        'input[name="advanced_plugins"][value="silence_removal"], input[name="advanced_plugins"][value="filler_removal"]'
+    ).forEach((input) => input.addEventListener('change', syncSpeechEditUI));
+    document.querySelectorAll('#blocks-container [data-block-form]').forEach(bindBlockCard);
+    bindBlockDragAndDrop();
+    byId('add-block-button')?.addEventListener('click', addBlockForm);
+    syncLanguageModeUI();
+    syncAutoReframeUI();
+    syncSpeechEditUI();
+    updateBlockOrder();
+    updateStylePreview();
+</script>
+{% endblock %}

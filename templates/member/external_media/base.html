@@ -1,0 +1,45 @@
+{% extends 'member_base.html' %}
+{% load static %}
+
+{% block title %}Mídia Externa{% endblock %}
+
+{% block head %}
+<style>
+    .media-shell { max-width: 1120px; margin: 0 auto; padding: 1rem 1rem 8rem; }
+    .media-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 1.25rem; box-shadow: 0 8px 30px rgba(38,2,0,.06); }
+    .media-btn { display:inline-flex; align-items:center; justify-content:center; gap:.55rem; border-radius:.8rem; padding:.75rem 1rem; font-weight:800; transition:.2s; }
+    .media-btn:hover { transform: translateY(-1px); }
+    .media-primary { color:#fff; background:#C90905; }
+    .media-secondary { color:#C90905; border:2px solid #C90905; background:#fff; }
+    .media-muted { color:#374151; border:1px solid #d1d5db; background:#fff; }
+    .media-form label { display:block; margin-bottom:.4rem; font-weight:800; color:#1f2937; }
+    .media-form input[type=text], .media-form input[type=file], .media-form select, .media-form textarea { width:100%; border:1px solid #d1d5db; border-radius:.75rem; padding:.75rem; background:#fff; }
+    .media-form ul { display:flex; flex-wrap:wrap; gap:1rem; }
+    .media-form li label { display:flex; gap:.5rem; align-items:center; font-weight:600; }
+    .media-form .errorlist { display:block; color:#b91c1c; margin:.35rem 0; font-size:.875rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="bg-white border-b border-gray-200">
+    <div class="max-w-6xl mx-auto px-4 py-5 flex flex-wrap items-center justify-between gap-4">
+        <a href="{% url 'external_media_dashboard' %}" class="flex items-center gap-3">
+            <span class="w-11 h-11 rounded-xl text-white flex items-center justify-center" style="background:#C90905"><i class="fas fa-closed-captioning"></i></span>
+            <span><strong class="block text-gray-900 text-lg">Mídia Externa</strong><small class="text-gray-500">Produção por templates</small></span>
+        </a>
+        <nav class="flex flex-wrap gap-2">
+            <a href="{% url 'external_media_create' %}" class="media-btn media-primary"><i class="fas fa-plus"></i>Novo projeto</a>
+            <a href="{% url 'external_media_glossary' %}" class="media-btn media-muted"><i class="fas fa-book"></i>Glossário</a>
+        </nav>
+    </div>
+</header>
+
+{% if messages %}
+<div class="max-w-6xl mx-auto px-4 pt-4">
+    {% for message in messages %}<div class="p-3 mb-2 rounded-xl border bg-white text-sm font-bold">{{ message }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<main class="media-shell">{% block media_content %}{% endblock %}</main>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

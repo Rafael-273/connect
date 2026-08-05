@@ -1,0 +1,14 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_content %}
+<div class="max-w-3xl mx-auto">
+    <div class="mb-6"><p class="text-sm font-bold uppercase tracking-widest" style="color:#C90905">Novo projeto</p><h1 class="text-3xl font-black">Escolha um template</h1><p class="text-gray-500 mt-2">O template define os blocos, o formato e todas as etapas automáticas.</p></div>
+    <form method="post" class="media-card media-form p-5 sm:p-8 space-y-6" id="media-upload-form">
+        {% csrf_token %}
+        {% for error in form.non_field_errors %}<p class="text-red-700">{{ error }}</p>{% endfor %}
+        <div>{{ form.template_version.label_tag }}{{ form.template_version }}{{ form.template_version.errors }}<p class="text-xs text-gray-500 mt-2">A versão escolhida fica congelada neste projeto.</p></div>
+        <div>{{ form.name.label_tag }}{{ form.name }}{{ form.name.errors }}</div>
+        <button class="media-btn media-primary w-full" type="submit"><i class="fas fa-arrow-right"></i>Criar projeto e enviar vídeos</button>
+    </form>
+</div>
+{% endblock %}

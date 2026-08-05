@@ -23,3 +23,19 @@ from .course_attendance import AttendanceCourse, CourseParticipant, CourseLesson
 from .roteiro import Roteiro, AnuncioRoteiro, AnuncioRoteiroData
 from .house_of_peace import HouseOfPeace, HouseOfPeaceAssignment
 from .prosperar import ProsperarCompany
+from .external_media import (
+    ExternalMediaJob,
+    ExternalMediaProject,
+    GlossaryTerm,
+    MediaAsset,
+    MediaTemplate,
+    MediaTemplateBlock,
+    MediaTemplatePlugin,
+    MediaTemplateVersion,
+    ProjectBlockMedia,
+    ProjectPipelineStep,
+    RenderPreset,
+    SubtitleCue,
+    SubtitleStyle,
+    SubtitleTrack,
+)

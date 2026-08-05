@@ -29,6 +29,21 @@ from .house_of_peace import (
     AdminHouseOfPeaceListView, AdminHouseOfPeaceDetailView,
     AdminHouseOfPeaceStatusView, AdminHouseOfPeaceDeleteView,
 )
+from .external_media import (
+    AdminExternalMediaBackgroundMusicDeleteView,
+    AdminExternalMediaBackgroundMusicSaveView,
+    AdminExternalMediaPresetDeleteView,
+    AdminExternalMediaPresetSaveView,
+    AdminExternalMediaSubtitleStyleDeleteView,
+    AdminExternalMediaSubtitleStyleSaveView,
+    AdminExternalMediaTemplateCreateView,
+    AdminExternalMediaTemplateDetailView,
+    AdminExternalMediaTemplateEditView,
+    AdminExternalMediaTemplateListView,
+    AdminExternalMediaVersionDuplicateView,
+    AdminExternalMediaVersionFormView,
+    AdminExternalMediaVersionPublishView,
+)
 
 __all__ = [
     'DashboardView',
@@ -50,4 +65,11 @@ __all__ = [
     'AnuncioReorderView', 'RoteiroPrintView',
     'AdminHouseOfPeaceListView', 'AdminHouseOfPeaceDetailView',
     'AdminHouseOfPeaceStatusView', 'AdminHouseOfPeaceDeleteView',
+    'AdminExternalMediaTemplateCreateView', 'AdminExternalMediaTemplateDetailView',
+    'AdminExternalMediaTemplateEditView', 'AdminExternalMediaTemplateListView',
+    'AdminExternalMediaVersionDuplicateView', 'AdminExternalMediaVersionFormView',
+    'AdminExternalMediaVersionPublishView',
+    'AdminExternalMediaBackgroundMusicDeleteView', 'AdminExternalMediaBackgroundMusicSaveView',
+    'AdminExternalMediaPresetDeleteView', 'AdminExternalMediaPresetSaveView',
+    'AdminExternalMediaSubtitleStyleDeleteView', 'AdminExternalMediaSubtitleStyleSaveView',
 ]

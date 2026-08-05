@@ -18,7 +18,7 @@
 
 <nav id="bottomNav"
      class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out
-            {% if can_consolidate and is_ministration_member %}w-[90%] max-w-lg justify-around{% else %}w-auto gap-2 justify-center{% endif %}"
+            {% if can_consolidate or is_ministration_member or is_external_media_member %}w-[94%] max-w-2xl justify-around{% else %}w-auto gap-2 justify-center{% endif %}"
      style="--accent: {% if color_scheme == 'house_of_peace' %}#C90905{% elif nav_active == 'consolidation' %}#F59E0B{% elif nav_active == 'profile' %}#6366F1{% else %}#C90905{% endif %};
             --ar: {% if color_scheme == 'house_of_peace' %}201{% elif nav_active == 'consolidation' %}245{% elif nav_active == 'profile' %}99{% else %}201{% endif %};
             --ag: {% if color_scheme == 'house_of_peace' %}9{% elif nav_active == 'consolidation' %}158{% elif nav_active == 'profile' %}102{% else %}9{% endif %};
@@ -73,6 +73,19 @@
         </div>
         <span class="{% if nav_active == 'curas' %}{% else %}group-hover:font-bold{% endif %} transition-all"
               {% if nav_active == 'curas' %}style="color: var(--accent);"{% endif %}>Curas</span>
+    </a>
+    {% endif %}
+
+    <!-- Mídia Externa -->
+    {% if is_external_media_member %}
+    <a href="{% url 'external_media_dashboard' %}"
+       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
+              {% if nav_active == 'media' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
+        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 {% if nav_active != 'media' %}border-2 shadow-md{% endif %}"
+             style="{% if nav_active == 'media' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
+            <i class="fas fa-closed-captioning text-lg {% if nav_active == 'media' %}text-white{% endif %}" {% if nav_active != 'media' %}style="color:var(--accent)"{% endif %}></i>
+        </div>
+        <span {% if nav_active == 'media' %}style="color:var(--accent)"{% endif %}>Mídia</span>
     </a>
     {% endif %}
 

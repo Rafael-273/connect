@@ -1,6 +1,12 @@
 from django.contrib import admin
 from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, testimony, prayer_request, music
 from .models.schedule import ScaleDivision, DivisionMember
+from .models.external_media import (
+    ExternalMediaJob, ExternalMediaProject, GlossaryTerm, MediaAsset, MediaTemplate,
+    MediaTemplateBlock, MediaTemplatePlugin, MediaTemplateVersion, ProjectBlockMedia,
+    ProjectPipelineStep, RenderPreset, SubtitleCue, SubtitleStyle, SubtitleTrack,
+)
+from django.utils import timezone
 
 admin.site.register(ministry.Ministry)
 admin.site.register(follow_up.FollowUp)
@@ -9,6 +15,155 @@ admin.site.register(member.Member)
 admin.site.register(visitor.Visitor)
 admin.site.register(neighborhood.Neighborhood)
 admin.site.register(user.User)
+admin.site.register(GlossaryTerm)
+admin.site.register(RenderPreset)
+admin.site.register(SubtitleStyle)
+
+
+class MediaTemplateBlockInline(admin.StackedInline):
+    model = MediaTemplateBlock
+    extra = 0
+    fields = (
+        'key', 'name', 'description', 'order', 'is_required', 'allows_multiple',
+        'min_occurrences', 'max_occurrences', 'default_video',
+    )
+
+    def has_add_permission(self, request, obj=None):
+        return not obj or obj.status == MediaTemplateVersion.Status.DRAFT
+
+    def has_change_permission(self, request, obj=None):
+        return not obj or obj.status == MediaTemplateVersion.Status.DRAFT
+
+    def has_delete_permission(self, request, obj=None):
+        return not obj or obj.status == MediaTemplateVersion.Status.DRAFT
+
+
+class MediaTemplatePluginInline(admin.TabularInline):
+    model = MediaTemplatePlugin
+    extra = 0
+    fields = ('code', 'order', 'is_enabled', 'user_can_override', 'configuration')
+
+    def has_add_permission(self, request, obj=None):
+        return not obj or obj.status == MediaTemplateVersion.Status.DRAFT
+
+    def has_change_permission(self, request, obj=None):
+        return not obj or obj.status == MediaTemplateVersion.Status.DRAFT
+
+    def has_delete_permission(self, request, obj=None):
+        return not obj or obj.status == MediaTemplateVersion.Status.DRAFT
+
+
+@admin.register(MediaTemplate)
+class MediaTemplateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'latest_version', 'is_active', 'update_at')
+    list_filter = ('category', 'is_active')
+    search_fields = ('name', 'description')
+    prepopulated_fields = {'slug': ('name',)}
+
+    @admin.display(description='Versão atual')
+    def latest_version(self, obj):
+        version = obj.published_version
+        return f'v{version.version}' if version else 'Sem publicação'
+
+
+@admin.register(MediaTemplateVersion)
+class MediaTemplateVersionAdmin(admin.ModelAdmin):
+    list_display = ('template', 'version', 'status', 'preset', 'published_at')
+    list_filter = ('status', 'template__category')
+    search_fields = ('template__name', 'changelog')
+    inlines = [MediaTemplateBlockInline, MediaTemplatePluginInline]
+    actions = ['create_new_version']
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj and obj.status != MediaTemplateVersion.Status.DRAFT:
+            return [field.name for field in obj._meta.fields if field.name not in {'id'}]
+        return ('published_at',)
+
+    def save_model(self, request, obj, form, change):
+        if obj.status == MediaTemplateVersion.Status.PUBLISHED and not obj.published_at:
+            obj.published_at = timezone.now()
+        super().save_model(request, obj, form, change)
+
+    @admin.action(description='Criar nova versão em rascunho')
+    def create_new_version(self, request, queryset):
+        created = 0
+        for source in queryset.prefetch_related('blocks', 'plugins'):
+            next_version = (source.template.versions.order_by('-version').values_list('version', flat=True).first() or 0) + 1
+            clone = MediaTemplateVersion.objects.create(
+                template=source.template,
+                version=next_version,
+                status=MediaTemplateVersion.Status.DRAFT,
+                changelog=f'Criada a partir da versão {source.version}.',
+                preset=source.preset,
+                subtitle_style=source.subtitle_style,
+                translated_subtitle_style=source.translated_subtitle_style,
+                original_language=source.original_language,
+                output_languages=list(source.output_languages),
+                default_settings=dict(source.default_settings),
+                allowed_overrides=list(source.allowed_overrides),
+                intro_video=source.intro_video.name,
+                outro_video=source.outro_video.name,
+                lut_file=source.lut_file.name,
+                background_music=source.background_music,
+                music_file=source.music_file.name,
+                music_volume=source.music_volume,
+                fade_in_seconds=source.fade_in_seconds,
+                fade_out_seconds=source.fade_out_seconds,
+            )
+            MediaTemplateBlock.objects.bulk_create([
+                MediaTemplateBlock(
+                    version=clone, key=item.key, name=item.name, description=item.description,
+                    order=item.order, is_required=item.is_required, allows_multiple=item.allows_multiple,
+                    min_occurrences=item.min_occurrences, max_occurrences=item.max_occurrences,
+                    default_video=item.default_video.name,
+                ) for item in source.blocks.all()
+            ])
+            MediaTemplatePlugin.objects.bulk_create([
+                MediaTemplatePlugin(
+                    version=clone, code=item.code, order=item.order, is_enabled=item.is_enabled,
+                    user_can_override=item.user_can_override, configuration=dict(item.configuration),
+                ) for item in source.plugins.all()
+            ])
+            created += 1
+        self.message_user(request, f'{created} nova(s) versão(ões) criada(s) como rascunho.')
+
+
+class ProjectBlockMediaInline(admin.TabularInline):
+    model = ProjectBlockMedia
+    extra = 0
+    readonly_fields = ('block', 'file', 'original_filename', 'position', 'duration_ms', 'file_size')
+    can_delete = False
+
+
+class ProjectPipelineStepInline(admin.TabularInline):
+    model = ProjectPipelineStep
+    extra = 0
+    readonly_fields = ('code', 'label', 'order', 'status', 'progress', 'started_at', 'finished_at', 'message')
+    can_delete = False
+
+
+@admin.register(ExternalMediaProject)
+class ExternalMediaProjectAdmin(admin.ModelAdmin):
+    list_display = ('name', 'template_version', 'created_by', 'status', 'progress', 'created_at')
+    list_filter = ('status', 'template_version__template')
+    search_fields = ('name', 'created_by__name')
+    readonly_fields = (
+        'public_id', 'created_by', 'template_version', 'configuration', 'status', 'progress',
+        'current_step', 'error_message', 'started_at', 'finished_at', 'celery_task_id', 'render_job',
+    )
+    inlines = [ProjectBlockMediaInline, ProjectPipelineStepInline]
+
+
+@admin.register(ExternalMediaJob)
+class ExternalMediaJobAdmin(admin.ModelAdmin):
+    list_display = ('name', 'created_by', 'status', 'progress', 'preset', 'created_at')
+    list_filter = ('status', 'preset')
+    search_fields = ('name', 'created_by__name')
+
+
+admin.site.register(MediaAsset)
+admin.site.register(SubtitleCue)
+admin.site.register(SubtitleTrack)
 
 
 @admin.register(prayer_request.PrayerRequest)

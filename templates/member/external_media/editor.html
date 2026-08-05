@@ -1,0 +1,13 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_content %}
+<div class="mb-6"><a href="{% url 'external_media_detail' job.public_id %}" class="text-sm text-gray-500 hover:underline">← Voltar ao processamento</a><h1 class="text-3xl font-black mt-2">Editor de legendas</h1><p class="text-gray-500">Edite somente o texto e as quebras de linha. A sincronização está bloqueada.</p></div>
+<form method="post">{% csrf_token %}
+    {% for track in tracks %}
+    <section class="media-card p-4 sm:p-6 mb-6"><h2 class="text-xl font-black mb-4">{{ track.get_language_display }} {% if track.is_source %}<span class="text-xs bg-gray-100 rounded-full px-2 py-1">Original</span>{% endif %}</h2><div class="space-y-3">
+        {% for cue in track.cues.all %}<div class="grid grid-cols-1 sm:grid-cols-[110px_1fr] gap-3 p-3 rounded-xl bg-gray-50"><div class="text-xs font-mono text-gray-500 pt-2"><strong>#{{ cue.cue_index }}</strong><br>{{ cue.start_ms }} ms<br>{{ cue.end_ms }} ms</div><textarea name="cue_{{ cue.pk }}" rows="2" maxlength="1000" class="w-full border border-gray-300 rounded-xl p-3" required>{{ cue.text }}</textarea></div>{% endfor %}
+    </div></section>
+    {% endfor %}
+    <div class="sticky bottom-4 flex justify-end"><button class="media-btn media-primary shadow-xl" type="submit"><i class="fas fa-save"></i>Salvar alterações</button></div>
+</form>
+{% endblock %}

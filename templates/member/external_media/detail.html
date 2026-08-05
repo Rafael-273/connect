@@ -1,0 +1,48 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_content %}
+<div class="flex flex-wrap justify-between items-start gap-4 mb-6">
+    <div><a href="{% url 'external_media_dashboard' %}" class="text-sm text-gray-500 hover:underline">← Histórico</a><h1 class="text-3xl font-black mt-2">{{ job.name }}</h1><p class="text-gray-500">Enviado por {{ job.created_by.name }} em {{ job.created_at|date:'d/m/Y H:i' }}</p></div>
+    {% if job.status == 'AWAITING_REVIEW' or job.status == 'FINISHED' %}<a href="{% url 'external_media_editor' job.public_id %}" class="media-btn media-secondary"><i class="fas fa-pen"></i>Editar legendas</a>{% endif %}
+</div>
+
+<section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_status' job.public_id %}" data-terminal="{% if job.status == 'AWAITING_REVIEW' or job.status == 'FINISHED' or job.status == 'ERROR' or job.status == 'CANCELLED' %}1{% else %}0{% endif %}">
+    <div class="flex justify-between gap-3 mb-3"><div><span id="status-label" class="font-black">{{ job.get_status_display }}</span><p id="current-step" class="text-sm text-gray-500">{{ job.current_step }}</p></div><strong id="progress-value" class="text-2xl" style="color:#C90905">{{ job.progress }}%</strong></div>
+    <div class="h-3 bg-gray-100 rounded-full overflow-hidden"><div id="progress-bar" class="h-full transition-all duration-500" style="width:{{ job.progress }}%;background:#C90905"></div></div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 text-xs font-bold text-gray-500">
+        <span>✓ Upload</span><span>{% if job.progress >= 12 %}✓{% else %}○{% endif %} Áudio</span><span>{% if job.progress >= 30 %}✓{% else %}○{% endif %} Transcrição</span><span>{% if job.progress >= 58 %}✓{% else %}○{% endif %} Tradução</span><span>{% if job.progress >= 82 %}✓{% else %}○{% endif %} Legendas</span><span>{% if job.progress >= 86 %}✓{% else %}○{% endif %} Renderização</span><span>{% if job.progress == 100 %}✓{% else %}○{% endif %} Finalizado</span>
+    </div>
+    {% if job.error_message %}<div class="mt-5 p-4 bg-red-50 text-red-700 rounded-xl"><strong>Erro:</strong> {{ job.error_message }}</div>{% endif %}
+</section>
+
+{% if job.status == 'AWAITING_REVIEW' %}
+<section class="media-card p-6 text-center"><i class="fas fa-spell-check text-4xl mb-3" style="color:#C90905"></i><h2 class="text-xl font-black">Revise antes de renderizar</h2><p class="text-gray-500 mb-5">Você pode corrigir texto e quebras de linha. Os timestamps são protegidos.</p><div class="flex flex-wrap justify-center gap-3"><a href="{% url 'external_media_editor' job.public_id %}" class="media-btn media-secondary">Abrir editor</a><form method="post" action="{% url 'external_media_render' job.public_id %}">{% csrf_token %}<button class="media-btn media-primary">Aprovar e renderizar</button></form></div></section>
+{% endif %}
+
+{% if job.status == 'ERROR' %}
+<section class="media-card p-6 text-center mb-7">
+    <i class="fas fa-rotate text-4xl mb-3" style="color:#C90905"></i>
+    <h2 class="text-xl font-black">Tentar novamente</h2>
+    <p class="text-gray-500 mb-5">Quando der erro, você pode reenviar o processamento completo ou repetir só a renderização final se as legendas já estiverem prontas.</p>
+    <div class="flex flex-wrap justify-center gap-3">
+        <form method="post" action="{% url 'external_media_retry' job.public_id %}">{% csrf_token %}<button class="media-btn media-secondary">Reprocessar legendas</button></form>
+        {% if can_retry_render %}
+        <form method="post" action="{% url 'external_media_render' job.public_id %}">{% csrf_token %}<button class="media-btn media-primary">Tentar só a renderização</button></form>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% if job.status == 'FINISHED' %}
+<h2 class="text-2xl font-black mb-4">Arquivos disponíveis</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-7">
+    <div class="media-card p-4"><h3 class="font-black mb-3">Vídeo original</h3><video controls preload="metadata" class="w-full rounded-xl bg-black" src="{% url 'external_media_original' job.public_id %}?preview=1"></video><a class="media-btn media-muted w-full mt-3" href="{% url 'external_media_original' job.public_id %}"><i class="fas fa-download"></i>Baixar original</a></div>
+    {% for asset in assets %}{% if asset.kind == 'VIDEO' %}<div class="media-card p-4"><h3 class="font-black mb-3">{% if job.project.configuration.language_mode == 'translated' and job.output_languages|length > 1 %}Vídeo {{ job.output_languages|join:" + "|upper }}{% else %}Vídeo {{ asset.get_language_display }}{% endif %}</h3><video controls preload="metadata" class="w-full rounded-xl bg-black" src="{% url 'external_media_asset' job.public_id asset.pk %}?preview=1"></video><a class="media-btn media-primary w-full mt-3" href="{% url 'external_media_asset' job.public_id asset.pk %}"><i class="fas fa-download"></i>{% if job.project.configuration.language_mode == 'translated' and job.output_languages|length > 1 %}Baixar vídeo bilingue{% else %}Baixar vídeo {{ asset.language|upper }}{% endif %}</a></div>{% endif %}{% endfor %}
+</div>
+<div class="media-card p-5"><h3 class="font-black mb-4">Legendas</h3><div class="flex flex-wrap gap-3">{% for asset in assets %}{% if asset.kind == 'SRT' or asset.kind == 'VTT' %}<a class="media-btn media-muted" href="{% url 'external_media_asset' job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>{{ asset.language|upper }} .{{ asset.kind|lower }}</a>{% endif %}{% endfor %}</div></div>
+{% endif %}
+
+<script>
+(function(){const card=document.getElementById('progress-card');if(!card||card.dataset.terminal==='1')return;const poll=async()=>{try{const response=await fetch(card.dataset.statusUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}});const data=await response.json();document.getElementById('status-label').textContent=data.status_label;document.getElementById('current-step').textContent=data.current_step;document.getElementById('progress-value').textContent=data.progress+'%';document.getElementById('progress-bar').style.width=data.progress+'%';if(data.is_terminal){window.location.reload();return;}}catch(e){}setTimeout(poll,2500)};setTimeout(poll,1500)})();
+</script>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Mídia Externa - Templates{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+    .admin-card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .status-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .status-active { background: #dcfce7; color: #166534; }
+    .status-inactive { background: #f3f4f6; color: #374151; }
+    .data-table thead th { background: #f8fafc; font-size: .7rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: #6b7280; padding: 14px 24px; }
+    .data-table tbody td { padding: 16px 24px; border-bottom: 1px solid #f1f5f9; }
+    .data-table tbody tr:hover { background: #fffafa; box-shadow: inset 3px 0 0 var(--color-primary); }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; transition: all .15s; }
+    .action-btn-view { background: rgba(201,9,5,.08); color: var(--color-primary); }
+    .action-btn-edit { background: #eff6ff; color: #2563eb; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="flex items-center justify-between gap-3 mb-5">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center shadow-sm">
+                        <ion-icon name="videocam-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Mídia Externa</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">Templates de produção usados pelos projetos dos membros</p>
+                    </div>
+                </div>
+                <a href="{% url 'admin_external_media_template_create' %}" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold">
+                    <ion-icon name="add-outline"></ion-icon>
+                    Novo Template
+                </a>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div class="admin-card p-5"><p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Templates</p><p class="text-3xl font-black text-gray-900 mt-2">{{ stats.total }}</p></div>
+                <div class="admin-card p-5"><p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Versões publicadas</p><p class="text-3xl font-black text-gray-900 mt-2">{{ stats.published }}</p></div>
+                <div class="admin-card p-5"><p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Rascunhos</p><p class="text-3xl font-black text-gray-900 mt-2">{{ stats.drafts }}</p></div>
+            </div>
+
+            <div class="flex items-center gap-2 mb-5">
+                <form method="get" class="flex items-center gap-2 flex-1">
+                    <input type="text" name="search" value="{{ search }}" placeholder="Buscar template..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    <select name="status" class="px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                        <option value="">Todos</option>
+                        <option value="active" {% if status == 'active' %}selected{% endif %}>Ativos</option>
+                        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inativos</option>
+                    </select>
+                    <button class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Filtrar</button>
+                </form>
+                <a href="{% url 'admin_external_media_template_create' %}" class="sm:hidden w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg flex items-center justify-center">
+                    <ion-icon name="add-outline"></ion-icon>
+                </a>
+            </div>
+
+            <div class="admin-card overflow-hidden">
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="data-table w-full">
+                        <thead>
+                            <tr>
+                                <th>Template</th>
+                                <th>Categoria</th>
+                                <th>Versão atual</th>
+                                <th>Uso</th>
+                                <th>Status</th>
+                                <th class="text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for template in templates %}
+                            <tr>
+                                <td>
+                                    <p class="font-bold text-gray-900">{{ template.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ template.description|default:'Sem descrição'|truncatechars:80 }}</p>
+                                </td>
+                                <td class="text-sm text-gray-600">{{ template.get_category_display }}</td>
+                                <td class="text-sm text-gray-600">{% if template.published_version %}v{{ template.published_version.version }}{% else %}Sem publicação{% endif %}</td>
+                                <td class="text-sm text-gray-600">{{ template.projects_count }} projeto{{ template.projects_count|pluralize }}</td>
+                                <td><span class="status-badge {% if template.is_active %}status-active{% else %}status-inactive{% endif %}">{% if template.is_active %}Ativo{% else %}Inativo{% endif %}</span></td>
+                                <td class="text-right">
+                                    <div class="inline-flex gap-2">
+                                        <a href="{% url 'admin_external_media_template_detail' template.id %}" class="action-btn action-btn-view" title="Ver"><ion-icon name="eye-outline"></ion-icon></a>
+                                        <a href="{% url 'admin_external_media_template_edit' template.id %}" class="action-btn action-btn-edit" title="Editar"><ion-icon name="create-outline"></ion-icon></a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-gray-500 py-10">Nenhum template de mídia cadastrado.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="md:hidden divide-y divide-gray-100">
+                    {% for template in templates %}
+                    <a href="{% url 'admin_external_media_template_detail' template.id %}" class="block p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="font-bold text-gray-900">{{ template.name }}</h3>
+                                <p class="text-xs text-gray-500 mt-1">{{ template.get_category_display }} · {% if template.published_version %}v{{ template.published_version.version }}{% else %}sem publicação{% endif %}</p>
+                            </div>
+                            <span class="status-badge {% if template.is_active %}status-active{% else %}status-inactive{% endif %}">{% if template.is_active %}Ativo{% else %}Inativo{% endif %}</span>
+                        </div>
+                    </a>
+                    {% empty %}
+                    <div class="p-8 text-center text-gray-500">Nenhum template cadastrado.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

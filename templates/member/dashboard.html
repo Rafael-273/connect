@@ -480,8 +480,14 @@
 
 
     <!-- Cards de Ministério -->
-    {% if is_ministration_member or can_consolidate or is_boas_vindas_member or is_moderacao_member or member_schedules or can_music_member or is_house_of_peace_member%}
+    {% if is_ministration_member or can_consolidate or is_boas_vindas_member or is_moderacao_member or member_schedules or can_music_member or is_house_of_peace_member or is_external_media_member %}
     <div id="ministry-cards-container" class="space-y-3">
+
+        {% if is_external_media_member %}
+        <a href="{% url 'external_media_dashboard' %}" class="block rounded-xl sm:rounded-2xl border-2 p-4 sm:p-5 transition-all hover:-translate-y-1 hover:shadow-lg" style="border-color:rgba(201,9,5,.25);background:#fff">
+            <div class="flex items-center gap-4"><div class="w-12 h-12 rounded-xl flex items-center justify-center text-white" style="background:#C90905"><i class="fas fa-closed-captioning"></i></div><div><h3 class="text-xl font-black">Mídia Externa</h3><p class="text-sm text-gray-500">Transcrever, traduzir e renderizar legendas</p></div><i class="fas fa-chevron-right ml-auto text-gray-400"></i></div>
+        </a>
+        {% endif %}
 
         {% if is_ministration_member %}
         <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card

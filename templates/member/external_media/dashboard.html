@@ -1,0 +1,45 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_content %}
+<div class="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <div><p class="text-sm font-bold uppercase tracking-widest" style="color:#C90905">Histórico de processamentos</p><h1 class="text-3xl font-black text-gray-900">Projetos de mídia</h1></div>
+    <a href="{% url 'external_media_create' %}" class="media-btn media-primary"><i class="fas fa-plus"></i>Novo projeto</a>
+</div>
+
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
+    <div class="media-card p-5"><div class="text-sm text-gray-500">Projetos recentes</div><div class="text-3xl font-black">{{ projects|length }}</div></div>
+    <div class="media-card p-5"><div class="text-sm text-gray-500">Em andamento</div><div class="text-3xl font-black text-amber-600">{{ processing_count }}</div></div>
+    <div class="media-card p-5"><div class="text-sm text-gray-500">Downloads</div><div class="text-3xl font-black text-green-600">{{ total_downloads }}</div></div>
+</div>
+
+<div class="media-card overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left">
+            <thead class="bg-gray-50 text-xs uppercase text-gray-500"><tr><th class="p-4">Nome</th><th class="p-4">Usuário</th><th class="p-4">Data</th><th class="p-4">Tempo</th><th class="p-4">Status</th><th class="p-4">Downloads</th></tr></thead>
+            <tbody class="divide-y divide-gray-100">
+            {% for project in projects %}
+                <tr class="hover:bg-gray-50">
+                    <td class="p-4"><a class="font-extrabold hover:underline" href="{% url 'external_media_project_detail' project.public_id %}">{{ project.name }}</a><div class="text-xs text-gray-500">{{ project.template_version.template.name }} · v{{ project.template_version.version }}</div></td>
+                    <td class="p-4 text-sm">{{ project.created_by.name }}</td>
+                    <td class="p-4 text-sm whitespace-nowrap">{{ project.created_at|date:'d/m/Y H:i' }}</td>
+                    <td class="p-4 text-sm">{% if project.duration_seconds != None %}{{ project.duration_seconds }}s{% else %}—{% endif %}</td>
+                    <td class="p-4"><span class="text-xs font-bold px-2 py-1 rounded-full {% if project.status == 'FINISHED' %}bg-green-100 text-green-700{% elif project.status == 'ERROR' %}bg-red-100 text-red-700{% else %}bg-amber-100 text-amber-700{% endif %}">{{ project.get_status_display }}</span></td>
+                    <td class="p-4 text-sm">{% if project.render_job %}{{ project.render_job.download_count }}{% else %}0{% endif %}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="6" class="p-10 text-center text-gray-500">Nenhum projeto criado ainda.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if legacy_jobs %}
+<div class="mt-8 mb-3"><h2 class="text-lg font-black">Processamentos anteriores</h2><p class="text-sm text-gray-500">Vídeos criados antes da arquitetura de projetos continuam disponíveis.</p></div>
+<div class="media-card overflow-hidden">
+    <div class="overflow-x-auto"><table class="w-full text-left"><tbody class="divide-y divide-gray-100">
+    {% for job in legacy_jobs %}<tr><td class="p-4"><a class="font-extrabold hover:underline" href="{% url 'external_media_detail' job.public_id %}">{{ job.name }}</a><div class="text-xs text-gray-500">{{ job.preset.name }}</div></td><td class="p-4 text-sm">{{ job.created_at|date:'d/m/Y H:i' }}</td><td class="p-4"><span class="text-xs font-bold">{{ job.get_status_display }}</span></td><td class="p-4 text-sm">{{ job.download_count }} downloads</td></tr>{% endfor %}
+    </tbody></table></div>
+</div>
+{% endif %}
+{% endblock %}

@@ -70,6 +70,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'website.context_processors.member_module_access',
             ],
         },
     },
@@ -141,6 +142,13 @@ STORAGES = {
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
+    "external_media": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {
+            "location": os.path.join(BASE_DIR, 'media'),
+            "base_url": "/media/",
+        },
+    },
 }
 
 AUTH_USER_MODEL = 'website.User'
@@ -165,6 +173,44 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 SITE_DOMAIN = os.getenv('SITE_DOMAIN', 'localhost:8000')
+
+# OpenAI (texto + transcrição de arquivos). O tradutor ao vivo continua usando
+# Azure Speech; o modelo de texto deve ser escolhido por cada fluxo/view.
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+OPENAI_TRANSCRIPTION_MODEL = os.getenv(
+    'OPENAI_TRANSCRIPTION_MODEL',
+    'whisper-1',
+)
+
+# Mídia Externa. O modelo de tradução é escolhido pelo fluxo que usa AIService;
+# apenas o modelo de transcrição é centralizado na variável acima.
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', os.getenv('REDIS_URL', 'redis://redis:6379/1'))
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = int(os.getenv('CELERY_TASK_TIME_LIMIT', 21600))
+CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv('CELERY_TASK_SOFT_TIME_LIMIT', 21000))
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ACKS_LATE = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+EXTERNAL_MEDIA_MAX_UPLOAD_MB = int(os.getenv('EXTERNAL_MEDIA_MAX_UPLOAD_MB', 2048))
+EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS = int(os.getenv('EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS', 1200))
+EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE = int(os.getenv('EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE', 40))
+EXTERNAL_MEDIA_FFMPEG_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_FFMPEG_TIMEOUT', 21600))
+EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfast')
+EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
+EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')
+EXTERNAL_MEDIA_INTERMEDIATE_CRF = int(os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_CRF', 22))
+EXTERNAL_MEDIA_PROXY_WIDTH = int(os.getenv('EXTERNAL_MEDIA_PROXY_WIDTH', 854))
+EXTERNAL_MEDIA_PROXY_CRF = int(os.getenv('EXTERNAL_MEDIA_PROXY_CRF', 30))
+EXTERNAL_MEDIA_PROXY_PRESET = os.getenv('EXTERNAL_MEDIA_PROXY_PRESET', 'ultrafast')
+EXTERNAL_MEDIA_AUTO_REFRAME_INTERVAL_FRAMES = int(
+    os.getenv('EXTERNAL_MEDIA_AUTO_REFRAME_INTERVAL_FRAMES', 10)
+)
+EXTERNAL_MEDIA_AUTO_REFRAME_MAX_ANALYSIS_WIDTH = int(
+    os.getenv('EXTERNAL_MEDIA_AUTO_REFRAME_MAX_ANALYSIS_WIDTH', 640)
+)
+FFMPEG_BINARY = os.getenv('FFMPEG_BINARY', 'ffmpeg')
+FFPROBE_BINARY = os.getenv('FFPROBE_BINARY', 'ffprobe')
 
 # Configuração de arquivos de mídia
 MEDIA_URL = '/media/'
@@ -232,6 +278,15 @@ if USE_S3:
             'default_acl': None,  # Não definir ACL nos arquivos
             'querystring_auth': False,  # Não usar query string auth nas URLs
         }
+    }
+    STORAGES['external_media'] = {
+        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        'OPTIONS': {
+            'location': 'private_media',
+            'file_overwrite': False,
+            'default_acl': None,
+            'querystring_auth': True,
+        },
     }
     
     # Override MEDIA_URL when using S3

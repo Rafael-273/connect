@@ -1,0 +1,100 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_content %}
+<div class="mb-7 flex flex-wrap items-start justify-between gap-4">
+    <div>
+        <a href="{% url 'external_media_dashboard' %}" class="text-sm text-gray-500 hover:underline">← Projetos</a>
+        <h1 class="text-3xl font-black mt-2">{{ project.name }}</h1>
+        <p class="text-gray-500">{{ project.template_version.template.name }} · versão {{ project.template_version.version }} · {{ project.created_by.name }}</p>
+    </div>
+    <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">{% csrf_token %}<button class="media-btn media-muted"><i class="fas fa-copy"></i>Duplicar</button></form>
+</div>
+
+{% if project.status != 'DRAFT' %}
+<section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'AWAITING_REVIEW' or project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}">
+    <div class="flex justify-between gap-4 mb-3"><div><p class="font-black" id="status-label">{{ project.get_status_display }}</p><p class="text-sm text-gray-500" id="current-step">{{ project.current_step }}</p></div><strong id="progress-value">{{ project.progress }}%</strong></div>
+    <div class="h-3 rounded-full bg-gray-100 overflow-hidden"><div id="progress-bar" class="h-full transition-all" style="width:{{ project.progress }}%;background:#C90905"></div></div>
+    {% if project.error_message %}<p class="mt-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm">{{ project.error_message }}</p>{% endif %}
+    {% if steps %}<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-5">{% for step in steps %}<div class="rounded-xl border p-3 text-sm"><i class="fas {% if step.status == 'FINISHED' %}fa-check-circle text-green-600{% elif step.status == 'ERROR' %}fa-circle-xmark text-red-600{% elif step.status == 'RUNNING' %}fa-circle-notch fa-spin text-amber-600{% else %}fa-circle text-gray-300{% endif %} mr-2"></i>{{ step.label }}{% if step.status == 'SKIPPED' %}<span class="block text-xs text-amber-700 mt-1">{{ step.message }}</span>{% endif %}</div>{% endfor %}</div>{% endif %}
+</section>
+{% endif %}
+
+{% if project.configuration.speech_edit_preview %}
+{% with preview=project.configuration.speech_edit_preview %}
+<section class="media-card p-5 mb-7">
+    <div class="flex items-center gap-3 mb-4">
+        <i class="fas fa-scissors text-xl" style="color:#C90905"></i>
+        <div><h2 class="font-black text-lg">Edição inteligente de fala</h2><p class="text-sm text-gray-500">Prévia dos ajustes aplicados antes da renderização.</p></div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="rounded-xl bg-gray-50 p-4"><span class="text-sm text-gray-500">Silêncios ajustados</span><strong class="block text-2xl mt-1">{{ preview.silence_count }}</strong></div>
+        <div class="rounded-xl bg-gray-50 p-4"><span class="text-sm text-gray-500">Vícios de fala removidos</span><strong class="block text-2xl mt-1">{{ preview.filler_count }}</strong></div>
+        <div class="rounded-xl bg-gray-50 p-4"><span class="text-sm text-gray-500">Tempo economizado</span><strong class="block text-2xl mt-1">{{ preview.saved_seconds }}s</strong></div>
+    </div>
+</section>
+{% endwith %}
+{% endif %}
+
+{% if project.status == 'DRAFT' %}
+<div class="mb-7">
+    <h2 class="text-xl font-black mb-1">Vídeos do projeto</h2>
+    <p class="text-gray-500">Envie o conteúdo de cada bloco. A ordem já está definida pelo template.</p>
+</div>
+<div class="space-y-4 mb-7">
+{% for item in blocks %}
+    <section class="media-card p-5">
+        <div class="flex flex-wrap justify-between gap-3 mb-4">
+            <div><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-black">{{ forloop.counter }}</span><h3 class="font-black text-lg">{{ item.definition.name }}</h3>{% if item.definition.is_required %}<span class="text-xs font-bold text-red-700">Obrigatório</span>{% else %}<span class="text-xs text-gray-500">Opcional</span>{% endif %}</div>{% if item.definition.description %}<p class="text-sm text-gray-500 mt-1 ml-9">{{ item.definition.description }}</p>{% endif %}</div>
+            <span class="text-xs text-gray-500">{% if item.definition.allows_multiple %}até {{ item.definition.max_occurrences }} vídeos{% else %}1 vídeo{% endif %}</span>
+        </div>
+        {% for media in item.media %}
+        <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 mb-2"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div>
+        {% empty %}
+            {% if item.definition.default_video %}<p class="rounded-xl bg-green-50 text-green-800 p-3 text-sm mb-3"><i class="fas fa-circle-check mr-2"></i>Usará o vídeo padrão do template.</p>{% else %}<p class="text-sm text-gray-400 mb-3">Nenhum upload.</p>{% endif %}
+        {% endfor %}
+        {% if item.media|length < item.definition.max_occurrences %}<form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_upload' project.public_id item.definition.pk %}" class="media-form flex flex-col sm:flex-row gap-3">{% csrf_token %}<input type="file" name="file" accept="video/*" required class="flex-1"><button class="media-btn media-secondary"><i class="fas fa-upload"></i>Enviar</button></form>{% endif %}
+    </section>
+{% endfor %}
+</div>
+
+<section class="media-card p-5 mb-7">
+    <h2 class="font-black text-lg mb-3">Pipeline do template</h2>
+    <div class="flex flex-wrap gap-2">{% for plugin in plugins %}<span class="px-3 py-2 rounded-xl text-sm {% if plugin.is_enabled %}bg-green-50 text-green-800{% else %}bg-gray-100 text-gray-500{% endif %}"><i class="fas {% if plugin.is_enabled %}fa-check{% else %}fa-minus{% endif %} mr-1"></i>{{ plugin.get_code_display }}</span>{% empty %}<span class="text-gray-500">Somente montagem e renderização.</span>{% endfor %}</div>
+    {% if settings_form.fields %}<form method="post" action="{% url 'external_media_project_settings' project.public_id %}" class="media-form mt-5 pt-5 border-t">{% csrf_token %}<p class="font-bold mb-3">Opções permitidas</p><div class="flex flex-wrap gap-4">{% for field in settings_form %}<label class="flex gap-2 items-center">{{ field }} {{ field.label }}</label>{% endfor %}</div><button class="media-btn media-muted mt-4">Salvar opções</button></form>{% endif %}
+</section>
+
+{% if validation_errors %}<div class="rounded-xl bg-amber-50 text-amber-800 p-4 mb-4">{% for error in validation_errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
+<form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
+{% endif %}
+
+{% if project.status == 'AWAITING_REVIEW' and project.render_job %}
+<section class="media-card p-6 text-center mb-7"><i class="fas fa-spell-check text-4xl mb-3" style="color:#C90905"></i><h2 class="text-xl font-black">Revise as legendas</h2><p class="text-gray-500 mb-5">Você pode corrigir o texto sem alterar os timestamps.</p><div class="flex flex-wrap justify-center gap-3"><a href="{% url 'external_media_editor' project.render_job.public_id %}" class="media-btn media-secondary">Abrir editor</a><form method="post" action="{% url 'external_media_project_render' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary">Aprovar e renderizar</button></form></div></section>
+{% endif %}
+
+{% if project.status == 'ERROR' %}
+<section class="media-card p-6 text-center mb-7">
+    <i class="fas fa-rotate text-4xl mb-3" style="color:#C90905"></i>
+    <h2 class="text-xl font-black">Tentar novamente</h2>
+    <p class="text-gray-500 mb-5">Você pode repetir o projeto inteiro ou, quando as legendas já estiverem prontas, repetir só a renderização final.</p>
+    <div class="flex flex-wrap justify-center gap-3">
+        <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-secondary">Reprocessar projeto</button></form>
+        {% if can_retry_render %}
+        <form method="post" action="{% url 'external_media_project_render' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary">Tentar só a renderização</button></form>
+        {% endif %}
+    </div>
+</section>
+{% endif %}
+
+{% if project.render_job and project.status == 'FINISHED' %}
+<section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+    {% for asset in assets %}{% if asset.kind == 'VIDEO' %}<div class="media-card p-4"><h3 class="font-black mb-3">{% if project.configuration.language_mode == 'translated' and project.render_job.output_languages|length > 1 %}Vídeo {{ project.render_job.output_languages|join:" + "|upper }}{% else %}Vídeo {{ asset.get_language_display }}{% endif %}</h3><video controls preload="metadata" class="w-full rounded-xl bg-black" src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1"></video><a class="media-btn media-primary w-full mt-3" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-download"></i>{% if project.configuration.language_mode == 'translated' and project.render_job.output_languages|length > 1 %}Baixar vídeo bilingue{% else %}Baixar vídeo {{ asset.language|upper }}{% endif %}</a></div>{% endif %}{% endfor %}
+</section>
+<div class="media-card p-5"><h3 class="font-black mb-4">Legendas</h3><div class="flex flex-wrap gap-3">{% for asset in assets %}{% if asset.kind == 'SRT' or asset.kind == 'VTT' %}<a class="media-btn media-muted" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>{{ asset.language|upper }} .{{ asset.kind|lower }}</a>{% endif %}{% endfor %}</div></div>
+{% endif %}
+
+{% if project.status != 'DRAFT' and project.status != 'AWAITING_REVIEW' and project.status != 'FINISHED' and project.status != 'ERROR' %}
+<script>
+(function(){const card=document.getElementById('progress-card');if(!card||card.dataset.terminal==='1')return;const poll=()=>fetch(card.dataset.statusUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.json()).then(data=>{document.getElementById('status-label').textContent=data.status_label;document.getElementById('current-step').textContent=data.current_step;document.getElementById('progress-value').textContent=data.progress+'%';document.getElementById('progress-bar').style.width=data.progress+'%';if(data.is_terminal){window.location.reload();}else{setTimeout(poll,2500);}}).catch(()=>setTimeout(poll,5000));setTimeout(poll,1500);})();
+</script>
+{% endif %}
+{% endblock %}
