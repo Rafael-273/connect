@@ -45,8 +45,8 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div class="admin-card p-5"><p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Templates</p><p class="text-3xl font-black text-gray-900 mt-2">{{ stats.total }}</p></div>
-                <div class="admin-card p-5"><p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Versões publicadas</p><p class="text-3xl font-black text-gray-900 mt-2">{{ stats.published }}</p></div>
-                <div class="admin-card p-5"><p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Rascunhos</p><p class="text-3xl font-black text-gray-900 mt-2">{{ stats.drafts }}</p></div>
+                <div class="admin-card p-5"><p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Templates ativos</p><p class="text-3xl font-black text-gray-900 mt-2">{{ stats.active }}</p></div>
+                <div class="admin-card p-5"><p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Projetos criados</p><p class="text-3xl font-black text-gray-900 mt-2">{{ stats.projects|default:0 }}</p></div>
             </div>
 
             <div class="flex items-center gap-2 mb-5">
@@ -71,7 +71,7 @@
                             <tr>
                                 <th>Template</th>
                                 <th>Categoria</th>
-                                <th>Versão atual</th>
+                                <th>Blocos</th>
                                 <th>Uso</th>
                                 <th>Status</th>
                                 <th class="text-right">Ações</th>
@@ -85,7 +85,7 @@
                                     <p class="text-xs text-gray-500">{{ template.description|default:'Sem descrição'|truncatechars:80 }}</p>
                                 </td>
                                 <td class="text-sm text-gray-600">{{ template.get_category_display }}</td>
-                                <td class="text-sm text-gray-600">{% if template.published_version %}v{{ template.published_version.version }}{% else %}Sem publicação{% endif %}</td>
+                                <td class="text-sm text-gray-600">{{ template.blocks_count }} bloco{{ template.blocks_count|pluralize }}</td>
                                 <td class="text-sm text-gray-600">{{ template.projects_count }} projeto{{ template.projects_count|pluralize }}</td>
                                 <td><span class="status-badge {% if template.is_active %}status-active{% else %}status-inactive{% endif %}">{% if template.is_active %}Ativo{% else %}Inativo{% endif %}</span></td>
                                 <td class="text-right">
@@ -108,7 +108,7 @@
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <h3 class="font-bold text-gray-900">{{ template.name }}</h3>
-                                <p class="text-xs text-gray-500 mt-1">{{ template.get_category_display }} · {% if template.published_version %}v{{ template.published_version.version }}{% else %}sem publicação{% endif %}</p>
+                                <p class="text-xs text-gray-500 mt-1">{{ template.get_category_display }} · {{ template.blocks_count }} bloco{{ template.blocks_count|pluralize }} · {{ template.projects_count }} projeto{{ template.projects_count|pluralize }}</p>
                             </div>
                             <span class="status-badge {% if template.is_active %}status-active{% else %}status-inactive{% endif %}">{% if template.is_active %}Ativo{% else %}Inativo{% endif %}</span>
                         </div>

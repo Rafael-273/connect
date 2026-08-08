@@ -78,11 +78,9 @@ class ExternalMediaProjectForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         latest = MediaTemplateVersion.objects.filter(
             template=OuterRef('template'),
-            status=MediaTemplateVersion.Status.PUBLISHED,
         ).order_by('-version').values('pk')[:1]
         self.fields['template_version'].queryset = (
             MediaTemplateVersion.objects.filter(
-                status=MediaTemplateVersion.Status.PUBLISHED,
                 template__is_active=True,
                 pk=Subquery(latest),
             ).select_related('template').order_by('template__name')
@@ -90,6 +88,9 @@ class ExternalMediaProjectForm(forms.ModelForm):
 
 
 class ProjectBlockMediaForm(forms.ModelForm):
+    trim_start_seconds = forms.DecimalField(required=False, min_value=0, decimal_places=3, max_digits=12)
+    trim_end_seconds = forms.DecimalField(required=False, min_value=0, decimal_places=3, max_digits=12)
+
     class Meta:
         model = ProjectBlockMedia
         fields = ['file']
@@ -98,6 +99,20 @@ class ProjectBlockMediaForm(forms.ModelForm):
 
     def clean_file(self):
         return validate_video_upload(self.cleaned_data['file'])
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get('trim_start_seconds')
+        end = cleaned_data.get('trim_end_seconds')
+        if start is not None and end is not None and end <= start:
+            raise forms.ValidationError('O tempo final do corte precisa ser maior que o tempo inicial.')
+        return cleaned_data
+
+    @staticmethod
+    def seconds_to_ms(value):
+        if value in (None, ''):
+            return None
+        return max(0, round(float(value) * 1000))
 
 
 class ExternalMediaProjectSettingsForm(forms.Form):

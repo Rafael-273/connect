@@ -42,16 +42,70 @@ def get_external_media_storage():
     return storages['external_media']
 
 
+def format_processing_duration(seconds):
+    if seconds is None:
+        return ''
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    parts = []
+    if hours:
+        parts.append(f'{hours}h')
+    if minutes:
+        parts.append(f'{minutes}min')
+    if secs or not parts:
+        parts.append(f'{secs}s')
+    return ' '.join(parts)
+
+
 class SubtitleStyle(BaseModel):
+    class FontWeight(models.IntegerChoices):
+        REGULAR = 400, 'Regular'
+        MEDIUM = 500, 'Medium'
+        SEMIBOLD = 600, 'SemiBold'
+        BOLD = 700, 'Bold'
+        EXTRABOLD = 800, 'ExtraBold'
+        BLACK = 900, 'Black'
+
+    class Alignment(models.IntegerChoices):
+        BOTTOM_LEFT = 1, 'Inferior esquerdo'
+        BOTTOM_CENTER = 2, 'Inferior centro'
+        BOTTOM_RIGHT = 3, 'Inferior direito'
+        MIDDLE_LEFT = 4, 'Meio esquerdo'
+        MIDDLE_CENTER = 5, 'Meio centro'
+        MIDDLE_RIGHT = 6, 'Meio direito'
+        TOP_LEFT = 7, 'Superior esquerdo'
+        TOP_CENTER = 8, 'Superior centro'
+        TOP_RIGHT = 9, 'Superior direito'
+
     name = models.CharField(max_length=100, unique=True)
     font_name = models.CharField(max_length=100, default='Arial')
+    font_weight = models.PositiveSmallIntegerField(
+        choices=FontWeight.choices,
+        default=FontWeight.BOLD,
+    )
     font_size = models.PositiveIntegerField(default=48)
     primary_color = models.CharField(max_length=10, default='#FFFFFF')
+    primary_opacity = models.PositiveSmallIntegerField(default=100)
+    background_enabled = models.BooleanField(default=False)
+    background_color = models.CharField(max_length=10, default='#000000')
+    background_opacity = models.PositiveSmallIntegerField(default=70)
+    background_padding_x = models.PositiveSmallIntegerField(default=14)
+    background_padding_y = models.PositiveSmallIntegerField(default=8)
+    background_height_percent = models.PositiveSmallIntegerField(default=100)
+    background_radius = models.PositiveSmallIntegerField(default=10)
     outline_color = models.CharField(max_length=10, default='#000000')
     outline_width = models.PositiveIntegerField(default=3)
     shadow = models.PositiveIntegerField(default=1)
+    shadow_angle = models.PositiveSmallIntegerField(default=45)
+    shadow_size = models.PositiveSmallIntegerField(default=0)
+    shadow_blur = models.PositiveSmallIntegerField(default=0)
+    shadow_opacity = models.PositiveSmallIntegerField(default=70)
     margin_bottom = models.PositiveIntegerField(default=60)
-    alignment = models.PositiveSmallIntegerField(default=2)
+    alignment = models.PositiveSmallIntegerField(
+        choices=Alignment.choices,
+        default=Alignment.BOTTOM_CENTER,
+    )
     max_lines = models.PositiveSmallIntegerField(default=2)
     max_characters = models.PositiveSmallIntegerField(default=42)
     is_active = models.BooleanField(default=True)
@@ -158,6 +212,10 @@ class ExternalMediaJob(BaseModel):
         return max(0, int((end - self.started_at).total_seconds()))
 
     @property
+    def duration_label(self):
+        return format_processing_duration(self.duration_seconds)
+
+    @property
     def download_count(self):
         return sum(asset.download_count for asset in self.assets.all())
 
@@ -245,7 +303,7 @@ class MediaAsset(BaseModel):
 
 
 class MediaTemplate(BaseModel):
-    """Stable template identity. Editable content lives in immutable versions."""
+    """Stable template identity. The admin edits the latest version as the current template."""
 
     class Category(models.TextChoices):
         ANNOUNCEMENT = 'ANNOUNCEMENT', 'Anúncios'
@@ -277,6 +335,10 @@ class MediaTemplate(BaseModel):
     @property
     def published_version(self):
         return self.versions.filter(status=MediaTemplateVersion.Status.PUBLISHED).order_by('-version').first()
+
+    @property
+    def current_version(self):
+        return self.versions.order_by('-version').first()
 
 
 class MediaTemplateVersion(BaseModel):
@@ -339,7 +401,7 @@ class MediaTemplateVersion(BaseModel):
         verbose_name_plural = 'Versões de templates'
 
     def __str__(self):
-        return f'{self.template.name} v{self.version}'
+        return self.template.name
 
 
 class MediaTemplateBlock(BaseModel):
@@ -352,6 +414,7 @@ class MediaTemplateBlock(BaseModel):
     allows_multiple = models.BooleanField(default=False)
     min_occurrences = models.PositiveSmallIntegerField(default=1)
     max_occurrences = models.PositiveSmallIntegerField(default=1)
+    skip_extra_processing = models.BooleanField(default=False)
     default_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
@@ -447,6 +510,10 @@ class ExternalMediaProject(BaseModel):
         end = self.finished_at or self.update_at
         return max(0, int((end - self.started_at).total_seconds()))
 
+    @property
+    def duration_label(self):
+        return format_processing_duration(self.duration_seconds)
+
 
 class ProjectBlockMedia(BaseModel):
     project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='block_media')
@@ -457,6 +524,8 @@ class ProjectBlockMedia(BaseModel):
     original_filename = models.CharField(max_length=255)
     position = models.PositiveSmallIntegerField(default=1)
     duration_ms = models.PositiveBigIntegerField(blank=True, null=True)
+    trim_start_ms = models.PositiveBigIntegerField(default=0)
+    trim_end_ms = models.PositiveBigIntegerField(blank=True, null=True)
     file_size = models.PositiveBigIntegerField(default=0)
     thumbnail = models.ImageField(
         upload_to=external_media_project_upload_path,

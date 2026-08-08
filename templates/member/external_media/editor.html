@@ -1,13 +1,483 @@
 {% extends 'member/external_media/base.html' %}
 
+{% block head %}
+{{ block.super }}
+<style>
+    .editor-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:1.5rem; }
+    @media (min-width: 1180px) { .editor-layout { grid-template-columns:minmax(0,1.2fr) minmax(360px,.8fr); align-items:start; } }
+    .cue-card { border:1px solid #e5e7eb; border-radius:1rem; background:#f8fafc; transition:.18s ease; }
+    .cue-card:hover { border-color:#fca5a5; background:#fff; }
+    .cue-card.is-active { border-color:#C90905; background:#fff5f5; box-shadow:0 10px 26px rgba(201,9,5,.08); }
+    .cue-input { width:100%; border:1px solid #d1d5db; border-radius:1rem; padding:1rem; resize:vertical; min-height:104px; background:#fff; }
+    .cue-input:focus { outline:none; border-color:#C90905; box-shadow:0 0 0 4px rgba(201,9,5,.08); }
+    .preview-card { position:sticky; top:1rem; }
+    .preview-shell { border:1px solid #e5e7eb; border-radius:1.5rem; background:linear-gradient(180deg,#0f172a 0%,#172036 100%); padding:1rem; }
+    .preview-toolbar { display:flex; flex-wrap:wrap; gap:.6rem; align-items:center; justify-content:space-between; margin-bottom:.9rem; }
+    .preview-toolbar-left, .preview-toolbar-right { display:flex; flex-wrap:wrap; gap:.55rem; align-items:center; }
+    .preview-chip { display:inline-flex; align-items:center; gap:.4rem; border-radius:999px; background:rgba(255,255,255,.12); color:rgba(255,255,255,.92); padding:.45rem .85rem; font-size:.78rem; font-weight:700; }
+    .preview-control { display:inline-flex; align-items:center; justify-content:center; gap:.35rem; min-width:40px; height:40px; border-radius:.8rem; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.08); color:#fff; font-weight:800; transition:.18s; }
+    .preview-control:hover { background:rgba(255,255,255,.16); }
+    .preview-stage { position:relative; width:100%; border-radius:1.35rem; overflow:auto; background:rgba(15,23,42,.36); border:1px solid rgba(255,255,255,.08); }
+    .preview-stage::before { content:""; display:block; padding-top:var(--preview-ratio,56.25%); }
+    .preview-viewport { position:absolute; inset:0; overflow:auto; padding:1rem; }
+    .preview-canvas-wrap { width:100%; height:100%; display:flex; align-items:center; justify-content:center; overflow:auto; }
+    .preview-canvas { position:relative; width:100%; height:100%; min-width:260px; min-height:180px; transform-origin:center center; transform:scale(var(--preview-zoom,1)); transition:transform .18s ease; }
+    .preview-background { position:absolute; inset:0; border-radius:1rem; background:
+        radial-gradient(circle at 76% 16%, rgba(148,163,184,.18), transparent 16%),
+        linear-gradient(145deg, rgba(17,24,39,.98), rgba(30,41,59,.88)); }
+    .preview-safe-area { position:absolute; inset:5% 5%; border:1px dashed rgba(255,255,255,.08); border-radius:.9rem; pointer-events:none; }
+    .preview-subtitle { position:absolute; left:50%; transform:translateX(-50%); display:inline-block; width:max-content; max-width:min(92%,calc(100% - 40px)); text-align:center; line-height:1.16; letter-spacing:.01em; white-space:pre-wrap; word-break:break-word; }
+    .preview-subtitle.single-line { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .preview-meta-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.9rem; margin-top:1rem; }
+    .preview-meta-card { border:1px solid #e5e7eb; border-radius:1rem; padding:1rem; background:#fff; }
+    .preview-meta-title { color:#94a3b8; font-size:.72rem; font-weight:800; letter-spacing:.18em; text-transform:uppercase; margin-bottom:.55rem; }
+    .preview-modal { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; background:rgba(15,23,42,.75); padding:1rem; }
+    .preview-modal.active { display:flex; }
+    .preview-modal-panel { width:min(1500px,100%); max-height:92vh; overflow:auto; border-radius:1.5rem; background:#0f172a; box-shadow:0 30px 80px rgba(0,0,0,.32); }
+    .preview-modal-header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.1rem; border-bottom:1px solid rgba(255,255,255,.08); }
+    .preview-modal-body { padding:1rem; }
+    .preview-modal-stage { height:min(74vh,900px); }
+</style>
+{% endblock %}
+
 {% block media_content %}
-<div class="mb-6"><a href="{% url 'external_media_detail' job.public_id %}" class="text-sm text-gray-500 hover:underline">← Voltar ao processamento</a><h1 class="text-3xl font-black mt-2">Editor de legendas</h1><p class="text-gray-500">Edite somente o texto e as quebras de linha. A sincronização está bloqueada.</p></div>
-<form method="post">{% csrf_token %}
-    {% for track in tracks %}
-    <section class="media-card p-4 sm:p-6 mb-6"><h2 class="text-xl font-black mb-4">{{ track.get_language_display }} {% if track.is_source %}<span class="text-xs bg-gray-100 rounded-full px-2 py-1">Original</span>{% endif %}</h2><div class="space-y-3">
-        {% for cue in track.cues.all %}<div class="grid grid-cols-1 sm:grid-cols-[110px_1fr] gap-3 p-3 rounded-xl bg-gray-50"><div class="text-xs font-mono text-gray-500 pt-2"><strong>#{{ cue.cue_index }}</strong><br>{{ cue.start_ms }} ms<br>{{ cue.end_ms }} ms</div><textarea name="cue_{{ cue.pk }}" rows="2" maxlength="1000" class="w-full border border-gray-300 rounded-xl p-3" required>{{ cue.text }}</textarea></div>{% endfor %}
-    </div></section>
-    {% endfor %}
-    <div class="sticky bottom-4 flex justify-end"><button class="media-btn media-primary shadow-xl" type="submit"><i class="fas fa-save"></i>Salvar alterações</button></div>
+<div class="mb-6">
+    <a href="{% url 'external_media_detail' job.public_id %}" class="text-sm text-gray-500 hover:underline">← Voltar ao processamento</a>
+    <h1 class="text-3xl font-black mt-2">Editor de legendas</h1>
+    <p class="text-gray-500">Edite o texto e as quebras de linha com preview ao vivo. Os timestamps continuam bloqueados.</p>
+</div>
+
+<div id="editor-config"
+     data-original-language="{{ job.original_language }}"
+     data-preset-width="{{ job.preset.width|default:'1920' }}"
+     data-preset-height="{{ job.preset.height|default:'1080' }}"
+     data-original-font="{{ job.subtitle_style.font_name|default:'Arial' }}"
+     data-original-font-size="{{ job.subtitle_style.font_size|default:'48' }}"
+     data-original-primary="{{ job.subtitle_style.primary_color|default:'#FFFFFF' }}"
+     data-original-background-enabled="{% if job.subtitle_style.background_enabled %}true{% else %}false{% endif %}"
+     data-original-background-color="{{ job.subtitle_style.background_color|default:'#000000' }}"
+     data-original-background-opacity="{{ job.subtitle_style.background_opacity|default:'70' }}"
+     data-original-background-padding-x="{{ job.subtitle_style.background_padding_x|default:'14' }}"
+     data-original-background-padding-y="{{ job.subtitle_style.background_padding_y|default:'8' }}"
+     data-original-background-radius="{{ job.subtitle_style.background_radius|default:'10' }}"
+     data-original-outline="{{ job.subtitle_style.outline_color|default:'#000000' }}"
+     data-original-outline-width="{{ job.subtitle_style.outline_width|default:'3' }}"
+     data-original-shadow="{{ job.subtitle_style.shadow|default:'1' }}"
+     data-original-margin="{{ job.subtitle_style.margin_bottom|default:'60' }}"
+     data-original-lines="{{ job.subtitle_style.max_lines|default:'2' }}"
+     data-original-chars="{{ job.subtitle_style.max_characters|default:'42' }}"
+     data-translated-font="{{ job.translated_subtitle_style.font_name|default:job.subtitle_style.font_name|default:'Arial' }}"
+     data-translated-font-size="{{ job.translated_subtitle_style.font_size|default:job.subtitle_style.font_size|default:'48' }}"
+     data-translated-primary="{{ job.translated_subtitle_style.primary_color|default:job.subtitle_style.primary_color|default:'#FFFFFF' }}"
+     data-translated-background-enabled="{% if job.translated_subtitle_style.background_enabled|default:job.subtitle_style.background_enabled %}true{% else %}false{% endif %}"
+     data-translated-background-color="{{ job.translated_subtitle_style.background_color|default:job.subtitle_style.background_color|default:'#000000' }}"
+     data-translated-background-opacity="{{ job.translated_subtitle_style.background_opacity|default:job.subtitle_style.background_opacity|default:'70' }}"
+     data-translated-background-padding-x="{{ job.translated_subtitle_style.background_padding_x|default:job.subtitle_style.background_padding_x|default:'14' }}"
+     data-translated-background-padding-y="{{ job.translated_subtitle_style.background_padding_y|default:job.subtitle_style.background_padding_y|default:'8' }}"
+     data-translated-background-radius="{{ job.translated_subtitle_style.background_radius|default:job.subtitle_style.background_radius|default:'10' }}"
+     data-translated-outline="{{ job.translated_subtitle_style.outline_color|default:job.subtitle_style.outline_color|default:'#000000' }}"
+     data-translated-outline-width="{{ job.translated_subtitle_style.outline_width|default:job.subtitle_style.outline_width|default:'3' }}"
+     data-translated-shadow="{{ job.translated_subtitle_style.shadow|default:job.subtitle_style.shadow|default:'1' }}"
+     data-translated-margin="{{ job.translated_subtitle_style.margin_bottom|default:job.subtitle_style.margin_bottom|default:'60' }}"
+     data-translated-lines="{{ job.translated_subtitle_style.max_lines|default:job.subtitle_style.max_lines|default:'2' }}"
+     data-translated-chars="{{ job.translated_subtitle_style.max_characters|default:job.subtitle_style.max_characters|default:'42' }}">
+</div>
+
+<form method="post">
+    {% csrf_token %}
+
+    <div class="editor-layout">
+        <div class="space-y-6">
+            {% for track in tracks %}
+            <section class="media-card p-4 sm:p-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                    <h2 class="text-xl font-black">
+                        {{ track.get_language_display }}
+                        {% if track.is_source %}
+                        <span class="text-xs bg-gray-100 rounded-full px-2 py-1">Original</span>
+                        {% endif %}
+                    </h2>
+                    <span class="text-sm text-gray-500">{{ track.cues.count }} bloco{{ track.cues.count|pluralize:"s" }}</span>
+                </div>
+
+                <div class="space-y-3">
+                    {% for cue in track.cues.all %}
+                    <div class="cue-card p-3 sm:p-4"
+                         data-cue-card
+                         data-language="{{ track.language }}"
+                         data-cue-index="{{ cue.cue_index }}"
+                         data-cue-id="{{ cue.pk }}">
+                        <div class="grid grid-cols-1 sm:grid-cols-[120px_1fr] gap-3">
+                            <div class="text-xs font-mono text-gray-500 pt-1">
+                                <strong>#{{ cue.cue_index }}</strong><br>
+                                {{ cue.start_ms }} ms<br>
+                                {{ cue.end_ms }} ms
+                            </div>
+                            <textarea name="cue_{{ cue.pk }}"
+                                      rows="3"
+                                      maxlength="1000"
+                                      class="cue-input"
+                                      data-cue-input
+                                      data-language="{{ track.language }}"
+                                      data-cue-index="{{ cue.cue_index }}"
+                                      data-cue-id="{{ cue.pk }}"
+                                      required>{{ cue.text }}</textarea>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </section>
+            {% endfor %}
+        </div>
+
+        <aside class="preview-card">
+            <section class="media-card p-4 sm:p-5">
+                <div class="mb-4">
+                    <h2 class="text-xl font-black">Preview da legenda</h2>
+                    <p class="text-sm text-gray-500 mt-1">Veja o bloco selecionado com o estilo real do render. Original e traduzida aparecem juntas quando existirem.</p>
+                </div>
+
+                <div class="preview-shell">
+                    <div class="preview-toolbar">
+                        <div class="preview-toolbar-left">
+                            <span id="preview-format-chip" class="preview-chip">16:9 · 1920x1080</span>
+                            <span id="preview-cue-chip" class="preview-chip">Bloco #1</span>
+                        </div>
+                        <div class="preview-toolbar-right">
+                            <button type="button" class="preview-control" data-preview-zoom-out title="Diminuir">−</button>
+                            <span id="preview-zoom-label" class="preview-chip">100%</span>
+                            <button type="button" class="preview-control" data-preview-zoom-in title="Aumentar">+</button>
+                            <button type="button" class="preview-control" data-preview-zoom-reset title="Resetar zoom">100</button>
+                            <button type="button" class="preview-control" data-preview-expand title="Ver maior">
+                                <i class="fas fa-expand"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="preview-stage" class="preview-stage" style="--preview-ratio:56.25%;">
+                        <div class="preview-viewport">
+                            <div class="preview-canvas-wrap">
+                                <div id="preview-canvas" class="preview-canvas" style="--preview-zoom:1;">
+                                    <div class="preview-background"></div>
+                                    <div class="preview-safe-area"></div>
+                                    <div id="preview-original" class="preview-subtitle">Selecione um bloco para visualizar a legenda original.</div>
+                                    <div id="preview-translated" class="preview-subtitle">A legenda traduzida aparecerá aqui.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="preview-meta-grid">
+                    <div class="preview-meta-card">
+                        <div class="preview-meta-title">Legenda original</div>
+                        <div id="preview-original-meta" class="text-sm text-gray-700"></div>
+                    </div>
+                    <div class="preview-meta-card">
+                        <div class="preview-meta-title">Legenda traduzida</div>
+                        <div id="preview-translated-meta" class="text-sm text-gray-700"></div>
+                    </div>
+                </div>
+            </section>
+        </aside>
+    </div>
+
+    <div class="sticky bottom-4 flex justify-end mt-6">
+        <button class="media-btn media-primary shadow-xl" type="submit">
+            <i class="fas fa-save"></i>Salvar alterações
+        </button>
+    </div>
 </form>
+
+<div id="preview-modal" class="preview-modal" aria-hidden="true">
+    <div class="preview-modal-panel">
+        <div class="preview-modal-header">
+            <div class="flex flex-wrap items-center gap-3">
+                <strong class="text-white text-lg">Preview ampliado</strong>
+                <span id="preview-modal-format-chip" class="preview-chip">16:9 · 1920x1080</span>
+                <span id="preview-modal-cue-chip" class="preview-chip">Bloco #1</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button type="button" class="preview-control" data-preview-modal-zoom-out>−</button>
+                <span id="preview-modal-zoom-label" class="preview-chip">160%</span>
+                <button type="button" class="preview-control" data-preview-modal-zoom-in>+</button>
+                <button type="button" class="preview-control" data-preview-modal-zoom-reset>160</button>
+                <button type="button" class="preview-control" data-preview-close>
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="preview-modal-body">
+            <div id="preview-modal-stage" class="preview-stage preview-modal-stage" style="--preview-ratio:56.25%;">
+                <div class="preview-viewport">
+                    <div class="preview-canvas-wrap">
+                        <div id="preview-modal-canvas" class="preview-canvas" style="--preview-zoom:1.6;">
+                            <div class="preview-background"></div>
+                            <div class="preview-safe-area"></div>
+                            <div id="preview-modal-original" class="preview-subtitle">Selecione um bloco para visualizar a legenda original.</div>
+                            <div id="preview-modal-translated" class="preview-subtitle">A legenda traduzida aparecerá aqui.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(() => {
+    const config = document.getElementById('editor-config');
+    if (!config) return;
+
+    const originalLanguage = config.dataset.originalLanguage || 'pt';
+    const presetWidth = parseInt(config.dataset.presetWidth || '1920', 10);
+    const presetHeight = parseInt(config.dataset.presetHeight || '1080', 10);
+
+    const originalStyle = {
+        font: config.dataset.originalFont || 'Arial',
+        fontSize: parseInt(config.dataset.originalFontSize || '48', 10),
+        primary: config.dataset.originalPrimary || '#FFFFFF',
+        backgroundEnabled: config.dataset.originalBackgroundEnabled === 'true',
+        backgroundColor: config.dataset.originalBackgroundColor || '#000000',
+        backgroundOpacity: parseInt(config.dataset.originalBackgroundOpacity || '70', 10),
+        backgroundPaddingX: parseInt(config.dataset.originalBackgroundPaddingX || '14', 10),
+        backgroundPaddingY: parseInt(config.dataset.originalBackgroundPaddingY || '8', 10),
+        backgroundRadius: parseInt(config.dataset.originalBackgroundRadius || '10', 10),
+        outline: config.dataset.originalOutline || '#000000',
+        outlineWidth: parseInt(config.dataset.originalOutlineWidth || '3', 10),
+        shadow: parseInt(config.dataset.originalShadow || '1', 10),
+        margin: parseInt(config.dataset.originalMargin || '60', 10),
+        lines: parseInt(config.dataset.originalLines || '2', 10),
+        chars: parseInt(config.dataset.originalChars || '42', 10),
+    };
+
+    const translatedStyle = {
+        font: config.dataset.translatedFont || originalStyle.font,
+        fontSize: parseInt(config.dataset.translatedFontSize || String(originalStyle.fontSize), 10),
+        primary: config.dataset.translatedPrimary || originalStyle.primary,
+        backgroundEnabled: config.dataset.translatedBackgroundEnabled === 'true',
+        backgroundColor: config.dataset.translatedBackgroundColor || originalStyle.backgroundColor,
+        backgroundOpacity: parseInt(config.dataset.translatedBackgroundOpacity || String(originalStyle.backgroundOpacity), 10),
+        backgroundPaddingX: parseInt(config.dataset.translatedBackgroundPaddingX || String(originalStyle.backgroundPaddingX), 10),
+        backgroundPaddingY: parseInt(config.dataset.translatedBackgroundPaddingY || String(originalStyle.backgroundPaddingY), 10),
+        backgroundRadius: parseInt(config.dataset.translatedBackgroundRadius || String(originalStyle.backgroundRadius), 10),
+        outline: config.dataset.translatedOutline || originalStyle.outline,
+        outlineWidth: parseInt(config.dataset.translatedOutlineWidth || String(originalStyle.outlineWidth), 10),
+        shadow: parseInt(config.dataset.translatedShadow || String(originalStyle.shadow), 10),
+        margin: parseInt(config.dataset.translatedMargin || String(originalStyle.margin), 10),
+        lines: parseInt(config.dataset.translatedLines || String(originalStyle.lines), 10),
+        chars: parseInt(config.dataset.translatedChars || String(originalStyle.chars), 10),
+    };
+
+    const cards = Array.from(document.querySelectorAll('[data-cue-card]'));
+    const inputs = Array.from(document.querySelectorAll('[data-cue-input]'));
+    const cueMap = new Map();
+
+    inputs.forEach((input) => {
+        const key = `${input.dataset.language}:${input.dataset.cueIndex}`;
+        cueMap.set(key, input);
+    });
+
+    const formatLabel = (() => {
+        const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+        const divisor = gcd(presetWidth, presetHeight);
+        return `${presetWidth / divisor}:${presetHeight / divisor} · ${presetWidth}x${presetHeight}`;
+    })();
+
+    const previewState = {
+        activeCueIndex: null,
+        activeLanguage: originalLanguage,
+        zoom: 1,
+        modalZoom: 1.6,
+    };
+
+    function findPartnerText(cueIndex, preferOriginal) {
+        if (preferOriginal) {
+            return cueMap.get(`${originalLanguage}:${cueIndex}`)?.value?.trim() || '';
+        }
+        const partner = inputs.find((input) => input.dataset.cueIndex === String(cueIndex) && input.dataset.language !== originalLanguage);
+        return partner?.value?.trim() || '';
+    }
+
+    function applySubtitleStyle(element, style, text, stage, allowSingleLine = false) {
+        if (!element || !stage) return;
+        const stageWidth = stage.clientWidth || presetWidth;
+        const stageHeight = stage.clientHeight || presetHeight;
+        const fontScale = stageWidth / presetWidth;
+        const verticalScale = stageHeight / presetHeight;
+        const outlineScale = stageWidth / presetWidth;
+        const shadowScale = stageWidth / presetWidth;
+
+        element.textContent = text || '—';
+        element.style.fontFamily = style.font;
+        element.style.fontSize = `${Math.max(1, style.fontSize * fontScale)}px`;
+        element.style.color = style.primary;
+        element.style.bottom = `${Math.max(0, style.margin * verticalScale)}px`;
+        if (style.backgroundEnabled) {
+            const color = style.backgroundColor || '#000000';
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            const alpha = Math.max(0, Math.min(100, style.backgroundOpacity)) / 100;
+            element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            element.style.padding = `${Math.max(1, style.backgroundPaddingY * verticalScale)}px ${Math.max(2, style.backgroundPaddingX * fontScale)}px`;
+            element.style.borderRadius = `${Math.max(0, style.backgroundRadius * fontScale)}px`;
+        } else {
+            element.style.backgroundColor = 'transparent';
+            element.style.padding = '0';
+            element.style.borderRadius = '0';
+        }
+        element.style.textShadow = [
+            `0 0 ${Math.max(.4, style.outlineWidth * outlineScale)}px ${style.outline}`,
+            `0 0 ${Math.max(.8, style.outlineWidth * outlineScale * 2)}px ${style.outline}`,
+            `${Math.max(.4, style.shadow * shadowScale)}px ${Math.max(.4, style.shadow * shadowScale)}px ${Math.max(.8, style.shadow * shadowScale * 2)}px rgba(0,0,0,.78)`,
+        ].join(', ');
+        element.classList.toggle('single-line', allowSingleLine || style.lines <= 1);
+    }
+
+    function renderMeta(target, title, style) {
+        if (!target) return;
+        target.innerHTML = `
+            <div class="font-semibold text-gray-900 mb-2">${title}</div>
+            <div class="text-sm text-gray-600">família ${style.font} · ${style.fontSize}px</div>
+            <div class="text-sm text-gray-500 mt-1">margem ${style.margin}px · até ${style.lines} linha(s) · ${style.chars} caracteres</div>
+            <div class="text-sm text-gray-500 mt-1">${style.backgroundEnabled ? `plano de fundo ${style.backgroundColor} · ${style.backgroundOpacity}%` : 'sem plano de fundo'}</div>
+        `;
+    }
+
+    function updateZoomLabels() {
+        const label = document.getElementById('preview-zoom-label');
+        const modalLabel = document.getElementById('preview-modal-zoom-label');
+        if (label) label.textContent = `${Math.round(previewState.zoom * 100)}%`;
+        if (modalLabel) modalLabel.textContent = `${Math.round(previewState.modalZoom * 100)}%`;
+        const canvas = document.getElementById('preview-canvas');
+        const modalCanvas = document.getElementById('preview-modal-canvas');
+        if (canvas) canvas.style.setProperty('--preview-zoom', previewState.zoom);
+        if (modalCanvas) modalCanvas.style.setProperty('--preview-zoom', previewState.modalZoom);
+    }
+
+    function renderPreview() {
+        const cueIndex = previewState.activeCueIndex || inputs[0]?.dataset.cueIndex;
+        if (!cueIndex) return;
+
+        previewState.activeCueIndex = cueIndex;
+        const originalText = findPartnerText(cueIndex, true);
+        const translatedText = findPartnerText(cueIndex, false);
+        const hasTranslated = Boolean(translatedText);
+
+        cards.forEach((card) => {
+            card.classList.toggle(
+                'is-active',
+                card.dataset.cueIndex === String(cueIndex) && card.dataset.language === previewState.activeLanguage
+            );
+        });
+
+        const original = document.getElementById('preview-original');
+        const translated = document.getElementById('preview-translated');
+        const modalOriginal = document.getElementById('preview-modal-original');
+        const modalTranslated = document.getElementById('preview-modal-translated');
+        const stage = document.getElementById('preview-stage');
+        const modalStage = document.getElementById('preview-modal-stage');
+
+        requestAnimationFrame(() => {
+            applySubtitleStyle(original, originalStyle, originalText || 'Legenda original vazia.', stage, false);
+            applySubtitleStyle(modalOriginal, originalStyle, originalText || 'Legenda original vazia.', modalStage, false);
+
+            if (translated && modalTranslated) {
+                translated.style.display = hasTranslated ? 'block' : 'none';
+                modalTranslated.style.display = hasTranslated ? 'block' : 'none';
+                if (hasTranslated) {
+                    applySubtitleStyle(translated, translatedStyle, translatedText, stage, translatedStyle.lines <= 1);
+                    applySubtitleStyle(modalTranslated, translatedStyle, translatedText, modalStage, translatedStyle.lines <= 1);
+                }
+            }
+        });
+
+        const cueChip = document.getElementById('preview-cue-chip');
+        const modalCueChip = document.getElementById('preview-modal-cue-chip');
+        if (cueChip) cueChip.textContent = `Bloco #${cueIndex}`;
+        if (modalCueChip) modalCueChip.textContent = `Bloco #${cueIndex}`;
+    }
+
+    function selectCue(input) {
+        previewState.activeCueIndex = input.dataset.cueIndex;
+        previewState.activeLanguage = input.dataset.language;
+        renderPreview();
+    }
+
+    document.getElementById('preview-stage')?.style.setProperty('--preview-ratio', `${(presetHeight / presetWidth) * 100}%`);
+    document.getElementById('preview-modal-stage')?.style.setProperty('--preview-ratio', `${(presetHeight / presetWidth) * 100}%`);
+    document.getElementById('preview-format-chip').textContent = formatLabel;
+    document.getElementById('preview-modal-format-chip').textContent = formatLabel;
+    renderMeta(document.getElementById('preview-original-meta'), 'Estilo aplicado no render original', originalStyle);
+    renderMeta(document.getElementById('preview-translated-meta'), 'Estilo aplicado na tradução', translatedStyle);
+    updateZoomLabels();
+
+    inputs.forEach((input) => {
+        input.addEventListener('focus', () => selectCue(input));
+        input.addEventListener('click', () => selectCue(input));
+        input.addEventListener('input', () => {
+            previewState.activeCueIndex = input.dataset.cueIndex;
+            previewState.activeLanguage = input.dataset.language;
+            renderPreview();
+        });
+    });
+
+    cards.forEach((card) => {
+        card.addEventListener('click', (event) => {
+            if (event.target.closest('textarea')) return;
+            const input = card.querySelector('[data-cue-input]');
+            if (input) {
+                input.focus();
+                selectCue(input);
+            }
+        });
+    });
+
+    document.querySelector('[data-preview-zoom-in]')?.addEventListener('click', () => {
+        previewState.zoom = Math.min(3, previewState.zoom + 0.2);
+        updateZoomLabels();
+    });
+    document.querySelector('[data-preview-zoom-out]')?.addEventListener('click', () => {
+        previewState.zoom = Math.max(0.6, previewState.zoom - 0.2);
+        updateZoomLabels();
+    });
+    document.querySelector('[data-preview-zoom-reset]')?.addEventListener('click', () => {
+        previewState.zoom = 1;
+        updateZoomLabels();
+    });
+    document.querySelector('[data-preview-modal-zoom-in]')?.addEventListener('click', () => {
+        previewState.modalZoom = Math.min(4, previewState.modalZoom + 0.2);
+        updateZoomLabels();
+    });
+    document.querySelector('[data-preview-modal-zoom-out]')?.addEventListener('click', () => {
+        previewState.modalZoom = Math.max(0.8, previewState.modalZoom - 0.2);
+        updateZoomLabels();
+    });
+    document.querySelector('[data-preview-modal-zoom-reset]')?.addEventListener('click', () => {
+        previewState.modalZoom = 1.6;
+        updateZoomLabels();
+    });
+
+    const modal = document.getElementById('preview-modal');
+    document.querySelector('[data-preview-expand]')?.addEventListener('click', () => {
+        modal?.classList.add('active');
+        modal?.setAttribute('aria-hidden', 'false');
+        renderPreview();
+    });
+    document.querySelector('[data-preview-close]')?.addEventListener('click', () => {
+        modal?.classList.remove('active');
+        modal?.setAttribute('aria-hidden', 'true');
+    });
+    modal?.addEventListener('click', (event) => {
+        if (event.target === modal) {
+            modal.classList.remove('active');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+    });
+
+    window.addEventListener('resize', renderPreview);
+    selectCue(inputs[0]);
+})();
+</script>
 {% endblock %}

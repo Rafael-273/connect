@@ -1,6 +1,6 @@
 {% extends 'admin_base.html' %}
 
-{% block title %}{{ title }} - Versão de Template{% endblock %}
+{% block title %}{{ title }} - Template de Mídia{% endblock %}
 
 {% block head %}
 <style>
@@ -30,23 +30,53 @@
     .block-position-badge { min-width: 36px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: rgba(201,9,5,.08); color: var(--color-primary); font-size: .75rem; font-weight: 800; }
     .block-remove-btn { display: inline-flex; align-items: center; gap: .35rem; color: #dc2626; font-size: .9rem; font-weight: 700; }
     .media-modal-panel.media-modal-panel-wide { width: min(1480px, 100%); }
-    .style-preview-shell { border: 1px solid #e5e7eb; border-radius: 18px; background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); padding: 18px; }
-    .style-preview-stage { position: relative; width: 100%; border-radius: 18px; overflow: hidden; background:
+    .style-preview-shell { border: 1px solid #e5e7eb; border-radius: 18px; padding: 18px; transition: background .2s ease; }
+    .style-preview-shell[data-backdrop="dark"] { background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); }
+    .style-preview-shell[data-backdrop="light"] { background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%); border-color: #cbd5e1; }
+    .style-preview-stage { position: relative; width: 100%; border-radius: 18px; overflow: hidden; transition: background .2s ease; }
+    .style-preview-shell[data-backdrop="dark"] .style-preview-stage { background:
         radial-gradient(circle at 75% 18%, rgba(148,163,184,.22), transparent 16%),
         linear-gradient(135deg, rgba(15,23,42,.96), rgba(30,41,59,.82)); }
+    .style-preview-shell[data-backdrop="light"] .style-preview-stage { background:
+        radial-gradient(circle at 75% 18%, rgba(148,163,184,.35), transparent 18%),
+        linear-gradient(135deg, #f1f5f9, #e2e8f0 55%, #cbd5e1); }
     .style-preview-stage::before { content: ""; display: block; padding-top: var(--preview-ratio, 56.25%); }
     .style-preview-overlay { position: absolute; inset: 0; }
     .style-preview-subtitle {
         position: absolute; left: 50%; transform: translateX(-50%);
-        width: min(92%, calc(100% - 40px)); text-align: center; line-height: 1.18;
+        display: inline-block; width: max-content; max-width: min(92%, calc(100% - 80px));
+        text-align: center; line-height: 1;
         letter-spacing: .01em; white-space: pre-wrap; word-break: break-word;
+        paint-order: stroke fill;
+        -webkit-font-smoothing: antialiased;
     }
     .style-preview-subtitle.single-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .style-preview-frame-label { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .65rem; border-radius: 999px; background: rgba(255,255,255,.12); color: rgba(255,255,255,.9); font-size: .72rem; font-weight: 700; }
-    .style-preview-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(380px, .9fr); gap: 1.25rem; }
+    .style-preview-frame-label { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .65rem; border-radius: 999px; font-size: .72rem; font-weight: 700; transition: background .2s ease, color .2s ease; }
+    .style-preview-shell[data-backdrop="dark"] .style-preview-frame-label { background: rgba(255,255,255,.12); color: rgba(255,255,255,.9); }
+    .style-preview-shell[data-backdrop="light"] .style-preview-frame-label { background: rgba(15,23,42,.08); color: #334155; }
+    .style-preview-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(400px, .95fr); gap: 1.25rem; }
+    @media (max-width: 1100px) { .style-preview-grid { grid-template-columns: 1fr; } }
     .style-preview-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
     .style-preview-meta-card { border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; padding: .85rem 1rem; }
     .style-font-chip { display: inline-flex; align-items: center; gap: .45rem; border-radius: 999px; background: #f8fafc; padding: .3rem .7rem; font-size: .75rem; color: #475569; }
+    .style-form-section { border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; padding: 14px; }
+    .style-form-section + .style-form-section { margin-top: .85rem; }
+    .style-form-section-title { font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; margin-bottom: .85rem; }
+    .style-field-help { font-size: .72rem; color: #94a3b8; margin-top: .3rem; line-height: 1.35; }
+    .style-bg-fields[data-disabled="true"] { opacity: .45; pointer-events: none; }
+    .style-backdrop-toggle { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
+    .style-backdrop-toggle button { padding: .45rem .85rem; font-size: .78rem; font-weight: 700; color: #64748b; background: transparent; transition: background .15s, color .15s; }
+    .style-backdrop-toggle button[data-backdrop="dark"].active { background: #0f172a; color: #fff; }
+    .style-backdrop-toggle button[data-backdrop="light"].active { background: #e2e8f0; color: #0f172a; }
+    .style-list-empty { border: 1px dashed #d1d5db; border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; color: #6b7280; background: #fafafa; }
+    .checkbox-card {
+        display: flex; align-items: center; gap: .625rem;
+        padding: .625rem .875rem; border: 1.5px solid #e5e7eb; border-radius: 10px;
+        cursor: pointer; transition: border-color .18s, background-color .18s; background: #fafafa;
+    }
+    .checkbox-card:has(input:checked) { border-color: var(--color-primary); background-color: rgba(201,9,5,0.04); }
+    .form-subsection { padding-top: 1.25rem; margin-top: 1.25rem; border-top: 1px solid #f1f5f9; }
+    .form-subsection-title { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #94a3b8; margin-bottom: 1rem; }
 </style>
 {% endblock %}
 
@@ -64,11 +94,16 @@
                         <ion-icon name="film-outline" class="text-xl text-white"></ion-icon>
                     </div>
                     <div class="min-w-0">
+                        {% if is_create %}
+                        <a href="{% url 'admin_external_media_templates' %}" class="text-xs text-gray-500 hover:underline">Mídia Externa</a>
+                        {% else %}
                         <a href="{% url 'admin_external_media_template_detail' template.id %}" class="text-xs text-gray-500 hover:underline">{{ template.name }}</a>
+                        {% endif %}
                         <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{{ title }}</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">Identidade, renderização, blocos e processamentos do template.</p>
                     </div>
                 </div>
-                <a href="{% url 'admin_external_media_template_detail' template.id %}" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                <a href="{% if is_create %}{% url 'admin_external_media_templates' %}{% else %}{% url 'admin_external_media_template_detail' template.id %}{% endif %}" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
                     <ion-icon name="arrow-back-outline"></ion-icon>
                     Voltar
                 </a>
@@ -78,16 +113,36 @@
                 {% csrf_token %}
 
                 <div class="admin-card p-6">
-                    <div class="section-title"><ion-icon name="settings-outline"></ion-icon><span>Configuração da versão</span></div>
+                    <div class="section-title"><ion-icon name="information-circle-outline"></ion-icon><span>Informações do template</span></div>
+                    {% if template_form.non_field_errors %}
+                    <div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ template_form.non_field_errors }}</div>
+                    {% endif %}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="md:col-span-2">
+                            <label class="form-label">{{ template_form.name.label }}</label>
+                            {{ template_form.name }}
+                            {% if template_form.name.errors %}<p class="text-xs text-red-600 mt-1">{{ template_form.name.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="form-label">{{ template_form.description.label }}</label>
+                            {{ template_form.description }}
+                            {% if template_form.description.errors %}<p class="text-xs text-red-600 mt-1">{{ template_form.description.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="checkbox-card">
+                                {{ template_form.is_active }}
+                                <span class="text-sm font-medium text-gray-700">{{ template_form.is_active.label }}</span>
+                            </label>
+                            {% if template_form.is_active.errors %}<p class="text-xs text-red-600 mt-1">{{ template_form.is_active.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+
+                    <div class="form-subsection">
+                        <div class="form-subsection-title">Renderização e idiomas</div>
                     {% if form.non_field_errors %}
                     <div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ form.non_field_errors }}</div>
                     {% endif %}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div class="md:col-span-2">
-                            <label class="form-label">{{ form.changelog.label }}</label>
-                            {{ form.changelog }}
-                            {% if form.changelog.errors %}<p class="text-xs text-red-600 mt-1">{{ form.changelog.errors.0 }}</p>{% endif %}
-                        </div>
                         <div>
                             <label class="form-label">{{ form.preset.label }}</label>
                             <div class="manage-select">
@@ -153,10 +208,10 @@
                             <strong>Dois idiomas falados no mesmo vídeo:</strong> use quando o áudio já mistura português e inglês. Nesse modo a transcrição deixa o modelo detectar os idiomas falados.
                         </div>
                     </div>
-                </div>
+                    </div>
 
-                <div class="admin-card p-6">
-                    <div class="section-title"><ion-icon name="color-filter-outline"></ion-icon><span>Assets e áudio</span></div>
+                    <div class="form-subsection">
+                        <div class="form-subsection-title">Assets e áudio</div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div><label class="form-label">{{ form.lut_file.label }}</label>{{ form.lut_file }}</div>
                         <div>
@@ -169,6 +224,7 @@
                             </div>
                             {% if form.background_music.errors %}<p class="text-xs text-red-600 mt-1">{{ form.background_music.errors.0 }}</p>{% endif %}
                         </div>
+                    </div>
                     </div>
                 </div>
 
@@ -202,6 +258,7 @@
                                 <div><label class="form-label">{{ block_form.default_video.label }}</label>{{ block_form.default_video }}</div>
                                 <div class="md:col-span-3"><label class="form-label">{{ block_form.description.label }}</label>{{ block_form.description }}</div>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.is_required }} {{ block_form.is_required.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.skip_extra_processing }} {{ block_form.skip_extra_processing.label }}</label>
                                 {{ block_form.min_occurrences }}
                                 {{ block_form.max_occurrences }}
                             </div>
@@ -228,6 +285,7 @@
                                 <div><label class="form-label">{{ block_formset.empty_form.default_video.label }}</label>{{ block_formset.empty_form.default_video }}</div>
                                 <div class="md:col-span-3"><label class="form-label">{{ block_formset.empty_form.description.label }}</label>{{ block_formset.empty_form.description }}</div>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.is_required }} {{ block_formset.empty_form.is_required.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.skip_extra_processing }} {{ block_formset.empty_form.skip_extra_processing.label }}</label>
                                 {{ block_formset.empty_form.min_occurrences }}
                                 {{ block_formset.empty_form.max_occurrences }}
                             </div>
@@ -305,8 +363,8 @@
                 </div>
 
                 <div class="admin-card p-4 flex flex-col sm:flex-row justify-end gap-3 sticky bottom-4">
-                    <a href="{% url 'admin_external_media_template_detail' template.id %}" class="px-5 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-lg text-center font-semibold">Cancelar</a>
-                    <button class="px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-lg font-semibold">Salvar Rascunho</button>
+                    <a href="{% if is_create %}{% url 'admin_external_media_templates' %}{% else %}{% url 'admin_external_media_template_detail' template.id %}{% endif %}" class="px-5 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-lg text-center font-semibold">Cancelar</a>
+                    <button class="px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-lg font-semibold">Salvar Template</button>
                 </div>
             </form>
 
@@ -407,50 +465,264 @@
                 </div>
             </div>
 
-            <div id="style-modal" class="media-modal" aria-hidden="true">
-                <div class="media-modal-panel">
+            <div id="style-modal" class="media-modal" aria-hidden="true" data-style-view="list">
+                <div class="media-modal-panel media-modal-panel-wide">
                     <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
-                        <div>
+                        <div class="min-w-0">
                             <h2 class="text-lg font-black text-gray-900">Estilos de legenda</h2>
-                            <p class="text-sm text-gray-500">Configure fonte, cores, contorno e limites usados na renderização.</p>
+                            <p id="style-modal-subtitle" class="text-sm text-gray-500">Gerencie os estilos disponíveis para os templates.</p>
                         </div>
                         <button type="button" class="asset-action" data-close-modal="style-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
                     </div>
 
-                    <div class="p-5 style-preview-grid">
-                        <form method="post" action="{% url 'admin_external_media_subtitle_style_save' %}" class="inline-card bg-white">
-                            {% csrf_token %}
-                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                            <input type="hidden" name="style_id" id="style-id">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 id="style-form-title" class="font-bold text-gray-900">Novo estilo</h3>
-                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-style>Limpar</button>
+                    <div id="style-list-view" class="p-5">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <div>
+                                <h3 class="font-bold text-gray-900">Estilos cadastrados</h3>
+                                <p class="text-sm text-gray-500">Edite, clone ou remova um estilo existente.</p>
                             </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><label class="form-label">{{ style_form.name.label }}</label>{{ style_form.name }}</div>
-                                <div><label class="form-label">{{ style_form.font_name.label }}</label>{{ style_form.font_name }}</div>
-                                <div><label class="form-label">{{ style_form.font_size.label }}</label>{{ style_form.font_size }}</div>
-                                <div><label class="form-label">{{ style_form.margin_bottom.label }}</label>{{ style_form.margin_bottom }}</div>
-                                <div><label class="form-label">{{ style_form.primary_color.label }}</label>{{ style_form.primary_color }}</div>
-                                <div><label class="form-label">{{ style_form.outline_color.label }}</label>{{ style_form.outline_color }}</div>
-                                <div><label class="form-label">{{ style_form.outline_width.label }}</label>{{ style_form.outline_width }}</div>
-                                <div><label class="form-label">{{ style_form.shadow.label }}</label>{{ style_form.shadow }}</div>
-                                <div><label class="form-label">{{ style_form.alignment.label }}</label>{{ style_form.alignment }}</div>
-                                <div><label class="form-label">{{ style_form.max_lines.label }}</label>{{ style_form.max_lines }}</div>
-                                <div><label class="form-label">{{ style_form.max_characters.label }}</label>{{ style_form.max_characters }}</div>
-                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 mt-7">{{ style_form.is_active }} {{ style_form.is_active.label }}</label>
-                            </div>
-                            <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
-                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar estilo</button>
-                            </div>
-                        </form>
+                            <button type="button" id="style-create-button" class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">
+                                <ion-icon name="add-outline" class="text-lg"></ion-icon>
+                                Novo estilo
+                            </button>
+                        </div>
 
-                        <div class="space-y-5">
+                        {% if subtitle_styles %}
+                        <div class="overflow-x-auto rounded-xl border border-gray-200">
+                            <table class="modal-table w-full">
+                                <thead><tr><th>Estilo</th><th>Aparência</th><th>Status</th><th class="text-right">Ações</th></tr></thead>
+                                <tbody>
+                                    {% for style in subtitle_styles %}
+                                    <tr>
+                                        <td>
+                                            <p class="font-bold text-gray-900">{{ style.name }}</p>
+                                            <div class="mt-1 flex flex-wrap gap-2">
+                                                <span class="style-font-chip">{{ style.font_name }}</span>
+                                                <span class="style-font-chip">{{ style.get_font_weight_display }}</span>
+                                                {% if style.background_enabled %}<span class="style-font-chip">com fundo</span>{% endif %}
+                                                <span class="style-font-chip">{{ style.font_size }}px</span>
+                                                <span class="style-font-chip">{{ style.max_lines }} linhas</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-6 h-6 rounded border border-gray-200" style="background: {{ style.primary_color }}"></span>
+                                                <span class="w-6 h-6 rounded border border-gray-200" style="background: {{ style.outline_color }}"></span>
+                                                <span class="text-xs text-gray-500">contorno {{ style.outline_width }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="text-sm {% if style.is_active %}text-green-700{% else %}text-gray-500{% endif %}">{% if style.is_active %}Ativo{% else %}Inativo{% endif %}</td>
+                                        <td class="text-right whitespace-nowrap">
+                                            <div class="inline-flex gap-2 items-center justify-end">
+                                                <button type="button" class="inline-flex items-center gap-2 px-3 h-8 rounded-lg bg-slate-50 text-slate-700 text-sm font-semibold hover:bg-slate-100"
+                                                        data-edit-style
+                                                        data-id="{{ style.id }}"
+                                                        data-name="{{ style.name }}"
+                                                        data-font="{{ style.font_name }}"
+                                                        data-font-weight="{{ style.font_weight }}"
+                                                        data-font-size="{{ style.font_size }}"
+                                                        data-primary="{{ style.primary_color }}"
+                                                        data-background-enabled="{% if style.background_enabled %}true{% else %}false{% endif %}"
+                                                        data-background-color="{{ style.background_color }}"
+                                                        data-background-opacity="{{ style.background_opacity }}"
+                                                        data-background-padding-x="{{ style.background_padding_x }}"
+                                                        data-background-padding-y="{{ style.background_padding_y }}"
+                                                        data-background-height-percent="{{ style.background_height_percent }}"
+                                                        data-background-radius="{{ style.background_radius }}"
+                                                        data-outline="{{ style.outline_color }}"
+                                                        data-outline-width="{{ style.outline_width }}"
+                                                        data-shadow="{{ style.shadow }}"
+                                                        data-shadow-opacity="{{ style.shadow_opacity }}"
+                                                        data-shadow-angle="{{ style.shadow_angle }}"
+                                                        data-shadow-size="{{ style.shadow_size }}"
+                                                        data-shadow-blur="{{ style.shadow_blur }}"
+                                                        data-margin="{{ style.margin_bottom }}"
+                                                        data-alignment="{{ style.alignment }}"
+                                                        data-lines="{{ style.max_lines }}"
+                                                        data-chars="{{ style.max_characters }}"
+                                                        data-active="{% if style.is_active %}true{% else %}false{% endif %}"
+                                                        title="Editar"><ion-icon name="create-outline"></ion-icon><span>Editar</span></button>
+                                                <button type="button" class="inline-flex items-center gap-2 px-3 h-8 rounded-lg bg-amber-50 text-amber-700 text-sm font-semibold hover:bg-amber-100"
+                                                        data-clone-style
+                                                        data-id="{{ style.id }}"
+                                                        data-name="{{ style.name }}"
+                                                        data-font="{{ style.font_name }}"
+                                                        data-font-weight="{{ style.font_weight }}"
+                                                        data-font-size="{{ style.font_size }}"
+                                                        data-primary="{{ style.primary_color }}"
+                                                        data-background-enabled="{% if style.background_enabled %}true{% else %}false{% endif %}"
+                                                        data-background-color="{{ style.background_color }}"
+                                                        data-background-opacity="{{ style.background_opacity }}"
+                                                        data-background-padding-x="{{ style.background_padding_x }}"
+                                                        data-background-padding-y="{{ style.background_padding_y }}"
+                                                        data-background-height-percent="{{ style.background_height_percent }}"
+                                                        data-background-radius="{{ style.background_radius }}"
+                                                        data-outline="{{ style.outline_color }}"
+                                                        data-outline-width="{{ style.outline_width }}"
+                                                        data-shadow="{{ style.shadow }}"
+                                                        data-shadow-opacity="{{ style.shadow_opacity }}"
+                                                        data-shadow-angle="{{ style.shadow_angle }}"
+                                                        data-shadow-size="{{ style.shadow_size }}"
+                                                        data-shadow-blur="{{ style.shadow_blur }}"
+                                                        data-margin="{{ style.margin_bottom }}"
+                                                        data-alignment="{{ style.alignment }}"
+                                                        data-lines="{{ style.max_lines }}"
+                                                        data-chars="{{ style.max_characters }}"
+                                                        data-active="{% if style.is_active %}true{% else %}false{% endif %}"
+                                                        title="Clonar"><ion-icon name="copy-outline"></ion-icon><span>Clonar</span></button>
+                                                <button type="button" class="asset-action asset-action-danger" title="Remover"
+                                                        data-delete-style
+                                                        data-name="{{ style.name }}"
+                                                        data-action="{% url 'admin_external_media_subtitle_style_delete' style.id %}">
+                                                    <ion-icon name="trash-outline"></ion-icon>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="style-list-empty">
+                            <p class="font-semibold text-gray-700 mb-1">Nenhum estilo cadastrado</p>
+                            <p class="text-sm mb-4">Crie o primeiro estilo para usar nas legendas dos templates.</p>
+                            <button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold" data-style-create>
+                                <ion-icon name="add-outline" class="text-lg"></ion-icon>
+                                Criar estilo
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div id="style-editor-view" class="p-5 hidden">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <button type="button" id="style-back-to-list" class="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
+                                <ion-icon name="arrow-back-outline" class="text-lg"></ion-icon>
+                                Voltar para a lista
+                            </button>
+                            <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-style>Limpar formulário</button>
+                        </div>
+
+                        <div class="style-preview-grid">
+                            <form method="post" action="{% url 'admin_external_media_subtitle_style_save' %}" class="inline-card bg-white">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <input type="hidden" name="style_id" id="style-id">
+                                <div class="mb-4">
+                                    <h3 id="style-form-title" class="font-bold text-gray-900">Novo estilo</h3>
+                                    <p class="text-sm text-gray-500">Ajuste tipografia, posição e contraste com o preview ao lado.</p>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <div class="style-form-section-title">Identidade</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div class="md:col-span-2"><label class="form-label">{{ style_form.name.label }}</label>{{ style_form.name }}</div>
+                                        <div><label class="form-label">{{ style_form.font_name.label }}</label>{{ style_form.font_name }}</div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.font_weight.label }}</label>{{ style_form.font_weight }}
+                                            <p class="style-field-help">{{ style_form.font_weight.help_text }}</p>
+                                        </div>
+                                        <div><label class="form-label">{{ style_form.font_size.label }}</label>{{ style_form.font_size }}</div>
+                                        <div><label class="form-label">{{ style_form.primary_color.label }}</label>{{ style_form.primary_color }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <div class="style-form-section-title">Posição e texto</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="form-label">{{ style_form.alignment.label }}</label>{{ style_form.alignment }}
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.margin_bottom.label }}</label>{{ style_form.margin_bottom }}
+                                            <p class="style-field-help">{{ style_form.margin_bottom.help_text }}</p>
+                                        </div>
+                                        <div><label class="form-label">{{ style_form.max_lines.label }}</label>{{ style_form.max_lines }}</div>
+                                        <div><label class="form-label">{{ style_form.max_characters.label }}</label>{{ style_form.max_characters }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <div class="style-form-section-title">Contorno e sombra</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><label class="form-label">{{ style_form.outline_color.label }}</label>{{ style_form.outline_color }}</div>
+                                        <div><label class="form-label">{{ style_form.outline_width.label }}</label>{{ style_form.outline_width }}</div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.shadow.label }}</label>{{ style_form.shadow }}
+                                            <p class="style-field-help">{{ style_form.shadow.help_text }}</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.shadow_angle.label }}</label>{{ style_form.shadow_angle }}
+                                            <p class="style-field-help">{{ style_form.shadow_angle.help_text }}</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.shadow_size.label }}</label>{{ style_form.shadow_size }}
+                                            <p class="style-field-help">{{ style_form.shadow_size.help_text }}</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.shadow_blur.label }}</label>{{ style_form.shadow_blur }}
+                                            <p class="style-field-help">{{ style_form.shadow_blur.help_text }}</p>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="form-label">{{ style_form.shadow_opacity.label }}</label>{{ style_form.shadow_opacity }}
+                                            <p class="style-field-help">{{ style_form.shadow_opacity.help_text }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <div class="flex items-center justify-between gap-3 mb-3">
+                                        <div class="style-form-section-title mb-0">Plano de fundo</div>
+                                        <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ style_form.background_enabled }} {{ style_form.background_enabled.label }}</label>
+                                    </div>
+                                    <div id="style-bg-fields" class="style-bg-fields grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><label class="form-label">{{ style_form.background_color.label }}</label>{{ style_form.background_color }}</div>
+                                        <div><label class="form-label">{{ style_form.background_opacity.label }}</label>{{ style_form.background_opacity }}</div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.background_padding_x.label }}</label>{{ style_form.background_padding_x }}
+                                            <p class="style-field-help">{{ style_form.background_padding_x.help_text }}</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.background_padding_y.label }}</label>{{ style_form.background_padding_y }}
+                                            <p class="style-field-help">{{ style_form.background_padding_y.help_text }}</p>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="form-label">{{ style_form.background_height_percent.label }}</label>{{ style_form.background_height_percent }}
+                                            <p class="style-field-help">{{ style_form.background_height_percent.help_text }}</p>
+                                        </div>
+                                        <div class="md:col-span-2 flex flex-wrap items-center gap-2">
+                                            <button type="button" id="style-bg-fit-text" class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50">
+                                                Ajustar fundo ao texto
+                                            </button>
+                                            <span class="text-xs text-gray-500">Zera os extras e usa 100% de altura (fundo colado na fonte).</span>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="form-label">{{ style_form.background_radius.label }}</label>{{ style_form.background_radius }}
+                                            <p class="style-field-help">{{ style_form.background_radius.help_text }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ style_form.is_active }} {{ style_form.is_active.label }}</label>
+                                </div>
+
+                                <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                    <button type="button" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50" data-style-back>Cancelar</button>
+                                    <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar estilo</button>
+                                </div>
+                            </form>
+
                             <div class="inline-card bg-white">
-                                <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
                                     <div>
                                         <h3 class="font-bold text-gray-900">Preview do estilo</h3>
-                                        <p class="text-sm text-gray-500">Veja a posição da legenda no formato final e compare original + tradução no mesmo quadro.</p>
+                                        <p class="text-sm text-gray-500">Compare contraste em fundo escuro ou claro.</p>
+                                    </div>
+                                    <div class="style-backdrop-toggle" id="style-backdrop-toggle" data-active="dark">
+                                        <button type="button" data-backdrop="dark" class="active">Escuro</button>
+                                        <button type="button" data-backdrop="light">Claro</button>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -472,24 +744,37 @@
                                     <div>
                                         <label class="form-label">Comparar tradução com</label>
                                         <select id="style-preview-compare" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
-                                            <option value="">Usar o mesmo estilo acima</option>
+                                            <option value="">Selecione um estilo salvo para fixar a tradução</option>
                                             {% for style in subtitle_styles %}
                                             <option value="{{ style.id }}"
                                                     data-name="{{ style.name }}"
                                                     data-font="{{ style.font_name }}"
+                                                    data-font-weight="{{ style.font_weight }}"
                                                     data-font-size="{{ style.font_size }}"
                                                     data-primary="{{ style.primary_color }}"
+                                                    data-background-enabled="{% if style.background_enabled %}true{% else %}false{% endif %}"
+                                                    data-background-color="{{ style.background_color }}"
+                                                    data-background-opacity="{{ style.background_opacity }}"
+                                                    data-background-padding-x="{{ style.background_padding_x }}"
+                                                    data-background-padding-y="{{ style.background_padding_y }}"
+                                                        data-background-height-percent="{{ style.background_height_percent }}"
+                                                    data-background-radius="{{ style.background_radius }}"
                                                     data-outline="{{ style.outline_color }}"
                                                     data-outline-width="{{ style.outline_width }}"
                                                     data-shadow="{{ style.shadow }}"
+                                                        data-shadow-opacity="{{ style.shadow_opacity }}"
+                                                        data-shadow-angle="{{ style.shadow_angle }}"
+                                                        data-shadow-size="{{ style.shadow_size }}"
+                                                        data-shadow-blur="{{ style.shadow_blur }}"
                                                     data-margin="{{ style.margin_bottom }}"
                                                     data-alignment="{{ style.alignment }}"
                                                     data-lines="{{ style.max_lines }}"
                                                     data-chars="{{ style.max_characters }}">
-                                                {{ style.name }} · {{ style.font_name }} · {{ style.font_size }}px
+                                                {{ style.name }} · margem {{ style.margin_bottom }}px · {{ style.font_size }}px
                                             </option>
                                             {% endfor %}
                                         </select>
+                                        <p class="style-field-help">A tradução fica travada no estilo salvo. Só o formulário à esquerda se move.</p>
                                     </div>
                                     <div class="md:col-span-2 flex flex-wrap gap-3">
                                         <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -499,14 +784,14 @@
                                     </div>
                                 </div>
 
-                                <div class="style-preview-shell">
+                                <div class="style-preview-shell" id="style-preview-shell" data-backdrop="dark">
                                     <div class="flex items-center justify-between gap-3 mb-3">
                                         <span id="style-preview-format-label" class="style-preview-frame-label">16:9 · 1920x1080</span>
-                                        <span class="style-preview-frame-label">Preview aproximado do render final</span>
+                                        <span class="style-preview-frame-label">Escala 1:1 com o preset selecionado</span>
                                     </div>
                                     <div id="style-preview-stage" class="style-preview-stage" style="--preview-ratio: 56.25%;">
                                         <div class="style-preview-overlay">
-                                            <div class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent"></div>
+                                            <div id="style-preview-vignette" class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent"></div>
                                             <div id="style-preview-original" class="style-preview-subtitle">Hoje queremos convidar você para estar conosco.</div>
                                             <div id="style-preview-translated" class="style-preview-subtitle">Today we want to invite you to join us.</div>
                                         </div>
@@ -522,80 +807,6 @@
                                         <p class="text-xs uppercase tracking-[0.18em] text-gray-400 mb-2">Legenda traduzida</p>
                                         <div id="style-preview-translated-meta" class="text-sm text-gray-700"></div>
                                     </div>
-                                </div>
-                            </div>
-
-                            <div class="inline-card bg-white">
-                                <h3 class="font-bold text-gray-900 mb-4">Estilos cadastrados</h3>
-                                <div id="style-details" class="hidden mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"></div>
-                                <div class="overflow-x-auto">
-                                    <table class="modal-table w-full">
-                                        <thead><tr><th>Estilo</th><th>Aparência</th><th>Status</th><th class="text-right">Ações</th></tr></thead>
-                                        <tbody>
-                                            {% for style in subtitle_styles %}
-                                            <tr>
-                                                <td>
-                                                    <p class="font-bold text-gray-900">{{ style.name }}</p>
-                                                    <div class="mt-1 flex flex-wrap gap-2">
-                                                        <span class="style-font-chip">{{ style.font_name }}</span>
-                                                        <span class="style-font-chip">{{ style.font_size }}px</span>
-                                                        <span class="style-font-chip">{{ style.max_lines }} linhas</span>
-                                                    </div>
-                                                </td>
-                                                <td>
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="w-6 h-6 rounded border border-gray-200" style="background: {{ style.primary_color }}"></span>
-                                                        <span class="w-6 h-6 rounded border border-gray-200" style="background: {{ style.outline_color }}"></span>
-                                                        <span class="text-xs text-gray-500">contorno {{ style.outline_width }}</span>
-                                                    </div>
-                                                </td>
-                                                <td class="text-sm {% if style.is_active %}text-green-700{% else %}text-gray-500{% endif %}">{% if style.is_active %}Ativo{% else %}Inativo{% endif %}</td>
-                                                <td class="text-right">
-                                                    <div class="inline-flex gap-1">
-                                                        <button type="button" class="asset-action"
-                                                                data-view-style
-                                                                data-id="{{ style.id }}"
-                                                                data-name="{{ style.name }}"
-                                                                data-font="{{ style.font_name }}"
-                                                                data-font-size="{{ style.font_size }}"
-                                                                data-primary="{{ style.primary_color }}"
-                                                                data-outline="{{ style.outline_color }}"
-                                                                data-outline-width="{{ style.outline_width }}"
-                                                                data-shadow="{{ style.shadow }}"
-                                                                data-margin="{{ style.margin_bottom }}"
-                                                                data-alignment="{{ style.alignment }}"
-                                                                data-lines="{{ style.max_lines }}"
-                                                                data-chars="{{ style.max_characters }}"
-                                                                title="Visualizar"><ion-icon name="eye-outline"></ion-icon></button>
-                                                        <button type="button" class="asset-action"
-                                                                data-edit-style
-                                                                data-id="{{ style.id }}"
-                                                                data-name="{{ style.name }}"
-                                                                data-font="{{ style.font_name }}"
-                                                                data-font-size="{{ style.font_size }}"
-                                                                data-primary="{{ style.primary_color }}"
-                                                                data-outline="{{ style.outline_color }}"
-                                                                data-outline-width="{{ style.outline_width }}"
-                                                                data-shadow="{{ style.shadow }}"
-                                                                data-margin="{{ style.margin_bottom }}"
-                                                                data-alignment="{{ style.alignment }}"
-                                                                data-lines="{{ style.max_lines }}"
-                                                                data-chars="{{ style.max_characters }}"
-                                                                data-active="{% if style.is_active %}true{% else %}false{% endif %}"
-                                                                title="Editar"><ion-icon name="create-outline"></ion-icon></button>
-                                                        <form method="post" action="{% url 'admin_external_media_subtitle_style_delete' style.id %}">
-                                                            {% csrf_token %}
-                                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                                            <button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button>
-                                                        </form>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            {% empty %}
-                                            <tr><td colspan="4" class="text-center text-gray-500 py-8">Nenhum estilo cadastrado.</td></tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
                                 </div>
                             </div>
                         </div>
@@ -692,26 +903,154 @@
     </div>
 </div>
 
+<form id="styleDeleteForm" method="post" action="" class="hidden">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+</form>
+
+<div id="styleDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[90] p-3">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir estilo de legenda</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-2">
+            Tem certeza que deseja excluir <strong id="styleDeleteModalName" class="text-gray-900"></strong>?
+        </p>
+        <p class="text-sm text-gray-500 mb-5">
+            Templates e processamentos que usam este estilo serão atualizados automaticamente.
+        </p>
+        <div class="flex gap-2 justify-end">
+            <button type="button" id="styleDeleteModalCancel" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button type="button" id="styleDeleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">
+                <ion-icon name="trash-outline"></ion-icon> Excluir
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
     function byId(id) { return document.getElementById(id); }
     function setValue(id, value) { const el = byId(id); if (el) el.value = value || ''; }
     function setChecked(id, value) { const el = byId(id); if (el) el.checked = value === true || value === 'true'; }
+    function existingStyleNames() {
+        return Array.from(document.querySelectorAll('[data-edit-style],[data-clone-style]'))
+            .map((button) => (button.dataset.name || '').trim().toLowerCase())
+            .filter(Boolean);
+    }
+    function nextCloneStyleName(baseName) {
+        const original = (baseName || 'Novo estilo').trim();
+        const names = new Set(existingStyleNames());
+        let candidate = `${original} (Cópia)`;
+        if (!names.has(candidate.toLowerCase())) return candidate;
+        let index = 2;
+        while (names.has(`${original} (Cópia ${index})`.toLowerCase())) {
+            index += 1;
+        }
+        return `${original} (Cópia ${index})`;
+    }
+
+    function showStyleList() {
+        const modal = byId('style-modal');
+        const listView = byId('style-list-view');
+        const editorView = byId('style-editor-view');
+        const subtitle = byId('style-modal-subtitle');
+        if (modal) modal.dataset.styleView = 'list';
+        listView?.classList.remove('hidden');
+        editorView?.classList.add('hidden');
+        if (subtitle) subtitle.textContent = 'Gerencie os estilos disponíveis para os templates.';
+    }
+
+    function showStyleEditor(title) {
+        const modal = byId('style-modal');
+        const listView = byId('style-list-view');
+        const editorView = byId('style-editor-view');
+        const subtitle = byId('style-modal-subtitle');
+        if (modal) modal.dataset.styleView = 'editor';
+        listView?.classList.add('hidden');
+        editorView?.classList.remove('hidden');
+        if (byId('style-form-title') && title) byId('style-form-title').textContent = title;
+        if (subtitle) subtitle.textContent = 'O preview usa a mesma escala e empilhamento do ASS final.';
+        requestAnimationFrame(updateStylePreview);
+    }
+
+    function openStyleCreate() {
+        resetStyleForm();
+        showStyleEditor('Novo estilo');
+    }
+
+    let _styleDeleteAction = null;
+
+    function openStyleDeleteModal(action, name) {
+        _styleDeleteAction = action;
+        const nameEl = byId('styleDeleteModalName');
+        if (nameEl) nameEl.textContent = name || '';
+        const modal = byId('styleDeleteModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeStyleDeleteModal() {
+        _styleDeleteAction = null;
+        const modal = byId('styleDeleteModal');
+        if (!modal) return;
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        const confirmBtn = byId('styleDeleteModalConfirm');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+        }
+    }
+
+    document.querySelectorAll('[data-delete-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+            openStyleDeleteModal(button.dataset.action, button.dataset.name);
+        });
+    });
+    byId('styleDeleteModalCancel')?.addEventListener('click', closeStyleDeleteModal);
+    byId('styleDeleteModalConfirm')?.addEventListener('click', () => {
+        const form = byId('styleDeleteForm');
+        if (!_styleDeleteAction || !form) return;
+        const btn = byId('styleDeleteModalConfirm');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        }
+        form.action = _styleDeleteAction;
+        form.submit();
+    });
+    byId('styleDeleteModal')?.addEventListener('click', (event) => {
+        if (event.target === byId('styleDeleteModal')) closeStyleDeleteModal();
+    });
 
     document.querySelectorAll('[data-open-modal]').forEach((button) => {
         button.addEventListener('click', () => {
             const modal = byId(button.dataset.openModal);
-            if (modal) modal.classList.add('active');
+            if (!modal) return;
+            modal.classList.add('active');
+            if (button.dataset.openModal === 'style-modal') showStyleList();
         });
     });
     document.querySelectorAll('[data-close-modal]').forEach((button) => {
         button.addEventListener('click', () => {
             const modal = byId(button.dataset.closeModal);
-            if (modal) modal.classList.remove('active');
+            if (!modal) return;
+            modal.classList.remove('active');
+            if (button.dataset.closeModal === 'style-modal') showStyleList();
         });
     });
     document.querySelectorAll('.media-modal').forEach((modal) => {
         modal.addEventListener('click', (event) => {
-            if (event.target === modal) modal.classList.remove('active');
+            if (event.target !== modal) return;
+            modal.classList.remove('active');
+            if (modal.id === 'style-modal') showStyleList();
         });
     });
 
@@ -750,16 +1089,83 @@
         });
     });
 
+    const FONT_WEIGHT_LABELS = {
+        400: 'Regular',
+        500: 'Medium',
+        600: 'SemiBold',
+        700: 'Bold',
+        800: 'ExtraBold',
+        900: 'Black',
+    };
+    const ALIGNMENT_LABELS = {
+        1: 'Inferior esquerdo',
+        2: 'Inferior centro',
+        3: 'Inferior direito',
+        4: 'Meio esquerdo',
+        5: 'Meio centro',
+        6: 'Meio direito',
+        7: 'Superior esquerdo',
+        8: 'Superior centro',
+        9: 'Superior direito',
+    };
+
+    function syncStyleBackgroundFields() {
+        const enabled = !!byId('id_style-background_enabled')?.checked;
+        const fields = byId('style-bg-fields');
+        if (fields) fields.dataset.disabled = enabled ? 'false' : 'true';
+    }
+
+    function fillStyleForm(dataset, { clone = false } = {}) {
+        setValue('id_style-name', clone ? nextCloneStyleName(dataset.name) : dataset.name);
+        setValue('id_style-font_name', dataset.font);
+        setValue('id_style-font_weight', dataset.fontWeight || '700');
+        setValue('id_style-font_size', dataset.fontSize);
+        setValue('id_style-primary_color', dataset.primary);
+        setChecked('id_style-background_enabled', dataset.backgroundEnabled);
+        setValue('id_style-background_color', dataset.backgroundColor);
+        setValue('id_style-background_opacity', dataset.backgroundOpacity);
+        setValue('id_style-background_padding_x', dataset.backgroundPaddingX);
+        setValue('id_style-background_padding_y', dataset.backgroundPaddingY);
+        setValue('id_style-background_height_percent', dataset.backgroundHeightPercent ?? '100');
+        setValue('id_style-background_radius', dataset.backgroundRadius);
+        setValue('id_style-outline_color', dataset.outline);
+        setValue('id_style-outline_width', dataset.outlineWidth);
+        setValue('id_style-shadow', dataset.shadow);
+        setValue('id_style-shadow_angle', dataset.shadowAngle ?? '45');
+        setValue('id_style-shadow_size', dataset.shadowSize ?? '0');
+        setValue('id_style-shadow_blur', dataset.shadowBlur ?? '0');
+        setValue('id_style-shadow_opacity', dataset.shadowOpacity ?? '70');
+        setValue('id_style-margin_bottom', dataset.margin);
+        setValue('id_style-alignment', dataset.alignment);
+        setValue('id_style-max_lines', dataset.lines);
+        setValue('id_style-max_characters', dataset.chars);
+        setChecked('id_style-is_active', dataset.active);
+        syncStyleBackgroundFields();
+        updateStylePreview();
+    }
+
     function resetStyleForm() {
         byId('style-form-title').textContent = 'Novo estilo';
         setValue('style-id', '');
         setValue('id_style-name', '');
         setValue('id_style-font_name', 'Arial');
+        setValue('id_style-font_weight', '700');
         setValue('id_style-font_size', '48');
         setValue('id_style-primary_color', '#FFFFFF');
+        setChecked('id_style-background_enabled', false);
+        setValue('id_style-background_color', '#000000');
+        setValue('id_style-background_opacity', '70');
+        setValue('id_style-background_padding_x', '14');
+        setValue('id_style-background_padding_y', '8');
+        setValue('id_style-background_height_percent', '100');
+        setValue('id_style-background_radius', '10');
         setValue('id_style-outline_color', '#000000');
         setValue('id_style-outline_width', '3');
         setValue('id_style-shadow', '1');
+        setValue('id_style-shadow_angle', '45');
+        setValue('id_style-shadow_size', '0');
+        setValue('id_style-shadow_blur', '0');
+        setValue('id_style-shadow_opacity', '70');
         setValue('id_style-margin_bottom', '60');
         setValue('id_style-alignment', '2');
         setValue('id_style-max_lines', '2');
@@ -767,6 +1173,7 @@
         setChecked('id_style-is_active', true);
         setValue('style-preview-compare', '');
         setChecked('style-preview-show-translation', true);
+        syncStyleBackgroundFields();
         updateStylePreview();
     }
 
@@ -774,12 +1181,24 @@
         return {
             name: byId('id_style-name')?.value || 'Legenda original',
             font: byId('id_style-font_name')?.value || 'Arial',
+            fontWeight: parseInt(byId('id_style-font_weight')?.value || '700', 10),
             fontSize: parseInt(byId('id_style-font_size')?.value || '48', 10),
             primary: byId('id_style-primary_color')?.value || '#FFFFFF',
+            backgroundEnabled: !!byId('id_style-background_enabled')?.checked,
+            backgroundColor: byId('id_style-background_color')?.value || '#000000',
+            backgroundOpacity: parseInt(byId('id_style-background_opacity')?.value || '70', 10),
+            backgroundPaddingX: Math.max(0, parseInt(byId('id_style-background_padding_x')?.value || '0', 10) || 0),
+            backgroundPaddingY: Math.max(0, parseInt(byId('id_style-background_padding_y')?.value || '0', 10) || 0),
+            backgroundHeightPercent: Math.max(40, Math.min(100, parseInt(byId('id_style-background_height_percent')?.value || '100', 10) || 100)),
+            backgroundRadius: parseInt(byId('id_style-background_radius')?.value || '10', 10),
             outline: byId('id_style-outline_color')?.value || '#000000',
             outlineWidth: parseInt(byId('id_style-outline_width')?.value || '3', 10),
-            shadow: parseInt(byId('id_style-shadow')?.value || '1', 10),
-            margin: parseInt(byId('id_style-margin_bottom')?.value || '60', 10),
+            shadow: Math.max(0, parseInt(byId('id_style-shadow')?.value || '0', 10) || 0),
+            shadowAngle: ((parseInt(byId('id_style-shadow_angle')?.value || '45', 10) || 0) % 360 + 360) % 360,
+            shadowSize: Math.max(0, parseInt(byId('id_style-shadow_size')?.value || '0', 10) || 0),
+            shadowBlur: Math.max(0, parseInt(byId('id_style-shadow_blur')?.value || '0', 10) || 0),
+            shadowOpacity: Math.max(0, Math.min(100, parseInt(byId('id_style-shadow_opacity')?.value || '70', 10) || 0)),
+            margin: Math.max(0, parseInt(byId('id_style-margin_bottom')?.value ?? '60', 10) || 0),
             alignment: parseInt(byId('id_style-alignment')?.value || '2', 10),
             lines: parseInt(byId('id_style-max_lines')?.value || '2', 10),
             chars: parseInt(byId('id_style-max_characters')?.value || '42', 10),
@@ -791,11 +1210,23 @@
         return {
             name: option.dataset.name || fallback.name,
             font: option.dataset.font || fallback.font,
+            fontWeight: parseInt(option.dataset.fontWeight || fallback.fontWeight, 10),
             fontSize: parseInt(option.dataset.fontSize || fallback.fontSize, 10),
             primary: option.dataset.primary || fallback.primary,
+            backgroundEnabled: option.dataset.backgroundEnabled === 'true',
+            backgroundColor: option.dataset.backgroundColor || fallback.backgroundColor,
+            backgroundOpacity: parseInt(option.dataset.backgroundOpacity || fallback.backgroundOpacity, 10),
+            backgroundPaddingX: parseInt(option.dataset.backgroundPaddingX || fallback.backgroundPaddingX, 10),
+            backgroundPaddingY: parseInt(option.dataset.backgroundPaddingY || fallback.backgroundPaddingY, 10),
+            backgroundHeightPercent: parseInt(option.dataset.backgroundHeightPercent || fallback.backgroundHeightPercent || '100', 10),
+            backgroundRadius: parseInt(option.dataset.backgroundRadius || fallback.backgroundRadius, 10),
             outline: option.dataset.outline || fallback.outline,
             outlineWidth: parseInt(option.dataset.outlineWidth || fallback.outlineWidth, 10),
             shadow: parseInt(option.dataset.shadow || fallback.shadow, 10),
+            shadowAngle: parseInt(option.dataset.shadowAngle || fallback.shadowAngle || '45', 10),
+            shadowSize: parseInt(option.dataset.shadowSize || fallback.shadowSize || '0', 10),
+            shadowBlur: parseInt(option.dataset.shadowBlur || fallback.shadowBlur || '0', 10),
+            shadowOpacity: parseInt(option.dataset.shadowOpacity || fallback.shadowOpacity || '70', 10),
             margin: parseInt(option.dataset.margin || fallback.margin, 10),
             alignment: parseInt(option.dataset.alignment || fallback.alignment, 10),
             lines: parseInt(option.dataset.lines || fallback.lines, 10),
@@ -820,51 +1251,229 @@
         return `${width / divisor}:${height / divisor}`;
     }
 
-    function applyPreviewStyle(element, style, text, metrics, singleLine=false) {
+    function hardOutlineShadow(color, widthPx) {
+        const width = Math.max(0, widthPx);
+        if (width <= 0) return '';
+        const layers = [];
+        const steps = Math.max(8, Math.ceil(width) * 4);
+        for (let i = 0; i < steps; i += 1) {
+            const angle = (Math.PI * 2 * i) / steps;
+            for (let distance = 1; distance <= Math.ceil(width); distance += 1) {
+                const x = Math.cos(angle) * Math.min(distance, width);
+                const y = Math.sin(angle) * Math.min(distance, width);
+                layers.push(`${x.toFixed(2)}px ${y.toFixed(2)}px 0 ${color}`);
+            }
+        }
+        return layers.join(', ');
+    }
+
+    function subtitleStackGap(originalStyle, translatedStyle) {
+        const fontSize = Math.max(Number(originalStyle.fontSize) || 48, Number(translatedStyle.fontSize) || 48);
+        const outline = Math.max(Number(originalStyle.outlineWidth) || 0, Number(translatedStyle.outlineWidth) || 0);
+        const shadow = Math.max(
+            (Number(originalStyle.shadow) || 0) + (Number(originalStyle.shadowSize) || 0) + (Number(originalStyle.shadowBlur) || 0),
+            (Number(translatedStyle.shadow) || 0) + (Number(translatedStyle.shadowSize) || 0) + (Number(translatedStyle.shadowBlur) || 0),
+        );
+        // A caixa de fundo da legenda traduzida (âncora fixa embaixo) se estende com padding
+        // para cima E para baixo do próprio texto, então a original precisa pular o padding
+        // DOBRADO da traduzida (não o maior entre as duas). Espelha
+        // SubtitleService._subtitle_stack_gap (services.py) para o preview bater com o ASS renderizado.
+        const heightPercent = translatedStyle.backgroundEnabled
+            ? Math.max(40, Math.min(100, Number(translatedStyle.backgroundHeightPercent) || 100))
+            : 100;
+        const translatedPadding = translatedStyle.backgroundEnabled
+            ? (Number(translatedStyle.backgroundPaddingY) || 0) * 2
+            : 0;
+        return Math.ceil(fontSize * 1.0 * (heightPercent / 100)) + outline + shadow + translatedPadding + 8;
+    }
+
+    function effectiveMarginV(style, marginBottom) {
+        const alignment = Math.max(1, Math.min(9, Number(style.alignment) || 2));
+        const margin = Math.max(0, Number(marginBottom) || 0);
+        if (!style.backgroundEnabled || (alignment >= 4 && alignment <= 6)) {
+            return margin;
+        }
+        return margin + Math.max(0, Number(style.backgroundPaddingY) || 0);
+    }
+
+    function dualStyleMargins(originalStyle, translatedStyle) {
+        // Espelha SubtitleService._dual_style_margins: margens 100% independentes.
+        // Mexer na margem do formulário só move a legenda atual; a traduzida fica na
+        // margem salva do estilo comparado.
+        return {
+            originalMargin: Math.max(0, Number(originalStyle.margin) || 0),
+            translatedMargin: Math.max(0, Number(translatedStyle.margin) || 0),
+        };
+    }
+
+    function applyAlignment(element, style, marginRatio, sideMarginRatio) {
+        const alignment = Math.max(1, Math.min(9, Number(style.alignment) || 2));
+        const horizontal = alignment % 3 === 1 ? 'left' : (alignment % 3 === 0 ? 'right' : 'center');
+        const vertical = alignment <= 3 ? 'bottom' : (alignment <= 6 ? 'middle' : 'top');
+        const marginPercent = `${Math.max(0, marginRatio) * 100}%`;
+        const sidePercent = `${Math.max(0, sideMarginRatio) * 100}%`;
+
+        element.style.position = 'absolute';
+        element.style.left = 'auto';
+        element.style.right = 'auto';
+        element.style.top = 'auto';
+        element.style.bottom = 'auto';
+        element.style.transform = 'none';
+
+        if (horizontal === 'left') {
+            element.style.left = sidePercent;
+            element.style.textAlign = 'left';
+        } else if (horizontal === 'right') {
+            element.style.right = sidePercent;
+            element.style.textAlign = 'right';
+        } else {
+            element.style.left = '50%';
+            element.style.transform = 'translateX(-50%)';
+            element.style.textAlign = 'center';
+        }
+
+        if (vertical === 'bottom') {
+            element.style.bottom = marginPercent;
+        } else if (vertical === 'top') {
+            element.style.top = marginPercent;
+        } else if (horizontal === 'center') {
+            element.style.top = '50%';
+            element.style.transform = 'translate(-50%, -50%)';
+        } else {
+            element.style.top = '50%';
+            element.style.transform = 'translateY(-50%)';
+        }
+    }
+
+    function applyPreviewStyle(element, style, text, metrics, { singleLine = false, marginOverride = null } = {}) {
         if (!element) return;
+        const scale = metrics?.scale || 1;
+        const playResX = metrics?.playResX || 1920;
+        const playResY = metrics?.playResY || 1080;
+        const margin = Number(marginOverride == null ? style.margin : marginOverride);
+        const safeMargin = Number.isFinite(margin) ? Math.max(0, margin) : 0;
+
         element.textContent = previewText(text, style);
-        element.style.fontFamily = style.font;
-        const fontScale = metrics?.fontScale || 1;
-        const verticalScale = metrics?.verticalScale || 1;
-        const outlineScale = metrics?.outlineScale || 1;
-        const shadowScale = metrics?.shadowScale || 1;
-        element.style.fontSize = `${Math.max(1, style.fontSize * fontScale)}px`;
+        element.style.fontFamily = `"${style.font}", Arial, sans-serif`;
+        element.style.fontWeight = String(style.fontWeight || 700);
+        element.style.fontSize = `${Math.max(1, style.fontSize * scale)}px`;
         element.style.color = style.primary;
-        element.style.bottom = `${Math.max(0, style.margin * verticalScale)}px`;
-        element.style.textShadow = [
-            `0 0 ${Math.max(0.4, style.outlineWidth * outlineScale)}px ${style.outline}`,
-            `0 0 ${Math.max(0.8, style.outlineWidth * outlineScale * 2)}px ${style.outline}`,
-            `${Math.max(0.4, style.shadow * shadowScale)}px ${Math.max(0.4, style.shadow * shadowScale)}px ${Math.max(0.8, style.shadow * shadowScale * 2)}px rgba(0,0,0,.75)`,
-        ].join(', ');
+        const heightPercent = Math.max(40, Math.min(100, Number(style.backgroundHeightPercent) || 100));
+        // Com altura < 100%, a faixa ASS usa \fscy na camada BG; no preview aproximamos
+        // com line-height menor para a caixa ficar mais baixa que o texto.
+        element.style.lineHeight = style.backgroundEnabled
+            ? String(Math.max(0.55, 1.0 * (heightPercent / 100)))
+            : '1.0';
+        element.style.overflow = 'visible';
+        // MarginV no ASS é fração da PlayResY — usar % evita erro de escala do preview.
+        applyAlignment(element, style, safeMargin / playResY, 40 / playResX);
+
+        const outlinePx = Math.max(0, style.outlineWidth * scale);
+        const shadowDistance = Math.max(0, Number(style.shadow) || 0) * scale;
+        const shadowAngle = ((Number(style.shadowAngle) || 0) % 360 + 360) % 360;
+        const shadowSizePx = Math.max(0, Number(style.shadowSize) || 0) * scale;
+        const shadowBlurPx = Math.max(0, Number(style.shadowBlur) || 0) * scale;
+        const shadowAlpha = Math.max(0, Math.min(100, Number(style.shadowOpacity) || 0)) / 100;
+        const radians = shadowAngle * Math.PI / 180;
+        const shadowDx = shadowDistance * Math.cos(radians);
+        const shadowDy = shadowDistance * Math.sin(radians);
+        // Tamanho não entra no blur do CSS (no ASS o tamanho é escala tipográfica, não \bord).
+        // Para simular tamanho > 0 no preview, empilhamos cópias nítidas no mesmo ângulo.
+        let dropShadow = '';
+        if (shadowAlpha > 0 && (shadowDistance > 0 || shadowSizePx > 0 || shadowBlurPx > 0)) {
+            const parts = [];
+            const sizeSteps = shadowSizePx > 0 ? Math.min(4, Math.max(1, Math.round(shadowSizePx / 3))) : 0;
+            for (let i = 0; i <= sizeSteps; i += 1) {
+                const grow = 1 + (sizeSteps ? (i / sizeSteps) * (shadowSizePx * 0.04) : 0);
+                parts.push(
+                    `${(shadowDx * grow).toFixed(2)}px ${(shadowDy * grow).toFixed(2)}px `
+                    + `${shadowBlurPx.toFixed(2)}px rgba(0,0,0,${shadowAlpha})`
+                );
+            }
+            dropShadow = parts.join(', ');
+        }
+
+        if (style.backgroundEnabled) {
+            const color = style.backgroundColor || '#000000';
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            const alpha = Math.max(0, Math.min(100, style.backgroundOpacity)) / 100;
+            const padX = Math.max(0, style.backgroundPaddingX || 0) * scale;
+            const padY = Math.max(0, style.backgroundPaddingY || 0) * scale;
+            element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            element.style.padding = `${padY}px ${padX}px`;
+            element.style.borderRadius = `${Math.max(0, style.backgroundRadius * scale)}px`;
+            element.style.webkitTextStroke = outlinePx > 0 ? `${outlinePx}px ${style.outline}` : '0';
+            element.style.textShadow = dropShadow || 'none';
+        } else {
+            element.style.backgroundColor = 'transparent';
+            element.style.padding = '0';
+            element.style.borderRadius = '0';
+            element.style.webkitTextStroke = outlinePx > 0 ? `${outlinePx}px ${style.outline}` : '0';
+            const outlineShadow = hardOutlineShadow(style.outline, outlinePx);
+            element.style.textShadow = [outlineShadow, dropShadow].filter(Boolean).join(', ') || 'none';
+        }
         element.classList.toggle('single-line', singleLine || style.lines <= 1);
     }
 
     function updateStylePreviewMeta(targetId, style) {
         const target = byId(targetId);
         if (!target) return;
+        const weightLabel = FONT_WEIGHT_LABELS[style.fontWeight] || style.fontWeight;
+        const alignmentLabel = ALIGNMENT_LABELS[style.alignment] || style.alignment;
         target.innerHTML = `
             <div class="flex flex-wrap gap-2 mb-2">
                 <span class="style-font-chip">${style.name}</span>
-                <span class="style-font-chip">${style.font}</span>
+                <span class="style-font-chip">${style.font} ${weightLabel}</span>
                 <span class="style-font-chip">${style.fontSize}px</span>
+                ${style.backgroundEnabled ? '<span class="style-font-chip">plano de fundo ativo</span>' : '<span class="style-font-chip">sem fundo</span>'}
             </div>
             <div class="text-xs text-gray-500">
-                margem ${style.margin}px · até ${style.lines} linha(s) · ${style.chars} caracteres
+                ${alignmentLabel} · margem ${style.margin}px · contorno ${style.outlineWidth}
+                · sombra ${style.shadow || 0}px · ${style.shadowAngle ?? 45}° · tam ${style.shadowSize || 0} · blur ${style.shadowBlur || 0} · ${style.shadowOpacity ?? 70}%
+                · até ${style.lines} linha(s) · ${style.chars} caracteres
+                ${style.backgroundEnabled
+                    ? ` · fundo ${style.backgroundOpacity}% · altura ${style.backgroundHeightPercent || 100}% · extra ${style.backgroundPaddingX || 0}×${style.backgroundPaddingY || 0}px`
+                    : ''}
             </div>
         `;
     }
 
+    function setPreviewBackdrop(mode) {
+        const backdrop = mode === 'light' ? 'light' : 'dark';
+        const shell = byId('style-preview-shell');
+        const toggle = byId('style-backdrop-toggle');
+        const vignette = byId('style-preview-vignette');
+        if (shell) shell.dataset.backdrop = backdrop;
+        if (toggle) {
+            toggle.dataset.active = backdrop;
+            toggle.querySelectorAll('button[data-backdrop]').forEach((button) => {
+                button.classList.toggle('active', button.dataset.backdrop === backdrop);
+            });
+        }
+        if (vignette) {
+            vignette.className = backdrop === 'light'
+                ? 'absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent'
+                : 'absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent';
+        }
+    }
+
     function updateStylePreview() {
+        syncStyleBackgroundFields();
         const originalStyle = styleDataFromForm();
         const compareOption = byId('style-preview-compare')?.selectedOptions?.[0];
-        const translatedStyle = styleDataFromOption(compareOption, originalStyle);
+        const hasCompareStyle = !!(compareOption && compareOption.value);
+        const translatedStyle = hasCompareStyle
+            ? styleDataFromOption(compareOption, originalStyle)
+            : null;
         const presetOption = byId('style-preview-preset')?.selectedOptions?.[0];
         const width = parseInt(presetOption?.dataset.width || '1920', 10);
         const height = parseInt(presetOption?.dataset.height || '1080', 10);
         const stage = byId('style-preview-stage');
         const original = byId('style-preview-original');
         const translated = byId('style-preview-translated');
-        const showTranslation = !!byId('style-preview-show-translation')?.checked;
+        const showTranslation = !!byId('style-preview-show-translation')?.checked && hasCompareStyle;
 
         if (stage) {
             stage.style.setProperty('--preview-ratio', `${(height / width) * 100}%`);
@@ -875,81 +1484,95 @@
         }
 
         requestAnimationFrame(() => {
-            const stageWidth = stage?.clientWidth || width;
-            const stageHeight = stage?.clientHeight || height;
+            const stageWidth = stage?.clientWidth || 0;
+            const scale = stageWidth > 0 ? stageWidth / width : 1;
             const metrics = {
-                fontScale: stageWidth / width,
-                verticalScale: stageHeight / height,
-                outlineScale: stageWidth / width,
-                shadowScale: stageWidth / width,
+                scale,
+                playResX: width,
+                playResY: height,
             };
+            // Margens independentes (igual ao backend): formulário mexe só a legenda atual;
+            // a traduzida usa a margem salva do estilo comparado.
+            let originalMargin = originalStyle.margin;
+            let translatedMargin = translatedStyle?.margin;
+            if (showTranslation && translatedStyle) {
+                const margins = dualStyleMargins(originalStyle, translatedStyle);
+                originalMargin = margins.originalMargin;
+                translatedMargin = margins.translatedMargin;
+            }
 
             applyPreviewStyle(
                 original,
                 originalStyle,
                 'Hoje queremos convidar você para estar conosco.',
                 metrics,
-                false,
+                { singleLine: false, marginOverride: originalMargin },
             );
             if (translated) {
                 translated.style.display = showTranslation ? 'block' : 'none';
-                if (showTranslation) {
+                if (showTranslation && translatedStyle) {
                     applyPreviewStyle(
                         translated,
                         translatedStyle,
                         'Today we want to invite you to join us.',
                         metrics,
-                        true,
+                        { singleLine: true, marginOverride: translatedMargin },
                     );
                 }
             }
 
             updateStylePreviewMeta('style-preview-original-meta', originalStyle);
-            updateStylePreviewMeta('style-preview-translated-meta', translatedStyle);
+            updateStylePreviewMeta(
+                'style-preview-translated-meta',
+                translatedStyle || {
+                    name: 'Selecione um estilo salvo',
+                    font: '—',
+                    fontWeight: '',
+                    fontSize: '—',
+                    margin: '—',
+                    outlineWidth: '—',
+                    lines: '—',
+                    chars: '—',
+                    alignment: '',
+                    backgroundEnabled: false,
+                },
+            );
         });
     }
 
-    document.querySelector('[data-reset-style]')?.addEventListener('click', resetStyleForm);
+    document.querySelectorAll('[data-reset-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+            resetStyleForm();
+            showStyleEditor('Novo estilo');
+        });
+    });
+    document.querySelectorAll('#style-create-button, [data-style-create]').forEach((button) => {
+        button.addEventListener('click', openStyleCreate);
+    });
+    document.querySelectorAll('#style-back-to-list, [data-style-back]').forEach((button) => {
+        button.addEventListener('click', showStyleList);
+    });
     document.querySelectorAll('[data-edit-style]').forEach((button) => {
         button.addEventListener('click', () => {
-            byId('style-form-title').textContent = `Editar estilo: ${button.dataset.name}`;
             setValue('style-id', button.dataset.id);
-            setValue('id_style-name', button.dataset.name);
-            setValue('id_style-font_name', button.dataset.font);
-            setValue('id_style-font_size', button.dataset.fontSize);
-            setValue('id_style-primary_color', button.dataset.primary);
-            setValue('id_style-outline_color', button.dataset.outline);
-            setValue('id_style-outline_width', button.dataset.outlineWidth);
-            setValue('id_style-shadow', button.dataset.shadow);
-            setValue('id_style-margin_bottom', button.dataset.margin);
-            setValue('id_style-alignment', button.dataset.alignment);
-            setValue('id_style-max_lines', button.dataset.lines);
-            setValue('id_style-max_characters', button.dataset.chars);
-            setChecked('id_style-is_active', button.dataset.active);
-            updateStylePreview();
+            fillStyleForm(button.dataset);
+            showStyleEditor(`Editar estilo: ${button.dataset.name}`);
         });
     });
-    document.querySelectorAll('[data-view-style]').forEach((button) => {
+    document.querySelectorAll('[data-clone-style]').forEach((button) => {
         button.addEventListener('click', () => {
-            const target = byId('style-details');
-            target.classList.remove('hidden');
-            target.innerHTML = `<strong>${button.dataset.name}</strong><br>Fonte: ${button.dataset.font}, ${button.dataset.fontSize}px<br>Cores: ${button.dataset.primary} / ${button.dataset.outline}<br>Contorno: ${button.dataset.outlineWidth}, sombra ${button.dataset.shadow}<br>Margem: ${button.dataset.margin}, alinhamento ${button.dataset.alignment}<br>Texto: ${button.dataset.lines} linhas, ${button.dataset.chars} caracteres`;
-            setValue('style-preview-compare', button.dataset.id);
-            updateStylePreview();
+            setValue('style-id', '');
+            fillStyleForm(button.dataset, { clone: true });
+            showStyleEditor(`Clonar estilo: ${button.dataset.name}`);
         });
     });
+    byId('style-backdrop-toggle')?.querySelectorAll('button[data-backdrop]').forEach((button) => {
+        button.addEventListener('click', () => setPreviewBackdrop(button.dataset.backdrop));
+    });
+    const styleEditorForm = byId('style-editor-view')?.querySelector('form');
+    styleEditorForm?.addEventListener('input', updateStylePreview);
+    styleEditorForm?.addEventListener('change', updateStylePreview);
     [
-        'id_style-name',
-        'id_style-font_name',
-        'id_style-font_size',
-        'id_style-primary_color',
-        'id_style-outline_color',
-        'id_style-outline_width',
-        'id_style-shadow',
-        'id_style-margin_bottom',
-        'id_style-alignment',
-        'id_style-max_lines',
-        'id_style-max_characters',
         'style-preview-preset',
         'style-preview-compare',
         'style-preview-show-translation',
@@ -957,6 +1580,16 @@
         byId(id)?.addEventListener('input', updateStylePreview);
         byId(id)?.addEventListener('change', updateStylePreview);
     });
+    byId('id_style-background_enabled')?.addEventListener('change', syncStyleBackgroundFields);
+    byId('style-bg-fit-text')?.addEventListener('click', () => {
+        setChecked('id_style-background_enabled', true);
+        setValue('id_style-background_padding_x', '0');
+        setValue('id_style-background_padding_y', '0');
+        setValue('id_style-background_height_percent', '100');
+        syncStyleBackgroundFields();
+        updateStylePreview();
+    });
+    setPreviewBackdrop('dark');
 
     function resetBackgroundMusicForm() {
         byId('bgmusic-form-title').textContent = 'Nova música';

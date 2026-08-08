@@ -25,7 +25,7 @@ class MediaTemplateBlockInline(admin.StackedInline):
     extra = 0
     fields = (
         'key', 'name', 'description', 'order', 'is_required', 'allows_multiple',
-        'min_occurrences', 'max_occurrences', 'default_video',
+        'min_occurrences', 'max_occurrences', 'skip_extra_processing', 'default_video',
     )
 
     def has_add_permission(self, request, obj=None):
@@ -115,6 +115,7 @@ class MediaTemplateVersionAdmin(admin.ModelAdmin):
                     version=clone, key=item.key, name=item.name, description=item.description,
                     order=item.order, is_required=item.is_required, allows_multiple=item.allows_multiple,
                     min_occurrences=item.min_occurrences, max_occurrences=item.max_occurrences,
+                    skip_extra_processing=item.skip_extra_processing,
                     default_video=item.default_video.name,
                 ) for item in source.blocks.all()
             ])

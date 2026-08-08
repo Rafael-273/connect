@@ -1,13 +1,15 @@
 import mimetypes
+import re
 from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import F, Max, Sum
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import content_disposition_header
 from django.views import View
 
 from ..external_media.tasks import (
@@ -36,8 +38,22 @@ from ..external_media.services import ProjectService
 from .mixins import ExternalMediaRequiredMixin
 
 
+_RANGE_RE = re.compile(r'bytes=(\d*)-(\d*)')
+
+
+def _file_chunks(file_handle, start, length, block_size=8192):
+    file_handle.seek(start)
+    remaining = length
+    while remaining > 0:
+        chunk = file_handle.read(min(block_size, remaining))
+        if not chunk:
+            break
+        remaining -= len(chunk)
+        yield chunk
+
+
 def protected_file_response(request, field_file):
-    """Serve locally or redirects to a short-lived signed S3 URL after authorization."""
+    """Serve locally (with HTTP Range for video seek) or redirect to a signed S3 URL."""
     filename = Path(field_file.name).name
     preview = request.GET.get('preview') == '1'
     content_type = mimetypes.guess_type(field_file.name)[0] or 'application/octet-stream'
@@ -55,12 +71,61 @@ def protected_file_response(request, field_file):
         file_handle = field_file.open('rb')
     except FileNotFoundError as exc:
         raise Http404('Arquivo não encontrado.') from exc
-    return FileResponse(
+
+    # FileResponse in Django 4.2 does not honor Range requests. HTML5 <video> seeking
+    # requires Accept-Ranges + 206 Partial Content, otherwise the scrubber stays stuck.
+    try:
+        file_size = int(getattr(field_file, 'size', None) or 0)
+    except (TypeError, ValueError, OSError):
+        file_size = 0
+    if not file_size and hasattr(file_handle, 'seek') and hasattr(file_handle, 'tell'):
+        current = file_handle.tell()
+        file_handle.seek(0, 2)
+        file_size = file_handle.tell()
+        file_handle.seek(current)
+
+    disposition = content_disposition_header(not preview, filename)
+    range_header = (request.META.get('HTTP_RANGE') or '').strip()
+    if range_header and file_size > 0:
+        match = _RANGE_RE.fullmatch(range_header)
+        if not match or (not match.group(1) and not match.group(2)):
+            file_handle.close()
+            return HttpResponse(status=416, headers={'Content-Range': f'bytes */{file_size}'})
+        start_raw, end_raw = match.groups()
+        if start_raw == '':
+            # bytes=-N → last N bytes
+            length = min(int(end_raw), file_size)
+            start = file_size - length
+            end = file_size - 1
+        else:
+            start = int(start_raw)
+            end = int(end_raw) if end_raw else file_size - 1
+            end = min(end, file_size - 1)
+        if start < 0 or start > end or start >= file_size:
+            file_handle.close()
+            return HttpResponse(status=416, headers={'Content-Range': f'bytes */{file_size}'})
+        length = end - start + 1
+        response = StreamingHttpResponse(
+            _file_chunks(file_handle, start, length),
+            status=206,
+            content_type=content_type,
+        )
+        response['Content-Length'] = str(length)
+        response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+        response['Accept-Ranges'] = 'bytes'
+        if disposition:
+            response['Content-Disposition'] = disposition
+        response._resource_closers.append(file_handle.close)
+        return response
+
+    response = FileResponse(
         file_handle,
         content_type=content_type,
         as_attachment=not preview,
         filename=filename,
     )
+    response['Accept-Ranges'] = 'bytes'
+    return response
 
 
 class ExternalMediaContextMixin:
@@ -164,7 +229,9 @@ class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
         block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version)
         form = ProjectBlockMediaForm(request.POST, request.FILES)
         if not form.is_valid():
-            messages.error(request, 'Não foi possível enviar o vídeo: ' + ' '.join(form.errors.get('file', [])))
+            messages.error(request, 'Não foi possível enviar o vídeo: ' + ' '.join(
+                error for errors in form.errors.values() for error in errors
+            ))
             return redirect('external_media_project_detail', public_id=public_id)
         count = project.block_media.filter(block=block).count()
         if count >= block.max_occurrences:
@@ -179,6 +246,8 @@ class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
         ) + 1
         item.original_filename = item.file.name
         item.file_size = item.file.size
+        item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_start_seconds')) or 0
+        item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_end_seconds'))
         item.save()
         messages.success(request, f'Vídeo adicionado ao bloco {block.name}.')
         return redirect('external_media_project_detail', public_id=public_id)
@@ -281,6 +350,7 @@ class ExternalMediaProjectStatusView(ExternalMediaRequiredMixin, View):
             'status_label': project.get_status_display(),
             'progress': project.progress,
             'current_step': project.current_step,
+            'duration_label': project.duration_label,
             'error': project.error_message,
             'is_terminal': project.status in {
                 ExternalMediaProject.Status.DRAFT,
@@ -333,6 +403,7 @@ class ExternalMediaStatusView(ExternalMediaRequiredMixin, View):
             'status_label': job.get_status_display(),
             'progress': job.progress,
             'current_step': job.current_step,
+            'duration_label': job.duration_label,
             'error': job.error_message,
             'is_terminal': job.status in {
                 ExternalMediaJob.Status.AWAITING_REVIEW,
@@ -353,7 +424,11 @@ class ExternalMediaEditorView(ExternalMediaRequiredMixin, ExternalMediaContextMi
 
     def get_job(self, public_id):
         return get_object_or_404(
-            ExternalMediaJob.objects.prefetch_related('subtitle_tracks__cues'),
+            ExternalMediaJob.objects.select_related(
+                'preset',
+                'subtitle_style',
+                'translated_subtitle_style',
+            ).prefetch_related('subtitle_tracks__cues'),
             public_id=public_id,
         )
 

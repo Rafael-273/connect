@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import json
 from types import SimpleNamespace
 import logging
@@ -38,6 +39,18 @@ from .exceptions import ExternalMediaError
 from .speech_edit import SpeechEditAnalyzer, SpeechEditPlan, SpeechEditService
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AssemblySource:
+    path: Path
+    label: str = ''
+    block_id: int | None = None
+    block_key: str = ''
+    block_name: str = ''
+    skip_extra_processing: bool = False
+    trim_start_ms: int = 0
+    trim_end_ms: int | None = None
 
 
 class timed_step:
@@ -82,6 +95,8 @@ class VideoMetadata:
     color_space: str = ''
     color_transfer: str = ''
     color_primaries: str = ''
+    width: int = 0
+    height: int = 0
 
     @property
     def is_hdr(self):
@@ -172,8 +187,29 @@ class TranscriptionService:
         return clean
 
     @classmethod
-    def group_for_subtitles(cls, detailed):
-        return cls._group_words(detailed) if detailed and all(item.granularity == 'word' for item in detailed) else detailed
+    def group_for_subtitles(cls, detailed, block_boundaries_ms=None):
+        if not detailed:
+            return detailed
+        if not all(item.granularity == 'word' for item in detailed):
+            return detailed
+        cues = []
+        for bucket in cls._bucket_by_boundaries(detailed, block_boundaries_ms):
+            # Grouping each block's words independently guarantees no cue can straddle
+            # a block boundary, so the last cue of a block never leaks into the next one's speech.
+            cues.extend(cls._group_words(bucket))
+        return cues
+
+    @staticmethod
+    def _bucket_by_boundaries(items, block_boundaries_ms):
+        boundaries = sorted({int(value) for value in (block_boundaries_ms or []) if value and value > 0})
+        if not boundaries:
+            return [list(items)]
+        buckets = [[] for _ in range(len(boundaries) + 1)]
+        for item in items:
+            anchor = (item.start_ms + item.end_ms) / 2
+            index = bisect.bisect_right(boundaries, anchor)
+            buckets[index].append(item)
+        return [bucket for bucket in buckets if bucket]
 
     @staticmethod
     def _remove_chunk_overlap(segments):
@@ -235,6 +271,10 @@ class TranslationService:
         'fr': 'francês',
         'it': 'italiano',
     }
+    PROTECTED_BRAND_TERMS = (
+        'Igreja Filadélfia',
+        'Filadélfia',
+    )
 
     def __init__(self, ai_service=None):
         self.ai_service = ai_service or get_ai_service()
@@ -277,14 +317,22 @@ class TranslationService:
             is_active=True,
         ).values('source_text', 'translated_text'))
         payload = [{'cue_id': cue.cue_index, 'text': cue.text} for cue in cues]
-        prompt = json.dumps({'glossary': glossary, 'cues': payload}, ensure_ascii=False)
+        payload, protected_terms = self._inject_protected_terms(payload, glossary)
+        prompt = json.dumps(
+            {'glossary': glossary, 'protected_terms': protected_terms, 'cues': payload},
+            ensure_ascii=False,
+        )
         instructions = f"""Você é um tradutor e editor nativo especializado em sermões,
 igrejas evangélicas e conteúdo cristão. Traduza de {self.LANGUAGE_NAMES[source_language]}
 para {self.LANGUAGE_NAMES[target_language]} natural e idiomático, como um falante nativo
-realmente diria. Nunca faça tradução palavra por palavra. Preserve integralmente o sentido,
-o tom pastoral, nomes próprios, referências bíblicas e a ordem dos blocos. Priorize o
-glossário fornecido. Não junte, divida, remova ou acrescente blocos. Para cada cue_id de
-entrada, devolva exatamente um item. Responda somente JSON válido no formato
+realmente diria no dia a dia. Prefira construções comuns a um nativo americano, evite
+tradução literal e troque expressões engessadas por equivalentes naturais quando isso
+preservar o sentido. Preserve integralmente o sentido, o tom pastoral, nomes próprios,
+marcas, referências bíblicas e a ordem dos blocos. Priorize o glossário fornecido.
+Qualquer item listado em protected_terms ou qualquer token no formato __TERM_X__ deve ser
+mantido exatamente igual, sem traduzir, adaptar ou substituir. Não junte, divida, remova
+ou acrescente blocos. Para cada cue_id de entrada, devolva exatamente um item. Responda
+somente JSON válido no formato
 {{"cues":[{{"cue_id":1,"text":"..."}}]}}. Não devolva timestamps."""
         expected_ids = [cue.cue_index for cue in cues]
         for attempt in range(2):
@@ -295,7 +343,8 @@ entrada, devolva exatamente um item. Responda somente JSON válido no formato
                 max_output_tokens=max(1200, len(cues) * 100),
             )
             try:
-                return self._parse_translated_cues(raw, expected_ids)
+                translated = self._parse_translated_cues(raw, expected_ids)
+                return self._restore_protected_terms(translated, protected_terms)
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 logger.warning('Resposta de tradução inválida; tentativa %s: %s', attempt + 1, exc)
         if len(cues) > 1:
@@ -385,6 +434,46 @@ entrada, devolva exatamente um item. Responda somente JSON válido no formato
                     return cleaned
         raise ValueError('Campo de texto traduzido ausente')
 
+    @classmethod
+    def _inject_protected_terms(cls, payload, glossary):
+        protected_sources = {
+            item['source_text'].strip()
+            for item in glossary
+            if str(item.get('source_text', '')).strip()
+            and str(item.get('translated_text', '')).strip()
+            and str(item.get('source_text', '')).strip() == str(item.get('translated_text', '')).strip()
+        }
+        protected_sources.update(term for term in cls.PROTECTED_BRAND_TERMS if term)
+        protected_sources = sorted(protected_sources, key=len, reverse=True)
+        protected_terms = []
+        token_map = {}
+        for index, source_text in enumerate(protected_sources, start=1):
+            token = f'__TERM_{index}__'
+            protected_terms.append({'token': token, 'text': source_text})
+            token_map[source_text] = token
+
+        if not token_map:
+            return payload, protected_terms
+
+        protected_payload = []
+        for item in payload:
+            text = item['text']
+            for source_text, token in token_map.items():
+                text = text.replace(source_text, token)
+            protected_payload.append({**item, 'text': text})
+        return protected_payload, protected_terms
+
+    @staticmethod
+    def _restore_protected_terms(translated, protected_terms):
+        if not protected_terms:
+            return translated
+        restored = []
+        for text in translated:
+            for item in protected_terms:
+                text = text.replace(item['token'], item['text'])
+            restored.append(text)
+        return restored
+
 
 class SubtitleService:
     @staticmethod
@@ -431,19 +520,23 @@ class SubtitleService:
         path.write_text('\n\n'.join(blocks) + '\n', encoding='utf-8')
 
     def write_ass(self, track, path, style, width=1920, height=1080):
-        header = self._ass_header(
-            width,
-            height,
-            [self._ass_style_line('Default', style, style.margin_bottom)],
-        )
+        styles = self._ass_styles_for_role('Default', style, style.margin_bottom)
+        header = self._ass_header(width, height, styles)
         rows = []
         for cue in track.cues.all():
             text = self.wrap_text(cue.text, style.max_characters, style.max_lines)
             text = self._ass_escape(text).replace('\n', r'\N')
-            rows.append(
-                f'Dialogue: 0,{self._ass_time(cue.start_ms)},{self._ass_time(cue.end_ms)},'
-                f'Default,,0,0,0,,{text}'
-            )
+            rows.extend(self._ass_dialogue_rows(
+                start_ms=cue.start_ms,
+                end_ms=cue.end_ms,
+                role='Default',
+                style=style,
+                text=text,
+                prefix='',
+                width=width,
+                height=height,
+                margin_bottom=style.margin_bottom,
+            ))
         path.write_text(header + '\n'.join(rows) + '\n', encoding='utf-8-sig')
 
     def write_dual_ass(
@@ -461,14 +554,12 @@ class SubtitleService:
         if len(ordered_tracks) < 2:
             self.write_ass(ordered_tracks[0], path, original_style, width, height)
             return
-        header = self._ass_header(
-            width,
-            height,
-            [
-                self._ass_style_line('Original', original_style, original_style.margin_bottom),
-                self._ass_style_line('Translated', translated_style, translated_style.margin_bottom),
-            ],
-        )
+        original_margin, translated_margin = self._dual_style_margins(original_style, translated_style)
+        styles = [
+            *self._ass_styles_for_role('Original', original_style, original_margin),
+            *self._ass_styles_for_role('Translated', translated_style, translated_margin),
+        ]
+        header = self._ass_header(width, height, styles)
         rows = []
         styled_tracks = (
             (ordered_tracks[0], 'Original', original_style),
@@ -476,12 +567,23 @@ class SubtitleService:
         )
         for track, style_name, style in styled_tracks:
             for cue in track.cues.all():
-                text = self._single_line_text(cue.text)
-                text = r'{\q2}' + self._ass_escape(text)
-                rows.append(
-                    f'Dialogue: 0,{self._ass_time(cue.start_ms)},{self._ass_time(cue.end_ms)},'
-                    f'{style_name},,0,0,0,,{text}'
-                )
+                chunks = self._split_dual_text_chunks(cue.text, style.max_characters)
+                for segment_start, segment_end, chunk in self._split_cue_segments(
+                    cue.start_ms, cue.end_ms, chunks,
+                ):
+                    text = self._ass_escape(chunk)
+                    role_margin = original_margin if style_name == 'Original' else translated_margin
+                    rows.extend(self._ass_dialogue_rows(
+                        start_ms=segment_start,
+                        end_ms=segment_end,
+                        role=style_name,
+                        style=style,
+                        text=text,
+                        prefix=r'{\q2}',
+                        width=width,
+                        height=height,
+                        margin_bottom=role_margin,
+                    ))
         path.write_text(header + '\n'.join(rows) + '\n', encoding='utf-8-sig')
 
     def _ass_header(self, width, height, styles):
@@ -500,17 +602,322 @@ Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour,
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
+    @classmethod
+    def _ass_styles_for_role(cls, role, style, margin_bottom):
+        styles = [cls._ass_style_line(role, style, margin_bottom, kind='main')]
+        if cls._needs_shadow_layer(style):
+            styles.append(cls._ass_style_line(f'{role}Shadow', style, margin_bottom, kind='shadow'))
+        if cls._needs_dedicated_background_layer(style):
+            styles.append(cls._ass_style_line(f'{role}BG', style, margin_bottom, kind='background'))
+        return styles
+
     @staticmethod
-    def _ass_style_line(name, style, margin_bottom):
+    def _role_layer_base(role):
+        # libass faz anti-colisão só dentro do mesmo layer. Legendas duplas usam margens
+        # independentes e podem ficar visualmente próximas; separar os layers evita que
+        # o render empurre a tradução para cima com espaçamento "padrão".
+        if role == 'Translated':
+            return 10
+        return 0
+
+    @classmethod
+    def _ass_dialogue_rows(
+        cls,
+        start_ms,
+        end_ms,
+        role,
+        style,
+        text,
+        prefix='',
+        width=0,
+        height=0,
+        margin_bottom=None,
+    ):
+        start = cls._ass_time(start_ms)
+        end = cls._ass_time(end_ms)
+        position_prefix = ''
+        if width > 0 and height > 0 and margin_bottom is not None:
+            position_prefix = cls._ass_position_override(style, margin_bottom, width, height)
+        full_prefix = f'{prefix}{position_prefix}'
+        rows = []
+        layer = cls._role_layer_base(role)
+        dedicated_background = cls._needs_dedicated_background_layer(style)
+        if dedicated_background:
+            bg_override = cls._ass_background_layer_override(style)
+            rows.append(
+                f'Dialogue: {layer},{start},{end},{role}BG,,0,0,0,,{full_prefix}{bg_override}{text}'
+            )
+            layer += 1
+        if cls._needs_shadow_layer(style):
+            # A sombra tem que ficar SEMPRE entre o fundo (se houver) e o texto principal —
+            # senão a caixa de fundo é desenhada por cima e "engole" a sombra por completo.
+            for shadow_override in cls._shadow_layer_overrides(style):
+                rows.append(
+                    f'Dialogue: {layer},{start},{end},{role}Shadow,,0,0,0,,{full_prefix}{shadow_override}{text}'
+                )
+            layer += 1
+        if dedicated_background:
+            rows.append(
+                f'Dialogue: {layer},{start},{end},{role},,0,0,0,,{full_prefix}{text}'
+            )
+            return rows
+        background_override = cls._ass_background_override(style)
+        rows.append(
+            f'Dialogue: {layer},{start},{end},{role},,0,0,0,,{full_prefix}{background_override}{text}'
+        )
+        return rows
+
+    @staticmethod
+    def _needs_shadow_layer(style):
+        # Sombra avançada (ângulo/distância/tamanho/desfoque) sempre em camada própria:
+        # BorderStyle=4 substitui a sombra pela caixa, e o Style.Shadow do ASS só aceita
+        # um deslocamento diagonal simples — sem ângulo, tamanho ou blur.
+        opacity = max(0, min(100, int(getattr(style, 'shadow_opacity', 70) or 0)))
+        if opacity <= 0:
+            return False
+        distance = max(0, int(getattr(style, 'shadow', 0) or 0))
+        size = max(0, int(getattr(style, 'shadow_size', 0) or 0))
+        blur = max(0, int(getattr(style, 'shadow_blur', 0) or 0))
+        return distance > 0 or size > 0 or blur > 0
+
+    @classmethod
+    def _needs_dedicated_background_layer(cls, style):
+        if not getattr(style, 'background_enabled', False):
+            return False
+        # Precisa de camada própria se a altura for reduzida (via \fscy) OU se houver
+        # sombra — assim a sombra entra ENTRE a caixa e o texto, em vez de ficar embutida
+        # no mesmo evento do texto (onde a caixa acabaria desenhada por cima dela).
+        return cls._needs_background_layer(style) or cls._needs_shadow_layer(style)
+
+    @staticmethod
+    def _needs_background_layer(style):
+        if not getattr(style, 'background_enabled', False):
+            return False
+        height_percent = max(40, min(100, int(getattr(style, 'background_height_percent', 100) or 100)))
+        return height_percent < 100
+
+    @staticmethod
+    def _shadow_offset_xy(style):
+        distance = max(0, float(getattr(style, 'shadow', 0) or 0))
+        try:
+            raw_angle = getattr(style, 'shadow_angle', 45)
+            angle = 45 if raw_angle is None else int(raw_angle) % 360
+        except (TypeError, ValueError):
+            angle = 45
+        # 0° = direita, 90° = baixo (eixo Y do ASS cresce para baixo).
+        radians = math.radians(angle)
+        dx = round(distance * math.cos(radians), 2)
+        dy = round(distance * math.sin(radians), 2)
+        return dx, dy
+
+    @staticmethod
+    def _format_ass_number(value):
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        text = f'{value:.2f}'.rstrip('0').rstrip('.')
+        return text or '0'
+
+    @staticmethod
+    def _ass_style_line(name, style, margin_bottom, kind='main'):
         color = style.primary_color.lstrip('#').zfill(6)
+        background = getattr(style, 'background_color', '#000000').lstrip('#').zfill(6)
         outline = style.outline_color.lstrip('#').zfill(6)
-        primary_color = f'&H00{color[4:6]}{color[2:4]}{color[0:2]}'
+        primary_opacity = max(0, min(100, int(getattr(style, 'primary_opacity', 100) or 100)))
+        primary_alpha_hex = SubtitleService._ass_alpha_from_opacity(primary_opacity)
+        primary_color = f'&H{primary_alpha_hex}{color[4:6]}{color[2:4]}{color[0:2]}'
         outline_color = f'&H00{outline[4:6]}{outline[2:4]}{outline[0:2]}'
+        shadow_opacity = max(0, min(100, int(getattr(style, 'shadow_opacity', 70) or 0)))
+        shadow_alpha_hex = SubtitleService._ass_alpha_from_opacity(shadow_opacity)
+        background_opacity = max(0, min(100, int(getattr(style, 'background_opacity', 70) or 0)))
+        background_alpha_hex = SubtitleService._ass_alpha_from_opacity(background_opacity)
+        background_enabled = bool(getattr(style, 'background_enabled', False))
+        font_weight = int(getattr(style, 'font_weight', 700) or 700)
+        bold_flag = -1 if font_weight >= 600 else 0
+        ass_margin_v = SubtitleService._ass_margin_v(style, margin_bottom)
+
+        if kind == 'shadow':
+            # Camada fantasma: offsets/tamanho/blur vêm do override no Dialogue.
+            back_colour = f'&H{shadow_alpha_hex}000000'
+            return (
+                f'Style: {name},{style.font_name},{style.font_size},&HFF000000,&H000000FF,'
+                f'&HFF000000,{back_colour},{bold_flag},0,0,0,100,100,0,0,1,'
+                f'0,0,{SubtitleService._ass_alignment(style)},40,40,{ass_margin_v},1'
+            )
+
+        if kind == 'background':
+            # Camada só da caixa (BS=4); texto invisível; altura controlada via \fscy no override.
+            back_colour = f'&H{background_alpha_hex}{background[4:6]}{background[2:4]}{background[0:2]}'
+            return (
+                f'Style: {name},{style.font_name},{style.font_size},&HFF000000,&H000000FF,'
+                f'&HFF000000,{back_colour},{bold_flag},0,0,0,100,100,0,0,4,'
+                f'0,0,{SubtitleService._ass_alignment(style)},40,40,{ass_margin_v},1'
+            )
+
+        # kind == main — sombra fica na camada Shadow quando ativa.
+        style_shadow = 0
+        if background_enabled and SubtitleService._needs_dedicated_background_layer(style):
+            border_style = 1
+            back_colour = f'&HFF000000'
+            effective_outline = style.outline_width
+        elif background_enabled:
+            # BorderStyle=4: uma caixa por evento (evita soma de alpha do BS=3 em multilinha).
+            border_style = 4
+            back_colour = f'&H{background_alpha_hex}{background[4:6]}{background[2:4]}{background[0:2]}'
+            effective_outline = style.outline_width
+        else:
+            border_style = 1
+            back_colour = f'&HFF000000'
+            effective_outline = style.outline_width
+
         return (
             f'Style: {name},{style.font_name},{style.font_size},{primary_color},&H000000FF,'
-            f'{outline_color},&H64000000,0,0,0,0,100,100,0,0,1,'
-            f'{style.outline_width},{style.shadow},{style.alignment},40,40,{margin_bottom},1'
+            f'{outline_color},{back_colour},{bold_flag},0,0,0,100,100,0,0,{border_style},'
+            f'{effective_outline},{style_shadow},{SubtitleService._ass_alignment(style)},40,40,{ass_margin_v},1'
         )
+
+    @staticmethod
+    def _ass_margin_v(style, margin_bottom):
+        # BorderStyle=4 desenha a caixa de fundo com padding via \yshad (ver
+        # _ass_background_override), mas esse padding NÃO desloca o texto nem entra no
+        # cálculo de alinhamento/margem do libass. Inflamos o MarginV para a borda da
+        # caixa terminar no margin_bottom configurado, batendo com o preview.
+        if not getattr(style, 'background_enabled', False):
+            return margin_bottom
+        alignment = SubtitleService._ass_alignment(style)
+        if 4 <= alignment <= 6:
+            return margin_bottom
+        pad_y = max(0, int(getattr(style, 'background_padding_y', 0) or 0))
+        return margin_bottom + pad_y
+
+    @staticmethod
+    def _ass_position_override(style, margin_bottom, width, height):
+        # \pos fixa o ponto de ancoragem em pixels do preset — espelha o preview CSS
+        # (bottom = margin_bottom + padding_y para o texto; caixa desce via padding).
+        alignment = SubtitleService._ass_alignment(style)
+        margin_v = SubtitleService._ass_margin_v(style, margin_bottom)
+        side_margin = 40
+        column = alignment % 3 or 3
+        row = (alignment - 1) // 3
+        if column == 1:
+            x = side_margin
+        elif column == 2:
+            x = width // 2
+        else:
+            x = max(side_margin, width - side_margin)
+        if row == 0:
+            y = max(0, height - margin_v)
+        elif row == 1:
+            y = height // 2
+        else:
+            y = margin_v
+        return f'{{\\an{alignment}\\pos({x},{y})}}'
+
+    @staticmethod
+    def _ass_background_override(style):
+        if not getattr(style, 'background_enabled', False):
+            return ''
+        if SubtitleService._needs_dedicated_background_layer(style):
+            return ''
+        background = getattr(style, 'background_color', '#000000').lstrip('#').zfill(6)
+        background_opacity = max(0, min(100, int(getattr(style, 'background_opacity', 70) or 0)))
+        alpha_hex = SubtitleService._ass_alpha_from_opacity(background_opacity)
+        box_color = f'{background[4:6]}{background[2:4]}{background[0:2]}'
+        pad_x = max(0, int(getattr(style, 'background_padding_x', 14) or 0))
+        pad_y = max(0, int(getattr(style, 'background_padding_y', 8) or 0))
+        return f'{{\\4c&H{box_color}&\\4a&H{alpha_hex}&\\xshad{pad_x}\\yshad{pad_y}}}'
+
+    @staticmethod
+    def _ass_background_layer_override(style):
+        background = getattr(style, 'background_color', '#000000').lstrip('#').zfill(6)
+        background_opacity = max(0, min(100, int(getattr(style, 'background_opacity', 70) or 0)))
+        alpha_hex = SubtitleService._ass_alpha_from_opacity(background_opacity)
+        box_color = f'{background[4:6]}{background[2:4]}{background[0:2]}'
+        pad_x = max(0, int(getattr(style, 'background_padding_x', 14) or 0))
+        pad_y = max(0, int(getattr(style, 'background_padding_y', 8) or 0))
+        height_percent = max(40, min(100, int(getattr(style, 'background_height_percent', 100) or 100)))
+        # Texto invisível + escala vertical da caixa (libass não encolhe BS=4 abaixo da fonte
+        # só com yshad negativo; \fscy na camada BG permite faixa mais baixa que o texto).
+        return (
+            f'{{\\1a&HFF&\\3a&HFF&\\4c&H{box_color}&\\4a&H{alpha_hex}&'
+            f'\\fscy{height_percent}\\xshad{pad_x}\\yshad{pad_y}}}'
+        )
+
+    @staticmethod
+    def _shadow_layer_overrides(style):
+        # libass desenha a sombra como glifo na cor primária (\1c/\1a), NÃO via BackColour
+        # (\4c/\4a com \1a&HFF& no texto principal — essa combinação fica invisível).
+        # Empilhamos cópias nítidas do glifo preto, cada uma um pouco mais longe no mesmo
+        # ângulo, espelhando os múltiplos `text-shadow` do preview (version_form.html).
+        opacity = max(0, min(100, int(getattr(style, 'shadow_opacity', 70) or 0)))
+        alpha_hex = SubtitleService._ass_alpha_from_opacity(opacity)
+        dx, dy = SubtitleService._shadow_offset_xy(style)
+        blur = max(0, int(getattr(style, 'shadow_blur', 0) or 0))
+        blur_tag = f'\\blur{blur}' if blur > 0 else ''
+        size = max(0, int(getattr(style, 'shadow_size', 0) or 0))
+        steps = min(4, max(1, round(size / 3))) if size > 0 else 0
+        overrides = []
+        for index in range(steps + 1):
+            growth = 1 + ((index / steps) * (size * 0.04)) if steps else 1
+            step_dx = SubtitleService._format_ass_number(round(dx * growth, 2))
+            step_dy = SubtitleService._format_ass_number(round(dy * growth, 2))
+            overrides.append(
+                f'{{\\1c&H000000&\\1a&H{alpha_hex}&\\3a&HFF&\\bord0{blur_tag}'
+                f'\\xshad{step_dx}\\yshad{step_dy}}}'
+            )
+        return overrides
+
+    @staticmethod
+    def _ass_alpha_from_opacity(opacity):
+        return format(round((100 - opacity) * 255 / 100), '02X')
+
+    @staticmethod
+    def _ass_alignment(style):
+        try:
+            alignment = int(getattr(style, 'alignment', 2) or 2)
+        except (TypeError, ValueError):
+            return 2
+        return alignment if 1 <= alignment <= 9 else 2
+
+    @classmethod
+    def _dual_style_margins(cls, original_style, translated_style):
+        # Margens independentes: cada estilo usa o margin_bottom configurado nele.
+        # Não empurramos uma legenda quando a outra muda — o posicionamento é responsabilidade
+        # de cada estilo (preview e render ficam iguais ao que o usuário salvou).
+        original_margin = max(0, int(getattr(original_style, 'margin_bottom', 60) or 0))
+        translated_margin = max(0, int(getattr(translated_style, 'margin_bottom', 60) or 0))
+        return original_margin, translated_margin
+
+    @staticmethod
+    def _subtitle_stack_gap(original_style, translated_style):
+        font_size = max(
+            int(getattr(original_style, 'font_size', 48) or 48),
+            int(getattr(translated_style, 'font_size', 48) or 48),
+        )
+        outline = max(
+            int(getattr(original_style, 'outline_width', 0) or 0),
+            int(getattr(translated_style, 'outline_width', 0) or 0),
+        )
+        shadow = max(
+            int(getattr(original_style, 'shadow', 0) or 0)
+            + int(getattr(original_style, 'shadow_size', 0) or 0)
+            + int(getattr(original_style, 'shadow_blur', 0) or 0),
+            int(getattr(translated_style, 'shadow', 0) or 0)
+            + int(getattr(translated_style, 'shadow_size', 0) or 0)
+            + int(getattr(translated_style, 'shadow_blur', 0) or 0),
+        )
+        # A caixa (BorderStyle=4) da legenda traduzida (a de baixo, âncora fixa) se estende
+        # `padding_y` para CIMA e para BAIXO do próprio texto sem mover seu MarginV (ver
+        # _ass_margin_v). Altura do fundo < 100% reduz a caixa via \fscy na camada BG.
+        height_percent = max(
+            40,
+            min(100, int(getattr(translated_style, 'background_height_percent', 100) or 100)),
+        ) if getattr(translated_style, 'background_enabled', False) else 100
+        translated_padding = (
+            int(getattr(translated_style, 'background_padding_y', 0) or 0) * 2
+            if getattr(translated_style, 'background_enabled', False) else 0
+        )
+        box_height = math.ceil(font_size * 1.0 * (height_percent / 100))
+        return box_height + outline + shadow + translated_padding + 8
 
     @staticmethod
     def _ass_escape(text):
@@ -519,6 +926,40 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     @staticmethod
     def _single_line_text(text):
         return re.sub(r'\s+', ' ', str(text or '').replace('\n', ' ')).strip()
+
+    @classmethod
+    def _split_dual_text_chunks(cls, text, max_characters):
+        # Legendas duplas ficam em uma linha empilhada; quando passam do limite do estilo,
+        # quebramos em vários trechos (palavra inteira) que viram legendas sequenciais com
+        # tempo repartido — nunca omitimos texto com reticências.
+        single_line = cls._single_line_text(text)
+        limit = max(1, int(max_characters or 42))
+        if len(single_line) <= limit:
+            return [single_line]
+        chunks = textwrap.wrap(single_line, width=limit, break_long_words=False)
+        return chunks or [single_line]
+
+    @staticmethod
+    def _split_cue_segments(start_ms, end_ms, chunks):
+        if not chunks:
+            return []
+        if len(chunks) == 1:
+            return [(start_ms, end_ms, chunks[0])]
+        duration = max(1, end_ms - start_ms)
+        total_chars = sum(len(chunk) for chunk in chunks)
+        segments = []
+        cursor = start_ms
+        for index, chunk in enumerate(chunks):
+            if index == len(chunks) - 1:
+                segments.append((cursor, end_ms, chunk))
+                continue
+            chunk_duration = max(1, round(duration * len(chunk) / total_chars))
+            segment_end = min(end_ms - 1, cursor + chunk_duration)
+            if segment_end <= cursor:
+                segment_end = cursor + 1
+            segments.append((cursor, segment_end, chunk))
+            cursor = segment_end
+        return segments
 
     @staticmethod
     def _ordered_dual_tracks(tracks, source_language):
@@ -554,8 +995,9 @@ class RenderService:
         source_language='pt',
         translated_style=None,
     ):
-        width = preset.width or 1920
-        height = preset.height or 1080
+        metadata = self.probe_video(video_path)
+        width = metadata.width or preset.width or 1920
+        height = metadata.height or preset.height or 1080
         tracks = list(tracks)
         suffix = '_'.join(track.language for track in tracks)
         ass_path = workdir / f'{suffix}.ass'
@@ -572,7 +1014,6 @@ class RenderService:
         else:
             self.subtitle_service.write_ass(tracks[0], ass_path, style, width, height)
         escaped_ass_path = str(ass_path).replace('\\', r'\\').replace(':', r'\:').replace("'", r"\'")
-        metadata = self.probe_video(video_path)
         filters = self.build_video_filters(preset, escaped_ass_path, metadata)
         command = [
             settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-vf', ','.join(filters),
@@ -606,7 +1047,7 @@ class RenderService:
         try:
             output = self.runner.run([
                 settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'v:0',
-                '-show_entries', 'stream=color_space,color_transfer,color_primaries',
+                '-show_entries', 'stream=width,height,color_space,color_transfer,color_primaries',
                 '-of', 'json', str(video_path),
             ])
             data = json.loads(output or '{}')
@@ -615,10 +1056,16 @@ class RenderService:
                 color_space=stream.get('color_space') or '',
                 color_transfer=stream.get('color_transfer') or '',
                 color_primaries=stream.get('color_primaries') or '',
+                width=int(stream.get('width') or 0),
+                height=int(stream.get('height') or 0),
             )
         except (ExternalMediaError, json.JSONDecodeError, IndexError, TypeError):
             logger.warning('Nao foi possivel identificar o perfil de cor do video; usando SDR padrao.')
             return VideoMetadata()
+
+    @staticmethod
+    def subtitle_fonts_dir():
+        return Path(settings.BASE_DIR) / 'static' / 'fonts' / 'subtitles'
 
     @staticmethod
     def build_video_filters(preset, escaped_ass_path, metadata):
@@ -634,8 +1081,14 @@ class RenderService:
                 f'scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase:flags=lanczos',
                 f'crop={preset.width}:{preset.height}:(iw-ow)/2:(ih-oh)/2',
             ])
+        fonts_dir = RenderService.subtitle_fonts_dir()
+        if fonts_dir.is_dir() and any(fonts_dir.glob('*.[ot]tf')):
+            escaped_fonts_dir = str(fonts_dir).replace('\\', r'\\').replace(':', r'\:').replace("'", r"\'")
+            ass_filter = f"ass='{escaped_ass_path}':fontsdir='{escaped_fonts_dir}'"
+        else:
+            ass_filter = f"ass='{escaped_ass_path}'"
         filters.extend([
-            f"ass='{escaped_ass_path}'",
+            ass_filter,
             'format=yuv420p',
         ])
         return filters
@@ -789,6 +1242,8 @@ class VideoAssemblyService:
         self.runner = runner or FFmpegRunner()
         self.storage = storage or StorageService()
         self.last_reframe_plans = []
+        self.last_protected_ranges = []
+        self.last_block_ranges = []
 
     def assemble(
         self, sources, output_path, preset, workdir, lut_path=None, music_path=None,
@@ -796,32 +1251,58 @@ class VideoAssemblyService:
         reframe_plans=None,
     ):
         self.last_reframe_plans = []
+        self.last_protected_ranges = []
+        self.last_block_ranges = []
+        source_items = [self._coerce_source(source) for source in sources]
+        source_paths = [source.path for source in source_items]
         if (
-            len(sources) == 1
+            len(source_items) == 1
             and not lut_path
             and not music_path
             and not auto_reframe_config
             and not (preset.width and preset.height)
         ):
-            shutil.copyfile(sources[0], output_path)
+            shutil.copyfile(source_paths[0], output_path)
             return False
         width = preset.width or 1920
         height = preset.height or 1080
         normalized = []
         used_auto_reframe = False
-        analysis_sources = analysis_sources or sources
+        analysis_sources = [self._coerce_source(source).path for source in (analysis_sources or source_paths)]
         reframe_plans = reframe_plans or []
-        for index, source in enumerate(sources):
+        timeline_cursor = 0
+        for index, source_item in enumerate(source_items):
+            source = source_item.path
             destination = workdir / f'normalized_{index:03d}.mp4'
+            source_duration = self._effective_duration_ms(source_item)
+            range_entry = {
+                'start_ms': timeline_cursor,
+                'end_ms': timeline_cursor + source_duration,
+                'block_id': source_item.block_id,
+                'block_key': source_item.block_key,
+                'block_name': source_item.block_name,
+                'label': source_item.label,
+            }
+            # Tracks the timeline span of every clip (not just "manter intacto" blocks) so
+            # subtitles can later be prevented from bleeding across a block boundary.
+            self.last_block_ranges.append(dict(range_entry))
+            if source_item.skip_extra_processing:
+                self.last_protected_ranges.append(range_entry)
+            timeline_cursor += source_duration
+            effective_auto_reframe_config = None if source_item.skip_extra_processing else auto_reframe_config
+            effective_lut_path = None if source_item.skip_extra_processing else lut_path
             reframe_plan = self._normalize(
-                source, destination, width, height, lut_path, auto_reframe_config,
+                source, destination, width, height, effective_lut_path, effective_auto_reframe_config,
                 analysis_source=analysis_sources[index],
                 reframe_plan_data=reframe_plans[index] if index < len(reframe_plans) else None,
+                trim_start_ms=source_item.trim_start_ms,
+                trim_end_ms=source_item.trim_end_ms,
+                preserve_framing=source_item.skip_extra_processing,
             )
             used_auto_reframe = bool(reframe_plan) or used_auto_reframe
             self.last_reframe_plans.append(
                 self._serialize_reframe_plan(reframe_plan, analysis_sources[index])
-                if auto_reframe_config else None
+                if effective_auto_reframe_config else None
             )
             normalized.append(destination)
         concat_file = workdir / 'concat.txt'
@@ -844,12 +1325,15 @@ class VideoAssemblyService:
             ])
         return used_auto_reframe
 
-    def create_proxy(self, source, destination):
+    def create_proxy(self, source, destination, trim_start_ms=0, trim_end_ms=None):
         source_width, source_height = self._video_dimensions(source)
         proxy_width = min(source_width, settings.EXTERNAL_MEDIA_PROXY_WIDTH)
         proxy_height = self._even(proxy_width * source_height / source_width)
-        self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(source),
+        command = [settings.FFMPEG_BINARY, '-y']
+        command.extend(self._trim_input_args(trim_start_ms))
+        command.extend([
+            '-i', str(source),
+            *self._trim_output_args(trim_start_ms, trim_end_ms),
             '-vf', f'scale={proxy_width}:{proxy_height}:flags=fast_bilinear,fps=30,setsar=1',
             '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264',
             '-preset', settings.EXTERNAL_MEDIA_PROXY_PRESET,
@@ -857,6 +1341,7 @@ class VideoAssemblyService:
             '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '96k',
             '-ar', '48000', '-ac', '2', '-shortest', str(destination),
         ])
+        self.runner.run(command)
         return destination
 
     def proxy_preset(self, preset):
@@ -870,11 +1355,14 @@ class VideoAssemblyService:
 
     def _normalize(
         self, source, destination, width, height, lut_path, auto_reframe_config=None,
-        analysis_source=None, reframe_plan_data=None,
+        analysis_source=None, reframe_plan_data=None, trim_start_ms=0, trim_end_ms=None,
+        preserve_framing=False,
     ):
         has_audio = self._has_audio(source)
         metadata = RenderService(runner=self.runner).probe_video(source)
-        command = [settings.FFMPEG_BINARY, '-y', '-i', str(source)]
+        command = [settings.FFMPEG_BINARY, '-y']
+        command.extend(self._trim_input_args(trim_start_ms))
+        command.extend(['-i', str(source)])
         if not has_audio:
             command.extend(['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'])
         filters = []
@@ -918,6 +1406,11 @@ class VideoAssemblyService:
                     )
         if reframe_plan:
             filters.extend(reframe_plan.ffmpeg_filters(width, height))
+        elif preserve_framing:
+            filters.extend([
+                f'scale={width}:{height}:force_original_aspect_ratio=decrease:flags=lanczos',
+                f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black',
+            ])
         else:
             filters.extend([
                 f'scale={width}:{height}:force_original_aspect_ratio=increase:flags=lanczos',
@@ -928,6 +1421,7 @@ class VideoAssemblyService:
             escaped = str(lut_path).replace('\\', r'\\').replace(':', r'\:').replace("'", r"\'")
             filters.append(f"lut3d='{escaped}'")
         command.extend([
+            *self._trim_output_args(trim_start_ms, trim_end_ms),
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',
             '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
             '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k',
@@ -952,6 +1446,23 @@ class VideoAssemblyService:
         ])
         return bool(output.strip())
 
+    def _duration_ms(self, source):
+        output = self.runner.run([
+            settings.FFPROBE_BINARY, '-v', 'error', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', str(source),
+        ]).strip()
+        try:
+            return max(1, round(float(output) * 1000))
+        except (TypeError, ValueError) as exc:
+            raise ExternalMediaError('Não foi possível identificar a duração do vídeo.') from exc
+
+    def _effective_duration_ms(self, source_item):
+        duration = self._duration_ms(source_item.path)
+        start = max(0, int(source_item.trim_start_ms or 0))
+        end = int(source_item.trim_end_ms) if source_item.trim_end_ms else duration
+        end = min(duration, max(start + 1, end))
+        return max(1, end - start)
+
     def _video_dimensions(self, source):
         output = self.runner.run([
             settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'v:0',
@@ -966,6 +1477,25 @@ class VideoAssemblyService:
     @staticmethod
     def _even(value):
         return max(2, int(round(value)) // 2 * 2)
+
+    @staticmethod
+    def _coerce_source(source):
+        if isinstance(source, AssemblySource):
+            return source
+        return AssemblySource(Path(source))
+
+    @staticmethod
+    def _trim_input_args(trim_start_ms=0):
+        if not trim_start_ms:
+            return []
+        return ['-ss', f'{max(0, int(trim_start_ms)) / 1000:.3f}']
+
+    @staticmethod
+    def _trim_output_args(trim_start_ms=0, trim_end_ms=None):
+        if not trim_end_ms:
+            return []
+        duration_ms = max(1, int(trim_end_ms) - max(0, int(trim_start_ms or 0)))
+        return ['-t', f'{duration_ms / 1000:.3f}']
 
 
 class ExternalMediaProjectPipeline:
@@ -1042,6 +1572,8 @@ class ExternalMediaProjectPipeline:
                         **(project.configuration or {}),
                         'proxy_pipeline': True,
                         'auto_reframe_plans': self.assembly.last_reframe_plans if auto_reframe_plugin else [],
+                        'protected_block_ranges': self.assembly.last_protected_ranges,
+                        'block_ranges': self.assembly.last_block_ranges,
                     }
                     project.save(update_fields=['configuration', 'update_at'])
             self._update(project, ExternalMediaProject.Status.PROCESSING, 22, 'Iniciando processamento do conteúdo')
@@ -1117,7 +1649,7 @@ class ExternalMediaProjectPipeline:
         version = project.template_version
         intro, outro = self.intro_outro.enabled_fields(version, codes)
         if intro:
-            sources.append(copy(intro, 'intro'))
+            sources.append(AssemblySource(copy(intro, 'intro'), label='intro'))
         media_by_block = {}
         for item in project.block_media.select_related('block'):
             media_by_block.setdefault(item.block_id, []).append(item)
@@ -1125,11 +1657,27 @@ class ExternalMediaProjectPipeline:
             items = media_by_block.get(block.pk, [])
             if items:
                 for item in items:
-                    sources.append(copy(item.file, f'block_{block.order}_{item.position}'))
+                    sources.append(AssemblySource(
+                        copy(item.file, f'block_{block.order}_{item.position}'),
+                        label=f'block_{block.order}_{item.position}',
+                        block_id=block.pk,
+                        block_key=block.key,
+                        block_name=block.name,
+                        skip_extra_processing=block.skip_extra_processing,
+                        trim_start_ms=item.trim_start_ms,
+                        trim_end_ms=item.trim_end_ms,
+                    ))
             elif block.default_video:
-                sources.append(copy(block.default_video, f'default_{block.order}'))
+                sources.append(AssemblySource(
+                    copy(block.default_video, f'default_{block.order}'),
+                    label=f'default_{block.order}',
+                    block_id=block.pk,
+                    block_key=block.key,
+                    block_name=block.name,
+                    skip_extra_processing=block.skip_extra_processing,
+                ))
         if outro:
-            sources.append(copy(outro, 'outro'))
+            sources.append(AssemblySource(copy(outro, 'outro'), label='outro'))
         if not sources:
             raise ExternalMediaError('Nenhum vídeo foi encontrado para montar o projeto.')
         lut_field = self.lut.selected_file(version, codes)
@@ -1155,9 +1703,24 @@ class ExternalMediaProjectPipeline:
     def _create_proxies(self, sources, workdir):
         proxies = []
         for index, source in enumerate(sources):
+            source_item = VideoAssemblyService._coerce_source(source)
             proxy = workdir / f'proxy_{index:03d}.mp4'
-            self.assembly.create_proxy(source, proxy)
-            proxies.append(proxy)
+            self.assembly.create_proxy(
+                source_item.path,
+                proxy,
+                trim_start_ms=source_item.trim_start_ms,
+                trim_end_ms=source_item.trim_end_ms,
+            )
+            proxies.append(AssemblySource(
+                proxy,
+                label=source_item.label,
+                block_id=source_item.block_id,
+                block_key=source_item.block_key,
+                block_name=source_item.block_name,
+                skip_extra_processing=source_item.skip_extra_processing,
+                trim_start_ms=0,
+                trim_end_ms=None,
+            ))
         return proxies
 
     def _prepare_final_master(self, project, workdir):
@@ -1318,7 +1881,8 @@ class ExternalMediaPipeline:
                 self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 30, 'Transcrevendo com Whisper')
                 detailed = self.transcription.transcribe_detailed(chunks, self._transcription_language(job))
                 detailed = self._apply_speech_edit(job, video_path, workdir, detailed)
-                segments = self.transcription.group_for_subtitles(detailed)
+                boundaries = self._block_boundaries_ms(job)
+                segments = self.transcription.group_for_subtitles(detailed, boundaries)
                 self._update(job, ExternalMediaJob.Status.GENERATING_SUBTITLES, 52, 'Criando blocos sincronizados')
                 source_track = self._save_source_track(job, segments)
                 targets = [language for language in job.output_languages if language != job.original_language]
@@ -1449,6 +2013,25 @@ class ExternalMediaPipeline:
             asset.delete(force_policy=HARD_DELETE)
 
     @staticmethod
+    def _block_boundaries_ms(job):
+        """Interior timeline points where one template block ends and the next begins.
+
+        Used so subtitle cues are grouped independently per block and never mix the
+        tail of one block's speech with the start of the next one's.
+        """
+        project = getattr(job, 'project', None)
+        if not project:
+            return []
+        ranges = (project.configuration or {}).get('block_ranges') or []
+        boundaries = {
+            int(item.get('end_ms') or 0)
+            for item in ranges
+            if int(item.get('end_ms') or 0) > int(item.get('start_ms') or 0)
+        }
+        boundaries.discard(0)
+        return sorted(boundaries)
+
+    @staticmethod
     def _transcription_language(job):
         project = getattr(job, 'project', None)
         version = getattr(project, 'template_version', None)
@@ -1489,6 +2072,7 @@ class ExternalMediaPipeline:
             remove_fillers=remove_fillers,
             configuration=configuration,
         )
+        plan = plan.without_ranges((project.configuration or {}).get('protected_block_ranges'))
         proxy_pipeline = bool((project.configuration or {}).get('proxy_pipeline'))
         final_path = video_path
         if plan.cuts and not proxy_pipeline:
@@ -1516,10 +2100,20 @@ class ExternalMediaPipeline:
             with final_path.open('rb') as source:
                 job.original_video.save('project_source.mp4', File(source), save=False)
             job.save(update_fields=['original_video', 'update_at'])
+        block_ranges = (project.configuration or {}).get('block_ranges')
+        remapped_block_ranges = [
+            {
+                **item,
+                'start_ms': plan.remap_time(item.get('start_ms') or 0),
+                'end_ms': plan.remap_time(item.get('end_ms') or 0),
+            }
+            for item in block_ranges
+        ] if block_ranges else block_ranges
         project.configuration = {
             **(project.configuration or {}),
             'speech_edit_preview': plan.as_preview(),
             'speech_edit_plan': plan.as_dict(),
+            **({'block_ranges': remapped_block_ranges} if remapped_block_ranges else {}),
         }
         project.save(update_fields=['configuration', 'update_at'])
         messages = {

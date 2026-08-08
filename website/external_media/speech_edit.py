@@ -70,6 +70,25 @@ class SpeechEditPlan:
             'cuts': [cut.as_dict() for cut in self.cuts],
         }
 
+    def without_ranges(self, ranges):
+        protected = tuple(
+            (
+                max(0, int(item.get('start_ms') or 0)),
+                max(0, int(item.get('end_ms') or 0)),
+            )
+            for item in (ranges or [])
+            if int(item.get('end_ms') or 0) > int(item.get('start_ms') or 0)
+        )
+        if not protected:
+            return self
+        cuts = tuple(
+            cut for cut in self.cuts
+            if not any(cut.start_ms < end_ms and cut.end_ms > start_ms for start_ms, end_ms in protected)
+        )
+        if len(cuts) == len(self.cuts):
+            return self
+        return SpeechEditPlan(cuts, self.duration_ms, self.crossfade_ms)
+
     @classmethod
     def from_dict(cls, data):
         data = data or {}
@@ -93,15 +112,15 @@ class SpeechEditPlan:
         for word in words:
             if any(cut.kind == 'filler' and word.start_ms < cut.end_ms and word.end_ms > cut.start_ms for cut in self.cuts):
                 continue
-            shift = sum(
-                cut.duration_ms
-                for cut in self.cuts
-                if cut.end_ms <= word.start_ms
-            )
-            start_ms = max(0, word.start_ms - shift)
-            end_ms = max(start_ms + 1, word.end_ms - shift)
+            start_ms = self.remap_time(word.start_ms)
+            end_ms = max(start_ms + 1, self.remap_time(word.end_ms))
             result.append(TranscriptionSegment(start_ms, end_ms, word.text, word.granularity))
         return result
+
+    def remap_time(self, ms):
+        """Shifts a timestamp from the original (pre-edit) timeline to the edited one."""
+        shift = sum(cut.duration_ms for cut in self.cuts if cut.end_ms <= ms)
+        return max(0, int(ms) - shift)
 
 
 @dataclass(frozen=True)

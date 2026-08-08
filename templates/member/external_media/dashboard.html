@@ -19,7 +19,7 @@
             <tbody class="divide-y divide-gray-100">
             {% for project in projects %}
                 <tr class="hover:bg-gray-50">
-                    <td class="p-4"><a class="font-extrabold hover:underline" href="{% url 'external_media_project_detail' project.public_id %}">{{ project.name }}</a><div class="text-xs text-gray-500">{{ project.template_version.template.name }} · v{{ project.template_version.version }}</div></td>
+                    <td class="p-4"><a class="font-extrabold hover:underline" href="{% url 'external_media_project_detail' project.public_id %}">{{ project.name }}</a><div class="text-xs text-gray-500">{{ project.template_version.template.name }}</div></td>
                     <td class="p-4 text-sm">{{ project.created_by.name }}</td>
                     <td class="p-4 text-sm whitespace-nowrap">{{ project.created_at|date:'d/m/Y H:i' }}</td>
                     <td class="p-4 text-sm">{% if project.duration_seconds != None %}{{ project.duration_seconds }}s{% else %}—{% endif %}</td>

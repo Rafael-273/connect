@@ -5,7 +5,7 @@
     <div>
         <a href="{% url 'external_media_dashboard' %}" class="text-sm text-gray-500 hover:underline">← Projetos</a>
         <h1 class="text-3xl font-black mt-2">{{ project.name }}</h1>
-        <p class="text-gray-500">{{ project.template_version.template.name }} · versão {{ project.template_version.version }} · {{ project.created_by.name }}</p>
+        <p class="text-gray-500">{{ project.template_version.template.name }} · {{ project.created_by.name }}</p>
     </div>
     <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">{% csrf_token %}<button class="media-btn media-muted"><i class="fas fa-copy"></i>Duplicar</button></form>
 </div>
@@ -14,6 +14,14 @@
 <section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'AWAITING_REVIEW' or project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}">
     <div class="flex justify-between gap-4 mb-3"><div><p class="font-black" id="status-label">{{ project.get_status_display }}</p><p class="text-sm text-gray-500" id="current-step">{{ project.current_step }}</p></div><strong id="progress-value">{{ project.progress }}%</strong></div>
     <div class="h-3 rounded-full bg-gray-100 overflow-hidden"><div id="progress-bar" class="h-full transition-all" style="width:{{ project.progress }}%;background:#C90905"></div></div>
+    <div class="mt-4">
+        <div class="inline-flex rounded-xl bg-gray-50 px-4 py-3">
+            <div>
+                <span class="block text-xs uppercase tracking-[0.18em] text-gray-500">Tempo de processamento</span>
+                <strong id="duration-label" class="block mt-1 text-base">{{ project.duration_label|default:"—" }}</strong>
+            </div>
+        </div>
+    </div>
     {% if project.error_message %}<p class="mt-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm">{{ project.error_message }}</p>{% endif %}
     {% if steps %}<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-5">{% for step in steps %}<div class="rounded-xl border p-3 text-sm"><i class="fas {% if step.status == 'FINISHED' %}fa-check-circle text-green-600{% elif step.status == 'ERROR' %}fa-circle-xmark text-red-600{% elif step.status == 'RUNNING' %}fa-circle-notch fa-spin text-amber-600{% else %}fa-circle text-gray-300{% endif %} mr-2"></i>{{ step.label }}{% if step.status == 'SKIPPED' %}<span class="block text-xs text-amber-700 mt-1">{{ step.message }}</span>{% endif %}</div>{% endfor %}</div>{% endif %}
 </section>
@@ -48,11 +56,65 @@
             <span class="text-xs text-gray-500">{% if item.definition.allows_multiple %}até {{ item.definition.max_occurrences }} vídeos{% else %}1 vídeo{% endif %}</span>
         </div>
         {% for media in item.media %}
-        <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 mb-2"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div>
+        <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 mb-2"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div>
         {% empty %}
             {% if item.definition.default_video %}<p class="rounded-xl bg-green-50 text-green-800 p-3 text-sm mb-3"><i class="fas fa-circle-check mr-2"></i>Usará o vídeo padrão do template.</p>{% else %}<p class="text-sm text-gray-400 mb-3">Nenhum upload.</p>{% endif %}
         {% endfor %}
-        {% if item.media|length < item.definition.max_occurrences %}<form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_upload' project.public_id item.definition.pk %}" class="media-form flex flex-col sm:flex-row gap-3">{% csrf_token %}<input type="file" name="file" accept="video/*" required class="flex-1"><button class="media-btn media-secondary"><i class="fas fa-upload"></i>Enviar</button></form>{% endif %}
+        {% if item.media|length < item.definition.max_occurrences %}
+        <form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_upload' project.public_id item.definition.pk %}" class="media-form media-upload-form space-y-3">
+            {% csrf_token %}
+            <div class="flex flex-col sm:flex-row gap-3">
+                <input type="file" name="file" accept="video/*" required class="flex-1" data-trim-file>
+                <button class="media-btn media-secondary"><i class="fas fa-upload"></i>Enviar</button>
+            </div>
+            <input type="hidden" name="trim_start_seconds" value="" data-trim-start-hidden>
+            <input type="hidden" name="trim_end_seconds" value="" data-trim-end-hidden>
+            <div class="media-trim-panel" data-trim-panel>
+                <div class="flex items-center gap-2 mb-3 text-sm font-black text-red-700"><i class="fas fa-scissors"></i>Cortar antes de enviar</div>
+                <div class="media-trim-player mb-3">
+                    <video preload="metadata" class="media-trim-video" data-trim-video></video>
+                    <div class="media-trim-controls">
+                        <div class="media-trim-control-row">
+                            <button type="button" class="media-trim-icon-btn" data-trim-play aria-label="Reproduzir trecho"><i class="fas fa-play"></i></button>
+                            <span class="media-trim-time" data-trim-current-label>00:00 / 00:00</span>
+                            <div class="media-trim-rail" data-trim-rail>
+                                <div class="media-trim-selection" data-trim-selection></div>
+                                <div class="media-trim-playhead" data-trim-playhead></div>
+                                <button type="button" class="media-trim-handle is-start" data-trim-start-handle aria-label="Início do corte"></button>
+                                <button type="button" class="media-trim-handle is-end" data-trim-end-handle aria-label="Fim do corte"></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="media-trim-shell space-y-4">
+                    <div class="media-trim-stats">
+                        <div class="media-trim-stat">
+                            <span class="text-xs uppercase tracking-[0.18em] text-gray-500">Início</span>
+                            <strong data-trim-start-label>00:00</strong>
+                        </div>
+                        <div class="media-trim-stat">
+                            <span class="text-xs uppercase tracking-[0.18em] text-gray-500">Fim</span>
+                            <strong data-trim-end-label>Vídeo inteiro</strong>
+                        </div>
+                        <div class="media-trim-stat">
+                            <span class="text-xs uppercase tracking-[0.18em] text-gray-500">Trecho usado</span>
+                            <strong data-trim-duration-label>Vídeo inteiro</strong>
+                        </div>
+                    </div>
+                    <div class="media-trim-actions">
+                        <button type="button" class="media-trim-chip" data-set-trim-start>Definir início no tempo atual</button>
+                        <button type="button" class="media-trim-chip" data-set-trim-end>Definir fim no tempo atual</button>
+                        <button type="button" class="media-trim-chip" data-reset-trim>Usar vídeo inteiro</button>
+                    </div>
+                    <div class="media-trim-hidden-fields">
+                        <input type="number" step="0.001" min="0" value="0" class="media-trim-input" data-trim-start>
+                        <input type="number" step="0.001" min="0" value="" class="media-trim-input" data-trim-end>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-3">Deixe o início em 0 e o fim vazio para usar o vídeo inteiro. O corte será aplicado no processamento do projeto.</p>
+            </div>
+        </form>
+        {% endif %}
     </section>
 {% endfor %}
 </div>
@@ -65,6 +127,216 @@
 
 {% if validation_errors %}<div class="rounded-xl bg-amber-50 text-amber-800 p-4 mb-4">{% for error in validation_errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
 <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
+<script>
+(function(){
+    const MIN_TRIM_SECONDS = 0.1;
+    function clamp(value, min, max) {
+        value = Number.isFinite(value) ? value : min;
+        return Math.min(Math.max(value, min), max);
+    }
+    function formatTime(value) {
+        if (!Number.isFinite(value) || value < 0) return '00:00';
+        const totalSeconds = Math.floor(value);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+    function fmt(value) {
+        return Number.isFinite(value) ? value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '') : '';
+    }
+    document.querySelectorAll('.media-upload-form').forEach((form) => {
+        const fileInput = form.querySelector('[data-trim-file]');
+        const panel = form.querySelector('[data-trim-panel]');
+        const video = form.querySelector('[data-trim-video]');
+        const playButton = form.querySelector('[data-trim-play]');
+        const currentLabel = form.querySelector('[data-trim-current-label]');
+        const startInput = form.querySelector('[data-trim-start]');
+        const endInput = form.querySelector('[data-trim-end]');
+        const startHidden = form.querySelector('[data-trim-start-hidden]');
+        const endHidden = form.querySelector('[data-trim-end-hidden]');
+        const rail = form.querySelector('[data-trim-rail]');
+        const selection = form.querySelector('[data-trim-selection]');
+        const playhead = form.querySelector('[data-trim-playhead]');
+        const startHandle = form.querySelector('[data-trim-start-handle]');
+        const endHandle = form.querySelector('[data-trim-end-handle]');
+        const startLabel = form.querySelector('[data-trim-start-label]');
+        const endLabel = form.querySelector('[data-trim-end-label]');
+        const durationLabel = form.querySelector('[data-trim-duration-label]');
+        let objectUrl = '';
+        let activeHandle = null;
+
+        function duration() {
+            return Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+        }
+        function selectedStart() {
+            return clamp(parseFloat(startInput.value || '0'), 0, duration());
+        }
+        function selectedEnd() {
+            const total = duration();
+            const rawEnd = endInput.value === '' ? NaN : parseFloat(endInput.value);
+            return Number.isFinite(rawEnd) ? clamp(rawEnd, selectedStart(), total) : total;
+        }
+        function setStart(value) {
+            const total = duration();
+            const end = selectedEnd();
+            startInput.value = fmt(clamp(value, 0, Math.max(0, end - MIN_TRIM_SECONDS)));
+            syncHidden();
+        }
+        function setEnd(value) {
+            const total = duration();
+            const start = selectedStart();
+            const end = clamp(value, Math.min(total, start + MIN_TRIM_SECONDS), total);
+            endInput.value = end >= total - 0.02 ? '' : fmt(end);
+            syncHidden();
+        }
+        function pointerTime(event) {
+            const total = duration();
+            if (!total || !rail) return 0;
+            const rect = rail.getBoundingClientRect();
+            const percent = clamp((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1);
+            return percent * total;
+        }
+        function syncTrack() {
+            const total = duration();
+            if (!total) {
+                selection.style.left = '0%';
+                selection.style.width = '100%';
+                playhead.style.left = '0%';
+                startHandle.style.left = '0%';
+                endHandle.style.left = '100%';
+                startLabel.textContent = '00:00';
+                endLabel.textContent = 'Vídeo inteiro';
+                durationLabel.textContent = 'Vídeo inteiro';
+                currentLabel.textContent = '00:00 / 00:00';
+                return;
+            }
+            const start = selectedStart();
+            const end = selectedEnd();
+            const startPercent = (start / total) * 100;
+            const endPercent = (end / total) * 100;
+            const current = clamp(video.currentTime || 0, 0, total);
+            const currentPercent = (current / total) * 100;
+            selection.style.left = `${startPercent}%`;
+            selection.style.width = `${Math.max(0, endPercent - startPercent)}%`;
+            playhead.style.left = `${currentPercent}%`;
+            startHandle.style.left = `${startPercent}%`;
+            endHandle.style.left = `${endPercent}%`;
+            startLabel.textContent = formatTime(start);
+            endLabel.textContent = end >= total ? 'Vídeo inteiro' : formatTime(end);
+            durationLabel.textContent = start <= 0 && end >= total ? 'Vídeo inteiro' : formatTime(Math.max(0, end - start));
+            currentLabel.textContent = `${formatTime(current)} / ${formatTime(total)}`;
+            playButton.querySelector('i')?.classList.toggle('fa-play', video.paused);
+            playButton.querySelector('i')?.classList.toggle('fa-pause', !video.paused);
+        }
+        function syncHidden() {
+            const total = duration() || Infinity;
+            const start = clamp(parseFloat(startInput.value || '0'), 0, total);
+            const rawEnd = endInput.value === '' ? NaN : parseFloat(endInput.value);
+            const end = Number.isFinite(rawEnd) ? clamp(rawEnd, start, total) : NaN;
+            startInput.value = fmt(start);
+            startHidden.value = start > 0 ? fmt(start) : '';
+            endHidden.value = Number.isFinite(end) && end > start ? fmt(end) : '';
+            syncTrack();
+        }
+        function seekTo(value) {
+            const total = duration();
+            if (!total) return;
+            video.currentTime = clamp(value, 0, total);
+            syncTrack();
+        }
+        function handlePointerMove(event) {
+            if (activeHandle === 'start') {
+                setStart(pointerTime(event));
+                seekTo(selectedStart());
+            }
+            if (activeHandle === 'end') {
+                setEnd(pointerTime(event));
+                seekTo(selectedEnd());
+            }
+        }
+        function stopDrag() {
+            activeHandle = null;
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', stopDrag);
+        }
+        function beginDrag(handle, event) {
+            event.preventDefault();
+            activeHandle = handle;
+            window.addEventListener('pointermove', handlePointerMove);
+            window.addEventListener('pointerup', stopDrag, { once: true });
+            handlePointerMove(event);
+        }
+        fileInput?.addEventListener('change', () => {
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) {
+                panel?.classList.remove('is-visible');
+                video.removeAttribute('src');
+                return;
+            }
+            objectUrl = URL.createObjectURL(file);
+            video.src = objectUrl;
+            panel?.classList.add('is-visible');
+            startInput.value = '0';
+            endInput.value = '';
+            syncHidden();
+        });
+        video?.addEventListener('loadedmetadata', () => {
+            syncHidden();
+        });
+        video?.addEventListener('click', () => playButton?.click());
+        video?.addEventListener('play', syncTrack);
+        video?.addEventListener('pause', syncTrack);
+        video?.addEventListener('timeupdate', () => {
+            const end = selectedEnd();
+            if (!video.paused && video.currentTime >= end) {
+                video.pause();
+                video.currentTime = end;
+            }
+            syncTrack();
+        });
+        playButton?.addEventListener('click', () => {
+            const start = selectedStart();
+            const end = selectedEnd();
+            if (video.paused) {
+                if (video.currentTime < start || video.currentTime >= end) {
+                    video.currentTime = start;
+                }
+                video.play();
+            } else {
+                video.pause();
+            }
+        });
+        rail?.addEventListener('pointerdown', (event) => {
+            if (event.target === startHandle || event.target === endHandle) return;
+            seekTo(pointerTime(event));
+        });
+        startHandle?.addEventListener('pointerdown', (event) => beginDrag('start', event));
+        endHandle?.addEventListener('pointerdown', (event) => beginDrag('end', event));
+        form.querySelector('[data-set-trim-start]')?.addEventListener('click', () => {
+            setStart(video.currentTime || 0);
+            seekTo(selectedStart());
+        });
+        form.querySelector('[data-set-trim-end]')?.addEventListener('click', () => {
+            setEnd(video.currentTime || duration());
+            seekTo(selectedEnd());
+        });
+        form.querySelector('[data-reset-trim]')?.addEventListener('click', () => {
+            startInput.value = '0';
+            endInput.value = '';
+            seekTo(0);
+            syncHidden();
+        });
+        startInput?.addEventListener('input', syncHidden);
+        endInput?.addEventListener('input', syncHidden);
+        form.addEventListener('submit', syncHidden);
+    });
+})();
+</script>
 {% endif %}
 
 {% if project.status == 'AWAITING_REVIEW' and project.render_job %}
@@ -94,7 +366,7 @@
 
 {% if project.status != 'DRAFT' and project.status != 'AWAITING_REVIEW' and project.status != 'FINISHED' and project.status != 'ERROR' %}
 <script>
-(function(){const card=document.getElementById('progress-card');if(!card||card.dataset.terminal==='1')return;const poll=()=>fetch(card.dataset.statusUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.json()).then(data=>{document.getElementById('status-label').textContent=data.status_label;document.getElementById('current-step').textContent=data.current_step;document.getElementById('progress-value').textContent=data.progress+'%';document.getElementById('progress-bar').style.width=data.progress+'%';if(data.is_terminal){window.location.reload();}else{setTimeout(poll,2500);}}).catch(()=>setTimeout(poll,5000));setTimeout(poll,1500);})();
+(function(){const card=document.getElementById('progress-card');if(!card||card.dataset.terminal==='1')return;const poll=()=>fetch(card.dataset.statusUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.json()).then(data=>{document.getElementById('status-label').textContent=data.status_label;document.getElementById('current-step').textContent=data.current_step;document.getElementById('progress-value').textContent=data.progress+'%';document.getElementById('progress-bar').style.width=data.progress+'%';const duration=document.getElementById('duration-label');if(duration){duration.textContent=data.duration_label||'—';}if(data.is_terminal){window.location.reload();}else{setTimeout(poll,2500);}}).catch(()=>setTimeout(poll,5000));setTimeout(poll,1500);})();
 </script>
 {% endif %}
 {% endblock %}

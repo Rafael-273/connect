@@ -30,6 +30,8 @@ class AutoReframePlan:
             return '0'
         if len(keyframes) == 1:
             return str(round(getattr(keyframes[0], axis), 3))
+        first = keyframes[0]
+        first_value = round(getattr(first, axis), 3)
         expression = str(round(getattr(keyframes[-1], axis), 3))
         for current, following in reversed(list(zip(keyframes, keyframes[1:]))):
             start = current.time_seconds
@@ -42,6 +44,8 @@ class AutoReframePlan:
                 f'*(t-{start:.3f})/{duration:.3f}'
             )
             expression = f'if(lt(t\\,{end:.3f})\\,{interpolated}\\,{expression})'
+        if first.time_seconds > 0:
+            return f'if(lt(t\\,{first.time_seconds:.3f})\\,{first_value}\\,{expression})'
         return expression
 
     def ffmpeg_filters(self, width, height):
@@ -113,6 +117,9 @@ class AutoReframeService:
         self.horizontal_smoothing = min(1.0, max(0.01, float(
             max(0.36, self.smoothing) if horizontal_smoothing is None else horizontal_smoothing,
         )))
+        # Nos primeiros ~1.2s de cada take a suavização horizontal sobe até 1.0 para evitar
+        # enquadramento descentralizado enquanto o crop "alcança" a pessoa.
+        self.horizontal_fast_start_seconds = 1.2
         self.vertical_lock = (self.priority == 'face') if vertical_lock is None else bool(vertical_lock)
 
     def analyze(self, video_path: Path, output_width: int, output_height: int):
@@ -289,6 +296,8 @@ class AutoReframeService:
     ):
         required_widths = []
         required_heights = []
+        person_widths = []
+        edge_slacks = []
         margin_factor = 1.0 + (2.0 * self.safe_margin)
         for _time, (left, top, right, bottom) in observations:
             box_width = max(1.0, right - left) * margin_factor
@@ -297,10 +306,28 @@ class AutoReframeService:
             height = width / target_ratio
             required_widths.append(width)
             required_heights.append(height)
+            person_widths.append(box_width)
+            center_x = (left + right) / 2.0
+            edge_slacks.append(min(center_x, max(0.0, source_width - center_x)))
         # The 90th percentile ignores a single detector outlier while protecting most movement.
         index = min(len(required_widths) - 1, math.floor(len(required_widths) * 0.90))
         desired_width = sorted(required_widths)[index]
         desired_height = sorted(required_heights)[index]
+        # For wide/short target ratios (e.g. 16:5 banners), the height requirement above
+        # inflates desired_width past the full source width, so it gets capped by cover_width
+        # below and leaves zero horizontal room to pan — the tracked person then stays wherever
+        # they happen to be framed in the original footage instead of being centered. When that
+        # happens, zoom in a bit further (shrinking width and height together, so the aspect
+        # ratio and the existing head-margin proportions are preserved) just enough to leave
+        # room to horizontally center the person, without ever cropping tighter than their own
+        # detected width.
+        min_person_width = sorted(person_widths)[index]
+        slack_index = min(len(edge_slacks) - 1, math.floor(len(edge_slacks) * 0.10))
+        centering_slack = sorted(edge_slacks)[slack_index]
+        max_width_for_centering = 2.0 * centering_slack
+        if max_width_for_centering < desired_width:
+            desired_width = max(min_person_width, min(desired_width, max_width_for_centering))
+            desired_height = desired_width / target_ratio
         # Avoid an excessively tight digital zoom; at least 45% of the cover window remains visible.
         crop_width = min(cover_width, max(cover_width * 0.45, desired_width))
         crop_height = min(cover_height, max(cover_height * 0.45, desired_height))
@@ -332,11 +359,25 @@ class AutoReframeService:
             if smooth_x is None:
                 smooth_x, smooth_y = target_x, target_y
             else:
-                smooth_x += self.horizontal_smoothing * (target_x - smooth_x)
+                h_smooth = self._horizontal_smoothing_at(time_seconds)
+                smooth_x += h_smooth * (target_x - smooth_x)
                 smooth_y += self.smoothing * (target_y - smooth_y)
             keyframes.append(ReframeKeyframe(time_seconds, smooth_x, smooth_y))
         tolerance = max(1.0, min(crop_width, crop_height) * 0.003)
-        return self._simplify(keyframes, tolerance)
+        simplified = self._simplify(keyframes, tolerance)
+        if simplified and simplified[0].time_seconds > 0:
+            simplified = [ReframeKeyframe(0.0, simplified[0].x, simplified[0].y), *simplified]
+        return simplified
+
+    def _horizontal_smoothing_at(self, time_seconds):
+        fast_start = max(0.25, float(self.horizontal_fast_start_seconds))
+        if time_seconds >= fast_start:
+            return self.horizontal_smoothing
+        ramp = 1.0 - (time_seconds / fast_start)
+        return min(
+            1.0,
+            self.horizontal_smoothing + ((1.0 - self.horizontal_smoothing) * ramp),
+        )
 
     def _locked_vertical_target(self, target_ys, max_y):
         if not self.vertical_lock or not target_ys or max_y <= 0:

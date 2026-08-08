@@ -32,8 +32,11 @@
                     </div>
                 </div>
                 <div class="hidden sm:flex gap-2">
-                    <a href="{% url 'admin_external_media_template_edit' template.id %}" class="px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg text-sm font-semibold">Editar Template</a>
-                    <a href="{% url 'admin_external_media_version_create' template.id %}" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Nova Versão</a>
+                    {% if current_version %}
+                    <a href="{% url 'admin_external_media_version_edit' current_version.id %}" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Editar Template</a>
+                    {% else %}
+                    <a href="{% url 'admin_external_media_template_edit' template.id %}" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Editar Template</a>
+                    {% endif %}
                 </div>
             </div>
 
@@ -43,55 +46,43 @@
                     <p class="text-gray-700">{{ template.description|default:'Sem descrição cadastrada.' }}</p>
                 </div>
                 <div class="admin-card p-5">
-                    <p class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">Versão usada pelos membros</p>
-                    <p class="text-3xl font-black text-gray-900">{% if published_version %}v{{ published_version.version }}{% else %}-{% endif %}</p>
-                    <p class="text-sm text-gray-500 mt-1">{% if published_version %}Publicada em {{ published_version.published_at|date:'d/m/Y H:i' }}{% else %}Nenhuma versão publicada{% endif %}</p>
+                    <p class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">Uso</p>
+                    <p class="text-3xl font-black text-gray-900">{% if current_version %}{{ current_version.projects_count }}{% else %}0{% endif %}</p>
+                    <p class="text-sm text-gray-500 mt-1">projeto{{ current_version.projects_count|pluralize }} criado{{ current_version.projects_count|pluralize }} com este template</p>
                 </div>
             </div>
 
-            <div class="sm:hidden grid grid-cols-2 gap-2 mb-5">
-                <a href="{% url 'admin_external_media_template_edit' template.id %}" class="px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg text-sm font-semibold text-center">Editar</a>
-                <a href="{% url 'admin_external_media_version_create' template.id %}" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold text-center">Nova Versão</a>
+            <div class="sm:hidden mb-5">
+                {% if current_version %}
+                <a href="{% url 'admin_external_media_version_edit' current_version.id %}" class="block px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold text-center">Editar Template</a>
+                {% else %}
+                <a href="{% url 'admin_external_media_template_edit' template.id %}" class="block px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold text-center">Editar Template</a>
+                {% endif %}
             </div>
 
             <div class="admin-card overflow-hidden">
                 <div class="p-5 border-b border-gray-100">
-                    <h2 class="font-bold text-gray-900">Versões do template</h2>
-                    <p class="text-sm text-gray-500">Edite rascunhos. Versões publicadas ficam congeladas para preservar projetos antigos.</p>
+                    <h2 class="font-bold text-gray-900">Template atual</h2>
+                    <p class="text-sm text-gray-500">Essa configuração é usada pelos novos projetos dos membros.</p>
                 </div>
-                <div class="divide-y divide-gray-100">
-                    {% for version in versions %}
+                <div>
+                    {% if current_version %}
                     <div class="p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         <div>
                             <div class="flex flex-wrap items-center gap-2">
-                                <h3 class="text-lg font-black text-gray-900">v{{ version.version }}</h3>
-                                <span class="status-badge status-{{ version.status }}">{{ version.get_status_display }}</span>
-                                <span class="text-xs text-gray-500">{{ version.blocks_count }} bloco{{ version.blocks_count|pluralize }} · {{ version.plugins_count }} plugin{{ version.plugins_count|pluralize }} · {{ version.projects_count }} projeto{{ version.projects_count|pluralize }}</span>
+                                <span class="status-badge {% if template.is_active %}status-PUBLISHED{% else %}status-ARCHIVED{% endif %}">{% if template.is_active %}Ativo{% else %}Inativo{% endif %}</span>
+                                <span class="text-xs text-gray-500">{{ current_version.blocks_count }} bloco{{ current_version.blocks_count|pluralize }} · {{ current_version.plugins_count }} processamento{{ current_version.plugins_count|pluralize }} · {{ current_version.projects_count }} projeto{{ current_version.projects_count|pluralize }}</span>
                             </div>
-                            <p class="text-sm text-gray-600 mt-1">{{ version.changelog|default:'Sem observações.' }}</p>
-                            <p class="text-xs text-gray-500 mt-1">Preset: {{ version.preset.name }} · Idiomas: {{ version.output_languages|join:', ' }}</p>
+                            <p class="text-sm text-gray-600 mt-2">Preset: {{ current_version.preset.name }} · Idiomas: {{ current_version.output_languages|join:', ' }}</p>
                         </div>
-                        <div class="flex flex-wrap gap-2">
-                            {% if version.status == 'DRAFT' %}
-                            <a href="{% url 'admin_external_media_version_edit' version.id %}" class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg text-sm font-semibold">Editar</a>
-                            <form method="post" action="{% url 'admin_external_media_version_publish' version.id %}">
-                                {% csrf_token %}
-                                <button class="px-3 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Publicar</button>
-                            </form>
-                            {% else %}
-                            <form method="post" action="{% url 'admin_external_media_version_duplicate' version.id %}">
-                                {% csrf_token %}
-                                <button class="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold">Duplicar para editar</button>
-                            </form>
-                            {% endif %}
-                        </div>
+                        <a href="{% url 'admin_external_media_version_edit' current_version.id %}" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold text-center">Editar Template</a>
                     </div>
-                    {% empty %}
+                    {% else %}
                     <div class="p-10 text-center text-gray-500">
-                        <p class="font-semibold text-gray-700">Este template ainda não tem versão.</p>
-                        <a href="{% url 'admin_external_media_version_create' template.id %}" class="inline-flex mt-4 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Criar primeira versão</a>
+                        <p class="font-semibold text-gray-700">Este template ainda não pode ser configurado.</p>
+                        <p class="text-sm mt-1">Cadastre um preset de renderização ativo para liberar a configuração.</p>
                     </div>
-                    {% endfor %}
+                    {% endif %}
                 </div>
             </div>
         </div>

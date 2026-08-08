@@ -52,7 +52,8 @@ def seed_external_media(apps, schema_editor):
         ('Ceia', 'Communion Service'),
         ('Evangelismo', 'Outreach'),
         ('Imersão Sobrenatural', 'Supernatural Immersion'),
-        ('Igreja Filadélfia', 'Philadelphia Church'),
+        ('Igreja Filadélfia', 'Igreja Filadélfia'),
+        ('Filadélfia', 'Filadélfia'),
     ]
     for source, translated in glossary:
         GlossaryTerm.objects.get_or_create(

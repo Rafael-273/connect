@@ -2,6 +2,7 @@ import json
 from math import gcd
 
 from django import forms
+from django.forms.models import BaseInlineFormSet
 from django.forms import inlineformset_factory
 from django.utils.text import slugify
 
@@ -175,11 +176,10 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
     class Meta:
         model = MediaTemplateVersion
         fields = [
-            'changelog', 'preset', 'subtitle_style', 'translated_subtitle_style', 'original_language',
+            'preset', 'subtitle_style', 'translated_subtitle_style', 'original_language',
             'lut_file', 'background_music',
         ]
         labels = {
-            'changelog': 'Observações da versão',
             'preset': 'Preset de renderização',
             'subtitle_style': 'Estilo da legenda original',
             'translated_subtitle_style': 'Estilo da legenda traduzida',
@@ -188,7 +188,6 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             'background_music': 'Música de fundo',
         }
         widgets = {
-            'changelog': forms.Textarea(attrs={'rows': 3}),
             'lut_file': forms.ClearableFileInput(),
         }
 
@@ -211,44 +210,53 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                 '',
             )
             initial.setdefault('translated_language', translated)
-            initial.setdefault(
-                'advanced_plugins',
-                list(
-                    instance.plugins.filter(
-                        code__in=ADVANCED_PLUGIN_CODES,
-                        is_enabled=True,
-                    ).values_list('code', flat=True)
-                ),
-            )
-            auto_reframe = instance.plugins.filter(
-                code=MediaTemplatePlugin.Code.AUTO_TRACKING,
-            ).first()
-            if auto_reframe:
+            if instance.pk:
                 initial.setdefault(
-                    'auto_reframe_priority',
-                    (auto_reframe.configuration or {}).get('priority', 'face'),
+                    'advanced_plugins',
+                    list(
+                        instance.plugins.filter(
+                            code__in=ADVANCED_PLUGIN_CODES,
+                            is_enabled=True,
+                        ).values_list('code', flat=True)
+                    ),
                 )
-            speech_plugin = instance.plugins.filter(
-                code__in=[
-                    MediaTemplatePlugin.Code.SILENCE_REMOVAL,
-                    MediaTemplatePlugin.Code.FILLER_REMOVAL,
-                ],
-            ).first()
-            if speech_plugin:
-                speech_configuration = speech_plugin.configuration or {}
-                initial.setdefault('speech_edit_profile', speech_configuration.get('profile', 'balanced'))
-                if speech_configuration.get('filler_words'):
-                    initial.setdefault('filler_words', ', '.join(speech_configuration['filler_words']))
+                auto_reframe = instance.plugins.filter(
+                    code=MediaTemplatePlugin.Code.AUTO_TRACKING,
+                ).first()
+                if auto_reframe:
+                    initial.setdefault(
+                        'auto_reframe_priority',
+                        (auto_reframe.configuration or {}).get('priority', 'face'),
+                    )
+                speech_plugin = instance.plugins.filter(
+                    code__in=[
+                        MediaTemplatePlugin.Code.SILENCE_REMOVAL,
+                        MediaTemplatePlugin.Code.FILLER_REMOVAL,
+                    ],
+                ).first()
+                if speech_plugin:
+                    speech_configuration = speech_plugin.configuration or {}
+                    initial.setdefault('speech_edit_profile', speech_configuration.get('profile', 'balanced'))
+                    if speech_configuration.get('filler_words'):
+                        initial.setdefault('filler_words', ', '.join(speech_configuration['filler_words']))
         super().__init__(*args, **kwargs)
         for field_name, field in self.fields.items():
             if field_name in {'spoken_languages', 'advanced_plugins'}:
                 continue
             field.widget.attrs.update({'class': FIELD_CLASS})
-        self.fields['preset'].queryset = RenderPreset.objects.filter(is_active=True).order_by('name')
-        self.fields['subtitle_style'].queryset = SubtitleStyle.objects.filter(is_active=True).order_by('name')
-        self.fields['translated_subtitle_style'].queryset = SubtitleStyle.objects.filter(is_active=True).order_by('name')
+        preset_qs = RenderPreset.objects.filter(is_active=True).order_by('name')
+        list(preset_qs)
+        subtitle_styles_qs = SubtitleStyle.objects.filter(is_active=True).order_by('name')
+        list(subtitle_styles_qs)
+        translated_styles_qs = SubtitleStyle.objects.filter(is_active=True).order_by('name')
+        list(translated_styles_qs)
+        background_music_qs = Music.objects.exclude(audio_file='').order_by('name', 'singer')
+        list(background_music_qs)
+        self.fields['preset'].queryset = preset_qs
+        self.fields['subtitle_style'].queryset = subtitle_styles_qs
+        self.fields['translated_subtitle_style'].queryset = translated_styles_qs
         self.fields['translated_subtitle_style'].required = False
-        self.fields['background_music'].queryset = Music.objects.exclude(audio_file='').order_by('name', 'singer')
+        self.fields['background_music'].queryset = background_music_qs
         if not instance:
             self.fields['spoken_languages'].initial = ['pt']
 
@@ -355,7 +363,7 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         model = MediaTemplateBlock
         fields = [
             'key', 'name', 'description', 'order', 'is_required', 'allows_multiple',
-            'min_occurrences', 'max_occurrences', 'default_video',
+            'min_occurrences', 'max_occurrences', 'skip_extra_processing', 'default_video',
         ]
         labels = {
             'name': 'Nome do bloco',
@@ -363,6 +371,7 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
             'order': 'Posição no vídeo',
             'default_video': 'Vídeo fixo deste bloco',
             'is_required': 'Obrigatório',
+            'skip_extra_processing': 'Manter este bloco intacto',
             'allows_multiple': 'Aceitar mais de um vídeo',
             'min_occurrences': 'Mínimo de vídeos',
             'max_occurrences': 'Máximo de vídeos',
@@ -381,8 +390,10 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['key'].required = False
         self.fields['allows_multiple'].required = False
+        for field_name in ('name', 'order', 'min_occurrences', 'max_occurrences'):
+            self.fields[field_name].required = False
         for field_name, field in self.fields.items():
-            if field_name in ('is_required', 'DELETE'):
+            if field_name in ('is_required', 'skip_extra_processing', 'DELETE'):
                 field.widget.attrs.update({'class': CHECKBOX_CLASS})
             elif field_name in ('allows_multiple', 'min_occurrences', 'max_occurrences'):
                 continue
@@ -395,12 +406,23 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         if not self.instance.pk and not self.initial.get('max_occurrences'):
             self.fields['max_occurrences'].initial = 4
 
+    def has_changed(self):
+        if self.instance.pk or not self.is_bound:
+            return super().has_changed()
+        prefix = self.add_prefix('name')
+        name = (self.data.get(prefix, '') or '').strip()
+        if not name:
+            return False
+        return super().has_changed()
+
     def clean(self):
         cleaned_data = super().clean()
         if cleaned_data.get('DELETE'):
             return cleaned_data
         name = (cleaned_data.get('name') or '').strip()
-        if name and not cleaned_data.get('key'):
+        if not name:
+            return cleaned_data
+        if not cleaned_data.get('key'):
             cleaned_data['key'] = slugify(name)
         if not self.instance.pk:
             cleaned_data['allows_multiple'] = True
@@ -410,6 +432,8 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         return cleaned_data
 
     def save(self, commit=True):
+        if not (self.cleaned_data.get('name') or '').strip():
+            return self.instance
         instance = super().save(commit=False)
         instance.key = self.cleaned_data.get('key') or slugify(self.cleaned_data.get('name', ''))
         if not instance.pk:
@@ -420,6 +444,46 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class AdminMediaTemplateBlockFormSetBase(BaseInlineFormSet):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for form in self.extra_forms:
+            form.empty_permitted = True
+
+    def save_new(self, form, commit=True):
+        if not (form.cleaned_data.get('name') or '').strip():
+            return None
+        return super().save_new(form, commit=commit)
+
+    def clean(self):
+        keys = set()
+        for form in self.forms:
+            if not hasattr(form, 'cleaned_data') or not form.cleaned_data:
+                continue
+            if form.cleaned_data.get('DELETE'):
+                continue
+            name = (form.cleaned_data.get('name') or '').strip()
+            if not name:
+                continue
+            base_key = slugify(name) or 'bloco'
+            key = self._unique_key(base_key, keys)
+            keys.add(key)
+            form.cleaned_data['key'] = key
+            form.instance.key = key
+
+    @staticmethod
+    def _unique_key(base_key, used_keys):
+        max_length = MediaTemplateBlock._meta.get_field('key').max_length
+        base_key = base_key[:max_length].strip('-') or 'bloco'
+        key = base_key
+        index = 2
+        while key in used_keys:
+            suffix = f'-{index}'
+            key = f'{base_key[:max_length - len(suffix)].strip("-")}{suffix}'
+            index += 1
+        return key
 
 
 class AdminMediaTemplatePluginForm(forms.ModelForm):
@@ -508,46 +572,174 @@ class AdminRenderPresetForm(forms.ModelForm):
 
 class AdminSubtitleStyleForm(forms.ModelForm):
     font_name = forms.ChoiceField(
-        label='Fonte',
+        label='Família da fonte',
         choices=SUBTITLE_FONT_CHOICES,
         initial='Arial',
+    )
+    font_weight = forms.TypedChoiceField(
+        label='Peso da fonte',
+        choices=SubtitleStyle.FontWeight.choices,
+        coerce=int,
+        initial=SubtitleStyle.FontWeight.BOLD,
+        help_text='SemiBold e acima são gravados como negrito no arquivo ASS.',
+    )
+    alignment = forms.TypedChoiceField(
+        label='Alinhamento',
+        choices=SubtitleStyle.Alignment.choices,
+        coerce=int,
+        initial=SubtitleStyle.Alignment.BOTTOM_CENTER,
+    )
+    background_opacity = forms.IntegerField(
+        label='Opacidade do fundo (%)',
+        min_value=0,
+        max_value=100,
+        initial=70,
+    )
+    background_padding_x = forms.IntegerField(
+        label='Extra de largura (px)',
+        min_value=0,
+        max_value=200,
+        initial=14,
+        help_text='0 deixa o fundo no limite horizontal da fonte (incluindo o contorno).',
+    )
+    background_padding_y = forms.IntegerField(
+        label='Extra de altura (px)',
+        min_value=0,
+        max_value=200,
+        initial=8,
+        help_text='Espaço extra além da altura do fundo. Use 0 e reduza a “Altura do fundo (%)” para uma faixa mais baixa.',
+    )
+    background_height_percent = forms.IntegerField(
+        label='Altura do fundo (%)',
+        min_value=40,
+        max_value=100,
+        initial=100,
+        help_text='100 = altura da fonte. Valores menores deixam a faixa mais baixa que o texto (ex.: 70).',
+    )
+    shadow = forms.IntegerField(
+        label='Distância da sombra',
+        min_value=0,
+        max_value=80,
+        initial=1,
+        help_text='Quão longe a sombra fica do texto (0 desliga, salvo se houver tamanho/desfoque).',
+    )
+    shadow_angle = forms.IntegerField(
+        label='Ângulo da sombra (°)',
+        min_value=0,
+        max_value=360,
+        initial=45,
+        help_text='0° = direita, 90° = baixo, 180° = esquerda, 270° = cima. 45° é a diagonal clássica.',
+    )
+    shadow_size = forms.IntegerField(
+        label='Tamanho da sombra',
+        min_value=0,
+        max_value=40,
+        initial=0,
+        help_text='Aumenta a sombra sem desfocar (escala a letra na camada de sombra). 0 = tamanho normal.',
+    )
+    shadow_blur = forms.IntegerField(
+        label='Desfoque da sombra',
+        min_value=0,
+        max_value=30,
+        initial=0,
+        help_text='Suaviza a sombra (\\blur no ASS). Valores altos deixam mais difusa.',
+    )
+    shadow_opacity = forms.IntegerField(
+        label='Opacidade da sombra (%)',
+        min_value=0,
+        max_value=100,
+        initial=70,
+        help_text='Controla o alpha da sombra no vídeo final.',
     )
 
     class Meta:
         model = SubtitleStyle
         fields = [
-            'name', 'font_name', 'font_size', 'primary_color', 'outline_color',
-            'outline_width', 'shadow', 'margin_bottom', 'alignment',
+            'name', 'font_name', 'font_weight', 'font_size', 'primary_color',
+            'background_enabled', 'background_color', 'background_opacity',
+            'background_padding_x', 'background_padding_y', 'background_height_percent',
+            'background_radius',
+            'outline_color', 'outline_width',
+            'shadow', 'shadow_angle', 'shadow_size', 'shadow_blur', 'shadow_opacity',
+            'margin_bottom', 'alignment',
             'max_lines', 'max_characters', 'is_active',
         ]
         labels = {
             'name': 'Nome do estilo',
-            'font_name': 'Fonte',
+            'font_name': 'Família da fonte',
+            'font_weight': 'Peso da fonte',
             'font_size': 'Tamanho',
-            'primary_color': 'Cor principal',
+            'primary_color': 'Cor do texto',
+            'background_enabled': 'Usar plano de fundo',
+            'background_color': 'Cor do plano de fundo',
+            'background_opacity': 'Opacidade do fundo (%)',
+            'background_padding_x': 'Extra de largura (px)',
+            'background_padding_y': 'Extra de altura (px)',
+            'background_height_percent': 'Altura do fundo (%)',
+            'background_radius': 'Arredondamento (preview)',
             'outline_color': 'Cor do contorno',
             'outline_width': 'Espessura do contorno',
-            'shadow': 'Sombra',
-            'margin_bottom': 'Margem inferior',
-            'alignment': 'Alinhamento ASS',
+            'shadow': 'Distância da sombra',
+            'shadow_angle': 'Ângulo da sombra (°)',
+            'shadow_size': 'Tamanho da sombra',
+            'shadow_blur': 'Desfoque da sombra',
+            'shadow_opacity': 'Opacidade da sombra (%)',
+            'margin_bottom': 'Margem da borda',
+            'alignment': 'Alinhamento',
             'max_lines': 'Máximo de linhas',
             'max_characters': 'Máximo de caracteres',
             'is_active': 'Estilo ativo',
         }
+        help_texts = {
+            'background_radius': 'O ASS final usa caixa retangular; o arredondamento vale só no preview.',
+            'margin_bottom': 'Distância da legenda até a borda do quadro (em pixels do preset).',
+            'font_weight': 'SemiBold e acima são gravados como negrito no arquivo ASS.',
+            'background_padding_x': '0 deixa o fundo no limite horizontal da fonte (incluindo o contorno).',
+            'background_padding_y': 'Espaço extra além da altura do fundo. Use 0 e reduza a “Altura do fundo (%)” para uma faixa mais baixa.',
+            'background_height_percent': '100 = altura da fonte. Valores menores deixam a faixa mais baixa que o texto (ex.: 70).',
+            'shadow': 'Quão longe a sombra fica do texto (0 desliga, salvo se houver tamanho/desfoque).',
+            'shadow_angle': '0° = direita, 90° = baixo, 180° = esquerda, 270° = cima. 45° é a diagonal clássica.',
+            'shadow_size': 'Aumenta a sombra sem desfocar (escala tipográfica). 0 = tamanho normal.',
+            'shadow_blur': 'Suaviza a sombra. Independente do tamanho — use 0 para sombra nítida.',
+            'shadow_opacity': 'Controla o alpha da sombra no vídeo final.',
+        }
         widgets = {
             'primary_color': forms.TextInput(attrs={'type': 'color'}),
+            'background_color': forms.TextInput(attrs={'type': 'color'}),
             'outline_color': forms.TextInput(attrs={'type': 'color'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field_name, field in self.fields.items():
-            if field_name == 'is_active':
+            if field_name in ('is_active', 'background_enabled'):
                 field.widget.attrs.update({'class': CHECKBOX_CLASS})
-            elif field_name in ('primary_color', 'outline_color'):
+            elif field_name in ('primary_color', 'background_color', 'outline_color'):
                 field.widget.attrs.update({'class': COLOR_CLASS})
             else:
                 field.widget.attrs.update({'class': FIELD_CLASS})
+        for field_name in ('background_opacity', 'shadow_opacity', 'background_height_percent'):
+            self.fields[field_name].widget.attrs.update({
+                'min': '0' if field_name != 'background_height_percent' else '40',
+                'max': '100',
+                'step': '1',
+            })
+        for field_name in ('background_padding_x', 'background_padding_y'):
+            self.fields[field_name].widget.attrs.update({'min': '0', 'max': '200', 'step': '1'})
+        self.fields['shadow'].widget.attrs.update({'min': '0', 'max': '80', 'step': '1'})
+        self.fields['shadow_angle'].widget.attrs.update({'min': '0', 'max': '360', 'step': '1'})
+        self.fields['shadow_size'].widget.attrs.update({'min': '0', 'max': '40', 'step': '1'})
+        self.fields['shadow_blur'].widget.attrs.update({'min': '0', 'max': '30', 'step': '1'})
+
+
+    def clean_name(self):
+        name = (self.cleaned_data.get('name') or '').strip()
+        queryset = SubtitleStyle.objects.filter(name__iexact=name)
+        if self.instance and self.instance.pk:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise forms.ValidationError('Já existe um estilo com esse nome. Use outro nome para salvar a cópia.')
+        return name
 
 
 class BackgroundMusicChoiceField(forms.ModelChoiceField):
@@ -582,6 +774,7 @@ AdminMediaTemplateBlockFormSet = inlineformset_factory(
     MediaTemplateVersion,
     MediaTemplateBlock,
     form=AdminMediaTemplateBlockForm,
+    formset=AdminMediaTemplateBlockFormSetBase,
     extra=1,
     can_delete=True,
 )

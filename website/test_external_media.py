@@ -1,12 +1,16 @@
 import json
+import math
+import re
 import tempfile
 import wave
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.urls import reverse
 from safedelete.models import HARD_DELETE
 
@@ -14,17 +18,21 @@ from website.external_media.exceptions import ExternalMediaError
 from website.external_media.auto_reframe import AutoReframePlan, AutoReframeService, ReframeKeyframe
 from website.external_media.speech_edit import SpeechCut, SpeechEditAnalyzer, SpeechEditPlan, SpeechEditService
 from website.external_media.services import (
+    AssemblySource,
     ExternalMediaPipeline,
     FFmpegRunner,
     RenderService,
     SubtitleService,
     TemplateService,
     TranscriptionSegment,
+    TranscriptionService,
     TranslationService,
     VideoAssemblyService,
     VideoMetadata,
 )
 from website.forms.admin_external_media import AdminMediaTemplateBlockForm
+from website.forms.external_media import ExternalMediaProjectForm
+from website.views.external_media import protected_file_response
 from website.models import Member, Ministry, MinistryMembership, Music, User
 from website.models.external_media import (
     ExternalMediaJob,
@@ -226,6 +234,38 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
         translated = list(target.cues.order_by('cue_index'))
         self.assertEqual([cue.text for cue in translated], ['Hello, church!', 'Let us worship the Lord.'])
 
+    def test_translation_restores_protected_brand_terms(self):
+        ai = Mock()
+        ai.generate_text.return_value = (
+            '{"cues":[{"cue_id":1,"text":"Welcome to __TERM_1__."},'
+            '{"cue_id":2,"text":"Join us at __TERM_2__ this Sunday."}]}'
+        )
+        self.cues[0].text = 'Bem-vindo à Igreja Filadélfia.'
+        self.cues[0].save(update_fields=['text'])
+        self.cues[1].text = 'Participe da Filadélfia neste domingo.'
+        self.cues[1].save(update_fields=['text'])
+
+        target = TranslationService(ai_service=ai).translate_track(
+            self.track, 'en', 'gpt-4.1-mini',
+        )
+
+        prompt = json.loads(ai.generate_text.call_args.args[0])
+        self.assertEqual(
+            prompt['protected_terms'],
+            [
+                {'token': '__TERM_1__', 'text': 'Igreja Filadélfia'},
+                {'token': '__TERM_2__', 'text': 'Filadélfia'},
+            ],
+        )
+        self.assertEqual(prompt['cues'][0]['text'], 'Bem-vindo à __TERM_1__.')
+        self.assertEqual(prompt['cues'][1]['text'], 'Participe da __TERM_2__ neste domingo.')
+
+        translated = list(target.cues.order_by('cue_index'))
+        self.assertEqual(
+            [cue.text for cue in translated],
+            ['Welcome to Igreja Filadélfia.', 'Join us at Filadélfia this Sunday.'],
+        )
+
     def test_editor_never_accepts_timestamp_fields(self):
         MinistryMembership.objects.create(member=self.member, ministry=self.ministry)
         self.client.force_login(self.user)
@@ -257,7 +297,7 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
         translated = SubtitleTrack.objects.create(job=self.job, language='en')
         SubtitleCue.objects.create(
             track=translated, cue_index=1, start_ms=1200, end_ms=4800,
-            text='Hello church this is a long translated subtitle',
+            text='Hello church this is a long translated',
         )
         service = SubtitleService()
         with tempfile.TemporaryDirectory() as directory:
@@ -267,8 +307,481 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
         self.assertIn('Style: Original', content)
         self.assertIn('Style: Translated', content)
         self.assertIn(r'{\q2}Olá, igreja!', content)
-        self.assertIn(r'{\q2}Hello church this is a long translated subtitle', content)
+        self.assertIn(r'{\q2}Hello church this is a long translated', content)
         self.assertNotIn(r'\N', content)
+        original_style = next(line for line in content.splitlines() if line.startswith('Style: Original,'))
+        translated_style = next(line for line in content.splitlines() if line.startswith('Style: Translated,'))
+        original_margin = int(original_style.split(',')[-2])
+        translated_margin = int(translated_style.split(',')[-2])
+        # Sem translated_style distinto, as duas usam o mesmo estilo → mesma margem.
+        self.assertEqual(original_margin, translated_margin)
+
+    def test_dual_ass_splits_long_text_into_sequential_cues(self):
+        # Legenda dupla nunca quebra em múltiplas linhas no mesmo instante — por isso,
+        # textos acima do limite viram várias legendas sequenciais (tempo repartido),
+        # sem omitir palavras com reticências.
+        self.style.max_characters = 20
+        self.style.background_enabled = False
+        self.style.shadow = 0
+        self.style.save()
+        translated = SubtitleTrack.objects.create(job=self.job, language='en')
+        SubtitleCue.objects.create(
+            track=translated, cue_index=1, start_ms=1200, end_ms=4800,
+            text='This translated line is way longer than the configured limit',
+        )
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'dual_split.ass'
+            service.write_dual_ass([translated, self.track], ass, self.style, 1920, 1080, 'pt')
+            content = ass.read_text(encoding='utf-8-sig')
+        translated_rows = [
+            row for row in content.splitlines()
+            if row.startswith('Dialogue:') and ',Translated,' in row
+        ]
+        self.assertGreater(len(translated_rows), 1)
+        combined = ''.join(row.split(r'{\q2}', 1)[1] for row in translated_rows)
+        self.assertIn('This translated line', combined)
+        self.assertIn('configured limit', combined)
+        self.assertNotIn('…', combined)
+        self.assertNotIn(r'\N', content)
+
+    def test_ass_background_style_uses_configured_padding(self):
+        self.style.background_enabled = True
+        self.style.background_color = '#101820'
+        self.style.background_opacity = 65
+        self.style.background_padding_x = 22
+        self.style.background_padding_y = 7
+        self.style.background_height_percent = 100
+        self.style.outline_width = 3
+        self.style.shadow = 0
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'single.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        style_line = next(line for line in content.splitlines() if line.startswith('Style: Default,'))
+        fields = style_line.split(',')
+        # BorderStyle=4 desenha uma única caixa para o evento inteiro (em vez de uma por linha),
+        # evitando que o alpha semi-transparente "some" e escureça o fundo em legendas com
+        # múltiplas linhas (libass issue #821). A cor/opacidade da caixa vem de overrides
+        # \4c/\4a no texto do Dialogue, não mais do campo BackColour do estilo.
+        self.assertEqual(fields[15], '4')
+        self.assertEqual(fields[16], '3')
+        self.assertIn('&H59', fields[6])
+        dialogue_line = next(line for line in content.splitlines() if line.startswith('Dialogue:'))
+        self.assertIn(r'\4c&H201810&', dialogue_line)
+        self.assertIn(r'\4a&H59&', dialogue_line)
+        self.assertIn(r'\xshad22', dialogue_line)
+        self.assertIn(r'\yshad7', dialogue_line)
+        # \yshad estende a caixa para cima/baixo do texto sem mover o MarginV (libass não
+        # desloca o texto por causa do \shad de BorderStyle=4), então o MarginV emitido
+        # precisa ser inflado pelo padding vertical para a BORDA da caixa (não o texto)
+        # terminar no margin_bottom configurado, batendo com o preview (CSS `bottom`).
+        self.assertEqual(int(fields[-2]), self.style.margin_bottom + 7)
+
+    def test_ass_shadow_uses_angle_distance_on_shadow_layer(self):
+        self.style.background_enabled = False
+        self.style.shadow = 10
+        self.style.shadow_angle = 0  # direita → xshad=10, yshad=0
+        self.style.shadow_size = 0
+        self.style.shadow_blur = 0
+        self.style.shadow_opacity = 50
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'shadow.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        self.assertIn('Style: DefaultShadow', content)
+        dialogues = [line for line in content.splitlines() if line.startswith('Dialogue:')]
+        self.assertIn('DefaultShadow', dialogues[0])
+        self.assertIn(r'\1a&H80&', dialogues[0])
+        self.assertIn(r'\1c&H000000&', dialogues[0])
+        self.assertIn(r'\xshad10', dialogues[0])
+        self.assertIn(r'\yshad0', dialogues[0])
+
+    def test_ass_shadow_size_stacks_undeformed_copies_along_the_angle(self):
+        self.style.background_enabled = False
+        self.style.shadow = 6
+        self.style.shadow_angle = 90  # baixo
+        self.style.shadow_size = 4
+        self.style.shadow_blur = 0
+        self.style.shadow_opacity = 40
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'sized_shadow.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        shadow_dialogues = [
+            line for line in content.splitlines()
+            if line.startswith('Dialogue:') and 'DefaultShadow' in line
+        ]
+        # "Tamanho" nunca usa \bord/\fscx (deformavam acentos e deslocavam a sombra); em vez
+        # disso, empilha cópias nítidas (mesmo glifo) cada vez mais longe no mesmo ângulo —
+        # a mesma técnica de múltiplos `text-shadow` do preview.
+        self.assertGreater(len(shadow_dialogues), 1)
+        for dialogue in shadow_dialogues:
+            self.assertNotIn(r'\fscx', dialogue)
+            self.assertNotIn(r'\fscy', dialogue)
+            self.assertIn(r'\bord0', dialogue)
+        self.assertIn(r'\xshad0', shadow_dialogues[0])
+        self.assertIn(r'\yshad6', shadow_dialogues[0])
+        last_yshad = float(re.search(r'\\yshad([\d.]+)', shadow_dialogues[-1]).group(1))
+        self.assertGreater(last_yshad, 6)
+
+    def test_ass_shadow_blur_only_when_requested(self):
+        self.style.background_enabled = False
+        self.style.shadow = 6
+        self.style.shadow_angle = 90
+        self.style.shadow_size = 0
+        self.style.shadow_blur = 3
+        self.style.shadow_opacity = 40
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'blur_shadow.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        shadow_dialogues = [
+            line for line in content.splitlines()
+            if line.startswith('Dialogue:') and 'DefaultShadow' in line
+        ]
+        # Sem tamanho, é uma única cópia nítida com blur por cue (2 cues no fixture) —
+        # sem \fscx e sem \bord.
+        self.assertEqual(len(shadow_dialogues), 2)
+        self.assertIn(r'\blur3', shadow_dialogues[0])
+        self.assertNotIn(r'\fscx', shadow_dialogues[0])
+        self.assertNotIn(r'\bord4', shadow_dialogues[0])
+
+    def test_ass_background_with_shadow_emits_shadow_layer(self):
+        self.style.background_enabled = True
+        self.style.background_padding_x = 0
+        self.style.background_padding_y = 0
+        self.style.shadow = 4
+        self.style.shadow_angle = 45
+        self.style.shadow_opacity = 40
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'bg_shadow.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        self.assertIn('Style: DefaultShadow', content)
+        dialogues = [line for line in content.splitlines() if line.startswith('Dialogue:')]
+        self.assertGreaterEqual(len(dialogues), 2)
+        shadow_dialogue = next(row for row in dialogues if 'DefaultShadow' in row)
+        self.assertIn(r'\1a&H99&', shadow_dialogue)
+        self.assertIn(r'\1c&H000000&', shadow_dialogue)
+        # 45° com distância 4 → ~2.83 em x e y
+        self.assertIn(r'\xshad2.83', shadow_dialogue)
+        self.assertIn(r'\yshad2.83', shadow_dialogue)
+
+    def test_ass_background_draws_behind_shadow_which_draws_behind_text(self):
+        # Se o fundo fosse desenhado por cima da sombra (ou na mesma camada do texto),
+        # a caixa "engoliria" a sombra visualmente — regressão relatada pelo usuário.
+        self.style.background_enabled = True
+        self.style.background_padding_x = 6
+        self.style.background_padding_y = 6
+        self.style.background_height_percent = 100
+        self.style.shadow = 4
+        self.style.shadow_angle = 45
+        self.style.shadow_opacity = 90
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'bg_behind_shadow.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        # Altura 100% normalmente não precisaria de camada própria, mas com sombra ativa
+        # precisa: senão a caixa embutida no evento do texto (camada mais alta) cobriria
+        # a sombra por completo.
+        self.assertIn('Style: DefaultBG', content)
+        dialogues = [line for line in content.splitlines() if line.startswith('Dialogue:')]
+        layer_by_role = {}
+        for row in dialogues:
+            layer = int(row.split(',')[0].split(':')[1])
+            role = row.split(',')[3]
+            layer_by_role.setdefault(role, layer)
+        self.assertLess(layer_by_role['DefaultBG'], layer_by_role['DefaultShadow'])
+        self.assertLess(layer_by_role['DefaultShadow'], layer_by_role['Default'])
+
+    def test_ass_background_height_percent_uses_scaled_bg_layer(self):
+        self.style.background_enabled = True
+        self.style.background_padding_x = 0
+        self.style.background_padding_y = 0
+        self.style.background_height_percent = 70
+        self.style.shadow = 0
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'bg_height.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        self.assertIn('Style: DefaultBG', content)
+        dialogues = [line for line in content.splitlines() if line.startswith('Dialogue:')]
+        self.assertGreaterEqual(len(dialogues), 2)
+        self.assertIn('DefaultBG', dialogues[0])
+        self.assertIn(r'\fscy70', dialogues[0])
+        self.assertIn(r'\1a&HFF&', dialogues[0])
+
+    def test_ass_background_zero_padding_hugs_text(self):
+        self.style.background_enabled = True
+        self.style.background_padding_x = 0
+        self.style.background_padding_y = 0
+        self.style.background_height_percent = 100
+        self.style.shadow = 0
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'tight.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        dialogue_line = next(line for line in content.splitlines() if line.startswith('Dialogue:'))
+        self.assertIn(r'\xshad0', dialogue_line)
+        self.assertIn(r'\yshad0', dialogue_line)
+        style_line = next(line for line in content.splitlines() if line.startswith('Style: Default,'))
+        self.assertEqual(int(style_line.split(',')[-2]), self.style.margin_bottom)
+
+    def test_ass_margin_v_ignores_padding_without_background(self):
+        self.style.background_enabled = False
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'single.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        style_line = next(line for line in content.splitlines() if line.startswith('Style: Default'))
+        fields = style_line.split(',')
+        self.assertEqual(int(fields[-2]), self.style.margin_bottom)
+
+    def test_dual_ass_keeps_independent_margins(self):
+        translated = SubtitleTrack.objects.create(job=self.job, language='en')
+        SubtitleCue.objects.create(
+            track=translated, cue_index=1, start_ms=1200, end_ms=4800,
+            text='Hello church this is a long translated subtitle',
+        )
+        translated_style, _ = SubtitleStyle.objects.get_or_create(name='TesteTraduzida')
+        translated_style.background_enabled = True
+        translated_style.background_padding_y = 10
+        translated_style.background_height_percent = 100
+        translated_style.margin_bottom = 40
+        translated_style.shadow = 0
+        translated_style.save()
+        self.style.background_enabled = False
+        self.style.margin_bottom = 120
+        self.style.shadow = 0
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'dual.ass'
+            service.write_dual_ass(
+                [translated, self.track], ass, self.style, 1920, 1080, 'pt',
+                translated_style=translated_style,
+            )
+            content = ass.read_text(encoding='utf-8-sig')
+        original_style_line = next(line for line in content.splitlines() if line.startswith('Style: Original,'))
+        translated_style_line = next(line for line in content.splitlines() if line.startswith('Style: Translated,'))
+        original_margin_v = int(original_style_line.split(',')[-2])
+        translated_margin_v = int(translated_style_line.split(',')[-2])
+        logical_original, logical_translated = SubtitleService._dual_style_margins(self.style, translated_style)
+        # Cada estilo mantém a própria margem — mexer numa não altera a outra.
+        self.assertEqual(logical_original, 120)
+        self.assertEqual(logical_translated, 40)
+        self.assertEqual(original_margin_v, SubtitleService._ass_margin_v(self.style, 120))
+        self.assertEqual(translated_margin_v, SubtitleService._ass_margin_v(translated_style, 40))
+
+    def test_dual_ass_dialogues_use_pos_for_pixel_perfect_margins(self):
+        translated = SubtitleTrack.objects.create(job=self.job, language='en')
+        SubtitleCue.objects.create(
+            track=translated, cue_index=1, start_ms=1200, end_ms=4800,
+            text='Hello church',
+        )
+        translated_style, _ = SubtitleStyle.objects.get_or_create(name='TesteTradPos')
+        translated_style.background_enabled = True
+        translated_style.background_padding_y = 2
+        translated_style.margin_bottom = 164
+        translated_style.shadow = 0
+        translated_style.save()
+        self.style.background_enabled = True
+        self.style.background_padding_y = 0
+        self.style.margin_bottom = 90
+        self.style.shadow = 0
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'dual_pos.ass'
+            service.write_dual_ass(
+                [translated, self.track], ass, self.style, 3840, 1200, 'pt',
+                translated_style=translated_style,
+            )
+            content = ass.read_text(encoding='utf-8-sig')
+        original_dialogue = next(
+            line for line in content.splitlines()
+            if line.startswith('Dialogue:') and ',Original,' in line and 'OriginalBG' not in line and 'OriginalShadow' not in line
+        )
+        translated_dialogue = next(
+            line for line in content.splitlines()
+            if line.startswith('Dialogue:') and ',Translated,' in line and 'TranslatedBG' not in line and 'TranslatedShadow' not in line
+        )
+        self.assertIn(r'{\an2\pos(1920,1110)}', original_dialogue)
+        self.assertIn(r'{\an2\pos(1920,1034)}', translated_dialogue)
+
+    def test_dual_ass_uses_separate_layers_to_avoid_collision_push(self):
+        translated = SubtitleTrack.objects.create(job=self.job, language='en')
+        SubtitleCue.objects.create(
+            track=translated, cue_index=1, start_ms=1200, end_ms=4800,
+            text='Hello church',
+        )
+        translated_style, _ = SubtitleStyle.objects.get_or_create(name='TesteTradLayer')
+        translated_style.shadow = 0
+        translated_style.save()
+        self.style.shadow = 0
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'dual_layers.ass'
+            service.write_dual_ass(
+                [translated, self.track], ass, self.style, 1920, 1080, 'pt',
+                translated_style=translated_style,
+            )
+            content = ass.read_text(encoding='utf-8-sig')
+        original_layers = {
+            int(line.split(',')[0].split(':')[1])
+            for line in content.splitlines()
+            if line.startswith('Dialogue:') and ',Original' in line
+        }
+        translated_layers = {
+            int(line.split(',')[0].split(':')[1])
+            for line in content.splitlines()
+            if line.startswith('Dialogue:') and ',Translated' in line
+        }
+        self.assertTrue(all(layer < 10 for layer in original_layers))
+        self.assertTrue(all(layer >= 10 for layer in translated_layers))
+
+    def test_render_filters_use_subtitle_fonts_dir_when_available(self):
+        preset = SimpleNamespace(width=3840, height=1200)
+        filters = RenderService.build_video_filters(
+            preset, '/tmp/subtitles.ass', VideoMetadata(),
+        )
+        ass_filter = next(item for item in filters if item.startswith('ass='))
+        fonts_dir = RenderService.subtitle_fonts_dir()
+        if fonts_dir.is_dir() and any(fonts_dir.glob('*.[ot]tf')):
+            self.assertIn('fontsdir=', ass_filter)
+        else:
+            self.assertNotIn('fontsdir=', ass_filter)
+
+    def test_ass_invalid_alignment_falls_back_to_bottom_center(self):
+        self.style.alignment = 0
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'single.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        style_line = next(line for line in content.splitlines() if line.startswith('Style: Default'))
+        fields = style_line.split(',')
+        self.assertEqual(fields[18], '2')
+
+    def test_ass_font_weight_maps_to_bold_flag(self):
+        self.style.font_weight = 400
+        self.style.save()
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'regular.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            regular_fields = next(
+                line for line in ass.read_text(encoding='utf-8-sig').splitlines()
+                if line.startswith('Style: Default')
+            ).split(',')
+        self.assertEqual(regular_fields[7], '0')
+
+        self.style.font_weight = 700
+        self.style.save()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'bold.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            bold_fields = next(
+                line for line in ass.read_text(encoding='utf-8-sig').splitlines()
+                if line.startswith('Style: Default')
+            ).split(',')
+        self.assertEqual(bold_fields[7], '-1')
+
+    def test_ass_reflects_every_configured_style_parameter_together(self):
+        # Golden test: combines font weight, alignment, colors, a scaled-down background,
+        # and an angled/sized/blurred shadow at once, guaranteeing the render never drifts
+        # from whatever the admin saved, even when several fields interact.
+        self.style.font_weight = SubtitleStyle.FontWeight.SEMIBOLD
+        self.style.alignment = SubtitleStyle.Alignment.TOP_RIGHT
+        self.style.primary_color = '#112233'
+        self.style.background_enabled = True
+        self.style.background_color = '#445566'
+        self.style.background_opacity = 55
+        self.style.background_padding_x = 5
+        self.style.background_padding_y = 3
+        self.style.background_height_percent = 60
+        self.style.outline_color = '#000000'
+        self.style.outline_width = 2
+        self.style.shadow = 6
+        self.style.shadow_angle = 90
+        self.style.shadow_size = 2
+        self.style.shadow_blur = 1
+        self.style.shadow_opacity = 40
+        self.style.margin_bottom = 77
+        self.style.save()
+
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'golden.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+
+        main_style = next(line for line in content.splitlines() if line.startswith('Style: Default,'))
+        shadow_style = next(line for line in content.splitlines() if line.startswith('Style: DefaultShadow,'))
+        bg_style = next(line for line in content.splitlines() if line.startswith('Style: DefaultBG,'))
+        main_fields = main_style.split(',')
+
+        # Font weight -> Bold flag; alignment maps 1:1 to ASS numpad alignment.
+        self.assertEqual(main_fields[7], '-1')
+        self.assertEqual(main_fields[18], '9')
+        # Primary color is BGR-swapped and fully opaque (text opacity isn't user-exposed).
+        self.assertEqual(main_fields[3], '&H00332211')
+        self.assertEqual(main_fields[5], '&H00000000')
+        # Background scaled below 100% forces a dedicated BG layer, so MarginV is padded
+        # on every layer by the saved background_padding_y on top of margin_bottom.
+        for style_line in (main_style, shadow_style, bg_style):
+            self.assertTrue(style_line.endswith(',80,1'), style_line)
+
+        rows = [line for line in content.splitlines() if line.startswith('Dialogue:')]
+        # 2 cues x (2 stacked shadow copies for shadow_size=2 + background + main) layers.
+        self.assertEqual(len(rows), 8)
+        shadow_rows = [row for row in rows if ',DefaultShadow,' in row]
+        bg_row = next(row for row in rows if ',DefaultBG,' in row)
+        main_row = next(row for row in rows if row.count(',Default,'))
+
+        # Shadow: 40% opacity, angle 90° (straight down) at distance 6. "Tamanho" stacks
+        # undeformed copies (never \bord/\fscx, which deform accents and shift position)
+        # progressively further along the same angle; blur is only added because
+        # shadow_blur > 0.
+        self.assertEqual(len(shadow_rows), 4)  # 2 cues x 2 stacked copies
+        base_shadow_row = shadow_rows[0]
+        self.assertIn(r'\1a&H99&', base_shadow_row)
+        self.assertIn(r'\1c&H000000&', base_shadow_row)
+        self.assertNotIn(r'\fscx', base_shadow_row)
+        self.assertIn(r'\bord0', base_shadow_row)
+        self.assertIn(r'\blur1', base_shadow_row)
+        self.assertIn(r'\xshad0', base_shadow_row)
+        self.assertIn(r'\yshad6', base_shadow_row)
+
+        # Background: 55% opacity, BGR-swapped box color, configured padding as extra
+        # width/height, and fscy60 to hug the text at 60% of the default box height.
+        self.assertIn(r'\4c&H665544&', bg_row)
+        self.assertIn(r'\4a&H73&', bg_row)
+        self.assertIn(r'\fscy60', bg_row)
+        self.assertIn(r'\xshad5', bg_row)
+        self.assertIn(r'\yshad3', bg_row)
+
+        self.assertIn('Olá, igreja!', main_row)
 
     def test_pipeline_can_resolve_job_by_public_id(self):
         found = ExternalMediaPipeline._get_job(str(self.job.public_id))
@@ -369,6 +882,14 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
         self.assertEqual(project.template_version, self.version)
 
+    def test_project_form_uses_current_template_without_publication_step(self):
+        self.version.status = MediaTemplateVersion.Status.DRAFT
+        self.version.save(update_fields=['status', 'update_at'])
+
+        form = ExternalMediaProjectForm()
+
+        self.assertIn(self.version, list(form.fields['template_version'].queryset))
+
     def test_upload_is_attached_to_the_correct_block(self):
         project = self.make_project()
         response = self.client.post(
@@ -466,6 +987,43 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(project.configuration['speech_edit_preview']['filler_count'], 1)
         self.assertEqual(remapped[0].start_ms, 600)
 
+    def test_speech_edit_remaps_block_ranges_to_the_edited_timeline(self):
+        MediaTemplatePlugin.objects.create(
+            version=self.version, code=MediaTemplatePlugin.Code.FILLER_REMOVAL, order=3,
+        )
+        project = self.make_project()
+        project.configuration = {
+            'proxy_pipeline': True,
+            'block_ranges': [
+                {'start_ms': 0, 'end_ms': 1000, 'block_key': 'a'},
+                {'start_ms': 1000, 'end_ms': 2000, 'block_key': 'b'},
+            ],
+        }
+        job = self.make_job()
+        project.render_job = job
+        project.save(update_fields=['configuration', 'render_job', 'update_at'])
+        pipeline = ExternalMediaPipeline()
+        pipeline.speech_editor = Mock()
+        pipeline.speech_editor.duration_ms.return_value = 2000
+        pipeline.speech_analyzer = Mock()
+        # A single 400ms filler cut squarely inside block "a" shortens it and shifts every
+        # later boundary (including block "b") back by 400ms in the edited timeline.
+        pipeline.speech_analyzer.analyze.return_value = SpeechEditPlan(
+            (SpeechCut(500, 900, 'filler', 'hum'),), 2000, 40,
+        )
+        detailed = [TranscriptionSegment(1000, 1300, 'Depois', 'word')]
+
+        pipeline._apply_speech_edit(job, Path('/tmp/proxy.mp4'), Path('/tmp'), detailed)
+
+        project.refresh_from_db()
+        ranges = project.configuration['block_ranges']
+        self.assertEqual(ranges[0]['start_ms'], 0)
+        self.assertEqual(ranges[0]['end_ms'], 600)
+        self.assertEqual(ranges[0]['block_key'], 'a')
+        self.assertEqual(ranges[1]['start_ms'], 600)
+        self.assertEqual(ranges[1]['end_ms'], 1600)
+        self.assertEqual(ranges[1]['block_key'], 'b')
+
     def test_project_upload_path_stays_short_even_with_long_block_name(self):
         long_block = MediaTemplateBlock.objects.create(
             version=self.version,
@@ -511,28 +1069,82 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
             preset=self.preset, subtitle_style=self.style, output_languages=['pt', 'en'],
         )
 
+    def _version_edit_payload(self, **overrides):
+        data = {
+            'name': self.template.name,
+            'description': self.template.description or '',
+            'is_active': 'on' if self.template.is_active else '',
+            'preset': self.preset.pk,
+            'subtitle_style': self.style.pk,
+            'original_language': 'pt',
+            'language_mode': 'translated',
+            'translated_language': 'en',
+            'default_settings_raw': '{}',
+            'allowed_overrides_raw': '[]',
+            'blocks-TOTAL_FORMS': '0',
+            'blocks-INITIAL_FORMS': '0',
+            'blocks-MIN_NUM_FORMS': '0',
+            'blocks-MAX_NUM_FORMS': '1000',
+        }
+        data.update(overrides)
+        return data
+
+    def _version_edit_payload(self, **overrides):
+        data = {
+            'name': self.template.name,
+            'description': self.template.description or '',
+            'is_active': 'on' if self.template.is_active else '',
+            'preset': self.preset.pk,
+            'subtitle_style': self.style.pk,
+            'original_language': 'pt',
+            'language_mode': 'translated',
+            'translated_language': 'en',
+            'default_settings_raw': '{}',
+            'allowed_overrides_raw': '[]',
+            'blocks-TOTAL_FORMS': '0',
+            'blocks-INITIAL_FORMS': '0',
+            'blocks-MIN_NUM_FORMS': '0',
+            'blocks-MAX_NUM_FORMS': '1000',
+        }
+        data.update(overrides)
+        return data
+
     def test_admin_panel_media_template_pages_render(self):
         urls = [
-            reverse('admin_external_media_templates'),
-            reverse('admin_external_media_template_detail', args=[self.template.pk]),
-            reverse('admin_external_media_template_edit', args=[self.template.pk]),
-            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            (reverse('admin_external_media_templates'), 200),
+            (reverse('admin_external_media_template_detail', args=[self.template.pk]), 200),
+            (reverse('admin_external_media_template_create'), 200),
+            (reverse('admin_external_media_version_edit', args=[self.version.pk]), 200),
         ]
-        for url in urls:
+        for url, expected_status in urls:
             with self.subTest(url=url):
                 response = self.client.get(url)
-                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.status_code, expected_status)
+
+        response = self.client.get(reverse('admin_external_media_template_edit', args=[self.template.pk]))
+        self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
 
     def test_admin_panel_can_create_media_template(self):
         response = self.client.post(reverse('admin_external_media_template_create'), {
             'name': 'Stories de Testemunho',
             'description': 'Modelo para cortes verticais.',
             'is_active': 'on',
+            'preset': self.preset.pk,
+            'subtitle_style': self.style.pk,
+            'original_language': 'pt',
+            'language_mode': 'translated',
+            'translated_language': '',
+            'default_settings_raw': '{}',
+            'allowed_overrides_raw': '[]',
+            'blocks-TOTAL_FORMS': '1',
+            'blocks-INITIAL_FORMS': '0',
+            'blocks-MIN_NUM_FORMS': '0',
+            'blocks-MAX_NUM_FORMS': '1000',
         })
         template = MediaTemplate.objects.get(slug='stories-de-testemunho')
         self.assertRedirects(
             response,
-            reverse('admin_external_media_version_create', args=[template.pk]),
+            reverse('admin_external_media_template_detail', args=[template.pk]),
         )
 
     def test_new_block_form_defaults_to_four_videos(self):
@@ -540,6 +1152,7 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertTrue(form.fields['allows_multiple'].initial)
         self.assertEqual(form.fields['min_occurrences'].initial, 1)
         self.assertEqual(form.fields['max_occurrences'].initial, 4)
+        self.assertIn('skip_extra_processing', form.fields)
 
     def test_admin_panel_can_publish_draft_version(self):
         MediaTemplateBlock.objects.create(
@@ -575,11 +1188,22 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
             'next': reverse('admin_external_media_version_edit', args=[self.version.pk]),
             'style-name': 'Legenda Feed',
             'style-font_name': 'Arial',
+            'style-font_weight': '600',
             'style-font_size': '44',
             'style-primary_color': '#FFFFFF',
+            'style-background_color': '#000000',
+            'style-background_opacity': '70',
+            'style-background_padding_x': '14',
+            'style-background_padding_y': '8',
+            'style-background_height_percent': '80',
+            'style-background_radius': '10',
             'style-outline_color': '#111111',
             'style-outline_width': '3',
-            'style-shadow': '1',
+            'style-shadow': '5',
+            'style-shadow_angle': '135',
+            'style-shadow_size': '2',
+            'style-shadow_blur': '3',
+            'style-shadow_opacity': '55',
             'style-margin_bottom': '80',
             'style-alignment': '2',
             'style-max_lines': '2',
@@ -589,6 +1213,39 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
         style = SubtitleStyle.objects.get(name='Legenda Feed')
         self.assertEqual(style.max_characters, 38)
+        self.assertEqual(style.font_weight, 600)
+        self.assertEqual(style.shadow, 5)
+        self.assertEqual(style.shadow_angle, 135)
+        self.assertEqual(style.shadow_size, 2)
+        self.assertEqual(style.shadow_blur, 3)
+        self.assertEqual(style.shadow_opacity, 55)
+        self.assertEqual(style.background_height_percent, 80)
+
+    def test_admin_panel_can_delete_unused_subtitle_style(self):
+        style = SubtitleStyle.objects.create(name='Estilo Temporário', font_size=40)
+        response = self.client.post(
+            reverse('admin_external_media_subtitle_style_delete', args=[style.pk]),
+            {'next': reverse('admin_external_media_version_edit', args=[self.version.pk])},
+        )
+        self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
+        self.assertFalse(SubtitleStyle.objects.filter(pk=style.pk).exists())
+
+    def test_admin_panel_can_delete_subtitle_style_in_use_by_template(self):
+        replacement = SubtitleStyle.objects.create(name='Estilo Reserva', font_size=41)
+        style = SubtitleStyle.objects.create(name='Estilo Descartável', font_size=42)
+        self.version.subtitle_style = style
+        self.version.translated_subtitle_style = style
+        self.version.save(update_fields=['subtitle_style', 'translated_subtitle_style', 'update_at'])
+
+        response = self.client.post(
+            reverse('admin_external_media_subtitle_style_delete', args=[style.pk]),
+            {'next': reverse('admin_external_media_version_edit', args=[self.version.pk])},
+        )
+        self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
+        self.assertFalse(SubtitleStyle.objects.filter(pk=style.pk).exists())
+        self.version.refresh_from_db()
+        self.assertEqual(self.version.subtitle_style_id, replacement.pk)
+        self.assertIsNone(self.version.translated_subtitle_style_id)
 
     def test_admin_panel_can_create_background_music_from_version_page(self):
         response = self.client.post(reverse('admin_external_media_background_music_save'), {
@@ -603,28 +1260,14 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertTrue(bool(music.audio_file))
 
     def test_admin_panel_saves_bilingual_language_strategy(self):
-        response = self.client.post(reverse('admin_external_media_version_edit', args=[self.version.pk]), {
-            'changelog': 'Configuração bilíngue.',
-            'preset': self.preset.pk,
-            'subtitle_style': self.style.pk,
-            'original_language': 'pt',
-            'language_mode': 'bilingual_source',
-            'spoken_languages': ['pt', 'en'],
-            'translated_language': 'en',
-            'default_settings_raw': '{}',
-            'allowed_overrides_raw': '[]',
-            'music_volume': '0.15',
-            'fade_in_seconds': '0',
-            'fade_out_seconds': '0',
-            'blocks-TOTAL_FORMS': '0',
-            'blocks-INITIAL_FORMS': '0',
-            'blocks-MIN_NUM_FORMS': '0',
-            'blocks-MAX_NUM_FORMS': '1000',
-            'plugins-TOTAL_FORMS': '0',
-            'plugins-INITIAL_FORMS': '0',
-            'plugins-MIN_NUM_FORMS': '0',
-            'plugins-MAX_NUM_FORMS': '1000',
-        })
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                language_mode='bilingual_source',
+                spoken_languages=['pt', 'en'],
+                translated_language='en',
+            ),
+        )
         self.assertRedirects(
             response,
             reverse('admin_external_media_template_detail', args=[self.template.pk]),
@@ -635,28 +1278,14 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(self.version.output_languages, ['pt', 'en'])
 
     def test_admin_panel_single_language_strategy_outputs_only_default_language(self):
-        response = self.client.post(reverse('admin_external_media_version_edit', args=[self.version.pk]), {
-            'changelog': 'Configuração de idioma único.',
-            'preset': self.preset.pk,
-            'subtitle_style': self.style.pk,
-            'original_language': 'pt',
-            'language_mode': 'single',
-            'spoken_languages': ['pt', 'en'],
-            'translated_language': 'en',
-            'default_settings_raw': '{}',
-            'allowed_overrides_raw': '[]',
-            'music_volume': '0.15',
-            'fade_in_seconds': '0',
-            'fade_out_seconds': '0',
-            'blocks-TOTAL_FORMS': '0',
-            'blocks-INITIAL_FORMS': '0',
-            'blocks-MIN_NUM_FORMS': '0',
-            'blocks-MAX_NUM_FORMS': '1000',
-            'plugins-TOTAL_FORMS': '0',
-            'plugins-INITIAL_FORMS': '0',
-            'plugins-MIN_NUM_FORMS': '0',
-            'plugins-MAX_NUM_FORMS': '1000',
-        })
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                language_mode='single',
+                spoken_languages=['pt', 'en'],
+                translated_language='en',
+            ),
+        )
         self.assertRedirects(
             response,
             reverse('admin_external_media_template_detail', args=[self.template.pk]),
@@ -667,28 +1296,14 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(self.version.output_languages, ['pt'])
 
     def test_admin_panel_translated_language_strategy_sets_translation_target(self):
-        response = self.client.post(reverse('admin_external_media_version_edit', args=[self.version.pk]), {
-            'changelog': 'Configuração traduzida.',
-            'preset': self.preset.pk,
-            'subtitle_style': self.style.pk,
-            'original_language': 'pt',
-            'language_mode': 'translated',
-            'spoken_languages': ['pt'],
-            'translated_language': 'en',
-            'default_settings_raw': '{}',
-            'allowed_overrides_raw': '[]',
-            'music_volume': '0.15',
-            'fade_in_seconds': '0',
-            'fade_out_seconds': '0',
-            'blocks-TOTAL_FORMS': '0',
-            'blocks-INITIAL_FORMS': '0',
-            'blocks-MIN_NUM_FORMS': '0',
-            'blocks-MAX_NUM_FORMS': '1000',
-            'plugins-TOTAL_FORMS': '0',
-            'plugins-INITIAL_FORMS': '0',
-            'plugins-MIN_NUM_FORMS': '0',
-            'plugins-MAX_NUM_FORMS': '1000',
-        })
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                language_mode='translated',
+                spoken_languages=['pt'],
+                translated_language='en',
+            ),
+        )
         self.assertRedirects(
             response,
             reverse('admin_external_media_template_detail', args=[self.template.pk]),
@@ -699,39 +1314,26 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(self.version.output_languages, ['pt', 'en'])
 
     def test_admin_panel_can_create_multiple_blocks_in_one_version_save(self):
-        response = self.client.post(reverse('admin_external_media_version_edit', args=[self.version.pk]), {
-            'changelog': 'Blocos configurados.',
-            'preset': self.preset.pk,
-            'subtitle_style': self.style.pk,
-            'original_language': 'pt',
-            'language_mode': 'translated',
-            'translated_language': 'en',
-            'default_settings_raw': '{}',
-            'allowed_overrides_raw': '[]',
-            'music_volume': '0.15',
-            'fade_in_seconds': '0',
-            'fade_out_seconds': '0',
-            'blocks-TOTAL_FORMS': '2',
-            'blocks-INITIAL_FORMS': '0',
-            'blocks-MIN_NUM_FORMS': '0',
-            'blocks-MAX_NUM_FORMS': '1000',
-            'blocks-0-name': 'Encerramento',
-            'blocks-0-description': 'Tela final do vídeo.',
-            'blocks-0-order': '2',
-            'blocks-0-is_required': 'on',
-            'blocks-0-min_occurrences': '1',
-            'blocks-0-max_occurrences': '1',
-            'blocks-1-name': 'Mensagem principal',
-            'blocks-1-description': 'Vídeo principal.',
-            'blocks-1-order': '1',
-            'blocks-1-is_required': 'on',
-            'blocks-1-min_occurrences': '1',
-            'blocks-1-max_occurrences': '1',
-            'plugins-TOTAL_FORMS': '0',
-            'plugins-INITIAL_FORMS': '0',
-            'plugins-MIN_NUM_FORMS': '0',
-            'plugins-MAX_NUM_FORMS': '1000',
-        })
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                **{
+                    'blocks-TOTAL_FORMS': '2',
+                    'blocks-0-name': 'Encerramento',
+                    'blocks-0-description': 'Tela final do vídeo.',
+                    'blocks-0-order': '2',
+                    'blocks-0-is_required': 'on',
+                    'blocks-0-min_occurrences': '1',
+                    'blocks-0-max_occurrences': '1',
+                    'blocks-1-name': 'Mensagem principal',
+                    'blocks-1-description': 'Vídeo principal.',
+                    'blocks-1-order': '1',
+                    'blocks-1-is_required': 'on',
+                    'blocks-1-min_occurrences': '1',
+                    'blocks-1-max_occurrences': '1',
+                },
+            ),
+        )
         self.assertRedirects(
             response,
             reverse('admin_external_media_template_detail', args=[self.template.pk]),
@@ -741,30 +1343,45 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual([block.key for block in blocks], ['mensagem-principal', 'encerramento'])
         self.assertEqual([block.max_occurrences for block in blocks], [1, 1])
 
+    def test_admin_panel_does_not_create_empty_block_on_save(self):
+        block = MediaTemplateBlock.objects.create(
+            version=self.version, key='video', name='Vídeo', order=1,
+            is_required=True, min_occurrences=1, max_occurrences=1,
+        )
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                **{
+                    'blocks-TOTAL_FORMS': '2',
+                    'blocks-INITIAL_FORMS': '1',
+                    'blocks-0-id': str(block.pk),
+                    'blocks-0-key': block.key,
+                    'blocks-0-name': block.name,
+                    'blocks-0-order': str(block.order),
+                    'blocks-0-is_required': 'on',
+                    'blocks-0-min_occurrences': '1',
+                    'blocks-0-max_occurrences': '1',
+                },
+            ),
+        )
+        self.assertRedirects(
+            response,
+            reverse('admin_external_media_template_detail', args=[self.template.pk]),
+        )
+        self.assertEqual(self.version.blocks.count(), 1)
+
     def test_admin_panel_uses_checkboxes_for_advanced_plugins(self):
-        response = self.client.post(reverse('admin_external_media_version_edit', args=[self.version.pk]), {
-            'changelog': 'Com ajustes extras.',
-            'preset': self.preset.pk,
-            'subtitle_style': self.style.pk,
-            'original_language': 'pt',
-            'language_mode': 'translated',
-            'translated_language': 'en',
-            'advanced_plugins': [
-                MediaTemplatePlugin.Code.SILENCE_REMOVAL,
-                MediaTemplatePlugin.Code.FILLER_REMOVAL,
-            ],
-            'speech_edit_profile': 'conservative',
-            'filler_words': 'eh, hum, tipo',
-            'default_settings_raw': '{}',
-            'allowed_overrides_raw': '[]',
-            'music_volume': '0.15',
-            'fade_in_seconds': '0',
-            'fade_out_seconds': '0',
-            'blocks-TOTAL_FORMS': '0',
-            'blocks-INITIAL_FORMS': '0',
-            'blocks-MIN_NUM_FORMS': '0',
-            'blocks-MAX_NUM_FORMS': '1000',
-        })
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                advanced_plugins=[
+                    MediaTemplatePlugin.Code.SILENCE_REMOVAL,
+                    MediaTemplatePlugin.Code.FILLER_REMOVAL,
+                ],
+                speech_edit_profile='conservative',
+                filler_words='eh, hum, tipo',
+            ),
+        )
         self.assertRedirects(
             response,
             reverse('admin_external_media_template_detail', args=[self.template.pk]),
@@ -781,21 +1398,14 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(fillers.configuration['filler_words'], ['eh', 'hum', 'tipo'])
 
     def test_admin_panel_saves_auto_reframe_priority(self):
-        response = self.client.post(reverse('admin_external_media_version_edit', args=[self.version.pk]), {
-            'changelog': 'Auto Reframe para apresentações.',
-            'preset': self.preset.pk,
-            'subtitle_style': self.style.pk,
-            'original_language': 'pt',
-            'language_mode': 'single',
-            'advanced_plugins': [MediaTemplatePlugin.Code.AUTO_TRACKING],
-            'auto_reframe_priority': 'body',
-            'default_settings_raw': '{}',
-            'allowed_overrides_raw': '[]',
-            'blocks-TOTAL_FORMS': '0',
-            'blocks-INITIAL_FORMS': '0',
-            'blocks-MIN_NUM_FORMS': '0',
-            'blocks-MAX_NUM_FORMS': '1000',
-        })
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                language_mode='single',
+                advanced_plugins=[MediaTemplatePlugin.Code.AUTO_TRACKING],
+                auto_reframe_priority='body',
+            ),
+        )
         self.assertRedirects(
             response,
             reverse('admin_external_media_template_detail', args=[self.template.pk]),
@@ -825,6 +1435,96 @@ class ExternalMediaRetryTests(ExternalMediaFixtureMixin, TestCase):
         job.refresh_from_db()
         self.assertEqual(job.status, ExternalMediaJob.Status.PENDING)
         self.assertEqual(job.celery_task_id, 'task-retry-job')
+
+
+class TranscriptionGroupingTests(SimpleTestCase):
+    def test_group_for_subtitles_merges_close_words_without_boundaries(self):
+        words = [
+            TranscriptionSegment(0, 300, 'Bom', 'word'),
+            TranscriptionSegment(320, 600, 'dia', 'word'),
+            TranscriptionSegment(650, 900, 'igreja', 'word'),
+        ]
+        cues = TranscriptionService.group_for_subtitles(words)
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].text, 'Bom dia igreja')
+
+    def test_group_for_subtitles_splits_cue_at_block_boundary(self):
+        # Without a boundary these five words (all within 900ms of each other) would be
+        # merged into a single cue, mixing the end of block "a" with the start of block "b".
+        words = [
+            TranscriptionSegment(0, 300, 'Bom', 'word'),
+            TranscriptionSegment(320, 600, 'dia', 'word'),
+            TranscriptionSegment(650, 900, 'igreja', 'word'),
+            TranscriptionSegment(950, 1200, 'Vamos', 'word'),
+            TranscriptionSegment(1220, 1500, 'começar', 'word'),
+        ]
+        cues = TranscriptionService.group_for_subtitles(words, block_boundaries_ms=[900])
+
+        self.assertEqual(len(cues), 2)
+        self.assertEqual(cues[0].text, 'Bom dia igreja')
+        self.assertEqual(cues[0].end_ms, 900)
+        self.assertEqual(cues[1].text, 'Vamos começar')
+        self.assertEqual(cues[1].start_ms, 950)
+
+    def test_group_for_subtitles_ignores_boundaries_far_from_any_word(self):
+        words = [
+            TranscriptionSegment(0, 300, 'Bom', 'word'),
+            TranscriptionSegment(320, 600, 'dia', 'word'),
+        ]
+        cues = TranscriptionService.group_for_subtitles(words, block_boundaries_ms=[50000])
+        self.assertEqual(len(cues), 1)
+        self.assertEqual(cues[0].text, 'Bom dia')
+
+    def test_group_for_subtitles_keeps_segment_level_transcripts_untouched(self):
+        segments = [TranscriptionSegment(0, 900, 'Bom dia igreja', 'segment')]
+        cues = TranscriptionService.group_for_subtitles(segments, block_boundaries_ms=[400])
+        self.assertEqual(cues, segments)
+
+    def test_block_boundaries_ms_reads_configured_block_ranges(self):
+        job = SimpleNamespace(project=SimpleNamespace(configuration={
+            'block_ranges': [
+                {'start_ms': 0, 'end_ms': 1000},
+                {'start_ms': 1000, 'end_ms': 2500},
+                {'start_ms': 2500, 'end_ms': 2500},
+            ],
+        }))
+        boundaries = ExternalMediaPipeline._block_boundaries_ms(job)
+        self.assertEqual(boundaries, [1000, 2500])
+
+    def test_block_boundaries_ms_returns_empty_without_project(self):
+        job = SimpleNamespace(project=None)
+        self.assertEqual(ExternalMediaPipeline._block_boundaries_ms(job), [])
+
+
+class ProtectedFileResponseRangeTests(SimpleTestCase):
+    def test_preview_supports_http_range_for_video_seeking(self):
+        with tempfile.TemporaryDirectory() as directory:
+            storage = FileSystemStorage(location=directory)
+            payload = b'0123456789ABCDEFGHIJ'
+            name = storage.save('seek-test.bin', ContentFile(payload))
+
+            class FakeFieldFile:
+                def __init__(self):
+                    self.name = name
+                    self.storage = storage
+                    self.size = len(payload)
+
+                def open(self, mode='rb'):
+                    return storage.open(self.name, mode)
+
+            factory = RequestFactory()
+            response = protected_file_response(
+                factory.get('/asset?preview=1', HTTP_RANGE='bytes=4-8'),
+                FakeFieldFile(),
+            )
+            self.assertEqual(response.status_code, 206)
+            self.assertEqual(response['Accept-Ranges'], 'bytes')
+            self.assertEqual(response['Content-Range'], 'bytes 4-8/20')
+            self.assertEqual(b''.join(response.streaming_content), b'45678')
+
+            full = protected_file_response(factory.get('/asset?preview=1'), FakeFieldFile())
+            self.assertEqual(full.status_code, 200)
+            self.assertEqual(full['Accept-Ranges'], 'bytes')
 
 
 class FFmpegRenderSmokeTests(SimpleTestCase):
@@ -877,6 +1577,12 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         remapped = plan.remap_words([TranscriptionSegment(1200, 1500, 'Depois', 'word')])
         self.assertEqual(remapped[0].start_ms, 700)
         self.assertEqual(remapped[0].end_ms, 1000)
+
+    def test_remap_time_shifts_only_timestamps_after_the_cut(self):
+        plan = SpeechEditPlan((SpeechCut(500, 1000, 'silence'),), 2000, crossfade_ms=40)
+        self.assertEqual(plan.remap_time(300), 300)
+        self.assertEqual(plan.remap_time(1200), 700)
+        self.assertEqual(plan.remap_time(0), 0)
 
     def test_speech_edit_ffmpeg_applies_lightweight_join(self):
         runner = FFmpegRunner()
@@ -971,6 +1677,30 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             (608, 1080),
         )
 
+    def test_auto_reframe_zooms_in_to_center_off_center_person_on_wide_ratio(self):
+        # 16:5 banner output from a 16:9 source: cover_crop_size uses the full source width
+        # (1920, 600), leaving zero room to pan horizontally. Without extra zoom, an off-center
+        # person would stay wherever the original footage framed them instead of being centered.
+        service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
+        source_width, source_height = 1920, 1080
+        cover_width, cover_height = AutoReframeService.cover_crop_size(source_width, source_height, 3840, 1200)
+        target_ratio = 3840 / 1200
+        # Face box left-of-center in the source frame.
+        observations = [(0.0, (346.0, 273.6, 874.0, 840.0))]
+        crop_width, crop_height = service._smart_crop_size(
+            observations, cover_width, cover_height, source_width, source_height, target_ratio,
+        )
+        self.assertLess(crop_width, cover_width)
+        center_x = (346.0 + 874.0) / 2.0
+        max_x = source_width - crop_width
+        ideal_x = center_x - crop_width / 2.0
+        # The crop must now be narrow enough that the ideal centered position is reachable
+        # without hitting the [0, max_x] pan-range clamp.
+        self.assertGreaterEqual(ideal_x, -1)
+        self.assertLessEqual(ideal_x, max_x + 1)
+        # Still wide enough to keep the detected person fully framed.
+        self.assertGreaterEqual(crop_width, (874.0 - 346.0) * 1.3 - 2)
+
     def test_auto_reframe_vertical_crop_preserves_headroom(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
         centered_y = ((290 + 850) / 2) - (600 / 2)
@@ -1052,6 +1782,43 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(round(keyframes[0].x), 0)
         self.assertGreater(round(keyframes[1].x), 160)
 
+    def test_auto_reframe_fast_start_centers_horizontally_within_opening_second(self):
+        service = AutoReframeService(
+            priority='face',
+            safe_margin=0.15,
+            top_margin=0.18,
+            smoothing=0.18,
+        )
+        keyframes = service._smooth_keyframes(
+            observations=[
+                (0.0, (100, 290, 300, 850)),
+                (0.33, (700, 290, 900, 850)),
+                (0.66, (700, 290, 900, 850)),
+                (1.0, (700, 290, 900, 850)),
+            ],
+            crop_width=608,
+            crop_height=1080,
+            source_width=1920,
+            source_height=1080,
+        )
+        target_x = min(1920 - 608, max(0.0, 800 - 608 / 2))
+        by_time = {round(keyframe.time_seconds, 2): round(keyframe.x) for keyframe in keyframes}
+        self.assertIn(0.0, [round(keyframe.time_seconds, 2) for keyframe in keyframes])
+        self.assertGreaterEqual(by_time[1.0], round(target_x * 0.85))
+
+    def test_auto_reframe_expression_holds_first_keyframe_before_sample_time(self):
+        plan = AutoReframePlan(
+            crop_width=1080,
+            crop_height=1920,
+            keyframes=(
+                ReframeKeyframe(0.5, 120.0, 40.0),
+                ReframeKeyframe(2.0, 420.0, 40.0),
+            ),
+        )
+        x_expression = plan._expression(plan.keyframes, 'x')
+        self.assertIn('if(lt(t\\,0.500)', x_expression)
+        self.assertIn('120.000', x_expression)
+
     def test_video_assembly_normalizes_and_concatenates_two_clips(self):
         runner = FFmpegRunner()
         preset = SimpleNamespace(width=320, height=240)
@@ -1067,9 +1834,16 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
                 ])
                 sources.append(source)
             output = workdir / 'assembled.mp4'
-            VideoAssemblyService(runner=runner).assemble(sources, output, preset, workdir)
+            service = VideoAssemblyService(runner=runner)
+            service.assemble(sources, output, preset, workdir)
             self.assertTrue(output.exists())
             self.assertGreater(output.stat().st_size, 0)
+            # Every clip (not just "manter intacto" ones) must have a timeline range recorded,
+            # so subtitles generated later can be kept from bleeding across block boundaries.
+            self.assertEqual(len(service.last_block_ranges), 2)
+            self.assertEqual(service.last_block_ranges[0]['start_ms'], 0)
+            self.assertEqual(service.last_block_ranges[0]['end_ms'], service.last_block_ranges[1]['start_ms'])
+            self.assertGreater(service.last_block_ranges[1]['end_ms'], service.last_block_ranges[1]['start_ms'])
 
     def test_video_assembly_creates_lightweight_proxy(self):
         runner = FFmpegRunner()
@@ -1112,7 +1886,8 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             ).as_dict(),
         }
 
-        with patch.object(VideoAssemblyService, '_has_audio', return_value=True), \
+        with patch.object(VideoAssemblyService, '_duration_ms', return_value=1000), \
+                patch.object(VideoAssemblyService, '_has_audio', return_value=True), \
                 patch.object(VideoAssemblyService, '_video_dimensions', return_value=(1920, 1080)), \
                 patch.object(AutoReframeService, 'analyze') as analyze:
             service = VideoAssemblyService(runner=runner)
@@ -1126,6 +1901,49 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         command = runner.run.call_args_list[1].args[0]
         filters = command[command.index('-vf') + 1]
         self.assertIn('crop=1920:600', filters)
+
+    def test_video_assembly_skips_extra_processing_for_protected_source(self):
+        runner = Mock()
+        runner.run.side_effect = [
+            '{"streams":[{}]}',
+            '',
+            '',
+        ]
+        source = AssemblySource(
+            Path('/tmp/intro.mp4'),
+            label='intro',
+            block_id=7,
+            block_key='intro',
+            block_name='Intro',
+            skip_extra_processing=True,
+        )
+        output = Path('/tmp/output.mp4')
+        workdir = Path('/tmp')
+        preset = SimpleNamespace(width=3840, height=1200)
+
+        with patch.object(VideoAssemblyService, '_duration_ms', return_value=2300), \
+                patch.object(VideoAssemblyService, '_has_audio', return_value=True), \
+                patch.object(VideoAssemblyService, '_video_dimensions', return_value=(1920, 1080)), \
+                patch.object(AutoReframeService, 'analyze') as analyze:
+            service = VideoAssemblyService(runner=runner)
+            service.assemble(
+                [source], output, preset, workdir,
+                auto_reframe_config={'priority': 'face'},
+            )
+
+        analyze.assert_not_called()
+        self.assertEqual(service.last_reframe_plans, [None])
+        self.assertEqual(service.last_protected_ranges[0]['block_key'], 'intro')
+        self.assertEqual(service.last_protected_ranges[0]['start_ms'], 0)
+        self.assertEqual(service.last_protected_ranges[0]['end_ms'], 2300)
+        self.assertEqual(service.last_block_ranges[0]['block_key'], 'intro')
+        self.assertEqual(service.last_block_ranges[0]['start_ms'], 0)
+        self.assertEqual(service.last_block_ranges[0]['end_ms'], 2300)
+        command = runner.run.call_args_list[1].args[0]
+        filters = command[command.index('-vf') + 1]
+        self.assertIn('force_original_aspect_ratio=decrease', filters)
+        self.assertIn('pad=3840:1200', filters)
+        self.assertNotIn('crop=3840:1200', filters)
 
     def test_render_command_uses_fast_h264_and_bt709_output(self):
         class CueList(list):

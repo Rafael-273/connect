@@ -3,8 +3,9 @@ import json
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
@@ -20,9 +21,8 @@ from ...forms.admin_external_media import (
 )
 from ...models.music import Music
 from ...models.external_media import (
+    ExternalMediaJob,
     MediaTemplate,
-    MediaTemplateBlock,
-    MediaTemplatePlugin,
     MediaTemplateVersion,
     RenderPreset,
     SubtitleStyle,
@@ -35,10 +35,7 @@ class AdminExternalMediaTemplateListView(LoginRequiredMixin, AdminRequiredMixin,
         search = request.GET.get('search', '').strip()
         status = request.GET.get('status', '').strip()
 
-        templates = MediaTemplate.objects.annotate(
-            versions_count=Count('versions', distinct=True),
-            projects_count=Count('versions__projects', distinct=True),
-        )
+        templates = MediaTemplate.objects.all()
         if search:
             templates = templates.filter(Q(name__icontains=search) | Q(description__icontains=search))
         if status == 'active':
@@ -46,75 +43,110 @@ class AdminExternalMediaTemplateListView(LoginRequiredMixin, AdminRequiredMixin,
         elif status == 'inactive':
             templates = templates.filter(is_active=False)
 
+        templates = list(templates.order_by('name'))
+        for template in templates:
+            current_version = template.current_version
+            template.blocks_count = current_version.blocks.count() if current_version else 0
+            template.projects_count = current_version.projects.count() if current_version else 0
+
         return render(request, 'admin_panel/external_media/templates.html', {
-            'templates': templates.order_by('name'),
+            'templates': templates,
             'search': search,
             'status': status,
             'stats': {
                 'total': MediaTemplate.objects.count(),
-                'published': MediaTemplateVersion.objects.filter(status=MediaTemplateVersion.Status.PUBLISHED).count(),
-                'drafts': MediaTemplateVersion.objects.filter(status=MediaTemplateVersion.Status.DRAFT).count(),
+                'active': MediaTemplate.objects.filter(is_active=True).count(),
+                'projects': MediaTemplateVersion.objects.aggregate(total=Count('projects', distinct=True))['total'],
             },
         })
 
 
-class AdminExternalMediaTemplateCreateView(LoginRequiredMixin, AdminRequiredMixin, View):
-    template_name = 'admin_panel/external_media/template_form.html'
+def get_or_create_current_media_version(template):
+    current = template.current_version
+    if current:
+        return current
+    preset = RenderPreset.objects.filter(is_active=True).order_by('name').first() or RenderPreset.objects.order_by('name').first()
+    if not preset:
+        return None
+    style = SubtitleStyle.objects.filter(is_active=True).order_by('name').first()
+    return MediaTemplateVersion.objects.create(
+        template=template,
+        version=1,
+        status=MediaTemplateVersion.Status.PUBLISHED,
+        published_at=timezone.now(),
+        preset=preset,
+        subtitle_style=style,
+        translated_subtitle_style=style,
+        original_language='pt',
+        output_languages=['pt'],
+        default_settings={'language_mode': 'single', 'spoken_languages': ['pt'], 'translated_language': ''},
+    )
 
-    def get(self, request):
-        return render(request, self.template_name, {
-            'form': AdminMediaTemplateForm(),
-            'title': 'Novo Template de Midia',
-        })
 
-    def post(self, request):
-        form = AdminMediaTemplateForm(request.POST, request.FILES)
-        if form.is_valid():
-            template = form.save()
-            messages.success(request, f'Template "{template.name}" criado. Agora crie a primeira versão.')
-            return redirect('admin_external_media_version_create', template_id=template.id)
-        messages.error(request, 'Revise os dados do template.')
-        return render(request, self.template_name, {'form': form, 'title': 'Novo Template de Midia'})
+def delete_subtitle_style(style):
+    replacement = (
+        SubtitleStyle.objects.filter(is_active=True)
+        .exclude(pk=style.pk)
+        .order_by('name')
+        .first()
+    )
+    jobs_using_style = ExternalMediaJob.objects.filter(subtitle_style=style).exists()
+    if jobs_using_style and not replacement:
+        return False, (
+            f'Estilo "{style.name}" não pode ser removido porque é o único disponível '
+            'e ainda está vinculado a processamentos antigos.'
+        )
+
+    with transaction.atomic():
+        MediaTemplateVersion.objects.filter(translated_subtitle_style=style).update(
+            translated_subtitle_style=None,
+        )
+        MediaTemplateVersion.objects.filter(subtitle_style=style).update(
+            subtitle_style=replacement,
+        )
+        ExternalMediaJob.objects.filter(translated_subtitle_style=style).update(
+            translated_subtitle_style=None,
+        )
+        if replacement:
+            ExternalMediaJob.objects.filter(subtitle_style=style).update(
+                subtitle_style=replacement,
+            )
+        style.delete()
+    return True, replacement
 
 
 class AdminExternalMediaTemplateEditView(LoginRequiredMixin, AdminRequiredMixin, View):
-    template_name = 'admin_panel/external_media/template_form.html'
-
     def get(self, request, template_id):
         template = get_object_or_404(MediaTemplate, id=template_id)
-        return render(request, self.template_name, {
-            'form': AdminMediaTemplateForm(instance=template),
-            'template': template,
-            'title': f'Editar Template: {template.name}',
-        })
+        version = get_or_create_current_media_version(template)
+        if version is None:
+            messages.warning(request, 'Cadastre um preset de renderização antes de editar templates de mídia.')
+            return redirect('admin_external_media_template_detail', template_id=template.id)
+        return redirect('admin_external_media_version_edit', version_id=version.id)
 
     def post(self, request, template_id):
-        template = get_object_or_404(MediaTemplate, id=template_id)
-        form = AdminMediaTemplateForm(request.POST, request.FILES, instance=template)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f'Template "{template.name}" atualizado.')
-            return redirect('admin_external_media_template_detail', template_id=template.id)
-        messages.error(request, 'Revise os dados do template.')
-        return render(request, self.template_name, {
-            'form': form,
-            'template': template,
-            'title': f'Editar Template: {template.name}',
-        })
+        return self.get(request, template_id)
 
 
 class AdminExternalMediaTemplateDetailView(LoginRequiredMixin, AdminRequiredMixin, View):
     def get(self, request, template_id):
         template = get_object_or_404(MediaTemplate, id=template_id)
-        versions = template.versions.select_related('preset', 'subtitle_style', 'translated_subtitle_style').annotate(
-            blocks_count=Count('blocks', distinct=True),
-            plugins_count=Count('plugins', distinct=True),
-            projects_count=Count('projects', distinct=True),
-        )
+        current_version = get_or_create_current_media_version(template)
+        if current_version is None:
+            messages.warning(request, 'Cadastre um preset de renderização para configurar este template.')
+        if current_version:
+            current_version = (
+                MediaTemplateVersion.objects.select_related('preset', 'subtitle_style', 'translated_subtitle_style')
+                .annotate(
+                    blocks_count=Count('blocks', distinct=True),
+                    plugins_count=Count('plugins', distinct=True),
+                    projects_count=Count('projects', distinct=True),
+                )
+                .get(pk=current_version.pk)
+            )
         return render(request, 'admin_panel/external_media/template_detail.html', {
             'template': template,
-            'versions': versions,
-            'published_version': template.published_version,
+            'current_version': current_version,
         })
 
 
@@ -122,67 +154,129 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
     template_name = 'admin_panel/external_media/version_form.html'
 
     def get(self, request, template_id=None, version_id=None):
-        template, version = self._resolve_objects(template_id, version_id)
-        if version and version.status != MediaTemplateVersion.Status.DRAFT:
-            messages.info(request, 'Versões publicadas ficam congeladas. Duplique para criar uma nova versão editável.')
-            return redirect('admin_external_media_template_detail', template_id=version.template_id)
-        return render(request, self.template_name, self._context(template, version))
+        template, version, is_create = self._resolve_objects(template_id, version_id)
+        if is_create and template is None:
+            messages.warning(request, 'Cadastre um preset de renderização antes de criar templates de mídia.')
+            return redirect('admin_external_media_templates')
+        return render(request, self.template_name, self._context(template, version, is_create=is_create))
 
     def post(self, request, template_id=None, version_id=None):
-        template, version = self._resolve_objects(template_id, version_id)
-        if version and version.status != MediaTemplateVersion.Status.DRAFT:
-            messages.error(request, 'Esta versão já foi publicada e não pode ser editada.')
-            return redirect('admin_external_media_template_detail', template_id=version.template_id)
+        template, version, is_create = self._resolve_objects(template_id, version_id)
+        if is_create and template is None:
+            messages.warning(request, 'Cadastre um preset de renderização antes de criar templates de mídia.')
+            return redirect('admin_external_media_templates')
 
+        template_form = AdminMediaTemplateForm(
+            request.POST,
+            request.FILES,
+            instance=template if template.pk else None,
+        )
         form = AdminMediaTemplateVersionForm(request.POST, request.FILES, instance=version)
-        candidate = version or MediaTemplateVersion(template=template, version=self._next_version(template))
         block_formset = AdminMediaTemplateBlockFormSet(
-            request.POST, request.FILES, instance=candidate, prefix='blocks',
+            request.POST, request.FILES, instance=version, prefix='blocks',
         )
 
-        if form.is_valid() and block_formset.is_valid():
+        if template_form.is_valid() and form.is_valid() and block_formset.is_valid():
             with transaction.atomic():
+                saved_template = template_form.save()
                 saved_version = form.save(commit=False)
-                if not saved_version.pk:
-                    saved_version.template = template
-                    saved_version.version = candidate.version
-                saved_version.status = MediaTemplateVersion.Status.DRAFT
+                saved_version.template = saved_template
+                saved_version.version = version.version or 1
+                saved_version.status = MediaTemplateVersion.Status.PUBLISHED
+                saved_version.published_at = saved_version.published_at or timezone.now()
                 saved_version.save()
                 block_formset.instance = saved_version
                 block_formset.save()
                 form.sync_advanced_plugins(saved_version)
-            messages.success(request, f'Versão v{saved_version.version} salva como rascunho.')
-            return redirect('admin_external_media_template_detail', template_id=saved_version.template_id)
+            action = 'criado' if is_create else 'atualizado'
+            messages.success(request, f'Template "{saved_template.name}" {action}.')
+            return redirect('admin_external_media_template_detail', template_id=saved_template.id)
 
-        messages.error(request, 'Revise a versão e os blocos.')
-        return render(request, self.template_name, self._context(template, version, form, block_formset))
+        messages.error(request, 'Revise o template e os blocos.')
+        return render(
+            request,
+            self.template_name,
+            self._context(template, version, form, block_formset, template_form, is_create=is_create),
+        )
 
     @staticmethod
-    def _next_version(template):
-        return (template.versions.aggregate(last=Max('version'))['last'] or 0) + 1
+    def _default_preset_and_style():
+        preset = (
+            RenderPreset.objects.filter(is_active=True).order_by('name').first()
+            or RenderPreset.objects.order_by('name').first()
+        )
+        style = SubtitleStyle.objects.filter(is_active=True).order_by('name').first()
+        return preset, style
 
     @staticmethod
-    def _resolve_objects(template_id, version_id):
+    def _new_template_and_version():
+        preset, style = AdminExternalMediaVersionFormView._default_preset_and_style()
+        if not preset:
+            return None, None
+        template = MediaTemplate()
+        version = MediaTemplateVersion(
+            preset=preset,
+            subtitle_style=style,
+            translated_subtitle_style=style,
+            original_language='pt',
+            output_languages=['pt'],
+            default_settings={
+                'language_mode': 'translated',
+                'spoken_languages': ['pt'],
+                'translated_language': '',
+            },
+            version=1,
+            status=MediaTemplateVersion.Status.PUBLISHED,
+        )
+        return template, version
+
+    @staticmethod
+    def _resolve_objects(template_id=None, version_id=None):
         if version_id:
             version = get_object_or_404(MediaTemplateVersion.objects.select_related('template'), id=version_id)
-            return version.template, version
-        return get_object_or_404(MediaTemplate, id=template_id), None
+            return version.template, version, False
+        if template_id:
+            template = get_object_or_404(MediaTemplate, id=template_id)
+            version = get_or_create_current_media_version(template)
+            if version is None:
+                raise Http404('Cadastre um preset de renderização antes de configurar templates de mídia.')
+            return template, version, False
+        template, version = AdminExternalMediaVersionFormView._new_template_and_version()
+        if template is None:
+            return None, None, True
+        return template, version, True
 
-    def _context(self, template, version, form=None, block_formset=None):
+    def _context(
+        self,
+        template,
+        version,
+        form=None,
+        block_formset=None,
+        template_form=None,
+        is_create=False,
+    ):
+        if template_form is None:
+            template_form = AdminMediaTemplateForm(instance=template if template.pk else None)
         if form is None:
             form = AdminMediaTemplateVersionForm(instance=version)
-        instance = version or MediaTemplateVersion(template=template)
         if block_formset is None:
-            block_formset = AdminMediaTemplateBlockFormSet(instance=instance, prefix='blocks')
-        version_label = f'v{version.version}' if version else f'v{self._next_version(template)}'
-        render_presets = RenderPreset.objects.order_by('name')
-        subtitle_styles = SubtitleStyle.objects.order_by('name')
-        background_musics = Music.objects.order_by('name', 'singer')
+            block_formset = AdminMediaTemplateBlockFormSet(instance=version, prefix='blocks')
+        render_presets = list(RenderPreset.objects.order_by('name'))
+        subtitle_styles = list(SubtitleStyle.objects.order_by('name'))
+        background_musics = list(Music.objects.order_by('name', 'singer'))
+        if is_create:
+            title = 'Novo Template de Mídia'
+        elif template.pk:
+            title = f'Editar Template: {template.name}'
+        else:
+            title = 'Novo Template de Mídia'
         return {
             'template': template,
             'version': version,
+            'template_form': template_form,
             'form': form,
             'block_formset': block_formset,
+            'is_create': is_create,
             'render_presets': render_presets,
             'render_preset_rows': [
                 {'preset': preset, 'extra_args_json': json.dumps(preset.extra_ffmpeg_args or [])}
@@ -193,81 +287,25 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             'preset_form': AdminRenderPresetForm(prefix='preset'),
             'style_form': AdminSubtitleStyleForm(prefix='style'),
             'music_form': AdminBackgroundMusicForm(prefix='bgmusic'),
-            'title': f'{template.name} {version_label}',
+            'title': title,
         }
 
 
 class AdminExternalMediaVersionPublishView(LoginRequiredMixin, AdminRequiredMixin, View):
     def post(self, request, version_id):
         version = get_object_or_404(MediaTemplateVersion.objects.select_related('template'), id=version_id)
-        if not version.blocks.exists():
-            messages.error(request, 'Adicione pelo menos um bloco antes de publicar.')
-            return redirect('admin_external_media_template_detail', template_id=version.template_id)
-
         version.status = MediaTemplateVersion.Status.PUBLISHED
         version.published_at = version.published_at or timezone.now()
         version.save(update_fields=['status', 'published_at', 'update_at'])
-        messages.success(request, f'{version.template.name} v{version.version} publicada.')
+        messages.success(request, f'Template "{version.template.name}" atualizado.')
         return redirect('admin_external_media_template_detail', template_id=version.template_id)
 
 
 class AdminExternalMediaVersionDuplicateView(LoginRequiredMixin, AdminRequiredMixin, View):
     def post(self, request, version_id):
-        source = get_object_or_404(
-            MediaTemplateVersion.objects.prefetch_related('blocks', 'plugins').select_related('template'),
-            id=version_id,
-        )
-        with transaction.atomic():
-            clone = MediaTemplateVersion.objects.create(
-                template=source.template,
-                version=AdminExternalMediaVersionFormView._next_version(source.template),
-                status=MediaTemplateVersion.Status.DRAFT,
-                changelog=f'Criada a partir da versão {source.version}.',
-                preset=source.preset,
-                subtitle_style=source.subtitle_style,
-                translated_subtitle_style=source.translated_subtitle_style,
-                original_language=source.original_language,
-                output_languages=list(source.output_languages),
-                default_settings=dict(source.default_settings),
-                allowed_overrides=list(source.allowed_overrides),
-                intro_video=source.intro_video.name,
-                outro_video=source.outro_video.name,
-                lut_file=source.lut_file.name,
-                background_music=source.background_music,
-                music_file=source.music_file.name,
-                music_volume=source.music_volume,
-                fade_in_seconds=source.fade_in_seconds,
-                fade_out_seconds=source.fade_out_seconds,
-            )
-            MediaTemplateBlock.objects.bulk_create([
-                MediaTemplateBlock(
-                    version=clone,
-                    key=block.key,
-                    name=block.name,
-                    description=block.description,
-                    order=block.order,
-                    is_required=block.is_required,
-                    allows_multiple=block.allows_multiple,
-                    min_occurrences=block.min_occurrences,
-                    max_occurrences=block.max_occurrences,
-                    default_video=block.default_video.name,
-                )
-                for block in source.blocks.all()
-            ])
-            MediaTemplatePlugin.objects.bulk_create([
-                MediaTemplatePlugin(
-                    version=clone,
-                    code=plugin.code,
-                    order=plugin.order,
-                    is_enabled=plugin.is_enabled,
-                    user_can_override=plugin.user_can_override,
-                    configuration=dict(plugin.configuration),
-                )
-                for plugin in source.plugins.all()
-            ])
-
-        messages.success(request, f'Nova versão v{clone.version} criada como rascunho.')
-        return redirect('admin_external_media_version_edit', version_id=clone.id)
+        version = get_object_or_404(MediaTemplateVersion.objects.select_related('template'), id=version_id)
+        messages.info(request, 'A criação de versões foi removida. Edite o template atual diretamente.')
+        return redirect('admin_external_media_version_edit', version_id=version.id)
 
 
 class AdminExternalMediaAssetRedirectMixin:
@@ -345,13 +383,17 @@ class AdminExternalMediaSubtitleStyleDeleteView(LoginRequiredMixin, AdminRequire
     def post(self, request, style_id):
         style = get_object_or_404(SubtitleStyle, id=style_id)
         name = style.name
-        try:
-            style.delete()
-            messages.success(request, f'Estilo "{name}" removido.')
-        except ProtectedError:
-            style.is_active = False
-            style.save(update_fields=['is_active', 'update_at'])
-            messages.warning(request, f'Estilo "{name}" está em uso e foi desativado.')
+        deleted, result = delete_subtitle_style(style)
+        if deleted:
+            if result:
+                messages.success(
+                    request,
+                    f'Estilo "{name}" removido. Templates e processamentos antigos passaram a usar "{result.name}".',
+                )
+            else:
+                messages.success(request, f'Estilo "{name}" removido.')
+        else:
+            messages.error(request, result)
         return self._redirect_back(request)
 
 
