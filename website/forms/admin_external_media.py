@@ -7,6 +7,8 @@ from django.forms import inlineformset_factory
 from django.utils.text import slugify
 
 from ..models.external_media import (
+    BackgroundMusicTrack,
+    MasteringProfile,
     MediaTemplate,
     MediaTemplateBlock,
     MediaTemplatePlugin,
@@ -14,7 +16,6 @@ from ..models.external_media import (
     RenderPreset,
     SubtitleStyle,
 )
-from ..models.music import Music
 
 
 FIELD_CLASS = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm'
@@ -29,6 +30,28 @@ ADVANCED_PLUGIN_CHOICES = [
     (MediaTemplatePlugin.Code.SILENCE_REMOVAL, 'Corte de silêncio'),
     (MediaTemplatePlugin.Code.FILLER_REMOVAL, 'Remover vícios de fala'),
     (MediaTemplatePlugin.Code.AUTO_TRACKING, 'Auto Reframe inteligente'),
+]
+RENDER_PRESET_VIDEO_CODEC_CHOICES = [
+    ('libx264', 'H.264 (libx264) — compatível com telão, YouTube e redes sociais'),
+    ('libx265', 'H.265 (libx265) — arquivo menor, menos compatível'),
+]
+RENDER_PRESET_AUDIO_CODEC_CHOICES = [
+    ('copy', 'Copiar áudio original (recomendado)'),
+    ('aac', 'Reencodar em AAC (MP4/web)'),
+]
+RENDER_PRESET_CRF_CHOICES = [
+    (18, '18 — alta qualidade (arquivo maior)'),
+    (20, '20 — muito boa qualidade'),
+    (21, '21 — boa qualidade'),
+    (23, '23 — equilibrado (padrão)'),
+    (26, '26 — arquivo menor'),
+    (28, '28 — menor qualidade'),
+]
+RENDER_PRESET_EXTRA_FFMPEG_CHOICES = [
+    ('[]', 'Nenhum'),
+    ('["-maxrate", "8M"]', 'Limitar bitrate — 8 Mbps'),
+    ('["-maxrate", "8M", "-bufsize", "16M"]', 'Limitar bitrate — 8 Mbps com buffer 16 Mbps'),
+    ('["-maxrate", "12M", "-bufsize", "24M"]', 'Limitar bitrate — 12 Mbps com buffer 24 Mbps'),
 ]
 SUBTITLE_FONT_CHOICES = [
     ('Arial', 'Arial'),
@@ -57,6 +80,16 @@ class RenderPresetChoiceField(forms.ModelChoiceField):
             ratio = f'{obj.width // divisor}:{obj.height // divisor}'
             return f'{obj.name} ({ratio} · {obj.width}x{obj.height})'
         return f'{obj.name} (sem redimensionar)'
+
+
+class BackgroundMusicChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return f'{obj.get_category_display()} · {obj.name}'
+
+
+class MasteringProfileChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return f'{obj.name} ({obj.target_lufs} LUFS · {obj.true_peak_db} dBTP)'
 
 
 class AdminMediaTemplateForm(forms.ModelForm):
@@ -93,11 +126,35 @@ class AdminMediaTemplateForm(forms.ModelForm):
 
 
 class AdminMediaTemplateVersionForm(forms.ModelForm):
-    background_music = forms.ModelChoiceField(
-        label='Música padrão',
-        queryset=Music.objects.none(),
+    background_music = BackgroundMusicChoiceField(
+        label='Trilha de fundo',
+        queryset=BackgroundMusicTrack.objects.none(),
         required=False,
-        empty_label='Sem música',
+        empty_label='Sem trilha',
+    )
+    mastering_profile = MasteringProfileChoiceField(
+        label='Perfil de masterização',
+        queryset=MasteringProfile.objects.none(),
+        required=False,
+        empty_label='Sem masterização',
+    )
+    audio_mixing_config_raw = forms.CharField(
+        label='Configuração avançada de mixagem (JSON)',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 4}),
+        help_text=(
+            'Opcional. Ajusta o ducking automático. Exemplo: '
+            '{"attack_ms": 250, "hold_ms": 180, "release_ms": 700, "base_duck_db": 8}'
+        ),
+    )
+    dialogue_processing_config_raw = forms.CharField(
+        label='Configuração avançada de tratamento de diálogo (JSON)',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 4}),
+        help_text=(
+            'Opcional. Ajusta EQ, compressão e nivelamento entre falantes. Exemplo: '
+            '{"compression_ratio": 2.5, "leveling_max_gain_db": 6, "deesser_enabled": true}'
+        ),
     )
     LANGUAGE_MODE_SINGLE = 'single'
     LANGUAGE_MODE_TRANSLATED = 'translated'
@@ -178,6 +235,9 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         fields = [
             'preset', 'subtitle_style', 'translated_subtitle_style', 'original_language',
             'lut_file', 'background_music',
+            'dialogue_processing_enabled',
+            'audio_mixing_enabled', 'audio_ducking_enabled', 'audio_spectral_ducking_enabled',
+            'audio_mastering_enabled', 'mastering_profile',
         ]
         labels = {
             'preset': 'Preset de renderização',
@@ -185,7 +245,12 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             'translated_subtitle_style': 'Estilo da legenda traduzida',
             'original_language': 'Idioma padrão da legenda',
             'lut_file': 'Arquivo LUT',
-            'background_music': 'Música de fundo',
+            'background_music': 'Trilha de fundo',
+            'dialogue_processing_enabled': 'Tratamento de diálogo',
+            'audio_mixing_enabled': 'Mixagem inteligente',
+            'audio_ducking_enabled': 'Ducking automático',
+            'audio_spectral_ducking_enabled': 'Ducking espectral',
+            'audio_mastering_enabled': 'Masterização',
         }
         widgets = {
             'lut_file': forms.ClearableFileInput(),
@@ -197,6 +262,11 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         if instance:
             initial.setdefault('default_settings_raw', json.dumps(instance.default_settings or {}, indent=2, ensure_ascii=False))
             initial.setdefault('allowed_overrides_raw', json.dumps(instance.allowed_overrides or [], indent=2, ensure_ascii=False))
+            initial.setdefault('audio_mixing_config_raw', json.dumps(instance.audio_mixing_config or {}, indent=2, ensure_ascii=False))
+            initial.setdefault(
+                'dialogue_processing_config_raw',
+                json.dumps(instance.dialogue_processing_config or {}, indent=2, ensure_ascii=False),
+            )
             initial.setdefault(
                 'language_mode',
                 (instance.default_settings or {}).get('language_mode', self.LANGUAGE_MODE_TRANSLATED),
@@ -243,22 +313,35 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         for field_name, field in self.fields.items():
             if field_name in {'spoken_languages', 'advanced_plugins'}:
                 continue
-            field.widget.attrs.update({'class': FIELD_CLASS})
+            if field_name in {
+                'dialogue_processing_enabled',
+                'audio_mixing_enabled', 'audio_ducking_enabled',
+                'audio_spectral_ducking_enabled', 'audio_mastering_enabled',
+            }:
+                field.widget.attrs.update({'class': CHECKBOX_CLASS})
+            else:
+                field.widget.attrs.update({'class': FIELD_CLASS})
         preset_qs = RenderPreset.objects.filter(is_active=True).order_by('name')
         list(preset_qs)
         subtitle_styles_qs = SubtitleStyle.objects.filter(is_active=True).order_by('name')
         list(subtitle_styles_qs)
         translated_styles_qs = SubtitleStyle.objects.filter(is_active=True).order_by('name')
         list(translated_styles_qs)
-        background_music_qs = Music.objects.exclude(audio_file='').order_by('name', 'singer')
+        background_music_qs = BackgroundMusicTrack.objects.exclude(audio_file='').order_by('category', 'name')
         list(background_music_qs)
+        mastering_profile_qs = MasteringProfile.objects.filter(is_active=True).order_by('name')
+        list(mastering_profile_qs)
         self.fields['preset'].queryset = preset_qs
         self.fields['subtitle_style'].queryset = subtitle_styles_qs
         self.fields['translated_subtitle_style'].queryset = translated_styles_qs
         self.fields['translated_subtitle_style'].required = False
         self.fields['background_music'].queryset = background_music_qs
+        self.fields['mastering_profile'].queryset = mastering_profile_qs
         if not instance:
             self.fields['spoken_languages'].initial = ['pt']
+            default_profile = MasteringProfile.objects.filter(is_active=True, is_default=True).first()
+            if default_profile:
+                self.fields['mastering_profile'].initial = default_profile.pk
 
     def clean_default_settings_raw(self):
         return self._parse_json(self.cleaned_data.get('default_settings_raw'), {}, 'Configurações padrão')
@@ -267,6 +350,20 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         value = self._parse_json(self.cleaned_data.get('allowed_overrides_raw'), [], 'Campos liberados')
         if not isinstance(value, list):
             raise forms.ValidationError('Use uma lista JSON, por exemplo ["music"].')
+        return value
+
+    def clean_audio_mixing_config_raw(self):
+        value = self._parse_json(self.cleaned_data.get('audio_mixing_config_raw'), {}, 'Configuração de mixagem')
+        if not isinstance(value, dict):
+            raise forms.ValidationError('Use um objeto JSON, por exemplo {"base_duck_db": 8}.')
+        return value
+
+    def clean_dialogue_processing_config_raw(self):
+        value = self._parse_json(
+            self.cleaned_data.get('dialogue_processing_config_raw'), {}, 'Configuração de tratamento de diálogo',
+        )
+        if not isinstance(value, dict):
+            raise forms.ValidationError('Use um objeto JSON, por exemplo {"compression_ratio": 2.5}.')
         return value
 
     @staticmethod
@@ -304,6 +401,8 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         instance.output_languages = output_languages
         instance.default_settings = default_settings
         instance.allowed_overrides = self.cleaned_data.get('allowed_overrides_raw') or []
+        instance.audio_mixing_config = self.cleaned_data.get('audio_mixing_config_raw') or {}
+        instance.dialogue_processing_config = self.cleaned_data.get('dialogue_processing_config_raw') or {}
         if commit:
             instance.save()
         return instance
@@ -322,7 +421,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                     **configuration,
                     'priority': self.cleaned_data.get('auto_reframe_priority') or 'face',
                     'safe_margin': 0.15,
-                    'top_margin': 0.18,
+                    'top_margin': 0.12,
                     'interval_frames': 10,
                     'smoothing': 0.18,
                 }
@@ -511,26 +610,43 @@ class AdminMediaTemplatePluginForm(forms.ModelForm):
 
 
 class AdminRenderPresetForm(forms.ModelForm):
-    extra_ffmpeg_args_raw = forms.CharField(
+    video_codec = forms.ChoiceField(
+        label='Codec de vídeo',
+        choices=RENDER_PRESET_VIDEO_CODEC_CHOICES,
+        initial='libx264',
+        help_text='Define o formato de compressão do vídeo final.',
+    )
+    audio_codec = forms.ChoiceField(
+        label='Codec de áudio',
+        choices=RENDER_PRESET_AUDIO_CODEC_CHOICES,
+        initial='copy',
+        help_text='Copiar mantém o áudio original; AAC reencoda para MP4.',
+    )
+    video_crf = forms.TypedChoiceField(
+        label='CRF',
+        choices=RENDER_PRESET_CRF_CHOICES,
+        coerce=int,
+        initial=23,
+        help_text='Controla qualidade vs. tamanho do arquivo. 23 é um bom equilíbrio.',
+    )
+    extra_ffmpeg_profile = forms.ChoiceField(
         label='Argumentos extras do FFmpeg',
+        choices=RENDER_PRESET_EXTRA_FFMPEG_CHOICES,
         required=False,
-        widget=forms.Textarea(attrs={'rows': 3}),
-        help_text='Use uma lista JSON. Exemplo: ["-maxrate", "8M"]',
+        initial='[]',
+        help_text='Use apenas se precisar limitar bitrate ou ajustes avançados.',
     )
 
     class Meta:
         model = RenderPreset
         fields = [
             'name', 'width', 'height', 'video_codec', 'audio_codec',
-            'video_crf', 'extra_ffmpeg_args_raw', 'is_active',
+            'video_crf', 'extra_ffmpeg_profile', 'is_active',
         ]
         labels = {
             'name': 'Nome do preset',
             'width': 'Largura',
             'height': 'Altura',
-            'video_codec': 'Codec de vídeo',
-            'audio_codec': 'Codec de áudio',
-            'video_crf': 'CRF',
             'is_active': 'Preset ativo',
         }
 
@@ -538,7 +654,29 @@ class AdminRenderPresetForm(forms.ModelForm):
         instance = kwargs.get('instance')
         initial = kwargs.setdefault('initial', {})
         if instance:
-            initial.setdefault('extra_ffmpeg_args_raw', json.dumps(instance.extra_ffmpeg_args or [], indent=2))
+            extra_args_json = json.dumps(instance.extra_ffmpeg_args or [], ensure_ascii=False)
+            known_extra_values = {value for value, _label in RENDER_PRESET_EXTRA_FFMPEG_CHOICES}
+            if extra_args_json not in known_extra_values:
+                self.fields['extra_ffmpeg_profile'].choices = [
+                    *RENDER_PRESET_EXTRA_FFMPEG_CHOICES,
+                    (extra_args_json, 'Configuração personalizada atual'),
+                ]
+            initial.setdefault('extra_ffmpeg_profile', extra_args_json)
+            if instance.video_codec and instance.video_codec not in dict(RENDER_PRESET_VIDEO_CODEC_CHOICES):
+                self.fields['video_codec'].choices = [
+                    *RENDER_PRESET_VIDEO_CODEC_CHOICES,
+                    (instance.video_codec, f'{instance.video_codec} (atual)'),
+                ]
+            if instance.audio_codec and instance.audio_codec not in dict(RENDER_PRESET_AUDIO_CODEC_CHOICES):
+                self.fields['audio_codec'].choices = [
+                    *RENDER_PRESET_AUDIO_CODEC_CHOICES,
+                    (instance.audio_codec, f'{instance.audio_codec} (atual)'),
+                ]
+            if instance.video_crf not in dict(RENDER_PRESET_CRF_CHOICES):
+                self.fields['video_crf'].choices = [
+                    *RENDER_PRESET_CRF_CHOICES,
+                    (instance.video_crf, f'{instance.video_crf} (atual)'),
+                ]
         super().__init__(*args, **kwargs)
         for field_name, field in self.fields.items():
             if field_name == 'is_active':
@@ -546,16 +684,14 @@ class AdminRenderPresetForm(forms.ModelForm):
             else:
                 field.widget.attrs.update({'class': FIELD_CLASS})
 
-    def clean_extra_ffmpeg_args_raw(self):
-        raw = self.cleaned_data.get('extra_ffmpeg_args_raw')
-        if not raw:
-            return []
+    def clean_extra_ffmpeg_profile(self):
+        raw = self.cleaned_data.get('extra_ffmpeg_profile') or '[]'
         try:
             value = json.loads(raw)
         except json.JSONDecodeError as exc:
-            raise forms.ValidationError('Informe uma lista JSON válida.') from exc
+            raise forms.ValidationError('Selecione uma opção válida de argumentos extras.') from exc
         if not isinstance(value, list):
-            raise forms.ValidationError('Use uma lista JSON, por exemplo ["-maxrate", "8M"].')
+            raise forms.ValidationError('Os argumentos extras precisam ser uma lista.')
         return value
 
     def save(self, commit=True):
@@ -564,7 +700,7 @@ class AdminRenderPresetForm(forms.ModelForm):
         if not code:
             raise forms.ValidationError('Informe um nome para gerar o código do preset.')
         instance.code = code
-        instance.extra_ffmpeg_args = self.cleaned_data.get('extra_ffmpeg_args_raw') or []
+        instance.extra_ffmpeg_args = self.cleaned_data.get('extra_ffmpeg_profile') or []
         if commit:
             instance.save()
         return instance
@@ -742,20 +878,13 @@ class AdminSubtitleStyleForm(forms.ModelForm):
         return name
 
 
-class BackgroundMusicChoiceField(forms.ModelChoiceField):
-    def label_from_instance(self, obj):
-        if obj.singer:
-            return f'{obj.name} - {obj.singer}'
-        return obj.name
-
-
 class AdminBackgroundMusicForm(forms.ModelForm):
     class Meta:
-        model = Music
-        fields = ['name', 'singer', 'tempo', 'audio_file']
+        model = BackgroundMusicTrack
+        fields = ['name', 'category', 'tempo', 'audio_file']
         labels = {
-            'name': 'Nome da música',
-            'singer': 'Artista ou ministério',
+            'name': 'Nome da trilha',
+            'category': 'Categoria',
             'tempo': 'Andamento',
             'audio_file': 'Arquivo de áudio',
         }
@@ -768,6 +897,72 @@ class AdminBackgroundMusicForm(forms.ModelForm):
         for field in self.fields.values():
             field.widget.attrs.update({'class': FIELD_CLASS})
         self.fields['audio_file'].required = not bool(self.instance and self.instance.pk and self.instance.audio_file)
+
+
+class AdminMasteringProfileForm(forms.ModelForm):
+    class Meta:
+        model = MasteringProfile
+        fields = [
+            'name', 'target_lufs', 'true_peak_db',
+            'dynamic_range_target', 'low_frequency_control', 'high_frequency_control',
+            'max_gain_db', 'max_limiter_reduction_db',
+            'bus_compression_enabled', 'limiter_enabled', 'is_default', 'is_active',
+        ]
+        labels = {
+            'name': 'Nome do perfil',
+            'target_lufs': 'Loudness alvo (LUFS)',
+            'true_peak_db': 'True Peak máximo (dBTP)',
+            'dynamic_range_target': 'Faixa dinâmica alvo (LU)',
+            'low_frequency_control': 'Ajuste de graves (dB)',
+            'high_frequency_control': 'Ajuste de agudos (dB)',
+            'max_gain_db': 'Ganho máximo permitido (dB)',
+            'max_limiter_reduction_db': 'Limiting máximo permitido (dB)',
+            'bus_compression_enabled': 'Compressão de bus leve',
+            'limiter_enabled': 'Limiter de true peak',
+            'is_default': 'Perfil padrão',
+            'is_active': 'Perfil ativo',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        optional_defaults = {
+            'dynamic_range_target': 11.0,
+            'low_frequency_control': 0.0,
+            'high_frequency_control': 0.0,
+            'max_gain_db': 12.0,
+            'max_limiter_reduction_db': 4.0,
+        }
+        for field_name, field in self.fields.items():
+            if field_name in {'bus_compression_enabled', 'limiter_enabled', 'is_default', 'is_active'}:
+                field.widget.attrs.update({'class': CHECKBOX_CLASS})
+            else:
+                field.widget.attrs.update({'class': FIELD_CLASS})
+            if field_name in optional_defaults:
+                field.required = False
+                field.initial = optional_defaults[field_name]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for field_name, default in {
+            'dynamic_range_target': 11.0,
+            'low_frequency_control': 0.0,
+            'high_frequency_control': 0.0,
+            'max_gain_db': 12.0,
+            'max_limiter_reduction_db': 4.0,
+        }.items():
+            if cleaned_data.get(field_name) is None:
+                cleaned_data[field_name] = default
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not instance.code:
+            instance.code = slugify(self.cleaned_data.get('name', ''))
+        if commit:
+            instance.save()
+            if instance.is_default:
+                MasteringProfile.objects.exclude(pk=instance.pk).update(is_default=False)
+        return instance
 
 
 AdminMediaTemplateBlockFormSet = inlineformset_factory(

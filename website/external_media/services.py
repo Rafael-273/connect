@@ -34,8 +34,13 @@ from website.models.external_media import (
     SubtitleTrack,
 )
 
+from .audio_mastering import AudioMasteringService, MasteringTarget
+from .audio_mixing import AudioMixingService, DuckingSettings, group_speech_blocks
+from .audio_validation import AudioValidationService
 from .auto_reframe import AutoReframePlan, AutoReframeService
+from .dialogue_processing import DialogueProcessor, DialogueSettings
 from .exceptions import ExternalMediaError
+from .ffmpeg_runner import FFmpegRunner
 from .speech_edit import SpeechEditAnalyzer, SpeechEditPlan, SpeechEditService
 
 logger = logging.getLogger(__name__)
@@ -102,26 +107,6 @@ class VideoMetadata:
     def is_hdr(self):
         values = {self.color_space, self.color_transfer, self.color_primaries}
         return bool({'bt2020nc', 'bt2020', 'smpte2084', 'arib-std-b67'} & values)
-
-
-class FFmpegRunner:
-    def run(self, command: list[str]) -> str:
-        try:
-            result = subprocess.run(
-                command,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=settings.EXTERNAL_MEDIA_FFMPEG_TIMEOUT,
-            )
-            return result.stdout
-        except FileNotFoundError as exc:
-            raise ExternalMediaError('FFmpeg/FFprobe não está instalado no worker.') from exc
-        except subprocess.TimeoutExpired as exc:
-            raise ExternalMediaError('O processamento de vídeo excedeu o tempo limite.') from exc
-        except subprocess.CalledProcessError as exc:
-            logger.error('FFmpeg falhou: %s', exc.stderr[-4000:])
-            raise ExternalMediaError('O FFmpeg não conseguiu processar este vídeo.') from exc
 
 
 class AudioExtractor:
@@ -593,6 +578,7 @@ ScriptType: v4.00+
 PlayResX: {width}
 PlayResY: {height}
 WrapStyle: 2
+ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
@@ -984,6 +970,14 @@ class RenderService:
     def render(self, video_path, track, output_path, preset, style, workdir):
         return self.render_tracks(video_path, [track], output_path, preset, style, workdir)
 
+    @staticmethod
+    def ass_play_res(preset, metadata):
+        # PlayRes must match the frame size when ffmpeg burns subtitles, not necessarily
+        # the probed source dimensions (scale/crop may run first in the filter chain).
+        if preset.width and preset.height:
+            return preset.width, preset.height
+        return metadata.width or 1920, metadata.height or 1080
+
     def render_tracks(
         self,
         video_path,
@@ -996,8 +990,7 @@ class RenderService:
         translated_style=None,
     ):
         metadata = self.probe_video(video_path)
-        width = metadata.width or preset.width or 1920
-        height = metadata.height or preset.height or 1080
+        width, height = self.ass_play_res(preset, metadata)
         tracks = list(tracks)
         suffix = '_'.join(track.language for track in tracks)
         ass_path = workdir / f'{suffix}.ass'
@@ -1141,10 +1134,18 @@ class TemplateService:
             result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.TRANSLATION_EN))
         if version.lut_file:
             result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.LUT))
-        if version.background_music_id and version.background_music and version.background_music.audio_file:
+        has_music = bool(
+            (version.background_music_id and version.background_music and version.background_music.audio_file)
+            or version.music_file
+        )
+        if has_music:
             result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.MUSIC))
-        elif version.music_file:
-            result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.MUSIC))
+        if version.dialogue_processing_enabled:
+            result.append(SimpleNamespace(code='dialogue_processing'))
+        if version.audio_mixing_enabled and has_music:
+            result.append(SimpleNamespace(code='audio_mixing'))
+        if version.audio_mastering_enabled:
+            result.append(SimpleNamespace(code='audio_mastering'))
         return result
 
 
@@ -1161,6 +1162,9 @@ class ProjectService:
         'intro': 'Aplicando intro',
         'outro': 'Aplicando tela final',
         'music': 'Aplicando música',
+        'dialogue_processing': 'Tratando diálogo',
+        'audio_mixing': 'Mixando áudio',
+        'audio_mastering': 'Masterizando áudio',
         'render': 'Renderizando',
         'storage': 'Salvando arquivos',
     }
@@ -1168,18 +1172,54 @@ class ProjectService:
     @staticmethod
     def validate_uploads(project):
         counts = {}
-        for item in project.block_media.all():
-            counts[item.block_id] = counts.get(item.block_id, 0) + 1
         errors = []
+        for item in project.block_media.all():
+            if ProjectService.file_exists(item.file):
+                counts[item.block_id] = counts.get(item.block_id, 0) + 1
+            else:
+                errors.append(
+                    f'{item.block.name}: o vídeo enviado não está mais disponível. Envie-o novamente.'
+                )
         for block in project.template_version.blocks.all():
             count = counts.get(block.pk, 0)
-            effective_count = count or (1 if block.default_video else 0)
+            has_default = ProjectService.file_exists(block.default_video)
+            if block.default_video and not has_default and not count:
+                errors.append(
+                    f'{block.name}: o vídeo padrão do template não está disponível. '
+                    'Envie um vídeo para este bloco ou restaure o arquivo no template.'
+                )
+            effective_count = count or (1 if has_default else 0)
             minimum = block.min_occurrences if block.is_required else 0
             if effective_count < minimum:
                 errors.append(f'{block.name}: envie pelo menos {minimum} vídeo(s).')
             if count > block.max_occurrences:
                 errors.append(f'{block.name}: máximo de {block.max_occurrences} vídeo(s).')
+        version = project.template_version
+        track = getattr(version, 'background_music', None)
+        if track and track.audio_file and not ProjectService.file_exists(track.audio_file):
+            errors.append(
+                'A música de fundo do template não está disponível. '
+                'Restaure ou substitua a música no cadastro do template.'
+            )
+        elif version.music_file and not ProjectService.file_exists(version.music_file):
+            errors.append(
+                'O arquivo de música de fundo do template não está disponível. '
+                'Restaure ou substitua a música no cadastro do template.'
+            )
+        if version.lut_file and not ProjectService.file_exists(version.lut_file):
+            errors.append(
+                'O arquivo LUT do template não está disponível. Restaure ou substitua o arquivo no template.'
+            )
         return errors
+
+    @staticmethod
+    def file_exists(field_file):
+        if not field_file or not getattr(field_file, 'name', ''):
+            return False
+        try:
+            return field_file.storage.exists(field_file.name)
+        except OSError:
+            return False
 
     def initialize_steps(self, project, plugins):
         codes = ['upload', 'assembly'] + [plugin.code for plugin in plugins] + ['render', 'storage']
@@ -1578,13 +1618,12 @@ class ExternalMediaProjectPipeline:
                     project.save(update_fields=['configuration', 'update_at'])
             self._update(project, ExternalMediaProject.Status.PROCESSING, 22, 'Iniciando processamento do conteúdo')
             if wants_subtitles:
-                ExternalMediaPipeline().prepare_subtitles(job.pk)
-                project.status = ExternalMediaProject.Status.AWAITING_REVIEW
-                project.progress = 82
-                project.current_step = 'Legendas prontas para revisão'
+                media_pipeline = ExternalMediaPipeline()
+                media_pipeline.prepare_subtitle_tracks(job.pk)
                 for code in (MediaTemplatePlugin.Code.SUBTITLE_PT, MediaTemplatePlugin.Code.TRANSLATION_EN):
                     if code in plugin_codes:
                         self._step(project, code, ProjectPipelineStep.Status.FINISHED)
+                self.render(project_id)
             else:
                 with TemporaryDirectory(prefix='connect-project-output-') as temp:
                     source = Path(temp) / 'video.mp4'
@@ -1601,7 +1640,7 @@ class ExternalMediaProjectPipeline:
                 project.progress = 100
                 project.current_step = 'Processamento finalizado'
                 project.finished_at = timezone.now()
-            project.save(update_fields=['status', 'progress', 'current_step', 'finished_at', 'update_at'])
+                project.save(update_fields=['status', 'progress', 'current_step', 'finished_at', 'update_at'])
         except (ExternalMediaError, AIServiceError) as exc:
             self._fail(project, str(exc))
             raise
@@ -1725,13 +1764,8 @@ class ExternalMediaProjectPipeline:
 
     def _prepare_final_master(self, project, workdir):
         plugins = self.templates.enabled_plugins(project)
-        codes = {plugin.code for plugin in plugins}
         sources, lut_path, music_path = self._materialize(project, plugins, workdir)
         assembled = workdir / 'project_master_original.mp4'
-        speech_edit_enabled = bool({
-            MediaTemplatePlugin.Code.SILENCE_REMOVAL,
-            MediaTemplatePlugin.Code.FILLER_REMOVAL,
-        } & codes)
         auto_reframe_plugin = next(
             (plugin for plugin in plugins if plugin.code == MediaTemplatePlugin.Code.AUTO_TRACKING),
             None,
@@ -1748,7 +1782,10 @@ class ExternalMediaProjectPipeline:
                 project.template_version.preset,
                 workdir,
                 lut_path=lut_path,
-                music_path=None if speech_edit_enabled else music_path,
+                # Music is never baked in here: mixing (with ducking, if enabled) always
+                # happens afterwards in `_finalize_audio`, once the speech-edit cuts (if
+                # any) have already reshaped the timeline.
+                music_path=None,
                 music_volume=project.template_version.music_volume,
                 auto_reframe_config=(
                     auto_reframe_plugin.configuration or {'priority': 'face'}
@@ -1758,31 +1795,120 @@ class ExternalMediaProjectPipeline:
             )
         final_path = assembled
         plan_data = (project.configuration or {}).get('speech_edit_plan')
-        if plan_data:
-            plan = SpeechEditPlan.from_dict(plan_data)
-            if plan.cuts:
-                edited = workdir / 'project_master_speech_edited.mp4'
-                with timed_step('apply_speech_edit_to_final_master', cuts=len(plan.cuts)):
-                    SpeechEditService(self.assembly.runner).apply(final_path, edited, plan)
-                final_path = edited
-        if speech_edit_enabled and music_path:
-            mixed = workdir / 'project_master_with_music.mp4'
-            with timed_step('mix_music_final_master'):
-                self.assembly.runner.run([
-                    settings.FFMPEG_BINARY, '-y', '-i', str(final_path), '-stream_loop', '-1',
-                    '-i', str(music_path), '-filter_complex',
-                    f'[1:a]volume={float(project.template_version.music_volume):.3f}[music];'
-                    '[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]',
-                    '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
-                    '-movflags', '+faststart', str(mixed),
-                ])
-            final_path = mixed
+        plan = SpeechEditPlan.from_dict(plan_data) if plan_data else None
+        if plan and plan.cuts:
+            edited = workdir / 'project_master_speech_edited.mp4'
+            with timed_step('apply_speech_edit_to_final_master', cuts=len(plan.cuts)):
+                SpeechEditService(self.assembly.runner).apply(final_path, edited, plan)
+            final_path = edited
         job = project.render_job
+        version = project.template_version
+        if music_path or version.audio_mastering_enabled or version.dialogue_processing_enabled:
+            with timed_step('finalize_audio_final_master'):
+                final_path = self._finalize_audio(project, job, workdir, final_path, music_path, plan)
         if job.original_video:
             job.original_video.delete(save=False)
         with final_path.open('rb') as source:
             job.original_video.save('project_source.mp4', File(source), save=False)
         job.save(update_fields=['original_video', 'update_at'])
+
+    def _finalize_audio(self, project, job, workdir, video_path, music_path, plan):
+        """Processes dialogue, mixes in music (with adaptive ducking, if enabled), then
+        masters the final mix.
+
+        The three stages stay independent: dialogue processing only ever sees the
+        dialogue/original track (before any music is blended in), mixing only runs
+        when there is music to blend in, and mastering only ever touches the resulting
+        stereo bed, never looking at dialogue/music separately (see
+        AudioMasteringService).
+        """
+        version = project.template_version
+        final_path = video_path
+        dialogue_metrics = None
+        if version.dialogue_processing_enabled:
+            speech_blocks = self._speech_blocks_for_job(job)
+            protected_ranges = self._protected_ranges_ms(project, plan)
+            duration_ms = SpeechEditService(self.assembly.runner).duration_ms(video_path)
+            dialogue_settings = DialogueSettings.from_config(version.dialogue_processing_config)
+            processed_path = workdir / 'dialogue_processed.mp4'
+            dialogue_result = DialogueProcessor(self.assembly.runner).process(
+                final_path, processed_path,
+                duration_ms=duration_ms,
+                speech_blocks=speech_blocks,
+                protected_ranges=protected_ranges,
+                settings_=dialogue_settings,
+            )
+            final_path = dialogue_result.path
+            dialogue_metrics = dialogue_result.metrics
+            self._step(project, 'dialogue_processing', ProjectPipelineStep.Status.FINISHED)
+        mix_metrics = None
+        if music_path:
+            mixing_enabled = version.audio_mixing_enabled
+            speech_blocks = self._speech_blocks_for_job(job) if mixing_enabled else []
+            protected_ranges = self._protected_ranges_ms(project, plan) if mixing_enabled else []
+            duration_ms = SpeechEditService(self.assembly.runner).duration_ms(final_path)
+            ducking_settings = DuckingSettings.from_config(version.audio_mixing_config)
+            mixed_path = workdir / 'audio_mixed.mp4'
+            mix_result = AudioMixingService(self.assembly.runner).mix(
+                final_path, music_path, mixed_path,
+                music_volume=version.music_volume,
+                duration_ms=duration_ms,
+                speech_blocks=speech_blocks,
+                protected_ranges=protected_ranges,
+                settings_=ducking_settings,
+                ducking_enabled=mixing_enabled and version.audio_ducking_enabled,
+                spectral_enabled=mixing_enabled and version.audio_spectral_ducking_enabled,
+            )
+            final_path = mix_result.path
+            mix_metrics = mix_result.metrics
+            self._step(project, 'audio_mixing', ProjectPipelineStep.Status.FINISHED)
+        master_metrics = None
+        if version.audio_mastering_enabled and version.mastering_profile:
+            mastered_path = workdir / 'audio_mastered.mp4'
+            target = MasteringTarget.from_profile(version.mastering_profile)
+            master_result = AudioMasteringService(self.assembly.runner).master(final_path, mastered_path, target)
+            final_path = master_result.path
+            master_metrics = {
+                **master_result.metrics,
+                'validation': AudioValidationService().validate(final_path, version.mastering_profile),
+            }
+            self._step(project, 'audio_mastering', ProjectPipelineStep.Status.FINISHED)
+        if dialogue_metrics or mix_metrics or master_metrics:
+            audio_metrics = {}
+            if dialogue_metrics:
+                audio_metrics['dialogue'] = dialogue_metrics
+            if mix_metrics:
+                audio_metrics['mixing'] = mix_metrics
+            if master_metrics:
+                audio_metrics['mastering'] = master_metrics
+            project.configuration = {**(project.configuration or {}), 'audio_metrics': audio_metrics}
+            project.save(update_fields=['configuration', 'update_at'])
+        return final_path
+
+    @staticmethod
+    def _speech_blocks_for_job(job, gap_threshold_ms=450):
+        """Speech Blocks for ducking, derived from the already-grouped subtitle cues.
+
+        Cue timestamps live in the same (post speech-edit) timeline as the final master
+        video, so no extra remapping is needed here.
+        """
+        track = job.subtitle_tracks.filter(is_source=True).prefetch_related('cues').first()
+        if not track:
+            return []
+        return group_speech_blocks(
+            [(cue.start_ms, cue.end_ms) for cue in track.cues.all()],
+            gap_threshold_ms=gap_threshold_ms,
+        )
+
+    @staticmethod
+    def _protected_ranges_ms(project, plan):
+        """"Manter bloco intacto" ranges, remapped onto the post speech-edit timeline."""
+        ranges = (project.configuration or {}).get('protected_block_ranges') or []
+        remap = plan.remap_time if plan else (lambda ms: ms)
+        return [
+            (remap(item.get('start_ms') or 0), remap(item.get('end_ms') or 0))
+            for item in ranges
+        ]
 
     def _create_render_job(self, project, assembled):
         version = project.template_version
@@ -1869,7 +1995,7 @@ class ExternalMediaPipeline:
         self.speech_analyzer = SpeechEditAnalyzer()
         self.speech_editor = SpeechEditService(self.audio.runner)
 
-    def prepare_subtitles(self, job_id):
+    def prepare_subtitle_tracks(self, job_id):
         job = self._get_job(job_id)
         try:
             self._update(job, ExternalMediaJob.Status.EXTRACTING_AUDIO, 12, 'Extraindo e preparando o áudio')
@@ -1890,14 +2016,18 @@ class ExternalMediaPipeline:
                     progress = 58 + round((index / max(1, len(targets))) * 22)
                     self._update(job, ExternalMediaJob.Status.TRANSLATING, progress, f'Traduzindo para {language.upper()}')
                     self.translation.translate_track(source_track, language, job.translation_model)
-                self._update(job, ExternalMediaJob.Status.AWAITING_REVIEW, 82, 'Legendas prontas para revisão')
+            self._update(job, ExternalMediaJob.Status.TRANSLATING, 82, 'Legendas preparadas')
         except (ExternalMediaError, AIServiceError) as exc:
             self._fail(job, str(exc))
             raise
-        except Exception as exc:
+        except Exception:
             logger.exception('Erro inesperado no job de mídia %s', job_id)
             self._fail(job, 'Ocorreu um erro inesperado durante o processamento.')
             raise
+
+    def prepare_subtitles(self, job_id):
+        self.prepare_subtitle_tracks(job_id)
+        self.render_outputs(job_id)
 
     def render_outputs(self, job_id):
         job = self._get_job(job_id)

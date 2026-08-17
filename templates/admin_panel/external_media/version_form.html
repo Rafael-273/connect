@@ -218,13 +218,81 @@
                             <label class="form-label">{{ form.background_music.label }}</label>
                             <div class="manage-select">
                                 {{ form.background_music }}
-                                <button type="button" class="manage-btn" data-open-modal="music-modal" title="Gerenciar músicas">
+                                <button type="button" class="manage-btn" data-open-modal="music-modal" title="Gerenciar trilhas">
                                     <ion-icon name="musical-notes-outline" class="text-xl"></ion-icon>
                                 </button>
                             </div>
                             {% if form.background_music.errors %}<p class="text-xs text-red-600 mt-1">{{ form.background_music.errors.0 }}</p>{% endif %}
                         </div>
                     </div>
+                    </div>
+
+                    <div class="form-subsection">
+                        <div class="form-subsection-title">Áudio inteligente</div>
+                        <div class="block-help mb-4">
+                            Controla o tratamento de diálogo, a mixagem automática (ducking da música durante a fala) e a masterização final (loudness/true peak) deste template. O operador não precisa ajustar nada disso por vídeo.
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-5">
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.dialogue_processing_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.dialogue_processing_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Limpa e equilibra a voz (EQ, compressão) antes da mixagem, e nivela automaticamente falantes com volumes diferentes.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_mixing_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_mixing_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Reduz a música de forma adaptativa quando há fala, e devolve a presença dela nos trechos sem fala.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_ducking_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_ducking_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Liga o ducking dentro da mixagem inteligente. Se desligado, a música fica em volume fixo.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_spectral_ducking_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_spectral_ducking_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Além de reduzir o volume, abre espaço na frequência da voz quando a música é densa nessa faixa.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_mastering_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_mastering_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Normaliza loudness e limita o true peak do mix final, usando o perfil escolhido ao lado.</p>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div>
+                                <label class="form-label">{{ form.mastering_profile.label }}</label>
+                                <div class="manage-select">
+                                    {{ form.mastering_profile }}
+                                    <button type="button" class="manage-btn" data-open-modal="mastering-modal" title="Gerenciar perfis de masterização">
+                                        <ion-icon name="speedometer-outline" class="text-xl"></ion-icon>
+                                    </button>
+                                </div>
+                                {% if form.mastering_profile.errors %}<p class="text-xs text-red-600 mt-1">{{ form.mastering_profile.errors.0 }}</p>{% endif %}
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.audio_mixing_config_raw.label }}</label>
+                                {{ form.audio_mixing_config_raw }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.audio_mixing_config_raw.help_text }}</p>
+                                {% if form.audio_mixing_config_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ form.audio_mixing_config_raw.errors.0 }}</p>{% endif %}
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.dialogue_processing_config_raw.label }}</label>
+                                {{ form.dialogue_processing_config_raw }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.dialogue_processing_config_raw.help_text }}</p>
+                                {% if form.dialogue_processing_config_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ form.dialogue_processing_config_raw.errors.0 }}</p>{% endif %}
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -391,14 +459,15 @@
                                 <div class="md:col-span-2"><label class="form-label">{{ preset_form.name.label }}</label>{{ preset_form.name }}</div>
                                 <div><label class="form-label">{{ preset_form.width.label }}</label>{{ preset_form.width }}</div>
                                 <div><label class="form-label">{{ preset_form.height.label }}</label>{{ preset_form.height }}</div>
-                                <div><label class="form-label">{{ preset_form.video_codec.label }}</label>{{ preset_form.video_codec }}</div>
-                                <div><label class="form-label">{{ preset_form.audio_codec.label }}</label>{{ preset_form.audio_codec }}</div>
-                                <div><label class="form-label">{{ preset_form.video_crf.label }}</label>{{ preset_form.video_crf }}</div>
+                                <div><label class="form-label">{{ preset_form.video_codec.label }}</label>{{ preset_form.video_codec }}{% if preset_form.video_codec.errors %}<p class="text-xs text-red-600 mt-1">{{ preset_form.video_codec.errors.0 }}</p>{% endif %}{% if preset_form.video_codec.help_text %}<p class="text-xs text-gray-500 mt-1">{{ preset_form.video_codec.help_text }}</p>{% endif %}</div>
+                                <div><label class="form-label">{{ preset_form.audio_codec.label }}</label>{{ preset_form.audio_codec }}{% if preset_form.audio_codec.errors %}<p class="text-xs text-red-600 mt-1">{{ preset_form.audio_codec.errors.0 }}</p>{% endif %}{% if preset_form.audio_codec.help_text %}<p class="text-xs text-gray-500 mt-1">{{ preset_form.audio_codec.help_text }}</p>{% endif %}</div>
+                                <div><label class="form-label">{{ preset_form.video_crf.label }}</label>{{ preset_form.video_crf }}{% if preset_form.video_crf.errors %}<p class="text-xs text-red-600 mt-1">{{ preset_form.video_crf.errors.0 }}</p>{% endif %}{% if preset_form.video_crf.help_text %}<p class="text-xs text-gray-500 mt-1">{{ preset_form.video_crf.help_text }}</p>{% endif %}</div>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 mt-7">{{ preset_form.is_active }} {{ preset_form.is_active.label }}</label>
                                 <div class="md:col-span-2">
-                                    <label class="form-label">{{ preset_form.extra_ffmpeg_args_raw.label }}</label>
-                                    {{ preset_form.extra_ffmpeg_args_raw }}
-                                    <p class="text-xs text-gray-500 mt-1">{{ preset_form.extra_ffmpeg_args_raw.help_text }}</p>
+                                    <label class="form-label">{{ preset_form.extra_ffmpeg_profile.label }}</label>
+                                    {{ preset_form.extra_ffmpeg_profile }}
+                                    {% if preset_form.extra_ffmpeg_profile.errors %}<p class="text-xs text-red-600 mt-1">{{ preset_form.extra_ffmpeg_profile.errors.0 }}</p>{% endif %}
+                                    {% if preset_form.extra_ffmpeg_profile.help_text %}<p class="text-xs text-gray-500 mt-1">{{ preset_form.extra_ffmpeg_profile.help_text }}</p>{% endif %}
                                 </div>
                             </div>
                             <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
@@ -408,7 +477,6 @@
 
                         <div class="inline-card bg-white">
                             <h3 class="font-bold text-gray-900 mb-4">Presets cadastrados</h3>
-                            <div id="preset-details" class="hidden mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"></div>
                             <div class="overflow-x-auto">
                                 <table class="modal-table w-full">
                                     <thead><tr><th>Preset</th><th>Saída</th><th>Status</th><th class="text-right">Ações</th></tr></thead>
@@ -425,15 +493,6 @@
                                             <td class="text-right">
                                                 <div class="inline-flex gap-1">
                                                     <button type="button" class="asset-action"
-                                                            data-view-preset
-                                                            data-name="{{ preset.name }}"
-                                                            data-size="{% if preset.width and preset.height %}{{ preset.width }}x{{ preset.height }}{% else %}Original{% endif %}"
-                                                            data-video-codec="{{ preset.video_codec }}"
-                                                            data-audio-codec="{{ preset.audio_codec }}"
-                                                            data-crf="{{ preset.video_crf }}"
-                                                            data-extra="{{ row.extra_args_json|escape }}"
-                                                            title="Visualizar"><ion-icon name="eye-outline"></ion-icon></button>
-                                                    <button type="button" class="asset-action"
                                                             data-edit-preset
                                                             data-id="{{ preset.id }}"
                                                             data-name="{{ preset.name }}"
@@ -445,11 +504,12 @@
                                                             data-extra="{{ row.extra_args_json|escape }}"
                                                             data-active="{% if preset.is_active %}true{% else %}false{% endif %}"
                                                             title="Editar"><ion-icon name="create-outline"></ion-icon></button>
-                                                    <form method="post" action="{% url 'admin_external_media_preset_delete' preset.id %}">
-                                                        {% csrf_token %}
-                                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                                                        <button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button>
-                                                    </form>
+                                                    <button type="button" class="asset-action asset-action-danger" title="Remover"
+                                                            data-delete-preset
+                                                            data-name="{{ preset.name }}"
+                                                            data-action="{% url 'admin_external_media_preset_delete' preset.id %}">
+                                                        <ion-icon name="trash-outline"></ion-icon>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -818,8 +878,8 @@
                 <div class="media-modal-panel">
                     <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
                         <div>
-                            <h2 class="text-lg font-black text-gray-900">Músicas de fundo</h2>
-                            <p class="text-sm text-gray-500">Cadastre, edite, visualize ou remova as trilhas disponíveis para os templates.</p>
+                            <h2 class="text-lg font-black text-gray-900">Trilhas de fundo</h2>
+                            <p class="text-sm text-gray-500">Cadastre trilhas exclusivas para templates de mídia. Não são vinculadas às músicas/cifras do site.</p>
                         </div>
                         <button type="button" class="asset-action" data-close-modal="music-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
                     </div>
@@ -830,12 +890,12 @@
                             <input type="hidden" name="next" value="{{ request.get_full_path }}">
                             <input type="hidden" name="bgmusic_id" id="bgmusic-id">
                             <div class="flex items-center justify-between mb-4">
-                                <h3 id="bgmusic-form-title" class="font-bold text-gray-900">Nova música</h3>
+                                <h3 id="bgmusic-form-title" class="font-bold text-gray-900">Nova trilha</h3>
                                 <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-bgmusic>Limpar</button>
                             </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div><label class="form-label">{{ music_form.name.label }}</label>{{ music_form.name }}</div>
-                                <div><label class="form-label">{{ music_form.singer.label }}</label>{{ music_form.singer }}</div>
+                                <div><label class="form-label">{{ music_form.category.label }}</label>{{ music_form.category }}</div>
                                 <div><label class="form-label">{{ music_form.tempo.label }}</label>{{ music_form.tempo }}</div>
                                 <div class="md:col-span-2">
                                     <label class="form-label">{{ music_form.audio_file.label }}</label>
@@ -843,23 +903,23 @@
                                 </div>
                             </div>
                             <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
-                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar música</button>
+                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar trilha</button>
                             </div>
                         </form>
 
                         <div class="inline-card bg-white">
-                            <h3 class="font-bold text-gray-900 mb-4">Músicas cadastradas</h3>
+                            <h3 class="font-bold text-gray-900 mb-4">Trilhas cadastradas</h3>
                             <div id="music-details" class="hidden mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"></div>
                             <div class="overflow-x-auto">
                                 <table class="modal-table w-full">
-                                    <thead><tr><th>Música</th><th>Andamento</th><th>Áudio</th><th class="text-right">Ações</th></tr></thead>
+                                    <thead><tr><th>Trilha</th><th>Categoria</th><th>Andamento</th><th>Áudio</th><th class="text-right">Ações</th></tr></thead>
                                     <tbody>
                                         {% for music in background_music_rows %}
                                         <tr>
                                             <td>
                                                 <p class="font-bold text-gray-900">{{ music.name }}</p>
-                                                <p class="text-xs text-gray-500">{{ music.singer|default:"—" }}</p>
                                             </td>
+                                            <td class="text-sm text-gray-600">{{ music.get_category_display }}</td>
                                             <td class="text-sm text-gray-600">{{ music.get_tempo_display|default:"—" }}</td>
                                             <td class="text-sm {% if music.audio_file %}text-green-700{% else %}text-amber-700{% endif %}">
                                                 {% if music.audio_file %}Disponível{% else %}Sem arquivo{% endif %}
@@ -869,7 +929,7 @@
                                                     <button type="button" class="asset-action"
                                                             data-view-bgmusic
                                                             data-name="{{ music.name }}"
-                                                            data-singer="{{ music.singer }}"
+                                                            data-category="{{ music.get_category_display }}"
                                                             data-tempo="{{ music.get_tempo_display|default:'Não definido' }}"
                                                             data-audio="{% if music.audio_file %}{{ music.audio_file.name }}{% else %}Sem arquivo{% endif %}"
                                                             title="Visualizar"><ion-icon name="eye-outline"></ion-icon></button>
@@ -877,7 +937,7 @@
                                                             data-edit-bgmusic
                                                             data-id="{{ music.id }}"
                                                             data-name="{{ music.name }}"
-                                                            data-singer="{{ music.singer }}"
+                                                            data-category="{{ music.category }}"
                                                             data-tempo="{{ music.tempo }}"
                                                             data-audio="{% if music.audio_file %}{{ music.audio_file.name }}{% endif %}"
                                                             title="Editar"><ion-icon name="create-outline"></ion-icon></button>
@@ -890,7 +950,96 @@
                                             </td>
                                         </tr>
                                         {% empty %}
-                                        <tr><td colspan="4" class="text-center text-gray-500 py-8">Nenhuma música cadastrada.</td></tr>
+                                        <tr><td colspan="5" class="text-center text-gray-500 py-8">Nenhuma trilha cadastrada.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mastering-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Perfis de masterização</h2>
+                            <p class="text-sm text-gray-500">Definem o alvo de loudness/true peak usado pelo AudioMasteringService. "PA Igreja" é o ponto de partida para o telão.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="mastering-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+
+                    <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <form method="post" action="{% url 'admin_external_media_mastering_profile_save' %}" class="inline-card bg-white">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="masterprofile_id" id="masterprofile-id">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 id="masterprofile-form-title" class="font-bold text-gray-900">Novo perfil</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-masterprofile>Limpar</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="md:col-span-2"><label class="form-label">{{ mastering_profile_form.name.label }}</label>{{ mastering_profile_form.name }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.target_lufs.label }}</label>{{ mastering_profile_form.target_lufs }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.true_peak_db.label }}</label>{{ mastering_profile_form.true_peak_db }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.dynamic_range_target.label }}</label>{{ mastering_profile_form.dynamic_range_target }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.max_gain_db.label }}</label>{{ mastering_profile_form.max_gain_db }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.max_limiter_reduction_db.label }}</label>{{ mastering_profile_form.max_limiter_reduction_db }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.low_frequency_control.label }}</label>{{ mastering_profile_form.low_frequency_control }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.high_frequency_control.label }}</label>{{ mastering_profile_form.high_frequency_control }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ mastering_profile_form.bus_compression_enabled }} {{ mastering_profile_form.bus_compression_enabled.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ mastering_profile_form.limiter_enabled }} {{ mastering_profile_form.limiter_enabled.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ mastering_profile_form.is_default }} {{ mastering_profile_form.is_default.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ mastering_profile_form.is_active }} {{ mastering_profile_form.is_active.label }}</label>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar perfil</button>
+                            </div>
+                        </form>
+
+                        <div class="inline-card bg-white">
+                            <h3 class="font-bold text-gray-900 mb-4">Perfis cadastrados</h3>
+                            <div class="overflow-x-auto">
+                                <table class="modal-table w-full">
+                                    <thead><tr><th>Perfil</th><th>LUFS</th><th>True Peak</th><th>Padrão</th><th class="text-right">Ações</th></tr></thead>
+                                    <tbody>
+                                        {% for profile in mastering_profile_rows %}
+                                        <tr>
+                                            <td><p class="font-bold text-gray-900">{{ profile.name }}</p></td>
+                                            <td class="text-sm text-gray-600">{{ profile.target_lufs }}</td>
+                                            <td class="text-sm text-gray-600">{{ profile.true_peak_db }}</td>
+                                            <td class="text-sm {% if profile.is_default %}text-green-700{% else %}text-gray-400{% endif %}">
+                                                {% if profile.is_default %}Padrão{% else %}—{% endif %}
+                                            </td>
+                                            <td class="text-right">
+                                                <div class="inline-flex gap-1">
+                                                    <button type="button" class="asset-action"
+                                                            data-edit-masterprofile
+                                                            data-id="{{ profile.id }}"
+                                                            data-name="{{ profile.name }}"
+                                                            data-target-lufs="{{ profile.target_lufs }}"
+                                                            data-true-peak="{{ profile.true_peak_db }}"
+                                                            data-dynamic-range="{{ profile.dynamic_range_target }}"
+                                                            data-max-gain="{{ profile.max_gain_db }}"
+                                                            data-max-limiter="{{ profile.max_limiter_reduction_db }}"
+                                                            data-low-frequency="{{ profile.low_frequency_control }}"
+                                                            data-high-frequency="{{ profile.high_frequency_control }}"
+                                                            data-bus-compression="{{ profile.bus_compression_enabled|yesno:'1,0' }}"
+                                                            data-limiter="{{ profile.limiter_enabled|yesno:'1,0' }}"
+                                                            data-default="{{ profile.is_default|yesno:'1,0' }}"
+                                                            data-active="{{ profile.is_active|yesno:'1,0' }}"
+                                                            title="Editar"><ion-icon name="create-outline"></ion-icon></button>
+                                                    <form method="post" action="{% url 'admin_external_media_mastering_profile_delete' profile.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                        <button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr><td colspan="5" class="text-center text-gray-500 py-8">Nenhum perfil cadastrado.</td></tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
@@ -907,6 +1056,37 @@
     {% csrf_token %}
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
 </form>
+
+<form id="presetDeleteForm" method="post" action="" class="hidden">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+</form>
+
+<div id="presetDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[90] p-3">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir preset de renderização</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-2">
+            Tem certeza que deseja excluir <strong id="presetDeleteModalName" class="text-gray-900"></strong>?
+        </p>
+        <p class="text-sm text-gray-500 mb-5">
+            Se o preset estiver em uso por templates, ele será desativado em vez de removido.
+        </p>
+        <div class="flex gap-2 justify-end">
+            <button type="button" id="presetDeleteModalCancel" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button type="button" id="presetDeleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">
+                <ion-icon name="trash-outline"></ion-icon> Excluir
+            </button>
+        </div>
+    </div>
+</div>
 
 <div id="styleDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[90] p-3">
     <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
@@ -1030,6 +1210,52 @@
         if (event.target === byId('styleDeleteModal')) closeStyleDeleteModal();
     });
 
+    let _presetDeleteAction = null;
+
+    function openPresetDeleteModal(action, name) {
+        _presetDeleteAction = action;
+        const nameEl = byId('presetDeleteModalName');
+        if (nameEl) nameEl.textContent = name || '';
+        const modal = byId('presetDeleteModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closePresetDeleteModal() {
+        _presetDeleteAction = null;
+        const modal = byId('presetDeleteModal');
+        if (!modal) return;
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        const confirmBtn = byId('presetDeleteModalConfirm');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+        }
+    }
+
+    document.querySelectorAll('[data-delete-preset]').forEach((button) => {
+        button.addEventListener('click', () => {
+            openPresetDeleteModal(button.dataset.action, button.dataset.name);
+        });
+    });
+    byId('presetDeleteModalCancel')?.addEventListener('click', closePresetDeleteModal);
+    byId('presetDeleteModalConfirm')?.addEventListener('click', () => {
+        const form = byId('presetDeleteForm');
+        if (!_presetDeleteAction || !form) return;
+        const btn = byId('presetDeleteModalConfirm');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        }
+        form.action = _presetDeleteAction;
+        form.submit();
+    });
+    byId('presetDeleteModal')?.addEventListener('click', (event) => {
+        if (event.target === byId('presetDeleteModal')) closePresetDeleteModal();
+    });
+
     document.querySelectorAll('[data-open-modal]').forEach((button) => {
         button.addEventListener('click', () => {
             const modal = byId(button.dataset.openModal);
@@ -1063,7 +1289,7 @@
         setValue('id_preset-video_codec', 'libx264');
         setValue('id_preset-audio_codec', 'copy');
         setValue('id_preset-video_crf', '23');
-        setValue('id_preset-extra_ffmpeg_args_raw', '[]');
+        setValue('id_preset-extra_ffmpeg_profile', '[]');
         setChecked('id_preset-is_active', true);
     }
     document.querySelector('[data-reset-preset]')?.addEventListener('click', resetPresetForm);
@@ -1077,15 +1303,8 @@
             setValue('id_preset-video_codec', button.dataset.videoCodec);
             setValue('id_preset-audio_codec', button.dataset.audioCodec);
             setValue('id_preset-video_crf', button.dataset.crf);
-            setValue('id_preset-extra_ffmpeg_args_raw', button.dataset.extra || '[]');
+            setValue('id_preset-extra_ffmpeg_profile', button.dataset.extra || '[]');
             setChecked('id_preset-is_active', button.dataset.active);
-        });
-    });
-    document.querySelectorAll('[data-view-preset]').forEach((button) => {
-        button.addEventListener('click', () => {
-            const target = byId('preset-details');
-            target.classList.remove('hidden');
-            target.innerHTML = `<strong>${button.dataset.name}</strong><br>Saída: ${button.dataset.size}<br>Vídeo: ${button.dataset.videoCodec}<br>Áudio: ${button.dataset.audioCodec}<br>CRF: ${button.dataset.crf}<br>Extras: <code>${button.dataset.extra || '[]'}</code>`;
         });
     });
 
@@ -1369,22 +1588,22 @@
         applyAlignment(element, style, safeMargin / playResY, 40 / playResX);
 
         const outlinePx = Math.max(0, style.outlineWidth * scale);
-        const shadowDistance = Math.max(0, Number(style.shadow) || 0) * scale;
+        const shadowDistance = Math.max(0, Number(style.shadow) || 0);
         const shadowAngle = ((Number(style.shadowAngle) || 0) % 360 + 360) % 360;
-        const shadowSizePx = Math.max(0, Number(style.shadowSize) || 0) * scale;
+        const shadowSize = Math.max(0, Number(style.shadowSize) || 0);
         const shadowBlurPx = Math.max(0, Number(style.shadowBlur) || 0) * scale;
         const shadowAlpha = Math.max(0, Math.min(100, Number(style.shadowOpacity) || 0)) / 100;
         const radians = shadowAngle * Math.PI / 180;
-        const shadowDx = shadowDistance * Math.cos(radians);
-        const shadowDy = shadowDistance * Math.sin(radians);
-        // Tamanho não entra no blur do CSS (no ASS o tamanho é escala tipográfica, não \bord).
-        // Para simular tamanho > 0 no preview, empilhamos cópias nítidas no mesmo ângulo.
+        const shadowDx = shadowDistance * Math.cos(radians) * scale;
+        const shadowDy = shadowDistance * Math.sin(radians) * scale;
+        // Passos/tamanho usam unidades PlayRes (como SubtitleService._shadow_layer_overrides),
+        // não pixels escalados — senão o preview subestima tamanho/distância vs o ASS final.
+        const sizeSteps = shadowSize > 0 ? Math.min(4, Math.max(1, Math.round(shadowSize / 3))) : 0;
         let dropShadow = '';
-        if (shadowAlpha > 0 && (shadowDistance > 0 || shadowSizePx > 0 || shadowBlurPx > 0)) {
+        if (shadowAlpha > 0 && (shadowDistance > 0 || shadowSize > 0 || Number(style.shadowBlur) > 0)) {
             const parts = [];
-            const sizeSteps = shadowSizePx > 0 ? Math.min(4, Math.max(1, Math.round(shadowSizePx / 3))) : 0;
             for (let i = 0; i <= sizeSteps; i += 1) {
-                const grow = 1 + (sizeSteps ? (i / sizeSteps) * (shadowSizePx * 0.04) : 0);
+                const grow = 1 + (sizeSteps ? (i / sizeSteps) * (shadowSize * 0.04) : 0);
                 parts.push(
                     `${(shadowDx * grow).toFixed(2)}px ${(shadowDy * grow).toFixed(2)}px `
                     + `${shadowBlurPx.toFixed(2)}px rgba(0,0,0,${shadowAlpha})`
@@ -1592,10 +1811,10 @@
     setPreviewBackdrop('dark');
 
     function resetBackgroundMusicForm() {
-        byId('bgmusic-form-title').textContent = 'Nova música';
+        byId('bgmusic-form-title').textContent = 'Nova trilha';
         setValue('bgmusic-id', '');
         setValue('id_bgmusic-name', '');
-        setValue('id_bgmusic-singer', '');
+        setValue('id_bgmusic-category', 'instrumental');
         setValue('id_bgmusic-tempo', '');
         const fileInput = byId('id_bgmusic-audio_file');
         if (fileInput) fileInput.value = '';
@@ -1603,10 +1822,10 @@
     document.querySelector('[data-reset-bgmusic]')?.addEventListener('click', resetBackgroundMusicForm);
     document.querySelectorAll('[data-edit-bgmusic]').forEach((button) => {
         button.addEventListener('click', () => {
-            byId('bgmusic-form-title').textContent = `Editar música: ${button.dataset.name}`;
+            byId('bgmusic-form-title').textContent = `Editar trilha: ${button.dataset.name}`;
             setValue('bgmusic-id', button.dataset.id);
             setValue('id_bgmusic-name', button.dataset.name);
-            setValue('id_bgmusic-singer', button.dataset.singer);
+            setValue('id_bgmusic-category', button.dataset.category);
             setValue('id_bgmusic-tempo', button.dataset.tempo);
             const details = byId('music-details');
             details.classList.remove('hidden');
@@ -1617,7 +1836,43 @@
         button.addEventListener('click', () => {
             const target = byId('music-details');
             target.classList.remove('hidden');
-            target.innerHTML = `<strong>${button.dataset.name}</strong><br>Artista: ${button.dataset.singer || '—'}<br>Andamento: ${button.dataset.tempo}<br>Áudio: ${button.dataset.audio}`;
+            target.innerHTML = `<strong>${button.dataset.name}</strong><br>Categoria: ${button.dataset.category || '—'}<br>Andamento: ${button.dataset.tempo}<br>Áudio: ${button.dataset.audio}`;
+        });
+    });
+
+    function resetMasteringProfileForm() {
+        byId('masterprofile-form-title').textContent = 'Novo perfil';
+        setValue('masterprofile-id', '');
+        setValue('id_masterprofile-name', '');
+        setValue('id_masterprofile-target_lufs', '-16.0');
+        setValue('id_masterprofile-true_peak_db', '-1.0');
+        setValue('id_masterprofile-dynamic_range_target', '11.0');
+        setValue('id_masterprofile-max_gain_db', '12.0');
+        setValue('id_masterprofile-max_limiter_reduction_db', '4.0');
+        setValue('id_masterprofile-low_frequency_control', '0.0');
+        setValue('id_masterprofile-high_frequency_control', '0.0');
+        setChecked('id_masterprofile-bus_compression_enabled', false);
+        setChecked('id_masterprofile-limiter_enabled', true);
+        setChecked('id_masterprofile-is_default', false);
+        setChecked('id_masterprofile-is_active', true);
+    }
+    document.querySelector('[data-reset-masterprofile]')?.addEventListener('click', resetMasteringProfileForm);
+    document.querySelectorAll('[data-edit-masterprofile]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('masterprofile-form-title').textContent = `Editar perfil: ${button.dataset.name}`;
+            setValue('masterprofile-id', button.dataset.id);
+            setValue('id_masterprofile-name', button.dataset.name);
+            setValue('id_masterprofile-target_lufs', button.dataset.targetLufs);
+            setValue('id_masterprofile-true_peak_db', button.dataset.truePeak);
+            setValue('id_masterprofile-dynamic_range_target', button.dataset.dynamicRange);
+            setValue('id_masterprofile-max_gain_db', button.dataset.maxGain);
+            setValue('id_masterprofile-max_limiter_reduction_db', button.dataset.maxLimiter);
+            setValue('id_masterprofile-low_frequency_control', button.dataset.lowFrequency);
+            setValue('id_masterprofile-high_frequency_control', button.dataset.highFrequency);
+            setChecked('id_masterprofile-bus_compression_enabled', button.dataset.busCompression === '1');
+            setChecked('id_masterprofile-limiter_enabled', button.dataset.limiter === '1');
+            setChecked('id_masterprofile-is_default', button.dataset.default === '1');
+            setChecked('id_masterprofile-is_active', button.dataset.active === '1');
         });
     });
 

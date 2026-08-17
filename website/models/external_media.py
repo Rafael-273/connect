@@ -7,7 +7,6 @@ from django.db import models
 
 from ._base import BaseModel
 from .member import Member
-from .music import Music
 
 
 def external_media_upload_path(instance, filename):
@@ -23,6 +22,26 @@ def external_media_asset_path(instance, filename):
 def external_media_template_path(instance, filename):
     template_id = getattr(instance, 'template_id', None) or getattr(instance, 'pk', 'pending')
     return f'external_media/templates/{template_id}/{filename}'
+
+
+def background_music_upload_path(instance, filename):
+    suffix = Path(filename).suffix.lower()
+    track_id = getattr(instance, 'pk', None) or 'pending'
+    return f'external_media/background_music/{track_id}{suffix}'
+
+
+def video_mastering_upload_path(instance, filename):
+    suffix = Path(filename).suffix.lower()
+    return f'external_media/mastering/{instance.public_id}/source/original{suffix}'
+
+
+def video_mastering_output_path(instance, filename):
+    suffix = Path(filename).suffix.lower() or '.mp4'
+    return f'external_media/mastering/{instance.public_id}/output/mastered{suffix}'
+
+
+def project_export_path(instance, filename):
+    return f'external_media/projects/{instance.project.public_id}/exports/{instance.public_id}/{filename}'
 
 
 def external_media_project_upload_path(instance, filename):
@@ -341,6 +360,176 @@ class MediaTemplate(BaseModel):
         return self.versions.order_by('-version').first()
 
 
+class BackgroundMusicTrack(BaseModel):
+    class Category(models.TextChoices):
+        INSTRUMENTAL = 'instrumental', 'Instrumental'
+        WORSHIP = 'worship', 'Adoração'
+        CALM = 'calm', 'Calma'
+        UPBEAT = 'upbeat', 'Animada'
+        CINEMATIC = 'cinematic', 'Cinematográfica'
+        ANNOUNCEMENT = 'announcement', 'Anúncio'
+        OTHER = 'other', 'Outra'
+
+    TEMPO_CHOICES = [
+        ('rapida', 'Rápida'),
+        ('media', 'Média'),
+        ('lenta', 'Lenta'),
+    ]
+
+    name = models.CharField(max_length=200)
+    category = models.CharField(
+        max_length=32,
+        choices=Category.choices,
+        default=Category.INSTRUMENTAL,
+        verbose_name='Categoria',
+    )
+    tempo = models.CharField(
+        max_length=10,
+        choices=TEMPO_CHOICES,
+        blank=True,
+        default='',
+        verbose_name='Andamento',
+    )
+    audio_file = models.FileField(
+        upload_to=background_music_upload_path,
+        storage=get_external_media_storage,
+        max_length=255,
+        blank=True,
+        help_text='Arquivo de áudio usado como trilha de fundo nos templates.',
+    )
+
+    class Meta:
+        ordering = ['category', 'name']
+        verbose_name = 'Trilha de fundo'
+        verbose_name_plural = 'Trilhas de fundo'
+
+    def __str__(self):
+        return self.name
+
+
+class MasteringProfile(BaseModel):
+    """Loudness/true-peak target used by AudioMasteringService for the final stereo mix.
+
+    Kept independent from mixing settings on purpose: mastering only ever sees the
+    finished mix, never individual dialogue/music elements (see AudioMasteringService).
+    """
+
+    name = models.CharField(max_length=100, unique=True)
+    code = models.SlugField(max_length=50, unique=True)
+    target_lufs = models.DecimalField(max_digits=4, decimal_places=1, default=-16.0, verbose_name='Loudness alvo (LUFS)')
+    true_peak_db = models.DecimalField(max_digits=4, decimal_places=1, default=-1.0, verbose_name='True Peak máximo (dBTP)')
+    bus_compression_enabled = models.BooleanField(default=False, verbose_name='Compressão de bus leve')
+    limiter_enabled = models.BooleanField(default=True, verbose_name='Limiter de true peak')
+    eq_profile = models.JSONField(default=dict, blank=True, verbose_name='Perfil de EQ')
+    dynamic_range_target = models.DecimalField(
+        max_digits=4, decimal_places=1, default=11.0, verbose_name='Faixa dinâmica alvo (LU)',
+    )
+    compression_limits = models.JSONField(default=dict, blank=True, verbose_name='Limites de compressão')
+    limiter_settings = models.JSONField(default=dict, blank=True, verbose_name='Configuração do limiter')
+    low_frequency_control = models.DecimalField(
+        max_digits=4, decimal_places=1, default=0, verbose_name='Controle de graves (dB)',
+    )
+    high_frequency_control = models.DecimalField(
+        max_digits=4, decimal_places=1, default=0, verbose_name='Controle de agudos (dB)',
+    )
+    max_gain_db = models.DecimalField(
+        max_digits=4, decimal_places=1, default=12.0, verbose_name='Ganho máximo (dB)',
+    )
+    max_limiter_reduction_db = models.DecimalField(
+        max_digits=4, decimal_places=1, default=4.0, verbose_name='Redução máxima do limiter (dB)',
+    )
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False, verbose_name='Perfil padrão')
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Perfil de masterização'
+        verbose_name_plural = 'Perfis de masterização'
+
+    def __str__(self):
+        return self.name
+
+
+class VideoMasteringJob(BaseModel):
+    """Masterização independente de um vídeo finalizado.
+
+    O original é imutável e sempre é a origem de qualquer reprocessamento. Este fluxo
+    deliberadamente não conhece diálogo, música ou templates de edição.
+    """
+
+    class Status(models.TextChoices):
+        UPLOADING = 'UPLOADING', 'Enviando vídeo'
+        ANALYZING = 'ANALYZING', 'Analisando áudio'
+        READY = 'READY', 'Pronto para masterizar'
+        MASTERING = 'MASTERING', 'Masterizando áudio'
+        VALIDATING = 'VALIDATING', 'Validando resultado'
+        MUXING = 'MUXING', 'Finalizando vídeo'
+        FINISHED = 'FINISHED', 'Finalizado'
+        ERROR = 'ERROR', 'Erro'
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    name = models.CharField(max_length=180)
+    created_by = models.ForeignKey(
+        Member, on_delete=models.PROTECT, related_name='video_mastering_jobs',
+    )
+    original_video = models.FileField(
+        upload_to=video_mastering_upload_path, storage=get_external_media_storage, max_length=255,
+    )
+    output_video = models.FileField(
+        upload_to=video_mastering_output_path,
+        storage=get_external_media_storage,
+        max_length=255,
+        blank=True,
+    )
+    mastering_profile = models.ForeignKey(
+        MasteringProfile,
+        on_delete=models.PROTECT,
+        related_name='video_jobs',
+        blank=True,
+        null=True,
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.UPLOADING)
+    progress = models.PositiveSmallIntegerField(default=0)
+    current_step = models.CharField(max_length=180, blank=True)
+    error_message = models.TextField(blank=True)
+    input_metrics = models.JSONField(default=dict, blank=True)
+    output_metrics = models.JSONField(default=dict, blank=True)
+    input_lufs = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    output_lufs = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    input_true_peak = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    output_true_peak = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    gain_applied = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    limiter_gain_reduction = models.DecimalField(max_digits=6, decimal_places=2, blank=True, null=True)
+    video_reencoded = models.BooleanField(default=False)
+    download_count = models.PositiveIntegerField(default=0)
+    started_at = models.DateTimeField(blank=True, null=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+    celery_task_id = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['created_by', '-created_at'], name='website_vid_created_ba1fd6_idx'),
+            models.Index(fields=['status'], name='website_vid_status_c4fdda_idx'),
+        ]
+        verbose_name = 'Masterização de vídeo'
+        verbose_name_plural = 'Masterizações de vídeo'
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def duration_seconds(self):
+        if not self.started_at:
+            return None
+        end = self.finished_at or self.update_at
+        return max(0, int((end - self.started_at).total_seconds()))
+
+    @property
+    def duration_label(self):
+        return format_processing_duration(self.duration_seconds)
+
+
 class MediaTemplateVersion(BaseModel):
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Rascunho'
@@ -378,9 +567,9 @@ class MediaTemplateVersion(BaseModel):
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
     background_music = models.ForeignKey(
-        Music,
+        BackgroundMusicTrack,
         on_delete=models.PROTECT,
-        related_name='external_media_versions',
+        related_name='template_versions',
         blank=True,
         null=True,
     )
@@ -390,6 +579,23 @@ class MediaTemplateVersion(BaseModel):
     music_volume = models.DecimalField(max_digits=4, decimal_places=2, default=0.15)
     fade_in_seconds = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     fade_out_seconds = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    dialogue_processing_enabled = models.BooleanField(default=False, verbose_name='Tratamento de diálogo')
+    dialogue_processing_config = models.JSONField(
+        default=dict, blank=True, verbose_name='Configuração avançada de tratamento de diálogo',
+    )
+    audio_mixing_enabled = models.BooleanField(default=False, verbose_name='Mixagem inteligente')
+    audio_ducking_enabled = models.BooleanField(default=True, verbose_name='Ducking automático')
+    audio_spectral_ducking_enabled = models.BooleanField(default=False, verbose_name='Ducking espectral')
+    audio_mixing_config = models.JSONField(default=dict, blank=True, verbose_name='Configuração avançada de mixagem')
+    audio_mastering_enabled = models.BooleanField(default=False, verbose_name='Masterização')
+    mastering_profile = models.ForeignKey(
+        MasteringProfile,
+        on_delete=models.PROTECT,
+        related_name='template_versions',
+        blank=True,
+        null=True,
+        verbose_name='Perfil de masterização',
+    )
     published_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
@@ -576,3 +782,66 @@ class ProjectPipelineStep(BaseModel):
 
     def __str__(self):
         return f'{self.project}: {self.label}'
+
+
+class ExternalMediaProjectExport(BaseModel):
+    class Format(models.TextChoices):
+        PREMIERE = 'PREMIERE', 'Adobe Premiere Pro'
+
+    class Status(models.TextChoices):
+        PREPARING = 'PREPARING', 'Preparando'
+        BUILDING_TIMELINE = 'BUILDING_TIMELINE', 'Construindo timeline'
+        CONVERTING = 'CONVERTING', 'Convertendo projeto'
+        PACKAGING_ASSETS = 'PACKAGING_ASSETS', 'Organizando arquivos'
+        VALIDATING = 'VALIDATING', 'Validando exportação'
+        COMPRESSING = 'COMPRESSING', 'Compactando pacote'
+        FINISHED = 'FINISHED', 'Finalizado'
+        ERROR = 'ERROR', 'Erro'
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    project = models.ForeignKey(
+        ExternalMediaProject, on_delete=models.CASCADE, related_name='exports',
+    )
+    created_by = models.ForeignKey(
+        Member, on_delete=models.PROTECT, related_name='external_media_exports',
+    )
+    format = models.CharField(max_length=16, choices=Format.choices, default=Format.PREMIERE)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.PREPARING)
+    progress = models.PositiveSmallIntegerField(default=0)
+    current_step = models.CharField(max_length=180, blank=True)
+    error_message = models.TextField(blank=True)
+    archive = models.FileField(
+        upload_to=project_export_path, storage=get_external_media_storage, max_length=255, blank=True,
+    )
+    timeline_json = models.FileField(
+        upload_to=project_export_path, storage=get_external_media_storage, max_length=255, blank=True,
+    )
+    compatibility = models.JSONField(default=dict, blank=True)
+    validation_report = models.JSONField(default=dict, blank=True)
+    celery_task_id = models.CharField(max_length=255, blank=True)
+    download_count = models.PositiveIntegerField(default=0)
+    started_at = models.DateTimeField(blank=True, null=True)
+    finished_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['project', '-created_at'], name='website_ext_project_a76efe_idx'),
+            models.Index(fields=['status'], name='website_ext_status_985ac0_idx'),
+        ]
+        verbose_name = 'Exportação de projeto de mídia'
+        verbose_name_plural = 'Exportações de projetos de mídia'
+
+    def __str__(self):
+        return f'{self.project.name} · {self.get_format_display()}'
+
+    @property
+    def duration_seconds(self):
+        if not self.started_at:
+            return None
+        end = self.finished_at or self.update_at
+        return max(0, int((end - self.started_at).total_seconds()))
+
+    @property
+    def duration_label(self):
+        return format_processing_duration(self.duration_seconds)

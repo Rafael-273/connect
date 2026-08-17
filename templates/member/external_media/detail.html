@@ -3,10 +3,10 @@
 {% block media_content %}
 <div class="flex flex-wrap justify-between items-start gap-4 mb-6">
     <div><a href="{% url 'external_media_dashboard' %}" class="text-sm text-gray-500 hover:underline">← Histórico</a><h1 class="text-3xl font-black mt-2">{{ job.name }}</h1><p class="text-gray-500">Enviado por {{ job.created_by.name }} em {{ job.created_at|date:'d/m/Y H:i' }}</p></div>
-    {% if job.status == 'AWAITING_REVIEW' or job.status == 'FINISHED' %}<a href="{% url 'external_media_editor' job.public_id %}" class="media-btn media-secondary"><i class="fas fa-pen"></i>Editar legendas</a>{% endif %}
+    {% if job.status == 'FINISHED' %}<a href="{% url 'external_media_editor' job.public_id %}" class="media-btn media-secondary"><i class="fas fa-pen"></i>Editar legendas</a>{% endif %}
 </div>
 
-<section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_status' job.public_id %}" data-terminal="{% if job.status == 'AWAITING_REVIEW' or job.status == 'FINISHED' or job.status == 'ERROR' or job.status == 'CANCELLED' %}1{% else %}0{% endif %}">
+<section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_status' job.public_id %}" data-terminal="{% if job.status == 'FINISHED' or job.status == 'ERROR' or job.status == 'CANCELLED' %}1{% else %}0{% endif %}">
     <div class="flex justify-between gap-3 mb-3"><div><span id="status-label" class="font-black">{{ job.get_status_display }}</span><p id="current-step" class="text-sm text-gray-500">{{ job.current_step }}</p></div><strong id="progress-value" class="text-2xl" style="color:#C90905">{{ job.progress }}%</strong></div>
     <div class="h-3 bg-gray-100 rounded-full overflow-hidden"><div id="progress-bar" class="h-full transition-all duration-500" style="width:{{ job.progress }}%;background:#C90905"></div></div>
     <div class="mt-4">
@@ -22,10 +22,6 @@
     </div>
     {% if job.error_message %}<div class="mt-5 p-4 bg-red-50 text-red-700 rounded-xl"><strong>Erro:</strong> {{ job.error_message }}</div>{% endif %}
 </section>
-
-{% if job.status == 'AWAITING_REVIEW' %}
-<section class="media-card p-6 text-center"><i class="fas fa-spell-check text-4xl mb-3" style="color:#C90905"></i><h2 class="text-xl font-black">Revise antes de renderizar</h2><p class="text-gray-500 mb-5">Você pode corrigir texto e quebras de linha. Os timestamps são protegidos.</p><div class="flex flex-wrap justify-center gap-3"><a href="{% url 'external_media_editor' job.public_id %}" class="media-btn media-secondary">Abrir editor</a><form method="post" action="{% url 'external_media_render' job.public_id %}">{% csrf_token %}<button class="media-btn media-primary">Aprovar e renderizar</button></form></div></section>
-{% endif %}
 
 {% if job.status == 'ERROR' %}
 <section class="media-card p-6 text-center mb-7">

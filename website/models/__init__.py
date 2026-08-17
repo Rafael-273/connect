@@ -24,10 +24,13 @@ from .roteiro import Roteiro, AnuncioRoteiro, AnuncioRoteiroData
 from .house_of_peace import HouseOfPeace, HouseOfPeaceAssignment
 from .prosperar import ProsperarCompany
 from .external_media import (
+    BackgroundMusicTrack,
     ExternalMediaJob,
     ExternalMediaProject,
+    ExternalMediaProjectExport,
     GlossaryTerm,
     MediaAsset,
+    MasteringProfile,
     MediaTemplate,
     MediaTemplateBlock,
     MediaTemplatePlugin,
@@ -38,4 +41,5 @@ from .external_media import (
     SubtitleCue,
     SubtitleStyle,
     SubtitleTrack,
+    VideoMasteringJob,
 )

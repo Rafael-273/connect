@@ -8,10 +8,12 @@ from ..models.external_media import (
     ExternalMediaJob,
     ExternalMediaProject,
     GlossaryTerm,
+    MasteringProfile,
     MediaTemplateVersion,
     ProjectBlockMedia,
     RenderPreset,
     SubtitleStyle,
+    VideoMasteringJob,
 )
 
 
@@ -156,3 +158,34 @@ class GlossaryTermForm(forms.ModelForm):
         choices = [('pt', 'Português'), ('en', 'Inglês')]
         self.fields['source_language'].choices = choices
         self.fields['target_language'].choices = choices
+
+
+class VideoMasteringUploadForm(forms.ModelForm):
+    class Meta:
+        model = VideoMasteringJob
+        fields = ['name', 'original_video']
+        labels = {'name': 'Nome do vídeo', 'original_video': 'Arquivo de vídeo'}
+        widgets = {
+            'original_video': forms.ClearableFileInput(attrs={'accept': '.mp4,.mov,video/mp4,video/quicktime'}),
+        }
+
+    def clean_original_video(self):
+        video = self.cleaned_data['original_video']
+        extension = Path(video.name).suffix.lower()
+        if extension not in {'.mp4', '.mov'}:
+            raise forms.ValidationError('Envie um vídeo MP4 ou MOV.')
+        return validate_video_upload(video)
+
+
+class VideoMasteringProfileForm(forms.Form):
+    mastering_profile = forms.ModelChoiceField(
+        label='Perfil de masterização',
+        queryset=MasteringProfile.objects.none(),
+        empty_label=None,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['mastering_profile'].queryset = MasteringProfile.objects.filter(
+            is_active=True,
+        ).order_by('-is_default', 'name')

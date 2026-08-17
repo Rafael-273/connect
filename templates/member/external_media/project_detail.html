@@ -11,7 +11,7 @@
 </div>
 
 {% if project.status != 'DRAFT' %}
-<section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'AWAITING_REVIEW' or project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}">
+<section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}">
     <div class="flex justify-between gap-4 mb-3"><div><p class="font-black" id="status-label">{{ project.get_status_display }}</p><p class="text-sm text-gray-500" id="current-step">{{ project.current_step }}</p></div><strong id="progress-value">{{ project.progress }}%</strong></div>
     <div class="h-3 rounded-full bg-gray-100 overflow-hidden"><div id="progress-bar" class="h-full transition-all" style="width:{{ project.progress }}%;background:#C90905"></div></div>
     <div class="mt-4">
@@ -58,7 +58,10 @@
         {% for media in item.media %}
         <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 mb-2"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div>
         {% empty %}
-            {% if item.definition.default_video %}<p class="rounded-xl bg-green-50 text-green-800 p-3 text-sm mb-3"><i class="fas fa-circle-check mr-2"></i>Usará o vídeo padrão do template.</p>{% else %}<p class="text-sm text-gray-400 mb-3">Nenhum upload.</p>{% endif %}
+            {% if item.has_default_video %}<p class="rounded-xl bg-green-50 text-green-800 p-3 text-sm mb-3"><i class="fas fa-circle-check mr-2"></i>Usará o vídeo padrão do template.</p>{% else %}<p class="text-sm text-gray-400 mb-3">Nenhum upload.</p>{% endif %}
+        {% endfor %}
+        {% for media in item.missing_media %}
+        <div class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 mb-2"><div class="min-w-0"><strong class="block text-amber-900">Arquivo não disponível</strong><span class="text-xs text-amber-800">{{ media.original_filename }} — envie o vídeo novamente.</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover referência antiga"><i class="fas fa-trash"></i></button></form></div>
         {% endfor %}
         {% if item.media|length < item.definition.max_occurrences %}
         <form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_upload' project.public_id item.definition.pk %}" class="media-form media-upload-form space-y-3">
@@ -339,10 +342,6 @@
 </script>
 {% endif %}
 
-{% if project.status == 'AWAITING_REVIEW' and project.render_job %}
-<section class="media-card p-6 text-center mb-7"><i class="fas fa-spell-check text-4xl mb-3" style="color:#C90905"></i><h2 class="text-xl font-black">Revise as legendas</h2><p class="text-gray-500 mb-5">Você pode corrigir o texto sem alterar os timestamps.</p><div class="flex flex-wrap justify-center gap-3"><a href="{% url 'external_media_editor' project.render_job.public_id %}" class="media-btn media-secondary">Abrir editor</a><form method="post" action="{% url 'external_media_project_render' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary">Aprovar e renderizar</button></form></div></section>
-{% endif %}
-
 {% if project.status == 'ERROR' %}
 <section class="media-card p-6 text-center mb-7">
     <i class="fas fa-rotate text-4xl mb-3" style="color:#C90905"></i>
@@ -358,13 +357,87 @@
 {% endif %}
 
 {% if project.render_job and project.status == 'FINISHED' %}
+<section class="media-card p-5 sm:p-6 mb-6">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+        <div>
+            <h2 class="text-xl font-black">Exportar projeto</h2>
+            <p class="text-sm text-gray-500 mt-1">Baixe o resultado final ou continue a edição com os arquivos originais no Premiere.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="{% url 'external_media_editor' project.render_job.public_id %}" class="media-btn media-secondary"><i class="fas fa-pen"></i>Editar legendas</a>
+            <form method="post" action="{% url 'external_media_project_export_premiere' project.public_id %}">
+                {% csrf_token %}
+                <button class="media-btn media-primary"><i class="fas fa-file-export"></i>Adobe Premiere</button>
+            </form>
+        </div>
+    </div>
+    <div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+        {% for asset in assets %}{% if asset.kind == 'SRT' %}<a class="media-btn media-muted text-sm" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>SRT {{ asset.language|upper }}</a>{% endif %}{% endfor %}
+        {% for export in project_exports %}{% if export.status == 'FINISHED' %}<a class="media-btn media-muted text-sm" href="{% url 'external_media_project_export_timeline' project.public_id export.public_id %}"><i class="fas fa-code"></i>Timeline JSON</a>{% endif %}{% endfor %}
+    </div>
+</section>
+
+{% if project_exports %}
+<section class="media-card p-5 sm:p-6 mb-6">
+    <h2 class="font-black text-lg">Exportações editáveis</h2>
+    <p class="text-sm text-gray-500 mb-4">Pacote completo com XML, originais, música, legendas, LUT e metadata.</p>
+    <div class="space-y-3">
+        {% for export in project_exports %}
+        <article class="rounded-xl border border-gray-200 p-4" data-export-card data-terminal="{% if export.status == 'FINISHED' or export.status == 'ERROR' %}1{% else %}0{% endif %}" data-status-url="{% url 'external_media_project_export_status' project.public_id export.public_id %}">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <strong class="block" data-export-label>{{ export.get_format_display }} · {{ export.get_status_display }}</strong>
+                    <span class="text-sm text-gray-500" data-export-step>{{ export.current_step }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <strong style="color:#C90905" data-export-progress>{{ export.progress }}%</strong>
+                    {% if export.status == 'FINISHED' %}
+                    <a class="media-btn media-primary text-sm" href="{% url 'external_media_project_export_download' project.public_id export.public_id %}"><i class="fas fa-download"></i>Baixar pacote</a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="h-2 rounded-full bg-gray-100 overflow-hidden mt-3"><div class="h-full" data-export-bar style="width:{{ export.progress }}%;background:#C90905"></div></div>
+            {% if export.error_message %}<p class="text-sm text-red-700 mt-3" data-export-error>{{ export.error_message }}</p>{% else %}<p data-export-error></p>{% endif %}
+            {% if export.status == 'FINISHED' and export.compatibility.warnings %}
+            <div class="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-4">
+                <strong class="block text-amber-900 mb-2"><i class="fas fa-triangle-exclamation mr-1"></i>Compatibilidade da exportação</strong>
+                <div class="space-y-1">{% for warning in export.compatibility.warnings %}<p class="text-sm text-amber-800">⚠ {{ warning }}</p>{% endfor %}</div>
+                <p class="text-sm text-green-800 mt-2">✓ Cortes, in/out, originais, trilhas, markers e legendas foram preservados.</p>
+            </div>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
 <section class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
     {% for asset in assets %}{% if asset.kind == 'VIDEO' %}<div class="media-card p-4"><h3 class="font-black mb-3">{% if project.configuration.language_mode == 'translated' and project.render_job.output_languages|length > 1 %}Vídeo {{ project.render_job.output_languages|join:" + "|upper }}{% else %}Vídeo {{ asset.get_language_display }}{% endif %}</h3><video controls preload="metadata" class="w-full rounded-xl bg-black" src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1"></video><a class="media-btn media-primary w-full mt-3" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-download"></i>{% if project.configuration.language_mode == 'translated' and project.render_job.output_languages|length > 1 %}Baixar vídeo bilingue{% else %}Baixar vídeo {{ asset.language|upper }}{% endif %}</a></div>{% endif %}{% endfor %}
 </section>
 <div class="media-card p-5"><h3 class="font-black mb-4">Legendas</h3><div class="flex flex-wrap gap-3">{% for asset in assets %}{% if asset.kind == 'SRT' or asset.kind == 'VTT' %}<a class="media-btn media-muted" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>{{ asset.language|upper }} .{{ asset.kind|lower }}</a>{% endif %}{% endfor %}</div></div>
+
+<script>
+(() => {
+    document.querySelectorAll('[data-export-card][data-terminal="0"]').forEach((card) => {
+        const poll = async () => {
+            try {
+                const response = await fetch(card.dataset.statusUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                const data = await response.json();
+                card.querySelector('[data-export-label]').textContent = `Adobe Premiere Pro · ${data.status_label}`;
+                card.querySelector('[data-export-step]').textContent = data.current_step || '';
+                card.querySelector('[data-export-progress]').textContent = `${data.progress}%`;
+                card.querySelector('[data-export-bar]').style.width = `${data.progress}%`;
+                card.querySelector('[data-export-error]').textContent = data.error || '';
+                if (data.is_terminal) window.location.reload(); else setTimeout(poll, 2500);
+            } catch (error) { setTimeout(poll, 5000); }
+        };
+        setTimeout(poll, 1200);
+    });
+})();
+</script>
 {% endif %}
 
-{% if project.status != 'DRAFT' and project.status != 'AWAITING_REVIEW' and project.status != 'FINISHED' and project.status != 'ERROR' %}
+{% if project.status != 'DRAFT' and project.status != 'FINISHED' and project.status != 'ERROR' %}
 <script>
 (function(){const card=document.getElementById('progress-card');if(!card||card.dataset.terminal==='1')return;const poll=()=>fetch(card.dataset.statusUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.json()).then(data=>{document.getElementById('status-label').textContent=data.status_label;document.getElementById('current-step').textContent=data.current_step;document.getElementById('progress-value').textContent=data.progress+'%';document.getElementById('progress-bar').style.width=data.progress+'%';const duration=document.getElementById('duration-label');if(duration){duration.textContent=data.duration_label||'—';}if(data.is_terminal){window.location.reload();}else{setTimeout(poll,2500);}}).catch(()=>setTimeout(poll,5000));setTimeout(poll,1500);})();
 </script>

@@ -13,15 +13,18 @@ from django.views import View
 
 from ...forms.admin_external_media import (
     AdminBackgroundMusicForm,
+    AdminMasteringProfileForm,
     AdminMediaTemplateBlockFormSet,
     AdminMediaTemplateForm,
     AdminMediaTemplateVersionForm,
     AdminRenderPresetForm,
     AdminSubtitleStyleForm,
 )
-from ...models.music import Music
 from ...models.external_media import (
+    BackgroundMusicTrack,
     ExternalMediaJob,
+    ExternalMediaProject,
+    MasteringProfile,
     MediaTemplate,
     MediaTemplateVersion,
     RenderPreset,
@@ -53,12 +56,32 @@ class AdminExternalMediaTemplateListView(LoginRequiredMixin, AdminRequiredMixin,
             'templates': templates,
             'search': search,
             'status': status,
-            'stats': {
-                'total': MediaTemplate.objects.count(),
-                'active': MediaTemplate.objects.filter(is_active=True).count(),
-                'projects': MediaTemplateVersion.objects.aggregate(total=Count('projects', distinct=True))['total'],
-            },
         })
+
+
+class AdminExternalMediaTemplateDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
+    def post(self, request, template_id):
+        template = get_object_or_404(MediaTemplate, id=template_id)
+        name = template.name
+        projects_count = ExternalMediaProject.objects.filter(
+            template_version__template=template,
+        ).count()
+        if projects_count:
+            projeto = 'projeto' if projects_count == 1 else 'projetos'
+            vinculado = 'vinculado' if projects_count == 1 else 'vinculados'
+            messages.error(
+                request,
+                f'Template "{name}" não pode ser excluído porque possui '
+                f'{projects_count} {projeto} {vinculado}.',
+            )
+            return redirect('admin_external_media_templates')
+        try:
+            with transaction.atomic():
+                template.delete()
+            messages.success(request, f'Template "{name}" excluído.')
+        except ProtectedError:
+            messages.error(request, f'Template "{name}" não pode ser excluído porque está em uso.')
+        return redirect('admin_external_media_templates')
 
 
 def get_or_create_current_media_version(template):
@@ -263,7 +286,8 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             block_formset = AdminMediaTemplateBlockFormSet(instance=version, prefix='blocks')
         render_presets = list(RenderPreset.objects.order_by('name'))
         subtitle_styles = list(SubtitleStyle.objects.order_by('name'))
-        background_musics = list(Music.objects.order_by('name', 'singer'))
+        background_musics = list(BackgroundMusicTrack.objects.order_by('category', 'name'))
+        mastering_profiles = list(MasteringProfile.objects.order_by('name'))
         if is_create:
             title = 'Novo Template de Mídia'
         elif template.pk:
@@ -284,9 +308,11 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             ],
             'subtitle_styles': subtitle_styles,
             'background_music_rows': background_musics,
+            'mastering_profile_rows': mastering_profiles,
             'preset_form': AdminRenderPresetForm(prefix='preset'),
             'style_form': AdminSubtitleStyleForm(prefix='style'),
             'music_form': AdminBackgroundMusicForm(prefix='bgmusic'),
+            'mastering_profile_form': AdminMasteringProfileForm(prefix='masterprofile'),
             'title': title,
         }
 
@@ -400,12 +426,12 @@ class AdminExternalMediaSubtitleStyleDeleteView(LoginRequiredMixin, AdminRequire
 class AdminExternalMediaBackgroundMusicSaveView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):
     def post(self, request):
         music_id = request.POST.get('bgmusic_id')
-        instance = Music.objects.filter(id=music_id).first() if music_id else None
+        instance = BackgroundMusicTrack.objects.filter(id=music_id).first() if music_id else None
         form = AdminBackgroundMusicForm(request.POST, request.FILES, instance=instance, prefix='bgmusic')
         if form.is_valid():
             music = form.save()
-            action = 'atualizada' if instance else 'criada'
-            messages.success(request, f'Música "{music.name}" {action}.')
+            action = 'atualizada' if instance else 'cadastrada'
+            messages.success(request, f'Trilha "{music.name}" {action}.')
         else:
             messages.error(request, self._errors_to_text(form))
         return self._redirect_back(request)
@@ -416,16 +442,50 @@ class AdminExternalMediaBackgroundMusicSaveView(LoginRequiredMixin, AdminRequire
         for field, field_errors in form.errors.items():
             label = form.fields[field].label if field in form.fields else field
             errors.append(f'{label}: {field_errors[0]}')
-        return 'Revise a música. ' + ' '.join(errors)
+        return 'Revise a trilha. ' + ' '.join(errors)
 
 
 class AdminExternalMediaBackgroundMusicDeleteView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):
     def post(self, request, music_id):
-        music = get_object_or_404(Music, id=music_id)
+        music = get_object_or_404(BackgroundMusicTrack, id=music_id)
         name = music.name
-        if music.external_media_versions.exists():
-            messages.warning(request, f'A música "{name}" está em uso em um template e não pode ser removida.')
+        if music.template_versions.exists():
+            messages.warning(request, f'A trilha "{name}" está em uso em um template e não pode ser removida.')
             return self._redirect_back(request)
         music.delete()
-        messages.success(request, f'Música "{name}" removida.')
+        messages.success(request, f'Trilha "{name}" removida.')
+        return self._redirect_back(request)
+
+
+class AdminExternalMediaMasteringProfileSaveView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):
+    def post(self, request):
+        profile_id = request.POST.get('masterprofile_id')
+        instance = MasteringProfile.objects.filter(id=profile_id).first() if profile_id else None
+        form = AdminMasteringProfileForm(request.POST, instance=instance, prefix='masterprofile')
+        if form.is_valid():
+            profile = form.save()
+            action = 'atualizado' if instance else 'criado'
+            messages.success(request, f'Perfil de masterização "{profile.name}" {action}.')
+        else:
+            messages.error(request, self._errors_to_text(form))
+        return self._redirect_back(request)
+
+    @staticmethod
+    def _errors_to_text(form):
+        errors = []
+        for field, field_errors in form.errors.items():
+            label = form.fields[field].label if field in form.fields else field
+            errors.append(f'{label}: {field_errors[0]}')
+        return 'Revise o perfil. ' + ' '.join(errors)
+
+
+class AdminExternalMediaMasteringProfileDeleteView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):
+    def post(self, request, profile_id):
+        profile = get_object_or_404(MasteringProfile, id=profile_id)
+        name = profile.name
+        if profile.template_versions.exists() or profile.video_jobs.exists():
+            messages.warning(request, f'O perfil "{name}" está em uso e não pode ser removido.')
+            return self._redirect_back(request)
+        profile.delete()
+        messages.success(request, f'Perfil "{name}" removido.')
         return self._redirect_back(request)

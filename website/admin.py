@@ -2,9 +2,10 @@ from django.contrib import admin
 from .models import ministry, evangelism, follow_up, member, visitor, neighborhood, user, event, testimony, prayer_request, music
 from .models.schedule import ScaleDivision, DivisionMember
 from .models.external_media import (
-    ExternalMediaJob, ExternalMediaProject, GlossaryTerm, MediaAsset, MediaTemplate,
-    MediaTemplateBlock, MediaTemplatePlugin, MediaTemplateVersion, ProjectBlockMedia,
-    ProjectPipelineStep, RenderPreset, SubtitleCue, SubtitleStyle, SubtitleTrack,
+    ExternalMediaJob, ExternalMediaProject, ExternalMediaProjectExport, GlossaryTerm, MasteringProfile, MediaAsset,
+    MediaTemplate, MediaTemplateBlock, MediaTemplatePlugin, MediaTemplateVersion,
+    ProjectBlockMedia, ProjectPipelineStep, RenderPreset, SubtitleCue, SubtitleStyle,
+    SubtitleTrack, VideoMasteringJob,
 )
 from django.utils import timezone
 
@@ -18,6 +19,21 @@ admin.site.register(user.User)
 admin.site.register(GlossaryTerm)
 admin.site.register(RenderPreset)
 admin.site.register(SubtitleStyle)
+
+
+@admin.register(MasteringProfile)
+class MasteringProfileAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'target_lufs', 'true_peak_db', 'is_default', 'is_active')
+    list_editable = ('is_default', 'is_active')
+    prepopulated_fields = {'code': ('name',)}
+
+
+@admin.register(VideoMasteringJob)
+class VideoMasteringJobAdmin(admin.ModelAdmin):
+    list_display = ('name', 'created_by', 'mastering_profile', 'status', 'video_reencoded', 'created_at')
+    list_filter = ('status', 'video_reencoded', 'mastering_profile')
+    search_fields = ('name', 'created_by__name')
+    readonly_fields = ('public_id', 'input_metrics', 'output_metrics', 'started_at', 'finished_at')
 
 
 class MediaTemplateBlockInline(admin.StackedInline):
@@ -153,6 +169,18 @@ class ExternalMediaProjectAdmin(admin.ModelAdmin):
         'current_step', 'error_message', 'started_at', 'finished_at', 'celery_task_id', 'render_job',
     )
     inlines = [ProjectBlockMediaInline, ProjectPipelineStepInline]
+
+
+@admin.register(ExternalMediaProjectExport)
+class ExternalMediaProjectExportAdmin(admin.ModelAdmin):
+    list_display = ('project', 'format', 'status', 'progress', 'created_by', 'created_at')
+    list_filter = ('format', 'status')
+    search_fields = ('project__name', 'created_by__name')
+    readonly_fields = (
+        'public_id', 'project', 'created_by', 'format', 'status', 'progress', 'current_step',
+        'error_message', 'archive', 'timeline_json', 'compatibility', 'validation_report',
+        'celery_task_id', 'download_count', 'started_at', 'finished_at',
+    )
 
 
 @admin.register(ExternalMediaJob)

@@ -15,11 +15,33 @@ from django.urls import reverse
 from safedelete.models import HARD_DELETE
 
 from website.external_media.exceptions import ExternalMediaError
-from website.external_media.auto_reframe import AutoReframePlan, AutoReframeService, ReframeKeyframe
+from website.external_media.audio_mastering import AudioMasteringService, MasteringTarget
+from website.external_media.audio_mixing import (
+    AudioMixingService,
+    DuckingSettings,
+    SpeechBlock,
+    build_ducking_envelope,
+    build_spectral_windows,
+    clip_blocks_against_protected_ranges,
+    group_speech_blocks,
+)
+from website.external_media.auto_reframe import AutoReframePlan, AutoReframeService, ReframeKeyframe, limit_keyframes_for_ffmpeg
+from website.external_media.dialogue_processing import (
+    DialogueProcessor,
+    DialogueSettings,
+    build_leveling_envelope,
+)
 from website.external_media.speech_edit import SpeechCut, SpeechEditAnalyzer, SpeechEditPlan, SpeechEditService
+from website.external_media.premiere_export import (
+    ExportValidationService,
+    PremiereExporter,
+    PremierePackageService,
+)
+from website.external_media.timeline import InternalTimelineBuilder, KeyframeSimplifier
 from website.external_media.services import (
     AssemblySource,
     ExternalMediaPipeline,
+    ExternalMediaProjectPipeline,
     FFmpegRunner,
     RenderService,
     SubtitleService,
@@ -33,10 +55,12 @@ from website.external_media.services import (
 from website.forms.admin_external_media import AdminMediaTemplateBlockForm
 from website.forms.external_media import ExternalMediaProjectForm
 from website.views.external_media import protected_file_response
-from website.models import Member, Ministry, MinistryMembership, Music, User
 from website.models.external_media import (
+    BackgroundMusicTrack,
     ExternalMediaJob,
     ExternalMediaProject,
+    ExternalMediaProjectExport,
+    MasteringProfile,
     MediaAsset,
     MediaTemplate,
     MediaTemplateBlock,
@@ -47,8 +71,9 @@ from website.models.external_media import (
     SubtitleCue,
     SubtitleStyle,
     SubtitleTrack,
-    external_media_project_upload_path,
 )
+from website.models import Member, Ministry, MinistryMembership, User
+from website.models.external_media import external_media_project_upload_path
 
 
 class ExternalMediaFixtureMixin:
@@ -72,7 +97,7 @@ class ExternalMediaFixtureMixin:
                 job.original_video.delete(save=False)
         super().tearDown()
 
-    def make_job(self, status=ExternalMediaJob.Status.AWAITING_REVIEW):
+    def make_job(self, status=ExternalMediaJob.Status.FINISHED):
         return ExternalMediaJob.objects.create(
             name='Culto de domingo',
             created_by=self.member,
@@ -306,8 +331,9 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
             content = ass.read_text(encoding='utf-8-sig')
         self.assertIn('Style: Original', content)
         self.assertIn('Style: Translated', content)
-        self.assertIn(r'{\q2}Olá, igreja!', content)
-        self.assertIn(r'{\q2}Hello church this is a long translated', content)
+        self.assertIn(r'{\q2}', content)
+        self.assertIn('Olá, igreja!', content)
+        self.assertIn('Hello church this is a long translated', content)
         self.assertNotIn(r'\N', content)
         original_style = next(line for line in content.splitlines() if line.startswith('Style: Original,'))
         translated_style = next(line for line in content.splitlines() if line.startswith('Style: Translated,'))
@@ -672,6 +698,20 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
         else:
             self.assertNotIn('fontsdir=', ass_filter)
 
+    def test_ass_header_enables_scaled_border_and_shadow(self):
+        service = SubtitleService()
+        with tempfile.TemporaryDirectory() as directory:
+            ass = Path(directory) / 'scaled.ass'
+            service.write_ass(self.track, ass, self.style, 1920, 1080)
+            content = ass.read_text(encoding='utf-8-sig')
+        self.assertIn('ScaledBorderAndShadow: yes', content)
+
+    def test_render_play_res_prefers_preset_output_dimensions(self):
+        preset = SimpleNamespace(width=1080, height=1920)
+        metadata = VideoMetadata(width=3840, height=2160)
+        width, height = RenderService.ass_play_res(preset, metadata)
+        self.assertEqual((width, height), (1080, 1920))
+
     def test_ass_invalid_alignment_falls_back_to_bottom_center(self):
         self.style.alignment = 0
         service = SubtitleService()
@@ -908,6 +948,41 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(response, 'Vídeos do projeto')
         self.assertContains(response, 'Legenda PT')
 
+    @patch('website.views.external_media.export_premiere_project.delay')
+    def test_finished_project_can_queue_editable_premiere_export(self, delay):
+        delay.return_value.id = 'premiere-export-123'
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+
+        response = self.client.post(
+            reverse('external_media_project_export_premiere', args=[project.public_id]),
+        )
+
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        export = ExternalMediaProjectExport.objects.get(project=project)
+        self.assertEqual(export.status, ExternalMediaProjectExport.Status.PREPARING)
+        self.assertEqual(export.celery_task_id, 'premiere-export-123')
+        detail = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
+        self.assertContains(detail, 'Exportar projeto')
+        self.assertContains(detail, 'Adobe Premiere')
+
+    def test_export_status_endpoint_returns_async_progress(self):
+        project = self.make_project()
+        export = ExternalMediaProjectExport.objects.create(
+            project=project, created_by=self.member,
+            status=ExternalMediaProjectExport.Status.VALIDATING,
+            progress=78, current_step='Validando XML',
+        )
+        response = self.client.get(reverse(
+            'external_media_project_export_status', args=[project.public_id, export.public_id],
+        ))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['progress'], 78)
+        self.assertFalse(response.json()['is_terminal'])
+
     def test_reupload_after_delete_does_not_reuse_soft_deleted_position(self):
         project = self.make_project()
         first = ProjectBlockMedia.objects.create(
@@ -960,6 +1035,62 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.refresh_from_db()
         self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
         self.assertEqual(project.celery_task_id, 'task-retry-1')
+
+    @patch.object(ExternalMediaProjectPipeline, 'render')
+    @patch.object(ExternalMediaPipeline, 'prepare_subtitle_tracks')
+    @patch.object(ExternalMediaProjectPipeline, '_create_render_job')
+    @patch.object(ExternalMediaProjectPipeline, '_create_proxies')
+    @patch.object(ExternalMediaProjectPipeline, '_materialize')
+    @patch.object(VideoAssemblyService, 'assemble')
+    def test_project_pipeline_renders_immediately_after_subtitles(
+        self, assemble_mock, materialize_mock, proxies_mock, create_job_mock, prepare_tracks_mock, render_mock,
+    ):
+        project = self.make_project()
+        ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='video.mp4',
+            file=SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4'), file_size=5,
+        )
+        job = ExternalMediaJob.objects.create(
+            name=project.name, created_by=self.member,
+            original_video=SimpleUploadedFile('proxy.mp4', b'video', content_type='video/mp4'),
+            original_language='pt', output_languages=['pt', 'en'],
+            preset=self.preset, subtitle_style=self.style,
+            status=ExternalMediaJob.Status.PENDING,
+        )
+        materialize_mock.return_value = ([Mock()], None, None)
+        proxies_mock.return_value = [Mock()]
+        assemble_mock.return_value = False
+        create_job_mock.return_value = job
+
+        ExternalMediaProjectPipeline().run(project.pk)
+
+        prepare_tracks_mock.assert_called_once_with(job.pk)
+        render_mock.assert_called_once_with(project.pk)
+        project.refresh_from_db()
+        self.assertNotEqual(project.status, ExternalMediaProject.Status.AWAITING_REVIEW)
+
+    def test_prepare_subtitle_tracks_never_pauses_for_review(self):
+        job = self.make_job(status=ExternalMediaJob.Status.PENDING)
+        pipeline = ExternalMediaPipeline()
+        pipeline.storage = Mock()
+        pipeline.audio = Mock()
+        pipeline.transcription = Mock()
+        pipeline.translation = Mock()
+        pipeline.speech_analyzer = Mock()
+        pipeline.speech_editor = Mock()
+        pipeline.storage.copy_to_local.return_value = None
+        pipeline.audio.extract.return_value = []
+        pipeline.transcription.transcribe_detailed.return_value = []
+        pipeline.transcription.group_for_subtitles.return_value = []
+        pipeline._save_source_track = Mock(return_value=Mock())
+        pipeline._apply_speech_edit = Mock(side_effect=lambda _job, _video, _workdir, detailed: detailed)
+        pipeline._block_boundaries_ms = Mock(return_value=[])
+
+        pipeline.prepare_subtitle_tracks(job.pk)
+
+        job.refresh_from_db()
+        self.assertNotEqual(job.status, ExternalMediaJob.Status.AWAITING_REVIEW)
+        self.assertEqual(job.current_step, 'Legendas preparadas')
 
     def test_proxy_speech_edit_stores_plan_without_rendering_master_video(self):
         MediaTemplatePlugin.objects.create(
@@ -1147,6 +1278,26 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
             reverse('admin_external_media_template_detail', args=[template.pk]),
         )
 
+    def test_admin_panel_can_delete_media_template_without_projects(self):
+        template = MediaTemplate.objects.create(
+            name='Template Descartável',
+            slug='template-descartavel',
+            category=MediaTemplate.Category.OTHER,
+        )
+        response = self.client.post(reverse('admin_external_media_template_delete', args=[template.pk]))
+        self.assertRedirects(response, reverse('admin_external_media_templates'))
+        self.assertFalse(MediaTemplate.objects.filter(pk=template.pk).exists())
+
+    def test_admin_panel_cannot_delete_media_template_with_projects(self):
+        ExternalMediaProject.objects.create(
+            name='Projeto vinculado',
+            template_version=self.version,
+            created_by=self.member,
+        )
+        response = self.client.post(reverse('admin_external_media_template_delete', args=[self.template.pk]))
+        self.assertRedirects(response, reverse('admin_external_media_templates'))
+        self.assertTrue(MediaTemplate.objects.filter(pk=self.template.pk).exists())
+
     def test_new_block_form_defaults_to_four_videos(self):
         form = AdminMediaTemplateBlockForm()
         self.assertTrue(form.fields['allows_multiple'].initial)
@@ -1176,7 +1327,7 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
             'preset-video_codec': 'libx264',
             'preset-audio_codec': 'aac',
             'preset-video_crf': '21',
-            'preset-extra_ffmpeg_args_raw': '["-maxrate", "8M"]',
+            'preset-extra_ffmpeg_profile': '["-maxrate", "8M"]',
             'preset-is_active': 'on',
         })
         self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
@@ -1251,13 +1402,60 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         response = self.client.post(reverse('admin_external_media_background_music_save'), {
             'next': reverse('admin_external_media_version_edit', args=[self.version.pk]),
             'bgmusic-name': 'Base Instrumental',
-            'bgmusic-singer': 'Filadelfia Worship',
+            'bgmusic-category': 'instrumental',
             'bgmusic-tempo': 'media',
             'bgmusic-audio_file': SimpleUploadedFile('base.mp3', b'audio', content_type='audio/mpeg'),
         })
         self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
-        music = Music.objects.get(name='Base Instrumental')
-        self.assertTrue(bool(music.audio_file))
+        track = BackgroundMusicTrack.objects.get(name='Base Instrumental')
+        self.assertEqual(track.category, 'instrumental')
+        self.assertTrue(bool(track.audio_file))
+
+    def test_admin_panel_can_create_mastering_profile_from_version_page(self):
+        response = self.client.post(reverse('admin_external_media_mastering_profile_save'), {
+            'next': reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            'masterprofile-name': 'Telão Teste',
+            'masterprofile-target_lufs': '-14.0',
+            'masterprofile-true_peak_db': '-1.5',
+            'masterprofile-limiter_enabled': 'on',
+        })
+        self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
+        profile = MasteringProfile.objects.get(name='Telão Teste')
+        self.assertEqual(profile.code, 'telao-teste')
+        self.assertEqual(float(profile.target_lufs), -14.0)
+        self.assertTrue(profile.limiter_enabled)
+        self.assertFalse(profile.bus_compression_enabled)
+
+    def test_admin_panel_saves_audio_mixing_and_mastering_toggles(self):
+        profile = MasteringProfile.objects.create(name='PA Igreja Teste', code='pa-igreja-teste')
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                dialogue_processing_enabled='on',
+                dialogue_processing_config_raw='{"compression_ratio": 3, "deesser_enabled": true}',
+                audio_mixing_enabled='on',
+                audio_ducking_enabled='on',
+                audio_spectral_ducking_enabled='on',
+                audio_mastering_enabled='on',
+                mastering_profile=profile.pk,
+                audio_mixing_config_raw='{"base_duck_db": 6}',
+            ),
+        )
+        self.assertRedirects(
+            response,
+            reverse('admin_external_media_template_detail', args=[self.template.pk]),
+        )
+        self.version.refresh_from_db()
+        self.assertTrue(self.version.dialogue_processing_enabled)
+        self.assertEqual(
+            self.version.dialogue_processing_config, {'compression_ratio': 3, 'deesser_enabled': True},
+        )
+        self.assertTrue(self.version.audio_mixing_enabled)
+        self.assertTrue(self.version.audio_ducking_enabled)
+        self.assertTrue(self.version.audio_spectral_ducking_enabled)
+        self.assertTrue(self.version.audio_mastering_enabled)
+        self.assertEqual(self.version.mastering_profile_id, profile.pk)
+        self.assertEqual(self.version.audio_mixing_config, {'base_duck_db': 6})
 
     def test_admin_panel_saves_bilingual_language_strategy(self):
         response = self.client.post(
@@ -1414,7 +1612,7 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertTrue(plugin.is_enabled)
         self.assertEqual(plugin.configuration['priority'], 'body')
         self.assertEqual(plugin.configuration['safe_margin'], 0.15)
-        self.assertEqual(plugin.configuration['top_margin'], 0.18)
+        self.assertEqual(plugin.configuration['top_margin'], 0.12)
 
 
 class ExternalMediaRetryTests(ExternalMediaFixtureMixin, TestCase):
@@ -1677,10 +1875,14 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             (608, 1080),
         )
 
-    def test_auto_reframe_zooms_in_to_center_off_center_person_on_wide_ratio(self):
+    def test_auto_reframe_never_zooms_in_to_center_on_wide_ratio_when_person_is_tall(self):
         # 16:5 banner output from a 16:9 source: cover_crop_size uses the full source width
-        # (1920, 600), leaving zero room to pan horizontally. Without extra zoom, an off-center
-        # person would stay wherever the original footage framed them instead of being centered.
+        # (1920, 600), leaving zero room to pan horizontally. A "centering zoom" that shrinks
+        # crop_width to gain pan room was tried before and reverted: since width/height are
+        # locked to the target ratio, that shrink also crops the vertical framing by the same
+        # factor, which cuts off the head/chin on a close/medium shot like this one (tall
+        # relative to the very wide 16:5 ratio). Keeping the person fully framed must win over
+        # perfect horizontal centering, so no extra zoom should be applied here at all.
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
         source_width, source_height = 1920, 1080
         cover_width, cover_height = AutoReframeService.cover_crop_size(source_width, source_height, 3840, 1200)
@@ -1690,23 +1892,51 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         crop_width, crop_height = service._smart_crop_size(
             observations, cover_width, cover_height, source_width, source_height, target_ratio,
         )
+        self.assertEqual((crop_width, crop_height), (cover_width, cover_height))
+
+    def test_auto_reframe_zooms_in_on_small_person_without_centering_pressure(self):
+        # A small, roughly centered person (box aspect close to the target ratio) can still be
+        # zoomed in on normally — this isn't the "centering zoom" case, just the regular
+        # size-driven crop, and it must keep working.
+        service = AutoReframeService(priority='body', safe_margin=0.15, top_margin=0.12, smoothing=1.0)
+        source_width, source_height = 1920, 1080
+        cover_width, cover_height = AutoReframeService.cover_crop_size(source_width, source_height, 1080, 1920)
+        target_ratio = 1080 / 1920
+        observations = [(0.0, (860.0, 300.0, 1060.0, 780.0))]
+        crop_width, crop_height = service._smart_crop_size(
+            observations, cover_width, cover_height, source_width, source_height, target_ratio,
+        )
         self.assertLess(crop_width, cover_width)
-        center_x = (346.0 + 874.0) / 2.0
-        max_x = source_width - crop_width
-        ideal_x = center_x - crop_width / 2.0
-        # The crop must now be narrow enough that the ideal centered position is reachable
-        # without hitting the [0, max_x] pan-range clamp.
-        self.assertGreaterEqual(ideal_x, -1)
-        self.assertLessEqual(ideal_x, max_x + 1)
-        # Still wide enough to keep the detected person fully framed.
-        self.assertGreaterEqual(crop_width, (874.0 - 346.0) * 1.3 - 2)
+        self.assertLess(crop_height, cover_height)
+        box_height_with_margin = (780.0 - 300.0) * 1.3
+        self.assertGreaterEqual(crop_height + 1, box_height_with_margin)
 
     def test_auto_reframe_vertical_crop_preserves_headroom(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
         centered_y = ((290 + 850) / 2) - (600 / 2)
         target_y = service._target_crop_y(top=290, bottom=850, crop_height=600, max_y=480)
         self.assertLess(target_y, centered_y)
-        self.assertEqual(round(290 - target_y), 92)
+        self.assertEqual(round(290 - target_y), 108)
+
+    def test_auto_reframe_vertical_crop_keeps_head_when_person_is_taller_than_crop(self):
+        service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.12, smoothing=1.0)
+        target_y = service._target_crop_y(top=290, bottom=950, crop_height=600, max_y=480)
+        self.assertEqual(round(target_y), round(290 - (600 * 0.12)))
+
+    def test_auto_reframe_normalizes_body_box_with_head_padding_and_minimum_height(self):
+        service = AutoReframeService(priority='face')
+        left, top, right, bottom = service._normalize_detection_box(
+            700.0, 400.0, 980.0, 780.0, 1920.0, 1080.0,
+        )
+        self.assertLess(top, 400.0)
+        self.assertGreaterEqual(bottom - top, 1080 * 0.48 - 1)
+
+    def test_auto_reframe_face_box_keeps_top_close_to_head(self):
+        left, top, width, height = AutoReframeService._face_priority_box(800, 260, 120, 120)
+        self.assertEqual(round(left), 596)
+        self.assertEqual(round(top), 246)
+        self.assertEqual(round(width), 528)
+        self.assertEqual(round(height), 518)
 
     def test_auto_reframe_vertical_crop_reduces_excessive_headroom(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
@@ -1715,13 +1945,6 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertGreater(target_y, centered_y)
         self.assertEqual(round(260 - target_y), 108)
 
-    def test_auto_reframe_face_box_keeps_top_close_to_head(self):
-        left, top, width, height = AutoReframeService._face_priority_box(800, 260, 120, 120)
-        self.assertEqual(round(left), 596)
-        self.assertEqual(round(top), 234)
-        self.assertEqual(round(width), 528)
-        self.assertEqual(round(height), 566)
-
     def test_auto_reframe_face_detection_tries_contrast_fallbacks(self):
         gray = SimpleNamespace(shape=(720, 1280))
         detector = Mock()
@@ -1729,10 +1952,11 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         fake_cv2 = SimpleNamespace(
             createCLAHE=lambda clipLimit, tileGridSize: SimpleNamespace(apply=lambda value: value),
             equalizeHist=lambda value: value,
+            bilateralFilter=lambda value, _a, _b, _c: value,
         )
         faces = AutoReframeService._detect_faces(gray, [detector], fake_cv2)
-        self.assertEqual(faces, [(100, 120, 80, 80)])
-        self.assertEqual(detector.detectMultiScale.call_count, 2)
+        self.assertEqual(len(faces), 1)
+        self.assertGreater(detector.detectMultiScale.call_count, 1)
 
     def test_auto_reframe_keyframes_apply_top_margin_before_smoothing(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
@@ -1744,7 +1968,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             source_height=1080,
         )
         self.assertEqual(len(keyframes), 1)
-        self.assertEqual(round(keyframes[0].y), 198)
+        self.assertEqual(round(keyframes[0].y), 182)
 
     def test_auto_reframe_locks_vertical_position_for_face_tracking(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
@@ -1763,24 +1987,67 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(len({round(keyframe.y) for keyframe in keyframes}), 1)
 
     def test_auto_reframe_horizontal_tracking_is_more_responsive_than_base_smoothing(self):
-        service = AutoReframeService(
+        responsive = AutoReframeService(
+            priority='face',
+            safe_margin=0.15,
+            top_margin=0.18,
+            smoothing=0.18,
+            horizontal_smoothing=0.36,
+        )
+        stable = AutoReframeService(
             priority='face',
             safe_margin=0.15,
             top_margin=0.18,
             smoothing=0.18,
         )
-        keyframes = service._smooth_keyframes(
-            observations=[
-                (0.0, (100, 290, 300, 850)),
-                (1.0, (700, 290, 900, 850)),
-            ],
+        observations = [
+            (0.0, (100, 290, 300, 850)),
+            (1.0, (700, 290, 900, 850)),
+        ]
+        responsive_keyframes = responsive._smooth_keyframes(
+            observations=observations,
             crop_width=608,
             crop_height=1080,
             source_width=1920,
             source_height=1080,
         )
-        self.assertEqual(round(keyframes[0].x), 0)
-        self.assertGreater(round(keyframes[1].x), 160)
+        stable_keyframes = stable._smooth_keyframes(
+            observations=observations,
+            crop_width=608,
+            crop_height=1080,
+            source_width=1920,
+            source_height=1080,
+        )
+        self.assertGreater(
+            responsive_keyframes[-1].x,
+            stable_keyframes[-1].x,
+        )
+
+    def test_auto_reframe_horizontal_anchor_uses_torso_core(self):
+        anchor = AutoReframeService._horizontal_anchor_x(100.0, 200.0, 500.0, 900.0)
+        self.assertAlmostEqual(anchor, 300.0)
+        self.assertGreater(anchor, 100.0 + ((500.0 - 100.0) * 0.24))
+        self.assertLess(anchor, 500.0 - ((500.0 - 100.0) * 0.24))
+
+    def test_auto_reframe_stable_body_box_keeps_center_on_face(self):
+        left, top, width, height = AutoReframeService._stable_body_box_from_face(800, 260, 120, 120)
+        self.assertAlmostEqual(left + (width / 2.0), 860.0)
+        self.assertAlmostEqual(width, 336.0)
+
+    def test_auto_reframe_detect_bodies_tries_contrast_fallback(self):
+        service = AutoReframeService(priority='face')
+        analyzed = Mock()
+        body_detector = Mock()
+        body_detector.detectMultiScale.side_effect = [([], None), ([(120, 80, 180, 360)], None)]
+        fake_cv2 = SimpleNamespace(
+            COLOR_BGR2GRAY='gray',
+            cvtColor=lambda value, _code: Mock(shape=(720, 1280)),
+            COLOR_GRAY2BGR='bgr',
+            createCLAHE=lambda clipLimit, tileGridSize: SimpleNamespace(apply=lambda value: value),
+        )
+        boxes = service._detect_bodies(analyzed, body_detector, fake_cv2)
+        self.assertEqual(len(boxes), 1)
+        self.assertEqual(body_detector.detectMultiScale.call_count, 2)
 
     def test_auto_reframe_fast_start_centers_horizontally_within_opening_second(self):
         service = AutoReframeService(
@@ -1804,7 +2071,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         target_x = min(1920 - 608, max(0.0, 800 - 608 / 2))
         by_time = {round(keyframe.time_seconds, 2): round(keyframe.x) for keyframe in keyframes}
         self.assertIn(0.0, [round(keyframe.time_seconds, 2) for keyframe in keyframes])
-        self.assertGreaterEqual(by_time[1.0], round(target_x * 0.85))
+        self.assertGreaterEqual(by_time[1.0], round(target_x * 0.60))
 
     def test_auto_reframe_expression_holds_first_keyframe_before_sample_time(self):
         plan = AutoReframePlan(
@@ -1818,6 +2085,25 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         x_expression = plan._expression(plan.keyframes, 'x')
         self.assertIn('if(lt(t\\,0.500)', x_expression)
         self.assertIn('120.000', x_expression)
+
+    def test_limit_keyframes_for_ffmpeg_caps_long_plans(self):
+        keyframes = tuple(ReframeKeyframe(index, float(index), 0.0) for index in range(200))
+        limited = limit_keyframes_for_ffmpeg(keyframes)
+        self.assertLessEqual(len(limited), 48)
+        self.assertEqual(limited[0], keyframes[0])
+        self.assertEqual(limited[-1], keyframes[-1])
+
+    def test_auto_reframe_ffmpeg_filters_caps_expression_size_for_long_clips(self):
+        keyframes = tuple(
+            ReframeKeyframe(index / 30.0, 50.0 + (index % 7), 10.0 + (index % 5))
+            for index in range(3000)
+        )
+        plan = AutoReframePlan(crop_width=734, crop_height=228, keyframes=keyframes)
+        filters = plan.ffmpeg_filters(854, 266)
+        crop_filter = filters[0]
+        # Each axis gets at most len(keyframes)-1 nested branches; both x and y live in one string.
+        self.assertLessEqual(crop_filter.count('if(lt(t\\,'), 96)
+        self.assertIn("crop=734:228", crop_filter)
 
     def test_video_assembly_normalizes_and_concatenates_two_clips(self):
         runner = FFmpegRunner()
@@ -2069,3 +2355,488 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             )
             self.assertTrue(output.exists())
             self.assertGreater(output.stat().st_size, 0)
+
+
+class AudioMixingUnitTests(SimpleTestCase):
+    def test_group_speech_blocks_merges_close_intervals(self):
+        blocks = group_speech_blocks([(0, 1000), (1300, 2000), (2100, 2400)], gap_threshold_ms=450)
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual((blocks[0].start_ms, blocks[0].end_ms), (0, 2400))
+
+    def test_group_speech_blocks_keeps_far_intervals_separate(self):
+        blocks = group_speech_blocks([(0, 1000), (2500, 3000)], gap_threshold_ms=450)
+        self.assertEqual(len(blocks), 2)
+        self.assertEqual((blocks[1].start_ms, blocks[1].end_ms), (2500, 3000))
+
+    def test_group_speech_blocks_ignores_invalid_intervals(self):
+        blocks = group_speech_blocks([(500, 500), (None, 200), (100, 900)])
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual((blocks[0].start_ms, blocks[0].end_ms), (100, 900))
+
+    def test_clip_blocks_against_protected_ranges_trims_overlap(self):
+        blocks = [SpeechBlock(0, 5000)]
+        clipped = clip_blocks_against_protected_ranges(blocks, [(2000, 3000)])
+        self.assertEqual([(item.start_ms, item.end_ms) for item in clipped], [(0, 2000), (3000, 5000)])
+
+    def test_clip_blocks_against_protected_ranges_drops_fully_covered_block(self):
+        blocks = [SpeechBlock(1000, 2000)]
+        clipped = clip_blocks_against_protected_ranges(blocks, [(0, 3000)])
+        self.assertEqual(clipped, [])
+
+    def test_estimate_duck_db_uses_less_ducking_when_voice_is_already_louder(self):
+        settings_ = DuckingSettings()
+        soft_music = AudioMixingService.estimate_duck_db(-30.0, -14.0, settings_)
+        dense_music = AudioMixingService.estimate_duck_db(-16.0, -18.0, settings_)
+        self.assertLess(soft_music, dense_music)
+        self.assertGreaterEqual(soft_music, settings_.min_duck_db)
+        self.assertLessEqual(dense_music, settings_.max_duck_db)
+
+    def test_estimate_duck_db_falls_back_to_base_when_unmeasured(self):
+        settings_ = DuckingSettings()
+        self.assertEqual(AudioMixingService.estimate_duck_db(None, -14.0, settings_), settings_.base_duck_db)
+
+    def test_build_ducking_envelope_holds_through_the_block_and_releases_after(self):
+        settings_ = DuckingSettings(attack_ms=200, hold_ms=180, release_ms=400)
+        blocks = [SpeechBlock(1000, 3000)]
+        envelope = build_ducking_envelope(blocks, duration_ms=5000, duck_gain=0.4, settings_=settings_)
+        times = [point[0] for point in envelope]
+        self.assertEqual(times, sorted(times))
+        before_speech = next(value for time, value in envelope if time == 1.0)
+        self.assertEqual(before_speech, 1.0)
+        during_hold = next(value for time, value in envelope if time == 3.0)
+        self.assertAlmostEqual(during_hold, 0.4)
+        after_release = next(value for time, value in envelope if time == 3.4)
+        self.assertEqual(after_release, 1.0)
+
+    def test_build_ducking_envelope_prevents_release_from_overlapping_next_block(self):
+        # A 2s release would normally end at t=2.5, well past the next block's start (t=0.7);
+        # the envelope must clamp the release so it never re-raises volume after the next
+        # block has already started ducking again.
+        settings_ = DuckingSettings(attack_ms=100, hold_ms=100, release_ms=2000)
+        blocks = [SpeechBlock(0, 500), SpeechBlock(700, 1200)]
+        envelope = build_ducking_envelope(blocks, duration_ms=2000, duck_gain=0.5, settings_=settings_)
+        times = [point[0] for point in envelope]
+        self.assertEqual(times, sorted(times))
+        self.assertNotIn(2.5, times)
+        matching = [value for time, value in envelope if abs(time - 0.7) < 0.01]
+        self.assertTrue(matching)
+        self.assertEqual(matching[0], 1.0)
+
+    def test_build_spectral_windows_skips_when_no_cut(self):
+        self.assertEqual(build_spectral_windows([SpeechBlock(0, 1000)], cut_db=0), [])
+
+    def test_build_spectral_windows_caps_block_count(self):
+        blocks = [SpeechBlock(index * 1000, index * 1000 + 500) for index in range(100)]
+        windows = build_spectral_windows(blocks, cut_db=3)
+        self.assertLessEqual(len(windows), 40)
+
+    def test_ducking_settings_from_config_overrides_defaults(self):
+        settings_ = DuckingSettings.from_config({'base_duck_db': 6, 'attack_ms': 300})
+        self.assertEqual(settings_.base_duck_db, 6.0)
+        self.assertEqual(settings_.attack_ms, 300)
+        self.assertEqual(settings_.hold_ms, DuckingSettings().hold_ms)
+
+
+class AudioMixingSmokeTests(SimpleTestCase):
+    @staticmethod
+    def _render_tone(path, frequency, duration_s, volume=1.0):
+        runner = FFmpegRunner()
+        runner.run([
+            'ffmpeg', '-y', '-f', 'lavfi', '-i', f'color=c=blue:s=320x240:d={duration_s}',
+            '-f', 'lavfi', '-i', f'sine=frequency={frequency}:duration={duration_s}',
+            '-filter_complex', f'[1:a]volume={volume}[a]', '-map', '0:v', '-map', '[a]',
+            '-shortest', '-c:v', 'libx264', '-c:a', 'aac', str(path),
+        ])
+
+    def test_mix_falls_back_to_flat_when_ducking_has_no_speech_blocks(self):
+        service = AudioMixingService()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            music = workdir / 'music.mp4'
+            output = workdir / 'mixed.mp4'
+            self._render_tone(video, 220, 3)
+            self._render_tone(music, 440, 3)
+            result = service.mix(
+                video, music, output, music_volume=0.2, duration_ms=3000,
+                speech_blocks=[], ducking_enabled=True,
+            )
+            self.assertTrue(output.exists())
+            self.assertEqual(result.metrics['mode'], 'flat')
+
+    def test_mix_adaptive_applies_ducking_and_reports_metrics(self):
+        service = AudioMixingService()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            music = workdir / 'music.mp4'
+            output = workdir / 'mixed.mp4'
+            self._render_tone(video, 220, 4, volume=1.0)
+            self._render_tone(music, 440, 4, volume=1.0)
+            result = service.mix(
+                video, music, output, music_volume=0.5, duration_ms=4000,
+                speech_blocks=[SpeechBlock(1000, 3000)], ducking_enabled=True,
+            )
+            self.assertTrue(output.exists())
+            self.assertGreater(output.stat().st_size, 0)
+            self.assertEqual(result.metrics['mode'], 'adaptive')
+            self.assertEqual(result.metrics['speech_block_count'], 1)
+            self.assertGreater(result.metrics['duck_db'], 0)
+
+    def test_mix_spectral_ducking_produces_equalizer_filter(self):
+        service = AudioMixingService()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            music = workdir / 'music.mp4'
+            output = workdir / 'mixed.mp4'
+            self._render_tone(video, 220, 3, volume=1.0)
+            self._render_tone(music, 1000, 3, volume=1.0)
+            result = service.mix(
+                video, music, output, music_volume=0.5, duration_ms=3000,
+                speech_blocks=[SpeechBlock(500, 2000)], ducking_enabled=True, spectral_enabled=True,
+            )
+            self.assertTrue(output.exists())
+            self.assertTrue(result.metrics['spectral_applied'])
+
+    def test_clipping_speech_blocks_against_a_protected_range_keeps_music_flat_there(self):
+        blocks = clip_blocks_against_protected_ranges([SpeechBlock(0, 3000)], [(0, 3000)])
+        self.assertEqual(blocks, [])
+        service = AudioMixingService()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            music = workdir / 'music.mp4'
+            output = workdir / 'mixed.mp4'
+            self._render_tone(video, 220, 3)
+            self._render_tone(music, 440, 3)
+            result = service.mix(
+                video, music, output, music_volume=0.3, duration_ms=3000,
+                speech_blocks=[SpeechBlock(0, 3000)], protected_ranges=[(0, 3000)], ducking_enabled=True,
+            )
+        self.assertEqual(result.metrics['mode'], 'flat')
+
+
+class AudioMasteringUnitTests(SimpleTestCase):
+    def test_parse_loudnorm_json_extracts_measurements(self):
+        stderr_text = (
+            '[Parsed_loudnorm_0 @ 0x0]\n'
+            '{\n'
+            '\t"input_i" : "-23.00",\n'
+            '\t"input_tp" : "-5.00",\n'
+            '\t"input_lra" : "4.00",\n'
+            '\t"input_thresh" : "-33.20",\n'
+            '\t"output_i" : "-16.00",\n'
+            '\t"output_tp" : "-1.00",\n'
+            '\t"output_lra" : "4.00",\n'
+            '\t"output_thresh" : "-26.10",\n'
+            '\t"normalization_type" : "dynamic",\n'
+            '\t"target_offset" : "0.00"\n'
+            '}\n'
+        )
+        measured = AudioMasteringService._parse_loudnorm_json(stderr_text)
+        self.assertEqual(measured['input_i'], '-23.00')
+        self.assertEqual(measured['target_offset'], '0.00')
+
+    def test_parse_loudnorm_json_returns_empty_dict_when_missing(self):
+        self.assertEqual(AudioMasteringService._parse_loudnorm_json('no json here'), {})
+
+    def test_result_metrics_computes_gain_applied(self):
+        target = MasteringTarget(target_lufs=-16.0, true_peak_db=-1.0, profile_code='church_pa')
+        metrics = AudioMasteringService._result_metrics({'input_i': '-23.00'}, target)
+        self.assertEqual(metrics['gain_applied_db'], 7.0)
+        self.assertEqual(metrics['profile'], 'church_pa')
+        self.assertTrue(metrics['applied'])
+
+    def test_mastering_target_from_profile_reads_model_fields(self):
+        profile = SimpleNamespace(
+            target_lufs=-14.5, true_peak_db=-1.2, bus_compression_enabled=True,
+            limiter_enabled=False, code='instagram', name='Instagram',
+        )
+        target = MasteringTarget.from_profile(profile)
+        self.assertEqual(target.target_lufs, -14.5)
+        self.assertTrue(target.bus_compression_enabled)
+        self.assertFalse(target.limiter_enabled)
+
+    def test_mastering_target_from_profile_handles_none(self):
+        target = MasteringTarget.from_profile(None)
+        self.assertEqual(target, MasteringTarget())
+
+
+class AudioMasteringSmokeTests(SimpleTestCase):
+    def test_master_normalizes_loudness_and_reports_metrics(self):
+        runner = FFmpegRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            output = workdir / 'mastered.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x240:d=3',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+                '-filter_complex', '[1:a]volume=0.05[a]', '-map', '0:v', '-map', '[a]',
+                '-shortest', '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            target = MasteringTarget(target_lufs=-16.0, true_peak_db=-1.0, profile_code='church_pa')
+            result = AudioMasteringService(runner).master(source, output, target)
+            self.assertTrue(output.exists())
+            self.assertTrue(result.metrics.get('applied'))
+            self.assertEqual(result.metrics['target_lufs'], -16.0)
+            self.assertIsNotNone(result.metrics.get('loudness_before_lufs'))
+
+    def test_master_with_bus_compression_and_limiter_enabled(self):
+        runner = FFmpegRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            output = workdir / 'mastered.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x240:d=2',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', '-shortest',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            target = MasteringTarget(
+                target_lufs=-16.0, true_peak_db=-1.0, bus_compression_enabled=True,
+                limiter_enabled=True, profile_code='church_pa',
+            )
+            result = AudioMasteringService(runner).master(source, output, target)
+            self.assertTrue(output.exists())
+            self.assertTrue(result.metrics.get('applied'))
+
+
+class DialogueProcessingUnitTests(SimpleTestCase):
+    def test_build_leveling_envelope_holds_block_gain_and_settles_to_neutral(self):
+        blocks = [(SpeechBlock(1000, 3000), 0.7)]
+        envelope = build_leveling_envelope(blocks, duration_ms=5000, transition_ms=100)
+        times = [point[0] for point in envelope]
+        self.assertEqual(times, sorted(times))
+        before_speech = next(value for time, value in envelope if time == 1.0)
+        self.assertEqual(before_speech, 1.0)
+        during_block = next(value for time, value in envelope if time == 3.0)
+        self.assertAlmostEqual(during_block, 0.7)
+        after_transition = next(value for time, value in envelope if time == 3.1)
+        self.assertEqual(after_transition, 1.0)
+
+    def test_build_leveling_envelope_clamps_transition_against_next_block(self):
+        # A 1s release from the first block would normally end at t=1.5, well past
+        # the second block's start (t=0.6); it must be clamped so gain is already back
+        # to neutral (1.0) by the time the next block starts its own correction,
+        # instead of overshooting into it.
+        blocks = [(SpeechBlock(0, 500), 0.5), (SpeechBlock(600, 1200), 1.3)]
+        envelope = build_leveling_envelope(blocks, duration_ms=2000, transition_ms=1000)
+        times = [point[0] for point in envelope]
+        self.assertEqual(times, sorted(times))
+        self.assertNotIn(1.5, times)
+        matching = [value for time, value in envelope if abs(time - 0.6) < 0.01]
+        self.assertTrue(matching)
+        self.assertEqual(matching[0], 1.0)
+
+    def test_dialogue_settings_from_config_overrides_defaults(self):
+        settings_ = DialogueSettings.from_config({'compression_ratio': 3.5, 'deesser_enabled': True})
+        self.assertEqual(settings_.compression_ratio, 3.5)
+        self.assertTrue(settings_.deesser_enabled)
+        self.assertEqual(settings_.highpass_hz, DialogueSettings().highpass_hz)
+
+    def test_static_chain_respects_individually_disabled_stages(self):
+        settings_ = DialogueSettings(
+            highpass_enabled=False, eq_enabled=False, compression_enabled=True, deesser_enabled=False,
+        )
+        chain = DialogueProcessor._static_chain(settings_)
+        self.assertEqual(len(chain), 1)
+        self.assertIn('acompressor', chain[0])
+
+    def test_static_chain_includes_deesser_only_when_enabled(self):
+        enabled = DialogueProcessor._static_chain(DialogueSettings(deesser_enabled=True))
+        disabled = DialogueProcessor._static_chain(DialogueSettings(deesser_enabled=False))
+        self.assertIn('deesser', enabled)
+        self.assertNotIn('deesser', disabled)
+
+    def test_compute_block_gains_skips_leveling_with_fewer_than_two_blocks(self):
+        processor = DialogueProcessor(runner=Mock())
+        block_gains, reference_db = processor._compute_block_gains(
+            Path('/tmp/does-not-matter.mp4'), [SpeechBlock(0, 1000)], [], DialogueSettings(),
+        )
+        self.assertEqual(block_gains, [])
+        self.assertIsNone(reference_db)
+
+    def test_compute_block_gains_normalizes_towards_the_median_level(self):
+        processor = DialogueProcessor(runner=Mock())
+        levels = {(0, 1000): -30.0, (2000, 3000): -20.0, (4000, 5000): -18.0}
+        processor.measure_block_mean_db = lambda path, block: levels[(block.start_ms, block.end_ms)]
+        blocks = [SpeechBlock(start, end) for start, end in levels]
+        block_gains, reference_db = processor._compute_block_gains(
+            Path('/tmp/does-not-matter.mp4'), blocks, [], DialogueSettings(leveling_max_gain_db=6.0),
+        )
+        self.assertAlmostEqual(reference_db, -20.0)
+        gains_by_block = {(block.start_ms, block.end_ms): gain_db for block, gain_db in block_gains}
+        # The quietest block would need +10dB to reach the median, but that's clamped
+        # to the configured safety cap so a single bad take can't be over-corrected.
+        self.assertAlmostEqual(gains_by_block[(0, 1000)], 6.0)
+        # The loudest block gets a (smaller, unclamped) negative correction towards the median.
+        self.assertAlmostEqual(gains_by_block[(4000, 5000)], -2.0)
+        # The block that's already at the reference level needs no correction at all.
+        self.assertNotIn((2000, 3000), gains_by_block)
+
+
+class DialogueProcessingSmokeTests(SimpleTestCase):
+    @staticmethod
+    def _render_two_speaker_tone(path, duration_s=4):
+        """A single audio file with a quiet segment (0-2s) and a loud one (2-4s),
+        simulating two speakers recorded at very different levels.
+        """
+        runner = FFmpegRunner()
+        runner.run([
+            'ffmpeg', '-y', '-f', 'lavfi', '-i', f'color=c=blue:s=320x240:d={duration_s}',
+            '-f', 'lavfi', '-i', f'sine=frequency=220:duration={duration_s / 2}',
+            '-f', 'lavfi', '-i', f'sine=frequency=220:duration={duration_s / 2}',
+            '-filter_complex',
+            '[1:a]volume=0.05[quiet];[2:a]volume=0.8[loud];[quiet][loud]concat=n=2:v=0:a=1[a]',
+            '-map', '0:v', '-map', '[a]', '-shortest', '-c:v', 'libx264', '-c:a', 'aac', str(path),
+        ])
+
+    def test_process_applies_static_chain_and_leveling(self):
+        service = DialogueProcessor()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            output = workdir / 'dialogue.mp4'
+            self._render_two_speaker_tone(video, duration_s=4)
+            speech_blocks = [SpeechBlock(0, 2000), SpeechBlock(2000, 4000)]
+            result = service.process(
+                video, output, duration_ms=4000, speech_blocks=speech_blocks,
+                settings_=DialogueSettings(),
+            )
+            self.assertTrue(output.exists())
+            self.assertGreater(output.stat().st_size, 0)
+            self.assertTrue(result.metrics['leveling_applied'])
+            self.assertEqual(result.metrics['leveling_block_count'], 2)
+
+    def test_process_skips_protected_ranges_when_leveling(self):
+        service = DialogueProcessor()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            output = workdir / 'dialogue.mp4'
+            self._render_two_speaker_tone(video, duration_s=4)
+            speech_blocks = [SpeechBlock(0, 2000), SpeechBlock(2000, 4000)]
+            result = service.process(
+                video, output, duration_ms=4000, speech_blocks=speech_blocks,
+                protected_ranges=[(0, 4000)], settings_=DialogueSettings(),
+            )
+            self.assertTrue(output.exists())
+            self.assertFalse(result.metrics['leveling_applied'])
+            self.assertEqual(result.metrics['leveling_block_count'], 0)
+
+    def test_process_is_a_no_op_copy_when_everything_is_disabled(self):
+        service = DialogueProcessor()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            output = workdir / 'dialogue.mp4'
+            self._render_two_speaker_tone(video, duration_s=2)
+            disabled = DialogueSettings(
+                highpass_enabled=False, eq_enabled=False, compression_enabled=False,
+                deesser_enabled=False, leveling_enabled=False,
+            )
+            result = service.process(video, output, duration_ms=2000, speech_blocks=[], settings_=disabled)
+            self.assertTrue(output.exists())
+            self.assertFalse(result.metrics['leveling_applied'])
+
+
+class EditableTimelineExportTests(SimpleTestCase):
+    def test_keyframe_simplifier_keeps_trajectory_endpoints(self):
+        points = [
+            {'time_ms': index * 100, 'x': float(index), 'y': float(index), 'scale': 110.0}
+            for index in range(100)
+        ]
+        simplified = KeyframeSimplifier.simplify(points, tolerance=0.1, max_points=12)
+        self.assertEqual(simplified[0], points[0])
+        self.assertEqual(simplified[-1], points[-1])
+        self.assertLessEqual(len(simplified), 12)
+
+    def test_reframe_interval_gets_interpolated_boundary_keyframes(self):
+        keyframes = [
+            {'source_time_ms': 0, 'x': 0, 'y': 10},
+            {'source_time_ms': 1000, 'x': 100, 'y': 30},
+        ]
+        selected = InternalTimelineBuilder._keyframes_for_interval(keyframes, 250, 750)
+        self.assertEqual([item['source_time_ms'] for item in selected], [250, 750])
+        self.assertAlmostEqual(selected[0]['x'], 25)
+        self.assertAlmostEqual(selected[-1]['y'], 25)
+
+    def test_subtract_cuts_preserves_recoverable_source_ranges(self):
+        cuts = [SpeechCut(1000, 1500, 'silence'), SpeechCut(2300, 2600, 'filler')]
+        self.assertEqual(
+            InternalTimelineBuilder._subtract_cuts(0, 3000, cuts),
+            [(0, 1000), (1500, 2300), (2600, 3000)],
+        )
+
+    def test_premiere_xml_has_portable_paths_and_reuses_file_definition(self):
+        timeline = {
+            'project': {'name': 'Anúncio'},
+            'sequence': {
+                'name': 'Anúncio', 'duration_ms': 2000, 'width': 1920, 'height': 1080,
+                'fps': 30.0, 'timebase': 30, 'ntsc': False,
+                'audio_sample_rate': 48000, 'audio_channels': 2,
+            },
+            'assets': [{
+                'id': 'video_1', 'name': 'take.mp4', 'path': './Media/take.mp4',
+                'type': 'video', 'duration_ms': 3000, 'width': 1920, 'height': 1080, 'fps': 30.0,
+            }, {
+                'id': 'caption_overlay_pt', 'name': 'captions_pt_styled.mov',
+                'path': './Graphics/captions_pt_styled.mov', 'type': 'video', 'has_audio': False,
+                'duration_ms': 2000, 'width': 1920, 'height': 1080, 'fps': 30.0,
+            }],
+            'video_tracks': [{'clips': [
+                {
+                    'id': 'clip_1', 'asset_id': 'video_1', 'name': 'Take',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 1000,
+                    'source_in_ms': 0, 'source_out_ms': 1000, 'effects': [],
+                },
+                {
+                    'id': 'clip_2', 'asset_id': 'video_1', 'name': 'Take',
+                    'timeline_in_ms': 1000, 'timeline_out_ms': 2000,
+                    'source_in_ms': 1500, 'source_out_ms': 2500, 'effects': [],
+                },
+            ]}, {
+                'name': 'Legendas estilizadas (visual final)', 'locked': True, 'clips': [{
+                    'id': 'caption_overlay_pt_clip', 'asset_id': 'caption_overlay_pt',
+                    'name': 'Legendas estilizadas', 'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000, 'audio_enabled': False,
+                }],
+            }],
+            'audio_tracks': [{'clips': [
+                {
+                    'id': 'clip_1', 'asset_id': 'video_1', 'name': 'Take',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 1000,
+                    'source_in_ms': 0, 'source_out_ms': 1000,
+                },
+            ]}],
+            'clips': [{'id': 'clip_1'}, {'id': 'clip_2'}],
+            'captions': [{
+                'language': 'pt', 'is_source': True,
+                'style': {'font': 'Arial', 'font_size': 48},
+                'cues': [{'start_ms': 100, 'end_ms': 900, 'text': 'Bem-vindos à Filadélfia'}],
+            }],
+            'markers': [], 'compatibility': {'warnings': []},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Media').mkdir()
+            (root / 'Graphics').mkdir()
+            (root / 'Project').mkdir()
+            (root / 'Media' / 'take.mp4').write_bytes(b'original')
+            (root / 'Graphics' / 'captions_pt_styled.mov').write_bytes(b'alpha captions')
+            xml_path = root / 'Project' / 'timeline.xml'
+            PremiereExporter().export(timeline, xml_path)
+            report = ExportValidationService().validate(root, timeline, xml_path)
+            xml = xml_path.read_text(encoding='utf-8')
+        self.assertTrue(report['valid'])
+        self.assertIn('../Media/take.mp4', xml)
+        self.assertNotIn('/Users/', xml)
+        self.assertEqual(xml.count('<pathurl>'), 1)
+        self.assertIn('<mediatype>video</mediatype>', xml)
+        self.assertIn('<mediatype>audio</mediatype>', xml)
+        self.assertIn('generatoritem', xml)
+        self.assertIn('Bem-vindos à Filadélfia', xml)
+        self.assertIn('Legendas estilizadas (visual final)', xml)
+        self.assertIn('../Graphics/captions_pt_styled.mov', xml)

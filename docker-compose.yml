@@ -59,7 +59,9 @@ services:
       context: .
       dockerfile: Dockerfile
     working_dir: /usr/src/platform
-    command: celery -A connect worker --loglevel=info --concurrency=1 -Q celery
+    command: >
+      python -m watchdog.watchmedo auto-restart --directory=/usr/src/platform/website --pattern='*.py' --recursive --
+      celery -A connect worker --loglevel=info --concurrency=1 -Q celery
     volumes:
       - ./:/usr/src/platform
       - media_volume:/usr/src/platform/media

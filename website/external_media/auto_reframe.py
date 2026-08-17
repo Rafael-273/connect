@@ -10,6 +10,26 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+# FFmpeg chokes on crop expressions with too many nested `if(lt(t,...))` branches.
+# Long clips can still produce 100+ keyframes even after Douglas-Peucker simplify,
+# so we cap what actually goes into the filter graph (same idea as spectral ducking).
+MAX_FFMPEG_CROP_KEYFRAMES = 48
+
+
+def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
+    """Downsamples keyframes to a safe count while always keeping the first and last."""
+    if len(keyframes) <= max_count:
+        return keyframes
+    if max_count < 2:
+        return keyframes[:1]
+    last_index = len(keyframes) - 1
+    indices = [round(index * last_index / (max_count - 1)) for index in range(max_count)]
+    deduped = []
+    for index in indices:
+        if not deduped or deduped[-1] != index:
+            deduped.append(index)
+    return [keyframes[index] for index in deduped]
+
 
 @dataclass(frozen=True)
 class ReframeKeyframe:
@@ -49,8 +69,9 @@ class AutoReframePlan:
         return expression
 
     def ffmpeg_filters(self, width, height):
-        x_expression = self._expression(self.keyframes, 'x')
-        y_expression = self._expression(self.keyframes, 'y')
+        keyframes = limit_keyframes_for_ffmpeg(self.keyframes)
+        x_expression = self._expression(keyframes, 'x')
+        y_expression = self._expression(keyframes, 'y')
         return [
             f"crop={self.crop_width}:{self.crop_height}:x='{x_expression}':y='{y_expression}'",
             f'scale={width}:{height}:flags=lanczos',
@@ -105,7 +126,7 @@ class AutoReframeService:
     ):
         self.priority = priority if priority in {'face', 'body'} else 'face'
         self.safe_margin = min(0.40, max(0.0, float(safe_margin)))
-        default_top_margin = 0.18 if self.priority == 'face' else 0.12
+        default_top_margin = 0.12 if self.priority == 'face' else 0.10
         self.top_margin = min(0.35, max(0.0, float(
             default_top_margin if top_margin is None else top_margin,
         )))
@@ -115,10 +136,10 @@ class AutoReframeService:
         )
         self.smoothing = min(1.0, max(0.01, float(smoothing)))
         self.horizontal_smoothing = min(1.0, max(0.01, float(
-            max(0.36, self.smoothing) if horizontal_smoothing is None else horizontal_smoothing,
+            max(0.15, self.smoothing) if horizontal_smoothing is None else horizontal_smoothing,
         )))
-        # Nos primeiros ~1.2s de cada take a suavização horizontal sobe até 1.0 para evitar
-        # enquadramento descentralizado enquanto o crop "alcança" a pessoa.
+        # Primeiros ~1.2s: suavização horizontal um pouco maior só para encontrar a pessoa,
+        # sem "colar" no rosto/gestos como o fast-start agressivo anterior.
         self.horizontal_fast_start_seconds = 1.2
         self.vertical_lock = (self.priority == 'face') if vertical_lock is None else bool(vertical_lock)
 
@@ -230,18 +251,13 @@ class AutoReframeService:
             analyzed = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
         else:
             analyzed = frame
-        boxes = []
-        if self.priority == 'body':
-            detected, _weights = body_detector.detectMultiScale(
-                analyzed, winStride=(8, 8), padding=(8, 8), scale=1.05,
-            )
-            boxes = [tuple(map(float, box)) for box in detected]
+        boxes = self._detect_bodies(analyzed, body_detector, cv2)
         if not boxes:
             gray = cv2.cvtColor(analyzed, cv2.COLOR_BGR2GRAY)
             faces = self._detect_faces(gray, face_detectors, cv2)
             for x, y, width, height in faces:
                 if self.priority == 'face':
-                    boxes.append(self._face_priority_box(x, y, width, height))
+                    boxes.append(self._stable_body_box_from_face(x, y, width, height))
                 else:
                     boxes.append((x - width * 1.2, y - height * 0.7, width * 3.4, height * 4.8))
         if not boxes:
@@ -251,6 +267,9 @@ class AutoReframeService:
         top = min(box[1] for box in boxes) * inverse_scale
         right = max(box[0] + box[2] for box in boxes) * inverse_scale
         bottom = max(box[1] + box[3] for box in boxes) * inverse_scale
+        left, top, right, bottom = self._normalize_detection_box(
+            left, top, right, bottom, original_width, original_height,
+        )
         return (
             (
                 max(0.0, left), max(0.0, top),
@@ -258,6 +277,27 @@ class AutoReframeService:
             ),
             len(boxes),
         )
+
+    def _detect_bodies(self, analyzed, body_detector, cv2):
+        gray = cv2.cvtColor(analyzed, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        candidates = (
+            analyzed,
+            cv2.cvtColor(clahe.apply(gray), cv2.COLOR_GRAY2BGR),
+        )
+        boxes = []
+        for candidate in candidates:
+            detected, _weights = body_detector.detectMultiScale(
+                candidate,
+                winStride=(8, 8),
+                padding=(16, 16),
+                scale=1.04,
+                hitThreshold=0,
+            )
+            if len(detected):
+                boxes = [tuple(map(float, box)) for box in detected]
+                break
+        return boxes
 
     @staticmethod
     def _face_detectors(cv2):
@@ -277,18 +317,38 @@ class AutoReframeService:
             return []
         min_size = (max(24, gray.shape[1] // 35),) * 2
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        variants = (
-            gray,
-            clahe.apply(gray),
-            cv2.equalizeHist(gray),
-        )
+        variant_specs = [
+            (gray, 1.0),
+            (clahe.apply(gray), 1.0),
+            (cv2.equalizeHist(gray), 1.0),
+            (cv2.bilateralFilter(gray, 5, 50, 50), 1.0),
+        ]
+        if gray.shape[1] < 960:
+            upscaled = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
+            variant_specs.extend([
+                (upscaled, 1.5),
+                (clahe.apply(upscaled), 1.5),
+            ])
         for detector in face_detectors:
-            for variant in variants:
-                faces = detector.detectMultiScale(
-                    variant, scaleFactor=1.08, minNeighbors=4, minSize=min_size,
-                )
-                if len(faces):
-                    return faces
+            for variant, scale_factor in variant_specs:
+                for min_neighbors in (4, 3):
+                    faces = detector.detectMultiScale(
+                        variant,
+                        scaleFactor=1.05,
+                        minNeighbors=min_neighbors,
+                        minSize=min_size,
+                    )
+                    if len(faces):
+                        inverse_scale = 1.0 / scale_factor
+                        return [
+                            (
+                                face[0] * inverse_scale,
+                                face[1] * inverse_scale,
+                                face[2] * inverse_scale,
+                                face[3] * inverse_scale,
+                            )
+                            for face in faces
+                        ]
         return []
 
     def _smart_crop_size(
@@ -296,8 +356,6 @@ class AutoReframeService:
     ):
         required_widths = []
         required_heights = []
-        person_widths = []
-        edge_slacks = []
         margin_factor = 1.0 + (2.0 * self.safe_margin)
         for _time, (left, top, right, bottom) in observations:
             box_width = max(1.0, right - left) * margin_factor
@@ -306,31 +364,19 @@ class AutoReframeService:
             height = width / target_ratio
             required_widths.append(width)
             required_heights.append(height)
-            person_widths.append(box_width)
-            center_x = (left + right) / 2.0
-            edge_slacks.append(min(center_x, max(0.0, source_width - center_x)))
         # The 90th percentile ignores a single detector outlier while protecting most movement.
         index = min(len(required_widths) - 1, math.floor(len(required_widths) * 0.90))
         desired_width = sorted(required_widths)[index]
         desired_height = sorted(required_heights)[index]
-        # For wide/short target ratios (e.g. 16:5 banners), the height requirement above
-        # inflates desired_width past the full source width, so it gets capped by cover_width
-        # below and leaves zero horizontal room to pan — the tracked person then stays wherever
-        # they happen to be framed in the original footage instead of being centered. When that
-        # happens, zoom in a bit further (shrinking width and height together, so the aspect
-        # ratio and the existing head-margin proportions are preserved) just enough to leave
-        # room to horizontally center the person, without ever cropping tighter than their own
-        # detected width.
-        min_person_width = sorted(person_widths)[index]
-        slack_index = min(len(edge_slacks) - 1, math.floor(len(edge_slacks) * 0.10))
-        centering_slack = sorted(edge_slacks)[slack_index]
-        max_width_for_centering = 2.0 * centering_slack
-        if max_width_for_centering < desired_width:
-            desired_width = max(min_person_width, min(desired_width, max_width_for_centering))
-            desired_height = desired_width / target_ratio
-        # Avoid an excessively tight digital zoom; at least 45% of the cover window remains visible.
-        crop_width = min(cover_width, max(cover_width * 0.45, desired_width))
-        crop_height = min(cover_height, max(cover_height * 0.45, desired_height))
+        # NOTE: on purpose, this never zooms in further just to gain horizontal pan room to
+        # center an off-center person (a "centering zoom" was tried before and reverted): since
+        # width/height are locked to `target_ratio`, any extra zoom tight enough to fully center
+        # a person in a wide/short ratio (e.g. 16:5 banners) also shrinks the vertical framing by
+        # the same factor — which crops below the head/chin on the common case of a close/medium
+        # shot. Keeping the person fully framed takes priority over perfect centering.
+        # Avoid an excessively tight digital zoom; at least 68% of the cover window remains visible.
+        crop_width = min(cover_width, max(cover_width * 0.68, desired_width))
+        crop_height = min(cover_height, max(cover_height * 0.68, desired_height))
         if crop_width / crop_height > target_ratio:
             crop_height = crop_width / target_ratio
         else:
@@ -347,7 +393,7 @@ class AutoReframeService:
         targets = [
             (
                 time_seconds,
-                min(max_x, max(0.0, (((left + right) / 2.0) - crop_width / 2.0))),
+                min(max_x, max(0.0, self._horizontal_anchor_x(left, top, right, bottom) - crop_width / 2.0)),
                 self._target_crop_y(top, bottom, crop_height, max_y),
             )
             for time_seconds, (left, top, right, bottom) in observations
@@ -374,10 +420,20 @@ class AutoReframeService:
         if time_seconds >= fast_start:
             return self.horizontal_smoothing
         ramp = 1.0 - (time_seconds / fast_start)
+        boosted = min(0.42, self.horizontal_smoothing * 2.4)
         return min(
-            1.0,
-            self.horizontal_smoothing + ((1.0 - self.horizontal_smoothing) * ramp),
+            boosted,
+            self.horizontal_smoothing + ((boosted - self.horizontal_smoothing) * ramp),
         )
+
+    @staticmethod
+    def _horizontal_anchor_x(left, top, right, bottom):
+        """Center on the torso, ignoring arm extensions and face jitter."""
+        width = max(1.0, right - left)
+        height = max(1.0, bottom - top)
+        core_left = left + width * 0.25
+        core_right = right - width * 0.25
+        return (core_left + core_right) / 2.0
 
     def _locked_vertical_target(self, target_ys, max_y):
         if not self.vertical_lock or not target_ys or max_y <= 0:
@@ -394,21 +450,60 @@ class AutoReframeService:
         if lowest_y_that_preserves_bottom <= ideal_y:
             target_y = ideal_y
         else:
-            # When the visible person is taller than the crop, keep the headroom close to ideal
-            # and only move down as much as needed to avoid losing too much body.
-            target_y = ideal_y + ((lowest_y_that_preserves_bottom - ideal_y) * 0.10)
+            # Person taller than the crop: keep the head at the configured headroom and
+            # sacrifice lower body instead of sliding the crop down (which cuts the head).
+            target_y = ideal_y
         return min(max_y, max(0.0, target_y))
 
     @staticmethod
+    def _normalize_detection_box(left, top, right, bottom, source_width, source_height):
+        """Turn raw detector output into a stable interview-style MCU framing box.
+
+        HOG body boxes often start below the hairline; face fallbacks can be tight.
+        We pad upward for the head and enforce a minimum height so sizing/positioning
+        doesn't over-zoom on the face or drift with inconsistent partial detections.
+        """
+        box_height = max(1.0, bottom - top)
+        head_pad = box_height * 0.20
+        top = max(0.0, top - head_pad)
+        box_height = max(1.0, bottom - top)
+
+        min_height = source_height * 0.48
+        if box_height < min_height:
+            center_y = (top + bottom) / 2.0
+            half = min_height / 2.0
+            top = max(0.0, center_y - half)
+            bottom = min(float(source_height), center_y + half)
+            if bottom - top < min_height:
+                bottom = min(float(source_height), top + min_height)
+
+        return left, top, right, bottom
+
+    @staticmethod
     def _face_priority_box(x, y, width, height):
-        # Keep the top near the real head while still expanding downward for upper-body context.
-        top = y - height * 0.22
-        bottom = y + height * 4.5
+        # Keep the top near the real head; headroom above the face is added by top_margin.
+        top = y - height * 0.12
+        bottom = y + height * 4.2
         return (
             x - width * 1.7,
             top,
             width * 4.4,
             bottom - top,
+        )
+
+    @staticmethod
+    def _stable_body_box_from_face(x, y, width, height):
+        """Estimate a body box with a fixed width centered on the face."""
+        face_center_x = x + (width / 2.0)
+        body_width = width * 2.8
+        top = y - height * 0.12
+        bottom = y + height * 4.2
+        body_height = bottom - top
+        return (
+            face_center_x - (body_width / 2.0),
+            top,
+            body_width,
+            body_height,
         )
 
     @classmethod
