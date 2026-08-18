@@ -226,8 +226,8 @@ class PastoralVisitorReportView(LoginRequiredMixin, TemplateView):
         for month in monthly_visits:
             month['height'] = max(8, round((month['count'] / max_monthly_visits) * 100)) if max_monthly_visits else 8
 
-        house_of_peace_visitors = visitors.filter(
-            wants_house_of_peace=True
+        home_prayer_visitors = visitors.filter(
+            wants_home_prayer=True
         ).order_by('-visit_date', '-id')[:5]
 
         context['report'] = {
@@ -238,5 +238,5 @@ class PastoralVisitorReportView(LoginRequiredMixin, TemplateView):
         }
         context['weekly_visits'] = weekly_visits
         context['monthly_visits'] = monthly_visits
-        context['house_of_peace_visitors'] = house_of_peace_visitors
+        context['home_prayer_visitors'] = home_prayer_visitors
         return context

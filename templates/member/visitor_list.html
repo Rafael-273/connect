@@ -321,12 +321,6 @@
                             <span>{{ visitor.neighborhood.name }}</span>
                         </div>
                         {% endif %}
-                        {% if visitor.address %}
-                        <div class="visitor-info-item span-full">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <span>{{ visitor.address }}</span>
-                        </div>
-                        {% endif %}
                     </div>
 
                     {% if visitor.prayer_request %}
@@ -344,7 +338,7 @@
                        rel="noopener noreferrer"
                        class="visitor-contact-btn">
                         <span class="visitor-contact-btn-icon"><i class="fab fa-whatsapp"></i></span>
-                        <span class="mt-2">{% if pastoral_view %}Enviar mensagem pastoral{% else %}Enviar mensagem de boas-vindas{% endif %}</span>
+                        <span class="mt-2">{% if pastoral_view %}Enviar mensagem{% else %}Enviar mensagem de boas-vindas{% endif %}</span>
                         <i class="fas fa-arrow-right visitor-contact-btn-arrow mr-1"></i>
                     </a>
                     {% endif %}

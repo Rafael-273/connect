@@ -75,19 +75,19 @@
     <section class="report-panel mt-6">
         <div class="flex items-start justify-between gap-3 mb-4">
             <div>
-                <h2 class="text-lg font-black text-gray-900">Interessados em Casa de Paz</h2>
-                <p class="text-sm text-gray-500">Visitantes que manifestaram interesse em participar de uma Casa de Paz</p>
+                <h2 class="text-lg font-black text-gray-900">Oração em casa</h2>
+                <p class="text-sm text-gray-500">Visitantes que solicitaram oração em casa</p>
             </div>
             <i class="fas fa-heart text-xl" style="color: #C90905;"></i>
         </div>
         <div class="space-y-3">
-            {% for visitor in house_of_peace_visitors %}
+            {% for visitor in home_prayer_visitors %}
             <div class="flex items-center justify-between gap-4 border-t border-gray-100 pt-3">
-                <div class="min-w-0"><p class="font-bold text-gray-900 truncate">{{ visitor.name }}</p><p class="text-xs text-gray-500">Visitou em {{ visitor.visit_date|date:"d/m/Y" }} · Interesse em Casa de Paz</p></div>
+                <div class="min-w-0"><p class="font-bold text-gray-900 truncate">{{ visitor.name }}</p><p class="text-xs text-gray-500">Visitou em {{ visitor.visit_date|date:"d/m/Y" }} · Solicitou oração em casa</p></div>
                 {% if visitor.phone %}<a href="https://wa.me/55{{ visitor.phone|cut:'('|cut:')'|cut:'-'|cut:' ' }}" target="_blank" rel="noopener noreferrer" class="shrink-0 text-sm font-bold" style="color: #C90905;"><i class="fab fa-whatsapp"></i> Contatar</a>{% endif %}
             </div>
             {% empty %}
-            <p class="py-4 text-sm text-gray-500">Nenhum visitante manifestou interesse em Casa de Paz ainda.</p>
+            <p class="py-4 text-sm text-gray-500">Nenhum visitante solicitou oração em casa ainda.</p>
             {% endfor %}
         </div>
     </section>
