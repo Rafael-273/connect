@@ -193,19 +193,6 @@ class PastoralVisitorReportView(LoginRequiredMixin, TemplateView):
         today = timezone.localdate()
         visitors = Visitor.objects.all()
         total = visitors.count()
-        weekly_visits = []
-        for offset in range(7, -1, -1):
-            week_start = today - timedelta(days=today.weekday() + (offset * 7))
-            week_end = week_start + timedelta(days=6)
-            weekly_visits.append({
-                'label': week_start.strftime('%d/%m'),
-                'count': visitors.filter(visit_date__range=(week_start, week_end)).count(),
-            })
-
-        max_weekly_visits = max((week['count'] for week in weekly_visits), default=0)
-        for week in weekly_visits:
-            week['height'] = max(8, round((week['count'] / max_weekly_visits) * 100)) if max_weekly_visits else 8
-
         month_names = ('Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez')
         month_starts = []
         month_cursor = today.replace(day=1)
@@ -236,7 +223,6 @@ class PastoralVisitorReportView(LoginRequiredMixin, TemplateView):
             'this_month': visitors.filter(visit_date__year=today.year, visit_date__month=today.month).count(),
             'prayer_requests': visitors.exclude(prayer_request__isnull=True).exclude(prayer_request='').count(),
         }
-        context['weekly_visits'] = weekly_visits
         context['monthly_visits'] = monthly_visits
         context['home_prayer_visitors'] = home_prayer_visitors
         return context

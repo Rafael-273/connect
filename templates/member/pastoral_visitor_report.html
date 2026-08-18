@@ -4,12 +4,19 @@
 
 {% block head %}
 <style>
-    .report-panel { border: 1px solid rgba(201, 9, 5, .15); background: #fff; border-radius: 1rem; padding: 1.25rem; }
-    .chart-grid { height: 240px; display: flex; align-items: end; gap: .65rem; padding: 1rem .5rem 0; border-bottom: 1px solid #e5e7eb; background-image: repeating-linear-gradient(to top, transparent 0, transparent calc(25% - 1px), #f3f4f6 calc(25% - 1px), #f3f4f6 25%); }
-    .bar-column { height: 100%; flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: .45rem; }
-    .bar-value { font-size: .75rem; font-weight: 700; color: #374151; }
-    .bar { width: min(100%, 2.75rem); min-height: 6px; background: linear-gradient(180deg, #e63946, #C90905); border-radius: .45rem .45rem 0 0; box-shadow: 0 3px 8px rgba(201, 9, 5, .18); transition: height .25s ease; }
-    .bar-label { font-size: .7rem; color: #6b7280; white-space: nowrap; }
+    .report-panel { border: 1px solid rgba(201, 9, 5, .15); background: linear-gradient(135deg, #fff 0%, #fffafa 100%); border-radius: 1rem; padding: 1.25rem; box-shadow: 0 12px 28px rgba(31, 41, 55, .04); }
+    .chart-grid { height: 275px; display: flex; align-items: end; gap: clamp(.65rem, 2vw, 1.5rem); padding: 1.25rem 1rem .3rem; border-bottom: 1px solid #e5e7eb; background-image: repeating-linear-gradient(to top, transparent 0, transparent calc(25% - 1px), rgba(229, 231, 235, .7) calc(25% - 1px), rgba(229, 231, 235, .7) 25%); }
+    .bar-column { height: 100%; flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: .55rem; }
+    .bar-value { min-width: 1.8rem; padding: .15rem .45rem; border-radius: 999px; background: #fff; box-shadow: 0 3px 10px rgba(31, 41, 55, .08); font-size: .75rem; font-weight: 800; color: #374151; text-align: center; transition: transform .2s ease, color .2s ease; }
+    .bar { width: min(100%, 3.5rem); height: var(--bar-height); min-height: 7px; position: relative; overflow: hidden; transform: scaleY(0); transform-origin: bottom; background: linear-gradient(180deg, #f04454 0%, #d90b08 55%, #b80603 100%); border-radius: .75rem .75rem .2rem .2rem; box-shadow: 0 10px 18px rgba(201, 9, 5, .2); animation: chart-grow .8s cubic-bezier(.22, 1, .36, 1) forwards; transition: filter .2s ease, box-shadow .2s ease; }
+    .bar::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(255,255,255,.3), transparent 45%); opacity: .65; }
+    .bar-current { background: linear-gradient(180deg, #ff5968 0%, #e10a07 50%, #c90905 100%); }
+    .bar-column:nth-child(1) .bar { animation-delay: .05s; } .bar-column:nth-child(2) .bar { animation-delay: .12s; } .bar-column:nth-child(3) .bar { animation-delay: .19s; } .bar-column:nth-child(4) .bar { animation-delay: .26s; } .bar-column:nth-child(5) .bar { animation-delay: .33s; } .bar-column:nth-child(6) .bar { animation-delay: .4s; }
+    .bar-column:hover .bar { filter: brightness(1.08); box-shadow: 0 14px 23px rgba(201, 9, 5, .3); }
+    .bar-column:hover .bar-value { color: #C90905; transform: translateY(-2px); }
+    .bar-label { font-size: .75rem; font-weight: 700; color: #6b7280; white-space: nowrap; }
+    @keyframes chart-grow { to { transform: scaleY(1); } }
+    @media (prefers-reduced-motion: reduce) { .bar { animation: none; transform: scaleY(1); } }
 </style>
 {% endblock %}
 
@@ -32,26 +39,7 @@
         <div class="rounded-2xl p-4 border" style="border-color: rgba(201, 9, 5, 0.14); background: rgba(201, 9, 5, 0.04);"><p class="text-xs text-gray-500">Pedidos de oração</p><p class="text-3xl font-black text-gray-900 mt-1">{{ report.prayer_requests }}</p></div>
     </div>
 
-    <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 mt-6">
-        <article class="report-panel">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <h2 class="text-lg font-black text-gray-900">Visitas por semana</h2>
-                    <p class="text-sm text-gray-500">Últimas oito semanas · cada barra representa uma semana</p>
-                </div>
-                <i class="fas fa-chart-column text-xl" style="color: #C90905;"></i>
-            </div>
-            <div class="chart-grid" role="img" aria-label="Quantidade de visitantes por semana nas últimas oito semanas">
-                {% for week in weekly_visits %}
-                <div class="bar-column">
-                    <span class="bar-value">{{ week.count }}</span>
-                    <div class="bar" style="height: {{ week.height }}%;"></div>
-                    <span class="bar-label">{{ week.label }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </article>
-
+    <section class="mt-6">
         <article class="report-panel">
             <div class="flex items-start justify-between gap-3">
                 <div>
@@ -64,7 +52,7 @@
                 {% for month in monthly_visits %}
                 <div class="bar-column">
                     <span class="bar-value">{{ month.count }}</span>
-                    <div class="bar" style="height: {{ month.height }}%;"></div>
+                    <div class="bar{% if forloop.last %} bar-current{% endif %}" style="--bar-height: {{ month.height }}%;" title="{{ month.label }}: {{ month.count }} visitante{{ month.count|pluralize:'s' }}"></div>
                     <span class="bar-label">{{ month.label }}</span>
                 </div>
                 {% endfor %}
