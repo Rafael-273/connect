@@ -261,7 +261,6 @@ Eventos
     </div>
     
     {% for event in events %}
-        {% if event.is_visible %}
             <div class="event p-5 rounded-xl shadow-lg flex flex-col md:flex-row gap-4 h-auto md:h-[25rem] transform transition-all duration-300 hover:translate-y-[-5px]" style="background-color: #0d0d0d;">
                 <div class="cover-event w-full md:w-1/2 flex-shrink-0 overflow-hidden rounded-lg">
                     <a href="{% url 'event_detail' slug=event.slug %}" class="block h-full">
@@ -328,7 +327,6 @@ Eventos
                     </a>
                 </div>
             </div>
-        {% endif %}
     {% endfor %}
     {% endif %}
 </div>

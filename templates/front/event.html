@@ -166,9 +166,17 @@
                 <div>
                     <div class="flex flex-col gap-3 mb-6">
                         <div class="date-badge self-start mb-2">
+                            {% if event.is_recurring %}
+                                <ion-icon name="repeat-outline" class="mr-2 text-xl text-white"></ion-icon>
+                                {% if event.recurrence_description %}
+                                    {{ event.recurrence_description }}
+                                {% else %}
+                                    Todo {{ event.get_weekday_name|lower }}{% if event.event_time %} • {{ event.event_time|time:"H" }}h{% endif %}
+                                {% endif %}
+                            {% else %}
                                 <ion-icon name="calendar-outline" class="mr-2 text-xl text-white"></ion-icon>
-                            {{ event.event_date|date:"d/m" }} • 
-                            {{ event.event_time|time:"H" }}h
+                                {{ event.event_date|date:"d/m" }}{% if event.event_time %} • {{ event.event_time|time:"H" }}h{% endif %}
+                            {% endif %}
                         </div>
                         {% if event.dates.all %}
                         <div class="flex flex-wrap gap-2">
@@ -188,25 +196,6 @@
                     
                     <div class="mb-6">
                         <p class="text-gray-300 text-base leading-relaxed mb-6">{{ event.description }}</p>
-                        
-                        {% if event.is_recurring %}
-                        <div class="flex items-center gap-2 text-gray-200 mb-2">
-                            <ion-icon name="repeat-outline" class="text-xl text-[var(--color-danger)]"></ion-icon>
-                            <h3 class="text-lg font-medium">Recorrência</h3>
-                        </div>
-                        <p class="text-gray-300 ml-7 mb-4">
-                            {% if event.recurrence_pattern == 'weekly' %}
-                                Evento semanal
-                            {% elif event.recurrence_pattern == 'biweekly' %}
-                                Evento quinzenal
-                            {% elif event.recurrence_pattern == 'monthly' %}
-                                Evento mensal
-                            {% endif %}
-                            {% if event.recurrence_description %}
-                                <br/>{{ event.recurrence_description }}
-                            {% endif %}
-                        </p>
-                        {% endif %}
                         
                         {% if event.location %}
                         <div class="flex items-center gap-2 text-gray-200 mb-2">
@@ -237,11 +226,6 @@
                             {% endif %}
                         </div>
                     </a>
-                {% else %}
-                    <div class="rounded-lg text-center py-4 text-white bg-gray-700 font-medium flex items-center justify-center gap-2">
-                        <ion-icon name="information-circle-outline" class="text-xl"></ion-icon>
-                        Sem link adicional
-                    </div>
                 {% endif %}
             </div>
         </div>

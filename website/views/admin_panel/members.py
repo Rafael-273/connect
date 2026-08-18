@@ -153,6 +153,7 @@ class MemberDetailApiView(LoginRequiredMixin, AdminRequiredMixin, View):
             'address': member.address,
             'birth_date': member.birth_date.strftime('%d/%m/%Y') if member.birth_date else None,
             'gender': member.get_gender_display() if member.gender else None,
+            'church_role': member.get_church_role_display(),
             'ministry': ', '.join(
                 MinistryMembership.objects.filter(
                     member=member, is_active=True

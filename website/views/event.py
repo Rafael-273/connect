@@ -15,8 +15,22 @@ class EventListView(ListView):
         event_type = self.request.GET.get('type', '')  # 'normal', 'recurring', ou vazio (todos)
         today = timezone.now().date()
         
-        # Filtramos apenas eventos NÃO recorrentes
-        queryset = Event.objects.filter(is_recurring=False).prefetch_related('dates')
+        # Eventos especiais só aparecem enquanto estão visíveis e possuem pelo
+        # menos uma data de realização hoje ou no futuro. A data principal pode
+        # já ter passado quando o evento possui datas adicionais em `dates`.
+        queryset = (
+            Event.objects.filter(
+                is_recurring=False,
+                display_start__lte=today,
+                display_end__gte=today,
+            )
+            .filter(
+                Q(event_date__gte=today) | Q(dates__event_date__gte=today)
+            )
+            .prefetch_related('dates')
+            .distinct()
+            .order_by('event_date')
+        )
         
         # Filtrar por tipo se especificado
         if event_type == 'normal':

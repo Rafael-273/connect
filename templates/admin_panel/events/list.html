@@ -95,7 +95,7 @@
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
 
-    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+    <div class="flex-1 min-w-0 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-3 md:p-6 mt-24">
             <!-- Title -->
             <div class="flex items-center justify-between gap-3 mb-4">
@@ -249,14 +249,19 @@
             </div>
 
             <!-- Versão Desktop: Tabela -->
-            <div class="admin-card overflow-hidden hidden md:block">
-                <div class="overflow-x-auto table-responsive">
-                    <table class="w-full data-table">
+            <div class="admin-card min-w-0 overflow-hidden hidden md:block">
+                <div class="overflow-x-auto min-w-0 table-responsive">
+                    <table class="w-full min-w-[860px] table-fixed data-table">
+                        <colgroup>
+                            <col class="w-[58%]">
+                            <col class="w-[16%]">
+                            <col class="w-[15%]">
+                            <col class="w-[11%]">
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th class="text-left">Evento</th>
                                 <th class="text-left">Data/Hora</th>
-                                <th class="text-left">Local</th>
                                 <th class="text-left">Status</th>
                                 <th class="text-left">Ações</th>
                             </tr>
@@ -283,12 +288,6 @@
                                     <div class="text-sm text-gray-800">{{ event.event_date|date:"d/m/Y" }}</div>
                                     {% if event.event_time %}
                                     <div class="text-xs text-gray-400 mt-0.5">{{ event.event_time|time:"H:i" }}h</div>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div class="text-sm text-gray-800 truncate">{{ event.location|default:"--" }}</div>
-                                    {% if event.link_more_info %}
-                                    <a href="{{ event.link_more_info }}" target="_blank" class="text-xs text-[var(--color-primary)] hover:underline truncate block">Mais informações</a>
                                     {% endif %}
                                 </td>
                                 <td class="whitespace-nowrap">
@@ -332,7 +331,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="5" class="px-6 py-12 text-center">
+                                <td colspan="4" class="px-6 py-12 text-center">
                                     <div class="flex flex-col items-center gap-2 text-gray-400">
                                         <ion-icon name="calendar-outline" style="font-size:2rem;"></ion-icon>
                                         <span class="text-sm">Nenhum evento encontrado.</span>

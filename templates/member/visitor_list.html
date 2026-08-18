@@ -210,8 +210,12 @@
                     <i class="fas fa-arrow-left"></i>
                 </a>
                 <div class="min-w-0">
-                    <h1 class="text-2xl sm:text-3xl font-black text-gray-900 truncate">Lista de <span style="color: #C90905;">Visitantes</span></h1>
-                    <p class="text-sm text-gray-600 font-medium mt-1">Ministério de Boas Vindas · {{ total }} visitante{{ total|pluralize:"s" }}</p>
+                    <h1 class="text-2xl sm:text-3xl font-black text-gray-900 truncate">
+                        {% if pastoral_view %}Área <span style="color: #C90905;">Pastoral</span>{% else %}Lista de <span style="color: #C90905;">Visitantes</span>{% endif %}
+                    </h1>
+                    <p class="text-sm text-gray-600 font-medium mt-1">
+                        {% if pastoral_view %}Visitantes da Área Pastoral · {{ total }} visitante{{ total|pluralize:"s" }}{% else %}Ministério de Boas Vindas · {{ total }} visitante{{ total|pluralize:"s" }}{% endif %}
+                    </p>
                 </div>
             </div>
         </div>
@@ -266,7 +270,7 @@
                         </select>
                     </div>
                     <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
-                        <a href="{% url 'member_visitor_list' %}"
+                        <a href="{% if pastoral_view %}{% url 'pastoral_visitor_list' %}{% else %}{% url 'member_visitor_list' %}{% endif %}"
                            class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
                             Limpar
                         </a>
@@ -340,7 +344,7 @@
                        rel="noopener noreferrer"
                        class="visitor-contact-btn">
                         <span class="visitor-contact-btn-icon"><i class="fab fa-whatsapp"></i></span>
-                        <span class="mt-2">Enviar mensagem de boas-vindas</span>
+                        <span class="mt-2">{% if pastoral_view %}Enviar mensagem pastoral{% else %}Enviar mensagem de boas-vindas{% endif %}</span>
                         <i class="fas fa-arrow-right visitor-contact-btn-arrow mr-1"></i>
                     </a>
                     {% endif %}
@@ -396,10 +400,10 @@
                         Ainda não há visitantes cadastrados. Comece cadastrando o primeiro!
                     {% endif %}
                 </p>
-                <a href="{% url 'member_visitor_create' %}" class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
+                {% if not pastoral_view %}<a href="{% url 'member_visitor_create' %}" class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
                     <i class="fas fa-user-plus"></i>
                     Cadastrar Visitante
-                </a>
+                </a>{% endif %}
             </div>
         {% endif %}
         </div>

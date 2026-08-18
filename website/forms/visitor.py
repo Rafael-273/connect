@@ -15,7 +15,7 @@ class VisitorForm(forms.ModelForm):
 
     class Meta:
         model = Visitor
-        fields = ['name', 'phone', 'address', 'neighborhood', 'prayer_request', 'wants_home_prayer']
+        fields = ['name', 'phone', 'address', 'neighborhood', 'prayer_request', 'wants_home_prayer', 'wants_house_of_peace']
         labels = {
             'name': 'Nome completo',
             'phone': 'Telefone',
@@ -23,6 +23,7 @@ class VisitorForm(forms.ModelForm):
             'neighborhood': 'Bairro',
             'prayer_request': 'Pedido de oração',
             'wants_home_prayer': 'Deseja oração na sua casa?',
+            'wants_house_of_peace': 'Tenho interesse em participar de uma Casa de Paz',
         }
         widgets = {
             'name': forms.TextInput(attrs={
@@ -78,7 +79,7 @@ class VisitorAdminForm(forms.ModelForm):
         model = Visitor
         fields = [
             'name', 'email', 'phone', 'birth_date', 'gender', 'address', 'neighborhood',
-            'decision_for_jesus', 'wants_home_prayer',
+            'decision_for_jesus', 'wants_home_prayer', 'wants_house_of_peace',
             'conversion', 'prayer_request', 'profile_notes',
         ]
         labels = {
@@ -91,6 +92,7 @@ class VisitorAdminForm(forms.ModelForm):
             'neighborhood':       'Bairro',
             'decision_for_jesus': 'Fez decisão por Jesus?',
             'wants_home_prayer':  'Deseja oração na sua casa?',
+            'wants_house_of_peace': 'Tem interesse em Casa de Paz?',
             'conversion':         'Tipo de Conversão',
             'prayer_request':     'Pedido de Oração',
             'profile_notes':      'Observações/Anotações',
@@ -120,6 +122,7 @@ class VisitorAdminForm(forms.ModelForm):
             'neighborhood':       forms.Select(attrs={'class': 'form-select'}),
             'decision_for_jesus': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
             'wants_home_prayer':  forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
+            'wants_house_of_peace': forms.CheckboxInput(attrs={'class': 'form-checkbox'}),
             'conversion': forms.Select(attrs={'class': 'form-select'}),
             'prayer_request': forms.Textarea(attrs={
                 'rows': 4,

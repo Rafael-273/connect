@@ -1,0 +1,98 @@
+{% extends "member_base.html" %}
+
+{% block title %}Relatório de Visitantes{% endblock %}
+
+{% block head %}
+<style>
+    .report-panel { border: 1px solid rgba(201, 9, 5, .15); background: #fff; border-radius: 1rem; padding: 1.25rem; }
+    .chart-grid { height: 240px; display: flex; align-items: end; gap: .65rem; padding: 1rem .5rem 0; border-bottom: 1px solid #e5e7eb; background-image: repeating-linear-gradient(to top, transparent 0, transparent calc(25% - 1px), #f3f4f6 calc(25% - 1px), #f3f4f6 25%); }
+    .bar-column { height: 100%; flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: .45rem; }
+    .bar-value { font-size: .75rem; font-weight: 700; color: #374151; }
+    .bar { width: min(100%, 2.75rem); min-height: 6px; background: linear-gradient(180deg, #e63946, #C90905); border-radius: .45rem .45rem 0 0; box-shadow: 0 3px 8px rgba(201, 9, 5, .18); transition: height .25s ease; }
+    .bar-label { font-size: .7rem; color: #6b7280; white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="px-4 sm:px-6 md:px-8 py-6 border-b-2" style="border-color: rgba(201, 9, 5, 0.2);">
+    <div class="flex gap-4 items-center">
+        <a href="{% url 'member_dashboard' %}" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1 flex-shrink-0" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;"><i class="fas fa-arrow-left"></i></a>
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-black text-gray-900">Relatório de <span style="color: #C90905;">Visitantes</span></h1>
+            <p class="text-sm text-gray-600 font-medium mt-1">Panorama da Área Pastoral</p>
+        </div>
+    </div>
+</header>
+
+<main class="px-4 sm:px-6 md:px-8 py-6">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="rounded-2xl p-4 border" style="border-color: rgba(201, 9, 5, 0.14); background: rgba(201, 9, 5, 0.04);"><p class="text-xs text-gray-500">Total</p><p class="text-3xl font-black text-gray-900 mt-1">{{ report.total }}</p></div>
+        <div class="rounded-2xl p-4 border" style="border-color: rgba(201, 9, 5, 0.14); background: rgba(201, 9, 5, 0.04);"><p class="text-xs text-gray-500">Últimos 7 dias</p><p class="text-3xl font-black text-gray-900 mt-1">{{ report.last_7_days }}</p></div>
+        <div class="rounded-2xl p-4 border" style="border-color: rgba(201, 9, 5, 0.14); background: rgba(201, 9, 5, 0.04);"><p class="text-xs text-gray-500">Este mês</p><p class="text-3xl font-black text-gray-900 mt-1">{{ report.this_month }}</p></div>
+        <div class="rounded-2xl p-4 border" style="border-color: rgba(201, 9, 5, 0.14); background: rgba(201, 9, 5, 0.04);"><p class="text-xs text-gray-500">Pedidos de oração</p><p class="text-3xl font-black text-gray-900 mt-1">{{ report.prayer_requests }}</p></div>
+    </div>
+
+    <section class="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 mt-6">
+        <article class="report-panel">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-black text-gray-900">Visitas por semana</h2>
+                    <p class="text-sm text-gray-500">Últimas oito semanas · cada barra representa uma semana</p>
+                </div>
+                <i class="fas fa-chart-column text-xl" style="color: #C90905;"></i>
+            </div>
+            <div class="chart-grid" role="img" aria-label="Quantidade de visitantes por semana nas últimas oito semanas">
+                {% for week in weekly_visits %}
+                <div class="bar-column">
+                    <span class="bar-value">{{ week.count }}</span>
+                    <div class="bar" style="height: {{ week.height }}%;"></div>
+                    <span class="bar-label">{{ week.label }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
+
+        <article class="report-panel">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-black text-gray-900">Visitas por mês</h2>
+                    <p class="text-sm text-gray-500">Últimos seis meses · tendência geral</p>
+                </div>
+                <i class="fas fa-calendar-alt text-xl" style="color: #C90905;"></i>
+            </div>
+            <div class="chart-grid" role="img" aria-label="Quantidade de visitantes por mês nos últimos seis meses">
+                {% for month in monthly_visits %}
+                <div class="bar-column">
+                    <span class="bar-value">{{ month.count }}</span>
+                    <div class="bar" style="height: {{ month.height }}%;"></div>
+                    <span class="bar-label">{{ month.label }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </article>
+    </section>
+
+    <section class="report-panel mt-6">
+        <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+                <h2 class="text-lg font-black text-gray-900">Interessados em Casa de Paz</h2>
+                <p class="text-sm text-gray-500">Visitantes que manifestaram interesse em participar de uma Casa de Paz</p>
+            </div>
+            <i class="fas fa-heart text-xl" style="color: #C90905;"></i>
+        </div>
+        <div class="space-y-3">
+            {% for visitor in house_of_peace_visitors %}
+            <div class="flex items-center justify-between gap-4 border-t border-gray-100 pt-3">
+                <div class="min-w-0"><p class="font-bold text-gray-900 truncate">{{ visitor.name }}</p><p class="text-xs text-gray-500">Visitou em {{ visitor.visit_date|date:"d/m/Y" }} · Interesse em Casa de Paz</p></div>
+                {% if visitor.phone %}<a href="https://wa.me/55{{ visitor.phone|cut:'('|cut:')'|cut:'-'|cut:' ' }}" target="_blank" rel="noopener noreferrer" class="shrink-0 text-sm font-bold" style="color: #C90905;"><i class="fab fa-whatsapp"></i> Contatar</a>{% endif %}
+            </div>
+            {% empty %}
+            <p class="py-4 text-sm text-gray-500">Nenhum visitante manifestou interesse em Casa de Paz ainda.</p>
+            {% endfor %}
+        </div>
+    </section>
+
+</main>
+
+{% include 'parciais/member_bottom_nav.html' with nav_active='home' %}
+{% endblock %}

@@ -348,7 +348,13 @@
                     <div class="min-w-0 flex-1">
                         <p class="text-xs sm:text-xs text-gray-600 tracking-wide">Bem-vindo(a)</p>
                         <h2 class="font-black text-xl sm:text-2xl text-gray-900 truncate leading-tight">{{member.name}}</h2>
-                        <p class="text-sm sm:text-sm text-gray-600 font-medium hidden sm:block">Família Filadélfia</p>
+                        <p class="text-sm sm:text-sm text-gray-600 font-medium hidden sm:block">
+                            {% if member.church_role != 'member' %}
+                                {{ member.get_church_role_display }} · Família Filadélfia
+                            {% else %}
+                                Família Filadélfia
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
 
@@ -480,8 +486,41 @@
 
 
     <!-- Cards de Ministério -->
-    {% if is_ministration_member or can_consolidate or is_boas_vindas_member or is_moderacao_member or member_schedules or can_music_member or is_house_of_peace_member%}
+    {% if is_ministration_member or can_consolidate or is_boas_vindas_member or is_pastor or is_moderacao_member or member_schedules or can_music_member or is_house_of_peace_member%}
     <div id="ministry-cards-container" class="space-y-3">
+
+        {% if is_pastor %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Área Pastoral"
+            data-card-icon="user-tie"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                        <i class="fas fa-user-tie text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">Área <span style="color: #C90905;">Pastoral</span></h3>
+                        <p class="text-sm text-gray-500 mt-0.5">Visitantes, mensagens e relatório</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <a href="{% url 'pastoral_visitor_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div><h4 class="text-sm font-black text-gray-900 mb-1">Ver visitantes</h4><p class="text-xs text-gray-500">Enviar mensagens e acompanhar visitas</p></div>
+                            <i class="fas fa-users text-lg" style="color: #C90905;"></i>
+                        </a>
+                        <a href="{% url 'pastoral_visitor_report' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div><h4 class="text-sm font-black text-gray-900 mb-1">Ver relatório</h4><p class="text-xs text-gray-500">Visitas e pedidos de oração</p></div>
+                            <i class="fas fa-chart-bar text-lg" style="color: #C90905;"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         {% if is_ministration_member %}
         <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
@@ -921,7 +960,7 @@
                 const tabBtn = document.createElement('button');
                 tabBtn.type = 'button';
                 tabBtn.className = 'ministry-tab-btn' + (idx === 0 ? ' active' : '');
-                tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> <span class="inline-block mt-1">${label}</span>`;
+                tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> <span class="inline-block">${label}</span>`;
                 tabBtn.addEventListener('click', () => switchMinistryTab(cards, tabBar, idx));
                 tabBar.appendChild(tabBtn);
 

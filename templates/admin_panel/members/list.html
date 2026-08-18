@@ -70,6 +70,18 @@
         color: #991b1b;
     }
 
+    .church-role-badge {
+        display: inline-flex;
+        align-items: center;
+        margin-top: 0.3rem;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        background-color: #fef3c7;
+        color: #92400e;
+        font-size: 0.7rem;
+        font-weight: 600;
+    }
+
     /* Table improvements */
     .data-table thead th {
         background: #f8fafc;
@@ -122,7 +134,7 @@
 <div class="flex min-h-screen bg-gray-50">
     {% include 'parciais/admin_sidebar.html' %}
 
-    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+    <div class="flex-1 min-w-0 ml-0 md:ml-0 main-content-wrapper">
         <div class="p-4 sm:p-6 mt-24">
             <!-- Title -->
             <div class="flex items-center justify-between gap-3 mb-4">
@@ -250,6 +262,9 @@
                             {% endif %}
                             <div class="flex-1 min-w-0">
                                 <h3 class="text-base font-bold text-gray-900 truncate">{{ member.name }}</h3>
+                                {% if member.church_role != 'member' %}
+                                <span class="church-role-badge">{{ member.get_church_role_display }}</span>
+                                {% endif %}
                                 {% if member.birth_date %}
                                 <p class="text-xs text-gray-500">{{ member.birth_date|date:"d/m/Y" }}</p>
                                 {% endif %}
@@ -314,22 +329,27 @@
             </div>
 
             <!-- Versão Desktop: Tabela -->
-            <div class="admin-card overflow-hidden hidden md:block">
-                <div class="overflow-x-auto table-responsive">
-                    <table class="w-full data-table">
+            <div class="admin-card min-w-0 overflow-hidden hidden md:block">
+                <div class="overflow-x-auto min-w-0 table-responsive">
+                    <table class="w-full min-w-[1000px] table-fixed data-table">
+                        <colgroup>
+                            <col class="w-[24%]">
+                            <col class="w-[25%]">
+                            <col class="w-[34%]">
+                            <col class="w-[17%]">
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th class="text-left">Membro</th>
                                 <th class="text-left">Contato</th>
                                 <th class="text-left">Ministério</th>
-                                <th class="text-left">Status</th>
                                 <th class="text-left">Ações</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white">
                             {% for member in members %}
                             <tr>
-                                <td class="whitespace-nowrap row-link" data-row-href="{% url 'admin_member_edit' member.id %}">
+                                <td class="row-link" data-row-href="{% url 'admin_member_edit' member.id %}">
                                     <div class="flex items-center gap-3">
                                         {% if member.profile_picture %}
                                         <img class="member-avatar" src="{{ member.profile_picture.url }}" alt="{{ member.name }}">
@@ -338,20 +358,23 @@
                                             {{ member.name|first }}
                                         </div>
                                         {% endif %}
-                                        <div>
-                                            <div class="text-sm text-gray-900">{{ member.name }}</div>
+                                        <div class="min-w-0">
+                                            <div class="text-sm text-gray-900 truncate">{{ member.name }}</div>
+                                            {% if member.church_role != 'member' %}
+                                            <span class="church-role-badge">{{ member.get_church_role_display }}</span>
+                                            {% endif %}
                                             {% if member.birth_date %}
                                             <div class="text-xs text-gray-400 mt-0.5">{{ member.birth_date|date:"d/m/Y" }}</div>
                                             {% endif %}
                                         </div>
                                     </div>
                                 </td>
-                                <td class="whitespace-nowrap">
-                                    <div class="text-sm text-gray-800">{{ member.email|default:"--" }}</div>
-                                    <div class="text-xs text-gray-400 mt-0.5">{{ member.phone|default:"--" }}</div>
+                                <td>
+                                    <div class="text-sm text-gray-800 truncate">{{ member.email|default:"--" }}</div>
+                                    <div class="text-xs text-gray-400 mt-0.5 truncate">{{ member.phone|default:"--" }}</div>
                                 </td>
-                                <td class="whitespace-nowrap">
-                                    <div class="text-sm text-gray-800">
+                                <td>
+                                    <div class="text-sm text-gray-800 truncate">
                                         {% with member_ministries=member.ministry_memberships.all %}
                                             {% if member_ministries %}
                                                 {% for m in member_ministries %}{{ m.ministry.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
@@ -359,14 +382,7 @@
                                         {% endwith %}
                                     </div>
                                     {% if member.neighborhood %}
-                                    <div class="text-xs text-gray-400 mt-0.5">{{ member.neighborhood.name }}</div>
-                                    {% endif %}
-                                </td>
-                                <td class="whitespace-nowrap">
-                                    {% if member.is_active %}
-                                    <span class="status-badge status-active">Ativo</span>
-                                    {% else %}
-                                    <span class="status-badge status-inactive">Inativo</span>
+                                    <div class="text-xs text-gray-400 mt-0.5 truncate">{{ member.neighborhood.name }}</div>
                                     {% endif %}
                                 </td>
                                 <td class="whitespace-nowrap">
@@ -385,7 +401,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="5" class="px-6 py-12 text-center">
+                                <td colspan="4" class="px-6 py-12 text-center">
                                     <div class="flex flex-col items-center gap-2 text-gray-400">
                                         <ion-icon name="people-outline" style="font-size:2rem;"></ion-icon>
                                         <span class="text-sm">Nenhum membro encontrado.</span>
