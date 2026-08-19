@@ -150,7 +150,13 @@
                 </div>
                 
                 <h2 class="text-xl font-bold text-gray-800 mb-2">{{ member.name }}</h2>
-                <p class="text-gray-500 text-sm mb-4">Membro Filadélfia</p>
+                <p class="text-gray-500 text-sm mb-4">
+                    {% if member.church_role != 'member' %}
+                        {{ member.get_church_role_display }} · Filadélfia
+                    {% else %}
+                        Membro Filadélfia
+                    {% endif %}
+                </p>
             </div>
         </div>
     </section>

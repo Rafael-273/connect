@@ -1,0 +1,160 @@
+  <div class="module-section" id="admin-consolidation">
+    <div class="module-header mod-admin">
+      <span class="icon">🌱</span>
+      <h2>6. Admin — Consolidação</h2>
+      <span class="access-badge badge-admin">admin · superuser · consolidation</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📋 6.1 — Lista de Consolidações (Follow-ups)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/followups/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/edit/</span> <span class="url-tag">delete/</span></p>
+        <div class="flow-title">Pré-condição</div>
+        <ul class="precond">
+          <li>Grupo consolidation, admin ou superuser.</li>
+          <li>Membros com <code>is_available_to_consolidate=True</code> como responsáveis.</li>
+          <li>Template criado (item 6.3).</li>
+        </ul>
+        <div class="flow-title">Fluxo — Criar</div>
+        <ol class="flow">
+          <li>Menu Consolidação → Consolidações → Novo.</li>
+          <li>Selecionar acompanhado, responsável, template, data início.</li>
+          <li>Salvar — <code>current_week=1</code>.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Listar</div>
+        <ol class="flow">
+          <li>Filtrar por nome, responsável, status (ativo/encerrado).</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Aparece em <code>/consolidation/</code> do responsável.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🔍 6.2 — Detalhe e relatórios</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/followups/&lt;id&gt;/detail/</span> <span class="url-tag">.../report/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Ver acompanhado, responsável, template, semana atual, passos.</li>
+          <li>Histórico de relatórios do consolidador.</li>
+          <li>Admin adiciona relatório manualmente se necessário.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📝 6.3 — Templates de Consolidação</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/templates/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Criar template: nome, descrição, passos semanais (título + orientações).</li>
+          <li>Duplicar via <code>?duplicate_from=&lt;id&gt;</code>.</li>
+          <li>Editar, ver detalhe, excluir.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Template disponível ao criar follow-up.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📊 6.4 — Relatórios agregados</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/reports/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Menu Consolidação → Relatórios.</li>
+          <li>Dashboard de indicadores espirituais por período.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="admin-schedules">
+    <div class="module-header mod-ops">
+      <span class="icon">📆</span>
+      <h2>7. Admin — Escalas de Serviço</h2>
+      <span class="access-badge badge-ops">admin · superuser (staff)</span>
+    </div>
+
+    <div class="info-box">Fluxo típico: equipes → escala com divisões → dias → escalonar membros → imprimir → membro vê no portal.</div>
+
+    <div class="feature">
+      <div class="feature-title">🏅 7.1 — Equipes</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/teams/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/edit/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Menu Escalas → Equipes.</li>
+          <li>Criar: nome, ministério, líder, membros.</li>
+          <li>Filtrar por ministério; editar ou excluir.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📅 7.2 — Criar escala (mensal ou semanal)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/schedules/new/</span></p>
+        <div class="flow-title">Fluxo — Mensal</div>
+        <ol class="flow">
+          <li>Ministério, título, mês/ano, revezamento de equipes.</li>
+          <li>Divisões (ex.: Palavra, Recepção) — até 3 níveis.</li>
+          <li>Orientações gerais; salvar → detalhe da escala.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Semanal</div>
+        <ol class="flow">
+          <li>Data início/fim, dias da semana (ex.: quarta, domingo).</li>
+          <li>Sistema gera <code>ScheduleDay</code> automaticamente no intervalo.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🗓️ 7.3 — Detalhe — dias e membros</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/schedules/&lt;id&gt;/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Adicionar dia: <code>.../days/new/</code> — data, turnos, equipe ou membros.</li>
+          <li>Editar dia: <code>.../days/&lt;day_id&gt;/edit/</code>.</li>
+          <li>Atribuir divisões: <code>.../days/&lt;day_id&gt;/divisions/</code>.</li>
+          <li>Conflito AJAX: <code>/admin-panel/schedules/check-conflict/</code>.</li>
+          <li>Cancelar dia: <code>.../toggle-cancel/</code>; excluir: <code>.../delete/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Membros escalados veem em <code>/schedule/&lt;id&gt;/</code>.</li>
+          <li>Alerta se membro duplicado na mesma data.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📂 7.4 — Divisões hierárquicas</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/schedules/&lt;id&gt;/divisions/new/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Criar/editar/excluir divisões (máx. 3 níveis).</li>
+          <li>Listar por ministério: <code>/admin-panel/ministries/&lt;id&gt;/divisions/</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🖨️ 7.5 — Imprimir / editar / excluir escala</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/schedules/&lt;id&gt;/print/</span> <span class="url-tag">edit/</span> <span class="url-tag">delete/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Imprimir versão formatada (Ctrl+P).</li>
+          <li>Editar metadados e divisões; excluir escala (soft delete).</li>
+          <li>Listar com filtros: ministério, ano, mês, tipo, busca.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />

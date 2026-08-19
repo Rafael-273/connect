@@ -1,0 +1,158 @@
+  <div class="module-section" id="public">
+    <div class="module-header mod-public">
+      <span class="icon">🌐</span>
+      <h2>1. Site Público</h2>
+      <span class="access-badge badge-public">Acesso: Anônimo</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🏠 1.1 — Página Inicial</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/</span> <span class="method-tag get">GET</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar a URL raiz do sistema.</li>
+          <li>Página carrega com cabeçalho, carrossel de testemunhos aprovados (<code>show_on_home=True</code>) e links de navegação.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Página renderiza sem erros.</li>
+          <li>Apenas testemunhos marcados para home aparecem no carrossel.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">✨ 1.2 — Galeria de Testemunhos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/testemunhos/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/testemunhos/</code>.</li>
+          <li>Lista exibe testemunhos com <code>is_approved=True</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Somente testemunhos aprovados aparecem.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📞 1.3 — Página de Contato</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/contato/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow"><li>Acessar <code>/contato/</code>.</li><li>Ver informações estáticas de contato da igreja.</li></ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Página carrega sem erros.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📅 1.4 — Lista e Detalhe de Eventos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/event/list</span> <span class="url-tag">/event/&lt;slug&gt;/</span></p>
+        <div class="flow-title">Fluxo — Lista</div>
+        <ol class="flow">
+          <li>Acessar <code>/event/list</code>.</li>
+          <li>Eventos visíveis dentro da janela de datas são exibidos em cards.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Detalhe</div>
+        <ol class="flow">
+          <li>Clicar em um evento.</li>
+          <li>Detalhe exibe banner, data, descrição e link de inscrição (se configurado).</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Eventos futuros exibidos conforme regra de recorrência.</li>
+          <li>Slug inválido retorna 404.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">👋 1.5 — Cadastro de Visitante (Público)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/visitor/</span> <span class="method-tag post">POST</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/visitor/</code>.</li>
+          <li>Preencher: nome, telefone, bairro, data de nascimento, decisão por Jesus, deseja visita domiciliar.</li>
+          <li>Submeter o formulário.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Mensagem de sucesso após envio.</li>
+          <li>Visitante aparece no painel admin.</li>
+          <li>Campos obrigatórios validados.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📋 1.6 — Auto-cadastro de Membro</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/member/register/</span> <span class="method-tag post">POST</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/member/register/</code>.</li>
+          <li>Preencher nome, e-mail, telefone, bairro, data de nascimento, foto (opcional).</li>
+          <li>Submeter — sistema cria User + Member com senha padrão <code>123</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Novo membro aparece na lista do painel admin.</li>
+          <li>E-mail duplicado rejeitado.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🙏 1.7 — Evangelização</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/evangelism/</span> <span class="url-tag">/evangelism/list/</span> <span class="url-tag">/new_converts/list/</span></p>
+        <div class="flow-title">Fluxo — Criar</div>
+        <ol class="flow">
+          <li>Acessar <code>/evangelism/</code>.</li>
+          <li>Preencher dados da pessoa evangelizada e submeter.</li>
+        </ol>
+        <div class="flow-title">Fluxo — Listar</div>
+        <ol class="flow">
+          <li><code>/evangelism/list/</code> — todas as pessoas evangelizadas.</li>
+          <li><code>/new_converts/list/</code> — novos convertidos.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">💬 1.8 — Pedido de Oração</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/prayer-request/</span> <span class="url-tag">/prayer-request/list</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/prayer-request/</code>, preencher nome e conteúdo, submeter.</li>
+          <li>Ver lista em <code>/prayer-request/list</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Pedido registrado e exibido na lista.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🏡 1.9 — Solicitação de Casa da Paz (Público)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/house-of-peace/</span> <span class="method-tag post">POST</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Acessar <code>/house-of-peace/</code> sem login.</li>
+          <li>Família preenche dados para solicitar visita de oração domiciliar.</li>
+          <li>Submeter — cria <code>HouseOfPeace</code> com status inicial.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Página de sucesso após envio.</li>
+          <li>Solicitação aparece no painel admin.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />

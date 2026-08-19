@@ -1,0 +1,155 @@
+  <div class="module-section" id="admin-ministration">
+    <div class="module-header mod-admin">
+      <span class="icon">🙌</span>
+      <h2>8. Admin — Ministração</h2>
+      <span class="access-badge badge-admin">admin · superuser (staff)</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📊 8.1 — Dashboard de Ministração</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Totais de palavras, curas, membros do ministério Ministração.</li>
+          <li>Escala da semana e próximas semanas.</li>
+          <li>Gráfico de curas por mês; últimas palavras e curas.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">💡 8.2 — Palavras de Conhecimento</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/words/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar todas com paginação.</li>
+          <li>Filtrar: busca, culto (quarta/domingo), datas, status.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">✅ 8.3 — Fila de aprovação</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/words/pending/</span> <span class="url-tag">approve/</span> <span class="url-tag">reject/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Revisar pendentes; aprovar ou rejeitar.</li>
+          <li>Aprovada → visível em <code>/words/service/</code> no portal.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Aprovador membro (<code>is_approver</code>) também aprova via portal.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">✝️ 8.4 — Curas</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/healings/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar curas; filtrar por nome, condição, datas, parte do corpo.</li>
+          <li>Ver vínculo opcional com Palavra de Conhecimento.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🧑‍💼 8.5 — Membros e aprovadores</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministration/members/</span> <span class="url-tag">toggle-approver/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Adicionar/remover membros da Ministração.</li>
+          <li>Toggle <code>is_approver</code> — habilita aprovação no portal.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />
+
+  <div class="module-section" id="admin-other">
+    <div class="module-header mod-admin">
+      <span class="icon">📦</span>
+      <h2>9. Admin — Outros Módulos</h2>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📅 9.1 — Eventos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/events/</span></p>
+        <ul class="precond"><li>admin, superuser ou events.</li></ul>
+        <ol class="flow">
+          <li>CRUD: título, slug, banner, datas, recorrência, link inscrição.</li>
+          <li>Publicado → aparece em <code>/event/list</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">✨ 9.2 — Testemunhos</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/testimonies/</span> <span class="url-tag">toggle/</span></p>
+        <ol class="flow">
+          <li>CRUD; toggle <code>is_approved</code> e <code>show_on_home</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📜 9.3 — Roteiro de Culto</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/roteiro/</span></p>
+        <ol class="flow">
+          <li>CRUD anúncios: fotos, datas, ordem, expiração.</li>
+          <li>Reordenar drag-and-drop; imprimir em <code>/roteiro/print/</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">⛪ 9.4 — Ministérios</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/ministries/</span></p>
+        <ol class="flow">
+          <li>CRUD; gerenciar membros (add/remove, líder, ativo).</li>
+          <li>Nomes controlam cards no portal (Ministração, Boas Vindas, Moderação).</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🎶 9.5 — Música / Cifras</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/music/</span></p>
+        <ol class="flow">
+          <li>CRUD músicas; upload PDF de cifras por tom (<code>ChordSheet</code>).</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🏡 9.6 — Casas de Paz</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/house-of-peace/</span></p>
+        <ol class="flow">
+          <li>Listar, detalhe com visitas, alterar status, soft delete.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🎓 9.7 — Cursos de Frequência</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/attendance-courses/</span></p>
+        <ol class="flow">
+          <li>Criar curso → participantes → aulas → marcar frequência por aula.</li>
+          <li>Exportar CSV; imprimir relatório do curso ou da aula.</li>
+        </ol>
+        <ul class="expects"><li>Frequência e CSV corretos.</li></ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />

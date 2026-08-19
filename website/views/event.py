@@ -15,8 +15,22 @@ class EventListView(ListView):
         event_type = self.request.GET.get('type', '')  # 'normal', 'recurring', ou vazio (todos)
         today = timezone.now().date()
         
-        # Filtramos apenas eventos NÃO recorrentes
-        queryset = Event.objects.filter(is_recurring=False)
+        # Eventos especiais só aparecem enquanto estão visíveis e possuem pelo
+        # menos uma data de realização hoje ou no futuro. A data principal pode
+        # já ter passado quando o evento possui datas adicionais em `dates`.
+        queryset = (
+            Event.objects.filter(
+                is_recurring=False,
+                display_start__lte=today,
+                display_end__gte=today,
+            )
+            .filter(
+                Q(event_date__gte=today) | Q(dates__event_date__gte=today)
+            )
+            .prefetch_related('dates')
+            .distinct()
+            .order_by('event_date')
+        )
         
         # Filtrar por tipo se especificado
         if event_type == 'normal':
@@ -42,7 +56,7 @@ class EventListView(ListView):
         event_type = self.request.GET.get('type', '')
         
         # Adicionar eventos recorrentes (também filtrados pela pesquisa se houver)
-        recurring_queryset = Event.objects.filter(is_recurring=True)
+        recurring_queryset = Event.objects.filter(is_recurring=True).prefetch_related('dates')
         
         # Se filtrar por tipo 'normal', não mostra recorrentes
         if event_type == 'normal':
@@ -66,6 +80,9 @@ class EventDetailView(DetailView):
     model = Event
     template_name = 'front/event.html'
     context_object_name = 'event'
+
+    def get_queryset(self):
+        return Event.objects.prefetch_related('dates')
     
     def get_object(self, queryset=None):
         # First get the regular object

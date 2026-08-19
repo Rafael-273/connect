@@ -5,12 +5,13 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.dateparse import parse_date, parse_time
 from django.utils import timezone
 from django.utils.text import slugify
 from django.views import View
 
 from ..mixins import ModulePermissionMixin
-from ...models.event import Event
+from ...models.event import Event, EventDate
 
 
 class EventsListView(LoginRequiredMixin, ModulePermissionMixin, View):
@@ -18,7 +19,7 @@ class EventsListView(LoginRequiredMixin, ModulePermissionMixin, View):
     module_name = 'events'
 
     def _get_queryset(self):
-        return Event.objects.all()
+        return Event.objects.all().prefetch_related('dates')
 
     def _apply_filters(self, qs, search, status_filter):
         if search:
@@ -57,7 +58,10 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
     module_name = 'events'
 
     def get(self, request, event_id=None):
-        event = get_object_or_404(Event, id=event_id) if event_id else None
+        event = (
+            get_object_or_404(Event.objects.prefetch_related('dates'), id=event_id)
+            if event_id else None
+        )
         messages.get_messages(request).used = True
         return render(request, 'admin_panel/events/edit.html', {'event': event})
 
@@ -91,6 +95,18 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
             display_start = request.POST.get('display_start') or event_date
             display_end = request.POST.get('display_end') or event_date
             recurrence_pattern = None
+
+        extra_dates = []
+        extra_event_dates = request.POST.getlist('extra_event_date')
+        extra_event_times = request.POST.getlist('extra_event_time')
+        for extra_date, extra_time in zip(extra_event_dates, extra_event_times):
+            if not extra_date:
+                continue
+            extra_dates.append({
+                'event_date': parse_date(extra_date) or extra_date,
+                'event_time': parse_time(extra_time) if extra_time else None,
+            })
+
         return {
             'title': request.POST.get('title'),
             'slug': request.POST.get('slug'),
@@ -105,6 +121,7 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
             'display_end': display_end,
             'recurrence_pattern': recurrence_pattern,
             'recurrence_description': None,
+            'extra_dates': extra_dates,
         }
 
     @staticmethod
@@ -118,6 +135,7 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
 
     @staticmethod
     def _save_event(event, data, files):
+        extra_dates = data.pop('extra_dates', [])
         if event:
             for field, value in data.items():
                 setattr(event, field, value)
@@ -126,4 +144,14 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
         if 'banner' in files:
             event.banner = files['banner']
         event.save()
+
+        EventDate.objects.filter(event=event).delete()
+        if not event.is_recurring:
+            for extra in extra_dates:
+                EventDate.objects.create(
+                    event=event,
+                    event_date=extra['event_date'],
+                    event_time=extra['event_time'],
+                )
+
         return event

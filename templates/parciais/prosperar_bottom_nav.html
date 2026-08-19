@@ -1,0 +1,68 @@
+<nav id="prosperarBottomNav"
+     class="fixed bottom-4 left-1/2 z-50 flex w-auto -translate-x-1/2 items-center justify-center gap-2 rounded-2xl border-2 px-2 py-2.5 shadow-2xl transition-all duration-500 ease-in-out"
+     style="background: linear-gradient(to bottom right, rgba(255,255,255,0.98), rgba(249,250,251,0.98));
+            backdrop-filter: blur(20px);
+            border-color: rgba(207,163,112,0.20);">
+
+    <a href="{% url 'prosperar_dashboard' %}"
+       class="group flex flex-col items-center p-2 px-3 text-xs transition-all duration-300 hover:scale-105 {% if nav_active == 'dashboard' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
+        <div class="mb-1.5 rounded-xl px-4 py-2.5 transition-all duration-300 {% if nav_active != 'dashboard' %}border-2 shadow-md{% endif %}"
+             style="{% if nav_active == 'dashboard' %}background-color: #4c2f24;{% else %}background: rgba(207,163,112,0.08); border-color: rgba(207,163,112,0.18);{% endif %}">
+            <i class="fas fa-store text-lg transition-transform group-hover:scale-110 {% if nav_active == 'dashboard' %}text-white{% else %}text-[#4c2f24]{% endif %}"></i>
+        </div>
+        <span class="transition-all {% if nav_active == 'dashboard' %}text-[#4c2f24]{% else %}group-hover:font-bold{% endif %}">Negocios</span>
+    </a>
+
+    <a href="{% url 'prosperar_profile' %}"
+       class="group flex flex-col items-center p-2 px-3 text-xs transition-all duration-300 hover:scale-105 {% if nav_active == 'profile' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
+        <div class="mb-1.5 rounded-xl px-4 py-2.5 transition-all duration-300 {% if nav_active != 'profile' %}border-2 shadow-md{% endif %}"
+             style="{% if nav_active == 'profile' %}background-color: #cfa370;{% else %}background: rgba(207,163,112,0.08); border-color: rgba(207,163,112,0.18);{% endif %}">
+            <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110 {% if nav_active == 'profile' %}text-[#241612]{% else %}text-[#4c2f24]{% endif %}"></i>
+        </div>
+        <span class="transition-all {% if nav_active == 'profile' %}text-[#4c2f24]{% else %}group-hover:font-bold{% endif %}">Perfil</span>
+    </a>
+</nav>
+
+<script>
+    (function () {
+        let lastScrollTop = 0;
+        let isScrolling;
+        const nav = document.getElementById('prosperarBottomNav');
+        const scrollThreshold = 50;
+
+        window.addEventListener('scroll', function () {
+            clearTimeout(isScrolling);
+            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+            if (scrollTop <= 100) {
+                nav.classList.remove('nav-hidden');
+                nav.classList.add('nav-visible');
+                lastScrollTop = scrollTop;
+                return;
+            }
+
+            if (Math.abs(scrollTop - lastScrollTop) > scrollThreshold) {
+                if (scrollTop > lastScrollTop) {
+                    nav.classList.add('nav-hidden');
+                    nav.classList.remove('nav-visible');
+                } else {
+                    nav.classList.remove('nav-hidden');
+                    nav.classList.add('nav-visible');
+                }
+                lastScrollTop = scrollTop;
+            }
+
+            isScrolling = setTimeout(function () {
+                nav.classList.remove('nav-hidden');
+                nav.classList.add('nav-visible');
+            }, 1000);
+        }, false);
+
+        document.addEventListener('mousemove', function (e) {
+            if (window.innerHeight - e.clientY < 150) {
+                nav.classList.remove('nav-hidden');
+                nav.classList.add('nav-visible');
+            }
+        });
+    })();
+</script>

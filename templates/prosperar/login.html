@@ -1,0 +1,170 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Login Prosperar{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --prosperar-primary: #cfa370;
+        --prosperar-secondary: #4c2f24;
+        --prosperar-dark: #241612;
+        --prosperar-cream: #f7efe5;
+    }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
+    }
+
+    .animate-fade-in-up { animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-scale-in { animation: scaleIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+    html, body {
+        overflow-x: hidden;
+        width: 100%;
+        height: 100%;
+        position: fixed;
+        margin: 0;
+        padding: 0;
+    }
+
+    .login-wrapper {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        width: 100%;
+        height: 100vh;
+        background:
+            radial-gradient(circle at top left, rgba(207, 163, 112, 0.16), transparent 22%),
+            linear-gradient(135deg, #4c2f24 0%, #241612 65%, #120d0b 100%);
+    }
+
+    .login-wrapper::before {
+        content: '';
+        position: absolute;
+        inset: -40%;
+        background-image: radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px);
+        background-size: 36px 36px;
+        opacity: 0.22;
+        pointer-events: none;
+    }
+
+    .login-card-container {
+        position: relative;
+        z-index: 1;
+        height: 100vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    .login-card-container::-webkit-scrollbar { display: none; }
+
+    .focus-prosperar:focus {
+        outline: none;
+        border-color: var(--prosperar-primary) !important;
+        box-shadow: 0 0 0 4px rgba(207, 163, 112, 0.12) !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<body style="font-family: 'Giga Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+    <div class="login-wrapper">
+        <div class="login-card-container flex items-center justify-center p-0 sm:p-3 lg:p-8">
+            <div class="animate-scale-in grid min-h-[600px] w-full max-w-none grid-cols-1 overflow-hidden rounded-none bg-white shadow-none sm:max-w-lg sm:rounded-2xl sm:shadow-2xl lg:max-w-5xl lg:grid-cols-2 lg:rounded-3xl">
+                <div class="relative order-1 flex flex-col items-center justify-center overflow-hidden bg-[linear-gradient(135deg,#241612_0%,#120d0b_100%)] p-8 text-center text-white lg:order-1 lg:p-12">
+                    <div class="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white opacity-5 blur-2xl"></div>
+                    <div class="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-[#cfa370] opacity-10 blur-xl"></div>
+
+                    <div class="z-10 mb-6 flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-white shadow-xl sm:h-24 sm:w-24 lg:h-32 lg:w-32 animate-fade-in-up">
+                        <img src="{% static 'assets/logotype.jpg' %}" alt="Igreja Filadelfia" class="h-full w-full object-cover" onerror="this.style.display='none'">
+                    </div>
+
+                    <div class="z-10 mb-8">
+                        <span class="mb-4 inline-flex rounded-full border border-[rgba(243,222,191,0.22)] bg-[rgba(255,255,255,0.06)] px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-[#f3debf]">
+                            Prosperar
+                        </span>
+                        <h1 class="mb-3 text-4xl font-bold leading-tight sm:text-3xl lg:text-4xl xl:text-5xl animate-fade-in-up" style="font-family: 'Tusker', 'Giga Sans', sans-serif;">
+                            Area de Negocios
+                        </h1>
+                        <p class="mx-auto max-w-sm px-2 text-base leading-relaxed text-white/85 sm:text-base lg:text-lg animate-fade-in-up">
+                            Entre para acompanhar os negocios do Prosperar e gerenciar o perfil da sua empresa.
+                        </p>
+                    </div>
+
+                    <div class="z-10 hidden flex-col space-y-3 lg:flex animate-fade-in-up">
+                        <div class="flex items-center gap-3 text-base opacity-90">
+                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-sm">🏪</div>
+                            <span>Veja os negocios de todos os participantes</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-base opacity-90">
+                            <div class="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-sm">📇</div>
+                            <span>Mantenha o perfil da sua empresa atualizado</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="order-2 flex flex-col justify-center bg-[linear-gradient(135deg,#faf7f2_0%,#ffffff_100%)] p-6 sm:p-8 lg:p-12 xl:p-16">
+                    <div class="text-center animate-fade-in-up">
+                        <h2 class="mb-3 text-3xl font-bold text-gray-900 lg:text-3xl" style="font-family: 'Tusker', 'Giga Sans', sans-serif;">
+                            Entrar no Prosperar
+                        </h2>
+                        <p class="text-base text-gray-600 lg:text-lg">
+                            Use o email e a senha da sua empresa para continuar
+                        </p>
+                    </div>
+
+                    {% if messages %}
+                    <div class="mt-6 animate-fade-in-up">
+                        {% for message in messages %}
+                        <div class="mb-3 rounded-lg border px-4 py-3 text-sm font-medium
+                            {% if message.tags == 'error' %}
+                                border-red-200 bg-red-50 text-red-700
+                            {% elif message.tags == 'success' %}
+                                border-green-200 bg-green-50 text-green-700
+                            {% else %}
+                                border-blue-200 bg-blue-50 text-blue-700
+                            {% endif %}">
+                            {{ message }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <form method="post" class="mt-8 space-y-6 animate-fade-in-up">
+                        {% csrf_token %}
+                        <div>
+                            <label for="email" class="mb-2 block text-sm font-semibold text-gray-800">Email</label>
+                            <input type="email" id="email" name="email" value="{{ email|default:'' }}" placeholder="empresa@exemplo.com"
+                                   class="focus-prosperar w-full rounded-2xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900 shadow-sm transition-all">
+                        </div>
+
+                        <div>
+                            <label for="password" class="mb-2 block text-sm font-semibold text-gray-800">Senha</label>
+                            <input type="password" id="password" name="password" placeholder="Digite sua senha"
+                                   class="focus-prosperar w-full rounded-2xl border border-gray-200 bg-white px-4 py-4 text-base text-gray-900 shadow-sm transition-all">
+                        </div>
+
+                        <button type="submit" class="w-full rounded-2xl bg-[linear-gradient(135deg,#d8ab72_0%,#c79355_100%)] px-6 py-4 text-base font-extrabold text-[#241612] shadow-[0_14px_34px_rgba(207,163,112,0.28)] transition-all hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(207,163,112,0.34)]">
+                            Entrar
+                        </button>
+                    </form>
+
+                    <div class="mt-6 text-center text-sm text-gray-500">
+                        Ainda nao cadastrou sua empresa?
+                        <a href="{% url 'prosperar_company_register' %}" class="font-bold text-[#4c2f24] hover:text-[#cfa370]">Cadastre no Prosperar</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+{% endblock %}

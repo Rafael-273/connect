@@ -38,6 +38,29 @@ class MemberRequiredMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
 
+class ProsperarRequiredMixin(LoginRequiredMixin):
+    """Mixin that requires user to have an associated Prosperar company."""
+
+    login_url = 'prosperar_login'
+    company = None
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
+        company = getattr(request.user, 'prosperar_company', None)
+        if company is None:
+            if request.user.is_superuser:
+                return redirect('admin_dashboard')
+            from django.contrib.auth import logout
+            messages.error(request, 'Voce precisa ter uma empresa cadastrada no Prosperar para acessar esta area.')
+            logout(request)
+            return redirect('prosperar_login')
+
+        self.company = company
+        return super().dispatch(request, *args, **kwargs)
+
+
 class ApproverRequiredMixin(MemberRequiredMixin):
     """Mixin that requires user to be a word-of-knowledge approver or staff."""
 

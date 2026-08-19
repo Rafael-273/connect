@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro enviado - Prosperar</title>
+    <meta name="theme-color" content="#241612">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-[#f6f1eb] px-4 py-10 text-slate-800 flex items-center justify-center" style="font-family: 'Montserrat', sans-serif;">
+    <main class="mx-auto max-w-3xl overflow-hidden rounded-[28px] border border-[rgba(207,163,112,0.18)] bg-white shadow-[0_18px_60px_rgba(36,22,18,0.10)] sm:p-0">
+        <section class="bg-[linear-gradient(155deg,#4c2f24_0%,#241612_48%,#120d0b_100%)] px-8 py-10 text-center text-white sm:px-10">
+            <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[rgba(243,222,191,0.24)] bg-white/10 text-2xl text-[#f3debf]">
+                <i class="fa-solid fa-check"></i>
+            </div>
+            <h1 class="mt-6 text-center text-3xl font-extrabold text-white">Cadastro enviado com sucesso</h1>
+            <p class="mx-auto mt-4 max-w-2xl text-center text-sm leading-7 text-[rgba(255,247,237,0.82)] sm:text-base">
+                Sua empresa agora faz parte da base inicial do Prosperar.
+            </p>
+        </section>
+
+        <section class="p-8 sm:p-10">
+        <p class="mx-auto max-w-2xl text-center text-sm leading-7 text-slate-600 sm:text-base">
+            A empresa <strong>{{ company_name }}</strong> foi cadastrada no Prosperar.
+        </p>
+        {% if used_existing_member_account %}
+        <p class="mx-auto mt-3 max-w-2xl text-center text-sm leading-7 text-slate-600 sm:text-base">
+            Identificamos que o email <strong>{{ email }}</strong> ja pertence a sua conta da Filadelfia. Por isso, sua empresa foi vinculada a essa mesma conta e <b>voce continuara usando o mesmo email e a mesma senha.</b>
+        </p>
+        {% else %}
+        <p class="mx-auto mt-3 max-w-2xl text-center text-sm leading-7 text-slate-600 sm:text-base">
+            O acesso foi criado com o email <strong>{{ email }}</strong>.
+        </p>
+        {% endif %}
+        <p class="mx-auto mt-3 max-w-2xl text-center text-sm leading-7 text-slate-500 sm:text-base">
+            Neste momento o cadastro fica pendente de revisao. Isso ajuda a manter a vitrine organizada antes da publicacao.
+        </p>
+
+        <div class="mt-10 flex justify-center">
+            <a href="{% url back_url %}" class="inline-flex min-w-[220px] items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#d8ab72_0%,#c79355_100%)] px-8 py-4 text-base font-extrabold text-[#241612] shadow-[0_12px_28px_rgba(207,163,112,0.28)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_34px_rgba(207,163,112,0.34)]">
+                <i class="fa-solid fa-arrow-left text-sm"></i>
+                <span>Voltar</span>
+            </a>
+        </div>
+        </section>
+    </main>
+</body>
+</html>

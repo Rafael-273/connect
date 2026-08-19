@@ -161,6 +161,7 @@
                             <input type="date" name="event_date"
                                    value="{% if event.event_date and not event.is_recurring %}{{ event.event_date|date:'Y-m-d' }}{% endif %}"
                                    class="form-input" required>
+                            <p class="text-gray-400 text-xs mt-1">Esta será a primeira ocorrência do evento.</p>
                         </div>
                         <div class="form-group recurrence-weekday-field" style="display:none;">
                             <label class="form-label">Dia da Semana *</label>
@@ -193,6 +194,38 @@
                                    value="{% if event.display_end %}{{ event.display_end|date:'Y-m-d' }}{% endif %}"
                                    class="form-input" required>
                             <p class="text-gray-400 text-xs mt-1">Até quando o evento aparecerá no site</p>
+                        </div>
+                    </div>
+
+                    <div class="extra-dates-section mt-5">
+                        <div class="flex items-center justify-between gap-3 mb-2">
+                            <div>
+                                <label class="form-label">Datas adicionais</label>
+                                <p class="text-gray-400 text-xs mt-1">Use quando o mesmo evento acontecer em mais de uma data e horário.</p>
+                            </div>
+                            <button type="button" onclick="addExtraDateRow()"
+                                    class="inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 transition">
+                                <ion-icon name="add-circle-outline" style="font-size:1rem;"></ion-icon>
+                                Adicionar outra data
+                            </button>
+                        </div>
+                        <div id="extra-dates-container" class="space-y-2">
+                            {% if event and event.dates.all %}
+                                {% for d in event.dates.all %}
+                                <div class="extra-date-row flex items-center gap-2">
+                                    <input type="date" name="extra_event_date"
+                                           value="{{ d.event_date|date:'Y-m-d' }}"
+                                           class="form-input flex-1">
+                                    <input type="time" name="extra_event_time"
+                                           value="{% if d.event_time %}{{ d.event_time|time:'H:i' }}{% endif %}"
+                                           class="form-input w-36" placeholder="--:--">
+                                    <button type="button" onclick="removeExtraDateRow(this)"
+                                            class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition flex items-center justify-center" title="Remover">
+                                        <ion-icon name="close-outline" style="font-size:1.1rem;"></ion-icon>
+                                    </button>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -278,6 +311,8 @@
     const eventDateField = document.querySelector('.event-date-field');
     const recurrenceWeekdayField = document.querySelector('.recurrence-weekday-field');
     const displayDateFields = document.querySelectorAll('.display-date-fields');
+    const extraDatesSection = document.querySelector('.extra-dates-section');
+    const extraDatesContainer = document.getElementById('extra-dates-container');
 
     function toggleRecurrenceOptions() {
         const isRecurring = isRecurringCheckbox.checked;
@@ -285,6 +320,9 @@
         eventDateField.style.display = isRecurring ? 'none' : 'block';
         recurrenceWeekdayField.style.display = isRecurring ? 'block' : 'none';
         displayDateFields.forEach(el => el.style.display = isRecurring ? 'none' : 'block');
+        if (extraDatesSection) {
+            extraDatesSection.style.display = isRecurring ? 'none' : 'block';
+        }
         const eventDateInput = eventDateField.querySelector('input');
         const weekdaySelect = recurrenceWeekdayField.querySelector('select');
         const displayInputs = document.querySelectorAll('.display-date-fields input');
@@ -300,6 +338,25 @@
     }
     toggleRecurrenceOptions();
     isRecurringCheckbox.addEventListener('change', toggleRecurrenceOptions);
+
+    function addExtraDateRow() {
+        if (!extraDatesContainer) return;
+        const row = document.createElement('div');
+        row.className = 'extra-date-row flex items-center gap-2';
+        row.innerHTML = `
+            <input type="date" name="extra_event_date" class="form-input flex-1">
+            <input type="time" name="extra_event_time" class="form-input w-36" placeholder="--:--">
+            <button type="button" onclick="removeExtraDateRow(this)"
+                    class="flex-shrink-0 w-8 h-8 rounded-lg bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 transition flex items-center justify-center" title="Remover">
+                <ion-icon name="close-outline" style="font-size:1.1rem;"></ion-icon>
+            </button>`;
+        extraDatesContainer.appendChild(row);
+    }
+
+    function removeExtraDateRow(btn) {
+        const row = btn.closest('.extra-date-row');
+        if (row) row.remove();
+    }
 
     document.getElementById('edit-form').addEventListener('submit', () =>
         document.getElementById('submit-overlay').classList.remove('hidden'));

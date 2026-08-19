@@ -1,0 +1,526 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro de Empresas - Prosperar</title>
+    <meta name="description" content="Cadastre sua empresa no Prosperar e crie seu acesso para a area de negocios.">
+    <meta name="theme-color" content="#241612">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --color-primary: #cfa370;
+            --color-dark: #241612;
+            --color-secondary: #4c2f24;
+            --color-accent: #f3debf;
+            --color-surface: #fffaf5;
+            --color-muted: #876653;
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(207, 163, 112, 0.12), transparent 26%),
+                radial-gradient(circle at bottom right, rgba(76, 47, 36, 0.1), transparent 28%),
+                #f6f1eb;
+            min-height: 100vh;
+            color: #374151;
+        }
+
+        @keyframes fadeInUp {
+            from { transform: translateY(16px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .animate-fadeInUp { animation: fadeInUp 0.5s ease-out both; }
+        .animate-delay-100 { animation-delay: 0.08s; }
+        .animate-delay-200 { animation-delay: 0.16s; }
+
+        .prosper-header {
+            position: relative;
+            overflow: hidden;
+            background:
+                linear-gradient(180deg, rgba(10, 8, 8, 0.18), rgba(10, 8, 8, 0.58)),
+                linear-gradient(155deg, #4c2f24 0%, #241612 48%, #120d0b 100%);
+            padding: 2.75rem 1.5rem 3rem;
+            text-align: center;
+        }
+        .prosper-header-bg {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at top left, rgba(207, 163, 112, 0.18), transparent 26%),
+                radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.06), transparent 24%);
+            mix-blend-mode: screen;
+        }
+        .prosper-header-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(40px);
+        }
+        .prosper-header-orb--1 {
+            width: 15rem;
+            height: 15rem;
+            top: -5rem;
+            right: -3rem;
+            background: rgba(207, 163, 112, 0.22);
+        }
+        .prosper-header-orb--2 {
+            width: 10rem;
+            height: 10rem;
+            bottom: -3rem;
+            left: -2rem;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .prosper-header-inner {
+            position: relative;
+            z-index: 1;
+            max-width: 22rem;
+            margin: 0 auto;
+        }
+        .prosper-header-eyebrow {
+            display: inline-block;
+            font-size: 0.625rem;
+            font-weight: 700;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--color-accent);
+            margin-bottom: 1.125rem;
+            opacity: 0.95;
+        }
+        .prosper-header-icon-wrap {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.125rem;
+        }
+        .prosper-header-icon {
+            width: 3.5rem;
+            height: 3.5rem;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(243, 222, 191, 0.22);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--color-accent);
+            font-size: 1.2rem;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .prosper-header h1 {
+            font-size: 1.875rem;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.03em;
+            line-height: 1.15;
+            margin-bottom: 0.75rem;
+        }
+        .prosper-header h1 span {
+            color: var(--color-accent);
+        }
+        @media (min-width: 640px) {
+            .prosper-header { padding: 3.25rem 2rem 3.5rem; }
+            .prosper-header h1 { font-size: 2.25rem; }
+        }
+        .prosper-header p {
+            font-size: 0.8125rem;
+            line-height: 1.65;
+            color: rgba(255, 247, 237, 0.8);
+            font-weight: 500;
+        }
+        .prosper-header-divider {
+            width: 2rem;
+            height: 2px;
+            background: var(--color-primary);
+            opacity: 0.75;
+            margin: 0 auto 0.875rem;
+            border-radius: 1px;
+        }
+
+        .prosper-form-wrap {
+            width: 100%;
+            max-width: 100%;
+            margin: 0;
+            padding: 1.25rem 1rem 2rem;
+        }
+        @media (min-width: 640px) {
+            .prosper-form-wrap { padding: 1.5rem 2rem 2.5rem; }
+        }
+        @media (min-width: 1024px) {
+            .prosper-form-wrap { padding: 1.75rem 3rem 3rem; }
+        }
+
+        .prosper-section {
+            background: #fff;
+            border-radius: 1rem;
+            border: 1px solid rgba(207, 163, 112, 0.16);
+            box-shadow: 0 1px 3px rgba(36, 22, 18, 0.04);
+            padding: 1.125rem 1.125rem 1.25rem;
+            margin-bottom: 0.875rem;
+        }
+        .prosper-section-head {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(36, 22, 18, 0.08);
+        }
+        .prosper-section-icon {
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 0.625rem;
+            background: rgba(207, 163, 112, 0.12);
+            color: var(--color-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 0.875rem;
+        }
+        .prosper-section-title {
+            font-size: 0.9375rem;
+            font-weight: 700;
+            color: var(--color-dark);
+            line-height: 1.2;
+        }
+        .prosper-section-sub {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.125rem;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.8125rem;
+            color: var(--color-dark);
+            margin-bottom: 0.375rem;
+        }
+        .form-label .req { color: var(--color-primary); }
+
+        .form-input,
+        .select-input {
+            width: 100%;
+            display: block;
+            box-sizing: border-box;
+            padding: 0.6875rem 0.875rem;
+            border: 1px solid rgba(76, 47, 36, 0.15);
+            border-radius: 0.625rem;
+            background: #fff;
+            font-family: inherit;
+            font-size: 0.875rem;
+            color: #374151;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            outline: none;
+        }
+        .form-input:focus,
+        .select-input:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(207, 163, 112, 0.16);
+        }
+        .form-input.error,
+        .select-input.error,
+        .file-input-wrap.error {
+            border-color: #dc2626;
+            background: #fef2f2;
+        }
+
+        .file-input-wrap {
+            width: 100%;
+            padding: 0.75rem 0.875rem;
+            border: 1px solid rgba(76, 47, 36, 0.15);
+            border-radius: 0.625rem;
+            background: #fff;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .file-input-wrap:focus-within {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(207, 163, 112, 0.16);
+        }
+        .file-input-wrap input[type="file"] {
+            width: 100%;
+            display: block;
+            font-size: 0.8125rem;
+            color: #4b5563;
+        }
+        .file-input-wrap input[type="file"]::file-selector-button {
+            margin-right: 0.75rem;
+            padding: 0.55rem 0.85rem;
+            border: 1px solid rgba(76, 47, 36, 0.12);
+            border-radius: 0.5rem;
+            background: rgba(207, 163, 112, 0.12);
+            color: var(--color-dark);
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .form-error {
+            color: #dc2626;
+            font-size: 0.75rem;
+            margin-top: 0.3125rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+        .form-help-text {
+            color: #6b7280;
+            font-size: 0.75rem;
+            margin-top: 0.3125rem;
+            line-height: 1.45;
+        }
+
+        .prosper-submit {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            background: linear-gradient(135deg, var(--color-primary) 0%, #b5814d 100%);
+            color: var(--color-dark);
+            font-family: inherit;
+            font-size: 0.9375rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        .prosper-submit:hover {
+            opacity: 0.94;
+            transform: translateY(-1px);
+        }
+        .prosper-submit:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .prosper-privacy {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: 0.75rem;
+            line-height: 1.45;
+        }
+        .prosper-privacy i { color: var(--color-primary); opacity: 0.85; }
+
+        .prosper-alert {
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border: 1px solid;
+            margin-bottom: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .prosper-alert-error {
+            background: #fef2f2;
+            border-color: #fecaca;
+            color: #b91c1c;
+        }
+        .prosper-alert-info {
+            background: rgba(207, 163, 112, 0.08);
+            border-color: rgba(207, 163, 112, 0.24);
+            color: var(--color-secondary);
+        }
+
+        .prosper-chip-grid {
+            display: grid;
+            gap: 0.875rem;
+        }
+        @media (min-width: 640px) {
+            .prosper-chip-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+        .prosper-chip-card {
+            background: linear-gradient(180deg, #fffdf9 0%, var(--color-surface) 100%);
+            border: 1px solid rgba(207, 163, 112, 0.16);
+            border-radius: 0.875rem;
+            padding: 0.95rem 0.95rem 1rem;
+        }
+        .prosper-chip-card h3 {
+            font-size: 0.875rem;
+            font-weight: 700;
+            color: var(--color-dark);
+            margin-bottom: 0.35rem;
+        }
+        .prosper-chip-card p {
+            font-size: 0.75rem;
+            line-height: 1.55;
+            color: var(--color-muted);
+        }
+
+        .prosper-back-link {
+            color: #6b7280;
+            font-size: 0.8125rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .prosper-back-link:hover {
+            color: var(--color-secondary);
+        }
+    </style>
+</head>
+<body>
+    <header class="prosper-header">
+        <div class="prosper-header-bg"></div>
+        <div class="prosper-header-orb prosper-header-orb--1"></div>
+        <div class="prosper-header-orb prosper-header-orb--2"></div>
+        <div class="prosper-header-inner">
+            <span class="prosper-header-eyebrow animate-fadeInUp">Prosperar</span>
+            <div class="prosper-header-icon-wrap animate-fadeInUp animate-delay-100">
+                <div class="prosper-header-icon">
+                    <i class="fa-solid fa-briefcase"></i>
+                </div>
+            </div>
+            <h1 class="animate-fadeInUp animate-delay-100">Cadastre sua <span>empresa</span> no Prosperar</h1>
+            <div class="prosper-header-divider animate-fadeInUp animate-delay-200"></div>
+            <p class="animate-fadeInUp animate-delay-200">
+                Preencha seus dados para criar o cadastro da sua empresa e receber acesso a sua area no Prosperar.
+            </p>
+        </div>
+    </header>
+
+    <main class="prosper-form-wrap">
+
+        {% if form.non_field_errors %}
+            <div class="prosper-alert prosper-alert-error animate-fadeInUp">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <div>{{ form.non_field_errors }}</div>
+            </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <section class="prosper-section animate-fadeInUp animate-delay-100">
+                <div class="prosper-section-head">
+                    <div class="prosper-section-icon">
+                        <i class="fa-solid fa-building"></i>
+                    </div>
+                    <div>
+                        <div class="prosper-section-title">Dados da empresa</div>
+                        <div class="prosper-section-sub">Informacoes para montar seu perfil no Prosperar.</div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="prosper-field">
+                        <label class="form-label" for="{{ form.company_name.id_for_label }}">Nome da empresa <span class="req">*</span></label>
+                        {{ form.company_name }}
+                        {% if form.company_name.help_text %}<div class="form-help-text">{{ form.company_name.help_text }}</div>{% endif %}
+                        {% for error in form.company_name.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field">
+                        <label class="form-label" for="{{ form.business_sector.id_for_label }}">Qual o ramo da atividade? <span class="req">*</span></label>
+                        {{ form.business_sector }}
+                        {% if form.business_sector.help_text %}<div class="form-help-text">{{ form.business_sector.help_text }}</div>{% endif %}
+                        {% for error in form.business_sector.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field md:col-span-2">
+                        <label class="form-label" for="{{ form.logo.id_for_label }}">Logo da empresa</label>
+                        <div class="file-input-wrap{% if form.logo.errors %} error{% endif %}">
+                            {{ form.logo }}
+                        </div>
+                        {% if form.logo.help_text %}<div class="form-help-text">{{ form.logo.help_text }}</div>{% endif %}
+                        {% for error in form.logo.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field">
+                        <label class="form-label" for="{{ form.address.id_for_label }}">Endereco <span class="req">*</span></label>
+                        {{ form.address }}
+                        {% if form.address.help_text %}<div class="form-help-text">{{ form.address.help_text }}</div>{% endif %}
+                        {% for error in form.address.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field">
+                        <label class="form-label" for="{{ form.neighborhood.id_for_label }}">Bairro</label>
+                        {{ form.neighborhood }}
+                        {% if form.neighborhood.help_text %}<div class="form-help-text">{{ form.neighborhood.help_text }}</div>{% endif %}
+                        {% for error in form.neighborhood.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field">
+                        <label class="form-label" for="{{ form.phone.id_for_label }}">Telefone / WhatsApp</label>
+                        {{ form.phone }}
+                        {% if form.phone.help_text %}<div class="form-help-text">{{ form.phone.help_text }}</div>{% endif %}
+                        {% for error in form.phone.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field">
+                        <label class="form-label" for="{{ form.instagram_url.id_for_label }}">Link do Instagram</label>
+                        {{ form.instagram_url }}
+                        {% if form.instagram_url.help_text %}<div class="form-help-text">{{ form.instagram_url.help_text }}</div>{% endif %}
+                        {% for error in form.instagram_url.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field md:col-span-2">
+                        <label class="form-label" for="{{ form.description.id_for_label }}">Descricao do negocio</label>
+                        {{ form.description }}
+                        {% if form.description.help_text %}<div class="form-help-text">{{ form.description.help_text }}</div>{% endif %}
+                        {% for error in form.description.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+            </section>
+
+            <section class="prosper-section animate-fadeInUp animate-delay-200">
+                <div class="prosper-section-head">
+                    <div class="prosper-section-icon">
+                        <i class="fa-solid fa-user-lock"></i>
+                    </div>
+                    <div>
+                        <div class="prosper-section-title">Acesso da empresa</div>
+                        <div class="prosper-section-sub">Use seu email e sua senha para acessar sua conta depois.</div>
+                    </div>
+                </div>
+
+                <div class="prosper-alert prosper-alert-info">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <div>Se este email ja for da sua conta da Filadelfia, sua empresa sera vinculada a essa mesma conta.</div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div class="prosper-field md:col-span-2">
+                        <label class="form-label" for="{{ form.email.id_for_label }}">Email de acesso <span class="req">*</span></label>
+                        {{ form.email }}
+                        {% if form.email.help_text %}<div class="form-help-text">{{ form.email.help_text }}</div>{% endif %}
+                        {% for error in form.email.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field">
+                        <label class="form-label" for="{{ form.password.id_for_label }}">Senha <span class="req">*</span></label>
+                        {{ form.password }}
+                        {% if form.password.help_text %}<div class="form-help-text">{{ form.password.help_text }}</div>{% endif %}
+                        {% for error in form.password.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <div class="prosper-field">
+                        <label class="form-label" for="{{ form.password_confirm.id_for_label }}">Confirmar senha <span class="req">*</span></label>
+                        {{ form.password_confirm }}
+                        {% if form.password_confirm.help_text %}<div class="form-help-text">{{ form.password_confirm.help_text }}</div>{% endif %}
+                        {% for error in form.password_confirm.errors %}<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i>{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+            </section>
+
+            <div class="prosper-section animate-fadeInUp animate-delay-200">
+                <button type="submit" class="prosper-submit">
+                    Concluir cadastro
+                </button>
+                <div class="prosper-privacy">
+                    <i class="fa-solid fa-lock"></i>
+                    Seus dados serao usados para criar sua conta e montar seu perfil no Prosperar.
+                </div>
+            </div>
+        </form>
+
+    </main>
+</body>
+</html>

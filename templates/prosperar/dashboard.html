@@ -1,0 +1,177 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Prosperar - Negocios{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --prosperar-primary: #cfa370;
+        --prosperar-secondary: #4c2f24;
+        --prosperar-dark: #241612;
+        --prosperar-soft: #fffaf5;
+        --prosperar-muted: #876653;
+    }
+
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(18px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-fadeInUp { animation: fadeInUp 0.65s ease-out; }
+    .nav-hidden { transform: translate(-50%, 120%) !important; opacity: 0.7 !important; }
+    .nav-visible { transform: translate(-50%, 0) !important; opacity: 1 !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="relative overflow-hidden px-4 py-3 animate-fadeInUp" style="background: linear-gradient(to bottom right, #ffffff, #faf7f2, #ffffff);">
+    <div class="absolute -right-20 -top-16 h-56 w-56 rounded-full opacity-20" style="background: radial-gradient(circle, rgba(207,163,112,0.32), transparent);"></div>
+    <div class="absolute -left-16 top-0 h-40 w-40 rounded-full opacity-10" style="background: radial-gradient(circle, rgba(76,47,36,0.30), transparent);"></div>
+
+    <div class="relative z-10 p-4 sm:p-6 md:p-8">
+        <div class="flex items-center justify-between gap-4">
+            <div class="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+                <div class="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#4c2f24] sm:h-20 sm:w-20">
+                    {% if company.logo %}
+                    <img src="{{ company.logo.url }}" alt="{{ company.company_name }}" class="h-full w-full object-cover">
+                    {% else %}
+                    <i class="fas fa-briefcase text-2xl text-[#f3debf] sm:text-3xl"></i>
+                    {% endif %}
+                </div>
+                <div class="min-w-0 flex-1">
+                    <p class="text-xs tracking-wide text-gray-600">Area Prosperar</p>
+                    <h2 class="truncate text-xl font-black leading-tight text-gray-900 sm:text-2xl">{{ company.company_name }}</h2>
+                    <p class="mt-0.5 hidden text-sm font-medium text-gray-600 sm:block">Negocios e conexoes da comunidade Prosperar</p>
+                </div>
+            </div>
+
+            <div class="flex-shrink-0">
+                <img src="{% static 'assets/logotype.jpg' %}" alt="Igreja Filadelfia" class="h-12 w-12 rounded-full object-cover shadow-lg sm:h-16 sm:w-16">
+            </div>
+        </div>
+    </div>
+</section>
+
+{% if messages %}
+<div class="mx-auto max-w-6xl px-4 pt-3">
+    {% for message in messages %}
+    <div class="mb-3 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-bold shadow-sm
+        {% if message.tags == 'error' %}border-red-100 bg-red-50 text-red-600
+        {% elif message.tags == 'success' %}border-green-100 bg-green-50 text-green-700
+        {% else %}border-blue-100 bg-blue-50 text-blue-600{% endif %}">
+        <i class="fas fa-{% if message.tags == 'error' %}exclamation-circle{% elif message.tags == 'success' %}check-circle{% else %}info-circle{% endif %}"></i>
+        <span>{{ message }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<main class="mx-auto max-w-6xl space-y-6 px-4 pb-24 pt-3">
+    <section class="grid gap-4 md:grid-cols-3">
+        <div class="rounded-2xl border bg-white p-5 shadow-sm" style="border-color: rgba(207,163,112,0.18);">
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Seu negocio</p>
+            <p class="mt-2 text-lg font-black text-[#241612]">{{ company.company_name }}</p>
+            <p class="mt-1 text-sm text-[#876653]">{{ company.get_business_sector_display }}</p>
+        </div>
+        <div class="rounded-2xl border bg-white p-5 shadow-sm" style="border-color: rgba(207,163,112,0.18);">
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Empresas no Prosperar</p>
+            <p class="mt-2 text-3xl font-black text-[#241612]">{{ companies|length }}</p>
+            <p class="mt-1 text-sm text-[#876653]">Rede atual de negocios cadastrados</p>
+        </div>
+        <div class="rounded-2xl border bg-white p-5 shadow-sm" style="border-color: rgba(207,163,112,0.18);">
+            <p class="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Seu perfil</p>
+            <p class="mt-2 text-lg font-black text-[#241612]">{{ company.neighborhood|default:"Sem bairro" }}</p>
+            <p class="mt-1 text-sm text-[#876653]">{{ company.user.email }}</p>
+        </div>
+    </section>
+
+    <section class="rounded-2xl border bg-white p-5 shadow-sm" style="border-color: rgba(207,163,112,0.18);">
+        <div class="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+                <h3 class="text-xl font-black text-[#241612]">Negocios do Prosperar</h3>
+                <p class="text-sm text-[#876653]">Explore os negocios de todos os participantes cadastrados.</p>
+            </div>
+            <a href="{% url 'prosperar_profile' %}" class="inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold text-[#4c2f24] transition hover:bg-[#fffaf5]" style="border-color: rgba(207,163,112,0.24);">
+                <i class="fas fa-pen-to-square"></i>
+                Editar meu perfil
+            </a>
+        </div>
+
+        <form method="get" class="grid gap-3 md:grid-cols-[1.6fr,1fr,auto]">
+            <input type="text" name="q" value="{{ query }}" placeholder="Busque por nome da empresa, descricao ou bairro"
+                   class="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-[#cfa370] focus:outline-none focus:ring-2 focus:ring-[#cfa370]/20">
+            <select name="sector" class="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm focus:border-[#cfa370] focus:outline-none focus:ring-2 focus:ring-[#cfa370]/20">
+                <option value="">Todos os ramos</option>
+                {% for value, label in sector_choices %}
+                <option value="{{ value }}" {% if sector == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="rounded-xl bg-[linear-gradient(135deg,#d8ab72_0%,#c79355_100%)] px-5 py-3 text-sm font-extrabold text-[#241612] shadow-[0_10px_20px_rgba(207,163,112,0.22)] transition hover:-translate-y-0.5">
+                Filtrar
+            </button>
+        </form>
+    </section>
+
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {% for listed_company in companies %}
+        <article class="rounded-3xl border bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg" style="border-color: {% if listed_company.id == company.id %}rgba(207,163,112,0.45){% else %}rgba(207,163,112,0.18){% endif %};">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex min-w-0 flex-1 items-center gap-3">
+                    <div class="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#fffaf5]">
+                        {% if listed_company.logo %}
+                        <img src="{{ listed_company.logo.url }}" alt="{{ listed_company.company_name }}" class="h-full w-full object-cover">
+                        {% else %}
+                        <i class="fas fa-store text-xl text-[#4c2f24]"></i>
+                        {% endif %}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <h4 class="truncate text-lg font-black text-[#241612]">{{ listed_company.company_name }}</h4>
+                        <p class="text-sm font-medium text-[#876653]">{{ listed_company.get_business_sector_display }}</p>
+                    </div>
+                </div>
+                {% if listed_company.id == company.id %}
+                <span class="rounded-full bg-[rgba(207,163,112,0.14)] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#4c2f24]">Sua empresa</span>
+                {% endif %}
+            </div>
+
+            <div class="mt-4 space-y-2 text-sm text-gray-600">
+                {% if listed_company.description %}
+                <p class="leading-6 text-[#5b6478]">{{ listed_company.description }}</p>
+                {% endif %}
+                <p><span class="font-bold text-[#241612]">Bairro:</span> {{ listed_company.neighborhood|default:"Nao informado" }}</p>
+                <p><span class="font-bold text-[#241612]">Contato:</span> {{ listed_company.phone|default:listed_company.user.email }}</p>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+                {% if listed_company.instagram_url %}
+                <a href="{{ listed_company.instagram_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-full bg-[#fffaf5] px-4 py-2 text-xs font-bold text-[#4c2f24] transition hover:bg-[#f6ecd9]">
+                    <i class="fab fa-instagram"></i>
+                    Instagram
+                </a>
+                {% endif %}
+                <span class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold
+                    {% if listed_company.status == 'approved' %}
+                        bg-green-50 text-green-700
+                    {% elif listed_company.status == 'pending' %}
+                        bg-amber-50 text-amber-700
+                    {% else %}
+                        bg-red-50 text-red-700
+                    {% endif %}">
+                    <i class="fas fa-circle text-[8px]"></i>
+                    {{ listed_company.get_status_display }}
+                </span>
+            </div>
+        </article>
+        {% empty %}
+        <div class="md:col-span-2 xl:col-span-3 rounded-3xl border border-dashed border-[rgba(207,163,112,0.28)] bg-white p-10 text-center">
+            <i class="fas fa-store-slash text-4xl text-[#cfa370]"></i>
+            <h4 class="mt-4 text-xl font-black text-[#241612]">Nenhum negocio encontrado</h4>
+            <p class="mt-2 text-sm text-[#876653]">Tente ajustar os filtros para encontrar outras empresas cadastradas.</p>
+        </div>
+        {% endfor %}
+    </section>
+</main>
+
+{% include 'parciais/prosperar_bottom_nav.html' with nav_active='dashboard' %}
+{% endblock %}

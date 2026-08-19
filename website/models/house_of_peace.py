@@ -9,7 +9,6 @@ class HouseOfPeace(BaseModel):
     """
     Represents a family that requested a House of Peace.
     Anyone can register via public form.
-    Up to 3 ministry members can accept each House of Peace.
     """
 
     PRAYER_TYPE_CHOICES = [
@@ -44,7 +43,11 @@ class HouseOfPeace(BaseModel):
     )
 
     # Informações sobre a família
-    family_size = models.PositiveIntegerField(verbose_name='Número de membros na família')
+    family_size = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        verbose_name='Número de membros na família',
+    )
 
     # O que deseja oração / mais informações
     prayer_types = models.CharField(
@@ -66,7 +69,7 @@ class HouseOfPeace(BaseModel):
     # Status
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available', verbose_name='Status')
 
-    # Membros que aceitaram esta Casa de Paz (máximo 3)
+    # Membros que aceitaram esta Casa de Paz
     accepted_members = models.ManyToManyField(
         Member,
         through='HouseOfPeaceAssignment',
@@ -97,8 +100,8 @@ class HouseOfPeace(BaseModel):
 
     @property
     def can_accept_more(self):
-        """Pode receber mais membros (máximo 3)?"""
-        return self.assignments.count() < 3
+        """Indica se a casa ainda está em fluxo de disponibilidade."""
+        return self.status == 'available'
 
     @property
     def is_available(self):

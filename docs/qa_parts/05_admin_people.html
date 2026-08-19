@@ -1,0 +1,85 @@
+  <div class="module-section" id="admin-people">
+    <div class="module-header mod-admin">
+      <span class="icon">🗂️</span>
+      <h2>4. Painel Admin — Pessoas</h2>
+      <span class="access-badge badge-admin">Acesso: has_admin_access</span>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">📈 4.1 — Dashboard Administrativo</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Login admin/staff → <code>/admin-panel/</code>.</li>
+          <li>Ver métricas: membros, visitantes, eventos, consolidações, gráficos.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects"><li>Métricas corretas; gráficos carregam sem erros.</li></ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">👥 4.2 — Gestão de Membros (CRUD)</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/members/</span> <span class="url-tag">/admin-panel/members/new/</span> <span class="url-tag">/admin-panel/members/&lt;id&gt;/edit/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Listar, criar, editar membros.</li>
+          <li>Soft-delete via <code>/admin-panel/api/delete/</code>.</li>
+          <li>API JSON: <code>/admin-panel/api/member/&lt;id&gt;/</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>E-mail duplicado rejeitado.</li>
+          <li>Membro deletado não aparece nas listas (soft delete).</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🚶 4.3 — Gestão de Visitantes</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/visitors/</span> <span class="url-tag">new/</span> <span class="url-tag">&lt;id&gt;/edit/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Usuário <code>user_type=visitors</code> ou admin: CRUD de visitantes.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Usuário sem permissão de visitantes recebe 403.</li>
+          <li>API: <code>/admin-panel/api/visitor/&lt;id&gt;/</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🗺️ 4.4 — Gestão de Bairros</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/neighborhoods/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Criar, editar e soft-deletar bairros.</li>
+          <li>Verificar que aparecem nos selects de cadastro.</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="feature">
+      <div class="feature-title">🔒 4.5 — Gestão de Usuários</div>
+      <div class="feature-body">
+        <p><span class="url-tag">/admin-panel/users/</span> <span class="url-tag">/admin-panel/users/&lt;id&gt;/reset-password/</span></p>
+        <div class="flow-title">Fluxo</div>
+        <ol class="flow">
+          <li>Apenas <code>user_type=admin</code> acessa lista de usuários.</li>
+          <li>Resetar senha → volta para <code>123</code>.</li>
+        </ol>
+        <div class="flow-title">Resultado esperado</div>
+        <ul class="expects">
+          <li>Outros roles recebem 403.</li>
+          <li>Login com senha resetada funciona.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <hr class="section-divider" />

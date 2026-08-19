@@ -1,0 +1,65 @@
+  <div class="toc no-print">
+    <h2>Sumário</h2>
+    <ol>
+      <li><a href="#roles">Perfis de Usuário e Permissões</a></li>
+      <li><a href="#public">Site Público</a>
+        <ul class="sub"><li>Página inicial, eventos, testemunhos, contato</li><li>Formulários públicos</li></ul>
+      </li>
+      <li><a href="#auth">Autenticação e Redefinição de Senha</a></li>
+      <li><a href="#member">Portal do Membro</a></li>
+      <li><a href="#admin-people">Painel Admin — Pessoas</a></li>
+      <li><a href="#admin-programs">Painel Admin — Programas</a></li>
+      <li><a href="#admin-ops">Painel Admin — Operações</a></li>
+      <li><a href="#ministration">Ministração (Palavras e Curas)</a></li>
+      <li><a href="#translator">Tradução ao Vivo</a></li>
+      <li><a href="#out-of-scope">Fora do Escopo</a></li>
+      <li><a href="#checklist">Checklist Rápido</a></li>
+    </ol>
+  </div>
+
+  <div class="module-section" id="roles">
+    <div class="module-header mod-ops">
+      <span class="icon">👥</span>
+      <h2>Perfis de Usuário e Permissões</h2>
+    </div>
+    <p style="margin-bottom:12px">O sistema possui os seguintes perfis (<code>user_type</code>), que controlam o acesso ao painel administrativo:</p>
+    <table>
+      <thead><tr><th>Perfil</th><th>Portal Membro</th><th>Painel Admin</th><th>Módulo Específico</th><th>Gestão Usuários</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Anônimo</strong></td><td><span class="dot dot-no"></span>Não</td><td><span class="dot dot-no"></span>Não</td><td>Site público</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>member</strong></td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-no"></span>Não</td><td>Portal membro</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>visitors</strong></td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-yes"></span>Parcial</td><td>Visitantes</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>consolidation</strong></td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-yes"></span>Parcial</td><td>Consolidação</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>events</strong></td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-yes"></span>Parcial</td><td>Eventos</td><td><span class="dot dot-no"></span>Não</td></tr>
+        <tr><td><strong>admin</strong></td><td><span class="dot dot-yes"></span>Sim</td><td><span class="dot dot-yes"></span>Total</td><td>Todos</td><td><span class="dot dot-yes"></span>Sim</td></tr>
+        <tr><td><strong>superuser</strong></td><td>Redireciona admin</td><td><span class="dot dot-yes"></span>Total</td><td>Todos</td><td><span class="dot dot-yes"></span>Sim</td></tr>
+      </tbody>
+    </table>
+    <p style="margin:16px 0 10px"><strong>Flags especiais no perfil de membro:</strong></p>
+    <table>
+      <thead><tr><th>Flag / Condição</th><th>Habilita</th></tr></thead>
+      <tbody>
+        <tr><td><code>is_approver</code></td><td>Aprovar/rejeitar Palavras de Conhecimento</td></tr>
+        <tr><td><code>is_available_to_consolidate</code></td><td>Receber acompanhamentos de consolidação</td></tr>
+        <tr><td><code>is_consolidated</code></td><td>Indica que já passou pelo processo de consolidação</td></tr>
+        <tr><td>Ministério "Ministração"</td><td>Aba de palavras/curas no dashboard</td></tr>
+        <tr><td>Ministério "Boas Vindas"</td><td>Cadastro de visitantes no dashboard</td></tr>
+        <tr><td>Qualquer ministério ativo</td><td>Card de escala no dashboard</td></tr>
+      </tbody>
+    </table>
+    <div class="warn-box"><strong>Senhas padrão:</strong> Ao criar usuário pelo admin ou resetar senha, a senha padrão é <code>123</code>.</div>
+    <h3 style="margin:20px 0 10px;font-size:14px">Personas sugeridas para testes</h3>
+    <p>
+      <span class="persona p-anon">Anônimo</span>
+      <span class="persona p-member">Membro genérico</span>
+      <span class="persona p-member">Membro Boas Vindas</span>
+      <span class="persona p-member">Membro Ministração</span>
+      <span class="persona p-approver">Aprovador</span>
+      <span class="persona p-consolidator">Consolidador</span>
+      <span class="persona p-staff">Admin visitors</span>
+      <span class="persona p-staff">Admin consolidação</span>
+      <span class="persona p-staff">Admin eventos</span>
+      <span class="persona p-admin">Admin completo</span>
+    </p>
+  </div>
+  <hr class="section-divider" />

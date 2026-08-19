@@ -6,221 +6,451 @@
 {% block head %}
 <style>
     @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(16px); }
+        from { opacity: 0; transform: translateY(12px); }
         to   { opacity: 1; transform: translateY(0); }
     }
-    .animate-fade { animation: fadeIn 0.6s ease-out; }
+    .animate-fade { animation: fadeIn 0.45s ease-out; }
 
-    .day-card-mine {
-        border-color: #C90905 !important;
-        background: linear-gradient(to right, rgba(201,9,5,0.05), white) !important;
+    .sched-header {
+        padding: 1.25rem 1rem 1rem;
+        border-bottom: 1px solid rgba(201, 9, 5, 0.08);
+        background: #fff;
     }
-    .day-badge-mine {
-        background: rgba(201,9,5,0.1);
+    @media (min-width: 640px) {
+        .sched-header { padding: 1.5rem 1.5rem 1.25rem; }
+    }
+
+    .sched-back {
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 0.625rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(201, 9, 5, 0.15);
         color: #C90905;
+        background: #fff;
+        transition: transform 0.15s ease;
+        flex-shrink: 0;
     }
-    .day-card-other {
-        border-color: rgba(0,0,0,0.08);
-        background: white;
+    .sched-back:hover { transform: translateX(-2px); }
+
+    .sched-notice {
+        margin-top: 1rem;
+        padding: 0.875rem 1rem;
+        border-radius: 0.875rem;
+        background: #fff;
+        border: 1px solid rgba(201, 9, 5, 0.14);
+        box-shadow: 0 1px 3px rgba(38, 2, 0, 0.04);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
     }
-    .day-card-cancelled {
+    .sched-notice-icon {
+        flex-shrink: 0;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(201, 9, 5, 0.08);
+        color: #C90905;
+        font-size: 0.75rem;
+    }
+    .sched-notice-text {
+        margin: 0;
+        flex: 1;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+        color: #374151;
+    }
+    .sched-notice-text strong {
+        color: #C90905;
+        font-weight: 700;
+    }
+    .sched-notice.is-empty {
+        border-color: rgba(38, 2, 0, 0.08);
+    }
+    .sched-notice.is-empty .sched-notice-icon {
+        background: rgba(38, 2, 0, 0.05);
+        color: #6b7280;
+    }
+
+    .sched-guidelines {
+        margin-top: 0.625rem;
+        padding: 0.875rem 1rem;
+        border-radius: 0.875rem;
+        background: #fff;
+        border: 1px solid rgba(38, 2, 0, 0.08);
+        box-shadow: 0 1px 3px rgba(38, 2, 0, 0.03);
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+    .sched-guidelines-icon {
+        flex-shrink: 0;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(38, 2, 0, 0.05);
+        color: #260200;
+        font-size: 0.75rem;
         opacity: 0.55;
-        border-color: rgba(0,0,0,0.08);
-        background: #f9fafb;
+        margin-top: 0.0625rem;
+    }
+    .sched-guidelines-content {
+        flex: 1;
+        min-width: 0;
+    }
+    .sched-guidelines-label {
+        font-size: 0.625rem;
+        font-weight: 800;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+        color: #260200;
+        opacity: 0.45;
+        margin: 0 0 0.25rem;
+    }
+    .sched-guidelines-text {
+        margin: 0;
+        font-size: 0.8125rem;
+        line-height: 1.55;
+        color: #4b5563;
+    }
+
+    .sched-list {
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+    @media (min-width: 640px) {
+        .sched-list { padding: 1.25rem 1.5rem; gap: 0.75rem; }
+    }
+
+    .sched-day {
+        background: #fff;
+        border-radius: 1rem;
+        border: 1px solid rgba(38, 2, 0, 0.07);
+        box-shadow: 0 1px 3px rgba(38, 2, 0, 0.04);
+        overflow: hidden;
+        transition: box-shadow 0.2s ease;
+    }
+    .sched-day.is-mine {
+        border-color: rgba(201, 9, 5, 0.22);
+        box-shadow: 0 2px 8px rgba(201, 9, 5, 0.07);
+    }
+    .sched-day.is-cancelled {
+        opacity: 0.55;
+        background: #fafafa;
+    }
+
+    .sched-day-head {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.875rem 1rem;
+        border-bottom: 1px solid rgba(38, 2, 0, 0.05);
+    }
+    .sched-day.is-mine .sched-day-head {
+        border-bottom-color: rgba(201, 9, 5, 0.08);
+    }
+
+    .sched-day-date {
+        flex-shrink: 0;
+        width: 2.75rem;
+        height: 2.75rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.625rem;
+        background: #fff;
+        border: 1px solid rgba(38, 2, 0, 0.1);
+        line-height: 1.05;
+    }
+    .sched-day.is-mine .sched-day-date {
+        background: #C90905;
+        border-color: #C90905;
+    }
+    .sched-day-date .day-num {
+        font-size: 1.125rem;
+        font-weight: 800;
+        color: #260200;
+        letter-spacing: -0.02em;
+    }
+    .sched-day.is-mine .sched-day-date .day-num { color: #fff; }
+    .sched-day-date .day-mon {
+        font-size: 0.5625rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: rgba(38, 2, 0, 0.45);
+        letter-spacing: 0.06em;
+        margin-top: 0.0625rem;
+    }
+    .sched-day.is-mine .sched-day-date .day-mon {
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    .sched-day-info { flex: 1; min-width: 0; }
+    .sched-day-weekday {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #260200;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+    }
+    .sched-day-desc {
+        font-size: 0.75rem;
+        color: #6b7280;
+        line-height: 1.25;
+        margin-top: 0.0625rem;
+    }
+
+    .sched-day-tag {
+        flex-shrink: 0;
+        padding: 0.2rem 0.5rem;
+        border-radius: 9999px;
+        font-size: 0.5625rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #C90905;
+        background: rgba(201, 9, 5, 0.08);
+        white-space: nowrap;
+    }
+    .sched-day-tag.is-cancelled {
+        color: #dc2626;
+        background: rgba(220, 38, 38, 0.08);
+    }
+
+    .sched-day-body {
+        padding: 0.75rem 1rem 0.875rem;
+    }
+
+    .sched-shift + .sched-shift {
+        margin-top: 0.625rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .sched-shift-label {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.5625rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #9ca3af;
+        margin-bottom: 0.4375rem;
+    }
+    .sched-shift-label i {
+        font-size: 0.5rem;
+        color: #C90905;
+        opacity: 0.85;
+    }
+
+    .sched-members {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3125rem;
+    }
+
+    .sched-member {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        line-height: 1.35;
+        color: #374151;
+        letter-spacing: -0.01em;
+    }
+    .sched-member.is-me {
+        color: #C90905;
+        font-weight: 700;
+    }
+
+    .sched-division + .sched-division {
+        margin-top: 0.625rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid rgba(0, 0, 0, 0.05);
+    }
+    .sched-division-label {
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #9ca3af;
+        margin-bottom: 0.375rem;
+    }
+
+    .sched-team {
+        display: inline-block;
+        margin-top: 0.375rem;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #6b7280;
+    }
+    .sched-team i { color: #C90905; opacity: 0.7; margin-right: 0.2rem; }
+
+    .sched-note {
+        margin-top: 0.5rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+        font-style: italic;
+        line-height: 1.4;
+    }
+    .sched-note.is-cancel-reason { color: #dc2626; }
+
+    .sched-empty {
+        font-size: 0.75rem;
+        color: #9ca3af;
+        font-style: italic;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="min-h-screen pb-24" style="background: #ffffff;">
+<div class="min-h-screen pb-24 bg-gray-50">
 
     <!-- Header -->
-    <div class="px-4 sm:px-6 md:px-8 py-6 border-b-2" style="border-color: rgba(201, 9, 5, 0.2);">
-        <div class="flex gap-4 items-start">
-            <a href="{% url 'member_dashboard' %}" class="mt-0.5 w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1" style="background-color: white; border-color: rgba(201, 9, 5, 0.15); color: #C90905;">
-                <i class="fas fa-arrow-left"></i>
+    <div class="sched-header">
+        <div class="flex gap-3 items-start">
+            <a href="{% url 'member_dashboard' %}" class="sched-back mt-0.5">
+                <i class="fas fa-arrow-left text-sm"></i>
             </a>
             <div class="flex-1 min-w-0">
-                <p class="text-xs font-bold uppercase tracking-widest mb-1" style="color: #C90905;">{{ schedule.ministry.name }}</p>
-                <h1 class="text-2xl sm:text-3xl font-black text-gray-900 leading-tight">{{ schedule.title }}</h1>
-                <p class="text-sm text-gray-500 mt-1">{{ month_name }} / {{ schedule.year }}</p>
+                <p class="text-[0.625rem] font-bold uppercase tracking-widest mb-0.5" style="color: #C90905;">{{ schedule.ministry.name }}</p>
+                <h1 class="text-xl sm:text-2xl font-extrabold leading-tight tracking-tight" style="color: #260200;">{{ schedule.title }}</h1>
+                <p class="text-xs text-gray-500 mt-0.5">{{ month_name }} / {{ schedule.year }}</p>
             </div>
         </div>
 
-        <!-- Resumo do membro -->
         {% if member_day_count > 0 %}
-        <div class="mt-4 flex items-center gap-3 px-4 py-3 rounded-xl" style="background: rgba(201,9,5,0.06); border: 2px solid rgba(201,9,5,0.15);">
-            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
-                <i class="fas fa-star text-white text-sm"></i>
-            </div>
-            <div>
-                <p class="text-sm font-black" style="color: #C90905;">Você está escalado {{ member_day_count|pluralize:" em,em" }} {{ member_day_count }} dia{{ member_day_count|pluralize:"s" }} neste mês!</p>
-                <p class="text-xs text-gray-500">Os dias marcados com borda vermelha são seus.</p>
-            </div>
+        <div class="sched-notice">
+            <div class="sched-notice-icon"><i class="fas fa-calendar-check"></i></div>
+            <p class="sched-notice-text">Você está escalado em <strong>{{ member_day_count }} dia{{ member_day_count|pluralize:"s" }}</strong> neste mês.</p>
         </div>
         {% else %}
-        <div class="mt-4 flex items-center gap-3 px-4 py-3 rounded-xl" style="background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.08);">
-            <i class="fas fa-info-circle text-gray-400"></i>
-            <p class="text-sm text-gray-500">Você não está escalado neste mês nesta escala.</p>
+        <div class="sched-notice is-empty">
+            <div class="sched-notice-icon"><i class="fas fa-calendar"></i></div>
+            <p class="sched-notice-text">Você não está escalado nesta escala neste mês.</p>
         </div>
         {% endif %}
 
         {% if schedule.guidelines %}
-        <div class="mt-3 px-4 py-3 rounded-xl text-sm" style="background: rgba(245,158,11,0.06); border: 2px solid rgba(245,158,11,0.2);">
-            <p class="font-bold text-xs uppercase tracking-wide mb-1" style="color: #B45309;">
-                <i class="fas fa-circle-info mr-1"></i>Orientações
-            </p>
-            <p class="text-gray-700 leading-relaxed">{{ schedule.guidelines }}</p>
+        <div class="sched-guidelines">
+            <div class="sched-guidelines-icon"><i class="fas fa-circle-info"></i></div>
+            <div class="sched-guidelines-content">
+                <p class="sched-guidelines-label">Orientações</p>
+                <p class="sched-guidelines-text">{{ schedule.guidelines }}</p>
+            </div>
         </div>
         {% endif %}
     </div>
 
     <!-- Lista de Dias -->
-    <div class="px-4 sm:px-6 md:px-8 py-5 space-y-3 animate-fade">
+    <div class="sched-list animate-fade">
         {% if days %}
             {% for entry in days %}
             {% with day=entry.day %}
-            <div class="rounded-2xl border-2 overflow-hidden shadow-sm transition-all duration-200
-                {% if day.is_cancelled %}day-card-cancelled
-                {% elif entry.is_member_assigned %}day-card-mine
-                {% else %}day-card-other{% endif %}">
+            <article class="sched-day
+                {% if day.is_cancelled %} is-cancelled
+                {% elif entry.is_member_assigned %} is-mine{% endif %}">
 
-                <!-- Header do Dia -->
-                <div class="flex flex-col gap-2 px-4 py-3 border-b"
-                     style="border-color: {% if entry.is_member_assigned and not day.is_cancelled %}rgba(201,9,5,0.15){% else %}rgba(0,0,0,0.06){% endif %};">
-                    <!-- Linha 1: data + descrição -->
-                    <div class="flex items-center gap-3">
-                        <!-- Data -->
-                        <div class="flex-shrink-0 text-center w-12">
-                            <p class="text-2xl font-black leading-none {% if entry.is_member_assigned and not day.is_cancelled %}text-red-600{% else %}text-gray-800{% endif %}">{{ day.date|date:"d" }}</p>
-                            <p class="text-xs font-medium text-gray-400 uppercase">{{ entry.pt_month_abbr }}</p>
-                        </div>
-                        <div class="min-w-0">
-                            <p class="text-sm font-bold text-gray-800">{{ entry.pt_weekday }}</p>
-                            {% if day.description %}
-                            <p class="text-xs text-gray-500">{{ day.description }}</p>
-                            {% endif %}
-                        </div>
+                <div class="sched-day-head">
+                    <div class="sched-day-date">
+                        <div class="day-num">{{ day.date|date:"d" }}</div>
+                        <div class="day-mon">{{ entry.pt_month_abbr }}</div>
                     </div>
-
-                    <!-- Linha 2: badges -->
-                    {% if day.is_cancelled or entry.is_member_assigned or day.team %}
-                    <div class="flex flex-wrap items-center gap-2 ml-15">
-                        {% if day.is_cancelled %}
-                        <span class="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-600">
-                            <i class="fas fa-ban mr-1"></i>Cancelado
-                        </span>
-                        {% elif entry.is_member_assigned %}
-                        <span class="px-2.5 py-1 text-xs font-bold rounded-full day-badge-mine">
-                            <i class="fas fa-check mr-1"></i>Você está escalado
-                        </span>
+                    <div class="sched-day-info">
+                        <p class="sched-day-weekday">{{ entry.pt_weekday }}</p>
+                        {% if day.description %}
+                        <p class="sched-day-desc">{{ day.description }}</p>
                         {% endif %}
-
                         {% if day.team %}
-                        <span class="px-2.5 py-1 text-xs font-bold rounded-full" style="background: rgba(59,130,246,0.1); color: #1D4ED8;">
-                            <i class="fas fa-users mr-1"></i>{{ day.team.name }}
-                        </span>
+                        <span class="sched-team"><i class="fas fa-users"></i>{{ day.team.name }}</span>
                         {% endif %}
                     </div>
+                    {% if day.is_cancelled %}
+                    <span class="sched-day-tag is-cancelled">Cancelado</span>
+                    {% elif entry.is_member_assigned %}
+                    <span class="sched-day-tag">Seu dia</span>
                     {% endif %}
                 </div>
 
-                <!-- Corpo do Dia -->
                 {% if day.has_shifts %}
-                <div class="px-4 py-3 space-y-3 text-sm">
-                    <!-- Manhã -->
-                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid #C90905;">
-                        <div class="flex items-center gap-2 px-3 py-2" style="background: #C90905;">
-                            <i class="fas fa-sun text-white text-xs"></i>
-                            <span class="text-white text-xs font-bold uppercase tracking-wide">Manhã</span>
-                        </div>
-                        <div class="px-3 py-2.5 flex flex-wrap gap-2">
+                <div class="sched-day-body">
+                    <div class="sched-shift">
+                        <p class="sched-shift-label"><i class="fas fa-sun"></i> Manhã</p>
+                        <div class="sched-members">
                             {% for m in entry.members_morning %}
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
-                                {% if m.id == member.id %}text-white{% else %}text-gray-700 bg-gray-100{% endif %}"
-                                {% if m.id == member.id %}style="background-color: #C90905;"{% endif %}>
-                                {% if m.id == member.id %}<i class="fas fa-star text-xs"></i>{% endif %}
-                                {{ m.name }}
-                            </span>
+                            <span class="sched-member{% if m.id == member.id %} is-me{% endif %}">{{ m.name }}</span>
                             {% empty %}
-                            <span class="text-xs text-gray-400 italic">Sem membros</span>
+                            <span class="sched-empty">Sem membros</span>
                             {% endfor %}
                         </div>
                     </div>
-                    <!-- Noite -->
-                    <div class="rounded-xl overflow-hidden" style="border: 1.5px solid #C90905;">
-                        <div class="flex items-center gap-2 px-3 py-2" style="background: #C90905;">
-                            <i class="fas fa-moon text-white text-xs"></i>
-                            <span class="text-white text-xs font-bold uppercase tracking-wide">Noite</span>
-                        </div>
-                        <div class="px-3 py-2.5 flex flex-wrap gap-2">
+                    <div class="sched-shift">
+                        <p class="sched-shift-label"><i class="fas fa-moon"></i> Noite</p>
+                        <div class="sched-members">
                             {% for m in entry.members_evening %}
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
-                                {% if m.id == member.id %}text-white{% else %}text-gray-700 bg-gray-100{% endif %}"
-                                {% if m.id == member.id %}style="background-color: #C90905;"{% endif %}>
-                                {% if m.id == member.id %}<i class="fas fa-star text-xs"></i>{% endif %}
-                                {{ m.name }}
-                            </span>
+                            <span class="sched-member{% if m.id == member.id %} is-me{% endif %}">{{ m.name }}</span>
                             {% empty %}
-                            <span class="text-xs text-gray-400 italic">Sem membros</span>
+                            <span class="sched-empty">Sem membros</span>
                             {% endfor %}
                         </div>
                     </div>
                     {% if day.notes %}
-                    <p class="text-xs text-gray-500 italic">{{ day.notes }}</p>
+                    <p class="sched-note">{{ day.notes }}</p>
                     {% endif %}
                 </div>
+
                 {% elif entry.div_map or entry.members %}
-                <div class="px-4 py-3 space-y-3 text-sm">
+                <div class="sched-day-body">
                     {% if entry.div_map %}
                         {% for div_name, div_members in entry.div_map.items %}
-                        <div>
-                            <p class="text-xs font-bold uppercase tracking-wide text-gray-400 mb-1.5">{{ div_name }}</p>
-                            <div class="flex flex-wrap gap-2">
+                        <div class="sched-division">
+                            <p class="sched-division-label">{{ div_name }}</p>
+                            <div class="sched-members">
                                 {% for m in div_members %}
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
-                                    {% if m.id == member.id %}text-white{% else %}text-gray-700 bg-gray-100{% endif %}"
-                                    {% if m.id == member.id %}style="background-color: #C90905;"{% endif %}>
-                                    {% if m.id == member.id %}<i class="fas fa-star text-xs"></i>{% endif %}
-                                    {{ m.name }}
-                                </span>
+                                <span class="sched-member{% if m.id == member.id %} is-me{% endif %}">{{ m.name }}</span>
                                 {% endfor %}
                             </div>
                         </div>
                         {% endfor %}
                     {% elif entry.members %}
-                        <div class="flex flex-wrap gap-2">
+                        <div class="sched-members">
                             {% for m in entry.members %}
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
-                                {% if m.id == member.id %}text-white{% else %}text-gray-700 bg-gray-100{% endif %}"
-                                {% if m.id == member.id %}style="background-color: #C90905;"{% endif %}>
-                                {% if m.id == member.id %}<i class="fas fa-star text-xs"></i>{% endif %}
-                                {{ m.name }}
-                            </span>
+                            <span class="sched-member{% if m.id == member.id %} is-me{% endif %}">{{ m.name }}</span>
                             {% endfor %}
                         </div>
                     {% endif %}
 
                     {% if day.is_cancelled and day.cancellation_reason %}
-                    <p class="text-xs text-red-500 italic">{{ day.cancellation_reason }}</p>
+                    <p class="sched-note is-cancel-reason">{{ day.cancellation_reason }}</p>
                     {% elif day.notes %}
-                    <p class="text-xs text-gray-500 italic">{{ day.notes }}</p>
+                    <p class="sched-note">{{ day.notes }}</p>
                     {% endif %}
                 </div>
+
                 {% elif day.notes %}
-                <div class="px-4 py-3">
-                    <p class="text-xs text-gray-500 italic">{{ day.notes }}</p>
+                <div class="sched-day-body">
+                    <p class="sched-note">{{ day.notes }}</p>
                 </div>
                 {% endif %}
-            </div>
+            </article>
             {% endwith %}
             {% endfor %}
         {% else %}
             <div class="text-center py-16 px-4">
-                <div class="w-24 h-24 mx-auto mb-6 rounded-3xl flex items-center justify-center shadow-xl" style="background: linear-gradient(135deg, rgba(201,9,5,0.08), rgba(230,57,70,0.06));">
-                    <i class="fas fa-calendar-xmark text-4xl" style="color: #C90905;"></i>
+                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center" style="background: rgba(201,9,5,0.06);">
+                    <i class="fas fa-calendar-xmark text-2xl" style="color: #C90905;"></i>
                 </div>
-                <h3 class="text-xl font-black text-gray-800 mb-2">Nenhum dia cadastrado</h3>
+                <h3 class="text-lg font-bold text-gray-800 mb-1">Nenhum dia cadastrado</h3>
                 <p class="text-gray-500 text-sm">Esta escala ainda não tem dias registrados.</p>
             </div>
         {% endif %}
