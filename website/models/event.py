@@ -49,6 +49,15 @@ class Event(BaseModel):
 
     slug = models.SlugField(unique=True, blank=True, max_length=200)
 
+    event_type = models.ForeignKey(
+        'MediaEventType',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='events',
+        verbose_name='Tipo de evento (Mídia)',
+    )
+
     def __str__(self):
         return self.title
 

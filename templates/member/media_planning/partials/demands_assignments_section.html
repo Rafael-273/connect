@@ -1,0 +1,23 @@
+<div class="demand-assignments" data-prefix="{{ prefix }}">
+    <div class="demand-assignments-table">
+        <div class="demand-assignments-head" aria-hidden="true">
+            <span class="demand-col-step"></span>
+            <span class="demand-col-role">Papel</span>
+            <span class="demand-col-user">Responsável</span>
+            <span class="demand-col-due">Prazo</span>
+            <span class="demand-col-action"></span>
+        </div>
+        <div class="demand-assignments-list">
+            {% for row in assignments %}
+            {% include 'member/media_planning/partials/demands_assignment_row.html' with prefix=prefix row=row %}
+            {% endfor %}
+        </div>
+    </div>
+    <button type="button" class="demand-add-assignment">
+        <i class="fas fa-plus"></i> Adicionar etapa
+    </button>
+</div>
+
+<template id="{{ prefix }}-assignment-row-template">
+    {% include 'member/media_planning/partials/demands_assignment_row.html' with prefix=prefix row=blank_assignment %}
+</template>

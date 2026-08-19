@@ -1,0 +1,38 @@
+{% extends "member_base.html" %}
+{% block title %}Templates de Mídia{% endblock %}
+{% block head %}<style>:root { --media-color: #8B5CF6; }</style>{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50">
+    <div class="px-4 pt-6 pb-2 bg-white border-b">
+        <h1 class="text-xl font-bold">Templates de mídia</h1>
+        <p class="text-xs text-gray-500">Padrões de demanda por tipo de evento — conferência, batismo, culto...</p>
+    </div>
+    {% include 'parciais/media_subnav.html' with section='templates' %}
+    <div class="px-4 pt-4 space-y-2">
+        {% for tpl in templates %}
+        {% if tpl.planning_template %}
+        <a href="{% url 'media_template_detail' tpl.planning_template.pk %}" class="bg-white rounded-xl border p-4 block">
+            <div class="font-bold">{{ tpl.name }}</div>
+            <div class="text-xs text-gray-400">{{ tpl.item_count }} demanda{{ tpl.item_count|pluralize:"s" }} sugerida{{ tpl.item_count|pluralize }}</div>
+        </a>
+        {% elif is_media_leader %}
+        <a href="{% url 'media_template_setup' tpl.pk %}" class="bg-white rounded-xl border p-4 block border-dashed">
+            <div class="font-bold">{{ tpl.name }}</div>
+            <div class="text-xs text-amber-600"><i class="fas fa-plus-circle"></i> Configurar demandas do template</div>
+        </a>
+        {% else %}
+        <div class="bg-white rounded-xl border p-4 opacity-60">
+            <div class="font-bold">{{ tpl.name }}</div>
+            <div class="text-xs text-gray-400">Template ainda não configurado</div>
+        </div>
+        {% endif %}
+        {% empty %}
+        <p class="text-center text-gray-400 py-12">Nenhum template cadastrado.</p>
+        {% endfor %}
+        {% if is_media_leader %}
+        <a href="{% url 'media_template_create' %}" class="block text-center py-3 rounded-xl text-white font-bold" style="background:var(--media-color);">+ Novo template</a>
+        {% endif %}
+    </div>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

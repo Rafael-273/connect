@@ -1,0 +1,72 @@
+{% load pt_date %}
+<div class="demand-task-step {% if task.status == 'completed' %}is-done{% endif %}" data-task-id="{{ task.pk }}">
+    <button type="button"
+            class="demand-task-check"
+            data-task-toggle="{{ task.pk }}"
+            data-status="{% if task.status == 'completed' %}completed{% else %}pending{% endif %}"
+            aria-label="{% if task.status == 'completed' %}Marcar como pendente{% else %}Marcar como concluída{% endif %}"
+            title="{% if task.status == 'completed' %}Marcar como pendente{% else %}Marcar como concluída{% endif %}">
+        <i class="fas fa-check"></i>
+    </button>
+    <div class="demand-task-body min-w-0 flex-1">
+        <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+                <p class="demand-task-role">{{ task.title }}</p>
+                <p class="demand-task-meta">
+                    {% if task.assigned_to %}
+                    <span class="demand-task-assignee">
+                        <span class="demand-task-avatar">
+                            {% if task.assigned_to.member.profile_picture %}
+                            <img src="{{ task.assigned_to.member.profile_picture.url }}" alt="">
+                            {% elif task.assigned_to.member %}
+                            {{ task.assigned_to.member.name|slice:":1"|upper }}
+                            {% else %}
+                            <i class="fas fa-user text-[9px]"></i>
+                            {% endif %}
+                        </span>
+                        <span>{% if task.assigned_to.member %}{{ task.assigned_to.member.name }}{% else %}{{ task.assigned_to.email }}{% endif %}</span>
+                    </span>
+                    {% else %}
+                    <span class="text-gray-400">Sem responsável</span>
+                    {% endif %}
+                    {% if task.due_date %}
+                    <span class="demand-task-meta-sep">·</span>
+                    <span class="demand-task-date">
+                        <i class="fas fa-calendar-alt"></i>{{ task.due_date|pt_date_short }}
+                    </span>
+                    {% endif %}
+                </p>
+            </div>
+            <span class="demand-task-status task-status-{{ task.status }}">{{ task.get_status_display }}</span>
+        </div>
+
+        <div class="demand-task-desc mt-2" data-task-desc-wrap="{{ task.pk }}">
+            {% if task.description %}
+            <button type="button" class="demand-task-desc-show-btn" data-task-desc-show="{{ task.pk }}">
+                <i class="fas fa-comment-alt"></i> Ver observação
+            </button>
+            <div class="demand-task-desc-view hidden" data-task-desc-view="{{ task.pk }}">
+                <p class="text-xs text-gray-600 whitespace-pre-line break-words">{{ task.description|urlize }}</p>
+                <button type="button" class="demand-task-desc-edit-btn" data-task-desc-edit="{{ task.pk }}">
+                    <i class="fas fa-pen"></i> Editar observação
+                </button>
+            </div>
+            {% else %}
+            <button type="button" class="demand-task-desc-add-btn" data-task-desc-edit="{{ task.pk }}">
+                <i class="fas fa-plus"></i> Adicionar observação ou link
+            </button>
+            {% endif %}
+            <form class="demand-task-desc-form hidden" data-task-desc-form="{{ task.pk }}">
+                {% csrf_token %}
+                <textarea class="media-field-input demand-task-desc-input" rows="2"
+                          placeholder="Ex: link da gravação, referências, dependências…">{{ task.description }}</textarea>
+                <div class="flex gap-2 mt-1.5">
+                    <button type="button" class="demand-task-desc-save text-xs font-bold px-2.5 py-1 rounded-lg text-white"
+                            style="background: var(--media-color);" data-task-desc-save="{{ task.pk }}">Salvar</button>
+                    <button type="button" class="demand-task-desc-cancel text-xs font-semibold px-2.5 py-1 rounded-lg text-gray-500"
+                            data-task-desc-cancel="{{ task.pk }}">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

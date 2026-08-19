@@ -1,0 +1,46 @@
+{% extends "member_base.html" %}
+{% block title %}Aplicar Template{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50 px-4 pt-6">
+    <a href="{% url 'media_event_contents' event.pk %}" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> {{ event.title }}</a>
+    {% include 'parciais/media_subnav.html' with section='planning' %}
+    <h1 class="text-xl font-bold">Aplicar template</h1>
+    <p class="text-sm text-gray-500 mb-4">Template: <strong>{{ template.name }}</strong> ({{ event.event_type.name }})</p>
+    <p class="text-xs text-gray-400 mb-4">Selecione as demandas sugeridas. Elas serão criadas como conteúdos editáveis — o template não altera planejamentos existentes.</p>
+
+    {% if available_items %}
+    <form method="post" class="space-y-3">
+        {% csrf_token %}
+        <div class="bg-white rounded-xl border divide-y">
+            <label class="flex items-center gap-3 p-4 cursor-pointer">
+                <input type="checkbox" id="select-all" class="rounded" checked>
+                <span class="font-semibold text-sm">Selecionar todos</span>
+            </label>
+            {% for item in available_items %}
+            <label class="flex items-start gap-3 p-4 cursor-pointer">
+                <input type="checkbox" name="item_ids" value="{{ item.pk }}" class="item-check rounded mt-1" checked>
+                <div>
+                    <div class="font-semibold text-sm">{{ item.title }}</div>
+                    <div class="text-xs text-gray-400">{{ item.get_content_type_display }}
+                        {% if item.default_sub_team %} · {{ item.default_sub_team.name }}{% endif %}
+                        {% if item.publication_offset_days %} · Pub {{ item.publication_offset_days }}d{% endif %}
+                        {% if item.due_offset_days %} · Prazo {{ item.due_offset_days }}d{% endif %}
+                    </div>
+                    {% if item.description %}<p class="text-xs text-gray-500 mt-1">{{ item.description|truncatechars:100 }}</p>{% endif %}
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+        <button type="submit" class="w-full py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">Criar demandas selecionadas</button>
+    </form>
+    <script>
+    document.getElementById('select-all').addEventListener('change', function() {
+        document.querySelectorAll('.item-check').forEach(cb => cb.checked = this.checked);
+    });
+    </script>
+    {% else %}
+    <p class="text-center text-gray-400 py-8">Todos os itens do template já foram aplicados a este evento.</p>
+    {% endif %}
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

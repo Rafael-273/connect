@@ -1,0 +1,62 @@
+<!-- Modal: Editar demanda -->
+<div id="demands-modal-edit" class="demands-modal {% if edit_mode %}active{% endif %}" role="dialog" aria-modal="true" aria-labelledby="demands-modal-edit-title">
+    <div class="demands-modal-backdrop" data-close-modal></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <div class="demands-modal-icon"><i id="edit-modal-type-icon" class="fas fa-edit"></i></div>
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Editar demanda</p>
+                    <h2 id="demands-modal-edit-title" class="text-lg font-black text-gray-900 leading-tight">Atualizar informações</h2>
+                    <p id="edit-modal-subtitle" class="text-xs text-gray-500 mt-0.5">Produção de conteúdo ou tarefa organizacional</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form method="post"
+              action="{% if edit_form.instance.pk %}{% url 'media_demand_quick_update' edit_form.instance.pk %}{% else %}#{% endif %}"
+              class="demands-modal-body"
+              id="demand-edit-form">
+            {% csrf_token %}
+            <input type="hidden" name="kind" value="{{ filter_kind|default:'all' }}">
+            {% if filter_q %}<input type="hidden" name="q" value="{{ filter_q }}">{% endif %}
+            {% if filter_responsible %}<input type="hidden" name="responsible" value="{{ filter_responsible }}">{% endif %}
+            {% if filter_team %}<input type="hidden" name="team" value="{{ filter_team }}">{% endif %}
+            {% if filter_event_type %}<input type="hidden" name="event_type" value="{{ filter_event_type }}">{% endif %}
+            {% if filter_period_from %}<input type="hidden" name="period_from" value="{{ filter_period_from }}">{% endif %}
+            {% if filter_period_to %}<input type="hidden" name="period_to" value="{{ filter_period_to }}">{% endif %}
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_edit-title">Título</label>
+                {{ edit_form.title }}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_edit-content_type">Tipo</label>
+                {% include 'member/media_planning/partials/demands_type_select.html' with prefix='edit' selected_value=edit_form.content_type.value hint_id='edit-type-hint' %}
+                <p id="edit-type-hint" class="text-xs text-gray-400 mt-1.5"></p>
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_edit-description">Descrição</label>
+                {{ edit_form.description }}
+            </div>
+
+            <div class="modal-section">
+                <p class="modal-section-title">Equipe e prazos</p>
+                <p class="text-xs text-gray-500 mb-3">Defina quem faz cada parte e quando.</p>
+                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='edit' assignments=edit_assignments blank_assignment=blank_assignment %}
+            </div>
+
+            <div class="demands-modal-footer">
+                <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
+                <button type="submit" class="media-btn-primary sm flex-1 justify-center">
+                    <i class="fas fa-check"></i> Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

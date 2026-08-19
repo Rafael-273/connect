@@ -1,0 +1,12 @@
+<select name="{{ prefix }}-event_type"
+        id="id_{{ prefix }}-event_type"
+        class="media-field-select demand-event-type-select"
+        data-last-value="{{ selected_value|default:'' }}">
+    <option value="" {% if not selected_value %}selected{% endif %}>Sem template</option>
+    {% for et in event_types %}
+    <option value="{{ et.pk }}" {% if selected_value == et.pk|stringformat:"s" %}selected{% endif %}>{{ et.name }}</option>
+    {% endfor %}
+    {% if is_media_leader %}
+    <option value="__create__" data-create-option>+ Criar tipo de evento...</option>
+    {% endif %}
+</select>

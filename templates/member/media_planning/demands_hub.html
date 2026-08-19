@@ -1,0 +1,1248 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Demandas e Eventos{% endblock %}
+
+{% block head %}
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+
+    .media-btn-primary {
+        display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+        padding: 0.625rem 1.25rem; border-radius: 0.875rem;
+        font-size: 0.875rem; font-weight: 700; color: #fff;
+        background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+        box-shadow: 0 4px 14px rgba(var(--media-rgb), 0.35);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .media-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(var(--media-rgb), 0.45); }
+    .media-btn-primary.sm { padding: 0.5rem 0.875rem; font-size: 0.8125rem; border-radius: 0.75rem; }
+
+    .media-btn-secondary {
+        display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+        padding: 0.625rem 1rem; border-radius: 0.875rem;
+        font-size: 0.875rem; font-weight: 600; color: #374151;
+        background: #fff; border: 2px solid #E5E7EB;
+        transition: all 0.2s ease;
+    }
+    .media-btn-secondary:hover { border-color: rgba(var(--media-rgb), 0.35); background: rgba(var(--media-rgb), 0.03); }
+    .media-btn-secondary.sm { padding: 0.5rem 0.875rem; font-size: 0.8125rem; border-radius: 0.75rem; }
+
+    .media-btn-icon {
+        width: 2.5rem; height: 2.5rem; border-radius: 0.75rem;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: 2px solid rgba(var(--media-rgb), 0.3); color: var(--media-color);
+        background: #fff; transition: all 0.2s ease;
+    }
+    .media-btn-icon:hover { background: rgba(var(--media-rgb), 0.06); transform: translateY(-1px); }
+
+    .media-chip {
+        white-space: nowrap; padding: 0.4375rem 0.875rem;
+        border-radius: 9999px; font-size: 0.75rem; font-weight: 700;
+        border: 2px solid #E5E7EB; color: #6B7280; background: #fff;
+        transition: all 0.2s ease;
+    }
+    .media-chip.active {
+        border-color: rgba(var(--media-rgb), 0.45);
+        background: rgba(var(--media-rgb), 0.1); color: #6D28D9;
+    }
+
+    .media-search-input {
+        width: 100%; padding: 0.625rem 1rem;
+        border: 2px solid #E5E7EB; border-radius: 0.75rem;
+        background: #fff; font-size: 0.875rem; color: #111827;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .media-search-input:focus {
+        outline: none;
+        border-color: var(--media-color);
+        box-shadow: 0 0 0 3px rgba(var(--media-rgb), 0.12);
+    }
+    .media-search-input::placeholder { color: #9CA3AF; }
+
+    .media-select {
+        width: 100%; padding: 0.625rem 0.875rem;
+        border: 2px solid #E5E7EB; border-radius: 0.75rem;
+        background: #fff; font-size: 0.875rem; color: #374151;
+        transition: border-color 0.2s ease;
+    }
+    .media-select:focus {
+        outline: none; border-color: var(--media-color);
+        box-shadow: 0 0 0 3px rgba(var(--media-rgb), 0.12);
+    }
+
+    .media-field-input, .media-field-select {
+        width: 100%; padding: 0.6875rem 0.875rem;
+        border: 2px solid #E5E7EB; border-radius: 0.75rem;
+        background: #FAFAFA; font-size: 0.875rem; color: #111827;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    }
+    .media-field-input:focus, .media-field-select:focus {
+        outline: none; border-color: var(--media-color);
+        background: #fff;
+        box-shadow: 0 0 0 3px rgba(var(--media-rgb), 0.12);
+    }
+    .media-field-input::placeholder { color: #9CA3AF; }
+
+    .modal-field-label {
+        display: block; font-size: 0.6875rem; font-weight: 700;
+        letter-spacing: 0.04em; text-transform: uppercase;
+        color: #6B7280; margin-bottom: 0.375rem;
+    }
+    .modal-section { margin-bottom: 1.125rem; }
+    .modal-section-title {
+        font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em;
+        text-transform: uppercase; color: #9CA3AF; margin-bottom: 0.625rem;
+    }
+    .demands-modal-check-card {
+        display: flex; align-items: flex-start; gap: 0.625rem;
+        margin-top: 0.75rem; padding: 0.75rem 0.875rem;
+        border: 2px solid #E5E7EB; border-radius: 0.875rem;
+        background: #FAFAFA; cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .demands-modal-check-card:has(input:checked) {
+        border-color: rgba(var(--media-rgb), 0.45);
+        background: rgba(var(--media-rgb), 0.06);
+    }
+    .demands-modal-check-card:has(input:checked) span {
+        color: #6D28D9;
+    }
+    .demands-modal-checkbox {
+        width: 1rem; height: 1rem; margin-top: 0.125rem;
+        accent-color: #8B5CF6; flex-shrink: 0; cursor: pointer;
+    }
+    .demands-event-type-add {
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        margin-top: 0.5rem; padding: 0;
+        font-size: 0.6875rem; font-weight: 700; color: #8B5CF6;
+        background: none; border: none; cursor: pointer;
+    }
+    .demands-event-type-add:hover { color: #6D28D9; }
+
+    /* Grid de tipos de demanda */
+    .demand-type-grid {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem;
+    }
+    @media (max-width: 400px) {
+        .demand-type-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .demand-type-option { cursor: pointer; }
+    .demand-type-option input { position: absolute; opacity: 0; pointer-events: none; }
+    .demand-type-card {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 0.25rem; padding: 0.625rem 0.375rem; min-height: 4.5rem;
+        border: 2px solid #E5E7EB; border-radius: 0.875rem;
+        background: #FAFAFA; text-align: center;
+        transition: all 0.15s ease;
+    }
+    .demand-type-card .type-icon {
+        font-size: 1rem; line-height: 1; color: #6D28D9;
+        width: 1.75rem; height: 1.75rem;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .type-icon-box {
+        width: 2.75rem; height: 2.75rem; border-radius: 0.75rem;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        background: rgba(var(--media-rgb), 0.12); color: #7C3AED; font-size: 1rem;
+    }
+    .type-icon-box-sm { width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; font-size: 0.875rem; }
+
+    /* Menu de ações (três pontinhos) */
+    .demands-kebab-btn {
+        width: 2.25rem; height: 2.25rem; border-radius: 0.625rem;
+        display: flex; align-items: center; justify-content: center;
+        border: none; background: #F3F4F6; color: #6B7280; cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .demands-kebab-btn:hover { background: rgba(var(--media-rgb), 0.1); color: #6D28D9; }
+    .demands-kebab-menu {
+        position: absolute; top: calc(100% + 0.25rem); right: 0;
+        min-width: 10.5rem; background: #fff; border-radius: 0.75rem;
+        border: 1px solid #E5E7EB; box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+        padding: 0.375rem; z-index: 30;
+    }
+    .demands-kebab-menu form { margin: 0; }
+    .demands-kebab-item {
+        display: flex; align-items: center; gap: 0.5rem; width: 100%;
+        padding: 0.5rem 0.625rem; border: none; background: none;
+        border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 600;
+        color: #374151; cursor: pointer; text-align: left;
+    }
+    .demands-kebab-item:hover { background: #F9FAFB; }
+    .demands-kebab-item-danger { color: #DC2626; }
+    .demands-kebab-item-danger:hover { background: #FEF2F2; }
+
+    .demand-type-card .label {
+        font-size: 0.6875rem; font-weight: 700; color: #374151; line-height: 1.2;
+    }
+    .demand-type-option input:checked + .demand-type-card {
+        border-color: var(--media-color);
+        background: rgba(var(--media-rgb), 0.08);
+        box-shadow: 0 0 0 3px rgba(var(--media-rgb), 0.12);
+    }
+    .demand-type-option input:checked + .demand-type-card .label { color: #6D28D9; }
+    .demand-type-option:hover .demand-type-card {
+        border-color: rgba(var(--media-rgb), 0.35);
+        background: #fff;
+    }
+    .demand-type-grid-org { grid-template-columns: repeat(3, 1fr); }
+    .demand-type-card-org {
+        background: #F8FAFC;
+        border-color: #E2E8F0;
+    }
+    .demand-type-option input:checked + .demand-type-card-org {
+        background: rgba(var(--media-rgb), 0.06);
+    }
+
+    /* Etapas / múltiplos responsáveis */
+    .demand-assignments-table {
+        background: rgba(var(--media-rgb), 0.04);
+        border: 1px solid rgba(var(--media-rgb), 0.12);
+        border-radius: 0.875rem;
+        padding: 0.625rem;
+    }
+    .demand-assignments-head,
+    .demand-assignment-row {
+        display: grid;
+        grid-template-columns: 1.75rem 1fr 1.35fr 1fr 2rem;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .demand-assignments-head {
+        padding: 0 0.375rem 0.5rem;
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #9CA3AF;
+        border-bottom: 1px solid rgba(var(--media-rgb), 0.1);
+        margin-bottom: 0.5rem;
+    }
+    @media (max-width: 520px) {
+        .demand-assignments-head { display: none; }
+        .demand-assignment-row {
+            grid-template-columns: 1.75rem 1fr 2rem;
+            grid-template-areas:
+                "step role action"
+                "step user action"
+                "step due action";
+            gap: 0.375rem 0.5rem;
+            padding: 0.75rem;
+            background: #fff;
+            border-radius: 0.75rem;
+            border: 1px solid #E5E7EB;
+            margin-bottom: 0.5rem;
+        }
+        .demand-assignments-list { display: flex; flex-direction: column; gap: 0.25rem; }
+        .demand-step-badge { grid-area: step; align-self: start; margin-top: 0.375rem; }
+        .demand-col-role { grid-area: role; }
+        .demand-col-user { grid-area: user; }
+        .demand-col-due { grid-area: due; }
+        .demand-col-action { grid-area: action; align-self: start; margin-top: 0.125rem; }
+        .demand-field-label-mobile {
+            display: block;
+            font-size: 0.625rem;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: #9CA3AF;
+            margin-bottom: 0.25rem;
+        }
+    }
+    @media (min-width: 521px) {
+        .demand-field-label-mobile { display: none; }
+        .demand-assignment-row {
+            padding: 0.375rem;
+            border-radius: 0.625rem;
+            transition: background 0.15s ease;
+        }
+        .demand-assignment-row:hover { background: rgba(255,255,255,0.7); }
+    }
+    .demand-step-badge {
+        width: 1.75rem; height: 1.75rem; border-radius: 9999px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.6875rem; font-weight: 800; color: #6D28D9;
+        background: rgba(var(--media-rgb), 0.12);
+        flex-shrink: 0;
+    }
+    .demand-assignments-list { counter-reset: demand-step; }
+    .demand-step-badge::before {
+        counter-increment: demand-step;
+        content: counter(demand-step);
+    }
+    .assignment-role-wrap {
+        display: flex; flex-direction: column; gap: 0.375rem; min-width: 0;
+    }
+    .assignment-role-custom.hidden { display: none; }
+    .demand-assignment-row .media-field-input,
+    .demand-assignment-row .media-field-select {
+        width: 100%; min-width: 0;
+        padding-top: 0.5rem; padding-bottom: 0.5rem;
+        font-size: 0.8125rem;
+    }
+    .demand-remove-assignment {
+        width: 2rem; height: 2rem; flex-shrink: 0;
+        border: none; border-radius: 0.5rem;
+        background: transparent; color: #D1D5DB;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        font-size: 0.8125rem; transition: all 0.15s ease;
+    }
+    .demand-remove-assignment:hover {
+        background: #FEE2E2; color: #DC2626;
+    }
+    .demand-add-assignment {
+        display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+        width: 100%; margin-top: 0.625rem;
+        padding: 0.625rem 1rem;
+        font-size: 0.8125rem; font-weight: 700; color: #6D28D9;
+        background: rgba(var(--media-rgb), 0.04);
+        border: 1.5px dashed rgba(var(--media-rgb), 0.25);
+        border-radius: 0.75rem; cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    .demand-add-assignment:hover {
+        background: rgba(var(--media-rgb), 0.08);
+        border-color: rgba(var(--media-rgb), 0.45);
+        color: #5B21B6;
+    }
+    .demand-assignment-row-wrap { margin-bottom: 0.375rem; }
+    .demand-assignment-row-wrap:last-child { margin-bottom: 0; }
+    .demand-assignment-desc {
+        padding: 0 0.375rem 0.5rem 2.375rem;
+    }
+    .demand-assignment-desc textarea {
+        font-size: 0.8125rem;
+        min-height: 2.25rem;
+        resize: vertical;
+    }
+
+    /* Etapas no detalhe da demanda */
+    .demand-task-step {
+        display: flex; align-items: flex-start; gap: 0.75rem;
+        padding: 0.875rem; border-radius: 0.75rem;
+        border: 1px solid #F3F4F6; background: #FAFAFA;
+        transition: all 0.2s ease;
+    }
+    .demand-task-step.is-done {
+        background: #F0FDF4; border-color: #BBF7D0;
+    }
+    .demand-task-step.is-done .demand-task-role {
+        text-decoration: line-through; color: #6B7280;
+    }
+    .demand-task-check {
+        width: 1.625rem; height: 1.625rem; flex-shrink: 0; margin-top: 0.125rem;
+        border-radius: 9999px; border: 2px solid #D1D5DB;
+        background: #fff; color: transparent; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.625rem; transition: all 0.15s ease;
+    }
+    .demand-task-check:hover { border-color: #8B5CF6; color: #8B5CF6; }
+    .demand-task-step.is-done .demand-task-check {
+        background: #10B981; border-color: #10B981; color: #fff;
+    }
+    .demand-task-role {
+        font-size: 0.875rem; font-weight: 700; color: #111827; line-height: 1.3;
+    }
+    .demand-task-meta {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem;
+        font-size: 0.75rem; color: #6B7280; margin-top: 0.25rem;
+    }
+    .demand-task-meta-sep { opacity: 0.35; }
+    .demand-task-assignee {
+        display: inline-flex; align-items: center; gap: 0.375rem;
+    }
+    .demand-task-avatar {
+        width: 1.375rem; height: 1.375rem; border-radius: 9999px;
+        flex-shrink: 0; overflow: hidden;
+        display: flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, rgba(139,92,246,0.18), rgba(139,92,246,0.06));
+        color: #7C3AED; font-size: 0.625rem; font-weight: 800;
+        border: 1.5px solid rgba(var(--media-rgb), 0.15);
+    }
+    .demand-task-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .demand-task-date {
+        display: inline-flex; align-items: center; gap: 0.25rem;
+    }
+    .demand-task-date i { font-size: 0.625rem; opacity: 0.55; }
+    .demand-task-status {
+        font-size: 0.625rem; font-weight: 700; padding: 0.2rem 0.5rem;
+        border-radius: 9999px; flex-shrink: 0; white-space: nowrap;
+        background: #F3F4F6; color: #6B7280;
+    }
+    .demand-task-status.task-status-completed {
+        background: #D1FAE5; color: #065F46;
+    }
+    .demand-task-status.task-status-in_progress {
+        background: #DBEAFE; color: #1D4ED8;
+    }
+    .demand-task-desc-show-btn,
+    .demand-task-desc-add-btn,
+    .demand-task-desc-edit-btn {
+        display: inline-flex; align-items: center; gap: 0.3rem;
+        font-size: 0.6875rem; font-weight: 600; color: #8B5CF6;
+        background: none; border: none; cursor: pointer; padding: 0;
+        margin-top: 0.375rem;
+    }
+    .demand-task-desc-show-btn:hover,
+    .demand-task-desc-add-btn:hover,
+    .demand-task-desc-edit-btn:hover { color: #6D28D9; }
+    .demand-task-desc-view {
+        margin-top: 0.375rem; padding: 0.5rem 0.625rem;
+        background: #fff; border-radius: 0.5rem;
+        border: 1px solid #F3F4F6;
+    }
+    .demand-task-desc-input { font-size: 0.8125rem; resize: vertical; min-height: 2.5rem; }
+    .sr-only {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    .demands-modal-header-accent {
+        background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.02));
+        border-bottom: 1px solid rgba(var(--media-rgb), 0.1);
+        padding: 1rem 1.25rem 0.875rem;
+    }
+    .demands-modal-icon {
+        width: 2.75rem; height: 2.75rem; border-radius: 0.875rem;
+        display: flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+        color: #fff; font-size: 1.125rem; flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(var(--media-rgb), 0.35);
+    }
+
+    .media-panel {
+        background: #fff;
+        border: 2px solid rgba(var(--media-rgb), 0.12);
+        border-radius: 1.25rem;
+        box-shadow: 0 2px 12px rgba(var(--media-rgb), 0.06);
+        overflow: hidden;
+    }
+    .sidebar-item {
+        border: 2px solid transparent; border-radius: 0.875rem;
+        transition: all 0.2s ease; background: #fff;
+    }
+    .sidebar-item:hover {
+        border-color: rgba(var(--media-rgb), 0.25);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(var(--media-rgb), 0.08);
+    }
+    .sidebar-item.active {
+        border-color: rgba(var(--media-rgb), 0.5);
+        background: rgba(var(--media-rgb), 0.06);
+        box-shadow: 0 2px 10px rgba(var(--media-rgb), 0.12);
+    }
+
+    .phase-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9CA3AF; }
+    .content-card { border: 2px solid rgba(var(--media-rgb), 0.1); border-radius: 1rem; background: #fff; }
+    .task-row { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid #F3F4F6; }
+    .task-row:last-child { border-bottom: none; }
+    .badge-pending { background: #F3F4F6; color: #374151; }
+    .badge-in_progress { background: #DBEAFE; color: #1D4ED8; }
+    .badge-review { background: #FEF3C7; color: #92400E; }
+    .badge-approved { background: #D1FAE5; color: #065F46; }
+    .badge-scheduled { background: #EDE9FE; color: #5B21B6; }
+    .badge-published { background: #ECFDF5; color: #047857; }
+    .progress-bar-bg { background: rgba(var(--media-rgb),0.12); border-radius: 9999px; height: 6px; overflow: hidden; }
+    .progress-bar-fill { background: linear-gradient(90deg, #8B5CF6, #A78BFA); height: 100%; border-radius: 9999px; }
+    .progress-bar-fill.done { background: linear-gradient(90deg, #10B981, #34D399); }
+
+    .media-create-menu {
+        position: absolute; right: 0; top: calc(100% + 0.5rem); z-index: 50;
+        min-width: 11rem; padding: 0.375rem;
+        background: #fff; border: 2px solid rgba(var(--media-rgb), 0.12);
+        border-radius: 0.875rem; box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+    }
+    .media-create-menu[hidden] { display: none; }
+    .media-create-menu a {
+        display: flex; align-items: center; gap: 0.625rem;
+        padding: 0.625rem 0.75rem; border-radius: 0.625rem;
+        font-size: 0.8125rem; font-weight: 600; color: #374151;
+        transition: background 0.15s ease;
+    }
+    .media-create-menu a:hover { background: rgba(var(--media-rgb), 0.08); color: #6D28D9; }
+    .media-create-menu a i { width: 1rem; text-align: center; color: #8B5CF6; }
+
+    /* —— Modals —— */
+    .demands-modal {
+        position: fixed; inset: 0; z-index: 60;
+        display: flex; align-items: flex-end; justify-content: center;
+        padding: 0; pointer-events: none; opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .demands-modal.active {
+        pointer-events: auto; opacity: 1;
+    }
+    .demands-modal-nested { z-index: 70; }
+    .demands-modal-backdrop {
+        position: absolute; inset: 0;
+        background: rgba(17, 24, 39, 0.45);
+        backdrop-filter: blur(2px);
+    }
+    .demands-modal-card {
+        position: relative; z-index: 1;
+        width: 100%; max-width: 42rem;
+        max-height: 90vh; overflow: hidden;
+        background: #fff;
+        border-radius: 1.25rem 1.25rem 0 0;
+        box-shadow: 0 -8px 40px rgba(0,0,0,0.15);
+        display: flex; flex-direction: column;
+        transform: translateY(100%);
+        transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
+    }
+    .demands-modal.active .demands-modal-card {
+        transform: translateY(0);
+    }
+    .demands-modal-card::before {
+        content: ''; display: block; width: 2.5rem; height: 0.25rem;
+        background: #E5E7EB; border-radius: 9999px;
+        margin: 0.75rem auto 0;
+        flex-shrink: 0;
+    }
+    .demands-modal-header {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        gap: 0.75rem; flex-shrink: 0;
+    }
+    .demands-modal-close {
+        width: 2rem; height: 2rem; border-radius: 0.5rem;
+        display: flex; align-items: center; justify-content: center;
+        color: #9CA3AF; background: #F3F4F6; border: none; cursor: pointer;
+        flex-shrink: 0; transition: all 0.15s ease;
+    }
+    .demands-modal-close:hover { background: #E5E7EB; color: #374151; }
+    .demands-modal-body {
+        padding: 1rem 1.25rem 1.25rem;
+        overflow-y: auto; flex: 1;
+    }
+    .demands-modal-footer {
+        display: flex; gap: 0.5rem; padding-top: 1rem;
+        position: sticky; bottom: 0; background: #fff;
+    }
+    @media (min-width: 640px) {
+        .demands-modal { align-items: center; padding: 1rem; }
+        .demands-modal-card {
+            border-radius: 1.25rem;
+            max-height: 85vh;
+            transform: translateY(1rem) scale(0.96);
+        }
+        .demands-modal.active .demands-modal-card {
+            transform: translateY(0) scale(1);
+        }
+        .demands-modal-card::before { display: none; }
+    }
+
+    @media (min-width: 1024px) {
+        .demands-layout { display: grid; grid-template-columns: 340px 1fr; min-height: calc(100vh - 240px); }
+        .demands-sidebar { border-right: 2px solid rgba(var(--media-rgb), 0.08); }
+    }
+    @media (max-width: 1023px) {
+        .demands-layout { display: block; }
+        .demands-detail-panel.mobile-hidden { display: none; }
+        .demands-sidebar.mobile-hidden { display: none; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen pb-28" id="demands-hub" style="background: linear-gradient(135deg, rgba(139,92,246,0.04) 0%, #fff 55%);">
+
+    <!-- Header -->
+    <div class="px-4 pt-8 pb-2">
+        <div class="flex items-center gap-3 min-w-0">
+            <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                <i class="fas fa-clipboard-list text-white text-lg"></i>
+            </div>
+            <div class="min-w-0">
+                <h1 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
+                    Demandas e <span style="color: #8B5CF6;">eventos</span>
+                </h1>
+                <p class="text-sm text-gray-500 font-medium">O que a equipe precisa produzir</p>
+            </div>
+        </div>
+    </div>
+
+    {% include 'member/media_planning/partials/demands_filters.html' %}
+
+    <div class="px-4 pb-4">
+        <div class="demands-layout media-panel">
+            <aside class="demands-sidebar bg-gray-50/60 {% if selected %}mobile-hidden{% endif %}" id="demands-sidebar">
+                {% include 'member/media_planning/partials/demands_sidebar.html' %}
+            </aside>
+
+            <main class="demands-detail-panel bg-white min-h-[50vh] {% if not selected %}mobile-hidden lg:block{% endif %}" id="demands-detail">
+                {% if detail_type == 'event' %}
+                {% include 'member/media_planning/partials/demands_detail_event.html' %}
+                {% elif detail_type == 'free' %}
+                {% include 'member/media_planning/partials/demands_detail_free.html' %}
+                {% else %}
+                {% include 'member/media_planning/partials/demands_empty.html' %}
+                {% endif %}
+            </main>
+        </div>
+    </div>
+
+    {% if is_media_leader %}
+    {% include 'member/media_planning/partials/demands_create_modals.html' %}
+    {% include 'member/media_planning/partials/demands_edit_modal.html' %}
+    {% endif %}
+</div>
+
+<script>
+(function () {
+    var backBtn = document.getElementById('demands-mobile-back');
+    var filterToggle = document.getElementById('demands-filter-toggle');
+    var filterPanel = document.getElementById('demands-filter-panel');
+    var createToggle = document.getElementById('demands-create-toggle');
+    var createMenu = document.getElementById('demands-create-menu');
+
+    function isMobile() { return window.innerWidth < 1024; }
+
+    function openModal(id) {
+        var modal = document.getElementById(id);
+        if (!modal) return;
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModalEl(modal) {
+        if (!modal) return;
+        modal.classList.remove('active');
+        if (!document.querySelector('.demands-modal.active')) {
+            document.body.style.overflow = '';
+            var url = new URL(window.location.href);
+            if (url.searchParams.has('create')) {
+                url.searchParams.delete('create');
+                history.replaceState({}, '', url.toString());
+            }
+            if (url.searchParams.has('edit')) {
+                url.searchParams.delete('edit');
+                history.replaceState({}, '', url.toString());
+            }
+        }
+    }
+
+    function closeAllModals() {
+        document.querySelectorAll('.demands-modal.active').forEach(function (m) {
+            m.classList.remove('active');
+        });
+        document.body.style.overflow = '';
+        var url = new URL(window.location.href);
+        if (url.searchParams.has('create')) {
+            url.searchParams.delete('create');
+            history.replaceState({}, '', url.toString());
+        }
+        if (url.searchParams.has('edit')) {
+            url.searchParams.delete('edit');
+            history.replaceState({}, '', url.toString());
+        }
+    }
+
+    document.querySelectorAll('[data-open-modal]').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (createMenu) createMenu.setAttribute('hidden', '');
+            openModal(el.getAttribute('data-open-modal'));
+        });
+    });
+
+    document.querySelectorAll('[data-close-modal]').forEach(function (el) {
+        el.addEventListener('click', function () {
+            closeModalEl(el.closest('.demands-modal'));
+        });
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var active = document.querySelectorAll('.demands-modal.active');
+        if (!active.length) return;
+        closeModalEl(active[active.length - 1]);
+    });
+
+    if (backBtn) {
+        backBtn.addEventListener('click', function (e) {
+            if (!isMobile()) return;
+            e.preventDefault();
+            var url = new URL(window.location.href);
+            url.searchParams.delete('selected');
+            window.location.href = url.toString();
+        });
+    }
+
+    if (filterToggle && filterPanel) {
+        filterToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = filterPanel.classList.contains('hidden');
+            filterPanel.classList.toggle('hidden');
+            filterToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (createMenu) createMenu.setAttribute('hidden', '');
+            if (createToggle) createToggle.setAttribute('aria-expanded', 'false');
+        });
+        filterPanel.addEventListener('click', function (e) { e.stopPropagation(); });
+        document.addEventListener('click', function (e) {
+            if (!filterPanel.contains(e.target) && e.target !== filterToggle && !filterToggle.contains(e.target)) {
+                filterPanel.classList.add('hidden');
+                filterToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    if (createToggle && createMenu) {
+        createToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = createMenu.hasAttribute('hidden');
+            if (open) createMenu.removeAttribute('hidden');
+            else createMenu.setAttribute('hidden', '');
+            createToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (filterPanel) {
+                filterPanel.classList.add('hidden');
+                if (filterToggle) filterToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        document.addEventListener('click', function () {
+            if (createMenu) {
+                createMenu.setAttribute('hidden', '');
+                createToggle.setAttribute('aria-expanded', 'false');
+            }
+        });
+        createMenu.addEventListener('click', function (e) { e.stopPropagation(); });
+    }
+
+    document.querySelectorAll('.demands-content-toggle').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var body = btn.parentElement.querySelector('.demands-content-body');
+            var chevron = btn.querySelector('.demands-chevron');
+            var hidden = body.classList.toggle('hidden');
+            btn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
+            if (chevron) chevron.classList.toggle('rotate-180', !hidden);
+        });
+    });
+
+    /* Abre modal automaticamente após redirect com ?create= ou ?edit= */
+    {% if create_mode == 'demand' %}
+    openModal('demands-modal-demand');
+    {% elif create_mode == 'event' %}
+    openModal('demands-modal-event');
+    {% elif edit_mode %}
+    openModal('demands-modal-edit');
+    {% endif %}
+
+    /* Menu três pontinhos */
+    document.querySelectorAll('.demands-kebab-wrap').forEach(function (wrap) {
+        var btn = wrap.querySelector('.demands-kebab-btn');
+        var menu = wrap.querySelector('.demands-kebab-menu');
+        if (!btn || !menu) return;
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = menu.hasAttribute('hidden');
+            document.querySelectorAll('.demands-kebab-menu').forEach(function (m) {
+                m.setAttribute('hidden', '');
+            });
+            document.querySelectorAll('.demands-kebab-btn').forEach(function (b) {
+                b.setAttribute('aria-expanded', 'false');
+            });
+            if (open) {
+                menu.removeAttribute('hidden');
+                btn.setAttribute('aria-expanded', 'true');
+            }
+        });
+    });
+    document.addEventListener('click', function () {
+        document.querySelectorAll('.demands-kebab-menu').forEach(function (m) {
+            m.setAttribute('hidden', '');
+        });
+        document.querySelectorAll('.demands-kebab-btn').forEach(function (b) {
+            b.setAttribute('aria-expanded', 'false');
+        });
+    });
+    document.querySelectorAll('.demands-kebab-menu').forEach(function (menu) {
+        menu.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
+
+    function initDemandDeleteConfirm() {
+        document.querySelectorAll('[data-confirm-delete]').forEach(function (btn) {
+            if (btn.dataset.bound) return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof Swal === 'undefined') return;
+                var form = btn.closest('form');
+                var name = btn.getAttribute('data-item-name') || 'esta demanda';
+                var safeName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                document.querySelectorAll('.demands-kebab-menu').forEach(function (m) {
+                    m.setAttribute('hidden', '');
+                });
+                document.querySelectorAll('.demands-kebab-btn').forEach(function (b) {
+                    b.setAttribute('aria-expanded', 'false');
+                });
+                Swal.fire({
+                    title: 'Excluir demanda?',
+                    html: 'Tem certeza que deseja excluir <strong>' + safeName + '</strong>?<br><span style="color:#6B7280;font-size:0.875rem;">Esta ação não pode ser desfeita.</span>',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> Sim, excluir',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#DC2626',
+                    cancelButtonColor: '#6B7280',
+                    reverseButtons: true,
+                    customClass: {
+                        popup: 'rounded-2xl',
+                        confirmButton: 'rounded-xl px-5 py-2.5 font-bold',
+                        cancelButton: 'rounded-xl px-5 py-2.5 font-bold',
+                    },
+                }).then(function (result) {
+                    if (result.isConfirmed && form) form.submit();
+                });
+            });
+        });
+    }
+    initDemandDeleteConfirm();
+
+    function applyTypeSelectLabels(select, hintId, subtitleId, iconEl, fallbackIcon) {
+        if (!select) return;
+        var opt = select.options[select.selectedIndex];
+        var hintEl = hintId ? document.getElementById(hintId) : null;
+        var subtitle = subtitleId ? document.getElementById(subtitleId) : null;
+        if (!opt || !opt.value) {
+            if (hintEl) hintEl.textContent = '';
+            if (iconEl) iconEl.className = 'fas fa-' + (fallbackIcon || 'clipboard-list');
+            return;
+        }
+        if (hintEl) hintEl.textContent = opt.getAttribute('data-hint') || '';
+        if (subtitle) {
+            subtitle.textContent = opt.getAttribute('data-group') === 'organizational'
+                ? 'Tarefa de organização ou alinhamento'
+                : 'Produção de conteúdo para mídia';
+        }
+        if (iconEl) {
+            iconEl.className = 'fas fa-' + (opt.getAttribute('data-icon') || fallbackIcon || 'file');
+        }
+    }
+
+    function bindTypeSelect(select, hintId, subtitleId, assignmentsContainer, iconEl, fallbackIcon) {
+        if (!select) return;
+        var update = function () {
+            applyTypeSelectLabels(select, hintId, subtitleId, iconEl, fallbackIcon);
+            maybeSuggestAssignmentRoles(select, assignmentsContainer);
+        };
+        select.addEventListener('change', update);
+        update();
+    }
+
+    function getTypeRolesFromOption(opt) {
+        if (!opt) return [];
+        var raw = opt.getAttribute('data-default-roles') || '';
+        return raw.split('|').map(function (s) { return s.trim(); }).filter(Boolean);
+    }
+
+    function isAssignmentListEmpty(container) {
+        if (!container) return true;
+        var rows = container.querySelectorAll('.demand-assignment-row');
+        if (!rows.length) return true;
+        for (var i = 0; i < rows.length; i++) {
+            var roleVal = getRowRoleValue(rows[i]);
+            var user = rows[i].querySelector('[name$="-assignment_user"]');
+            var due = rows[i].querySelector('[name$="-assignment_due"]');
+            var desc = rows[i].querySelector('[name$="-assignment_desc"]');
+            if (roleVal || (user && user.value) || (due && due.value) || (desc && desc.value.trim())) return false;
+        }
+        return true;
+    }
+
+    function getRowRoleValue(row) {
+        var sel = row.querySelector('.assignment-role-select');
+        var custom = row.querySelector('.assignment-role-custom');
+        if (!sel) return '';
+        if (sel.value === '__custom__') return custom ? custom.value.trim() : '';
+        return sel.value;
+    }
+
+    function syncRoleField(row) {
+        var sel = row.querySelector('.assignment-role-select');
+        var custom = row.querySelector('.assignment-role-custom');
+        if (!sel || !custom) return;
+        var fieldName = sel.getAttribute('data-role-name');
+        if (sel.value === '__custom__') {
+            sel.removeAttribute('name');
+            custom.classList.remove('hidden');
+            custom.removeAttribute('disabled');
+            custom.name = fieldName;
+        } else {
+            sel.name = fieldName;
+            custom.classList.add('hidden');
+            custom.setAttribute('disabled', '');
+            custom.removeAttribute('name');
+            if (sel.value !== '__custom__') custom.value = '';
+        }
+    }
+
+    function bindRoleFields(scope) {
+        (scope || document).querySelectorAll('.demand-assignment-row').forEach(function (row) {
+            var sel = row.querySelector('.assignment-role-select');
+            if (!sel || sel.dataset.bound) return;
+            sel.dataset.bound = '1';
+            sel.addEventListener('change', function () { syncRoleField(row); });
+            syncRoleField(row);
+        });
+    }
+
+    function setAssignmentRows(container, rows) {
+        if (!container) return;
+        var prefix = container.getAttribute('data-prefix');
+        var list = container.querySelector('.demand-assignments-list');
+        var tpl = document.getElementById(prefix + '-assignment-row-template');
+        if (!list || !tpl) return;
+        list.innerHTML = '';
+        var data = rows && rows.length ? rows : [{ id: '', role: '', user_id: '', due_date: '', description: '', is_custom_role: false }];
+        data.forEach(function (row) {
+            var node = tpl.content.cloneNode(true);
+            var wrap = node.querySelector('.demand-assignment-row-wrap') || node;
+            var el = wrap.querySelector('.demand-assignment-row');
+            if (!el) return;
+            var idInput = wrap.querySelector('[name$="-assignment_id"]');
+            var roleSelect = wrap.querySelector('.assignment-role-select');
+            var roleCustom = wrap.querySelector('.assignment-role-custom');
+            var userSelect = wrap.querySelector('[name$="-assignment_user"]');
+            var dueInput = wrap.querySelector('[name$="-assignment_due"]');
+            var descInput = wrap.querySelector('[name$="-assignment_desc"]');
+            if (idInput) idInput.value = row.id || '';
+            if (roleSelect) {
+                var role = row.role || '';
+                var isCustom = row.is_custom_role || (role && roleSelect.querySelector('option[value="' + role + '"]') === null);
+                if (isCustom && role) {
+                    roleSelect.value = '__custom__';
+                    if (roleCustom) roleCustom.value = role;
+                } else {
+                    roleSelect.value = role;
+                }
+            }
+            if (userSelect) userSelect.value = row.user_id ? String(row.user_id) : '';
+            if (dueInput) dueInput.value = row.due_date || '';
+            if (descInput) descInput.value = row.description || '';
+            list.appendChild(node);
+        });
+        bindRoleFields(list);
+    }
+
+    function maybeSuggestAssignmentRoles(select, container) {
+        if (!select || !container || !isAssignmentListEmpty(container)) return;
+        var opt = select.options[select.selectedIndex];
+        var roles = getTypeRolesFromOption(opt);
+        if (!roles.length) return;
+        setAssignmentRows(container, roles.map(function (role) {
+            return { id: '', role: role, user_id: '', due_date: '', description: '', is_custom_role: false };
+        }));
+    }
+
+    function initAssignmentSections() {
+        document.querySelectorAll('.demand-assignments').forEach(function (container) {
+            var prefix = container.getAttribute('data-prefix');
+            var addBtn = container.querySelector('.demand-add-assignment');
+            var list = container.querySelector('.demand-assignments-list');
+            var tpl = document.getElementById(prefix + '-assignment-row-template');
+            if (!addBtn || !list || !tpl) return;
+
+            bindRoleFields(container);
+
+            addBtn.addEventListener('click', function () {
+                var node = tpl.content.cloneNode(true);
+                list.appendChild(node);
+                bindRoleFields(list.lastElementChild);
+            });
+
+            list.addEventListener('click', function (e) {
+                var btn = e.target.closest('.demand-remove-assignment');
+                if (!btn) return;
+                var rows = list.querySelectorAll('.demand-assignment-row-wrap');
+                if (rows.length <= 1) {
+                    var wrap = rows[0];
+                    wrap.querySelector('[name$="-assignment_id"]').value = '';
+                    var sel = wrap.querySelector('.assignment-role-select');
+                    var custom = wrap.querySelector('.assignment-role-custom');
+                    if (sel) sel.value = '';
+                    if (custom) custom.value = '';
+                    wrap.querySelector('[name$="-assignment_user"]').value = '';
+                    wrap.querySelector('[name$="-assignment_due"]').value = '';
+                    var desc = wrap.querySelector('[name$="-assignment_desc"]');
+                    if (desc) desc.value = '';
+                    syncRoleField(wrap.querySelector('.demand-assignment-row') || wrap);
+                    return;
+                }
+                btn.closest('.demand-assignment-row-wrap').remove();
+            });
+        });
+    }
+    initAssignmentSections();
+
+    var demandAssignments = document.querySelector('.demand-assignments[data-prefix="demand"]');
+    var editAssignments = document.querySelector('.demand-assignments[data-prefix="edit"]');
+
+    bindTypeSelect(
+        document.getElementById('id_edit-content_type'),
+        'edit-type-hint', 'edit-modal-subtitle', editAssignments,
+        document.getElementById('edit-modal-type-icon'), 'edit'
+    );
+
+    function populateEditForm(data) {
+        var form = document.getElementById('demand-edit-form');
+        if (!form || !data.pk) return;
+        form.action = '{% url "media_demand_quick_update" 999999 %}'.replace('999999', data.pk);
+        var title = form.querySelector('[name="edit-title"]');
+        if (title) title.value = data.title || '';
+        var desc = form.querySelector('[name="edit-description"]');
+        if (desc) desc.value = data.description || '';
+        var typeSelect = document.getElementById('id_edit-content_type');
+        if (typeSelect) typeSelect.value = data.contentType || '';
+        applyTypeSelectLabels(typeSelect, 'edit-type-hint', 'edit-modal-subtitle', document.getElementById('edit-modal-type-icon'), 'edit');
+        var rows = [];
+        if (data.assignments) {
+            try { rows = JSON.parse(data.assignments); } catch (e) { rows = []; }
+        }
+        setAssignmentRows(editAssignments, rows);
+    }
+
+    document.querySelectorAll('[data-open-edit-modal]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            populateEditForm({
+                pk: btn.getAttribute('data-pk'),
+                title: btn.getAttribute('data-title'),
+                contentType: btn.getAttribute('data-content-type'),
+                description: btn.getAttribute('data-description'),
+                assignments: btn.getAttribute('data-assignments'),
+            });
+            openModal('demands-modal-edit');
+        });
+    });
+
+    bindTypeSelect(
+        document.getElementById('id_demand-content_type'),
+        'demand-type-hint', 'demand-modal-subtitle', demandAssignments,
+        document.getElementById('demand-modal-type-icon'), 'clipboard-list'
+    );
+
+    function addEventTypeOption(select, id, name) {
+        if (!select) return;
+        var createOpt = select.querySelector('[data-create-option]');
+        var opt = document.createElement('option');
+        opt.value = String(id);
+        opt.textContent = name;
+        if (createOpt) select.insertBefore(opt, createOpt);
+        else select.appendChild(opt);
+        select.value = String(id);
+        select.setAttribute('data-last-value', String(id));
+    }
+
+    function initEventTypeSelect() {
+        var select = document.getElementById('id_event-event_type');
+        if (!select || select.dataset.bound) return;
+        select.dataset.bound = '1';
+        if (select.value && select.value !== '__create__') {
+            select.setAttribute('data-last-value', select.value);
+        }
+        select.addEventListener('change', function () {
+            if (select.value === '__create__') {
+                select.value = select.getAttribute('data-last-value') || '';
+                openModal('demands-modal-event-type');
+                var nameInput = document.getElementById('id_event_type-name');
+                if (nameInput) nameInput.focus();
+                return;
+            }
+            select.setAttribute('data-last-value', select.value);
+        });
+    }
+    initEventTypeSelect();
+
+    var eventTypeForm = document.getElementById('demand-event-type-form');
+    if (eventTypeForm) {
+        eventTypeForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var errEl = document.getElementById('event-type-name-error');
+            if (errEl) {
+                errEl.textContent = '';
+                errEl.classList.add('hidden');
+            }
+            var submitBtn = document.getElementById('demand-event-type-submit');
+            if (submitBtn) submitBtn.disabled = true;
+            var body = new URLSearchParams(new FormData(eventTypeForm));
+            fetch('{% url "media_event_type_quick_create" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                body: body.toString(),
+            }).then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+              .then(function (res) {
+                if (submitBtn) submitBtn.disabled = false;
+                if (!res.ok) {
+                    if (errEl && res.data.errors && res.data.errors.name) {
+                        errEl.textContent = res.data.errors.name;
+                        errEl.classList.remove('hidden');
+                    }
+                    return;
+                }
+                addEventTypeOption(document.getElementById('id_event-event_type'), res.data.id, res.data.name);
+                eventTypeForm.reset();
+                closeModalEl(document.getElementById('demands-modal-event-type'));
+            }).catch(function () {
+                if (submitBtn) submitBtn.disabled = false;
+            });
+        });
+    }
+
+    function getCsrfToken() {
+        var m = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+    }
+
+    function initDemandTaskSteps() {
+        document.querySelectorAll('[data-task-toggle]').forEach(function (btn) {
+            if (btn.dataset.bound) return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', function () {
+                var pk = btn.getAttribute('data-task-toggle');
+                var step = btn.closest('.demand-task-step');
+                var current = btn.getAttribute('data-status');
+                var next = current === 'completed' ? 'pending' : 'completed';
+                btn.disabled = true;
+                fetch('{% url "media_task_update_status" 999999 %}'.replace('999999', pk), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: 'status=' + encodeURIComponent(next),
+                }).then(function (r) { return r.json(); }).then(function (data) {
+                    btn.disabled = false;
+                    btn.setAttribute('data-status', data.status);
+                    var done = data.status === 'completed';
+                    if (step) step.classList.toggle('is-done', done);
+                    var badge = step && step.querySelector('.demand-task-status');
+                    if (badge) {
+                        badge.textContent = data.label;
+                        badge.className = 'demand-task-status task-status-' + data.status;
+                    }
+                    btn.setAttribute('aria-label', done ? 'Marcar como pendente' : 'Marcar como concluída');
+                }).catch(function () { btn.disabled = false; });
+            });
+        });
+
+        document.querySelectorAll('[data-task-desc-show]').forEach(function (btn) {
+            if (btn.dataset.bound) return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', function () {
+                var pk = btn.getAttribute('data-task-desc-show');
+                var wrap = document.querySelector('[data-task-desc-wrap="' + pk + '"]');
+                if (!wrap) return;
+                var view = wrap.querySelector('[data-task-desc-view]');
+                if (view) view.classList.remove('hidden');
+                btn.classList.add('hidden');
+            });
+        });
+
+        document.querySelectorAll('[data-task-desc-edit]').forEach(function (btn) {
+            if (btn.dataset.bound) return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', function () {
+                var pk = btn.getAttribute('data-task-desc-edit');
+                var wrap = document.querySelector('[data-task-desc-wrap="' + pk + '"]');
+                if (!wrap) return;
+                var form = wrap.querySelector('[data-task-desc-form]');
+                var view = wrap.querySelector('[data-task-desc-view]');
+                var showBtn = wrap.querySelector('[data-task-desc-show]');
+                if (form) form.classList.remove('hidden');
+                if (view) view.classList.add('hidden');
+                if (showBtn) showBtn.classList.add('hidden');
+                wrap.querySelector('.demand-task-desc-add-btn')?.classList.add('hidden');
+            });
+        });
+
+        document.querySelectorAll('[data-task-desc-cancel]').forEach(function (btn) {
+            if (btn.dataset.bound) return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', function () {
+                var pk = btn.getAttribute('data-task-desc-cancel');
+                var wrap = document.querySelector('[data-task-desc-wrap="' + pk + '"]');
+                if (!wrap) return;
+                var form = wrap.querySelector('[data-task-desc-form]');
+                var view = wrap.querySelector('[data-task-desc-view]');
+                var showBtn = wrap.querySelector('[data-task-desc-show]');
+                var addBtn = wrap.querySelector('.demand-task-desc-add-btn');
+                if (form) form.classList.add('hidden');
+                if (view && view.querySelector('p')?.textContent.trim()) {
+                    view.classList.add('hidden');
+                    if (showBtn) showBtn.classList.remove('hidden');
+                } else if (view) {
+                    view.classList.add('hidden');
+                }
+                if (addBtn) addBtn.classList.remove('hidden');
+            });
+        });
+
+        document.querySelectorAll('[data-task-desc-save]').forEach(function (btn) {
+            if (btn.dataset.bound) return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', function () {
+                var pk = btn.getAttribute('data-task-desc-save');
+                var wrap = document.querySelector('[data-task-desc-wrap="' + pk + '"]');
+                if (!wrap) return;
+                var textarea = wrap.querySelector('.demand-task-desc-input');
+                var description = textarea ? textarea.value.trim() : '';
+                btn.disabled = true;
+                fetch('{% url "media_task_update_description" 999999 %}'.replace('999999', pk), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: 'description=' + encodeURIComponent(description),
+                }).then(function (r) { return r.json(); }).then(function (data) {
+                    btn.disabled = false;
+                    var form = wrap.querySelector('[data-task-desc-form]');
+                    var addBtn = wrap.querySelector('.demand-task-desc-add-btn');
+                    if (form) form.classList.add('hidden');
+                    if (description) {
+                        var view = wrap.querySelector('[data-task-desc-view]');
+                        var showBtn = wrap.querySelector('[data-task-desc-show]');
+                        if (!view) {
+                            view = document.createElement('div');
+                            view.className = 'demand-task-desc-view hidden';
+                            view.setAttribute('data-task-desc-view', pk);
+                            view.innerHTML = '<p class="text-xs text-gray-600 whitespace-pre-line break-words"></p>' +
+                                '<button type="button" class="demand-task-desc-edit-btn" data-task-desc-edit="' + pk + '">' +
+                                '<i class="fas fa-pen"></i> Editar observação</button>';
+                            wrap.insertBefore(view, form);
+                            if (addBtn) addBtn.remove();
+                            var newShowBtn = document.createElement('button');
+                            newShowBtn.type = 'button';
+                            newShowBtn.className = 'demand-task-desc-show-btn';
+                            newShowBtn.setAttribute('data-task-desc-show', pk);
+                            newShowBtn.innerHTML = '<i class="fas fa-comment-alt"></i> Ver observação';
+                            wrap.insertBefore(newShowBtn, view);
+                            initDemandTaskSteps();
+                            showBtn = newShowBtn;
+                        }
+                        view.querySelector('p').innerHTML = data.description_html || '';
+                        view.classList.add('hidden');
+                        if (showBtn) {
+                            showBtn.classList.remove('hidden');
+                        }
+                        if (addBtn) addBtn.classList.add('hidden');
+                    } else {
+                        var viewEl = wrap.querySelector('[data-task-desc-view]');
+                        if (viewEl) viewEl.remove();
+                        if (addBtn) addBtn.classList.remove('hidden');
+                    }
+                }).catch(function () { btn.disabled = false; });
+            });
+        });
+    }
+    initDemandTaskSteps();
+})();
+</script>
+
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

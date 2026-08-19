@@ -34,12 +34,32 @@
                 </div>
                 <div>
                     <h1 class="text-xl font-bold text-gray-900">Planejamento de Mídia</h1>
-                    <p class="text-xs text-gray-500">Planejamento mensal da equipe</p>
+                    <p class="text-xs text-gray-500">Planejamento, templates e organização da equipe</p>
                 </div>
             </div>
-            <a href="{% url 'media_calendar' %}" class="w-9 h-9 rounded-xl flex items-center justify-center border-2" style="border-color: rgba(var(--media-rgb),0.3); color: var(--media-color);">
-                <i class="fas fa-calendar-alt text-sm"></i>
-            </a>
+            <div class="flex gap-2">
+                <a href="{% url 'media_organization' %}" class="w-9 h-9 rounded-xl flex items-center justify-center border-2" style="border-color: rgba(var(--media-rgb),0.3); color: var(--media-color);" title="Organização">
+                    <i class="fas fa-sitemap text-sm"></i>
+                </a>
+                <a href="{% url 'media_calendar' %}" class="w-9 h-9 rounded-xl flex items-center justify-center border-2" style="border-color: rgba(var(--media-rgb),0.3); color: var(--media-color);">
+                    <i class="fas fa-calendar-alt text-sm"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% include 'parciais/media_subnav.html' with section='planning' %}
+
+    <!-- Acesso rápido -->
+    <div class="px-4 mb-6">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Acesso rápido</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {% url 'media_content_list' as u1 %}{% include 'parciais/media_quick_tile.html' with url=u1 icon='clipboard-list' label='Demandas' %}
+            {% url 'media_calendar' as u2 %}{% include 'parciais/media_quick_tile.html' with url=u2 icon='calendar-alt' label='Calendário' %}
+            {% url 'media_organization' as u3 %}{% include 'parciais/media_quick_tile.html' with url=u3 icon='sitemap' label='Organização' %}
+            {% url 'media_subteam_list' as u6 %}{% include 'parciais/media_quick_tile.html' with url=u6 icon='users' label='Equipes' %}
+            {% url 'media_leadership_list' as u7 %}{% include 'parciais/media_quick_tile.html' with url=u7 icon='lightbulb' label='Prioridades' %}
+            {% url 'media_resource_list' as u8 %}{% include 'parciais/media_quick_tile.html' with url=u8 icon='key' label='Recursos' %}
         </div>
     </div>
 
@@ -58,8 +78,8 @@
             <div class="text-xs text-gray-500">Esta semana</div>
         </div>
         <a href="{% url 'media_content_list' %}" class="flex-shrink-0 bg-white rounded-xl border border-gray-100 px-4 py-2.5 text-center shadow-sm min-w-[80px] flex flex-col items-center justify-center">
-            <i class="fas fa-list-ul text-gray-400 text-sm"></i>
-            <div class="text-xs text-gray-500 mt-0.5">Lista</div>
+            <i class="fas fa-clipboard-list text-gray-400 text-sm"></i>
+            <div class="text-xs text-gray-500 mt-0.5">Demandas</div>
         </a>
     </div>
 

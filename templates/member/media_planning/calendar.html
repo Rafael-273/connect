@@ -21,15 +21,18 @@
 <div class="min-h-screen pb-28">
 
     <!-- Header -->
-    <div class="px-4 pt-6 pb-4 flex items-center justify-between">
-        <div>
-            <h1 class="text-xl font-bold text-gray-900">Calendário</h1>
-            <p class="text-sm text-gray-500">Planejamento de Mídia</p>
+    <div class="px-4 pt-6 pb-2">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">Calendário</h1>
+                <p class="text-sm text-gray-500">Planejamento de Mídia</p>
+            </div>
+            <a href="{% url 'media_dashboard' %}" class="text-gray-400 hover:text-gray-600 text-sm">
+                <i class="fas fa-arrow-left"></i>
+            </a>
         </div>
-        <a href="{% url 'media_dashboard' %}" class="text-gray-400 hover:text-gray-600 text-sm">
-            <i class="fas fa-arrow-left"></i> Voltar
-        </a>
     </div>
+    {% include 'parciais/media_subnav.html' with section='planning' %}
 
     <!-- Legend -->
     <div class="px-4 mb-4 flex flex-wrap gap-3">

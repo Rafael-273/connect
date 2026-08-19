@@ -1,87 +1,158 @@
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views import View
-from django.views.generic import ListView
 
-from ...models.event import Event
-from ...models.media_content import CONTENT_TYPE_CHOICES, STATUS_CHOICES, MediaContent
-from ...models.media_task import TASK_STATUS_CHOICES, MediaTask
-from ...models.user import User
+from ...models.media_content import MediaContent
+from ...models.media_task import MediaTask, TASK_STATUS_CHOICES
+from ...services.demands_hub import (
+    DEMAND_QUICK_TYPES,
+    DEMAND_TYPES_ORGANIZATIONAL,
+    DEMAND_TYPES_TECHNICAL,
+    ASSIGNMENT_ROLE_PRESETS,
+    build_assignment_rows,
+    build_event_detail,
+    build_free_detail,
+    build_sidebar_items,
+    content_hub_url,
+    get_demand_type_roles_map,
+    get_filter_context,
+    get_responsible_picker_options,
+    hub_redirect_url,
+    parse_selected,
+)
+from ...services.media_planning import get_available_template_items, get_template_for_event
 from ...forms.media_planning import (
-    MediaAttachmentForm,
-    MediaCommentForm,
     MediaContentForm,
+    MediaDemandQuickForm,
+    MediaEventQuickForm,
+    MediaEventTypeQuickForm,
     MediaTaskForm,
 )
 from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
 
 
-class MediaContentListView(MediaMemberRequiredMixin, ListView):
-    model = MediaContent
-    template_name = 'member/media_planning/content_list.html'
-    context_object_name = 'contents'
-    paginate_by = 20
+class MediaContentListView(MediaMemberRequiredMixin, View):
+    """Hub Demandas e Eventos — lista + master-detail."""
 
-    def get_queryset(self):
-        qs = (
-            MediaContent.objects.select_related('event', 'responsible__member')
-            .order_by('-created_at')
-        )
-        event_id = self.request.GET.get('event', '')
-        content_type = self.request.GET.get('content_type', '')
-        responsible_id = self.request.GET.get('responsible', '')
-        status = self.request.GET.get('status', '')
-        pub_date = self.request.GET.get('pub_date', '')
+    template_name = 'member/media_planning/demands_hub.html'
 
-        if event_id:
-            qs = qs.filter(event_id=event_id)
-        if content_type:
-            qs = qs.filter(content_type=content_type)
-        if responsible_id:
-            qs = qs.filter(responsible_id=responsible_id)
-        if status:
-            qs = qs.filter(status=status)
-        if pub_date:
-            qs = qs.filter(publication_date__date=pub_date)
-        return qs
+    def get(self, request):
+        create_mode = request.GET.get('create', '')
+        if create_mode not in ('demand', 'event'):
+            create_mode = ''
 
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx['events'] = Event.objects.order_by('-event_date')[:50]
-        ctx['users'] = (
-            User.objects.filter(member__isnull=False)
-            .select_related('member')
-            .order_by('member__name')
-        )
-        ctx['content_types'] = CONTENT_TYPE_CHOICES
-        ctx['status_choices'] = STATUS_CHOICES
-        ctx['filter_event'] = self.request.GET.get('event', '')
-        ctx['filter_content_type'] = self.request.GET.get('content_type', '')
-        ctx['filter_responsible'] = self.request.GET.get('responsible', '')
-        ctx['filter_status'] = self.request.GET.get('status', '')
-        ctx['filter_pub_date'] = self.request.GET.get('pub_date', '')
-        return ctx
+        selected = request.GET.get('selected', '')
+        sidebar_months = build_sidebar_items(request)
+        filters = get_filter_context()
 
+        if not create_mode and not selected and sidebar_months:
+            first_month = sidebar_months[0]
+            if first_month.get('items') and request.GET.get('auto_select', '1') != '0':
+                selected = first_month['items'][0]['key']
 
-class MediaContentDetailView(MediaMemberRequiredMixin, View):
-    template_name = 'member/media_planning/content_detail.html'
+        kind, pk = parse_selected(selected)
+        detail = None
+        detail_type = None
+        event_template = None
+        available_template_count = 0
 
-    def get(self, request, pk):
-        content = get_object_or_404(MediaContent, pk=pk)
+        if not create_mode and kind == 'event' and pk:
+            try:
+                detail = build_event_detail(pk)
+                detail_type = 'event'
+                event_template = get_template_for_event(detail['event'])
+                available_template_count = get_available_template_items(detail['event']).count()
+            except Exception:
+                selected = ''
+                detail = None
+        elif not create_mode and kind == 'free' and pk:
+            try:
+                detail = build_free_detail(pk)
+                detail_type = 'free'
+            except Exception:
+                selected = ''
+                detail = None
+
+        demand_form = MediaDemandQuickForm(prefix='demand')
+        event_form = MediaEventQuickForm(prefix='event')
+        event_type_quick_form = MediaEventTypeQuickForm(prefix='event_type')
+        event_types = list(event_form.fields['event_type'].queryset)
+        edit_form = MediaDemandQuickForm(prefix='edit')
+        edit_assignments = [{'id': '', 'role': '', 'user_id': '', 'due_date': ''}]
+        if detail_type == 'free' and detail:
+            edit_form = MediaDemandQuickForm(instance=detail['content'], prefix='edit')
+            edit_assignments = build_assignment_rows(detail['content'])
+
         ctx = {
             **self._nav_context(),
-            'content': content,
-            'tasks': content.tasks.select_related('assigned_to__member').order_by('due_date'),
-            'comments': content.comments.select_related('author__member').order_by('created_at'),
-            'attachments': content.attachments.select_related('uploaded_by__member').order_by('-created_at'),
-            'task_form': MediaTaskForm(),
-            'comment_form': MediaCommentForm(),
-            'attachment_form': MediaAttachmentForm(),
-            'task_statuses': TASK_STATUS_CHOICES,
-            'tab': request.GET.get('tab', 'details'),
+            **filters,
+            'create_mode': create_mode,
+            'demand_form': demand_form,
+            'event_form': event_form,
+            'event_type_quick_form': event_type_quick_form,
+            'event_types': event_types,
+            'edit_form': edit_form,
+            'edit_assignments': edit_assignments,
+            'demand_assignments': [{'id': '', 'role': '', 'user_id': '', 'due_date': '', 'description': '', 'is_custom_role': False}],
+            'blank_assignment': {'id': '', 'role': '', 'user_id': '', 'due_date': '', 'description': '', 'is_custom_role': False},
+            'demand_type_roles': get_demand_type_roles_map(),
+            'assignment_role_presets': ASSIGNMENT_ROLE_PRESETS,
+            'edit_mode': request.GET.get('edit', '') == '1',
+            'hub_url': hub_redirect_url(request),
+            'demand_quick_types': DEMAND_QUICK_TYPES,
+            'demand_types_technical': DEMAND_TYPES_TECHNICAL,
+            'demand_types_organizational': DEMAND_TYPES_ORGANIZATIONAL,
+            'responsible_options': get_responsible_picker_options(),
+            'sidebar_months': sidebar_months,
+            'selected': selected,
+            'detail': detail,
+            'detail_type': detail_type,
+            'event_template': event_template,
+            'available_template_count': available_template_count,
+            'filter_kind': request.GET.get('kind', 'all'),
+            'filter_q': request.GET.get('q', ''),
+            'filter_responsible': request.GET.get('responsible', ''),
+            'filter_team': request.GET.get('team', ''),
+            'filter_event_type': request.GET.get('event_type', ''),
+            'filter_period_from': request.GET.get('period_from', ''),
+            'filter_period_to': request.GET.get('period_to', ''),
         }
         return render(request, self.template_name, ctx)
+
+
+class MediaDemandsPanelView(MediaMemberRequiredMixin, View):
+    """Retorna HTML parcial do painel de detalhe (desktop AJAX)."""
+
+    def get(self, request):
+        kind, pk = parse_selected(request.GET.get('selected', ''))
+        event_template = None
+        available_template_count = 0
+
+        if kind == 'event' and pk:
+            detail = build_event_detail(pk)
+            event_template = get_template_for_event(detail['event'])
+            available_template_count = get_available_template_items(detail['event']).count()
+            return render(request, 'member/media_planning/partials/demands_detail_event.html', {
+                **self._nav_context(),
+                'detail': detail,
+                'event_template': event_template,
+                'available_template_count': available_template_count,
+                'selected': request.GET.get('selected'),
+            })
+        if kind == 'free' and pk:
+            detail = build_free_detail(pk)
+            return render(request, 'member/media_planning/partials/demands_detail_free.html', {
+                **self._nav_context(),
+                'detail': detail,
+                'selected': request.GET.get('selected'),
+                'hub_url': hub_redirect_url(request),
+                'filter_kind': request.GET.get('kind', 'all'),
+            })
+        return render(request, 'member/media_planning/partials/demands_empty.html', {
+            **self._nav_context(),
+        })
 
 
 class MediaContentCreateView(MediaLeaderRequiredMixin, View):
@@ -154,7 +225,7 @@ class MediaContentCreateView(MediaLeaderRequiredMixin, View):
                     )
                 return redirect('media_plan_step', year=plan.year, month=plan.month, step=2)
             if content.event_id:
-                return redirect('media_event_contents', event_pk=content.event_id)
+                return redirect(f"{reverse('media_content_list')}?selected=event-{content.event_id}")
             return redirect('media_category_contents', content_type=content.content_type)
         ctx = {
             **self._nav_context(),
@@ -185,7 +256,7 @@ class MediaContentUpdateView(MediaLeaderRequiredMixin, View):
         if form.is_valid():
             content = form.save()
             messages.success(request, f'Conteúdo "{content.title}" atualizado!')
-            return redirect('media_content_detail', pk=content.pk)
+            return redirect(content_hub_url(content))
         ctx = {
             **self._nav_context(),
             'form': form,
@@ -201,6 +272,9 @@ class MediaContentDeleteView(MediaLeaderRequiredMixin, View):
         title = content.title
         content.delete()
         messages.success(request, f'Conteúdo "{title}" excluído.')
+        next_url = request.POST.get('next')
+        if next_url:
+            return redirect(next_url)
         return redirect('media_content_list')
 
 
@@ -215,24 +289,52 @@ class MediaTaskCreateView(MediaLeaderRequiredMixin, View):
             messages.success(request, f'Tarefa "{task.title}" criada!')
         else:
             messages.error(request, 'Erro ao criar a tarefa. Verifique os campos.')
-        return redirect('media_content_detail', pk=pk)
+        return redirect(content_hub_url(content))
 
 
 class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
     def post(self, request, pk):
         task = get_object_or_404(MediaTask, pk=pk)
         new_status = request.POST.get('status', '')
+        if new_status == 'toggle':
+            new_status = 'pending' if task.status == 'completed' else 'completed'
         valid_statuses = [c[0] for c in TASK_STATUS_CHOICES]
         if new_status in valid_statuses:
             task.status = new_status
             task.save(update_fields=['status', 'update_at'])
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'status': new_status, 'label': task.get_status_display()})
+                return JsonResponse({
+                    'status': new_status,
+                    'label': task.get_status_display(),
+                })
             messages.success(
                 request,
                 f'Status atualizado para "{task.get_status_display()}".',
             )
-        return redirect('media_content_detail', pk=task.content_id)
+        next_url = request.POST.get('next')
+        if next_url:
+            return redirect(next_url)
+        content = get_object_or_404(MediaContent, pk=task.content_id)
+        return redirect(content_hub_url(content))
+
+
+class MediaTaskUpdateDescriptionView(MediaMemberRequiredMixin, View):
+    def post(self, request, pk):
+        from django.utils.html import linebreaks, urlize
+        from django.utils.safestring import mark_safe
+
+        task = get_object_or_404(MediaTask, pk=pk)
+        description = request.POST.get('description', '').strip()
+        task.description = description
+        task.save(update_fields=['description', 'update_at'])
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            html = mark_safe(linebreaks(urlize(description))) if description else ''
+            return JsonResponse({'description': description, 'description_html': html})
+        next_url = request.POST.get('next')
+        if next_url:
+            return redirect(next_url)
+        content = get_object_or_404(MediaContent, pk=task.content_id)
+        return redirect(content_hub_url(content))
 
 
 class MediaCommentCreateView(MediaMemberRequiredMixin, View):
@@ -247,7 +349,7 @@ class MediaCommentCreateView(MediaMemberRequiredMixin, View):
             comment.save()
         else:
             messages.error(request, 'Não foi possível adicionar o comentário.')
-        return redirect('media_content_detail', pk=pk)
+        return redirect(content_hub_url(content))
 
 
 class MediaAttachmentCreateView(MediaMemberRequiredMixin, View):
@@ -263,4 +365,4 @@ class MediaAttachmentCreateView(MediaMemberRequiredMixin, View):
             messages.success(request, f'Arquivo "{attachment.name}" anexado!')
         else:
             messages.error(request, 'Erro ao enviar o arquivo. Verifique o tipo e tamanho.')
-        return redirect('media_content_detail', pk=pk)
+        return redirect(content_hub_url(content))

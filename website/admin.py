@@ -173,3 +173,49 @@ class MediaCommentAdmin(admin.ModelAdmin):
 class MediaAttachmentAdmin(admin.ModelAdmin):
     list_display = ('name', 'content', 'task', 'uploaded_by', 'created_at')
     search_fields = ('name',)
+
+
+from .models.media_event_type import MediaEventType, MediaPlanningTemplate, MediaPlanningTemplateItem
+from .models.media_organization import (
+    MediaSubTeam, MediaRole, MediaSubTeamMembership,
+    MediaLeadershipItem, MediaResource, MediaResourceCredential,
+)
+
+
+@admin.register(MediaEventType)
+class MediaEventTypeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active', 'sort_order')
+    list_filter = ('is_active',)
+
+
+@admin.register(MediaPlanningTemplate)
+class MediaPlanningTemplateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'event_type', 'is_active')
+
+
+@admin.register(MediaPlanningTemplateItem)
+class MediaPlanningTemplateItemAdmin(admin.ModelAdmin):
+    list_display = ('title', 'template', 'content_type', 'sort_order')
+    list_filter = ('content_type',)
+
+
+@admin.register(MediaSubTeam)
+class MediaSubTeamAdmin(admin.ModelAdmin):
+    list_display = ('name', 'leader', 'is_active')
+
+
+@admin.register(MediaRole)
+class MediaRoleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'sub_team')
+
+
+@admin.register(MediaLeadershipItem)
+class MediaLeadershipItemAdmin(admin.ModelAdmin):
+    list_display = ('title', 'category', 'priority', 'status', 'responsible')
+    list_filter = ('category', 'priority', 'status')
+
+
+@admin.register(MediaResource)
+class MediaResourceAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'responsible', 'is_active', 'renewal_date')
+    list_filter = ('category', 'is_active')

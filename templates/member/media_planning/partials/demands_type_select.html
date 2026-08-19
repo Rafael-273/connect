@@ -1,0 +1,31 @@
+<select name="{{ prefix }}-content_type"
+        id="id_{{ prefix }}-content_type"
+        class="media-field-select demand-type-select"
+        data-hint-target="{{ hint_id }}"
+        required>
+    <option value="" disabled {% if not selected_value %}selected{% endif %}>Selecione o tipo</option>
+    <optgroup label="Produção de conteúdo">
+        {% for t in demand_types_technical %}
+        <option value="{{ t.value }}"
+                data-due-label="{{ t.due_label }}"
+                data-pub-label="{{ t.pub_label }}"
+                data-hint="{{ t.hint }}"
+                data-icon="{{ t.icon|default:'file' }}"
+                data-group="technical"
+                data-default-roles="{{ t.default_roles|default_if_none:''|join:'|' }}"
+                {% if selected_value == t.value %}selected{% endif %}>{{ t.label }}</option>
+        {% endfor %}
+    </optgroup>
+    <optgroup label="Organização e alinhamento">
+        {% for t in demand_types_organizational %}
+        <option value="{{ t.value }}"
+                data-due-label="{{ t.due_label }}"
+                data-pub-label="{{ t.pub_label }}"
+                data-hint="{{ t.hint }}"
+                data-icon="{{ t.icon|default:'file' }}"
+                data-group="organizational"
+                data-default-roles="{{ t.default_roles|default_if_none:''|join:'|' }}"
+                {% if selected_value == t.value %}selected{% endif %}>{{ t.label }}</option>
+        {% endfor %}
+    </optgroup>
+</select>

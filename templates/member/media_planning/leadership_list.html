@@ -1,0 +1,31 @@
+{% extends "member_base.html" %}
+{% block title %}Prioridades da Liderança{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50">
+    <div class="px-4 pt-6 pb-2 bg-white border-b">
+        <a href="{% url 'media_organization' %}" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Organização</a>
+        <h1 class="text-xl font-bold">Prioridades da liderança</h1>
+    </div>
+    {% include 'parciais/media_subnav.html' with section='organization' %}
+    <div class="px-4 pt-4 space-y-2">
+        {% for item in items %}
+        <div class="bg-white rounded-xl border p-4">
+            <div class="flex justify-between items-start">
+                <div>
+                    <span class="text-xs font-bold px-2 py-0.5 rounded-full {% if item.priority == 'critical' %}bg-red-100 text-red-700{% elif item.priority == 'high' %}bg-amber-100 text-amber-700{% else %}bg-gray-100 text-gray-600{% endif %}">{{ item.get_priority_display }}</span>
+                    <div class="font-bold text-sm mt-1">{{ item.title }}</div>
+                    <div class="text-xs text-gray-400">{{ item.get_category_display }} · {{ item.get_status_display }}{% if item.responsible %} · {{ item.responsible.name }}{% endif %}</div>
+                </div>
+                {% if is_media_leader %}
+                <a href="{% url 'media_leadership_edit' item.pk %}" class="text-xs" style="color:#8B5CF6;">Editar</a>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}<p class="text-center text-gray-400 py-12">Nenhum item.</p>{% endfor %}
+        {% if is_media_leader %}
+        <a href="{% url 'media_leadership_create' %}" class="block text-center py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">+ Novo item</a>
+        {% endif %}
+    </div>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

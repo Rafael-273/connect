@@ -1,0 +1,41 @@
+{% extends "member_base.html" %}
+{% block title %}{{ template.name }}{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50">
+    <div class="px-4 pt-6 pb-2 bg-white border-b">
+        <a href="{% url 'media_content_list' %}?tab=templates" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Demandas e eventos</a>
+        <h1 class="text-xl font-bold">{{ event_type.name }}</h1>
+        {% if event_type.description %}<p class="text-sm text-gray-500 mt-1">{{ event_type.description }}</p>{% endif %}
+        {% if is_media_leader %}
+        <div class="flex gap-2 mt-3">
+            <a href="{% url 'media_template_edit' template.pk %}" class="text-xs px-3 py-1.5 rounded-lg border font-semibold">Editar template</a>
+            <a href="{% url 'media_template_item_create' template.pk %}" class="text-xs px-3 py-1.5 rounded-lg text-white font-semibold" style="background:#8B5CF6;">+ Demanda</a>
+        </div>
+        {% endif %}
+    </div>
+    {% include 'parciais/media_subnav.html' with section='demands' %}
+    <div class="px-4 pt-4 space-y-2">
+        {% for item in items %}
+        <div class="bg-white rounded-xl border p-4">
+            <div class="flex justify-between items-start">
+                <div>
+                    <div class="font-bold text-sm">{{ item.title }}</div>
+                    <div class="text-xs text-gray-400">{{ item.get_content_type_display }}
+                        {% if item.default_sub_team %} · {{ item.default_sub_team.name }}{% endif %}
+                        {% if item.requires_recording %} · Gravação{% endif %}
+                        {% if item.requires_editing %} · Edição{% endif %}
+                    </div>
+                    {% if item.publication_offset_days %}<div class="text-xs text-gray-400 mt-1">Pub: {{ item.publication_offset_days }} dias do evento</div>{% endif %}
+                </div>
+                {% if is_media_leader %}
+                <a href="{% url 'media_template_item_edit' item.pk %}" class="text-xs" style="color:#8B5CF6;">Editar</a>
+                {% endif %}
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-center text-gray-400 py-8">Nenhuma demanda configurada. Adicione o que normalmente é produzido neste tipo de evento.</p>
+        {% endfor %}
+    </div>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

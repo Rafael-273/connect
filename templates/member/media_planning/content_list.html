@@ -1,20 +1,22 @@
 {% extends "member_base.html" %}
 {% load static %}
 
-{% block title %}Conteúdos de Mídia{% endblock %}
+{% block title %}Demandas e Eventos{% endblock %}
 
 {% block head %}
 <style>
     :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
     .media-card { background: white; border-radius: 1rem; border: 2px solid rgba(var(--media-rgb),0.12); overflow: hidden; transition: all 0.3s; }
     .media-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(var(--media-rgb),0.1); }
+    .tab-btn.active { background: var(--media-color); color: #fff; }
+    .tab-btn:not(.active) { background: #fff; color: #6B7280; border: 1px solid #E5E7EB; }
     .badge-pending { background: #F3F4F6; color: #374151; }
     .badge-in_progress { background: #DBEAFE; color: #1D4ED8; }
     .badge-review { background: #FEF3C7; color: #92400E; }
     .badge-approved { background: #D1FAE5; color: #065F46; }
     .badge-scheduled { background: #EDE9FE; color: #5B21B6; }
     .badge-published { background: #ECFDF5; color: #047857; }
-    .badge-low { background: #F3F4F6; color: #6B7280; }
+    .badge-low, .badge-medium, .badge-high, .badge-urgent { font-size: 0.65rem; }
     .badge-medium { background: #FEF3C7; color: #92400E; }
     .badge-high { background: #FEE2E2; color: #B91C1C; }
     .badge-urgent { background: #EF4444; color: #FFF; }
@@ -22,23 +24,63 @@
 {% endblock %}
 
 {% block content %}
-<div class="min-h-screen pb-28">
+<div class="min-h-screen pb-28 bg-gray-50">
 
-    <!-- Header -->
-    <div class="px-4 pt-8 pb-4 flex items-center justify-between">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900">Conteúdos</h1>
-            <p class="text-sm text-gray-500">Planejamento de Mídia</p>
+    <div class="px-4 pt-8 pb-2 bg-white border-b">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Demandas e eventos</h1>
+                <p class="text-sm text-gray-500">Produções, templates e eventos da igreja</p>
+            </div>
+            {% if is_media_leader and active_tab == 'demands' %}
+            <a href="{% url 'media_content_create' %}" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">
+                <i class="fas fa-plus"></i> Nova
+            </a>
+            {% elif is_media_leader and active_tab == 'templates' %}
+            <a href="{% url 'media_template_create' %}" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">
+                <i class="fas fa-plus"></i> Template
+            </a>
+            {% endif %}
         </div>
-        {% if is_media_leader %}
-        <a href="{% url 'media_content_create' %}" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">
-            <i class="fas fa-plus"></i> Novo
-        </a>
-        {% endif %}
+    </div>
+    {% include 'parciais/media_subnav.html' with section='demands' %}
+
+    <!-- Tabs -->
+    <div class="px-4 pt-4 flex gap-2">
+        <a href="?tab=demands" class="tab-btn {% if active_tab != 'templates' %}active{% endif %} flex-1 text-center py-2.5 rounded-xl text-sm font-semibold">Demandas</a>
+        <a href="?tab=templates" class="tab-btn {% if active_tab == 'templates' %}active{% endif %} flex-1 text-center py-2.5 rounded-xl text-sm font-semibold">Templates</a>
     </div>
 
-    <!-- Filters -->
-    <form method="get" class="px-4 mb-4 space-y-2">
+    {% if active_tab == 'templates' %}
+    <!-- Templates -->
+    <div class="px-4 pt-4 space-y-2">
+        <p class="text-xs text-gray-500 mb-2">Padrões de demanda por tipo de evento — conferência, batismo, culto...</p>
+        {% for tpl in templates %}
+        {% if tpl.planning_template %}
+        <a href="{% url 'media_template_detail' tpl.planning_template.pk %}" class="media-card block p-4">
+            <div class="font-bold text-gray-900">{{ tpl.name }}</div>
+            <div class="text-xs text-gray-400">{{ tpl.item_count }} demanda{{ tpl.item_count|pluralize:"s" }} sugerida{{ tpl.item_count|pluralize }}</div>
+        </a>
+        {% elif is_media_leader %}
+        <a href="{% url 'media_template_setup' tpl.pk %}" class="media-card block p-4 border-dashed">
+            <div class="font-bold text-gray-900">{{ tpl.name }}</div>
+            <div class="text-xs text-amber-600"><i class="fas fa-plus-circle"></i> Configurar demandas do template</div>
+        </a>
+        {% else %}
+        <div class="media-card p-4 opacity-60">
+            <div class="font-bold">{{ tpl.name }}</div>
+            <div class="text-xs text-gray-400">Template ainda não configurado</div>
+        </div>
+        {% endif %}
+        {% empty %}
+        <p class="text-center text-gray-400 py-12">Nenhum template cadastrado.</p>
+        {% endfor %}
+    </div>
+
+    {% else %}
+    <!-- Demandas -->
+    <form method="get" class="px-4 pt-4 mb-4 space-y-2">
+        <input type="hidden" name="tab" value="demands">
         <div class="grid grid-cols-2 gap-2">
             <select name="status" class="form-input text-sm">
                 <option value="">Todos os status</option>
@@ -60,14 +102,27 @@
         <div class="flex gap-2">
             <input type="date" name="pub_date" value="{{ filter_pub_date }}" class="form-input text-sm flex-1">
             <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">Filtrar</button>
-            <a href="{% url 'media_content_list' %}" class="px-4 py-2 rounded-xl text-sm font-semibold border-2 border-gray-300 text-gray-600 flex items-center">Limpar</a>
+            <a href="{% url 'media_content_list' %}?tab=demands" class="px-4 py-2 rounded-xl text-sm font-semibold border-2 border-gray-300 text-gray-600 flex items-center">Limpar</a>
         </div>
     </form>
 
-    <!-- Content List -->
+    {% if upcoming_events and not filter_event and not filter_status and not filter_content_type %}
+    <div class="px-4 mb-4">
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Próximos eventos</p>
+        <div class="flex gap-2 overflow-x-auto pb-1">
+            {% for event in upcoming_events %}
+            <a href="{% url 'media_event_contents' event.pk %}" class="flex-shrink-0 bg-white rounded-xl border px-3 py-2 text-xs" style="border-color: rgba(var(--media-rgb),0.2);">
+                <div class="font-bold text-gray-900">{{ event.title|truncatechars:22 }}</div>
+                <div class="text-gray-400">{% if event.event_type %}{{ event.event_type.name }} · {% endif %}{{ event.event_date|date:"d/m" }}</div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="px-4 space-y-3">
         {% for content in contents %}
-        <a href="{% url 'media_content_detail' content.pk %}" class="media-card block p-4">
+        <a href="{% url 'media_content_list' %}?selected={% if content.event_id %}event-{{ content.event_id }}{% else %}free-{{ content.pk }}{% endif %}" class="media-card block p-4">
             <div class="flex items-start justify-between gap-3 mb-2">
                 <div class="flex-1 min-w-0">
                     <h3 class="font-semibold text-gray-900 truncate">{{ content.title }}</h3>
@@ -87,22 +142,22 @@
         {% empty %}
         <div class="py-12 text-center">
             <i class="fas fa-inbox text-4xl text-gray-300 mb-3 block"></i>
-            <p class="text-gray-500 text-sm">Nenhum conteúdo encontrado.</p>
+            <p class="text-gray-500 text-sm">Nenhuma demanda encontrada.</p>
         </div>
         {% endfor %}
     </div>
 
-    <!-- Pagination -->
     {% if is_paginated %}
     <div class="px-4 py-6 flex justify-center gap-2">
         {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}" class="px-4 py-2 rounded-xl border-2 border-gray-300 text-sm text-gray-600">Anterior</a>
+        <a href="?tab=demands&page={{ page_obj.previous_page_number }}" class="px-4 py-2 rounded-xl border-2 border-gray-300 text-sm text-gray-600">Anterior</a>
         {% endif %}
         <span class="px-4 py-2 text-sm text-gray-500">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
         {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}" class="px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">Próxima</a>
+        <a href="?tab=demands&page={{ page_obj.next_page_number }}" class="px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">Próxima</a>
         {% endif %}
     </div>
+    {% endif %}
     {% endif %}
 
 </div>

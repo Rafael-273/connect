@@ -1,0 +1,52 @@
+<div class="p-3 lg:p-4 overflow-y-auto max-h-[calc(100vh-280px)]">
+    {% if sidebar_months %}
+    {% for month in sidebar_months %}
+    <div class="mb-4">
+        <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">{{ month.label }}</p>
+        <div class="space-y-2">
+            {% for item in month.items %}
+            <a href="?kind={{ filter_kind|default:'all' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}&selected={{ item.key }}"
+               data-demands-select="{{ item.key }}"
+               class="sidebar-item block p-3 {% if selected == item.key %}active{% endif %}">
+                <div class="flex items-start gap-2.5">
+                    <div class="type-icon-box type-icon-box-sm">
+                        <i class="fas fa-{{ item.icon|default:'file' }}"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="font-bold text-sm text-gray-900 truncate">{{ item.title }}</p>
+                        <p class="text-xs text-gray-500 mt-0.5">
+                            <span class="font-semibold">{{ item.date_label }}</span>
+                            {% if item.type == 'event' %}
+                            · {{ item.content_count }} conteúdo{{ item.content_count|pluralize }}
+                            {% else %}
+                            · Conteúdo livre
+                            {% endif %}
+                        </p>
+                        {% if item.type == 'free' and item.responsible %}
+                        <p class="text-[11px] text-gray-400 mt-0.5 truncate"><i class="fas fa-user text-[10px] mr-0.5"></i>{{ item.responsible }}</p>
+                        {% elif item.type == 'event' and item.event_type %}
+                        <span class="inline-block mt-1 text-[10px] font-bold px-2 py-0.5 rounded-full" style="background: rgba(139,92,246,0.1); color: #6D28D9;">{{ item.event_type }}</span>
+                        {% endif %}
+                    </div>
+                    <i class="fas fa-chevron-right text-[10px] mt-2 flex-shrink-0" style="color: rgba(139,92,246,0.4);"></i>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="py-16 text-center px-4">
+        <div class="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-4" style="background: rgba(139,92,246,0.08);">
+            <i class="fas fa-inbox text-2xl" style="color: #8B5CF6;"></i>
+        </div>
+        <p class="text-sm font-semibold text-gray-600">Nenhum evento ou conteúdo encontrado</p>
+        <p class="text-xs text-gray-400 mt-1">Tente ajustar os filtros ou crie uma nova demanda.</p>
+        {% if is_media_leader %}
+        <button type="button" class="media-btn-primary sm inline-flex mt-5" data-open-modal="demands-modal-demand">
+            <i class="fas fa-plus"></i> Criar conteúdo
+        </button>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

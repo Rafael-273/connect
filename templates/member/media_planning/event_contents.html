@@ -35,7 +35,7 @@
 <div class="min-h-screen pb-28 bg-gray-50">
 
     <!-- Back + Header -->
-    <div class="px-4 pt-6 pb-4 bg-white border-b border-gray-100">
+    <div class="px-4 pt-6 pb-2 bg-white border-b border-gray-100">
         <a href="{% url 'media_dashboard' %}" class="flex items-center gap-1.5 text-xs font-semibold mb-3" style="color: var(--media-color);">
             <i class="fas fa-arrow-left"></i> Planejamento de Mídia
         </a>
@@ -48,6 +48,7 @@
                 <div class="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
                     <span><i class="fas fa-calendar-alt mr-1"></i>{{ event.event_date|date:"d \d\e M \d\e Y" }}</span>
                     {% if event.location %}<span><i class="fas fa-map-marker-alt mr-1"></i>{{ event.location }}</span>{% endif %}
+                    {% if event.event_type %}<span class="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-semibold">{{ event.event_type.name }}</span>{% endif %}
                 </div>
             </div>
         </div>
@@ -65,13 +66,22 @@
         </div>
         {% endif %}
     </div>
+    {% include 'parciais/media_subnav.html' with section='planning' %}
 
     <!-- Action Bar -->
-    <div class="px-4 py-3 bg-white border-b border-gray-100 flex items-center gap-2">
+    <div class="px-4 py-3 bg-white border-b border-gray-100 flex flex-wrap items-center gap-2">
         {% if is_media_leader %}
         <a href="{% url 'media_content_create' %}?event={{ event.pk }}" class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white" style="background: var(--media-color);">
             <i class="fas fa-plus"></i> Novo conteúdo
         </a>
+        <a href="{% url 'media_event_set_type' event.pk %}" class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 bg-white">
+            <i class="fas fa-tag"></i> {% if event.event_type %}Alterar template{% else %}Definir template{% endif %}
+        </a>
+        {% if event.event_type and event_template and available_template_count > 0 %}
+        <a href="{% url 'media_apply_template' event.pk %}" class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-white" style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+            <i class="fas fa-magic"></i> Aplicar template ({{ available_template_count }})
+        </a>
+        {% endif %}
         {% endif %}
         <a href="{% url 'media_content_list' %}?event={{ event.pk }}" class="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 bg-white">
             <i class="fas fa-filter"></i> Filtrar
@@ -83,7 +93,7 @@
         {% if contents %}
         <div class="space-y-2">
             {% for content in contents %}
-            <a href="{% url 'media_content_detail' content.pk %}" class="media-card flex items-center gap-3 p-3.5 block">
+            <a href="{% url 'media_content_list' %}?selected=event-{{ event.pk }}" class="media-card flex items-center gap-3 p-3.5 block">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
                         <span class="badge badge-{{ content.status }}">{{ content.get_status_display }}</span>

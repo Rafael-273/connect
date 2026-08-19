@@ -1,0 +1,21 @@
+{% extends "member_base.html" %}
+{% block title %}Funções{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50 px-4 pt-6">
+    <a href="{% url 'media_organization' %}" class="text-xs font-semibold mb-4 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Organização</a>
+    {% include 'parciais/media_subnav.html' with section='organization' %}
+    <h1 class="text-xl font-bold mb-4">Funções</h1>
+    <div class="space-y-2 mb-4">
+        {% for role in roles %}
+        <div class="bg-white rounded-xl border p-4">
+            <div class="font-semibold">{{ role.name }}</div>
+            {% if role.sub_team %}<div class="text-xs text-gray-400">{{ role.sub_team.name }}</div>{% endif %}
+        </div>
+        {% empty %}<p class="text-gray-400">Nenhuma função.</p>{% endfor %}
+    </div>
+    {% if is_media_leader %}
+    <a href="{% url 'media_role_create' %}" class="block text-center py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">+ Nova função</a>
+    {% endif %}
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

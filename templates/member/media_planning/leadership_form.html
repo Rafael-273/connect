@@ -1,0 +1,15 @@
+{% extends "member_base.html" %}
+{% block title %}{% if action == 'edit' %}Editar{% else %}Novo{% endif %} Item{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50 px-4 pt-6">
+    <a href="{% url 'media_leadership_list' %}" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Prioridades</a>
+    {% include 'parciais/media_subnav.html' with section='organization' %}
+    <h1 class="text-xl font-bold mb-4">{% if action == 'edit' %}Editar item{% else %}Novo item{% endif %}</h1>
+    <form method="post" class="bg-white rounded-xl border p-4 space-y-4">
+        {% csrf_token %}
+        {% for field in form %}<div><label class="block text-xs font-bold text-gray-600 mb-1">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+        <button type="submit" class="w-full py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">Salvar</button>
+    </form>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

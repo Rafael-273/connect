@@ -1,0 +1,81 @@
+{% with content=detail.content %}
+{% load pt_date %}
+<div class="h-full overflow-y-auto">
+    <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 lg:px-6 lg:py-4">
+        <a href="{% url 'media_content_list' %}?kind={{ filter_kind|default:'all' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
+           id="demands-mobile-back"
+           class="lg:hidden inline-flex items-center gap-1.5 text-xs font-semibold mb-3" style="color: var(--media-color);">
+            <i class="fas fa-arrow-left"></i> Voltar
+        </a>
+
+        <div class="flex items-start gap-3">
+            <div class="type-icon-box">
+                <i class="fas fa-{{ content.type_meta.icon|default:'file' }}"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-gray-400">Conteúdo livre</p>
+                <h2 class="text-lg lg:text-xl font-bold text-gray-900">{{ content.title }}</h2>
+                <div class="flex flex-wrap items-center gap-2 mt-1">
+                    <span class="text-xs text-gray-500">{{ content.get_content_type_display }}</span>
+                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full badge-{{ content.status }}">{{ content.get_status_display }}</span>
+                </div>
+            </div>
+
+            {% if is_media_leader %}
+            <div class="demands-kebab-wrap relative flex-shrink-0">
+                <button type="button" class="demands-kebab-btn" aria-label="Ações" aria-haspopup="true" aria-expanded="false">
+                    <i class="fas fa-ellipsis-v"></i>
+                </button>
+                <div class="demands-kebab-menu" hidden>
+                    <button type="button" class="demands-kebab-item" data-open-modal="demands-modal-edit">
+                        <i class="fas fa-edit"></i> Editar
+                    </button>
+                    <form method="post" action="{% url 'media_content_delete' content.pk %}" class="demand-delete-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ hub_url }}">
+                        <button type="button"
+                                class="demands-kebab-item demands-kebab-item-danger"
+                                data-confirm-delete
+                                data-item-name="{{ content.title|escapejs }}">
+                            <i class="fas fa-trash-alt"></i> Excluir
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="px-4 py-4 lg:px-6 lg:py-6 space-y-4">
+        {% if content.description %}
+        <div class="content-card p-4">
+            <p class="phase-label mb-2">Descrição</p>
+            <p class="text-sm text-gray-600 whitespace-pre-line">{{ content.description|urlize }}</p>
+        </div>
+        {% endif %}
+
+        {% if content.tasks.all %}
+        <div class="content-card p-4">
+            <p class="phase-label mb-3">Equipe e prazos</p>
+            <div class="demand-task-steps space-y-2">
+                {% for task in content.tasks.all %}
+                {% include 'member/media_planning/partials/demands_task_step.html' with task=task %}
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="content-card p-4 space-y-2 text-sm">
+            {% if content.responsible_name %}
+            <p><span class="font-semibold text-gray-600">Responsável</span> · {{ content.responsible_name }}</p>
+            {% endif %}
+            {% if content.due_date %}
+            <p><span class="font-semibold text-gray-600">Prazo</span> · {{ content.due_date|pt_date_short }}</p>
+            {% endif %}
+            {% if not content.responsible_name and not content.due_date %}
+            <p class="text-gray-400 text-sm">Defina responsáveis e prazos na edição da demanda.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endwith %}

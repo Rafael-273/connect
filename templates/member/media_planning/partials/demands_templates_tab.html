@@ -1,0 +1,45 @@
+<div class="px-4 pt-4 space-y-2 pb-8">
+    <p class="text-xs text-gray-500 font-medium mb-3">Padrões de demanda por tipo de evento — conferência, batismo, culto...</p>
+    {% for tpl in templates %}
+    {% if tpl.planning_template %}
+    <a href="{% url 'media_template_detail' tpl.planning_template.pk %}"
+       class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-0.5"
+       style="border-color: rgba(139, 92, 246, 0.2); box-shadow: 0 2px 8px rgba(139,92,246,0.06);">
+        <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(139, 92, 246, 0.1);">
+                <i class="fas fa-layer-group text-sm" style="color: #8B5CF6;"></i>
+            </div>
+            <div class="min-w-0">
+                <div class="font-bold text-gray-900">{{ tpl.name }}</div>
+                <div class="text-xs text-gray-400">{{ tpl.item_count }} demanda{{ tpl.item_count|pluralize:"s" }} sugerida{{ tpl.item_count|pluralize }}</div>
+            </div>
+        </div>
+        <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1 flex-shrink-0" style="color: #8B5CF6;"></i>
+    </a>
+    {% elif is_media_leader %}
+    <a href="{% url 'media_template_setup' tpl.pk %}"
+       class="flex items-center gap-3 bg-white rounded-xl p-4 border-2 border-dashed transition-all hover:-translate-y-0.5"
+       style="border-color: rgba(139,92,246,0.35);">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(139,92,246,0.08);">
+            <i class="fas fa-plus text-sm" style="color: #8B5CF6;"></i>
+        </div>
+        <div>
+            <div class="font-bold text-gray-900">{{ tpl.name }}</div>
+            <div class="text-xs font-semibold" style="color: #7C3AED;">Configurar demandas do template</div>
+        </div>
+    </a>
+    {% else %}
+    <div class="bg-white rounded-xl border-2 p-4 opacity-60" style="border-color: rgba(139,92,246,0.12);">
+        <div class="font-bold">{{ tpl.name }}</div>
+        <div class="text-xs text-gray-400">Template ainda não configurado</div>
+    </div>
+    {% endif %}
+    {% empty %}
+    <div class="text-center py-16">
+        <div class="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center mb-4" style="background: rgba(139,92,246,0.08);">
+            <i class="fas fa-layer-group text-2xl" style="color: #8B5CF6;"></i>
+        </div>
+        <p class="text-sm text-gray-500">Nenhum template cadastrado.</p>
+    </div>
+    {% endfor %}
+</div>

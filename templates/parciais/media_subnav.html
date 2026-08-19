@@ -1,0 +1,23 @@
+{% comment %}
+  Sub-navegação do módulo de mídia.
+  Context: section = 'planning' | 'organization' | 'demands'
+{% endcomment %}
+<div class="px-4 pb-3 overflow-x-auto">
+    <div class="flex gap-2 min-w-max p-1 rounded-xl" style="background: rgba(139,92,246,0.04);">
+        <a href="{% url 'media_dashboard' %}"
+           class="px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all {% if section == 'planning' %}text-white shadow-sm{% else %}text-gray-600 bg-white border-2 border-gray-100 hover:border-purple-200{% endif %}"
+           {% if section == 'planning' %}style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);"{% endif %}>
+            Planejamento
+        </a>
+        <a href="{% url 'media_content_list' %}"
+           class="px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all {% if section == 'demands' %}text-white shadow-sm{% else %}text-gray-600 bg-white border-2 border-gray-100 hover:border-purple-200{% endif %}"
+           {% if section == 'demands' %}style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);"{% endif %}>
+            Demandas e eventos
+        </a>
+        <a href="{% url 'media_organization' %}"
+           class="px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all {% if section == 'organization' %}text-white shadow-sm{% else %}text-gray-600 bg-white border-2 border-gray-100 hover:border-purple-200{% endif %}"
+           {% if section == 'organization' %}style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);"{% endif %}>
+            Organização
+        </a>
+    </div>
+</div>

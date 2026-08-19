@@ -901,7 +901,7 @@
                         <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">
                             Planejamento de <span style="color: #8B5CF6;">Mídia</span>
                         </h3>
-                        <p class="text-sm text-gray-500 mt-0.5">Gerencie conteúdos e campanhas</p>
+                        <p class="text-sm text-gray-500 mt-0.5">Gerencie conteúdos, templates e equipe</p>
                     </div>
                 </div>
                 <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
@@ -911,56 +911,19 @@
             <div class="accordion-content">
                 <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
                     <div class="flex flex-col gap-3">
-                        <a href="{% url 'media_dashboard' %}"
-                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
-                            style="border-color: rgba(139, 92, 246, 0.3);">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                                    style="background: rgba(139, 92, 246, 0.1);">
-                                    <i class="fas fa-tachometer-alt text-sm" style="color: #8B5CF6;"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-bold text-gray-900">Dashboard</h4>
-                                    <p class="text-xs text-gray-500">Visão geral de conteúdos</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
-                                style="color: #8B5CF6;"></i>
-                        </a>
 
-                        <a href="{% url 'media_content_list' %}"
-                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
-                            style="border-color: rgba(139, 92, 246, 0.3);">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                                    style="background: rgba(139, 92, 246, 0.1);">
-                                    <i class="fas fa-list text-sm" style="color: #8B5CF6;"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-bold text-gray-900">Conteúdos</h4>
-                                    <p class="text-xs text-gray-500">Todos os conteúdos de mídia</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
-                                style="color: #8B5CF6;"></i>
-                        </a>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Planejamento</p>
+                        {% url 'media_dashboard' as media_dashboard_url %}
+                        {% include 'parciais/media_link_card.html' with url=media_dashboard_url icon='tachometer-alt' title='Dashboard' subtitle='Visão geral e planos mensais' %}
+                        {% url 'media_content_list' as media_content_list_url %}
+                        {% include 'parciais/media_link_card.html' with url=media_content_list_url icon='clipboard-list' title='Demandas e eventos' subtitle='Produções, templates e eventos da igreja' %}
+                        {% url 'media_calendar' as media_calendar_url %}
+                        {% include 'parciais/media_link_card.html' with url=media_calendar_url icon='calendar-alt' title='Calendário' subtitle='Linha do tempo de publicações' %}
 
-                        <a href="{% url 'media_calendar' %}"
-                            class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
-                            style="border-color: rgba(139, 92, 246, 0.3);">
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                                    style="background: rgba(139, 92, 246, 0.1);">
-                                    <i class="fas fa-calendar-alt text-sm" style="color: #8B5CF6;"></i>
-                                </div>
-                                <div>
-                                    <h4 class="text-sm font-bold text-gray-900">Calendário</h4>
-                                    <p class="text-xs text-gray-500">Linha do tempo de publicações</p>
-                                </div>
-                            </div>
-                            <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"
-                                style="color: #8B5CF6;"></i>
-                        </a>
+                        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-2">Organização da equipe</p>
+                        {% url 'media_organization' as media_organization_url %}
+                        {% include 'parciais/media_link_card.html' with url=media_organization_url icon='sitemap' title='Organização da mídia' subtitle='Equipes, prioridades, recursos e funções' %}
+
                     </div>
                 </div>
             </div>

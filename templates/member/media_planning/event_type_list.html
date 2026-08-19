@@ -1,0 +1,32 @@
+{% extends "member_base.html" %}
+{% block title %}Tipos de Evento{% endblock %}
+{% block head %}<style>:root { --media-color: #8B5CF6; }</style>{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50">
+    <div class="px-4 pt-6 pb-2 bg-white border-b">
+        <h1 class="text-xl font-bold">Tipos de Evento</h1>
+        <p class="text-xs text-gray-500">Classificação para templates e planejamento</p>
+    </div>
+    {% include 'parciais/media_subnav.html' with section='types' %}
+    <div class="px-4 pt-4 space-y-2">
+        {% for et in event_types %}
+        <div class="bg-white rounded-xl border p-4 flex items-center justify-between">
+            <div>
+                <div class="font-bold">{{ et.name }}</div>
+                {% if et.planning_template %}<div class="text-xs text-emerald-600"><i class="fas fa-check"></i> Template: {{ et.planning_template.name }}</div>{% else %}
+                <div class="text-xs text-gray-400">Sem template</div>{% endif %}
+            </div>
+            {% if is_media_leader %}
+            <a href="{% url 'media_event_type_edit' et.pk %}" class="text-xs font-semibold" style="color:var(--media-color);">Editar</a>
+            {% endif %}
+        </div>
+        {% empty %}
+        <p class="text-center text-gray-400 py-12">Nenhum tipo cadastrado.</p>
+        {% endfor %}
+        {% if is_media_leader %}
+        <a href="{% url 'media_event_type_create' %}" class="block text-center py-3 rounded-xl text-white font-bold" style="background:var(--media-color);">+ Novo tipo</a>
+        {% endif %}
+    </div>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

@@ -1,0 +1,181 @@
+<!-- Modal: Nova demanda -->
+<div id="demands-modal-demand" class="demands-modal {% if create_mode == 'demand' %}active{% endif %}" role="dialog" aria-modal="true" aria-labelledby="demands-modal-demand-title">
+    <div class="demands-modal-backdrop" data-close-modal></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <div class="demands-modal-icon"><i id="demand-modal-type-icon" class="fas fa-clipboard-list"></i></div>
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Nova demanda</p>
+                    <h2 id="demands-modal-demand-title" class="text-lg font-black text-gray-900 leading-tight">O que precisamos fazer?</h2>
+                    <p id="demand-modal-subtitle" class="text-xs text-gray-500 mt-0.5">Produção de conteúdo ou tarefa organizacional</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form method="post" action="{% url 'media_demand_quick_create' %}" class="demands-modal-body">
+            {% csrf_token %}
+            <input type="hidden" name="kind" value="{{ filter_kind|default:'all' }}">
+            {% if filter_q %}<input type="hidden" name="q" value="{{ filter_q }}">{% endif %}
+            {% if filter_responsible %}<input type="hidden" name="responsible" value="{{ filter_responsible }}">{% endif %}
+            {% if filter_team %}<input type="hidden" name="team" value="{{ filter_team }}">{% endif %}
+            {% if filter_event_type %}<input type="hidden" name="event_type" value="{{ filter_event_type }}">{% endif %}
+            {% if filter_period_from %}<input type="hidden" name="period_from" value="{{ filter_period_from }}">{% endif %}
+            {% if filter_period_to %}<input type="hidden" name="period_to" value="{{ filter_period_to }}">{% endif %}
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_demand-title">Título</label>
+                {{ demand_form.title }}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_demand-content_type">Tipo</label>
+                {% include 'member/media_planning/partials/demands_type_select.html' with prefix='demand' selected_value=demand_form.content_type.value hint_id='demand-type-hint' %}
+                <p id="demand-type-hint" class="text-xs text-gray-400 mt-1.5"></p>
+                {% if demand_form.content_type.errors %}
+                <p class="text-xs text-red-500 mt-1">{{ demand_form.content_type.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_demand-description">Descrição</label>
+                {{ demand_form.description }}
+            </div>
+
+            <div class="modal-section">
+                <p class="modal-section-title">Equipe e prazos</p>
+                <p class="text-xs text-gray-500 mb-3">Defina quem faz cada parte e quando — ex: Filmmaker, Editor, Publicador.</p>
+                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='demand' assignments=demand_assignments blank_assignment=blank_assignment %}
+            </div>
+
+            <div class="demands-modal-footer">
+                <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
+                <button type="submit" class="media-btn-primary sm flex-1 justify-center">
+                    <i class="fas fa-check"></i> Criar demanda
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Novo evento -->
+<div id="demands-modal-event" class="demands-modal {% if create_mode == 'event' %}active{% endif %}" role="dialog" aria-modal="true" aria-labelledby="demands-modal-event-title">
+    <div class="demands-modal-backdrop" data-close-modal></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <div class="demands-modal-icon"><i class="fas fa-calendar-plus"></i></div>
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Novo evento</p>
+                    <h2 id="demands-modal-event-title" class="text-lg font-black text-gray-900 leading-tight">Qual evento vamos produzir?</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Data, local e template de mídia</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form method="post" action="{% url 'media_event_quick_create' %}" class="demands-modal-body">
+            {% csrf_token %}
+            <input type="hidden" name="kind" value="{{ filter_kind|default:'all' }}">
+            {% if filter_q %}<input type="hidden" name="q" value="{{ filter_q }}">{% endif %}
+            {% if filter_responsible %}<input type="hidden" name="responsible" value="{{ filter_responsible }}">{% endif %}
+            {% if filter_team %}<input type="hidden" name="team" value="{{ filter_team }}">{% endif %}
+            {% if filter_event_type %}<input type="hidden" name="event_type" value="{{ filter_event_type }}">{% endif %}
+            {% if filter_period_from %}<input type="hidden" name="period_from" value="{{ filter_period_from }}">{% endif %}
+            {% if filter_period_to %}<input type="hidden" name="period_to" value="{{ filter_period_to }}">{% endif %}
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_event-title">Título</label>
+                {{ event_form.title }}
+            </div>
+
+            <div class="modal-section">
+                <p class="modal-section-title">Quando e onde</p>
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="modal-field-label" for="id_event-event_date">Data</label>
+                        {{ event_form.event_date }}
+                    </div>
+                    <div>
+                        <label class="modal-field-label" for="id_event-event_time">Horário</label>
+                        {{ event_form.event_time }}
+                    </div>
+                </div>
+                <div>
+                    <label class="modal-field-label" for="id_event-location">Local</label>
+                    {{ event_form.location }}
+                </div>
+            </div>
+
+            <div class="modal-section">
+                <p class="modal-section-title">Template de mídia</p>
+                <p class="text-xs text-gray-500 mb-3">O template sugere os conteúdos automaticamente com base no tipo de evento.</p>
+                <label class="modal-field-label" for="id_event-event_type">Tipo de evento</label>
+                {% include 'member/media_planning/partials/demands_event_type_select.html' with prefix='event' event_types=event_types selected_value=event_form.event_type.value %}
+                {% if is_media_leader %}
+                <button type="button"
+                        class="demands-event-type-add"
+                        data-open-modal="demands-modal-event-type">
+                    <i class="fas fa-plus"></i> Criar tipo de evento
+                </button>
+                {% endif %}
+                <label class="demands-modal-check-card" for="id_event-apply_template">
+                    {{ event_form.apply_template }}
+                    <span class="text-sm text-gray-700 leading-snug">{{ event_form.apply_template.label }}</span>
+                </label>
+            </div>
+
+            <div class="demands-modal-footer">
+                <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
+                <button type="submit" class="media-btn-primary sm flex-1 justify-center">
+                    <i class="fas fa-check"></i> Criar evento
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Novo tipo de evento -->
+<div id="demands-modal-event-type" class="demands-modal demands-modal-nested" role="dialog" aria-modal="true" aria-labelledby="demands-modal-event-type-title">
+    <div class="demands-modal-backdrop" data-close-modal></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <div class="demands-modal-icon"><i class="fas fa-layer-group"></i></div>
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Novo tipo</p>
+                    <h2 id="demands-modal-event-type-title" class="text-lg font-black text-gray-900 leading-tight">Criar template de evento</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Define o padrão de demandas para este tipo</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form id="demand-event-type-form" class="demands-modal-body" novalidate>
+            {% csrf_token %}
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_event_type-name">Nome</label>
+                {{ event_type_quick_form.name }}
+                <p id="event-type-name-error" class="text-xs text-red-500 mt-1 hidden"></p>
+            </div>
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_event_type-description">Descrição</label>
+                {{ event_type_quick_form.description }}
+            </div>
+            <p class="text-xs text-gray-400">Depois de criar, você pode configurar as demandas sugeridas do template.</p>
+            <div class="demands-modal-footer">
+                <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
+                <button type="submit" class="media-btn-primary sm flex-1 justify-center" id="demand-event-type-submit">
+                    <i class="fas fa-check"></i> Criar tipo
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

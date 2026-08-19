@@ -1,0 +1,48 @@
+<div class="demand-assignment-row-wrap">
+    <div class="demand-assignment-row">
+        <input type="hidden" name="{{ prefix }}-assignment_id" value="{{ row.id|default:'' }}">
+        <span class="demand-step-badge" aria-hidden="true"></span>
+        <div class="demand-col-role assignment-role-wrap">
+            <label class="demand-field-label demand-field-label-mobile">Papel</label>
+            <select class="media-field-select assignment-role-select"
+                    data-role-name="{{ prefix }}-assignment_role"
+                    {% if not row.is_custom_role %}name="{{ prefix }}-assignment_role"{% endif %}>
+                <option value="" {% if not row.role %}selected{% endif %}>Escolher papel</option>
+                {% for r in assignment_role_presets %}
+                <option value="{{ r }}" {% if row.role == r %}selected{% endif %}>{{ r }}</option>
+                {% endfor %}
+                <option value="__custom__" {% if row.is_custom_role %}selected{% endif %}>Outro…</option>
+            </select>
+            <input type="text"
+                   class="media-field-input assignment-role-custom{% if not row.is_custom_role %} hidden{% endif %}"
+                   placeholder="Nome do papel"
+                   value="{% if row.is_custom_role %}{{ row.role }}{% endif %}"
+                   {% if row.is_custom_role %}name="{{ prefix }}-assignment_role"{% else %}disabled{% endif %}>
+        </div>
+        <div class="demand-col-user">
+            <label class="demand-field-label demand-field-label-mobile">Responsável</label>
+            <select name="{{ prefix }}-assignment_user" class="media-field-select">
+                <option value="" {% if not row.user_id %}selected{% endif %}>Escolher membro</option>
+                {% for u in responsible_options %}
+                <option value="{{ u.pk }}" {% if row.user_id|stringformat:'s' == u.pk|stringformat:'s' %}selected{% endif %}>
+                    {{ u.member.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="demand-col-due">
+            <label class="demand-field-label demand-field-label-mobile">Prazo</label>
+            <input type="date" name="{{ prefix }}-assignment_due" value="{{ row.due_date|default:'' }}"
+                   class="media-field-input">
+        </div>
+        <div class="demand-col-action">
+            <button type="button" class="demand-remove-assignment" aria-label="Remover etapa" title="Remover etapa">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+    </div>
+    <div class="demand-assignment-desc">
+        <textarea name="{{ prefix }}-assignment_desc" rows="2" class="media-field-input"
+                  placeholder="Observações, links ou dependências desta etapa (opcional)">{{ row.description|default:'' }}</textarea>
+    </div>
+</div>

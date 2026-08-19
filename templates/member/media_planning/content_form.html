@@ -13,8 +13,8 @@
 <div class="min-h-screen pb-28">
 
     <!-- Header -->
-    <div class="px-4 pt-6 pb-4 flex items-center gap-3">
-        <a href="{% if content %}{% url 'media_content_detail' content.pk %}{% else %}{% url 'media_content_list' %}{% endif %}" class="text-gray-400 hover:text-gray-600">
+    <div class="px-4 pt-6 pb-2 flex items-center gap-3">
+        <a href="{% if content %}{% url 'media_content_list' %}?selected={% if content.event_id %}event-{{ content.event_id }}{% else %}free-{{ content.pk }}{% endif %}{% else %}{% url 'media_content_list' %}{% endif %}" class="text-gray-400 hover:text-gray-600">
             <i class="fas fa-arrow-left text-lg"></i>
         </a>
         <div>
@@ -22,6 +22,7 @@
             <p class="text-sm text-gray-500">Planejamento de Mídia</p>
         </div>
     </div>
+    {% include 'parciais/media_subnav.html' with section='planning' %}
 
     <form method="post" class="px-4 space-y-4">{% csrf_token %}
 
@@ -73,6 +74,36 @@
                     <label class="block text-sm font-semibold text-gray-700 mb-1">Data de publicação</label>
                     {{ form.publication_date }}
                 </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+            <p class="text-xs font-bold text-gray-400 uppercase tracking-wider">Equipe e execução</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Equipe responsável</label>
+                    {{ form.sub_team }}
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Função</label>
+                    {{ form.assigned_role }}
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Canal de publicação</label>
+                {{ form.publication_channel }}
+            </div>
+            <div class="flex flex-wrap gap-4">
+                <label class="flex items-center gap-2 text-sm text-gray-700">
+                    {{ form.requires_recording }} Necessita gravação
+                </label>
+                <label class="flex items-center gap-2 text-sm text-gray-700">
+                    {{ form.requires_editing }} Necessita edição
+                </label>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1">Observações</label>
+                {{ form.observations }}
             </div>
         </div>
 

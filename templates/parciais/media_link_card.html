@@ -1,0 +1,20 @@
+{% comment %}
+  Card de link do módulo de mídia.
+  Params: url, icon, title, subtitle
+{% endcomment %}
+<a href="{{ url }}"
+   class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1"
+   style="border-color: rgba(139, 92, 246, 0.3);">
+    <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+             style="background: rgba(139, 92, 246, 0.1);">
+            <i class="fas fa-{{ icon }} text-sm" style="color: #8B5CF6;"></i>
+        </div>
+        <div class="min-w-0">
+            <h4 class="text-sm font-bold text-gray-900">{{ title }}</h4>
+            <p class="text-xs text-gray-500 truncate">{{ subtitle }}</p>
+        </div>
+    </div>
+    <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1 flex-shrink-0"
+       style="color: #8B5CF6;"></i>
+</a>

@@ -1,0 +1,42 @@
+{% extends "member_base.html" %}
+{% block title %}{{ sub_team.name }}{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50">
+    <div class="px-4 pt-6 pb-2 bg-white border-b">
+        <a href="{% url 'media_subteam_list' %}" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Equipes</a>
+        <h1 class="text-xl font-bold">{{ sub_team.name }}</h1>
+        {% if sub_team.leader %}<p class="text-xs text-gray-500">Líder: {{ sub_team.leader.name }}</p>{% endif %}
+        {% if sub_team.responsibilities %}<p class="text-sm text-gray-600 mt-2">{{ sub_team.responsibilities }}</p>{% endif %}
+        {% if is_media_leader %}
+        <a href="{% url 'media_subteam_edit' sub_team.pk %}" class="inline-block mt-2 text-xs font-semibold" style="color:#8B5CF6;">Editar equipe</a>
+        {% endif %}
+    </div>
+    {% include 'parciais/media_subnav.html' with section='organization' %}
+    <div class="px-4 pt-4">
+        <h2 class="text-sm font-bold text-gray-500 uppercase mb-2">Membros</h2>
+        <div class="space-y-2 mb-6">
+            {% for m in memberships %}
+            <div class="bg-white rounded-xl border p-4">
+                <div class="flex justify-between">
+                    <div class="font-semibold">{{ m.member.name }}</div>
+                    {% if is_media_leader %}
+                    <a href="{% url 'media_subteam_member_edit' m.pk %}" class="text-xs" style="color:#8B5CF6;">Editar</a>
+                    {% endif %}
+                </div>
+                {% if m.roles.exists %}<div class="text-xs text-gray-400 mt-1">{% for r in m.roles.all %}{{ r.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+                {% if m.responsibilities %}<p class="text-xs text-gray-500 mt-1">{{ m.responsibilities }}</p>{% endif %}
+            </div>
+            {% empty %}<p class="text-gray-400 text-sm">Nenhum membro.</p>{% endfor %}
+        </div>
+        {% if is_media_leader %}
+        <h2 class="text-sm font-bold text-gray-500 uppercase mb-2">Adicionar membro</h2>
+        <form method="post" action="{% url 'media_subteam_member_add' sub_team.pk %}" class="bg-white rounded-xl border p-4 space-y-3">
+            {% csrf_token %}
+            {% for field in member_form %}<div><label class="block text-xs font-bold text-gray-600 mb-1">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+            <button type="submit" class="w-full py-2 rounded-xl text-white font-semibold text-sm" style="background:#8B5CF6;">Adicionar</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

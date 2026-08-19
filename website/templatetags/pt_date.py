@@ -42,6 +42,24 @@ def pt_weekday(value):
         return ''
 
 
+MONTHS_SHORT_PT = [
+    'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+    'jul', 'ago', 'set', 'out', 'nov', 'dez',
+]
+
+
+@register.filter
+def pt_date_short(value):
+    """Formato curto em português. Ex: 19 ago"""
+    if not value:
+        return ''
+    try:
+        d = value.date() if hasattr(value, 'date') else value
+        return f'{d.day} {MONTHS_SHORT_PT[d.month - 1]}'
+    except Exception:
+        return ''
+
+
 @register.filter
 def pt_date(value):
     """Formata uma data em português com extenso.

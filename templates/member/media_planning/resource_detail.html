@@ -1,0 +1,63 @@
+{% extends "member_base.html" %}
+{% block title %}{{ resource.name }}{% endblock %}
+{% block content %}
+<div class="min-h-screen pb-28 bg-gray-50 px-4 pt-6">
+    <a href="{% url 'media_resource_list' %}" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Recursos</a>
+    {% include 'parciais/media_subnav.html' with section='organization' %}
+    <h1 class="text-xl font-bold">{{ resource.name }}</h1>
+    <div class="bg-white rounded-xl border p-4 mt-4 space-y-2 text-sm">
+        <div><span class="text-gray-400 text-xs">Categoria</span><div>{{ resource.get_category_display }}</div></div>
+        {% if resource.url %}<div><span class="text-gray-400 text-xs">URL</span><div><a href="{{ resource.url }}" target="_blank" class="text-blue-600 break-all">{{ resource.url }}</a></div></div>{% endif %}
+        {% if resource.email_username %}<div><span class="text-gray-400 text-xs">E-mail / usuário</span><div>{{ resource.email_username }}</div></div>{% endif %}
+        {% if resource.responsible %}<div><span class="text-gray-400 text-xs">Responsável</span><div>{{ resource.responsible.name }}</div></div>{% endif %}
+        {% if resource.subscription_type %}<div><span class="text-gray-400 text-xs">Assinatura</span><div>{{ resource.get_subscription_type_display }}</div></div>{% endif %}
+        {% if resource.renewal_date %}<div><span class="text-gray-400 text-xs">Renovação</span><div>{{ resource.renewal_date|date:"d/m/Y" }}</div></div>{% endif %}
+        {% if resource.notes %}<div><span class="text-gray-400 text-xs">Observações</span><div>{{ resource.notes }}</div></div>{% endif %}
+        {% if resource.access_members.exists %}
+        <div><span class="text-gray-400 text-xs">Acesso</span><div>{% for m in resource.access_members.all %}{{ m.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div></div>
+        {% endif %}
+    </div>
+
+    {% if is_media_leader %}
+    <a href="{% url 'media_resource_edit' resource.pk %}" class="inline-block mt-4 text-sm font-semibold" style="color:#8B5CF6;">Editar recurso</a>
+
+    <div class="bg-white rounded-xl border p-4 mt-4">
+        <h2 class="font-bold text-sm mb-2"><i class="fas fa-lock"></i> Cofre de credenciais</h2>
+        {% if has_credential %}
+        <p class="text-xs text-emerald-600 mb-2">Senha cadastrada (criptografada)</p>
+        <button type="button" id="reveal-btn" class="text-xs px-3 py-1.5 rounded-lg border font-semibold mb-3">Revelar senha</button>
+        <div id="revealed-area" class="hidden bg-gray-50 rounded-lg p-3 text-sm font-mono break-all"></div>
+        {% else %}
+        <p class="text-xs text-gray-400 mb-2">Nenhuma credencial cadastrada.</p>
+        {% endif %}
+        <form method="post" action="{% url 'media_resource_credential_update' resource.pk %}" class="space-y-3 mt-3 border-t pt-3">
+            {% csrf_token %}
+            {% for field in credential_form %}<div><label class="block text-xs font-bold text-gray-600 mb-1">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+            <button type="submit" class="w-full py-2 rounded-xl text-white font-semibold text-sm" style="background:#8B5CF6;">Salvar credenciais</button>
+        </form>
+    </div>
+    <script>
+    const btn = document.getElementById('reveal-btn');
+    if (btn) {
+        btn.addEventListener('click', async function() {
+            const resp = await fetch('{% url "media_resource_credential_reveal" resource.pk %}', {
+                method: 'POST',
+                headers: {'X-CSRFToken': '{{ csrf_token }}', 'Content-Type': 'application/json'},
+            });
+            const data = await resp.json();
+            const area = document.getElementById('revealed-area');
+            if (data.password) {
+                area.innerHTML = '<strong>Senha:</strong> ' + data.password + (data.notes ? '<br><strong>Notas:</strong> ' + data.notes : '');
+                area.classList.remove('hidden');
+                btn.textContent = 'Ocultar';
+                btn.onclick = () => { area.classList.add('hidden'); btn.textContent = 'Revelar senha'; btn.onclick = null; location.reload(); };
+            }
+        });
+    }
+    </script>
+    {% elif has_credential %}
+    <p class="text-xs text-gray-400 mt-4"><i class="fas fa-lock"></i> Este recurso possui credenciais — apenas líderes podem visualizá-las.</p>
+    {% endif %}
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% endblock %}

@@ -62,7 +62,7 @@
         {% if contents %}
         <div class="space-y-2">
             {% for content in contents %}
-            <a href="{% url 'media_content_detail' content.pk %}" class="media-card flex items-center gap-3 p-3.5 block">
+            <a href="{% url 'media_content_list' %}?selected=free-{{ content.pk }}" class="media-card flex items-center gap-3 p-3.5 block">
                 <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-2 mb-1">
                         <span class="badge badge-{{ content.status }}">{{ content.get_status_display }}</span>

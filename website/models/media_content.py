@@ -15,6 +15,9 @@ CONTENT_TYPE_CHOICES = [
     ('website_banner', 'Banner do Site'),
     ('devotional', 'Devocional'),
     ('announcement', 'Comunicado'),
+    ('coordination', 'Organização'),
+    ('contact', 'Contato'),
+    ('approval', 'Aprovação'),
 ]
 
 STATUS_CHOICES = [
@@ -31,6 +34,17 @@ PRIORITY_CHOICES = [
     ('medium', 'Média'),
     ('high', 'Alta'),
     ('urgent', 'Urgente'),
+]
+
+PUBLICATION_CHANNEL_CHOICES = [
+    ('instagram', 'Instagram'),
+    ('instagram_stories', 'Instagram Stories'),
+    ('facebook', 'Facebook'),
+    ('youtube', 'YouTube'),
+    ('whatsapp', 'WhatsApp'),
+    ('website', 'Site'),
+    ('tiktok', 'TikTok'),
+    ('other', 'Outro'),
 ]
 
 
@@ -96,6 +110,39 @@ class MediaContent(BaseModel):
         related_name='contents',
         verbose_name='Categoria',
     )
+    sub_team = models.ForeignKey(
+        'MediaSubTeam',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='contents',
+        verbose_name='Equipe responsável',
+    )
+    assigned_role = models.ForeignKey(
+        'MediaRole',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='contents',
+        verbose_name='Função responsável',
+    )
+    requires_recording = models.BooleanField(default=False, verbose_name='Necessita gravação?')
+    requires_editing = models.BooleanField(default=False, verbose_name='Necessita edição?')
+    publication_channel = models.CharField(
+        max_length=30,
+        choices=PUBLICATION_CHANNEL_CHOICES,
+        blank=True,
+        verbose_name='Canal de publicação',
+    )
+    template_item = models.ForeignKey(
+        'MediaPlanningTemplateItem',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='generated_contents',
+        verbose_name='Item de template de origem',
+    )
+    observations = models.TextField(blank=True, verbose_name='Observações')
 
     class Meta:
         verbose_name = 'Conteúdo de Mídia'
