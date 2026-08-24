@@ -7,6 +7,7 @@
            class="media-chip {% if filter_kind == 'events' %}active{% endif %}">Eventos</a>
         <a href="?kind=free{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
            class="media-chip {% if filter_kind == 'free' %}active{% endif %}">Conteúdos livres</a>
+        <a href="{% url 'media_event_type_list' %}" class="media-chip">Tipos de eventos</a>
     </div>
 
     <!-- Busca + botões -->

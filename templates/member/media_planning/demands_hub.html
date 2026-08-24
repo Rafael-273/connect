@@ -473,7 +473,6 @@
     .demands-modal.active {
         pointer-events: auto; opacity: 1;
     }
-    .demands-modal-nested { z-index: 70; }
     .demands-modal-backdrop {
         position: absolute; inset: 0;
         background: rgba(17, 24, 39, 0.45);
@@ -1020,18 +1019,6 @@
         document.getElementById('demand-modal-type-icon'), 'clipboard-list'
     );
 
-    function addEventTypeOption(select, id, name) {
-        if (!select) return;
-        var createOpt = select.querySelector('[data-create-option]');
-        var opt = document.createElement('option');
-        opt.value = String(id);
-        opt.textContent = name;
-        if (createOpt) select.insertBefore(opt, createOpt);
-        else select.appendChild(opt);
-        select.value = String(id);
-        select.setAttribute('data-last-value', String(id));
-    }
-
     function initEventTypeSelect() {
         var select = document.getElementById('id_event-event_type');
         if (!select || select.dataset.bound) return;
@@ -1041,55 +1028,19 @@
         }
         select.addEventListener('change', function () {
             if (select.value === '__create__') {
+                var createOption = select.querySelector('[data-create-option]');
+                var createUrl = createOption && createOption.getAttribute('data-create-url');
+                if (createUrl) {
+                    window.location.assign(createUrl);
+                    return;
+                }
                 select.value = select.getAttribute('data-last-value') || '';
-                openModal('demands-modal-event-type');
-                var nameInput = document.getElementById('id_event_type-name');
-                if (nameInput) nameInput.focus();
                 return;
             }
             select.setAttribute('data-last-value', select.value);
         });
     }
     initEventTypeSelect();
-
-    var eventTypeForm = document.getElementById('demand-event-type-form');
-    if (eventTypeForm) {
-        eventTypeForm.addEventListener('submit', function (e) {
-            e.preventDefault();
-            var errEl = document.getElementById('event-type-name-error');
-            if (errEl) {
-                errEl.textContent = '';
-                errEl.classList.add('hidden');
-            }
-            var submitBtn = document.getElementById('demand-event-type-submit');
-            if (submitBtn) submitBtn.disabled = true;
-            var body = new URLSearchParams(new FormData(eventTypeForm));
-            fetch('{% url "media_event_type_quick_create" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRFToken': getCsrfToken(),
-                },
-                body: body.toString(),
-            }).then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
-              .then(function (res) {
-                if (submitBtn) submitBtn.disabled = false;
-                if (!res.ok) {
-                    if (errEl && res.data.errors && res.data.errors.name) {
-                        errEl.textContent = res.data.errors.name;
-                        errEl.classList.remove('hidden');
-                    }
-                    return;
-                }
-                addEventTypeOption(document.getElementById('id_event-event_type'), res.data.id, res.data.name);
-                eventTypeForm.reset();
-                closeModalEl(document.getElementById('demands-modal-event-type'));
-            }).catch(function () {
-                if (submitBtn) submitBtn.disabled = false;
-            });
-        });
-    }
 
     function getCsrfToken() {
         var m = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);

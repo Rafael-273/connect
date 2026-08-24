@@ -1,22 +1,50 @@
 {% extends "member_base.html" %}
-{% block title %}{% if action == 'edit' %}Editar{% else %}Novo{% endif %} Template{% endblock %}
+
+{% block title %}{% if action == 'edit' %}Editar{% else %}Novo{% endif %} tipo de evento{% endblock %}
+
+{% block head %}
+<style>:root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }</style>
+{% endblock %}
+
 {% block content %}
-<div class="min-h-screen pb-28 bg-gray-50 px-4 pt-6">
-    <a href="{% url 'media_content_list' %}?tab=templates" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Demandas e eventos</a>
-    {% include 'parciais/media_subnav.html' with section='demands' %}
-    <h1 class="text-xl font-bold mb-4">{% if action == 'edit' %}Editar template{% else %}Novo template{% endif %}</h1>
-    <p class="text-sm text-gray-500 mb-4">O nome do template também classifica eventos (ex: Conferência, Batismo).</p>
-    <form method="post" class="bg-white rounded-xl border p-4 space-y-4">
-        {% csrf_token %}
-        {% for field in form %}
-        <div>
-            <label class="block text-xs font-bold text-gray-600 mb-1">{{ field.label }}</label>
-            {{ field }}
-            {% if field.errors %}<p class="text-xs text-red-500 mt-1">{{ field.errors.0 }}</p>{% endif %}
+<div class="min-h-screen pb-28 bg-gray-50">
+    <div class="px-4 pt-6 pb-4 bg-white border-b border-gray-100">
+        <div class="max-w-2xl mx-auto">
+            <a href="{% url 'media_event_type_list' %}" class="inline-flex items-center gap-1.5 text-xs font-semibold mb-3" style="color:var(--media-color);">
+                <i class="fas fa-arrow-left"></i> Tipos de eventos
+            </a>
+            <div class="flex items-start gap-3">
+                <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0" style="background:rgba(var(--media-rgb),.12); color:var(--media-color);">
+                    <i class="fas fa-tags"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-900">{% if action == 'edit' %}Editar tipo de evento{% else %}Novo tipo de evento{% endif %}</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">Defina o tipo e, em seguida, suas demandas padrão.</p>
+                </div>
+            </div>
         </div>
-        {% endfor %}
-        <button type="submit" class="w-full py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">Salvar</button>
-    </form>
+    </div>
+
+    {% include 'parciais/media_subnav.html' with section='demands' %}
+
+    <div class="max-w-2xl mx-auto px-4 pt-5">
+        <div class="rounded-2xl bg-purple-50 border border-purple-100 p-4 mb-4">
+            <p class="text-sm font-bold text-purple-900">Como funciona</p>
+            <p class="text-xs text-purple-700 mt-1 leading-relaxed">Após salvar, adicione as demandas que este tipo deve sugerir automaticamente em cada novo evento.</p>
+        </div>
+        <form method="post" class="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 space-y-4">
+            {% csrf_token %}
+            {% for field in form %}
+            <div>
+                <label class="block text-xs font-bold text-gray-600 mb-1.5">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="text-xs text-gray-400 mt-1">{{ field.help_text }}</p>{% endif %}
+                {% if field.errors %}<p class="text-xs text-red-500 mt-1">{{ field.errors.0 }}</p>{% endif %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="w-full py-3 rounded-xl text-sm text-white font-bold shadow-sm" style="background:linear-gradient(135deg,#8B5CF6,#7C3AED);">Salvar e configurar demandas</button>
+        </form>
+    </div>
 </div>
 {% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
 {% endblock %}

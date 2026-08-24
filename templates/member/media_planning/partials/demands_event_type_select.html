@@ -7,6 +7,6 @@
     <option value="{{ et.pk }}" {% if selected_value == et.pk|stringformat:"s" %}selected{% endif %}>{{ et.name }}</option>
     {% endfor %}
     {% if is_media_leader %}
-    <option value="__create__" data-create-option>+ Criar tipo de evento...</option>
+    <option value="__create__" data-create-option data-create-url="{% url 'media_event_type_list' %}">Ver tipos de eventos...</option>
     {% endif %}
 </select>

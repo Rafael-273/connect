@@ -1,32 +1,250 @@
 {% extends "member_base.html" %}
-{% block title %}Tipos de Evento{% endblock %}
-{% block head %}<style>:root { --media-color: #8B5CF6; }</style>{% endblock %}
+
+{% block title %}Tipos de eventos{% endblock %}
+
+{% block head %}
+<style>
+    :root { --media-color: #8B5CF6; }
+    .admin-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+    .data-table thead th {
+        background: #f8fafc; color: #6b7280; border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px; font-size: .7rem; font-weight: 700;
+        letter-spacing: .07em; text-transform: uppercase;
+    }
+    .data-table tbody tr { border-bottom: 1px solid #f8fafc; transition: background .15s, box-shadow .15s; }
+    .data-table tbody tr:hover { background: #fafbff; box-shadow: inset 3px 0 0 var(--media-color); }
+    .data-table tbody td { padding: 14px 24px; vertical-align: middle; }
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+        border-radius: 9px; font-size: .9rem; transition: all .15s;
+    }
+    .action-btn-view { background: rgba(139,92,246,.09); color: var(--media-color); }
+    .action-btn-edit { background: #eff6ff; color: #2563eb; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn:hover { filter: brightness(.96); transform: translateY(-1px); }
+    .type-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .type-modal-backdrop { position: absolute; inset: 0; background: rgba(17,24,39,.5); backdrop-filter: blur(2px); }
+    .type-modal-card { position: relative; width: 100%; max-width: 32rem; max-height: calc(100vh - 2rem); overflow-y: auto; background: #fff; border-radius: 1.25rem; box-shadow: 0 24px 60px rgba(17,24,39,.24); }
+    .type-modal input[name="name"] {
+        width: 100%; min-height: 3rem; padding: .75rem 1rem; border: 1px solid #d1d5db;
+        border-radius: .75rem; background: #fff; color: #374151; font-size: .875rem;
+    }
+    .type-modal input[name="name"]:focus { outline: none; border-color: var(--media-color); box-shadow: 0 0 0 3px rgba(139,92,246,.12); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="min-h-screen pb-28 bg-gray-50">
-    <div class="px-4 pt-6 pb-2 bg-white border-b">
-        <h1 class="text-xl font-bold">Tipos de Evento</h1>
-        <p class="text-xs text-gray-500">Classificação para templates e planejamento</p>
-    </div>
-    {% include 'parciais/media_subnav.html' with section='types' %}
-    <div class="px-4 pt-4 space-y-2">
-        {% for et in event_types %}
-        <div class="bg-white rounded-xl border p-4 flex items-center justify-between">
-            <div>
-                <div class="font-bold">{{ et.name }}</div>
-                {% if et.planning_template %}<div class="text-xs text-emerald-600"><i class="fas fa-check"></i> Template: {{ et.planning_template.name }}</div>{% else %}
-                <div class="text-xs text-gray-400">Sem template</div>{% endif %}
+    <div class="px-4 pt-6 pb-4">
+        <a href="{% url 'media_content_list' %}" class="text-xs font-semibold mb-3 inline-block" style="color:var(--media-color);">
+            <i class="fas fa-arrow-left"></i> Demandas e eventos
+        </a>
+
+        <div class="flex items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm text-white" style="background:var(--media-color);">
+                    <i class="fas fa-tags text-lg"></i>
+                </div>
+                <div class="min-w-0">
+                    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Tipos de eventos</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">Templates e demandas padrão da equipe</p>
+                </div>
             </div>
             {% if is_media_leader %}
-            <a href="{% url 'media_event_type_edit' et.pk %}" class="text-xs font-semibold" style="color:var(--media-color);">Editar</a>
+            <a href="?create=1{% if search %}&search={{ search|urlencode }}{% endif %}" class="sm:hidden flex-shrink-0 w-10 h-10 text-white rounded-lg flex items-center justify-center" style="background:var(--media-color);" title="Novo tipo de evento">
+                <i class="fas fa-plus"></i>
+            </a>
             {% endif %}
         </div>
-        {% empty %}
-        <p class="text-center text-gray-400 py-12">Nenhum tipo cadastrado.</p>
-        {% endfor %}
-        {% if is_media_leader %}
-        <a href="{% url 'media_event_type_create' %}" class="block text-center py-3 rounded-xl text-white font-bold" style="background:var(--media-color);">+ Novo tipo</a>
-        {% endif %}
+
+        <div class="flex items-center gap-2 mb-5">
+            <form method="get" class="flex items-center gap-2 flex-1 min-w-0">
+                <input type="search" name="search" value="{{ search }}" placeholder="Buscar tipo de evento..."
+                       class="w-full min-w-0 h-10 px-4 border border-gray-300 rounded-lg focus:outline-none bg-white text-sm" style="--tw-ring-color:var(--media-color);">
+                <button type="submit" class="flex-shrink-0 w-10 h-10 text-white rounded-lg flex items-center justify-center" style="background:var(--media-color);" title="Buscar">
+                    <i class="fas fa-search text-sm"></i>
+                </button>
+            </form>
+            {% if is_media_leader %}
+            <a href="?create=1{% if search %}&search={{ search|urlencode }}{% endif %}" class="hidden sm:flex flex-shrink-0 px-4 py-2 text-white rounded-lg items-center gap-2 text-sm font-medium" style="background:var(--media-color);">
+                <i class="fas fa-plus"></i> Novo tipo
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="block md:hidden space-y-3">
+            {% for et in event_types %}
+            <div class="admin-card p-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <h2 class="text-base font-bold text-gray-900 truncate">{{ et.name }}</h2>
+                        {% if et.description %}<p class="text-xs text-gray-500 mt-0.5 line-clamp-2">{{ et.description }}</p>{% endif %}
+                        {% if et.planning_template %}
+                        <span class="inline-flex mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">{{ et.template_item_count }} demanda{{ et.template_item_count|pluralize }} padrão</span>
+                        {% else %}
+                        <span class="inline-flex mt-2 px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">Sem demandas configuradas</span>
+                        {% endif %}
+                    </div>
+                    {% if et.is_active %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ativo</span>{% else %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">Inativo</span>{% endif %}
+                </div>
+                {% if et.planning_template or is_media_leader %}
+                <div class="flex gap-2 pt-3 mt-3 border-t border-gray-100">
+                    <a href="{% if et.planning_template %}{% url 'media_template_detail' et.planning_template.pk %}{% else %}{% url 'media_template_setup' et.pk %}{% endif %}" class="flex-1 py-2 px-3 rounded-lg text-sm font-medium text-center text-white" style="background:var(--media-color);">
+                        {% if et.planning_template %}Ver demandas{% else %}Configurar{% endif %}
+                    </a>
+                    {% if is_media_leader %}
+                    <a href="{% url 'media_event_type_edit' et.pk %}" class="py-2 px-3 rounded-lg text-sm font-medium bg-blue-50 text-blue-600" title="Editar tipo"><i class="fas fa-pen"></i></a>
+                    <button type="button" class="py-2 px-3 rounded-lg text-sm font-medium bg-red-50 text-red-600" title="Excluir tipo"
+                            data-delete-type data-delete-url="{% url 'media_event_type_delete' et.pk %}" data-delete-name="{{ et.name }}" data-demand-count="{{ et.template_item_count }}" data-event-count="{{ et.event_count }}"><i class="fas fa-trash"></i></button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div class="admin-card p-8 text-center text-sm text-gray-500">Nenhum tipo de evento encontrado.</div>
+            {% endfor %}
+        </div>
+
+        <div class="admin-card hidden md:block overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="data-table w-full min-w-[720px]">
+                    <thead>
+                        <tr>
+                            <th class="text-left">Tipo de evento</th>
+                            <th class="text-left">Demandas padrão</th>
+                            <th class="text-left">Status</th>
+                            <th class="text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white">
+                        {% for et in event_types %}
+                        <tr>
+                            <td>
+                                <div class="text-sm font-medium text-gray-900">{{ et.name }}</div>
+                                {% if et.description %}<div class="text-xs text-gray-400 mt-0.5">{{ et.description|truncatewords:12 }}</div>{% endif %}
+                            </td>
+                            <td>
+                                {% if et.planning_template %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">{{ et.template_item_count }} demanda{{ et.template_item_count|pluralize }}</span>{% else %}<span class="text-xs text-amber-600">Não configuradas</span>{% endif %}
+                            </td>
+                            <td>{% if et.is_active %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">Ativo</span>{% else %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">Inativo</span>{% endif %}</td>
+                            <td>
+                                <div class="flex items-center justify-end gap-1.5">
+                                    {% if et.planning_template or is_media_leader %}
+                                    <a href="{% if et.planning_template %}{% url 'media_template_detail' et.planning_template.pk %}{% else %}{% url 'media_template_setup' et.pk %}{% endif %}" class="action-btn action-btn-view" title="{% if et.planning_template %}Ver demandas{% else %}Configurar demandas{% endif %}"><i class="fas {% if et.planning_template %}fa-eye{% else %}fa-plus{% endif %}"></i></a>
+                                    {% endif %}
+                                    {% if is_media_leader %}<a href="{% url 'media_event_type_edit' et.pk %}" class="action-btn action-btn-edit" title="Editar"><i class="fas fa-pen"></i></a>{% endif %}
+                                    {% if is_media_leader %}<button type="button" class="action-btn action-btn-delete" title="Excluir" data-delete-type data-delete-url="{% url 'media_event_type_delete' et.pk %}" data-delete-name="{{ et.name }}" data-demand-count="{{ et.template_item_count }}" data-event-count="{{ et.event_count }}"><i class="fas fa-trash"></i></button>{% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">Nenhum tipo de evento encontrado.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
+{% if is_media_leader and show_create_modal %}
+<div class="type-modal" role="dialog" aria-modal="true" aria-labelledby="create-event-type-title">
+    <a href="{% url 'media_event_type_list' %}{% if search %}?search={{ search|urlencode }}{% endif %}" class="type-modal-backdrop" aria-label="Fechar"></a>
+    <div class="type-modal-card">
+        <div class="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white" style="background:var(--media-color);"><i class="fas fa-tags"></i></div>
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Novo tipo</p>
+                    <h2 id="create-event-type-title" class="text-lg font-bold text-gray-900">Novo tipo de evento</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Crie o template para suas demandas padrão.</p>
+                </div>
+            </div>
+            <a href="{% url 'media_event_type_list' %}{% if search %}?search={{ search|urlencode }}{% endif %}" class="w-9 h-9 rounded-lg bg-gray-100 text-gray-400 flex items-center justify-center" aria-label="Fechar"><i class="fas fa-times"></i></a>
+        </div>
+        <form method="post" action="{% url 'media_template_create' %}" class="p-5 space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="is_active" value="on">
+            <input type="hidden" name="sort_order" value="0">
+            {% if create_form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{{ create_form.non_field_errors.0 }}</div>
+            {% endif %}
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5" for="{{ create_form.name.id_for_label }}">Nome do tipo</label>
+                {{ create_form.name }}
+                {% if create_form.name.errors %}<p class="text-xs text-red-500 mt-1">{{ create_form.name.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5" for="{{ create_form.description.id_for_label }}">Descrição <span class="normal-case font-medium text-gray-400">(opcional)</span></label>
+                {{ create_form.description }}
+                {% if create_form.description.errors %}<p class="text-xs text-red-500 mt-1">{{ create_form.description.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="flex items-start gap-2.5 rounded-xl border border-purple-100 bg-purple-50 px-3.5 py-3">
+                <i class="fas fa-clipboard-list mt-0.5 text-sm text-purple-500"></i>
+                <p class="text-xs leading-relaxed text-purple-700">Depois de salvar, você poderá adicionar as demandas padrão que serão sugeridas para cada evento deste tipo.</p>
+            </div>
+            <div class="flex gap-2 pt-2">
+                <a href="{% url 'media_event_type_list' %}{% if search %}?search={{ search|urlencode }}{% endif %}" class="flex-1 py-2.5 rounded-lg text-sm text-center font-semibold bg-gray-100 text-gray-600">Cancelar</a>
+                <button type="submit" class="flex-1 py-2.5 rounded-lg text-sm font-bold text-white" style="background:var(--media-color);">Salvar e configurar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% if is_media_leader %}
+<div id="delete-event-type-modal" class="type-modal hidden" role="dialog" aria-modal="true" aria-labelledby="delete-event-type-title">
+    <div class="type-modal-backdrop" data-close-delete-type></div>
+    <div class="type-modal-card max-w-md">
+        <div class="p-5">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0"><i class="fas fa-trash"></i></div>
+                <div class="min-w-0">
+                    <h2 id="delete-event-type-title" class="text-lg font-bold text-gray-900">Excluir tipo de evento?</h2>
+                    <p class="text-sm text-gray-500 mt-0.5">Esta ação não pode ser desfeita.</p>
+                </div>
+            </div>
+            <p class="text-sm text-gray-600 leading-relaxed mt-5">Você está prestes a excluir <strong id="delete-event-type-name" class="text-gray-900"></strong>. O template e suas <span id="delete-demand-count"></span> também serão removidos.</p>
+            <p id="delete-event-count" class="hidden text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-3"></p>
+            <form id="delete-event-type-form" method="post" class="flex gap-2 mt-5">
+                {% csrf_token %}
+                <button type="button" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600" data-close-delete-type>Cancelar</button>
+                <button type="submit" class="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-red-600 hover:bg-red-700">Excluir tipo</button>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var modal = document.getElementById('delete-event-type-modal');
+    var form = document.getElementById('delete-event-type-form');
+    var name = document.getElementById('delete-event-type-name');
+    var demandCount = document.getElementById('delete-demand-count');
+    var eventCount = document.getElementById('delete-event-count');
+    if (!modal || !form) return;
+
+    document.querySelectorAll('[data-delete-type]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var demands = Number(button.dataset.demandCount || 0);
+            var events = Number(button.dataset.eventCount || 0);
+            form.action = button.dataset.deleteUrl;
+            name.textContent = button.dataset.deleteName;
+            demandCount.textContent = demands + ' demanda' + (demands === 1 ? ' padrão' : 's padrão');
+            if (events > 0) {
+                eventCount.textContent = events + ' evento' + (events === 1 ? '' : 's') + ' existente' + (events === 1 ? '' : 's') + ' não será(ão) excluído(s), mas ficará(ão) sem este tipo.';
+                eventCount.classList.remove('hidden');
+            } else {
+                eventCount.classList.add('hidden');
+            }
+            modal.classList.remove('hidden');
+        });
+    });
+    document.querySelectorAll('[data-close-delete-type]').forEach(function (button) {
+        button.addEventListener('click', function () { modal.classList.add('hidden'); });
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') modal.classList.add('hidden');
+    });
+}());
+</script>
+{% endif %}
 {% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
 {% endblock %}

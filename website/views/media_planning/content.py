@@ -27,7 +27,6 @@ from ...forms.media_planning import (
     MediaContentForm,
     MediaDemandQuickForm,
     MediaEventQuickForm,
-    MediaEventTypeQuickForm,
     MediaTaskForm,
 )
 from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
@@ -77,7 +76,6 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
 
         demand_form = MediaDemandQuickForm(prefix='demand')
         event_form = MediaEventQuickForm(prefix='event')
-        event_type_quick_form = MediaEventTypeQuickForm(prefix='event_type')
         event_types = list(event_form.fields['event_type'].queryset)
         edit_form = MediaDemandQuickForm(prefix='edit')
         edit_assignments = [{'id': '', 'role': '', 'user_id': '', 'due_date': ''}]
@@ -91,7 +89,6 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             'create_mode': create_mode,
             'demand_form': demand_form,
             'event_form': event_form,
-            'event_type_quick_form': event_type_quick_form,
             'event_types': event_types,
             'edit_form': edit_form,
             'edit_assignments': edit_assignments,

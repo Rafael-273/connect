@@ -26,7 +26,7 @@ from .content import (
     MediaAttachmentCreateView,
 )
 from .calendar import MediaCalendarView, MediaCalendarEventsAPIView, MediaCalendarUpdateView
-from .event_types import MediaEventTypeListView, MediaEventTypeCreateView, MediaEventTypeUpdateView
+from .event_types import MediaEventTypeListView, MediaEventTypeCreateView, MediaEventTypeUpdateView, MediaEventTypeDeleteView
 from .templates_mgmt import (
     MediaTemplateListView,
     MediaTemplateCreateView,
@@ -93,6 +93,7 @@ __all__ = [
     'MediaEventTypeListView',
     'MediaEventTypeCreateView',
     'MediaEventTypeUpdateView',
+    'MediaEventTypeDeleteView',
     'MediaTemplateListView',
     'MediaTemplateCreateView',
     'MediaTemplateSetupView',

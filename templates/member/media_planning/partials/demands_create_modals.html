@@ -118,11 +118,10 @@
                 <label class="modal-field-label" for="id_event-event_type">Tipo de evento</label>
                 {% include 'member/media_planning/partials/demands_event_type_select.html' with prefix='event' event_types=event_types selected_value=event_form.event_type.value %}
                 {% if is_media_leader %}
-                <button type="button"
-                        class="demands-event-type-add"
-                        data-open-modal="demands-modal-event-type">
-                    <i class="fas fa-plus"></i> Criar tipo de evento
-                </button>
+                <a href="{% url 'media_event_type_list' %}" class="demands-event-type-add">
+                    <i class="fas fa-list"></i> Ver tipos de eventos
+                </a>
+                <p class="text-xs text-gray-400 mt-2">Defina as demandas fixas que serão sugeridas sempre que este tipo de evento for usado.</p>
                 {% endif %}
                 <label class="demands-modal-check-card" for="id_event-apply_template">
                     {{ event_form.apply_template }}
@@ -134,46 +133,6 @@
                 <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
                 <button type="submit" class="media-btn-primary sm flex-1 justify-center">
                     <i class="fas fa-check"></i> Criar evento
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Modal: Novo tipo de evento -->
-<div id="demands-modal-event-type" class="demands-modal demands-modal-nested" role="dialog" aria-modal="true" aria-labelledby="demands-modal-event-type-title">
-    <div class="demands-modal-backdrop" data-close-modal></div>
-    <div class="demands-modal-card">
-        <div class="demands-modal-header-accent demands-modal-header">
-            <div class="flex items-start gap-3 min-w-0 flex-1">
-                <div class="demands-modal-icon"><i class="fas fa-layer-group"></i></div>
-                <div class="min-w-0">
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Novo tipo</p>
-                    <h2 id="demands-modal-event-type-title" class="text-lg font-black text-gray-900 leading-tight">Criar template de evento</h2>
-                    <p class="text-xs text-gray-500 mt-0.5">Define o padrão de demandas para este tipo</p>
-                </div>
-            </div>
-            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-
-        <form id="demand-event-type-form" class="demands-modal-body" novalidate>
-            {% csrf_token %}
-            <div class="modal-section">
-                <label class="modal-field-label" for="id_event_type-name">Nome</label>
-                {{ event_type_quick_form.name }}
-                <p id="event-type-name-error" class="text-xs text-red-500 mt-1 hidden"></p>
-            </div>
-            <div class="modal-section">
-                <label class="modal-field-label" for="id_event_type-description">Descrição</label>
-                {{ event_type_quick_form.description }}
-            </div>
-            <p class="text-xs text-gray-400">Depois de criar, você pode configurar as demandas sugeridas do template.</p>
-            <div class="demands-modal-footer">
-                <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
-                <button type="submit" class="media-btn-primary sm flex-1 justify-center" id="demand-event-type-submit">
-                    <i class="fas fa-check"></i> Criar tipo
                 </button>
             </div>
         </form>

@@ -1,41 +1,284 @@
 {% extends "member_base.html" %}
+
 {% block title %}{{ template.name }}{% endblock %}
+
+{% block head %}
+<style>
+    :root { --media-color: #8B5CF6; }
+    .admin-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+    .data-table thead th {
+        background: #f8fafc; color: #6b7280; border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px; font-size: .7rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase;
+    }
+    .data-table tbody tr { border-bottom: 1px solid #f8fafc; transition: background .15s, box-shadow .15s; }
+    .data-table tbody tr:hover { background: #fafbff; box-shadow: inset 3px 0 0 var(--media-color); }
+    .data-table tbody td { padding: 14px 24px; vertical-align: middle; }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; transition: all .15s; }
+    .action-btn-edit { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover { background: #dbeafe; transform: translateY(-1px); }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; }
+    .action-btn-delete:hover { background: #fee2e2; transform: translateY(-1px); }
+    .template-demand-modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .template-demand-backdrop { position: absolute; inset: 0; background: rgba(17,24,39,.5); backdrop-filter: blur(2px); }
+    .template-demand-card { position: relative; width: 100%; max-width: 42rem; max-height: calc(100vh - 2rem); overflow-y: auto; background: #fff; border-radius: 1.25rem; box-shadow: 0 24px 60px rgba(17,24,39,.24); }
+    .template-demand-card input[type="text"], .template-demand-card input[type="number"], .template-demand-card select, .template-demand-card textarea {
+        width: 100%; border: 1px solid #d1d5db; border-radius: .75rem; background: #fff;
+        color: #374151; font-size: .875rem; padding: .75rem 1rem;
+    }
+    .template-demand-card input[type="text"], .template-demand-card input[type="number"], .template-demand-card select { min-height: 3rem; }
+    .template-demand-card .schedule-relation { width: 6.5rem; }
+    .template-demand-card textarea { min-height: 5.5rem; resize: vertical; }
+    .template-demand-card input[type="text"]:focus, .template-demand-card input[type="number"]:focus, .template-demand-card select:focus, .template-demand-card textarea:focus { outline: none; border-color: var(--media-color); box-shadow: 0 0 0 3px rgba(139,92,246,.12); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="min-h-screen pb-28 bg-gray-50">
-    <div class="px-4 pt-6 pb-2 bg-white border-b">
-        <a href="{% url 'media_content_list' %}?tab=templates" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Demandas e eventos</a>
-        <h1 class="text-xl font-bold">{{ event_type.name }}</h1>
-        {% if event_type.description %}<p class="text-sm text-gray-500 mt-1">{{ event_type.description }}</p>{% endif %}
-        {% if is_media_leader %}
-        <div class="flex gap-2 mt-3">
-            <a href="{% url 'media_template_edit' template.pk %}" class="text-xs px-3 py-1.5 rounded-lg border font-semibold">Editar template</a>
-            <a href="{% url 'media_template_item_create' template.pk %}" class="text-xs px-3 py-1.5 rounded-lg text-white font-semibold" style="background:#8B5CF6;">+ Demanda</a>
-        </div>
-        {% endif %}
-    </div>
-    {% include 'parciais/media_subnav.html' with section='demands' %}
-    <div class="px-4 pt-4 space-y-2">
-        {% for item in items %}
-        <div class="bg-white rounded-xl border p-4">
-            <div class="flex justify-between items-start">
-                <div>
-                    <div class="font-bold text-sm">{{ item.title }}</div>
-                    <div class="text-xs text-gray-400">{{ item.get_content_type_display }}
-                        {% if item.default_sub_team %} · {{ item.default_sub_team.name }}{% endif %}
-                        {% if item.requires_recording %} · Gravação{% endif %}
-                        {% if item.requires_editing %} · Edição{% endif %}
-                    </div>
-                    {% if item.publication_offset_days %}<div class="text-xs text-gray-400 mt-1">Pub: {{ item.publication_offset_days }} dias do evento</div>{% endif %}
+    <div class="px-4 pt-6 pb-4">
+        <a href="{% url 'media_event_type_list' %}" class="text-xs font-semibold mb-3 inline-block" style="color:var(--media-color);">
+            <i class="fas fa-arrow-left"></i> Tipos de eventos
+        </a>
+
+        <div class="flex items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm text-white" style="background:var(--media-color);">
+                    <i class="fas fa-tags text-lg"></i>
                 </div>
-                {% if is_media_leader %}
-                <a href="{% url 'media_template_item_edit' item.pk %}" class="text-xs" style="color:#8B5CF6;">Editar</a>
-                {% endif %}
+                <div class="min-w-0">
+                    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight truncate">{{ event_type.name }}</h1>
+                    <p class="text-sm text-gray-500 mt-0.5">Demandas padrão deste tipo de evento</p>
+                </div>
+            </div>
+            {% if is_media_leader %}
+            <a href="?create=1{% if search %}&search={{ search|urlencode }}{% endif %}" class="sm:hidden flex-shrink-0 w-10 h-10 text-white rounded-lg flex items-center justify-center" style="background:var(--media-color);" title="Nova demanda"><i class="fas fa-plus"></i></a>
+            {% endif %}
+        </div>
+
+        {% if event_type.description %}
+        <p class="text-sm text-gray-500 mb-4 max-w-3xl">{{ event_type.description }}</p>
+        {% endif %}
+
+        <div class="flex items-center gap-2 mb-5">
+            <form method="get" class="flex items-center gap-2 flex-1 min-w-0">
+                <input type="search" name="search" value="{{ search }}" placeholder="Buscar demanda..."
+                       class="w-full min-w-0 h-10 px-4 border border-gray-300 rounded-lg focus:outline-none bg-white text-sm" style="--tw-ring-color:var(--media-color);">
+                <button type="submit" class="flex-shrink-0 w-10 h-10 text-white rounded-lg flex items-center justify-center" style="background:var(--media-color);" title="Buscar"><i class="fas fa-search text-sm"></i></button>
+            </form>
+            {% if is_media_leader %}
+            <a href="?create=1{% if search %}&search={{ search|urlencode }}{% endif %}" class="hidden sm:flex flex-shrink-0 px-4 py-2 text-white rounded-lg items-center gap-2 text-sm font-medium" style="background:var(--media-color);">
+                <i class="fas fa-plus"></i> Nova demanda
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="block md:hidden space-y-3">
+            {% for item in items %}
+            <div class="admin-card p-4">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <h2 class="text-base font-bold text-gray-900">{{ item.title }}</h2>
+                        <p class="text-xs text-gray-500 mt-0.5">{{ item.get_content_type_display }}{% if item.default_sub_team %} · {{ item.default_sub_team.name }}{% endif %}</p>
+                    </div>
+                    {% if is_media_leader %}
+                    <div class="flex gap-1.5">
+                        <a href="{% url 'media_template_item_edit' item.pk %}" class="action-btn action-btn-edit" title="Editar demanda"><i class="fas fa-pen"></i></a>
+                        <button type="button" class="action-btn action-btn-delete" title="Excluir demanda" data-delete-demand data-delete-url="{% url 'media_template_item_delete' item.pk %}" data-delete-name="{{ item.title }}"><i class="fas fa-trash"></i></button>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="flex flex-wrap gap-1.5 mt-3">
+                    {% if item.requires_recording %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">Gravação</span>{% endif %}
+                    {% if item.requires_editing %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">Edição</span>{% endif %}
+                    {% if item.publication_offset_days is not None %}
+                    {% if item.publication_offset_days < 0 %}{% widthratio item.publication_offset_days -1 1 as publication_days %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">Publicar: {{ publication_days }} dias antes</span>{% else %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">Publicar: {{ item.publication_offset_days }} dias depois</span>{% endif %}
+                    {% endif %}
+                </div>
+                {% if item.description %}<p class="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">{{ item.description|truncatewords:18 }}</p>{% endif %}
+            </div>
+            {% empty %}
+            <div class="admin-card p-8 text-center text-sm text-gray-500">Nenhuma demanda encontrada.</div>
+            {% endfor %}
+        </div>
+
+        <div class="admin-card hidden md:block overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="data-table w-full min-w-[800px]">
+                    <thead>
+                        <tr>
+                            <th class="text-left">Demanda</th>
+                            <th class="text-left">Produção</th>
+                            <th class="text-left">Publicação</th>
+                            <th class="text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white">
+                        {% for item in items %}
+                        <tr>
+                            <td>
+                                <div class="text-sm font-medium text-gray-900">{{ item.title }}</div>
+                                <div class="text-xs text-gray-400 mt-0.5">{{ item.get_content_type_display }}{% if item.default_sub_team %} · {{ item.default_sub_team.name }}{% endif %}</div>
+                            </td>
+                            <td>
+                                {% if item.requires_recording %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">Gravação</span>{% endif %}
+                                {% if item.requires_editing %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">Edição</span>{% endif %}
+                                {% if not item.requires_recording and not item.requires_editing %}<span class="text-xs text-gray-400">—</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if item.publication_offset_days is not None %}
+                                {% if item.publication_offset_days < 0 %}{% widthratio item.publication_offset_days -1 1 as publication_days %}<span class="text-sm text-gray-700">{{ publication_days }} dias antes</span>{% else %}<span class="text-sm text-gray-700">{{ item.publication_offset_days }} dias depois</span>{% endif %}
+                                {% else %}<span class="text-xs text-gray-400">Não definida</span>{% endif %}
+                            </td>
+                            <td><div class="flex justify-end gap-1.5">{% if is_media_leader %}<a href="{% url 'media_template_item_edit' item.pk %}" class="action-btn action-btn-edit" title="Editar demanda"><i class="fas fa-pen"></i></a><button type="button" class="action-btn action-btn-delete" title="Excluir demanda" data-delete-demand data-delete-url="{% url 'media_template_item_delete' item.pk %}" data-delete-name="{{ item.title }}"><i class="fas fa-trash"></i></button>{% endif %}</div></td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="px-6 py-12 text-center text-sm text-gray-500">Nenhuma demanda encontrada.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
-        {% empty %}
-        <p class="text-center text-gray-400 py-8">Nenhuma demanda configurada. Adicione o que normalmente é produzido neste tipo de evento.</p>
-        {% endfor %}
     </div>
 </div>
+{% if is_media_leader and show_create_modal %}
+<div class="template-demand-modal" role="dialog" aria-modal="true" aria-labelledby="create-template-demand-title">
+    <a href="{% url 'media_template_detail' template.pk %}{% if search %}?search={{ search|urlencode }}{% endif %}" class="template-demand-backdrop" aria-label="Fechar"></a>
+    <div class="template-demand-card">
+        <div class="sticky top-0 z-10 flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100 bg-white">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white" style="background:var(--media-color);"><i class="fas fa-clipboard-list"></i></div>
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Nova demanda</p>
+                    <h2 id="create-template-demand-title" class="text-lg font-bold text-gray-900">Adicionar demanda padrão</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Ela será sugerida em eventos do tipo {{ event_type.name }}.</p>
+                </div>
+            </div>
+            <a href="{% url 'media_template_detail' template.pk %}{% if search %}?search={{ search|urlencode }}{% endif %}" class="w-9 h-9 rounded-lg bg-gray-100 text-gray-400 flex items-center justify-center" aria-label="Fechar"><i class="fas fa-times"></i></a>
+        </div>
+        <form method="post" action="{% url 'media_template_item_create' template.pk %}" class="p-5 space-y-5">
+            {% csrf_token %}
+            <input type="hidden" name="sort_order" value="0">
+            {% if create_form.non_field_errors %}<div class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{{ create_form.non_field_errors.0 }}</div>{% endif %}
+            <section class="space-y-3">
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Informações da demanda</p>
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1.5" for="{{ create_form.title.id_for_label }}">Nome da demanda</label>
+                        {{ create_form.title }}
+                        {% if create_form.title.errors %}<p class="text-xs text-red-500 mt-1">{{ create_form.title.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1.5" for="{{ create_form.content_type.id_for_label }}">Tipo de conteúdo</label>
+                        {{ create_form.content_type }}
+                        {% if create_form.content_type.errors %}<p class="text-xs text-red-500 mt-1">{{ create_form.content_type.errors.0 }}</p>{% endif %}
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1.5" for="{{ create_form.description.id_for_label }}">Descrição <span class="font-medium text-gray-400">(opcional)</span></label>
+                    {{ create_form.description }}
+                    {% if create_form.description.errors %}<p class="text-xs text-red-500 mt-1">{{ create_form.description.errors.0 }}</p>{% endif %}
+                </div>
+            </section>
+
+            <section class="space-y-3 pt-1">
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Etapas de produção</p>
+                <div class="grid sm:grid-cols-2 gap-3">
+                    <label class="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 cursor-pointer">
+                        {{ create_form.requires_recording }}
+                        <span class="text-sm font-semibold text-gray-700">Precisa de gravação</span>
+                    </label>
+                    <label class="flex items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 cursor-pointer">
+                        {{ create_form.requires_editing }}
+                        <span class="text-sm font-semibold text-gray-700">Precisa de edição</span>
+                    </label>
+                </div>
+            </section>
+
+            <section class="space-y-3 pt-1">
+                <p class="text-xs font-bold uppercase tracking-wider text-gray-400">Cronograma em relação ao evento</p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1.5" for="{{ create_form.lead_offset_days.id_for_label }}">Iniciar produção</label>
+                        <div class="grid grid-cols-[1fr_auto] gap-2">
+                            <input id="lead-days" type="number" name="lead_days" min="0" placeholder="Dias" aria-label="Dias para iniciar a produção">
+                            <select class="schedule-relation" name="lead_relation" aria-label="Relação com o evento"><option value="before" selected>Antes</option><option value="after">Depois</option></select>
+                        </div>
+                        {% if create_form.lead_offset_days.errors %}<p class="text-xs text-red-500 mt-1">{{ create_form.lead_offset_days.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1.5" for="{{ create_form.due_offset_days.id_for_label }}">Prazo final</label>
+                        <div class="grid grid-cols-[1fr_auto] gap-2">
+                            <input id="due-days" type="number" name="due_days" min="0" placeholder="Dias" aria-label="Dias para o prazo final">
+                            <select class="schedule-relation" name="due_relation" aria-label="Relação com o evento"><option value="before" selected>Antes</option><option value="after">Depois</option></select>
+                        </div>
+                        {% if create_form.due_offset_days.errors %}<p class="text-xs text-red-500 mt-1">{{ create_form.due_offset_days.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 mb-1.5" for="{{ create_form.publication_offset_days.id_for_label }}">Publicar</label>
+                        <div class="grid grid-cols-[1fr_auto] gap-2">
+                            <input id="publication-days" type="number" name="publication_days" min="0" placeholder="Dias" aria-label="Dias para publicar">
+                            <select class="schedule-relation" name="publication_relation" aria-label="Relação com o evento"><option value="before" selected>Antes</option><option value="after">Depois</option></select>
+                        </div>
+                        {% if create_form.publication_offset_days.errors %}<p class="text-xs text-red-500 mt-1">{{ create_form.publication_offset_days.errors.0 }}</p>{% endif %}
+                    </div>
+                </div>
+                <p class="text-xs text-gray-400">Informe a quantidade de dias e escolha se acontece antes ou depois do evento.</p>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 mb-1.5" for="{{ create_form.publication_channel.id_for_label }}">Canal de publicação</label>
+                    {{ create_form.publication_channel }}
+                </div>
+            </section>
+
+            <div class="sticky bottom-0 flex gap-2 pt-3 pb-1 bg-white border-t border-gray-100">
+                <a href="{% url 'media_template_detail' template.pk %}{% if search %}?search={{ search|urlencode }}{% endif %}" class="flex-1 py-2.5 rounded-lg text-sm text-center font-semibold bg-gray-100 text-gray-600">Cancelar</a>
+                <button type="submit" class="flex-1 py-2.5 rounded-lg text-sm font-bold text-white" style="background:var(--media-color);">Adicionar demanda</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% if is_media_leader %}
+<div id="delete-template-demand-modal" class="template-demand-modal hidden" role="dialog" aria-modal="true" aria-labelledby="delete-template-demand-title">
+    <div class="template-demand-backdrop" data-close-delete-demand></div>
+    <div class="template-demand-card max-w-md">
+        <div class="p-5">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0"><i class="fas fa-trash"></i></div>
+                <div>
+                    <h2 id="delete-template-demand-title" class="text-lg font-bold text-gray-900">Excluir demanda padrão?</h2>
+                    <p class="text-sm text-gray-500 mt-0.5">Esta ação não pode ser desfeita.</p>
+                </div>
+            </div>
+            <p class="text-sm text-gray-600 leading-relaxed mt-5">Você está prestes a excluir <strong id="delete-template-demand-name" class="text-gray-900"></strong> deste tipo de evento.</p>
+            <p class="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-3">Demandas já criadas em eventos existentes não serão alteradas.</p>
+            <form id="delete-template-demand-form" method="post" class="flex gap-2 mt-5">
+                {% csrf_token %}
+                <button type="button" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600" data-close-delete-demand>Cancelar</button>
+                <button type="submit" class="flex-1 py-2.5 rounded-lg text-sm font-bold text-white bg-red-600 hover:bg-red-700">Excluir demanda</button>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    var modal = document.getElementById('delete-template-demand-modal');
+    var form = document.getElementById('delete-template-demand-form');
+    var name = document.getElementById('delete-template-demand-name');
+    if (!modal || !form) return;
+    document.querySelectorAll('[data-delete-demand]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            form.action = button.dataset.deleteUrl;
+            name.textContent = button.dataset.deleteName;
+            modal.classList.remove('hidden');
+        });
+    });
+    document.querySelectorAll('[data-close-delete-demand]').forEach(function (button) {
+        button.addEventListener('click', function () { modal.classList.add('hidden'); });
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') modal.classList.add('hidden');
+    });
+}());
+</script>
+{% endif %}
 {% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
 {% endblock %}
