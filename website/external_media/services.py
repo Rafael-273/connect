@@ -37,7 +37,7 @@ from website.models.external_media import (
 from .audio_mastering import AudioMasteringService, MasteringTarget
 from .audio_mixing import AudioMixingService, DuckingSettings, group_speech_blocks
 from .audio_validation import AudioValidationService
-from .auto_reframe import AutoReframePlan, AutoReframeService
+from .auto_reframe import AUTO_REFRAME_PLAN_VERSION, AutoReframePlan, AutoReframeService
 from .dialogue_processing import DialogueProcessor, DialogueSettings
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
@@ -307,18 +307,108 @@ class TranslationService:
             {'glossary': glossary, 'protected_terms': protected_terms, 'cues': payload},
             ensure_ascii=False,
         )
-        instructions = f"""Você é um tradutor e editor nativo especializado em sermões,
-igrejas evangélicas e conteúdo cristão. Traduza de {self.LANGUAGE_NAMES[source_language]}
-para {self.LANGUAGE_NAMES[target_language]} natural e idiomático, como um falante nativo
-realmente diria no dia a dia. Prefira construções comuns a um nativo americano, evite
-tradução literal e troque expressões engessadas por equivalentes naturais quando isso
-preservar o sentido. Preserve integralmente o sentido, o tom pastoral, nomes próprios,
-marcas, referências bíblicas e a ordem dos blocos. Priorize o glossário fornecido.
-Qualquer item listado em protected_terms ou qualquer token no formato __TERM_X__ deve ser
-mantido exatamente igual, sem traduzir, adaptar ou substituir. Não junte, divida, remova
-ou acrescente blocos. Para cada cue_id de entrada, devolva exatamente um item. Responda
-somente JSON válido no formato
-{{"cues":[{{"cue_id":1,"text":"..."}}]}}. Não devolva timestamps."""
+        instructions = f"""Você é um tradutor e editor nativo especializado em sermões, anúncios de igreja,
+ministérios evangélicos e conteúdo cristão de contexto carismático/pentecostal.
+
+Traduza de {self.LANGUAGE_NAMES[source_language]} para {self.LANGUAGE_NAMES[target_language]}
+contemporâneo, natural e idiomático.
+
+OBJETIVO PRINCIPAL
+
+O resultado deve soar como se tivesse sido originalmente escrito e falado por uma
+igreja evangélica/carismática americana, e não como um texto traduzido do português.
+
+Preserve integralmente o significado, a intenção, o tom pastoral e a mensagem do
+original, mas não preserve estruturas do português quando elas soarem artificiais
+em inglês.
+
+Traduza a intenção e o sentido da fala, e não palavras ou estruturas individualmente.
+
+NATURALIDADE E CONTEXTO CRISTÃO
+
+Use vocabulário, construções e expressões naturalmente utilizadas por falantes
+nativos de inglês americano em igrejas evangélicas/carismáticas.
+
+Quando houver várias traduções semanticamente corretas, prefira aquela que um
+falante nativo americano provavelmente usaria naquele contexto.
+
+Exemplos de princípio de tradução:
+
+- "vem estar com a gente" pode naturalmente se tornar "come join us";
+- "expandir o Reino de Deus" pode se tornar "advance God's Kingdom";
+- "orar pelos aniversariantes" pode se tornar "pray over those celebrating birthdays";
+- expressões de convite devem soar calorosas e naturais, e não como traduções literais.
+
+Estes exemplos demonstram o estilo desejado e não devem ser tratados como
+substituições obrigatórias.
+
+Evite:
+
+- traduções palavra por palavra;
+- estruturas que revelem sintaxe portuguesa;
+- expressões gramaticalmente corretas, mas pouco naturais para um americano;
+- linguagem excessivamente formal quando a fala original for casual;
+- linguagem excessivamente acadêmica ou arcaica;
+- adaptar desnecessariamente termos teológicos que já possuem uso estabelecido
+  no contexto cristão americano.
+
+CONTEXTO ENTRE BLOCOS
+
+Os cues pertencem a uma fala contínua. Leia e interprete todos os cues recebidos
+no lote como partes do mesmo discurso. Uma frase, ideia ou construção gramatical
+pode começar em um cue e continuar no seguinte. Use os cues anteriores e posteriores
+como contexto para compreender corretamente cada trecho. Não trate cada cue como
+uma frase independente.
+
+Apesar disso, preserve rigorosamente a correspondência entre os blocos: cada cue_id
+de entrada deve gerar exatamente um cue_id de saída.
+
+Não junte, divida, remova, reordene ou acrescente blocos. Não mova informação de um
+cue para outro apenas para melhorar a escrita. A tradução deve continuar
+semanticamente alinhada ao trecho correspondente.
+
+GLOSSÁRIO E TERMINOLOGIA
+
+Priorize o glossário fornecido. Use traduções oficiais quando definidas pelo glossário
+e respeite a terminologia estabelecida pela Igreja Filadélfia.
+
+Quando o glossário fornecer uma orientação terminológica que permita flexibilidade
+gramatical ou contextual, incorpore o termo da maneira mais natural possível na
+frase em inglês. Não deixe uma substituição terminológica tornar a frase artificial
+se a regra permitir adaptação contextual.
+
+TERMOS PROTEGIDOS
+
+Preserve nomes próprios, marcas e termos explicitamente protegidos. Qualquer item
+listado em protected_terms ou qualquer token no formato __TERM_X__ deve ser mantido
+EXATAMENTE igual. Nunca traduza, adapte, pluralize, flexione, reformule ou substitua
+esses tokens.
+
+REFERÊNCIAS BÍBLICAS E TEOLOGIA
+
+Preserve o significado teológico do original. Use terminologia cristã naturalmente
+reconhecida no inglês americano. Preserve referências bíblicas e não altere
+deliberadamente seu significado. Não acrescente interpretações teológicas,
+explicações ou informações que não estejam presentes no original.
+
+FIDELIDADE
+
+Naturalidade não significa liberdade para reescrever a mensagem. Não acrescente
+informações, remova informações relevantes, intensifique ou enfraqueça afirmações,
+altere doutrina ou intenção, invente explicações ou transforme a tradução em uma
+paráfrase livre.
+
+A tradução pode reorganizar a construção linguística dentro do mesmo cue quando
+necessário para soar natural em inglês, desde que preserve o significado original.
+
+FORMATO DE SAÍDA
+
+Para cada cue_id de entrada, devolva exatamente um item correspondente. Não devolva
+timestamps. Responda SOMENTE JSON válido no formato:
+
+{{"cues":[{{"cue_id":1,"text":"..."}}]}}
+
+Não inclua comentários, explicações, Markdown ou qualquer texto fora do JSON."""
         expected_ids = [cue.cue_index for cue in cues]
         for attempt in range(2):
             raw = self.ai_service.generate_text(
@@ -1192,7 +1282,7 @@ class ProjectService:
             minimum = block.min_occurrences if block.is_required else 0
             if effective_count < minimum:
                 errors.append(f'{block.name}: envie pelo menos {minimum} vídeo(s).')
-            if count > block.max_occurrences:
+            if block.max_occurrences > 0 and count > block.max_occurrences:
                 errors.append(f'{block.name}: máximo de {block.max_occurrences} vídeo(s).')
         version = project.template_version
         track = getattr(version, 'background_music', None)
@@ -1201,10 +1291,20 @@ class ProjectService:
                 'A música de fundo do template não está disponível. '
                 'Restaure ou substitua a música no cadastro do template.'
             )
+        elif track and track.audio_file and ProjectService.file_size(track.audio_file) < 1024:
+            errors.append(
+                'A música de fundo do template está vazia ou inválida. '
+                'Envie novamente um arquivo de áudio válido no template.'
+            )
         elif version.music_file and not ProjectService.file_exists(version.music_file):
             errors.append(
                 'O arquivo de música de fundo do template não está disponível. '
                 'Restaure ou substitua a música no cadastro do template.'
+            )
+        elif version.music_file and ProjectService.file_size(version.music_file) < 1024:
+            errors.append(
+                'O arquivo de música de fundo do template está vazio ou inválido. '
+                'Envie novamente um arquivo de áudio válido no template.'
             )
         if version.lut_file and not ProjectService.file_exists(version.lut_file):
             errors.append(
@@ -1220,6 +1320,15 @@ class ProjectService:
             return field_file.storage.exists(field_file.name)
         except OSError:
             return False
+
+    @staticmethod
+    def file_size(field_file):
+        if not field_file or not getattr(field_file, 'name', ''):
+            return 0
+        try:
+            return field_file.storage.size(field_file.name)
+        except OSError:
+            return 0
 
     def initialize_steps(self, project, plugins):
         codes = ['upload', 'assembly'] + [plugin.code for plugin in plugins] + ['render', 'storage']
@@ -1611,6 +1720,7 @@ class ExternalMediaProjectPipeline:
                     project.configuration = {
                         **(project.configuration or {}),
                         'proxy_pipeline': True,
+                        'auto_reframe_plan_version': AUTO_REFRAME_PLAN_VERSION,
                         'auto_reframe_plans': self.assembly.last_reframe_plans if auto_reframe_plugin else [],
                         'protected_block_ranges': self.assembly.last_protected_ranges,
                         'block_ranges': self.assembly.last_block_ranges,
@@ -1770,7 +1880,12 @@ class ExternalMediaProjectPipeline:
             (plugin for plugin in plugins if plugin.code == MediaTemplatePlugin.Code.AUTO_TRACKING),
             None,
         )
-        saved_reframe_plans = (project.configuration or {}).get('auto_reframe_plans') or []
+        configuration = project.configuration or {}
+        saved_reframe_plans = configuration.get('auto_reframe_plans') or []
+        if configuration.get('auto_reframe_plan_version') != AUTO_REFRAME_PLAN_VERSION:
+            # Reprocess old projects with the current framing strategy instead of
+            # replaying crop plans generated by a previous implementation.
+            saved_reframe_plans = []
         analysis_sources = None
         if auto_reframe_plugin and not saved_reframe_plans:
             with timed_step('create_final_analysis_proxies', count=len(sources)):
@@ -1916,7 +2031,9 @@ class ExternalMediaProjectPipeline:
         plugin_codes = {plugin.code for plugin in self.templates.enabled_plugins(project)}
         if MediaTemplatePlugin.Code.TRANSLATION_EN not in plugin_codes:
             output_languages = [version.original_language]
-        job = project.render_job or ExternalMediaJob(created_by=project.created_by)
+        # Cada reprocessamento recebe um job próprio. Isso preserva o histórico do
+        # projeto e evita que os resultados de uma execução antiga sejam sobrescritos.
+        job = ExternalMediaJob(created_by=project.created_by, processing_project=project)
         job.name = project.name
         job.original_language = version.original_language
         job.output_languages = output_languages

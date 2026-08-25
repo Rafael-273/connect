@@ -187,6 +187,14 @@ class ExternalMediaJob(BaseModel):
         on_delete=models.PROTECT,
         related_name='external_media_jobs',
     )
+    processing_project = models.ForeignKey(
+        'ExternalMediaProject',
+        on_delete=models.CASCADE,
+        related_name='processing_history',
+        blank=True,
+        null=True,
+        help_text='Projeto que originou este processamento.',
+    )
     original_video = models.FileField(
         upload_to=external_media_upload_path,
         storage=get_external_media_storage,
@@ -216,6 +224,7 @@ class ExternalMediaJob(BaseModel):
         indexes = [
             models.Index(fields=['created_by', '-created_at']),
             models.Index(fields=['status']),
+            models.Index(fields=['processing_project', '-created_at'], name='ext_job_project_created_idx'),
         ]
         verbose_name = 'Processamento de mídia externa'
         verbose_name_plural = 'Processamentos de mídia externa'
@@ -583,7 +592,7 @@ class MediaTemplateVersion(BaseModel):
     dialogue_processing_config = models.JSONField(
         default=dict, blank=True, verbose_name='Configuração avançada de tratamento de diálogo',
     )
-    audio_mixing_enabled = models.BooleanField(default=False, verbose_name='Mixagem inteligente')
+    audio_mixing_enabled = models.BooleanField(default=True, verbose_name='Mixagem inteligente')
     audio_ducking_enabled = models.BooleanField(default=True, verbose_name='Ducking automático')
     audio_spectral_ducking_enabled = models.BooleanField(default=False, verbose_name='Ducking espectral')
     audio_mixing_config = models.JSONField(default=dict, blank=True, verbose_name='Configuração avançada de mixagem')
@@ -617,9 +626,11 @@ class MediaTemplateBlock(BaseModel):
     description = models.TextField(blank=True)
     order = models.PositiveSmallIntegerField(default=0)
     is_required = models.BooleanField(default=True)
-    allows_multiple = models.BooleanField(default=False)
+    allows_multiple = models.BooleanField(default=True)
     min_occurrences = models.PositiveSmallIntegerField(default=1)
-    max_occurrences = models.PositiveSmallIntegerField(default=1)
+    # Zero representa quantidade ilimitada. Mantemos o campo apenas para
+    # compatibilidade com templates antigos já cadastrados.
+    max_occurrences = models.PositiveSmallIntegerField(default=0)
     skip_extra_processing = models.BooleanField(default=False)
     default_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
@@ -719,6 +730,14 @@ class ExternalMediaProject(BaseModel):
     @property
     def duration_label(self):
         return format_processing_duration(self.duration_seconds)
+
+    @property
+    def duration_minutes(self):
+        """Processing duration rounded up to a whole minute for compact lists."""
+        seconds = self.duration_seconds
+        if seconds is None:
+            return None
+        return (seconds + 59) // 60
 
 
 class ProjectBlockMedia(BaseModel):

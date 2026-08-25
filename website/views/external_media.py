@@ -4,13 +4,14 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib import messages
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F, Max, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import content_disposition_header
 from django.views import View
+from safedelete.models import HARD_DELETE
 
 from ..external_media.tasks import (
     analyze_video_mastering,
@@ -23,6 +24,7 @@ from ..external_media.tasks import (
 )
 from ..forms.external_media import (
     ExternalMediaJobForm,
+    ExternalMediaProjectEditForm,
     ExternalMediaProjectForm,
     ExternalMediaProjectSettingsForm,
     GlossaryTermForm,
@@ -172,21 +174,15 @@ class ExternalMediaDashboardView(ExternalMediaRequiredMixin, ExternalMediaContex
             projects = projects.filter(status=ExternalMediaProject.Status.ERROR)
 
         all_projects = ExternalMediaProject.objects.all()
-        jobs = ExternalMediaJob.objects.select_related('created_by', 'preset').prefetch_related('assets')
-        summary = jobs.aggregate(total=Sum('assets__download_count'))
-
-        legacy_jobs = jobs.filter(project__isnull=True).order_by('-created_at')
-        if query:
-            legacy_jobs = legacy_jobs.filter(
-                Q(name__icontains=query) | Q(preset__name__icontains=query),
-            )
+        summary = ExternalMediaJob.objects.filter(processing_project__isnull=False).aggregate(
+            total=Sum('assets__download_count'),
+        )
 
         return render(request, 'member/external_media/dashboard.html', self.media_context(
             query=query,
             status=status,
             total=projects.count(),
             projects=projects[:50],
-            legacy_jobs=legacy_jobs[:20],
             total_all=all_projects.count(),
             processing_count=all_projects.exclude(status__in=[
                 ExternalMediaProject.Status.FINISHED,
@@ -345,7 +341,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 'template_version__subtitle_style', 'render_job',
             ).prefetch_related(
                 'template_version__blocks', 'template_version__plugins',
-                'block_media', 'pipeline_steps', 'render_job__assets',
+                'block_media', 'pipeline_steps', 'render_job__assets', 'processing_history__assets',
             ),
             public_id=public_id,
         )
@@ -365,6 +361,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 'media': media_by_block.get(block.pk, []),
                 'missing_media': missing_media_by_block.get(block.pk, []),
                 'has_default_video': ProjectService.file_exists(block.default_video),
+                'has_missing_default_video': bool(block.default_video and block.default_video.name),
             }
             for block in project.template_version.blocks.all()
         ]
@@ -379,7 +376,96 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             validation_errors=ProjectService.validate_uploads(project),
             can_retry_render=self._can_retry_project_render(project),
             project_exports=project.exports.order_by('-created_at')[:10],
+            processing_history=project.processing_history.select_related('preset').prefetch_related('assets'),
         ))
+
+
+class ExternalMediaProjectEditView(ExternalMediaRequiredMixin, ExternalMediaContextMixin, View):
+    def get_project(self, public_id):
+        return get_object_or_404(
+            ExternalMediaProject.objects.select_related('template_version__template'),
+            public_id=public_id,
+        )
+
+    def get(self, request, public_id):
+        project = self.get_project(public_id)
+        return render(request, 'member/external_media/project_edit.html', self.media_context(
+            project=project,
+            form=ExternalMediaProjectEditForm(instance=project),
+        ))
+
+    def post(self, request, public_id):
+        project = self.get_project(public_id)
+        form = ExternalMediaProjectEditForm(request.POST, instance=project)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Nome do projeto atualizado.')
+            return redirect('external_media_project_detail', public_id=project.public_id)
+        return render(request, 'member/external_media/project_edit.html', self.media_context(
+            project=project, form=form,
+        ))
+
+
+class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
+    terminal_statuses = {
+        ExternalMediaProject.Status.DRAFT,
+        ExternalMediaProject.Status.FINISHED,
+        ExternalMediaProject.Status.ERROR,
+        ExternalMediaProject.Status.CANCELLED,
+    }
+
+    def post(self, request, public_id):
+        project = get_object_or_404(
+            ExternalMediaProject.objects.select_related('render_job').prefetch_related(
+                'block_media', 'exports', 'render_job__assets', 'processing_history__assets',
+            ),
+            public_id=public_id,
+        )
+        if project.status not in self.terminal_statuses:
+            messages.warning(request, 'Aguarde o processamento terminar antes de excluir o projeto.')
+            return redirect('external_media_dashboard')
+
+        files = []
+
+        def remember(field_file):
+            if field_file and field_file.name:
+                files.append((field_file.storage, field_file.name))
+
+        for item in project.block_media.all():
+            remember(item.file)
+            remember(item.thumbnail)
+        for export in project.exports.all():
+            remember(export.archive)
+            remember(export.timeline_json)
+        processing_jobs = list(project.processing_history.all())
+        if project.render_job_id and all(job.pk != project.render_job_id for job in processing_jobs):
+            # Compatibilidade para execuções feitas antes do histórico de projeto.
+            processing_jobs.append(project.render_job)
+        for job in processing_jobs:
+            remember(job.original_video)
+            for asset in job.assets.all():
+                remember(asset.file)
+
+        project_name = project.name
+        with transaction.atomic():
+            # A remoção é feita antes do projeto porque o job atual é referenciado por
+            # `render_job`; o banco então limpa esse ponteiro sem deixar histórico órfão.
+            for job in processing_jobs:
+                job.delete(force_policy=HARD_DELETE)
+            project.delete(force_policy=HARD_DELETE)
+
+            def remove_files():
+                for storage, name in files:
+                    try:
+                        storage.delete(name)
+                    except Exception:
+                        # A exclusão do registro já foi concluída; uma mídia ausente
+                        # não deve impedir a limpeza do projeto.
+                        continue
+
+            transaction.on_commit(remove_files)
+        messages.success(request, f'Projeto “{project_name}” excluído.')
+        return redirect('external_media_dashboard')
 
 
 class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
@@ -399,7 +485,7 @@ class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
             1 for existing in project.block_media.filter(block=block)
             if ProjectService.file_exists(existing.file)
         )
-        if count >= block.max_occurrences:
+        if block.max_occurrences > 0 and count >= block.max_occurrences:
             messages.error(request, f'O bloco {block.name} aceita no máximo {block.max_occurrences} vídeo(s).')
             return redirect('external_media_project_detail', public_id=public_id)
         item = form.save(commit=False)
@@ -455,7 +541,12 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
                 ),
                 public_id=public_id,
             )
-            if project.status not in {ExternalMediaProject.Status.DRAFT, ExternalMediaProject.Status.ERROR}:
+            if project.status not in {
+                ExternalMediaProject.Status.DRAFT,
+                ExternalMediaProject.Status.ERROR,
+                ExternalMediaProject.Status.FINISHED,
+                ExternalMediaProject.Status.CANCELLED,
+            }:
                 messages.warning(request, 'Este projeto já foi iniciado.')
                 return redirect('external_media_project_detail', public_id=public_id)
             errors = ProjectService.validate_uploads(project)
@@ -510,7 +601,7 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
 class ExternalMediaProjectStatusView(ExternalMediaRequiredMixin, View):
     def get(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
-        return JsonResponse({
+        response = JsonResponse({
             'status': project.status,
             'status_label': project.get_status_display(),
             'progress': project.progress,
@@ -525,6 +616,12 @@ class ExternalMediaProjectStatusView(ExternalMediaRequiredMixin, View):
             },
             'detail_url': reverse('external_media_project_detail', kwargs={'public_id': project.public_id}),
         })
+        # O navegador não pode reutilizar uma resposta antiga deste endpoint: ele é
+        # consultado enquanto o worker atualiza o projeto em segundo plano.
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response['Pragma'] = 'no-cache'
+        response['Expires'] = '0'
+        return response
 
 
 class ExternalMediaProjectDuplicateView(ExternalMediaRequiredMixin, View):
@@ -806,9 +903,27 @@ class ExternalMediaGlossaryView(ExternalMediaRequiredMixin, ExternalMediaContext
     def post(self, request):
         form = GlossaryTermForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Termo adicionado ao glossário.')
-            return redirect('external_media_glossary')
+            # Older glossary deletions were soft-deletes. Remove a matching
+            # tombstone before inserting, so a user can recreate a term that was
+            # deliberately deleted without tripping the database unique key.
+            GlossaryTerm.all_objects.filter(
+                source_language=form.cleaned_data['source_language'],
+                target_language=form.cleaned_data['target_language'],
+                source_text=form.cleaned_data['source_text'],
+                deleted__isnull=False,
+            ).delete(force_policy=HARD_DELETE)
+            try:
+                form.save()
+            except IntegrityError:
+                # The form catches normal duplicates. This protects against two
+                # simultaneous submissions reaching the database at once.
+                form.add_error(
+                    'source_text',
+                    'Este termo já existe para este par de idiomas. Edite ou remova o termo existente.',
+                )
+            else:
+                messages.success(request, 'Termo adicionado ao glossário.')
+                return redirect('external_media_glossary')
         return render(request, 'member/external_media/glossary.html', self.media_context(
             form=form,
             terms=GlossaryTerm.objects.filter(is_active=True),
@@ -818,6 +933,8 @@ class ExternalMediaGlossaryView(ExternalMediaRequiredMixin, ExternalMediaContext
 class ExternalMediaGlossaryDeleteView(ExternalMediaRequiredMixin, View):
     def post(self, request, term_id):
         term = get_object_or_404(GlossaryTerm, pk=term_id)
-        term.delete()
+        # Glossary terms have no processing history to preserve. A real delete
+        # means the same language pair/term can be created again immediately.
+        term.delete(force_policy=HARD_DELETE)
         messages.success(request, 'Termo removido do glossário.')
         return redirect('external_media_glossary')

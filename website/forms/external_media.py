@@ -89,6 +89,25 @@ class ExternalMediaProjectForm(forms.ModelForm):
         )
 
 
+class ExternalMediaProjectEditForm(forms.ModelForm):
+    """Campos seguros para alterar depois que o projeto já foi criado.
+
+    O template não pode mudar aqui: blocos, uploads e decisões de processamento
+    pertencem ao template escolhido na criação do projeto.
+    """
+
+    class Meta:
+        model = ExternalMediaProject
+        fields = ['name']
+        labels = {'name': 'Nome do projeto'}
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'w-full rounded-xl border border-gray-300 px-4 py-3',
+                'maxlength': 180,
+            }),
+        }
+
+
 class ProjectBlockMediaForm(forms.ModelForm):
     trim_start_seconds = forms.DecimalField(required=False, min_value=0, decimal_places=3, max_digits=12)
     trim_end_seconds = forms.DecimalField(required=False, min_value=0, decimal_places=3, max_digits=12)
@@ -158,6 +177,32 @@ class GlossaryTermForm(forms.ModelForm):
         choices = [('pt', 'Português'), ('en', 'Inglês')]
         self.fields['source_language'].choices = choices
         self.fields['target_language'].choices = choices
+
+    def clean_source_text(self):
+        return (self.cleaned_data.get('source_text') or '').strip()
+
+    def clean_translated_text(self):
+        return (self.cleaned_data.get('translated_text') or '').strip()
+
+    def clean(self):
+        cleaned = super().clean()
+        source_language = cleaned.get('source_language')
+        target_language = cleaned.get('target_language')
+        source_text = cleaned.get('source_text')
+        if source_language and target_language and source_text:
+            existing = GlossaryTerm.objects.filter(
+                source_language=source_language,
+                target_language=target_language,
+                source_text=source_text,
+            )
+            if self.instance and self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            if existing.exists():
+                self.add_error(
+                    'source_text',
+                    'Este termo já existe para este par de idiomas. Edite ou remova o termo existente.',
+                )
+        return cleaned
 
 
 class VideoMasteringUploadForm(forms.ModelForm):

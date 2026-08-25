@@ -27,6 +27,33 @@
 </section>
 {% endif %}
 
+{% if processing_history %}
+<section class="media-card p-5 sm:p-6 mb-7">
+    <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <div>
+            <h2 class="text-xl font-black">Histórico de processamentos</h2>
+            <p class="text-sm text-gray-500 mt-1">Todas as execuções realizadas para este projeto.</p>
+        </div>
+        <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">{{ processing_history|length }} execução{{ processing_history|length|pluralize }}</span>
+    </div>
+    <div class="space-y-3">
+        {% for job in processing_history %}
+        <article class="rounded-xl border border-gray-200 p-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <strong class="text-gray-900">Processamento #{{ forloop.revcounter }}</strong>
+                    <span class="media-status-badge {% if job.status == 'FINISHED' %}is-finished{% elif job.status == 'ERROR' %}is-error{% elif job.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ job.get_status_display }}</span>
+                    {% if job.pk == project.render_job_id %}<span class="text-xs font-bold text-green-700">Resultado atual</span>{% endif %}
+                </div>
+                <p class="text-sm text-gray-500 mt-1"><i class="far fa-calendar-alt mr-1"></i>{{ job.created_at|date:'d/m/Y H:i' }}{% if job.duration_label %} · <i class="fas fa-stopwatch mr-1"></i>{{ job.duration_label }}{% endif %}</p>
+            </div>
+            <a href="{% url 'external_media_detail' job.public_id %}" class="media-btn media-muted text-sm"><i class="fas fa-eye"></i>Ver processamento</a>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
 {% if project.configuration.speech_edit_preview %}
 {% with preview=project.configuration.speech_edit_preview %}
 <section class="media-card p-5 mb-7">
@@ -53,17 +80,22 @@
     <section class="media-card p-5">
         <div class="flex flex-wrap justify-between gap-3 mb-4">
             <div><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-black">{{ forloop.counter }}</span><h3 class="font-black text-lg">{{ item.definition.name }}</h3>{% if item.definition.is_required %}<span class="text-xs font-bold text-red-700">Obrigatório</span>{% else %}<span class="text-xs text-gray-500">Opcional</span>{% endif %}</div>{% if item.definition.description %}<p class="text-sm text-gray-500 mt-1 ml-9">{{ item.definition.description }}</p>{% endif %}</div>
-            <span class="text-xs text-gray-500">{% if item.definition.allows_multiple %}até {{ item.definition.max_occurrences }} vídeos{% else %}1 vídeo{% endif %}</span>
         </div>
         {% for media in item.media %}
         <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 mb-2"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div>
         {% empty %}
-            {% if item.has_default_video %}<p class="rounded-xl bg-green-50 text-green-800 p-3 text-sm mb-3"><i class="fas fa-circle-check mr-2"></i>Usará o vídeo padrão do template.</p>{% else %}<p class="text-sm text-gray-400 mb-3">Nenhum upload.</p>{% endif %}
+            {% if item.has_default_video %}
+                <p class="rounded-xl bg-green-50 text-green-800 p-3 text-sm mb-3"><i class="fas fa-circle-check mr-2"></i>Usará o vídeo padrão do template.</p>
+            {% elif item.has_missing_default_video %}
+                <p class="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-3 text-sm mb-3"><i class="fas fa-triangle-exclamation mr-2"></i>Este bloco possui um vídeo padrão configurado, mas o arquivo não está disponível no armazenamento. Reenvie-o no admin-panel para utilizá-lo automaticamente.</p>
+            {% else %}
+                <p class="text-sm text-gray-400 mb-3">Nenhum upload.</p>
+            {% endif %}
         {% endfor %}
         {% for media in item.missing_media %}
         <div class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 mb-2"><div class="min-w-0"><strong class="block text-amber-900">Arquivo não disponível</strong><span class="text-xs text-amber-800">{{ media.original_filename }} — envie o vídeo novamente.</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover referência antiga"><i class="fas fa-trash"></i></button></form></div>
         {% endfor %}
-        {% if item.media|length < item.definition.max_occurrences %}
+        {% if item.definition.max_occurrences == 0 or item.media|length < item.definition.max_occurrences %}
         <form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_upload' project.public_id item.definition.pk %}" class="media-form media-upload-form space-y-3">
             {% csrf_token %}
             <div class="flex flex-col sm:flex-row gap-3">
@@ -421,7 +453,13 @@
     document.querySelectorAll('[data-export-card][data-terminal="0"]').forEach((card) => {
         const poll = async () => {
             try {
-                const response = await fetch(card.dataset.statusUrl, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+                const statusUrl = new URL(card.dataset.statusUrl, window.location.origin);
+                statusUrl.searchParams.set('_', Date.now());
+                const response = await fetch(statusUrl, {
+                    cache: 'no-store',
+                    headers: {'X-Requested-With': 'XMLHttpRequest', 'Cache-Control': 'no-cache'},
+                });
+                if (!response.ok) throw new Error('Não foi possível consultar a exportação.');
                 const data = await response.json();
                 card.querySelector('[data-export-label]').textContent = `Adobe Premiere Pro · ${data.status_label}`;
                 card.querySelector('[data-export-step]').textContent = data.current_step || '';
@@ -439,7 +477,28 @@
 
 {% if project.status != 'DRAFT' and project.status != 'FINISHED' and project.status != 'ERROR' %}
 <script>
-(function(){const card=document.getElementById('progress-card');if(!card||card.dataset.terminal==='1')return;const poll=()=>fetch(card.dataset.statusUrl,{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(r=>r.json()).then(data=>{document.getElementById('status-label').textContent=data.status_label;document.getElementById('current-step').textContent=data.current_step;document.getElementById('progress-value').textContent=data.progress+'%';document.getElementById('progress-bar').style.width=data.progress+'%';const duration=document.getElementById('duration-label');if(duration){duration.textContent=data.duration_label||'—';}if(data.is_terminal){window.location.reload();}else{setTimeout(poll,2500);}}).catch(()=>setTimeout(poll,5000));setTimeout(poll,1500);})();
+(function(){
+    const card=document.getElementById('progress-card');
+    if(!card||card.dataset.terminal==='1')return;
+    const poll=async()=>{
+        try{
+            const statusUrl=new URL(card.dataset.statusUrl,window.location.origin);
+            statusUrl.searchParams.set('_',Date.now());
+            const response=await fetch(statusUrl,{cache:'no-store',headers:{'X-Requested-With':'XMLHttpRequest','Cache-Control':'no-cache'}});
+            if(!response.ok)throw new Error('Não foi possível consultar o projeto.');
+            const data=await response.json();
+            document.getElementById('status-label').textContent=data.status_label;
+            document.getElementById('current-step').textContent=data.current_step;
+            document.getElementById('progress-value').textContent=data.progress+'%';
+            document.getElementById('progress-bar').style.width=data.progress+'%';
+            const duration=document.getElementById('duration-label');
+            if(duration)duration.textContent=data.duration_label||'—';
+            if(data.is_terminal){window.location.reload();return;}
+            setTimeout(poll,2500);
+        }catch(error){setTimeout(poll,5000);}
+    };
+    setTimeout(poll,1000);
+})();
 </script>
 {% endif %}
 {% endblock %}

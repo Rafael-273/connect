@@ -144,7 +144,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         widget=forms.Textarea(attrs={'rows': 4}),
         help_text=(
             'Opcional. Ajusta o ducking automático. Exemplo: '
-            '{"attack_ms": 250, "hold_ms": 180, "release_ms": 700, "base_duck_db": 8}'
+            '{"attack_ms": 140, "hold_ms": 300, "release_ms": 850, "base_duck_db": 14}'
         ),
     )
     dialogue_processing_config_raw = forms.CharField(
@@ -417,11 +417,12 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             plugin = existing.get(code)
             configuration = plugin.configuration or {} if plugin else {}
             if code == MediaTemplatePlugin.Code.AUTO_TRACKING:
+                reframe_priority = self.cleaned_data.get('auto_reframe_priority') or 'face'
                 configuration = {
                     **configuration,
-                    'priority': self.cleaned_data.get('auto_reframe_priority') or 'face',
-                    'safe_margin': 0.15,
-                    'top_margin': 0.12,
+                    'priority': reframe_priority,
+                    'safe_margin': 0.18 if reframe_priority == 'face' else 0.15,
+                    'top_margin': 0.06 if reframe_priority == 'face' else 0.12,
                     'interval_frames': 10,
                     'smoothing': 0.18,
                 }
@@ -502,8 +503,8 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
             self.fields['allows_multiple'].initial = True
         if not self.instance.pk and not self.initial.get('min_occurrences'):
             self.fields['min_occurrences'].initial = 1
-        if not self.instance.pk and not self.initial.get('max_occurrences'):
-            self.fields['max_occurrences'].initial = 4
+        if not self.instance.pk:
+            self.fields['max_occurrences'].initial = 0
 
     def has_changed(self):
         if self.instance.pk or not self.is_bound:
@@ -525,9 +526,10 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
             cleaned_data['key'] = slugify(name)
         if not self.instance.pk:
             cleaned_data['allows_multiple'] = True
-        if not cleaned_data.get('allows_multiple'):
-            cleaned_data['min_occurrences'] = 1
-            cleaned_data['max_occurrences'] = 1
+        # Os blocos não possuem mais teto de uploads. O campo continua oculto
+        # para manter compatibilidade com registros e migrations anteriores.
+        cleaned_data['allows_multiple'] = True
+        cleaned_data['max_occurrences'] = 0
         return cleaned_data
 
     def save(self, commit=True):
@@ -537,9 +539,8 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         instance.key = self.cleaned_data.get('key') or slugify(self.cleaned_data.get('name', ''))
         if not instance.pk:
             instance.allows_multiple = True
-        if not self.cleaned_data.get('allows_multiple'):
-            instance.min_occurrences = 1
-            instance.max_occurrences = 1
+        instance.allows_multiple = True
+        instance.max_occurrences = 0
         if commit:
             instance.save()
         return instance

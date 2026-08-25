@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 # Long clips can still produce 100+ keyframes even after Douglas-Peucker simplify,
 # so we cap what actually goes into the filter graph (same idea as spectral ducking).
 MAX_FFMPEG_CROP_KEYFRAMES = 48
+# Increment whenever the crop strategy changes. Cached proxy plans from older
+# strategies must not be reused by a reprocess.
+AUTO_REFRAME_PLAN_VERSION = 3
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -125,11 +128,24 @@ class AutoReframeService:
         top_margin=None, horizontal_smoothing=None, vertical_lock=None,
     ):
         self.priority = priority if priority in {'face', 'body'} else 'face'
-        self.safe_margin = min(0.40, max(0.0, float(safe_margin)))
-        default_top_margin = 0.12 if self.priority == 'face' else 0.10
-        self.top_margin = min(0.35, max(0.0, float(
+        # A face-only crop feels like a webcam close-up and is very unforgiving if
+        # detection misses a strand of hair. Keep enough room for the upper torso.
+        requested_safe_margin = min(0.40, max(0.0, float(safe_margin)))
+        self.safe_margin = max(0.18 if self.priority == 'face' else 0.15, requested_safe_margin)
+        # Face framing should keep the hair/head close to the top edge, without
+        # becoming a tight headshot. Older templates stored 12–18%, which made
+        # the speaker look noticeably low in wide renders.
+        default_top_margin = 0.06 if self.priority == 'face' else 0.10
+        requested_top_margin = min(0.35, max(0.0, float(
             default_top_margin if top_margin is None else top_margin,
         )))
+        if self.priority == 'face':
+            # Keep backward-compatible template settings from reintroducing the
+            # excessive headroom. Face priority deliberately operates in a
+            # narrow, safe interval: close to the top but never flush against it.
+            self.top_margin = min(0.07, max(0.04, requested_top_margin))
+        else:
+            self.top_margin = max(0.10, requested_top_margin)
         self.interval_frames = max(
             1,
             int(interval_frames or settings.EXTERNAL_MEDIA_AUTO_REFRAME_INTERVAL_FRAMES),
@@ -251,15 +267,21 @@ class AutoReframeService:
             analyzed = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
         else:
             analyzed = frame
-        boxes = self._detect_bodies(analyzed, body_detector, cv2)
-        if not boxes:
-            gray = cv2.cvtColor(analyzed, cv2.COLOR_BGR2GRAY)
-            faces = self._detect_faces(gray, face_detectors, cv2)
-            for x, y, width, height in faces:
-                if self.priority == 'face':
-                    boxes.append(self._stable_body_box_from_face(x, y, width, height))
-                else:
-                    boxes.append((x - width * 1.2, y - height * 0.7, width * 3.4, height * 4.8))
+        body_boxes = self._detect_bodies(analyzed, body_detector, cv2)
+        # HOG body detections frequently begin at the shoulders, which is precisely
+        # what caused heads/hair to be cropped. When a face is available it is the
+        # most reliable top anchor, while the expanded box keeps head + upper torso.
+        gray = cv2.cvtColor(analyzed, cv2.COLOR_BGR2GRAY)
+        faces = self._detect_faces(gray, face_detectors, cv2)
+        if faces and self.priority == 'face':
+            boxes = [self._face_priority_box(x, y, width, height) for x, y, width, height in faces]
+        elif body_boxes:
+            boxes = body_boxes
+        else:
+            boxes = [
+                (x - width * 1.2, y - height * 0.7, width * 3.4, height * 4.8)
+                for x, y, width, height in faces
+            ]
         if not boxes:
             return None
         inverse_scale = 1.0 / scale
@@ -374,9 +396,10 @@ class AutoReframeService:
         # a person in a wide/short ratio (e.g. 16:5 banners) also shrinks the vertical framing by
         # the same factor — which crops below the head/chin on the common case of a close/medium
         # shot. Keeping the person fully framed takes priority over perfect centering.
-        # Avoid an excessively tight digital zoom; at least 68% of the cover window remains visible.
-        crop_width = min(cover_width, max(cover_width * 0.68, desired_width))
-        crop_height = min(cover_height, max(cover_height * 0.68, desired_height))
+        # Preserve the natural camera framing. A crop may zoom only up to 4%
+        # beyond the cover crop, while still filling the final canvas completely.
+        crop_width = min(cover_width, max(cover_width * 0.96, desired_width))
+        crop_height = min(cover_height, max(cover_height * 0.96, desired_height))
         if crop_width / crop_height > target_ratio:
             crop_height = crop_width / target_ratio
         else:
@@ -464,11 +487,11 @@ class AutoReframeService:
         doesn't over-zoom on the face or drift with inconsistent partial detections.
         """
         box_height = max(1.0, bottom - top)
-        head_pad = box_height * 0.20
+        head_pad = box_height * 0.30
         top = max(0.0, top - head_pad)
         box_height = max(1.0, bottom - top)
 
-        min_height = source_height * 0.48
+        min_height = source_height * 0.58
         if box_height < min_height:
             center_y = (top + bottom) / 2.0
             half = min_height / 2.0

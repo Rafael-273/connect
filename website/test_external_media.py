@@ -3,6 +3,7 @@ import math
 import re
 import tempfile
 import wave
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -60,6 +61,7 @@ from website.models.external_media import (
     ExternalMediaJob,
     ExternalMediaProject,
     ExternalMediaProjectExport,
+    GlossaryTerm,
     MasteringProfile,
     MediaAsset,
     MediaTemplate,
@@ -136,6 +138,48 @@ class ExternalMediaPermissionTests(ExternalMediaFixtureMixin, TestCase):
         for url in urls:
             with self.subTest(url=url):
                 self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_glossary_duplicate_returns_a_form_error(self):
+        MinistryMembership.objects.create(member=self.member, ministry=self.ministry)
+        GlossaryTerm.objects.create(
+            source_language='pt', target_language='en',
+            source_text='Termo duplicado de cobertura', translated_text='Coverage duplicate term',
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('external_media_glossary'), {
+            'source_language': 'pt',
+            'target_language': 'en',
+            'source_text': 'Termo duplicado de cobertura',
+            'translated_text': 'Another translation',
+            'notes': '',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Este termo já existe para este par de idiomas.')
+        self.assertEqual(GlossaryTerm.objects.filter(source_text='Termo duplicado de cobertura').count(), 1)
+
+    def test_glossary_term_can_be_recreated_after_deletion(self):
+        MinistryMembership.objects.create(member=self.member, ministry=self.ministry)
+        term = GlossaryTerm.objects.create(
+            source_language='pt', target_language='en',
+            source_text='Termo removível', translated_text='First translation',
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(reverse('external_media_glossary_delete', args=[term.pk]))
+        self.assertRedirects(response, reverse('external_media_glossary'))
+        self.assertFalse(GlossaryTerm.all_objects.filter(pk=term.pk).exists())
+
+        response = self.client.post(reverse('external_media_glossary'), {
+            'source_language': 'pt',
+            'target_language': 'en',
+            'source_text': 'Termo removível',
+            'translated_text': 'Replacement translation',
+            'notes': '',
+        })
+        self.assertRedirects(response, reverse('external_media_glossary'))
+        recreated = GlossaryTerm.objects.get(
+            source_language='pt', target_language='en', source_text='Termo removível',
+        )
+        self.assertEqual(recreated.translated_text, 'Replacement translation')
 
 
 class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
@@ -948,6 +992,64 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(response, 'Vídeos do projeto')
         self.assertContains(response, 'Legenda PT')
 
+    def test_project_duration_minutes_rounds_up(self):
+        project = self.make_project()
+        project.started_at = project.created_at
+        project.finished_at = project.created_at + timedelta(seconds=1857)
+        project.save(update_fields=['started_at', 'finished_at', 'update_at'])
+
+        self.assertEqual(project.duration_minutes, 31)
+
+    def test_project_can_be_renamed_from_the_edit_screen(self):
+        project = self.make_project()
+
+        response = self.client.post(
+            reverse('external_media_project_edit', args=[project.public_id]),
+            {'name': 'Anúncios de setembro'},
+        )
+
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.name, 'Anúncios de setembro')
+
+    def test_terminal_project_can_be_deleted_from_the_dashboard(self):
+        project = self.make_project()
+        job = self.make_job()
+        previous_job = self.make_job()
+        previous_job.processing_project = project
+        previous_job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+
+        response = self.client.post(reverse('external_media_project_delete', args=[project.public_id]))
+
+        self.assertRedirects(response, reverse('external_media_dashboard'))
+        self.assertFalse(ExternalMediaProject.all_objects.filter(pk=project.pk).exists())
+        self.assertFalse(ExternalMediaJob.all_objects.filter(pk=job.pk).exists())
+        self.assertFalse(ExternalMediaJob.all_objects.filter(pk=previous_job.pk).exists())
+
+    def test_project_detail_displays_its_processing_history(self):
+        project = self.make_project()
+        previous_job = self.make_job()
+        previous_job.processing_project = project
+        previous_job.save(update_fields=['processing_project', 'update_at'])
+
+        response = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
+
+        self.assertContains(response, 'Histórico de processamentos')
+        self.assertContains(response, 'Processamento #1')
+
+    def test_processing_project_cannot_be_deleted(self):
+        project = self.make_project()
+        project.status = ExternalMediaProject.Status.PROCESSING
+        project.save(update_fields=['status', 'update_at'])
+
+        response = self.client.post(reverse('external_media_project_delete', args=[project.public_id]))
+
+        self.assertRedirects(response, reverse('external_media_dashboard'))
+        self.assertTrue(ExternalMediaProject.objects.filter(pk=project.pk).exists())
+
     @patch('website.views.external_media.export_premiere_project.delay')
     def test_finished_project_can_queue_editable_premiere_export(self, delay):
         delay.return_value.id = 'premiere-export-123'
@@ -1035,6 +1137,24 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.refresh_from_db()
         self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
         self.assertEqual(project.celery_task_id, 'task-retry-1')
+
+    @patch('website.views.external_media.run_external_media_project.delay')
+    def test_finished_project_can_be_reprocessed_with_existing_uploads(self, delay):
+        delay.return_value.id = 'task-reprocess-1'
+        project = self.make_project()
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.save(update_fields=['status', 'update_at'])
+        ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='video.mp4',
+            file=SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4'), file_size=5,
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('external_media_project_run', args=[project.public_id]))
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
+        self.assertEqual(project.celery_task_id, 'task-reprocess-1')
+        self.assertEqual(project.block_media.count(), 1)
 
     @patch.object(ExternalMediaProjectPipeline, 'render')
     @patch.object(ExternalMediaPipeline, 'prepare_subtitle_tracks')
@@ -1298,11 +1418,11 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertRedirects(response, reverse('admin_external_media_templates'))
         self.assertTrue(MediaTemplate.objects.filter(pk=self.template.pk).exists())
 
-    def test_new_block_form_defaults_to_four_videos(self):
+    def test_new_block_form_defaults_to_unlimited_videos(self):
         form = AdminMediaTemplateBlockForm()
         self.assertTrue(form.fields['allows_multiple'].initial)
         self.assertEqual(form.fields['min_occurrences'].initial, 1)
-        self.assertEqual(form.fields['max_occurrences'].initial, 4)
+        self.assertEqual(form.fields['max_occurrences'].initial, 0)
         self.assertIn('skip_extra_processing', form.fields)
 
     def test_admin_panel_can_publish_draft_version(self):
@@ -1539,7 +1659,7 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         blocks = list(self.version.blocks.order_by('order'))
         self.assertEqual([block.name for block in blocks], ['Mensagem principal', 'Encerramento'])
         self.assertEqual([block.key for block in blocks], ['mensagem-principal', 'encerramento'])
-        self.assertEqual([block.max_occurrences for block in blocks], [1, 1])
+        self.assertEqual([block.max_occurrences for block in blocks], [0, 0])
 
     def test_admin_panel_does_not_create_empty_block_on_save(self):
         block = MediaTemplateBlock.objects.create(
@@ -1916,12 +2036,14 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         centered_y = ((290 + 850) / 2) - (600 / 2)
         target_y = service._target_crop_y(top=290, bottom=850, crop_height=600, max_y=480)
         self.assertLess(target_y, centered_y)
-        self.assertEqual(round(290 - target_y), 108)
+        self.assertEqual(round(290 - target_y), 42)
 
     def test_auto_reframe_vertical_crop_keeps_head_when_person_is_taller_than_crop(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.12, smoothing=1.0)
         target_y = service._target_crop_y(top=290, bottom=950, crop_height=600, max_y=480)
-        self.assertEqual(round(target_y), round(290 - (600 * 0.12)))
+        # Older templates persisted larger values; face framing caps them at 7%
+        # to avoid excessive empty space above the head.
+        self.assertEqual(round(target_y), round(290 - (600 * 0.07)))
 
     def test_auto_reframe_normalizes_body_box_with_head_padding_and_minimum_height(self):
         service = AutoReframeService(priority='face')
@@ -1943,7 +2065,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         centered_y = ((260 + 560) / 2) - (600 / 2)
         target_y = service._target_crop_y(top=260, bottom=560, crop_height=600, max_y=480)
         self.assertGreater(target_y, centered_y)
-        self.assertEqual(round(260 - target_y), 108)
+        self.assertEqual(round(260 - target_y), 42)
 
     def test_auto_reframe_face_detection_tries_contrast_fallbacks(self):
         gray = SimpleNamespace(shape=(720, 1280))
@@ -1968,7 +2090,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             source_height=1080,
         )
         self.assertEqual(len(keyframes), 1)
-        self.assertEqual(round(keyframes[0].y), 182)
+        self.assertEqual(round(keyframes[0].y), 248)
 
     def test_auto_reframe_locks_vertical_position_for_face_tracking(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)

@@ -10,6 +10,7 @@ from .audio_utils import (
     build_piecewise_expression, clamp, linear_gain_from_db, parse_mean_volume_db,
     settings_from_config,
 )
+from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
 
 logger = logging.getLogger(__name__)
@@ -38,12 +39,14 @@ class SpeechBlock:
 
 @dataclass(frozen=True)
 class DuckingSettings:
-    attack_ms: int = 250
-    hold_ms: int = 180
-    release_ms: int = 700
-    base_duck_db: float = 8.0
-    min_duck_db: float = 3.0
-    max_duck_db: float = 14.0
+    attack_ms: int = 140
+    hold_ms: int = 300
+    release_ms: int = 850
+    # Music needs to sit clearly behind dialogue.  With the old 8 dB default,
+    # louder background tracks still competed with the speaker.
+    base_duck_db: float = 14.0
+    min_duck_db: float = 10.0
+    max_duck_db: float = 20.0
     spectral_max_cut_db: float = 5.0
     spectral_center_hz: int = 1200
     spectral_bandwidth_octaves: float = 2.2
@@ -220,6 +223,7 @@ class AudioMixingService:
         music_volume: float, duration_ms: int, speech_blocks=None, protected_ranges=None,
         settings_: DuckingSettings = None, ducking_enabled: bool = True, spectral_enabled: bool = False,
     ) -> AudioMixResult:
+        self._validate_music_input(music_path)
         settings_ = settings_ or DuckingSettings()
         speech_blocks = clip_blocks_against_protected_ranges(speech_blocks or [], protected_ranges or [])
         metrics = {
@@ -282,6 +286,37 @@ class AudioMixingService:
             'spectral_density': round(spectral_density, 2) if spectral_enabled else None,
         })
         return AudioMixResult(output_path, metrics)
+
+    def _validate_music_input(self, music_path: Path):
+        """Fail early with an actionable message when the template track is corrupt.
+
+        A file can exist in the configured storage while containing an interrupted
+        upload (or even text saved with an audio extension).  Without this check,
+        FFmpeg only reports a generic render error after the full video has already
+        been assembled.
+        """
+        path = Path(music_path)
+        if not path.is_file() or path.stat().st_size < 1024:
+            raise ExternalMediaError(
+                'A música de fundo do template está vazia ou inválida. '
+                'Envie novamente um arquivo de áudio válido no template.'
+            )
+        try:
+            stream_type = self.runner.run([
+                settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'a:0',
+                '-show_entries', 'stream=codec_type', '-of', 'default=noprint_wrappers=1:nokey=1',
+                str(path),
+            ]).strip()
+        except ExternalMediaError as exc:
+            raise ExternalMediaError(
+                'A música de fundo do template não pôde ser lida. '
+                'Envie novamente um arquivo de áudio válido no template.'
+            ) from exc
+        if stream_type != 'audio':
+            raise ExternalMediaError(
+                'A música de fundo do template não possui uma faixa de áudio válida. '
+                'Envie novamente um arquivo de áudio válido no template.'
+            )
 
     def _mix_flat(self, video_path, music_path, output_path, music_volume):
         self.runner.run([

@@ -70,6 +70,78 @@
     .media-status-badge.is-cancelled { background: #f3f4f6; color: #4b5563; }
     .media-status-badge.is-processing { background: #fef3c7; color: #b45309; }
 
+    .media-project-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-left: auto;
+    }
+    .media-project-action {
+        width: 2rem;
+        height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.6rem;
+        background: #fff;
+        color: #6b7280;
+        transition: 0.18s ease;
+    }
+    .media-project-action:hover { border-color: rgba(201, 9, 5, .35); color: #C90905; background: #fff7f7; }
+    .media-project-action.is-danger:hover { border-color: #fecaca; color: #dc2626; background: #fff1f2; }
+    .media-project-action:disabled { cursor: not-allowed; opacity: .42; }
+
+    .media-confirm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(15, 23, 42, .58);
+        backdrop-filter: blur(2px);
+    }
+    .media-confirm-overlay.is-open { display: flex; animation: fadeIn .18s ease-out; }
+    .media-confirm-dialog {
+        width: min(28rem, 100%);
+        border-radius: 1.25rem;
+        background: #fff;
+        box-shadow: 0 24px 64px rgba(15, 23, 42, .24);
+        overflow: hidden;
+    }
+    .media-confirm-content { padding: 1.6rem; }
+    .media-confirm-icon {
+        width: 2.8rem;
+        height: 2.8rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: .9rem;
+        color: #C90905;
+        background: #fff1f2;
+        font-size: 1.1rem;
+    }
+    .media-confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: .65rem;
+        margin-top: 1.5rem;
+    }
+    .media-confirm-actions button {
+        min-height: 2.75rem;
+        padding: .65rem 1rem;
+        border-radius: .75rem;
+        font-size: .875rem;
+        font-weight: 700;
+        transition: .18s ease;
+    }
+    .media-confirm-cancel { background: #f3f4f6; color: #4b5563; }
+    .media-confirm-cancel:hover { background: #e5e7eb; }
+    .media-confirm-delete { background: #C90905; color: #fff; }
+    .media-confirm-delete:hover { background: #a60704; }
+
     .media-project-card-body { padding: 1rem 1.125rem 1.125rem; }
 
     .media-info-grid {
@@ -257,9 +329,17 @@
                             {{ project.template_version.template.name }}
                         </p>
                     </div>
-                    <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">
-                        {{ project.get_status_display }}
-                    </span>
+                    <div class="media-project-actions">
+                        <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">
+                            {{ project.get_status_display }}
+                        </span>
+                        <a href="{% url 'external_media_project_edit' project.public_id %}" class="media-project-action" title="Editar projeto" aria-label="Editar projeto {{ project.name }}">
+                            <i class="fas fa-pen"></i>
+                        </a>
+                        <button type="button" class="media-project-action is-danger" data-delete-project data-project-name="{{ project.name }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}" title="{% if project.status == 'PENDING' or project.status == 'ASSEMBLING' or project.status == 'PROCESSING' or project.status == 'AWAITING_REVIEW' %}Aguarde o processamento terminar{% else %}Excluir projeto{% endif %}" aria-label="Excluir projeto {{ project.name }}" {% if project.status == 'PENDING' or project.status == 'ASSEMBLING' or project.status == 'PROCESSING' or project.status == 'AWAITING_REVIEW' %}disabled{% endif %}>
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="media-project-card-body">
@@ -274,7 +354,7 @@
                         </div>
                         <div class="media-info-item">
                             <i class="fas fa-stopwatch"></i>
-                            <span>{% if project.duration_seconds != None %}{{ project.duration_seconds }}s de processamento{% else %}Tempo indisponível{% endif %}</span>
+                            <span>{% if project.duration_minutes != None %}{{ project.duration_minutes }} min de processamento{% else %}Tempo indisponível{% endif %}</span>
                         </div>
                         <div class="media-info-item">
                             <i class="fas fa-download"></i>
@@ -351,51 +431,26 @@
     </section>
     {% endif %}
 
-    {% if legacy_jobs %}
-    <section class="media-legacy-section">
-        <h2 class="text-lg font-black text-gray-900 mb-1">Processamentos anteriores</h2>
-        <p class="text-sm text-gray-500 mb-4">Vídeos criados antes da arquitetura de projetos continuam disponíveis.</p>
+</div>
 
-        <div class="media-project-list space-y-3">
-            {% for job in legacy_jobs %}
-            <article class="media-project-card">
-                <div class="media-project-card-header">
-                    <div class="media-project-avatar" style="background:#6b7280; box-shadow:none;"><span class="mt-1">{{ job.name|slice:":1"|upper }}</span></div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-base font-bold text-gray-900 truncate">{{ job.name }}</h3>
-                        <p class="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
-                            <i class="fas fa-history" style="color: #6b7280;"></i>
-                            {{ job.preset.name }} · legado
-                        </p>
-                    </div>
-                    <span class="media-status-badge {% if job.status == 'FINISHED' %}is-finished{% elif job.status == 'ERROR' %}is-error{% else %}is-processing{% endif %}">
-                        {{ job.get_status_display }}
-                    </span>
+<div id="delete-project-modal" class="media-confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
+    <div class="media-confirm-dialog" role="document">
+        <div class="media-confirm-content">
+            <span class="media-confirm-icon"><i class="fas fa-trash"></i></span>
+            <h2 id="delete-project-title" class="text-xl font-black text-gray-900 mt-4">Excluir projeto?</h2>
+            <p class="text-sm text-gray-600 leading-relaxed mt-2">
+                Você está prestes a excluir <strong id="delete-project-name" class="text-gray-900"></strong>.
+                Os vídeos, legendas e exportações vinculados serão removidos permanentemente.
+            </p>
+            <form id="delete-project-form" method="post">
+                {% csrf_token %}
+                <div class="media-confirm-actions">
+                    <button type="button" class="media-confirm-cancel" data-close-delete-modal>Cancelar</button>
+                    <button type="submit" class="media-confirm-delete"><i class="fas fa-trash mr-1"></i>Excluir projeto</button>
                 </div>
-
-                <div class="media-project-card-body">
-                    <div class="media-info-grid">
-                        <div class="media-info-item">
-                            <i class="far fa-calendar-alt"></i>
-                            <span>{{ job.created_at|date:'d/m/Y H:i' }}</span>
-                        </div>
-                        <div class="media-info-item">
-                            <i class="fas fa-download"></i>
-                            <span>{{ job.download_count }} download{{ job.download_count|pluralize }}</span>
-                        </div>
-                    </div>
-
-                    <a href="{% url 'external_media_detail' job.public_id %}" class="media-open-btn">
-                        <span class="media-open-btn-icon" style="background:#6b7280;"><i class="fas fa-eye"></i></span>
-                        <span class="mt-2">Ver processamento</span>
-                        <i class="fas fa-arrow-right media-open-btn-arrow mr-1"></i>
-                    </a>
-                </div>
-            </article>
-            {% endfor %}
+            </form>
         </div>
-    </section>
-    {% endif %}
+    </div>
 </div>
 
 <script>
@@ -417,5 +472,37 @@
         document.getElementById('hidden-status').value = document.getElementById('panel-status').value;
         document.getElementById('media-filter-form').submit();
     });
+
+    (function() {
+        const modal = document.getElementById('delete-project-modal');
+        const form = document.getElementById('delete-project-form');
+        const name = document.getElementById('delete-project-name');
+        let trigger = null;
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            form.removeAttribute('action');
+            trigger?.focus();
+        }
+
+        document.querySelectorAll('[data-delete-project]').forEach((button) => {
+            button.addEventListener('click', () => {
+                trigger = button;
+                name.textContent = `“${button.dataset.projectName}”`;
+                form.action = button.dataset.deleteUrl;
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                modal.querySelector('.media-confirm-delete').focus();
+            });
+        });
+        modal.querySelector('[data-close-delete-modal]').addEventListener('click', closeModal);
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) closeModal();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+        });
+    })();
 </script>
 {% endblock %}
