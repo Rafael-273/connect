@@ -110,7 +110,11 @@ class SpeechEditPlan:
     def remap_words(self, words):
         result = []
         for word in words:
-            if any(cut.kind == 'filler' and word.start_ms < cut.end_ms and word.end_ms > cut.start_ms for cut in self.cuts):
+            if any(
+                cut.kind in ('filler', 'background_voice')
+                and word.start_ms < cut.end_ms and word.end_ms > cut.start_ms
+                for cut in self.cuts
+            ):
                 continue
             start_ms = self.remap_time(word.start_ms)
             end_ms = max(start_ms + 1, self.remap_time(word.end_ms))
@@ -121,6 +125,19 @@ class SpeechEditPlan:
         """Shifts a timestamp from the original (pre-edit) timeline to the edited one."""
         shift = sum(cut.duration_ms for cut in self.cuts if cut.end_ms <= ms)
         return max(0, int(ms) - shift)
+
+    def source_time(self, ms):
+        """Maps a post-edit timestamp back onto the original source timeline."""
+        edited_ms = max(0, int(ms))
+        original_cursor = 0
+        edited_cursor = 0
+        for cut in self.cuts:
+            kept_duration = max(0, cut.start_ms - original_cursor)
+            if edited_ms <= edited_cursor + kept_duration:
+                return original_cursor + edited_ms - edited_cursor
+            edited_cursor += kept_duration
+            original_cursor = cut.end_ms
+        return original_cursor + edited_ms - edited_cursor
 
 
 @dataclass(frozen=True)
@@ -187,25 +204,71 @@ class AudioActivity:
         breath_frames = (values >= self.breath_threshold_db) & (values < self.voice_threshold_db)
         return float(np.mean(breath_frames)) >= 0.12
 
+    def average_db(self, start_ms, end_ms):
+        """Robust loudness estimate for a known speech interval."""
+        values = self._slice(start_ms, end_ms)
+        return float(np.median(values)) if values.size else -96.0
+
 
 class SpeechEditAnalyzer:
     def analyze(
         self, words, wav_path: Path, duration_ms: int, *, remove_silence=True,
-        remove_fillers=True, configuration=None,
+        remove_fillers=True, configuration=None, block_ranges=None,
     ) -> SpeechEditPlan:
         configuration = configuration or {}
         profile = PROFILES.get(configuration.get('profile', 'balanced'), PROFILES['balanced'])
-        filler_words = configuration.get('filler_words') or DEFAULT_FILLERS
+        # An explicit empty list means that this template opted out of all
+        # vocabulary items. Only older configurations without this key use the
+        # legacy defaults.
+        filler_words = (
+            configuration['filler_words']
+            if 'filler_words' in configuration
+            else DEFAULT_FILLERS
+        )
         fillers = {self._normalize(value) for value in filler_words if self._normalize(value)}
         activity = AudioActivity(wav_path)
         ordered = sorted(words, key=lambda item: item.start_ms)
         cuts = []
         if remove_silence:
             cuts.extend(self._silence_cuts(ordered, activity, profile))
+            cuts.extend(self._leading_take_cuts(ordered, block_ranges, profile))
         if remove_fillers and ordered and all(word.granularity == 'word' for word in ordered):
             cuts.extend(self._filler_cuts(ordered, activity, profile, fillers))
         cuts = self._merge_safe_cuts(cuts, duration_ms)
         return SpeechEditPlan(tuple(cuts), duration_ms, profile.crossfade_ms)
+
+    @staticmethod
+    def _leading_take_cuts(words, block_ranges, profile):
+        """Removes a detached inhale/silence before speech starts in each take.
+
+        A regular silence cut only has a previous and a following word. At the start
+        of a clip there is no previous word, which previously left a short image of a
+        presenter inhaling before the first spoken phrase. Keep a tiny lead-in so the
+        first consonant is never clipped, but do not preserve a standalone breath.
+        """
+        if not words or not block_ranges:
+            return []
+        minimum_lead_ms = max(450, profile.minimum_silence_ms)
+        # Word timestamps may start a little late; leave enough of the natural
+        # lead-in so the first syllable does not feel abruptly cut.
+        speech_guard_ms = 150
+        cuts = []
+        for item in block_ranges:
+            start_ms = max(0, int(item.get('start_ms') or 0))
+            end_ms = max(start_ms, int(item.get('end_ms') or 0))
+            first_word = next(
+                (
+                    word for word in words
+                    if word.start_ms >= start_ms and word.start_ms < end_ms
+                ),
+                None,
+            )
+            if not first_word or first_word.start_ms - start_ms < minimum_lead_ms:
+                continue
+            cut_end = max(start_ms, first_word.start_ms - speech_guard_ms)
+            if cut_end - start_ms >= 120:
+                cuts.append(SpeechCut(start_ms, cut_end, 'silence'))
+        return cuts
 
     def _silence_cuts(self, words, activity, profile):
         cuts = []
@@ -236,6 +299,12 @@ class SpeechEditAnalyzer:
 
     def _filler_cuts(self, words, activity, profile, fillers):
         cuts = []
+        # The old limit required a full profile-sized pause on *both* sides of
+        # the filler (180 ms in the default profile). Whisper word boundaries
+        # are commonly tighter than that, even for an isolated "hum...". Keep
+        # the word safety window, but accept a smaller verified-quiet gap.
+        word_safety_ms = 100
+        verified_gap_ms = 110
         for index, word in enumerate(words):
             if self._normalize(word.text) not in fillers or word.end_ms - word.start_ms > 1600:
                 continue
@@ -243,20 +312,25 @@ class SpeechEditAnalyzer:
             following = words[index + 1] if index + 1 < len(words) else None
             before = word.start_ms - previous.end_ms if previous else profile.filler_neighbor_gap_ms
             after = following.start_ms - word.end_ms if following else profile.filler_neighbor_gap_ms
-            if before < profile.filler_neighbor_gap_ms or after < profile.filler_neighbor_gap_ms:
+            # Never cut a filler glued to another word. This remains the key
+            # safeguard against truncating syllables when timestamps drift.
+            if before < verified_gap_ms or after < verified_gap_ms:
                 continue
-            # A spoken filler must be surrounded by low-activity margins. This prevents
-            # us from cutting a syllable attached to the neighboring word.
-            margin = min(90, before // 3, after // 3)
+            # A spoken filler must be surrounded by verified low activity. A
+            # 110 ms gap lets natural isolated fillers be removed while the
+            # 100 ms protected region around neighboring words stays intact.
+            before_start = max(0, word.start_ms - min(90, before))
+            after_end = word.end_ms + min(90, after)
+            if activity.silence_ratio(before_start, word.start_ms) < 0.45:
+                continue
+            if activity.silence_ratio(word.end_ms, after_end) < 0.45:
+                continue
+            margin = min(80, (before - word_safety_ms) // 2, (after - word_safety_ms) // 2)
             start = word.start_ms - margin
             end = word.end_ms + margin
-            if previous and start < previous.end_ms + 100:
+            if previous and start < previous.end_ms + word_safety_ms:
                 continue
-            if following and end > following.start_ms - 100:
-                continue
-            if activity.silence_ratio(max(0, start - 90), word.start_ms) < 0.45:
-                continue
-            if activity.silence_ratio(word.end_ms, end + 90) < 0.45:
+            if following and end > following.start_ms - word_safety_ms:
                 continue
             cuts.append(SpeechCut(start, end, 'filler', word.text.strip()))
         return cuts

@@ -7,7 +7,15 @@
         <h1 class="text-3xl font-black mt-2">{{ project.name }}</h1>
         <p class="text-gray-500">{{ project.template_version.template.name }} · {{ project.created_by.name }}</p>
     </div>
-    <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">{% csrf_token %}<button class="media-btn media-muted"><i class="fas fa-copy"></i>Duplicar</button></form>
+    <div class="flex flex-wrap gap-2">
+        {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
+        <form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">
+            {% csrf_token %}
+            <button class="media-btn media-secondary"><i class="fas fa-film"></i>Editar vídeos</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">{% csrf_token %}<button class="media-btn media-muted"><i class="fas fa-copy"></i>Duplicar</button></form>
+    </div>
 </div>
 
 {% if project.status != 'DRAFT' %}
@@ -71,6 +79,18 @@
 {% endif %}
 
 {% if project.status == 'DRAFT' %}
+{% if restore_processed_result %}
+<section class="mb-7 rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-4">
+    <div>
+        <strong class="block text-amber-900">Você está editando os vídeos deste projeto.</strong>
+        <p class="text-sm text-amber-800 mt-1">O resultado anterior continua disponível e pode ser restaurado sem renderizar novamente.</p>
+    </div>
+    <form method="post" action="{% url 'external_media_project_restore_processed_result' project.public_id %}">
+        {% csrf_token %}
+        <button class="media-btn media-muted"><i class="fas fa-arrow-rotate-left"></i>Voltar ao resultado processado</button>
+    </form>
+</section>
+{% endif %}
 <div class="mb-7">
     <h2 class="text-xl font-black mb-1">Vídeos do projeto</h2>
     <p class="text-gray-500">Envie o conteúdo de cada bloco. A ordem já está definida pelo template.</p>
@@ -81,9 +101,23 @@
         <div class="flex flex-wrap justify-between gap-3 mb-4">
             <div><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-black">{{ forloop.counter }}</span><h3 class="font-black text-lg">{{ item.definition.name }}</h3>{% if item.definition.is_required %}<span class="text-xs font-bold text-red-700">Obrigatório</span>{% else %}<span class="text-xs text-gray-500">Opcional</span>{% endif %}</div>{% if item.definition.description %}<p class="text-sm text-gray-500 mt-1 ml-9">{{ item.definition.description }}</p>{% endif %}</div>
         </div>
+        {% if item.media %}
+        <div class="space-y-2 mb-3" data-media-sortable data-reorder-url="{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}">
         {% for media in item.media %}
-        <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 mb-2"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div>
-        {% empty %}
+        <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 media-sort-item" draggable="true" data-media-id="{{ media.pk }}">
+            <div class="flex items-center min-w-0 gap-3">
+                <button type="button" class="text-gray-400 cursor-grab active:cursor-grabbing p-1" title="Arraste para mudar a ordem"><i class="fas fa-grip-vertical"></i></button>
+                <div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button>
+                <form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form>
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+        <p class="text-xs text-gray-500 mb-3"><i class="fas fa-grip-vertical mr-1"></i>Arraste os vídeos para definir a ordem deste bloco.</p>
+        {% else %}
             {% if item.has_default_video %}
                 <p class="rounded-xl bg-green-50 text-green-800 p-3 text-sm mb-3"><i class="fas fa-circle-check mr-2"></i>Usará o vídeo padrão do template.</p>
             {% elif item.has_missing_default_video %}
@@ -91,7 +125,7 @@
             {% else %}
                 <p class="text-sm text-gray-400 mb-3">Nenhum upload.</p>
             {% endif %}
-        {% endfor %}
+        {% endif %}
         {% for media in item.missing_media %}
         <div class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 mb-2"><div class="min-w-0"><strong class="block text-amber-900">Arquivo não disponível</strong><span class="text-xs text-amber-800">{{ media.original_filename }} — envie o vídeo novamente.</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover referência antiga"><i class="fas fa-trash"></i></button></form></div>
         {% endfor %}
@@ -501,4 +535,69 @@
 })();
 </script>
 {% endif %}
+
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-media-preview-modal aria-hidden="true">
+    <section class="w-full max-w-5xl rounded-2xl bg-white p-4 sm:p-5 shadow-2xl">
+        <div class="flex items-center justify-between gap-4 mb-4">
+            <h2 class="font-black text-lg truncate" data-media-preview-title>Prévia do vídeo</h2>
+            <button type="button" class="media-btn media-muted !px-3 !py-2" data-media-preview-close aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+        </div>
+        <video controls preload="metadata" class="w-full max-h-[72vh] rounded-xl bg-black" data-media-preview-player></video>
+    </section>
+</div>
+
+<script>
+(() => {
+    const modal = document.querySelector('[data-media-preview-modal]');
+    const player = modal?.querySelector('[data-media-preview-player]');
+    const title = modal?.querySelector('[data-media-preview-title]');
+    const close = () => {
+        if (!modal || !player) return;
+        player.pause(); player.removeAttribute('src'); player.load();
+        modal.classList.add('hidden'); modal.classList.remove('flex');
+        modal.setAttribute('aria-hidden', 'true');
+    };
+    document.querySelectorAll('[data-media-preview]').forEach((button) => button.addEventListener('click', () => {
+        if (!modal || !player) return;
+        title.textContent = button.dataset.mediaName || 'Prévia do vídeo';
+        player.src = `${button.dataset.mediaUrl}?preview=1`;
+        modal.classList.remove('hidden'); modal.classList.add('flex');
+        modal.setAttribute('aria-hidden', 'false');
+    }));
+    modal?.querySelector('[data-media-preview-close]')?.addEventListener('click', close);
+    modal?.addEventListener('click', (event) => { if (event.target === modal) close(); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    document.querySelectorAll('[data-media-sortable]').forEach((container) => {
+        let dragged = null;
+        const saveOrder = async () => {
+            const data = new FormData();
+            container.querySelectorAll('[data-media-id]').forEach((item) => data.append('media_ids[]', item.dataset.mediaId));
+            const response = await fetch(container.dataset.reorderUrl, {
+                method: 'POST', body: data, credentials: 'same-origin',
+                headers: {'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest'},
+            });
+            if (!response.ok) throw new Error('Não foi possível salvar a nova ordem.');
+        };
+        container.querySelectorAll('[data-media-id]').forEach((item) => {
+            item.addEventListener('dragstart', (event) => {
+                if (event.target.closest('button, form')) { event.preventDefault(); return; }
+                dragged = item; item.classList.add('opacity-50'); event.dataTransfer.effectAllowed = 'move';
+            });
+            item.addEventListener('dragend', () => { item.classList.remove('opacity-50'); dragged = null; });
+            item.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                if (!dragged || dragged === item) return;
+                const before = event.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2;
+                container.insertBefore(dragged, before ? item : item.nextSibling);
+            });
+            item.addEventListener('drop', async (event) => {
+                event.preventDefault();
+                try { await saveOrder(); } catch (error) { window.location.reload(); }
+            });
+        });
+    });
+})();
+</script>
 {% endblock %}

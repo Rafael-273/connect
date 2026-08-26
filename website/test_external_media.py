@@ -27,6 +27,7 @@ from website.external_media.audio_mixing import (
     group_speech_blocks,
 )
 from website.external_media.auto_reframe import AutoReframePlan, AutoReframeService, ReframeKeyframe, limit_keyframes_for_ffmpeg
+from website.external_media.background_voice import BackgroundVoiceRemovalService, QuietUtterance
 from website.external_media.dialogue_processing import (
     DialogueProcessor,
     DialogueSettings,
@@ -38,12 +39,13 @@ from website.external_media.premiere_export import (
     PremiereExporter,
     PremierePackageService,
 )
-from website.external_media.timeline import InternalTimelineBuilder, KeyframeSimplifier
+from website.external_media.timeline import InternalTimelineBuilder, KeyframeSimplifier, TimelineSource
 from website.external_media.services import (
     AssemblySource,
     ExternalMediaPipeline,
     ExternalMediaProjectPipeline,
     FFmpegRunner,
+    LUTService,
     RenderService,
     SubtitleService,
     TemplateService,
@@ -213,6 +215,20 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
             [(cue.start_ms, cue.end_ms) for cue in self.cues],
         )
         self.assertEqual([cue.cue_index for cue in translated], [1, 2])
+
+    def test_translation_removes_ellipsis_and_continuation_hyphens(self):
+        ai = Mock()
+        ai.generate_text.return_value = (
+            '{"cues":[{"cue_id":1,"text":"Hello, church... --"},'
+            '{"cue_id":2,"text":"Let us worship the Lord…"}]}'
+        )
+        target = TranslationService(ai_service=ai).translate_track(
+            self.track, 'en', 'gpt-4.1-mini',
+        )
+        self.assertEqual(
+            list(target.cues.order_by('cue_index').values_list('text', flat=True)),
+            ['Hello, church', 'Let us worship the Lord'],
+        )
 
     def test_translation_rejects_missing_cue(self):
         ai = Mock()
@@ -386,10 +402,9 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
         # Sem translated_style distinto, as duas usam o mesmo estilo → mesma margem.
         self.assertEqual(original_margin, translated_margin)
 
-    def test_dual_ass_splits_long_text_into_sequential_cues(self):
-        # Legenda dupla nunca quebra em múltiplas linhas no mesmo instante — por isso,
-        # textos acima do limite viram várias legendas sequenciais (tempo repartido),
-        # sem omitir palavras com reticências.
+    def test_dual_ass_keeps_long_bilingual_pair_in_the_same_time_window(self):
+        # Legendas bilíngues devem exibir o mesmo trecho nos dois idiomas, mesmo
+        # quando uma tradução for maior que o limite de caracteres configurado.
         self.style.max_characters = 20
         self.style.background_enabled = False
         self.style.shadow = 0
@@ -408,11 +423,15 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
             row for row in content.splitlines()
             if row.startswith('Dialogue:') and ',Translated,' in row
         ]
-        self.assertGreater(len(translated_rows), 1)
-        combined = ''.join(row.split(r'{\q2}', 1)[1] for row in translated_rows)
-        self.assertIn('This translated line', combined)
-        self.assertIn('configured limit', combined)
-        self.assertNotIn('…', combined)
+        original_rows = [
+            row for row in content.splitlines()
+            if row.startswith('Dialogue:') and ',Original,' in row
+        ]
+        self.assertEqual(len(original_rows), 2)
+        self.assertEqual(len(translated_rows), 1)
+        self.assertIn('This translated line is way longer than the configured limit', translated_rows[0])
+        self.assertEqual(original_rows[0].split(',', 3)[1:3], translated_rows[0].split(',', 3)[1:3])
+        self.assertNotIn('…', translated_rows[0])
         self.assertNotIn(r'\N', content)
 
     def test_ass_background_style_uses_configured_padding(self):
@@ -626,7 +645,7 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
         fields = style_line.split(',')
         self.assertEqual(int(fields[-2]), self.style.margin_bottom)
 
-    def test_dual_ass_keeps_independent_margins(self):
+    def test_dual_ass_compacts_excessive_margin_between_subtitles(self):
         translated = SubtitleTrack.objects.create(job=self.job, language='en')
         SubtitleCue.objects.create(
             track=translated, cue_index=1, start_ms=1200, end_ms=4800,
@@ -656,10 +675,10 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
         original_margin_v = int(original_style_line.split(',')[-2])
         translated_margin_v = int(translated_style_line.split(',')[-2])
         logical_original, logical_translated = SubtitleService._dual_style_margins(self.style, translated_style)
-        # Cada estilo mantém a própria margem — mexer numa não altera a outra.
-        self.assertEqual(logical_original, 120)
+        # A margem inferior (tradução) é preservada; a outra é compactada logo acima.
+        self.assertEqual(logical_original, 119)
         self.assertEqual(logical_translated, 40)
-        self.assertEqual(original_margin_v, SubtitleService._ass_margin_v(self.style, 120))
+        self.assertEqual(original_margin_v, SubtitleService._ass_margin_v(self.style, 119))
         self.assertEqual(translated_margin_v, SubtitleService._ass_margin_v(translated_style, 40))
 
     def test_dual_ass_dialogues_use_pos_for_pixel_perfect_margins(self):
@@ -696,7 +715,7 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
             if line.startswith('Dialogue:') and ',Translated,' in line and 'TranslatedBG' not in line and 'TranslatedShadow' not in line
         )
         self.assertIn(r'{\an2\pos(1920,1110)}', original_dialogue)
-        self.assertIn(r'{\an2\pos(1920,1034)}', translated_dialogue)
+        self.assertIn(r'{\an2\pos(1920,1049)}', translated_dialogue)
 
     def test_dual_ass_uses_separate_layers_to_avoid_collision_push(self):
         translated = SubtitleTrack.objects.create(job=self.job, language='en')
@@ -985,6 +1004,30 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(upload.block, self.block)
         self.assertEqual(upload.position, 1)
 
+    def test_project_media_can_be_reordered_before_processing(self):
+        project = self.make_project()
+        first = ProjectBlockMedia.objects.create(
+            project=project, block=self.block,
+            file=SimpleUploadedFile('primeiro.mp4', b'video', content_type='video/mp4'),
+            original_filename='primeiro.mp4', file_size=5, position=1,
+        )
+        second = ProjectBlockMedia.objects.create(
+            project=project, block=self.block,
+            file=SimpleUploadedFile('segundo.mp4', b'video', content_type='video/mp4'),
+            original_filename='segundo.mp4', file_size=5, position=2,
+        )
+
+        response = self.client.post(
+            reverse('external_media_project_media_reorder', args=[project.public_id, self.block.pk]),
+            {'media_ids[]': [str(second.pk), str(first.pk)]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            list(project.block_media.order_by('position').values_list('pk', flat=True)),
+            [second.pk, first.pk],
+        )
+
     def test_project_detail_page_renders_blocks_and_plugins(self):
         project = self.make_project()
         response = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
@@ -1011,6 +1054,55 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
         project.refresh_from_db()
         self.assertEqual(project.name, 'Anúncios de setembro')
+
+    def test_finished_project_can_return_to_video_editing_without_losing_uploads(self):
+        project = self.make_project()
+        upload = ProjectBlockMedia.objects.create(
+            project=project, block=self.block,
+            file=SimpleUploadedFile('aviso.mp4', b'video', content_type='video/mp4'),
+            original_filename='aviso.mp4', file_size=5,
+        )
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.progress = 100
+        project.save(update_fields=['render_job', 'status', 'progress', 'update_at'])
+
+        response = self.client.post(
+            reverse('external_media_project_resume_editing', args=[project.public_id]),
+        )
+
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.status, ExternalMediaProject.Status.DRAFT)
+        self.assertIsNone(project.render_job_id)
+        self.assertTrue(ProjectBlockMedia.objects.filter(pk=upload.pk, project=project).exists())
+        self.assertTrue(ExternalMediaJob.objects.filter(pk=job.pk, processing_project=project).exists())
+
+    def test_editing_mode_can_restore_the_previous_processed_result(self):
+        project = self.make_project()
+        job = self.make_job()
+        job.processing_project = project
+        job.status = ExternalMediaJob.Status.FINISHED
+        job.save(update_fields=['processing_project', 'status', 'update_at'])
+        project.status = ExternalMediaProject.Status.DRAFT
+        project.configuration = {
+            '_editable_previous_render_job_id': job.pk,
+            '_editable_previous_steps': [],
+        }
+        project.save(update_fields=['status', 'configuration', 'update_at'])
+
+        response = self.client.post(
+            reverse('external_media_project_restore_processed_result', args=[project.public_id]),
+        )
+
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.status, ExternalMediaProject.Status.FINISHED)
+        self.assertEqual(project.render_job_id, job.pk)
+        self.assertNotIn('_editable_previous_render_job_id', project.configuration)
 
     def test_terminal_project_can_be_deleted_from_the_dashboard(self):
         project = self.make_project()
@@ -1424,6 +1516,7 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(form.fields['min_occurrences'].initial, 1)
         self.assertEqual(form.fields['max_occurrences'].initial, 0)
         self.assertIn('skip_extra_processing', form.fields)
+        self.assertIn('remove_background_voice', form.fields)
 
     def test_admin_panel_can_publish_draft_version(self):
         MediaTemplateBlock.objects.create(
@@ -1870,6 +1963,28 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(plan.cuts[0].duration_ms, 950)
         self.assertEqual(1700 - 500 - plan.cuts[0].duration_ms, 250)
 
+    def test_speech_edit_removes_leading_breath_before_each_take(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._silent_wav(wav_path)
+            words = [
+                TranscriptionSegment(900, 1200, 'Olá', 'word'),
+                TranscriptionSegment(2200, 2500, 'pessoal', 'word'),
+            ]
+            plan = SpeechEditAnalyzer().analyze(
+                words, wav_path, 3000, remove_fillers=False,
+                configuration={'profile': 'balanced'},
+                block_ranges=[
+                    {'start_ms': 0, 'end_ms': 1500},
+                    {'start_ms': 1500, 'end_ms': 3000},
+                ],
+            )
+
+        self.assertIn(SpeechCut(0, 750, 'silence'), plan.cuts)
+        self.assertTrue(
+            any(cut.start_ms <= 1500 and cut.end_ms >= 2050 for cut in plan.cuts),
+        )
+
     def test_speech_edit_only_removes_an_isolated_filler(self):
         with tempfile.TemporaryDirectory() as directory:
             wav_path = Path(directory) / 'analysis.wav'
@@ -1890,11 +2005,61 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertNotIn('hum', [item.text for item in plan.remap_words(words)])
         self.assertIn('eh', [item.text for item in plan.remap_words(words)])
 
+    def test_speech_edit_removes_isolated_filler_with_short_verified_pauses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._silent_wav(wav_path)
+            words = [
+                TranscriptionSegment(100, 450, 'Olá', 'word'),
+                TranscriptionSegment(570, 720, 'hum', 'word'),
+                TranscriptionSegment(840, 1200, 'pessoal', 'word'),
+            ]
+            plan = SpeechEditAnalyzer().analyze(
+                words, wav_path, 2000, remove_silence=False,
+                configuration={'profile': 'balanced'},
+            )
+
+        self.assertEqual(plan.filler_count, 1)
+        self.assertEqual(plan.cuts[0].label, 'hum')
+
+    def test_speech_edit_keeps_adjacent_filler_even_when_selected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._silent_wav(wav_path)
+            words = [
+                TranscriptionSegment(100, 350, 'É', 'word'),
+                TranscriptionSegment(420, 780, 'verdade', 'word'),
+            ]
+            plan = SpeechEditAnalyzer().analyze(
+                words, wav_path, 1200, remove_silence=False,
+                configuration={'profile': 'balanced', 'filler_words': ['é']},
+            )
+
+        self.assertEqual(plan.filler_count, 0)
+
+    def test_background_voice_removal_cuts_only_clearly_quieter_utterances(self):
+        service = BackgroundVoiceRemovalService(Mock())
+        utterances = [
+            QuietUtterance(0, 800, -22),
+            QuietUtterance(1200, 1700, -36),
+            QuietUtterance(2100, 2900, -21),
+        ]
+        cuts = service._quiet_cuts(utterances, [(0, 4000)], -21, 4000)
+
+        self.assertEqual(len(cuts), 1)
+        self.assertEqual((cuts[0].start_ms, cuts[0].end_ms), (1165, 1765))
+
     def test_speech_edit_remaps_words_after_cut_and_crossfade(self):
         plan = SpeechEditPlan((SpeechCut(500, 1000, 'silence'),), 2000, crossfade_ms=40)
         remapped = plan.remap_words([TranscriptionSegment(1200, 1500, 'Depois', 'word')])
         self.assertEqual(remapped[0].start_ms, 700)
         self.assertEqual(remapped[0].end_ms, 1000)
+
+    def test_speech_edit_maps_post_edit_timestamps_back_to_source(self):
+        plan = SpeechEditPlan((SpeechCut(500, 1000, 'background_voice'),), 2000, crossfade_ms=40)
+        self.assertEqual(plan.source_time(300), 300)
+        self.assertEqual(plan.source_time(700), 1200)
+        self.assertEqual(plan.source_time(0), 0)
 
     def test_remap_time_shifts_only_timestamps_after_the_cut(self):
         plan = SpeechEditPlan((SpeechCut(500, 1000, 'silence'),), 2000, crossfade_ms=40)
@@ -2035,15 +2200,15 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
         centered_y = ((290 + 850) / 2) - (600 / 2)
         target_y = service._target_crop_y(top=290, bottom=850, crop_height=600, max_y=480)
-        self.assertLess(target_y, centered_y)
-        self.assertEqual(round(290 - target_y), 42)
+        self.assertGreater(target_y, centered_y)
+        self.assertEqual(round(290 - target_y), 15)
 
     def test_auto_reframe_vertical_crop_keeps_head_when_person_is_taller_than_crop(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.12, smoothing=1.0)
         target_y = service._target_crop_y(top=290, bottom=950, crop_height=600, max_y=480)
-        # Older templates persisted larger values; face framing caps them at 7%
+        # Older templates persisted larger values; face framing caps them at 2.5%
         # to avoid excessive empty space above the head.
-        self.assertEqual(round(target_y), round(290 - (600 * 0.07)))
+        self.assertEqual(round(target_y), round(290 - (600 * 0.025)))
 
     def test_auto_reframe_normalizes_body_box_with_head_padding_and_minimum_height(self):
         service = AutoReframeService(priority='face')
@@ -2056,16 +2221,22 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
     def test_auto_reframe_face_box_keeps_top_close_to_head(self):
         left, top, width, height = AutoReframeService._face_priority_box(800, 260, 120, 120)
         self.assertEqual(round(left), 596)
-        self.assertEqual(round(top), 246)
+        self.assertEqual(round(top), 224)
         self.assertEqual(round(width), 528)
-        self.assertEqual(round(height), 518)
+        self.assertEqual(round(height), 540)
+
+    def test_auto_reframe_uses_small_tracking_zoom_only_for_persistent_lateral_offset(self):
+        centered = [(0.0, (760, 200, 1160, 900)), (1.0, (770, 200, 1170, 900))]
+        off_center = [(0.0, (1180, 200, 1580, 900)), (1.0, (1190, 200, 1590, 900))]
+        self.assertFalse(AutoReframeService._needs_tracking_pan(centered, 1920))
+        self.assertTrue(AutoReframeService._needs_tracking_pan(off_center, 1920))
 
     def test_auto_reframe_vertical_crop_reduces_excessive_headroom(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
         centered_y = ((260 + 560) / 2) - (600 / 2)
         target_y = service._target_crop_y(top=260, bottom=560, crop_height=600, max_y=480)
         self.assertGreater(target_y, centered_y)
-        self.assertEqual(round(260 - target_y), 42)
+        self.assertEqual(round(260 - target_y), 15)
 
     def test_auto_reframe_face_detection_tries_contrast_fallbacks(self):
         gray = SimpleNamespace(shape=(720, 1280))
@@ -2090,7 +2261,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             source_height=1080,
         )
         self.assertEqual(len(keyframes), 1)
-        self.assertEqual(round(keyframes[0].y), 248)
+        self.assertEqual(round(keyframes[0].y), 275)
 
     def test_auto_reframe_locks_vertical_position_for_face_tracking(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
@@ -2114,7 +2285,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             safe_margin=0.15,
             top_margin=0.18,
             smoothing=0.18,
-            horizontal_smoothing=0.36,
+            horizontal_smoothing=0.65,
         )
         stable = AutoReframeService(
             priority='face',
@@ -2125,6 +2296,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         observations = [
             (0.0, (100, 290, 300, 850)),
             (1.0, (700, 290, 900, 850)),
+            (2.0, (760, 290, 960, 850)),
         ]
         responsive_keyframes = responsive._smooth_keyframes(
             observations=observations,
@@ -2273,6 +2445,35 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(width % 2, 0)
         self.assertEqual(height % 2, 0)
 
+    def test_video_assembly_blends_lut_at_configured_intensity(self):
+        runner = FFmpegRunner()
+        preset = SimpleNamespace(width=160, height=120)
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            lut = workdir / 'identity.cube'
+            output = workdir / 'assembled.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=red:s=160x120:d=0.3',
+                '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-shortest',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            lut.write_text(
+                'LUT_3D_SIZE 2\n'
+                '0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n',
+                encoding='utf-8',
+            )
+            partial_lut = LUTService.with_intensity(lut, 50, workdir)
+            self.assertNotEqual(partial_lut, lut)
+            # A 50% identity LUT must remain identity; this also validates the
+            # red/green/blue table ordering used when precomputing the cube.
+            self.assertIn('1.00000000 0.00000000 0.00000000', partial_lut.read_text())
+            VideoAssemblyService(runner=runner).assemble(
+                [source], output, preset, workdir, lut_path=lut, lut_intensity=50,
+            )
+            self.assertTrue(output.exists())
+            self.assertGreater(output.stat().st_size, 0)
+
     def test_video_assembly_reuses_saved_reframe_plan(self):
         runner = Mock()
         runner.run.side_effect = [
@@ -2336,6 +2537,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             service = VideoAssemblyService(runner=runner)
             service.assemble(
                 [source], output, preset, workdir,
+                lut_path=Path('/tmp/template.cube'), lut_intensity=50,
                 auto_reframe_config={'priority': 'face'},
             )
 
@@ -2352,6 +2554,7 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertIn('force_original_aspect_ratio=decrease', filters)
         self.assertIn('pad=3840:1200', filters)
         self.assertNotIn('crop=3840:1200', filters)
+        self.assertNotIn('lut3d=', filters)
 
     def test_render_command_uses_fast_h264_and_bt709_output(self):
         class CueList(list):
@@ -2604,6 +2807,24 @@ class AudioMixingSmokeTests(SimpleTestCase):
             self.assertEqual(result.metrics['mode'], 'adaptive')
             self.assertEqual(result.metrics['speech_block_count'], 1)
             self.assertGreater(result.metrics['duck_db'], 0)
+
+    def test_mix_keeps_music_ducked_through_a_short_speech_pause(self):
+        service = AudioMixingService()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            music = workdir / 'music.mp4'
+            output = workdir / 'mixed.mp4'
+            self._render_tone(video, 220, 4, volume=1.0)
+            self._render_tone(music, 440, 4, volume=1.0)
+            result = service.mix(
+                video, music, output, music_volume=0.5, duration_ms=4000,
+                speech_blocks=[SpeechBlock(200, 1000), SpeechBlock(2000, 3600)],
+                ducking_enabled=True,
+            )
+        self.assertEqual(result.metrics['mode'], 'adaptive')
+        self.assertEqual(result.metrics['speech_block_count'], 1)
+        self.assertEqual(result.metrics['speech_gap_hold_ms'], 1800)
 
     def test_mix_spectral_ducking_produces_equalizer_filter(self):
         service = AudioMixingService()
@@ -2865,6 +3086,30 @@ class DialogueProcessingSmokeTests(SimpleTestCase):
 
 
 class EditableTimelineExportTests(SimpleTestCase):
+    def test_dialogue_is_exported_as_an_independent_wav_track(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Media').mkdir()
+            (root / 'Audio').mkdir()
+            source_path = root / 'Media' / 'take.mp4'
+            FFmpegRunner().run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=black:s=320x240:d=1',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-shortest',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source_path),
+            ])
+            source = TimelineSource('video_1', None, 'Media/take.mp4', 'take.mp4', 'main')
+            clips = [{
+                'id': 'clip_1', 'asset_id': 'video_1', 'name': 'Take',
+                'timeline_in_ms': 0, 'timeline_out_ms': 1000,
+                'source_in_ms': 0, 'source_out_ms': 1000,
+            }]
+            assets, dialogue_clips = InternalTimelineBuilder()._dialogue_assets(
+                [(source, {})], clips, root,
+            )
+            self.assertEqual(len(assets), 1)
+            self.assertTrue((root / 'Audio' / 'dialogue_001_take.wav').exists())
+            self.assertEqual(dialogue_clips[0]['asset_id'], 'video_1_dialogue')
+
     def test_keyframe_simplifier_keeps_trajectory_endpoints(self):
         points = [
             {'time_ms': index * 100, 'x': float(index), 'y': float(index), 'scale': 110.0}
@@ -2955,7 +3200,8 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertTrue(report['valid'])
         self.assertIn('../Media/take.mp4', xml)
         self.assertNotIn('/Users/', xml)
-        self.assertEqual(xml.count('<pathurl>'), 1)
+        # Há um asset para o take e outro para a camada ProRes transparente das legendas.
+        self.assertEqual(xml.count('<pathurl>'), 2)
         self.assertIn('<mediatype>video</mediatype>', xml)
         self.assertIn('<mediatype>audio</mediatype>', xml)
         self.assertIn('generatoritem', xml)

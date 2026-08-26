@@ -39,6 +39,7 @@ from ..models.external_media import (
     GlossaryTerm,
     MediaAsset,
     MediaTemplateBlock,
+    ProjectPipelineStep,
     ProjectBlockMedia,
     SubtitleCue,
     VideoMasteringJob,
@@ -348,6 +349,14 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
 
     def get(self, request, public_id):
         project = self.get_project(public_id)
+        restore_job = None
+        restore_job_id = (project.configuration or {}).get('_editable_previous_render_job_id')
+        if project.status == ExternalMediaProject.Status.DRAFT and restore_job_id:
+            restore_job = next(
+                (job for job in project.processing_history.all()
+                 if job.pk == restore_job_id and job.status == ExternalMediaJob.Status.FINISHED),
+                None,
+            )
         media_by_block = {}
         missing_media_by_block = {}
         for item in project.block_media.all():
@@ -375,6 +384,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             assets=project.render_job.assets.all() if project.render_job_id else [],
             validation_errors=ProjectService.validate_uploads(project),
             can_retry_render=self._can_retry_project_render(project),
+            restore_processed_result=restore_job,
             project_exports=project.exports.order_by('-created_at')[:10],
             processing_history=project.processing_history.select_related('preset').prefetch_related('assets'),
         ))
@@ -404,6 +414,87 @@ class ExternalMediaProjectEditView(ExternalMediaRequiredMixin, ExternalMediaCont
         return render(request, 'member/external_media/project_edit.html', self.media_context(
             project=project, form=form,
         ))
+
+
+class ExternalMediaProjectResumeEditingView(ExternalMediaRequiredMixin, View):
+    """Returns a terminal project to the upload screen without losing its media/history."""
+
+    editable_statuses = {
+        ExternalMediaProject.Status.FINISHED,
+        ExternalMediaProject.Status.ERROR,
+        ExternalMediaProject.Status.CANCELLED,
+    }
+
+    def post(self, request, public_id):
+        with transaction.atomic():
+            project = get_object_or_404(
+                ExternalMediaProject.objects.select_for_update().prefetch_related('template_version__plugins'),
+                public_id=public_id,
+            )
+            if project.status not in self.editable_statuses:
+                messages.warning(request, 'Aguarde o processamento terminar antes de editar os vídeos.')
+                return redirect('external_media_project_detail', public_id=project.public_id)
+
+            # The current job stays in processing_history, including generated files,
+            # while the project itself becomes editable and its next run gets a new job.
+            configuration = dict(project.configuration or {})
+            configuration['_editable_previous_render_job_id'] = project.render_job_id
+            configuration['_editable_previous_steps'] = list(project.pipeline_steps.values(
+                'code', 'status', 'progress', 'message',
+            ))
+            project.status = ExternalMediaProject.Status.DRAFT
+            project.progress = 0
+            project.current_step = ''
+            project.error_message = ''
+            project.started_at = None
+            project.finished_at = None
+            project.celery_task_id = ''
+            project.render_job = None
+            project.configuration = configuration
+            project.save(update_fields=[
+                'status', 'progress', 'current_step', 'error_message', 'started_at',
+                'finished_at', 'celery_task_id', 'render_job', 'configuration', 'update_at',
+            ])
+            ProjectService().initialize_steps(project, project.template_version.plugins.all())
+        messages.success(request, 'Projeto aberto para edição. Seus vídeos e cortes foram preservados.')
+        return redirect('external_media_project_detail', public_id=project.public_id)
+
+
+class ExternalMediaProjectRestoreProcessedResultView(ExternalMediaRequiredMixin, View):
+    """Reattaches the latest finished result when the user leaves edit mode."""
+
+    def post(self, request, public_id):
+        with transaction.atomic():
+            project = get_object_or_404(
+                ExternalMediaProject.objects.select_for_update().prefetch_related('pipeline_steps'),
+                public_id=public_id, status=ExternalMediaProject.Status.DRAFT,
+            )
+            configuration = dict(project.configuration or {})
+            job_id = configuration.get('_editable_previous_render_job_id')
+            job = get_object_or_404(
+                ExternalMediaJob, pk=job_id, processing_project=project,
+                status=ExternalMediaJob.Status.FINISHED,
+            )
+            previous_steps = configuration.pop('_editable_previous_steps', [])
+            configuration.pop('_editable_previous_render_job_id', None)
+            project.status = ExternalMediaProject.Status.FINISHED
+            project.progress = 100
+            project.current_step = 'Processamento finalizado'
+            project.error_message = ''
+            project.started_at = job.started_at
+            project.finished_at = job.finished_at
+            project.render_job = job
+            project.configuration = configuration
+            project.save(update_fields=[
+                'status', 'progress', 'current_step', 'error_message', 'started_at',
+                'finished_at', 'render_job', 'configuration', 'update_at',
+            ])
+            for step in previous_steps:
+                ProjectPipelineStep.objects.filter(project=project, code=step['code']).update(
+                    status=step['status'], progress=step['progress'], message=step['message'],
+                )
+        messages.success(request, 'Resultado processado restaurado. Nenhuma nova renderização foi iniciada.')
+        return redirect('external_media_project_detail', public_id=project.public_id)
 
 
 class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
@@ -530,6 +621,50 @@ class ExternalMediaProjectMediaDeleteView(ExternalMediaRequiredMixin, View):
         item.delete()
         messages.success(request, 'Vídeo removido do bloco.')
         return redirect('external_media_project_detail', public_id=public_id)
+
+
+class ExternalMediaProjectMediaPreviewView(ExternalMediaRequiredMixin, View):
+    def get(self, request, public_id, media_id):
+        item = get_object_or_404(ProjectBlockMedia, pk=media_id, project__public_id=public_id)
+        if not ProjectService.file_exists(item.file):
+            raise Http404('O vídeo não está mais disponível.')
+        request.GET = request.GET.copy()
+        request.GET['preview'] = '1'
+        return protected_file_response(request, item.file)
+
+
+class ExternalMediaProjectMediaReorderView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, block_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        if project.status != ExternalMediaProject.Status.DRAFT:
+            return JsonResponse({'detail': 'Os vídeos só podem ser ordenados durante a edição.'}, status=409)
+        block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version)
+        raw_ids = request.POST.getlist('media_ids[]') or request.POST.getlist('media_ids')
+        try:
+            media_ids = [int(value) for value in raw_ids]
+        except (TypeError, ValueError):
+            return JsonResponse({'detail': 'Ordem de vídeos inválida.'}, status=400)
+        with transaction.atomic():
+            items = list(
+                ProjectBlockMedia.objects.select_for_update().filter(
+                    project=project, block=block, pk__in=media_ids,
+                )
+            )
+            if len(media_ids) != len(items) or len(set(media_ids)) != len(media_ids):
+                return JsonResponse({'detail': 'A ordem precisa conter todos os vídeos do bloco uma única vez.'}, status=400)
+
+            # A restrição (projeto, bloco, posição) é imediata no PostgreSQL.
+            # Primeiro liberamos as posições atuais com valores temporários para
+            # permitir trocas como 1 <-> 2 sem uma colisão de unicidade.
+            for offset, item in enumerate(items, start=1):
+                item.position = 30000 + offset
+            ProjectBlockMedia.objects.bulk_update(items, ['position'])
+
+            by_id = {item.pk: item for item in items}
+            for position, media_id in enumerate(media_ids, start=1):
+                by_id[media_id].position = position
+            ProjectBlockMedia.objects.bulk_update(items, ['position'])
+        return JsonResponse({'ok': True})
 
 
 class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):

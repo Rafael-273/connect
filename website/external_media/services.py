@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import bisect
 import json
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 import logging
 import math
@@ -38,6 +39,7 @@ from .audio_mastering import AudioMasteringService, MasteringTarget
 from .audio_mixing import AudioMixingService, DuckingSettings, group_speech_blocks
 from .audio_validation import AudioValidationService
 from .auto_reframe import AUTO_REFRAME_PLAN_VERSION, AutoReframePlan, AutoReframeService
+from .background_voice import BackgroundVoiceRemovalService
 from .dialogue_processing import DialogueProcessor, DialogueSettings
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
@@ -54,6 +56,7 @@ class AssemblySource:
     block_key: str = ''
     block_name: str = ''
     skip_extra_processing: bool = False
+    remove_background_voice: bool = False
     trim_start_ms: int = 0
     trim_end_ms: int | None = None
 
@@ -367,6 +370,18 @@ Não junte, divida, remova, reordene ou acrescente blocos. Não mova informaçã
 cue para outro apenas para melhorar a escrita. A tradução deve continuar
 semanticamente alinhada ao trecho correspondente.
 
+CRITICAL FIDELITY RULE
+
+Never invent, infer, complete, or add information that is not explicitly present
+in the source text, even when doing so would make the translation sound smoother
+or make a cue read better on its own.
+
+Some cues may contain only the end or beginning of a sentence because subtitle
+segmentation follows timestamps. This is expected.
+
+If a cue contains only a sentence fragment, translate only that fragment.
+Do not add new content to make the cue feel complete.
+
 GLOSSÁRIO E TERMINOLOGIA
 
 Priorize o glossário fornecido. Use traduções oficiais quando definidas pelo glossário
@@ -401,12 +416,19 @@ paráfrase livre.
 A tradução pode reorganizar a construção linguística dentro do mesmo cue quando
 necessário para soar natural em inglês, desde que preserve o significado original.
 
+PONTUAÇÃO DE LEGENDAS
+
+Não adicione reticências ("..." ou "…"), travessões, hífens isolados ou hífens
+duplicados ("--") para indicar continuidade, pausa ou conteúdo omitido. Se o cue
+for apenas um fragmento, traduza somente o fragmento, sem usar essa pontuação para
+fazê-lo parecer uma frase completa.
+
 FORMATO DE SAÍDA
 
 Para cada cue_id de entrada, devolva exatamente um item correspondente. Não devolva
 timestamps. Responda SOMENTE JSON válido no formato:
 
-{{"cues":[{{"cue_id":1,"text":"..."}}]}}
+{{"cues":[{{"cue_id":1,"text":"translated cue"}}]}}
 
 Não inclua comentários, explicações, Markdown ou qualquer texto fora do JSON."""
         expected_ids = [cue.cue_index for cue in cues]
@@ -419,7 +441,8 @@ Não inclua comentários, explicações, Markdown ou qualquer texto fora do JSON
             )
             try:
                 translated = self._parse_translated_cues(raw, expected_ids)
-                return self._restore_protected_terms(translated, protected_terms)
+                restored = self._restore_protected_terms(translated, protected_terms)
+                return [self._clean_translated_subtitle_text(text) for text in restored]
             except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
                 logger.warning('Resposta de tradução inválida; tentativa %s: %s', attempt + 1, exc)
         if len(cues) > 1:
@@ -508,6 +531,14 @@ Não inclua comentários, explicações, Markdown ou qualquer texto fora do JSON
                 if cleaned:
                     return cleaned
         raise ValueError('Campo de texto traduzido ausente')
+
+    @staticmethod
+    def _clean_translated_subtitle_text(value):
+        """Remove marcadores de continuação que não devem aparecer na legenda final."""
+        text = re.sub(r'\s+', ' ', str(value or '')).strip()
+        text = re.sub(r'\s*(?:\.{3,}|…)\s*', ' ', text)
+        text = re.sub(r'\s*(?:--+|—|–)\s*', ' ', text)
+        return re.sub(r'\s{2,}', ' ', text).strip()
 
     @classmethod
     def _inject_protected_terms(cls, payload, glossary):
@@ -636,29 +667,36 @@ class SubtitleService:
         ]
         header = self._ass_header(width, height, styles)
         rows = []
-        styled_tracks = (
-            (ordered_tracks[0], 'Original', original_style),
-            (ordered_tracks[1], 'Translated', translated_style),
-        )
-        for track, style_name, style in styled_tracks:
-            for cue in track.cues.all():
-                chunks = self._split_dual_text_chunks(cue.text, style.max_characters)
-                for segment_start, segment_end, chunk in self._split_cue_segments(
-                    cue.start_ms, cue.end_ms, chunks,
-                ):
-                    text = self._ass_escape(chunk)
-                    role_margin = original_margin if style_name == 'Original' else translated_margin
-                    rows.extend(self._ass_dialogue_rows(
-                        start_ms=segment_start,
-                        end_ms=segment_end,
-                        role=style_name,
-                        style=style,
-                        text=text,
-                        prefix=r'{\q2}',
-                        width=width,
-                        height=height,
-                        margin_bottom=role_margin,
-                    ))
+        # Uma legenda bilíngue é sempre um par. O cue original é a referência de
+        # tempo para os dois idiomas, evitando que cada idioma seja repartido em
+        # intervalos diferentes quando um deles tem mais caracteres.
+        original_cues = {
+            cue.cue_index: cue for cue in ordered_tracks[0].cues.all()
+        }
+        translated_cues = {
+            cue.cue_index: cue for cue in ordered_tracks[1].cues.all()
+        }
+        for cue_index, original_cue in original_cues.items():
+            translated_cue = translated_cues.get(cue_index)
+            paired_rows = (
+                (original_cue, 'Original', original_style, original_margin),
+                (translated_cue, 'Translated', translated_style, translated_margin),
+            )
+            for cue, role, style, role_margin in paired_rows:
+                if cue is None:
+                    continue
+                text = self._ass_escape(self._single_line_text(cue.text))
+                rows.extend(self._ass_dialogue_rows(
+                    start_ms=original_cue.start_ms,
+                    end_ms=original_cue.end_ms,
+                    role=role,
+                    style=style,
+                    text=text,
+                    prefix=r'{\q2}',
+                    width=width,
+                    height=height,
+                    margin_bottom=role_margin,
+                ))
         path.write_text(header + '\n'.join(rows) + '\n', encoding='utf-8-sig')
 
     def _ass_header(self, width, height, styles):
@@ -956,11 +994,25 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     @classmethod
     def _dual_style_margins(cls, original_style, translated_style):
-        # Margens independentes: cada estilo usa o margin_bottom configurado nele.
-        # Não empurramos uma legenda quando a outra muda — o posicionamento é responsabilidade
-        # de cada estilo (preview e render ficam iguais ao que o usuário salvou).
+        # A margem mais baixa continua sendo a âncora escolhida pelo usuário. A outra
+        # legenda é limitada a um empilhamento compacto acima dela: sem isso, duas
+        # margens válidas porém distantes (por exemplo 30px e 121px) viram um vão
+        # visual muito maior no libass do que no preview.
         original_margin = max(0, int(getattr(original_style, 'margin_bottom', 60) or 0))
         translated_margin = max(0, int(getattr(translated_style, 'margin_bottom', 60) or 0))
+        original_alignment = cls._ass_alignment(original_style)
+        translated_alignment = cls._ass_alignment(translated_style)
+        if original_alignment <= 3 and translated_alignment <= 3:
+            if original_margin <= translated_margin:
+                compact_translated_margin = original_margin + cls._subtitle_stack_gap(
+                    translated_style, original_style,
+                )
+                translated_margin = min(translated_margin, compact_translated_margin)
+            else:
+                compact_original_margin = translated_margin + cls._subtitle_stack_gap(
+                    original_style, translated_style,
+                )
+                original_margin = min(original_margin, compact_original_margin)
         return original_margin, translated_margin
 
     @staticmethod
@@ -1364,6 +1416,66 @@ class LUTService:
     def selected_file(version, enabled_codes):
         return version.lut_file if MediaTemplatePlugin.Code.LUT in enabled_codes and version.lut_file else None
 
+    @staticmethod
+    def with_intensity(lut_path, intensity, workdir):
+        """Materialize a partial .cube LUT so FFmpeg needs only one image pass.
+
+        Blending source and graded frames works visually, but at 4K it doubles
+        the per-frame image work. Interpolating the cube table once preserves the
+        requested intensity and lets FFmpeg use a single `lut3d` filter.
+        """
+        if not lut_path:
+            return None
+        try:
+            percentage = min(100, max(0, int(intensity)))
+        except (TypeError, ValueError):
+            percentage = 50
+        source = Path(lut_path)
+        if percentage <= 0:
+            return None
+        if percentage >= 100 or source.suffix.lower() != '.cube':
+            return source
+        if not source.is_file():
+            return source
+        try:
+            lines = source.read_text(encoding='utf-8-sig').splitlines()
+            size = next(
+                int(line.split()[1]) for line in lines
+                if line.strip().upper().startswith('LUT_3D_SIZE ')
+            )
+            rows = []
+            for index, line in enumerate(lines):
+                values = line.strip().split()
+                if len(values) != 3:
+                    continue
+                try:
+                    rows.append((index, tuple(float(value) for value in values)))
+                except ValueError:
+                    continue
+            if size < 2 or len(rows) != size ** 3:
+                raise ValueError('Tabela LUT_3D inválida.')
+            ratio = percentage / 100
+            output = list(lines)
+            for cube_index, (line_index, graded) in enumerate(rows):
+                base = (
+                    # .cube tables used by FFmpeg enumerate red first, then
+                    # green, then blue (the same ordering used by our admin LUTs).
+                    cube_index % size / (size - 1),
+                    (cube_index // size) % size / (size - 1),
+                    cube_index // (size * size) / (size - 1),
+                )
+                output[line_index] = ' '.join(
+                    f'{original + (target - original) * ratio:.8f}'
+                    for original, target in zip(base, graded)
+                )
+            generated = Path(workdir) / f'lut_intensity_{percentage}.cube'
+            generated.write_text('\n'.join(output) + '\n', encoding='utf-8')
+            return generated
+        except (OSError, StopIteration, ValueError, IndexError, ZeroDivisionError):
+            # Keep the established frame-blend path for exotic/invalid LUT files.
+            logger.warning('Não foi possível preparar o LUT com intensidade; usando mistura compatível.', exc_info=True)
+            return source
+
 
 class IntroOutroService:
     @staticmethod
@@ -1395,7 +1507,7 @@ class VideoAssemblyService:
         self.last_block_ranges = []
 
     def assemble(
-        self, sources, output_path, preset, workdir, lut_path=None, music_path=None,
+        self, sources, output_path, preset, workdir, lut_path=None, lut_intensity=50, music_path=None,
         music_volume=0.15, auto_reframe_config=None, analysis_sources=None,
         reframe_plans=None,
     ):
@@ -1417,9 +1529,12 @@ class VideoAssemblyService:
         height = preset.height or 1080
         normalized = []
         used_auto_reframe = False
+        prepared_lut_path = LUTService.with_intensity(lut_path, lut_intensity, workdir)
+        lut_is_prepared = bool(prepared_lut_path and prepared_lut_path != Path(lut_path))
         analysis_sources = [self._coerce_source(source).path for source in (analysis_sources or source_paths)]
         reframe_plans = reframe_plans or []
         timeline_cursor = 0
+        normalize_jobs = []
         for index, source_item in enumerate(source_items):
             source = source_item.path
             destination = workdir / f'normalized_{index:03d}.mp4'
@@ -1431,6 +1546,10 @@ class VideoAssemblyService:
                 'block_key': source_item.block_key,
                 'block_name': source_item.block_name,
                 'label': source_item.label,
+                # "Manter intacto" always wins over every optional edit,
+                # including quiet-background-voice removal.
+                'skip_extra_processing': source_item.skip_extra_processing,
+                'remove_background_voice': source_item.remove_background_voice,
             }
             # Tracks the timeline span of every clip (not just "manter intacto" blocks) so
             # subtitles can later be prevented from bleeding across a block boundary.
@@ -1439,21 +1558,43 @@ class VideoAssemblyService:
                 self.last_protected_ranges.append(range_entry)
             timeline_cursor += source_duration
             effective_auto_reframe_config = None if source_item.skip_extra_processing else auto_reframe_config
-            effective_lut_path = None if source_item.skip_extra_processing else lut_path
-            reframe_plan = self._normalize(
-                source, destination, width, height, effective_lut_path, effective_auto_reframe_config,
-                analysis_source=analysis_sources[index],
-                reframe_plan_data=reframe_plans[index] if index < len(reframe_plans) else None,
-                trim_start_ms=source_item.trim_start_ms,
-                trim_end_ms=source_item.trim_end_ms,
-                preserve_framing=source_item.skip_extra_processing,
+            effective_lut_path = None if source_item.skip_extra_processing else prepared_lut_path
+            effective_lut_intensity = 0 if source_item.skip_extra_processing else (
+                100 if lut_is_prepared else lut_intensity
             )
+            normalize_jobs.append({
+                'source': source,
+                'destination': destination,
+                'width': width,
+                'height': height,
+                'lut_path': effective_lut_path,
+                'lut_intensity': effective_lut_intensity,
+                'auto_reframe_config': effective_auto_reframe_config,
+                'analysis_source': analysis_sources[index],
+                'reframe_plan_data': reframe_plans[index] if index < len(reframe_plans) else None,
+                'trim_start_ms': source_item.trim_start_ms,
+                'trim_end_ms': source_item.trim_end_ms,
+                'preserve_framing': source_item.skip_extra_processing,
+            })
+            normalized.append(destination)
+
+        # In the final pass the proxy phase has already produced all crop plans.
+        # The 4K takes are then independent, so a bounded pool can encode two at
+        # once. We keep the analysis pass serial to avoid competing face detectors.
+        workers = min(max(1, settings.EXTERNAL_MEDIA_ASSEMBLY_WORKERS), len(normalize_jobs))
+        if workers > 1 and reframe_plans:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='media-assemble') as executor:
+                futures = [executor.submit(self._normalize, **job) for job in normalize_jobs]
+                reframe_results = [future.result() for future in futures]
+        else:
+            reframe_results = [self._normalize(**job) for job in normalize_jobs]
+        for index, reframe_plan in enumerate(reframe_results):
+            effective_auto_reframe_config = normalize_jobs[index]['auto_reframe_config']
             used_auto_reframe = bool(reframe_plan) or used_auto_reframe
             self.last_reframe_plans.append(
                 self._serialize_reframe_plan(reframe_plan, analysis_sources[index])
                 if effective_auto_reframe_config else None
             )
-            normalized.append(destination)
         concat_file = workdir / 'concat.txt'
         concat_file.write_text(
             ''.join(f"file '{str(path).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n" for path in normalized),
@@ -1503,7 +1644,7 @@ class VideoAssemblyService:
         return SimpleNamespace(width=proxy_width, height=proxy_height)
 
     def _normalize(
-        self, source, destination, width, height, lut_path, auto_reframe_config=None,
+        self, source, destination, width, height, lut_path, lut_intensity=50, auto_reframe_config=None,
         analysis_source=None, reframe_plan_data=None, trim_start_ms=0, trim_end_ms=None,
         preserve_framing=False,
     ):
@@ -1566,9 +1707,18 @@ class VideoAssemblyService:
                 f'crop={width}:{height}:(iw-ow)/2:(ih-oh)/2',
             ])
         filters.extend(['fps=30', 'setsar=1'])
-        if lut_path:
+        if lut_path and int(lut_intensity or 0) > 0:
             escaped = str(lut_path).replace('\\', r'\\').replace(':', r'\:').replace("'", r"\'")
-            filters.append(f"lut3d='{escaped}'")
+            intensity = min(100, max(0, int(lut_intensity))) / 100
+            if intensity >= 1:
+                filters.append(f"lut3d='{escaped}'")
+            else:
+                # Blend original and graded images, matching Premiere's LUT intensity.
+                filters.extend([
+                    'split=2[lut_original][lut_graded_source]',
+                    f"[lut_graded_source]lut3d='{escaped}'[lut_graded]",
+                    f"[lut_original][lut_graded]blend=all_expr='A*{1 - intensity:.3f}+B*{intensity:.3f}'",
+                ])
         command.extend([
             *self._trim_output_args(trim_start_ms, trim_end_ms),
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',
@@ -1698,6 +1848,7 @@ class ExternalMediaProjectPipeline:
                 used_auto_reframe = self.assembly.assemble(
                     assembly_sources, assembled, assembly_preset, workdir,
                     lut_path=lut_path,
+                    lut_intensity=project.template_version.lut_intensity,
                     # Music is deferred until after VAD/transcription so it cannot mask silence.
                     music_path=None if speech_edit_enabled else music_path,
                     music_volume=project.template_version.music_volume,
@@ -1813,6 +1964,7 @@ class ExternalMediaProjectPipeline:
                         block_key=block.key,
                         block_name=block.name,
                         skip_extra_processing=block.skip_extra_processing,
+                        remove_background_voice=block.remove_background_voice,
                         trim_start_ms=item.trim_start_ms,
                         trim_end_ms=item.trim_end_ms,
                     ))
@@ -1824,6 +1976,7 @@ class ExternalMediaProjectPipeline:
                     block_key=block.key,
                     block_name=block.name,
                     skip_extra_processing=block.skip_extra_processing,
+                    remove_background_voice=block.remove_background_voice,
                 ))
         if outro:
             sources.append(AssemblySource(copy(outro, 'outro'), label='outro'))
@@ -1867,6 +2020,7 @@ class ExternalMediaProjectPipeline:
                 block_key=source_item.block_key,
                 block_name=source_item.block_name,
                 skip_extra_processing=source_item.skip_extra_processing,
+                remove_background_voice=source_item.remove_background_voice,
                 trim_start_ms=0,
                 trim_end_ms=None,
             ))
@@ -1897,6 +2051,7 @@ class ExternalMediaProjectPipeline:
                 project.template_version.preset,
                 workdir,
                 lut_path=lut_path,
+                lut_intensity=project.template_version.lut_intensity,
                 # Music is never baked in here: mixing (with ducking, if enabled) always
                 # happens afterwards in `_finalize_audio`, once the speech-edit cuts (if
                 # any) have already reshaped the timeline.
@@ -1909,12 +2064,43 @@ class ExternalMediaProjectPipeline:
                 reframe_plans=saved_reframe_plans,
             )
         final_path = assembled
+        background_plan_data = (project.configuration or {}).get('background_voice_plan')
+        background_plan = SpeechEditPlan.from_dict(background_plan_data) if background_plan_data else None
         plan_data = (project.configuration or {}).get('speech_edit_plan')
         plan = SpeechEditPlan.from_dict(plan_data) if plan_data else None
+        # Speech-edit timestamps are created after background-voice cuts. Convert
+        # them back to the original master and apply both plans in one FFmpeg pass.
+        # This removes an entire 4K re-encode without changing the resulting cuts.
+        combined_cuts = []
+        original_duration_ms = SpeechEditService(self.assembly.runner).duration_ms(assembled)
+        if background_plan and background_plan.cuts:
+            combined_cuts.extend(background_plan.cuts)
         if plan and plan.cuts:
+            if background_plan and background_plan.cuts:
+                combined_cuts.extend(
+                    type(cut)(
+                        background_plan.source_time(cut.start_ms),
+                        background_plan.source_time(cut.end_ms),
+                        cut.kind,
+                        cut.label,
+                    )
+                    for cut in plan.cuts
+                )
+            else:
+                combined_cuts.extend(plan.cuts)
+        if combined_cuts:
             edited = workdir / 'project_master_speech_edited.mp4'
-            with timed_step('apply_speech_edit_to_final_master', cuts=len(plan.cuts)):
-                SpeechEditService(self.assembly.runner).apply(final_path, edited, plan)
+            combined_plan = SpeechEditPlan(
+                tuple(sorted(combined_cuts, key=lambda cut: (cut.start_ms, cut.end_ms))),
+                original_duration_ms,
+                max(
+                    getattr(background_plan, 'crossfade_ms', 0) or 0,
+                    getattr(plan, 'crossfade_ms', 0) or 0,
+                    40,
+                ),
+            )
+            with timed_step('apply_combined_speech_edits_to_final_master', cuts=len(combined_plan.cuts)):
+                SpeechEditService(self.assembly.runner).apply(final_path, edited, combined_plan)
             final_path = edited
         job = project.render_job
         version = project.template_version
@@ -2123,6 +2309,8 @@ class ExternalMediaPipeline:
                 chunks = self.audio.extract(video_path, workdir)
                 self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 30, 'Transcrevendo com Whisper')
                 detailed = self.transcription.transcribe_detailed(chunks, self._transcription_language(job))
+                self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 36, 'Removendo voz de fundo quando necessário')
+                video_path, detailed = self._apply_background_voice_removal(job, video_path, workdir, detailed)
                 detailed = self._apply_speech_edit(job, video_path, workdir, detailed)
                 boundaries = self._block_boundaries_ms(job)
                 segments = self.transcription.group_for_subtitles(detailed, boundaries)
@@ -2287,6 +2475,48 @@ class ExternalMediaPipeline:
             return None
         return job.original_language
 
+    def _apply_background_voice_removal(self, job, video_path, workdir, detailed):
+        """Remove off-camera interviewer turns only from opted-in blocks."""
+        project = getattr(job, 'project', None)
+        if not project:
+            return video_path, detailed
+        configuration = project.configuration or {}
+        selected_ranges = [
+            item for item in (configuration.get('block_ranges') or [])
+            if item.get('remove_background_voice') and not item.get('skip_extra_processing')
+        ]
+        if not selected_ranges:
+            return video_path, detailed
+        service = BackgroundVoiceRemovalService(self.audio.runner)
+        plan = service.analyze(video_path, detailed, selected_ranges)
+        if not plan.cuts:
+            configuration['background_voice_plan'] = plan.as_dict()
+            project.configuration = configuration
+            project.save(update_fields=['configuration', 'update_at'])
+            return video_path, detailed
+        edited_path = workdir / 'background_voice_removed.mp4'
+        service.apply(video_path, edited_path, plan)
+        if job.original_video:
+            job.original_video.delete(save=False)
+        with edited_path.open('rb') as source:
+            job.original_video.save('project_source.mp4', File(source), save=False)
+        job.save(update_fields=['original_video', 'update_at'])
+        remap = SpeechEditPlan(plan.cuts, plan.duration_ms).remap_time
+        for key in ('block_ranges', 'protected_block_ranges'):
+            if configuration.get(key):
+                configuration[key] = [
+                    {
+                        **item,
+                        'start_ms': remap(item.get('start_ms') or 0),
+                        'end_ms': remap(item.get('end_ms') or 0),
+                    }
+                    for item in configuration[key]
+                ]
+        configuration['background_voice_plan'] = plan.as_dict()
+        project.configuration = configuration
+        project.save(update_fields=['configuration', 'update_at'])
+        return edited_path, SpeechEditPlan(plan.cuts, plan.duration_ms).remap_words(detailed)
+
     def _apply_speech_edit(self, job, video_path, workdir, detailed):
         project = getattr(job, 'project', None)
         if not project:
@@ -2318,6 +2548,7 @@ class ExternalMediaPipeline:
             remove_silence=remove_silence,
             remove_fillers=remove_fillers,
             configuration=configuration,
+            block_ranges=(project.configuration or {}).get('block_ranges'),
         )
         plan = plan.without_ranges((project.configuration or {}).get('protected_block_ranges'))
         proxy_pipeline = bool((project.configuration or {}).get('proxy_pipeline'))
@@ -2347,20 +2578,24 @@ class ExternalMediaPipeline:
             with final_path.open('rb') as source:
                 job.original_video.save('project_source.mp4', File(source), save=False)
             job.save(update_fields=['original_video', 'update_at'])
-        block_ranges = (project.configuration or {}).get('block_ranges')
-        remapped_block_ranges = [
-            {
-                **item,
-                'start_ms': plan.remap_time(item.get('start_ms') or 0),
-                'end_ms': plan.remap_time(item.get('end_ms') or 0),
-            }
-            for item in block_ranges
-        ] if block_ranges else block_ranges
+        configuration = project.configuration or {}
+        remapped_ranges = {}
+        for key in ('block_ranges', 'protected_block_ranges'):
+            ranges = configuration.get(key)
+            if ranges:
+                remapped_ranges[key] = [
+                    {
+                        **item,
+                        'start_ms': plan.remap_time(item.get('start_ms') or 0),
+                        'end_ms': plan.remap_time(item.get('end_ms') or 0),
+                    }
+                    for item in ranges
+                ]
         project.configuration = {
-            **(project.configuration or {}),
+            **configuration,
             'speech_edit_preview': plan.as_preview(),
             'speech_edit_plan': plan.as_dict(),
-            **({'block_ranges': remapped_block_ranges} if remapped_block_ranges else {}),
+            **remapped_ranges,
         }
         project.save(update_fields=['configuration', 'update_at'])
         messages = {

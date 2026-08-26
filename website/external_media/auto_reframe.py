@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-AUTO_REFRAME_PLAN_VERSION = 3
+AUTO_REFRAME_PLAN_VERSION = 8
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -135,7 +135,7 @@ class AutoReframeService:
         # Face framing should keep the hair/head close to the top edge, without
         # becoming a tight headshot. Older templates stored 12–18%, which made
         # the speaker look noticeably low in wide renders.
-        default_top_margin = 0.06 if self.priority == 'face' else 0.10
+        default_top_margin = 0.02 if self.priority == 'face' else 0.10
         requested_top_margin = min(0.35, max(0.0, float(
             default_top_margin if top_margin is None else top_margin,
         )))
@@ -143,7 +143,7 @@ class AutoReframeService:
             # Keep backward-compatible template settings from reintroducing the
             # excessive headroom. Face priority deliberately operates in a
             # narrow, safe interval: close to the top but never flush against it.
-            self.top_margin = min(0.07, max(0.04, requested_top_margin))
+            self.top_margin = min(0.025, max(0.015, requested_top_margin))
         else:
             self.top_margin = max(0.10, requested_top_margin)
         self.interval_frames = max(
@@ -152,8 +152,13 @@ class AutoReframeService:
         )
         self.smoothing = min(1.0, max(0.01, float(smoothing)))
         self.horizontal_smoothing = min(1.0, max(0.01, float(
-            max(0.15, self.smoothing) if horizontal_smoothing is None else horizontal_smoothing,
+            (0.48 if self.priority == 'face' else max(0.15, self.smoothing))
+            if horizontal_smoothing is None else horizontal_smoothing,
         )))
+        # Ignore short lateral gestures, but follow a speaker who remains outside
+        # the center for successive samples.
+        self.horizontal_deadzone_ratio = 0.025
+        self.horizontal_persistence_samples = 2
         # Primeiros ~1.2s: suavização horizontal um pouco maior só para encontrar a pessoa,
         # sem "colar" no rosto/gestos como o fast-start agressivo anterior.
         self.horizontal_fast_start_seconds = 1.2
@@ -273,7 +278,8 @@ class AutoReframeService:
         # most reliable top anchor, while the expanded box keeps head + upper torso.
         gray = cv2.cvtColor(analyzed, cv2.COLOR_BGR2GRAY)
         faces = self._detect_faces(gray, face_detectors, cv2)
-        if faces and self.priority == 'face':
+        face_priority_detection = bool(faces and self.priority == 'face')
+        if face_priority_detection:
             boxes = [self._face_priority_box(x, y, width, height) for x, y, width, height in faces]
         elif body_boxes:
             boxes = body_boxes
@@ -289,9 +295,10 @@ class AutoReframeService:
         top = min(box[1] for box in boxes) * inverse_scale
         right = max(box[0] + box[2] for box in boxes) * inverse_scale
         bottom = max(box[1] + box[3] for box in boxes) * inverse_scale
-        left, top, right, bottom = self._normalize_detection_box(
-            left, top, right, bottom, original_width, original_height,
-        )
+        if not face_priority_detection:
+            left, top, right, bottom = self._normalize_detection_box(
+                left, top, right, bottom, original_width, original_height,
+            )
         return (
             (
                 max(0.0, left), max(0.0, top),
@@ -396,10 +403,19 @@ class AutoReframeService:
         # a person in a wide/short ratio (e.g. 16:5 banners) also shrinks the vertical framing by
         # the same factor — which crops below the head/chin on the common case of a close/medium
         # shot. Keeping the person fully framed takes priority over perfect centering.
-        # Preserve the natural camera framing. A crop may zoom only up to 4%
-        # beyond the cover crop, while still filling the final canvas completely.
-        crop_width = min(cover_width, max(cover_width * 0.96, desired_width))
-        crop_height = min(cover_height, max(cover_height * 0.96, desired_height))
+        # Face framing starts exactly at the cover crop: this is the least zoom
+        # possible while still filling the output canvas. The body profile retains
+        # its small adaptive zoom, which is useful for vertical social formats.
+        if self.priority == 'face':
+            # A 16:5 cover crop normally uses the entire source width, leaving no
+            # horizontal room for the tracker. Only when the speaker consistently
+            # stands away from center reserve up to 4% for a subtle pan.
+            tracking_zoom = 0.96 if self._needs_tracking_pan(observations, source_width) else 1.0
+            crop_width = cover_width * tracking_zoom
+            crop_height = cover_height * tracking_zoom
+        else:
+            crop_width = min(cover_width, max(cover_width * 0.99, desired_width))
+            crop_height = min(cover_height, max(cover_height * 0.99, desired_height))
         if crop_width / crop_height > target_ratio:
             crop_height = crop_width / target_ratio
         else:
@@ -408,9 +424,24 @@ class AutoReframeService:
         crop_height = min(crop_height, source_height)
         return self._even(crop_width), self._even(crop_height)
 
+    @staticmethod
+    def _needs_tracking_pan(observations, source_width):
+        if len(observations) < 2 or source_width <= 0:
+            return False
+        anchors = sorted(
+            AutoReframeService._horizontal_anchor_x(left, top, right, bottom)
+            for _time, (left, top, right, bottom) in observations
+        )
+        median_anchor = anchors[len(anchors) // 2]
+        # Ignore natural small variation around center; reserve pan only for a
+        # speaker who occupies one side through most of the clip.
+        return abs(median_anchor - (source_width / 2.0)) > source_width * 0.08
+
     def _smooth_keyframes(self, observations, crop_width, crop_height, source_width, source_height):
         keyframes = []
         smooth_x = smooth_y = None
+        horizontal_direction = 0
+        horizontal_streak = 0
         max_x = max(0.0, source_width - crop_width)
         max_y = max(0.0, source_height - crop_height)
         targets = [
@@ -428,7 +459,23 @@ class AutoReframeService:
             if smooth_x is None:
                 smooth_x, smooth_y = target_x, target_y
             else:
+                offset = target_x - smooth_x
+                deadzone = crop_width * self.horizontal_deadzone_ratio
+                direction = 1 if offset > deadzone else (-1 if offset < -deadzone else 0)
+                if direction and direction == horizontal_direction:
+                    horizontal_streak += 1
+                elif direction:
+                    horizontal_direction = direction
+                    horizontal_streak = 1
+                else:
+                    horizontal_direction = 0
+                    horizontal_streak = 0
+                # A brief lean or gesture receives only a modest correction.
+                # Two consecutive off-center samples activate the tracker so a
+                # speaker who actually moved remains centered.
                 h_smooth = self._horizontal_smoothing_at(time_seconds)
+                if horizontal_streak < self.horizontal_persistence_samples:
+                    h_smooth = min(0.20, h_smooth)
                 smooth_x += h_smooth * (target_x - smooth_x)
                 smooth_y += self.smoothing * (target_y - smooth_y)
             keyframes.append(ReframeKeyframe(time_seconds, smooth_x, smooth_y))
@@ -504,8 +551,17 @@ class AutoReframeService:
 
     @staticmethod
     def _face_priority_box(x, y, width, height):
-        # Keep the top near the real head; headroom above the face is added by top_margin.
-        top = y - height * 0.12
+        # Haar faces begin around the forehead, not the hairline. Add a small upward
+        # allowance for hair, but do not run this box through the body normalizer:
+        # that previous second expansion pulled the crop to y=0 and created huge
+        # empty headroom in wide formats.
+        # The cascade starts around the forehead. Estimate enough area above it
+        # to cover the full hairline, while the crop top-margin keeps this safety
+        # allowance visually tight instead of creating empty headroom.
+        # Curly/voluminous hair can extend noticeably above the forehead reported
+        # by Haar. This small additional allowance is enough to avoid clipping it
+        # while remaining visually close to the top edge.
+        top = y - height * 0.30
         bottom = y + height * 4.2
         return (
             x - width * 1.7,

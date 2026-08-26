@@ -36,6 +36,8 @@ from .external_media import (
     AdminExternalMediaMasteringProfileSaveView,
     AdminExternalMediaPresetDeleteView,
     AdminExternalMediaPresetSaveView,
+    AdminExternalMediaSpeechFillerTermDeleteView,
+    AdminExternalMediaSpeechFillerTermSaveView,
     AdminExternalMediaSubtitleStyleDeleteView,
     AdminExternalMediaSubtitleStyleSaveView,
     AdminExternalMediaTemplateDeleteView,
@@ -75,5 +77,6 @@ __all__ = [
     'AdminExternalMediaBackgroundMusicDeleteView', 'AdminExternalMediaBackgroundMusicSaveView',
     'AdminExternalMediaMasteringProfileDeleteView', 'AdminExternalMediaMasteringProfileSaveView',
     'AdminExternalMediaPresetDeleteView', 'AdminExternalMediaPresetSaveView',
+    'AdminExternalMediaSpeechFillerTermDeleteView', 'AdminExternalMediaSpeechFillerTermSaveView',
     'AdminExternalMediaSubtitleStyleDeleteView', 'AdminExternalMediaSubtitleStyleSaveView',
 ]

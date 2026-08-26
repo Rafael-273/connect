@@ -1,7 +1,7 @@
 import uuid
 from pathlib import Path
 
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.core.files.storage import storages
 from django.db import models
 
@@ -539,6 +539,26 @@ class VideoMasteringJob(BaseModel):
         return format_processing_duration(self.duration_seconds)
 
 
+class SpeechFillerTerm(BaseModel):
+    """Reusable vocabulary used by the speech-filler removal pipeline."""
+
+    language = models.CharField(
+        max_length=10,
+        choices=ExternalMediaJob.LANGUAGE_CHOICES,
+        default='pt',
+    )
+    text = models.CharField(max_length=80, verbose_name='Termo')
+    is_active = models.BooleanField(default=True, verbose_name='Disponível para templates')
+
+    class Meta:
+        ordering = ['language', 'text']
+        verbose_name = 'Vocabulário de vício de fala'
+        verbose_name_plural = 'Vocabulários de vícios de fala'
+
+    def __str__(self):
+        return self.text
+
+
 class MediaTemplateVersion(BaseModel):
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Rascunho'
@@ -566,6 +586,12 @@ class MediaTemplateVersion(BaseModel):
     output_languages = models.JSONField(default=default_output_languages)
     default_settings = models.JSONField(default=dict, blank=True)
     allowed_overrides = models.JSONField(default=list, blank=True)
+    filler_terms = models.ManyToManyField(
+        'SpeechFillerTerm',
+        related_name='template_versions',
+        blank=True,
+        verbose_name='Vícios de fala ativos',
+    )
     intro_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
@@ -574,6 +600,12 @@ class MediaTemplateVersion(BaseModel):
     )
     lut_file = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
+    )
+    lut_intensity = models.PositiveSmallIntegerField(
+        default=50,
+        validators=[MaxValueValidator(100)],
+        verbose_name='Intensidade do LUT (%)',
+        help_text='Mistura o LUT com a imagem original. 50% é o padrão recomendado.',
     )
     background_music = models.ForeignKey(
         BackgroundMusicTrack,
@@ -632,6 +664,11 @@ class MediaTemplateBlock(BaseModel):
     # compatibilidade com templates antigos já cadastrados.
     max_occurrences = models.PositiveSmallIntegerField(default=0)
     skip_extra_processing = models.BooleanField(default=False)
+    remove_background_voice = models.BooleanField(
+        default=False,
+        verbose_name='Remover voz de fundo',
+        help_text='Remove falas isoladas de um entrevistador/voz sem microfone. Sobreposições são preservadas.',
+    )
     default_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )

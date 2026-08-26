@@ -42,6 +42,9 @@ class DuckingSettings:
     attack_ms: int = 140
     hold_ms: int = 300
     release_ms: int = 850
+    # Subtitle cues often have a small gap around breaths or natural pauses.
+    # Keep them in the same dialogue bed so the music does not audibly pump.
+    speech_gap_hold_ms: int = 1800
     # Music needs to sit clearly behind dialogue.  With the old 8 dB default,
     # louder background tracks still competed with the speaker.
     base_duck_db: float = 14.0
@@ -225,10 +228,18 @@ class AudioMixingService:
     ) -> AudioMixResult:
         self._validate_music_input(music_path)
         settings_ = settings_ or DuckingSettings()
-        speech_blocks = clip_blocks_against_protected_ranges(speech_blocks or [], protected_ranges or [])
+        # Re-group the cue-derived blocks here as a final safeguard.  A 1s pause
+        # or breath belongs to the same spoken segment, so the music stays ducked
+        # instead of rising and falling between consecutive phrases.
+        speech_blocks = group_speech_blocks(
+            [(block.start_ms, block.end_ms) for block in (speech_blocks or [])],
+            gap_threshold_ms=max(0, int(settings_.speech_gap_hold_ms)),
+        )
+        speech_blocks = clip_blocks_against_protected_ranges(speech_blocks, protected_ranges or [])
         metrics = {
             'speech_block_count': len(speech_blocks),
             'protected_range_count': len(protected_ranges or []),
+            'speech_gap_hold_ms': settings_.speech_gap_hold_ms,
         }
         if not ducking_enabled or not speech_blocks or duration_ms <= 0:
             self._mix_flat(video_path, music_path, output_path, music_volume)

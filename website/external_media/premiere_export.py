@@ -350,10 +350,15 @@ class PremierePackageService:
         )
         (package_root / 'README.txt').write_text(
             'Abra Project/timeline.xml no Adobe Premiere Pro.\n'
-            'Os arquivos originais permanecem nas pastas Media e Audio.\n'
+            'Media contém os vídeos originais. Audio contém os WAVs de diálogo e a música de fundo.\n'
+            'A1 é o diálogo separado; A2 é a música, com keyframes de volume equivalentes ao ducking do render.\n'
             'A trilha “Legendas estilizadas (visual final)” é um ProRes 4444 com transparência '\
             'e reproduz o visual final das legendas. Ela vem bloqueada: mantenha-a visível para '\
             'fidelidade visual ou oculte-a para editar os títulos/SRT nativos.\n'
+            'Os SRTs ficam em Captions/. As trilhas de títulos PT/EN permanecem editáveis, mas o ProRes '\
+            'é a referência fiel para fundo, opacidade, sombra, contorno e posicionamento.\n'
+            'LUT, tratamento de diálogo e masterização constam nos metadados; reaplique-os no Premiere '\
+            'quando quiser uma edição não destrutiva.\n'
             'Consulte Metadata/timeline.json e Metadata/validation.json para detalhes.\n'
             'A masterização final deve ser feita após a edição, usando “Masterizar Vídeo”.\n',
             encoding='utf-8',

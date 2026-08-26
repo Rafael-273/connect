@@ -213,7 +213,15 @@
                     <div class="form-subsection">
                         <div class="form-subsection-title">Assets e áudio</div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div><label class="form-label">{{ form.lut_file.label }}</label>{{ form.lut_file }}</div>
+                        <div>
+                            <label class="form-label">{{ form.lut_file.label }}</label>{{ form.lut_file }}
+                            {% if form.lut_file.errors %}<p class="text-xs text-red-600 mt-1">{{ form.lut_file.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="form-label">{{ form.lut_intensity.label }}</label>{{ form.lut_intensity }}
+                            <p class="text-xs text-gray-500 mt-1">50% mantém o tratamento mais suave. Blocos marcados como intactos não recebem o LUT.</p>
+                            {% if form.lut_intensity.errors %}<p class="text-xs text-red-600 mt-1">{{ form.lut_intensity.errors.0 }}</p>{% endif %}
+                        </div>
                         <div>
                             <label class="form-label">{{ form.background_music.label }}</label>
                             <div class="manage-select">
@@ -327,6 +335,7 @@
                                 <div class="md:col-span-3"><label class="form-label">{{ block_form.description.label }}</label>{{ block_form.description }}</div>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.is_required }} {{ block_form.is_required.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.skip_extra_processing }} {{ block_form.skip_extra_processing.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.remove_background_voice }} {{ block_form.remove_background_voice.label }}</label>
                                 {{ block_form.min_occurrences }}
                                 {{ block_form.max_occurrences }}
                             </div>
@@ -354,6 +363,7 @@
                                 <div class="md:col-span-3"><label class="form-label">{{ block_formset.empty_form.description.label }}</label>{{ block_formset.empty_form.description }}</div>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.is_required }} {{ block_formset.empty_form.is_required.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.skip_extra_processing }} {{ block_formset.empty_form.skip_extra_processing.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.remove_background_voice }} {{ block_formset.empty_form.remove_background_voice.label }}</label>
                                 {{ block_formset.empty_form.min_occurrences }}
                                 {{ block_formset.empty_form.max_occurrences }}
                             </div>
@@ -411,9 +421,21 @@
                                 </p>
                             </div>
                             <div>
-                                <label class="form-label">{{ form.filler_words.label }}</label>
-                                {{ form.filler_words }}
-                                <p class="text-xs text-gray-500 mt-2">{{ form.filler_words.help_text }}</p>
+                                <div class="flex items-center justify-between gap-3 mb-2">
+                                    <label class="form-label !mb-0">{{ form.filler_terms.label }}</label>
+                                    <button type="button" class="text-xs font-semibold text-[var(--color-primary)] hover:underline" data-open-modal="filler-term-modal">
+                                        <ion-icon name="add-circle-outline" class="align-middle text-base"></ion-icon>
+                                        Criar outro
+                                    </button>
+                                </div>
+                                <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 max-h-40 overflow-y-auto grid grid-cols-2 gap-x-3 gap-y-2">
+                                    {% for choice in form.filler_terms %}
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>
+                                    {% empty %}
+                                    <p class="col-span-2 text-sm text-gray-500">Nenhum termo disponível. Crie o primeiro vício de fala.</p>
+                                    {% endfor %}
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">{{ form.filler_terms.help_text }}</p>
                             </div>
                         </div>
                         <div class="block-help mt-4">
@@ -421,7 +443,7 @@
                             recebem espaço extra; se houver dúvida sobre uma sílaba, o trecho é mantido.
                         </div>
                         {% if form.speech_edit_profile.errors %}<p class="text-xs text-red-600 mt-2">{{ form.speech_edit_profile.errors.0 }}</p>{% endif %}
-                        {% if form.filler_words.errors %}<p class="text-xs text-red-600 mt-2">{{ form.filler_words.errors.0 }}</p>{% endif %}
+                        {% if form.filler_terms.errors %}<p class="text-xs text-red-600 mt-2">{{ form.filler_terms.errors.0 }}</p>{% endif %}
                     </div>
                     {% if form.advanced_plugins.errors %}<p class="text-xs text-red-600 mt-3">{{ form.advanced_plugins.errors.0 }}</p>{% endif %}
                     <p class="text-xs text-gray-500 mt-3">
@@ -522,6 +544,67 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div id="filler-term-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel max-w-3xl">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Vícios de fala</h2>
+                            <p class="text-sm text-gray-500">Cadastre termos reutilizáveis e selecione quais ficam ativos neste template.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="filler-term-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+                    <div class="p-5 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-5">
+                        <form method="post" action="{% url 'admin_external_media_speech_filler_term_save' %}" class="inline-card bg-white h-fit">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="fillerterm_id" id="fillerterm-id">
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <h3 id="fillerterm-form-title" class="font-bold text-gray-900">Novo vício de fala</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-fillerterm>Limpar</button>
+                            </div>
+                            <div class="space-y-4">
+                                <div><label class="form-label">{{ filler_term_form.text.label }}</label>{{ filler_term_form.text }}</div>
+                                <div><label class="form-label">{{ filler_term_form.language.label }}</label>{{ filler_term_form.language }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ filler_term_form.is_active }} {{ filler_term_form.is_active.label }}</label>
+                            </div>
+                            <div class="flex justify-end mt-5 pt-4 border-t border-gray-100">
+                                <button class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar termo</button>
+                            </div>
+                        </form>
+                        <div class="inline-card bg-white">
+                            <div class="mb-4">
+                                <h3 class="font-bold text-gray-900">Termos cadastrados</h3>
+                                <p class="text-sm text-gray-500">Os termos inativos permanecem no histórico, mas não podem ser selecionados em novos templates.</p>
+                            </div>
+                            <div class="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                                {% for term in speech_filler_terms %}
+                                <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 p-3">
+                                    <div class="min-w-0"><strong class="block text-gray-900">{{ term.text }}</strong><span class="text-xs text-gray-500">{{ term.get_language_display }} · {% if term.is_active %}Disponível{% else %}Inativo{% endif %}</span></div>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <button type="button" class="asset-action" title="Editar" data-edit-fillerterm data-id="{{ term.id }}" data-text="{{ term.text }}" data-language="{{ term.language }}" data-active="{% if term.is_active %}true{% else %}false{% endif %}"><ion-icon name="create-outline"></ion-icon></button>
+                                        <button type="button" class="asset-action asset-action-danger" title="Remover" data-delete-fillerterm data-name="{{ term.text }}" data-action="{% url 'admin_external_media_speech_filler_term_delete' term.id %}"><ion-icon name="trash-outline"></ion-icon></button>
+                                    </div>
+                                </div>
+                                {% empty %}
+                                <p class="text-sm text-gray-500">Nenhum termo cadastrado.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fillerTermDeleteModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/50 p-4">
+                <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                    <h2 class="text-lg font-black text-gray-900">Remover vício de fala?</h2>
+                    <p class="text-sm text-gray-600 mt-2">O termo <strong id="fillerTermDeleteName"></strong> será removido dos templates que o utilizam.</p>
+                    <form id="fillerTermDeleteForm" method="post" class="flex justify-end gap-3 mt-6">{% csrf_token %}
+                        <button type="button" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold" data-close-fillerterm-delete>Cancelar</button>
+                        <button class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
+                    </form>
                 </div>
             </div>
 
@@ -1280,6 +1363,49 @@
         });
     });
 
+    function resetFillerTermForm() {
+        setValue('fillerterm-id', '');
+        setValue('id_fillerterm-text', '');
+        setValue('id_fillerterm-language', 'pt');
+        setChecked('id_fillerterm-is_active', true);
+        if (byId('fillerterm-form-title')) byId('fillerterm-form-title').textContent = 'Novo vício de fala';
+    }
+    document.querySelectorAll('[data-open-modal="filler-term-modal"]').forEach((button) => {
+        button.addEventListener('click', resetFillerTermForm);
+    });
+    document.querySelector('[data-reset-fillerterm]')?.addEventListener('click', resetFillerTermForm);
+    document.querySelectorAll('[data-edit-fillerterm]').forEach((button) => {
+        button.addEventListener('click', () => {
+            setValue('fillerterm-id', button.dataset.id);
+            setValue('id_fillerterm-text', button.dataset.text);
+            setValue('id_fillerterm-language', button.dataset.language || 'pt');
+            setChecked('id_fillerterm-is_active', button.dataset.active === 'true');
+            if (byId('fillerterm-form-title')) byId('fillerterm-form-title').textContent = `Editar: ${button.dataset.text}`;
+        });
+    });
+    let fillerTermDeleteAction = null;
+    const closeFillerTermDelete = () => {
+        fillerTermDeleteAction = null;
+        const modal = byId('fillerTermDeleteModal');
+        modal?.classList.add('hidden'); modal?.classList.remove('flex');
+    };
+    document.querySelectorAll('[data-delete-fillerterm]').forEach((button) => {
+        button.addEventListener('click', () => {
+            fillerTermDeleteAction = button.dataset.action;
+            if (byId('fillerTermDeleteName')) byId('fillerTermDeleteName').textContent = button.dataset.name || '';
+            const modal = byId('fillerTermDeleteModal');
+            modal?.classList.remove('hidden'); modal?.classList.add('flex');
+        });
+    });
+    document.querySelector('[data-close-fillerterm-delete]')?.addEventListener('click', closeFillerTermDelete);
+    byId('fillerTermDeleteModal')?.addEventListener('click', (event) => {
+        if (event.target === byId('fillerTermDeleteModal')) closeFillerTermDelete();
+    });
+    byId('fillerTermDeleteForm')?.addEventListener('submit', (event) => {
+        if (!fillerTermDeleteAction) { event.preventDefault(); return; }
+        event.currentTarget.action = fillerTermDeleteAction;
+    });
+
     function resetPresetForm() {
         byId('preset-form-title').textContent = 'Novo preset';
         setValue('preset-id', '');
@@ -1516,13 +1642,26 @@
     }
 
     function dualStyleMargins(originalStyle, translatedStyle) {
-        // Espelha SubtitleService._dual_style_margins: margens 100% independentes.
-        // Mexer na margem do formulário só move a legenda atual; a traduzida fica na
-        // margem salva do estilo comparado.
-        return {
-            originalMargin: Math.max(0, Number(originalStyle.margin) || 0),
-            translatedMargin: Math.max(0, Number(translatedStyle.margin) || 0),
-        };
+        // Espelha SubtitleService._dual_style_margins. Mantém a legenda mais baixa
+        // na margem escolhida e compacta a outra logo acima dela.
+        let originalMargin = Math.max(0, Number(originalStyle.margin) || 0);
+        let translatedMargin = Math.max(0, Number(translatedStyle.margin) || 0);
+        const originalBottom = Math.max(1, Math.min(3, Number(originalStyle.alignment) || 2));
+        const translatedBottom = Math.max(1, Math.min(3, Number(translatedStyle.alignment) || 2));
+        if (originalBottom <= 3 && translatedBottom <= 3) {
+            if (originalMargin <= translatedMargin) {
+                translatedMargin = Math.min(
+                    translatedMargin,
+                    originalMargin + subtitleStackGap(translatedStyle, originalStyle),
+                );
+            } else {
+                originalMargin = Math.min(
+                    originalMargin,
+                    translatedMargin + subtitleStackGap(originalStyle, translatedStyle),
+                );
+            }
+        }
+        return { originalMargin, translatedMargin };
     }
 
     function applyAlignment(element, style, marginRatio, sideMarginRatio) {

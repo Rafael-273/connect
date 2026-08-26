@@ -141,9 +141,13 @@ class DialogueProcessor:
 
     def measure_block_mean_db(self, path: Path, block) -> float | None:
         try:
+            start = max(0, int(block.start_ms)) / 1000
+            duration = max(0.001, int(block.end_ms - block.start_ms) / 1000)
             result = self.runner.run_capture([
-                settings.FFMPEG_BINARY, '-i', str(path), '-af',
-                f'atrim=start={block.start_ms / 1000:.3f}:end={block.end_ms / 1000:.3f},volumedetect',
+                # There may be dozens of speech blocks. Seeking first avoids
+                # decoding the whole video from zero for every measurement.
+                settings.FFMPEG_BINARY, '-ss', f'{start:.3f}', '-t', f'{duration:.3f}', '-i', str(path),
+                '-vn', '-af', 'volumedetect',
                 '-f', 'null', '-',
             ])
         except Exception:

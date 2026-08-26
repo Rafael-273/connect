@@ -22,7 +22,7 @@ CAPABILITY_MATRIX = {
     'captions': {'exportable': True, 'strategy': 'srt_editable_titles_and_alpha_overlay'},
     'caption_style': {'exportable': True, 'strategy': 'pre_rendered_alpha_overlay'},
     'lut': {'exportable': 'partial', 'strategy': 'asset_and_metadata'},
-    'dialogue_processing': {'exportable': 'partial', 'strategy': 'original_plus_metadata'},
+    'dialogue_processing': {'exportable': 'partial', 'strategy': 'separate_dialogue_source_plus_metadata'},
     'mastering': {'exportable': False, 'strategy': 'recommended_after_premiere'},
     'complex_motion': {'exportable': 'partial', 'strategy': 'pre_render_when_available'},
 }
@@ -107,6 +107,8 @@ class InternalTimelineBuilder:
                 'role': source.role,
                 'name': source.original_name,
                 'path': f'./{relative_path}',
+                # O áudio segue em A1 como WAV independente para evitar duplicação.
+                'has_audio': False,
                 **metadata,
             })
 
@@ -114,8 +116,13 @@ class InternalTimelineBuilder:
         cuts = SpeechEditPlan.from_dict((project.configuration or {}).get('speech_edit_plan'))
         video_clips, decisions, markers = self._video_clips(project, local_sources, cuts, sequence)
         duration_ms = max((clip['timeline_out_ms'] for clip in video_clips), default=0)
+        dialogue_assets, dialogue_clips = self._dialogue_assets(local_sources, video_clips, package_root)
+        assets.extend(dialogue_assets)
         audio_tracks = [
-            {'id': 'A1', 'name': 'Dialogue', 'role': 'dialogue', 'clips': [dict(clip) for clip in video_clips]},
+            {
+                'id': 'A1', 'name': 'Dialogue (áudio original separado)',
+                'role': 'dialogue', 'clips': dialogue_clips,
+            },
             {'id': 'A2', 'name': 'Music', 'role': 'music', 'clips': []},
             {'id': 'A3', 'name': 'SFX', 'role': 'sfx', 'clips': []},
             {'id': 'A4', 'name': 'Ambience', 'role': 'ambience', 'clips': []},
@@ -261,7 +268,7 @@ class InternalTimelineBuilder:
                     'source_out_ms': source_in + local_end,
                     'source_duration_ms': full_duration,
                     'effects': effects,
-                    'audio_enabled': True,
+                    'audio_enabled': False,
                     'skip_extra_processing': source.skip_extra_processing,
                 })
                 timeline_cursor += duration
@@ -280,6 +287,33 @@ class InternalTimelineBuilder:
             if plan_data and plan_data.get('plan'):
                 decisions.append({'operation': 'auto_reframe', 'source_index': index, 'confidence': None})
         return clips, decisions, markers
+
+    def _dialogue_assets(self, sources, video_clips, package_root):
+        """Extrai A1 por take, deixando vídeo, diálogo e música independentes."""
+        assets, clips, asset_by_video = [], [], {}
+        for index, (source, _metadata) in enumerate(sources, start=1):
+            source_path = package_root / source.relative_path
+            if not self._has_audio(source_path):
+                continue
+            safe_name = self._safe_name(Path(source.original_name).stem)
+            relative = f'Audio/dialogue_{index:03d}_{safe_name}.wav'
+            output = package_root / relative
+            self.runner.run([
+                settings.FFMPEG_BINARY, '-y', '-i', str(source_path),
+                '-map', '0:a:0', '-vn', '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2', str(output),
+            ])
+            asset_id = f'{source.asset_id}_dialogue'
+            asset_by_video[source.asset_id] = asset_id
+            assets.append({
+                'id': asset_id, 'type': 'audio', 'role': 'dialogue',
+                'name': f'{Path(source.original_name).stem} — diálogo',
+                'path': f'./{relative}', **self._probe(output, audio_only=True),
+            })
+        for video_clip in video_clips:
+            asset_id = asset_by_video.get(video_clip['asset_id'])
+            if asset_id:
+                clips.append({**video_clip, 'asset_id': asset_id, 'audio_enabled': True})
+        return assets, clips
 
     @staticmethod
     def _subtract_cuts(start, end, cuts):
@@ -411,13 +445,16 @@ class InternalTimelineBuilder:
         if project.render_job_id:
             track_source = project.render_job.subtitle_tracks.filter(is_source=True).prefetch_related('cues').first()
             cues = [(cue.start_ms, cue.end_ms) for cue in track_source.cues.all()] if track_source else []
-        blocks = group_speech_blocks(cues)
+        ducking_settings = DuckingSettings.from_config(version.audio_mixing_config)
+        # Use the same speech-gap hold configured for the platform render. This keeps
+        # the Premiere A2 automation from rising during short breaths or pauses.
+        blocks = group_speech_blocks(cues, gap_threshold_ms=ducking_settings.speech_gap_hold_ms)
         duck_db = float(
             ((project.configuration or {}).get('audio_metrics') or {}).get('mixing', {}).get('duck_db')
             or (version.audio_mixing_config or {}).get('base_duck_db', 8)
         )
         envelope = build_ducking_envelope(
-            blocks, duration_ms, 10 ** (-duck_db / 20), DuckingSettings.from_config(version.audio_mixing_config),
+            blocks, duration_ms, 10 ** (-duck_db / 20), ducking_settings,
         ) if version.audio_mixing_enabled and version.audio_ducking_enabled else [(0, 1), (duration_ms / 1000, 1)]
         base_volume = max(0.0001, float(version.music_volume))
         automation = [
@@ -616,6 +653,12 @@ class InternalTimelineBuilder:
         numerator, denominator = (output[2].split('/', 1) + ['1'])[:2]
         metadata.update({'width': width, 'height': height, 'fps': float(numerator) / max(1, float(denominator))})
         return metadata
+
+    def _has_audio(self, path):
+        return bool(self.runner.run([
+            settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'a:0',
+            '-show_entries', 'stream=index', '-of', 'csv=p=0', str(path),
+        ]).strip())
 
     @staticmethod
     def _copy_field(field_file, destination):

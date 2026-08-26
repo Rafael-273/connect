@@ -14,6 +14,7 @@ from ..models.external_media import (
     MediaTemplatePlugin,
     MediaTemplateVersion,
     RenderPreset,
+    SpeechFillerTerm,
     SubtitleStyle,
 )
 
@@ -211,11 +212,12 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         initial='balanced',
         required=False,
     )
-    filler_words = forms.CharField(
-        label='Vícios de fala reconhecidos',
-        initial='eh, é, hum, hmm, ahn, ah, hã, tipo, né, então, assim',
+    filler_terms = forms.ModelMultipleChoiceField(
+        label='Vícios de fala ativos',
+        queryset=SpeechFillerTerm.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
         required=False,
-        help_text='Separe por vírgulas. A palavra só será removida quando estiver isolada e houver margem segura.',
+        help_text='Selecione os termos que este template poderá remover com segurança.',
     )
     default_settings_raw = forms.CharField(
         label='Configurações padrão em JSON',
@@ -234,7 +236,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         model = MediaTemplateVersion
         fields = [
             'preset', 'subtitle_style', 'translated_subtitle_style', 'original_language',
-            'lut_file', 'background_music',
+            'lut_file', 'lut_intensity', 'background_music',
             'dialogue_processing_enabled',
             'audio_mixing_enabled', 'audio_ducking_enabled', 'audio_spectral_ducking_enabled',
             'audio_mastering_enabled', 'mastering_profile',
@@ -245,6 +247,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             'translated_subtitle_style': 'Estilo da legenda traduzida',
             'original_language': 'Idioma padrão da legenda',
             'lut_file': 'Arquivo LUT',
+            'lut_intensity': 'Intensidade do LUT',
             'background_music': 'Trilha de fundo',
             'dialogue_processing_enabled': 'Tratamento de diálogo',
             'audio_mixing_enabled': 'Mixagem inteligente',
@@ -254,6 +257,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         }
         widgets = {
             'lut_file': forms.ClearableFileInput(),
+            'lut_intensity': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': 1}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -307,8 +311,16 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                 if speech_plugin:
                     speech_configuration = speech_plugin.configuration or {}
                     initial.setdefault('speech_edit_profile', speech_configuration.get('profile', 'balanced'))
-                    if speech_configuration.get('filler_words'):
-                        initial.setdefault('filler_words', ', '.join(speech_configuration['filler_words']))
+                    configured_words = speech_configuration.get('filler_words') or []
+                    if configured_words and not instance.filler_terms.exists():
+                        initial.setdefault(
+                            'filler_terms',
+                            SpeechFillerTerm.objects.filter(
+                                is_active=True,
+                                language=instance.original_language,
+                                text__in=configured_words,
+                            ),
+                        )
         super().__init__(*args, **kwargs)
         for field_name, field in self.fields.items():
             if field_name in {'spoken_languages', 'advanced_plugins'}:
@@ -331,12 +343,27 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         list(background_music_qs)
         mastering_profile_qs = MasteringProfile.objects.filter(is_active=True).order_by('name')
         list(mastering_profile_qs)
+        filler_language = (getattr(instance, 'original_language', None) or 'pt')
+        filler_terms_qs = SpeechFillerTerm.objects.filter(
+            is_active=True,
+            language=filler_language,
+        ).order_by('text')
+        list(filler_terms_qs)
         self.fields['preset'].queryset = preset_qs
         self.fields['subtitle_style'].queryset = subtitle_styles_qs
         self.fields['translated_subtitle_style'].queryset = translated_styles_qs
         self.fields['translated_subtitle_style'].required = False
+        # Older template submissions do not contain this newly introduced field.
+        # Keep them valid and adopt the recommended intensity automatically.
+        self.fields['lut_intensity'].required = False
+        self.fields['lut_intensity'].initial = self.instance.lut_intensity if self.instance.pk else 50
         self.fields['background_music'].queryset = background_music_qs
         self.fields['mastering_profile'].queryset = mastering_profile_qs
+        self.fields['filler_terms'].queryset = filler_terms_qs
+        if instance and instance.pk and instance.filler_terms.exists():
+            self.fields['filler_terms'].initial = instance.filler_terms.filter(is_active=True)
+        elif not instance or not instance.pk:
+            self.fields['filler_terms'].initial = filler_terms_qs
         if not instance:
             self.fields['spoken_languages'].initial = ['pt']
             default_profile = MasteringProfile.objects.filter(is_active=True, is_default=True).first()
@@ -345,6 +372,10 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
 
     def clean_default_settings_raw(self):
         return self._parse_json(self.cleaned_data.get('default_settings_raw'), {}, 'Configurações padrão')
+
+    def clean_lut_intensity(self):
+        value = self.cleaned_data.get('lut_intensity')
+        return 50 if value in (None, '') else value
 
     def clean_allowed_overrides_raw(self):
         value = self._parse_json(self.cleaned_data.get('allowed_overrides_raw'), [], 'Campos liberados')
@@ -409,6 +440,18 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
 
     def sync_advanced_plugins(self, instance):
         selected_codes = set(self.cleaned_data.get('advanced_plugins') or [])
+        selected_filler_terms = list(self.cleaned_data.get('filler_terms') or [])
+        # Backwards compatibility for older administrative clients. The current
+        # interface uses checkbox vocabulary, but an old POST may still contain
+        # the comma-separated field while a template is being upgraded.
+        legacy_filler_words = []
+        if not selected_filler_terms and self.data.get('filler_words'):
+            legacy_filler_words = [
+                item.strip()
+                for item in self.data.get('filler_words', '').split(',')
+                if item.strip()
+            ]
+        instance.filler_terms.set(selected_filler_terms)
         existing = {
             plugin.code: plugin
             for plugin in instance.plugins.filter(code__in=ADVANCED_PLUGIN_CODES)
@@ -422,19 +465,20 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                     **configuration,
                     'priority': reframe_priority,
                     'safe_margin': 0.18 if reframe_priority == 'face' else 0.15,
-                    'top_margin': 0.06 if reframe_priority == 'face' else 0.12,
+                    'top_margin': 0.02 if reframe_priority == 'face' else 0.12,
                     'interval_frames': 10,
                     'smoothing': 0.18,
+                    'horizontal_smoothing': 0.34 if reframe_priority == 'face' else 0.18,
                 }
             elif code in {
                 MediaTemplatePlugin.Code.SILENCE_REMOVAL,
                 MediaTemplatePlugin.Code.FILLER_REMOVAL,
             }:
                 filler_words = [
-                    value.strip()
-                    for value in (self.cleaned_data.get('filler_words') or '').split(',')
-                    if value.strip()
-                ]
+                    term.text.strip()
+                    for term in selected_filler_terms
+                    if term.text.strip()
+                ] or legacy_filler_words
                 configuration = {
                     **configuration,
                     'profile': self.cleaned_data.get('speech_edit_profile') or 'balanced',
@@ -463,7 +507,7 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         model = MediaTemplateBlock
         fields = [
             'key', 'name', 'description', 'order', 'is_required', 'allows_multiple',
-            'min_occurrences', 'max_occurrences', 'skip_extra_processing', 'default_video',
+            'min_occurrences', 'max_occurrences', 'skip_extra_processing', 'remove_background_voice', 'default_video',
         ]
         labels = {
             'name': 'Nome do bloco',
@@ -472,6 +516,7 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
             'default_video': 'Vídeo fixo deste bloco',
             'is_required': 'Obrigatório',
             'skip_extra_processing': 'Manter este bloco intacto',
+            'remove_background_voice': 'Remover voz de fundo / entrevistador',
             'allows_multiple': 'Aceitar mais de um vídeo',
             'min_occurrences': 'Mínimo de vídeos',
             'max_occurrences': 'Máximo de vídeos',
@@ -493,7 +538,7 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         for field_name in ('name', 'order', 'min_occurrences', 'max_occurrences'):
             self.fields[field_name].required = False
         for field_name, field in self.fields.items():
-            if field_name in ('is_required', 'skip_extra_processing', 'DELETE'):
+            if field_name in ('is_required', 'skip_extra_processing', 'remove_background_voice', 'DELETE'):
                 field.widget.attrs.update({'class': CHECKBOX_CLASS})
             elif field_name in ('allows_multiple', 'min_occurrences', 'max_occurrences'):
                 continue
@@ -608,6 +653,36 @@ class AdminMediaTemplatePluginForm(forms.ModelForm):
             else:
                 field.widget.attrs.update({'class': FIELD_CLASS})
         self.fields['configuration'].initial = self.fields['configuration'].initial or {}
+
+
+class AdminSpeechFillerTermForm(forms.ModelForm):
+    class Meta:
+        model = SpeechFillerTerm
+        fields = ['text', 'language', 'is_active']
+        labels = {
+            'text': 'Vício de fala',
+            'language': 'Idioma',
+            'is_active': 'Disponível para templates',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field_name, field in self.fields.items():
+            field.widget.attrs.update({
+                'class': CHECKBOX_CLASS if field_name == 'is_active' else FIELD_CLASS,
+            })
+
+    def clean_text(self):
+        text = ' '.join((self.cleaned_data.get('text') or '').split())
+        if not text:
+            raise forms.ValidationError('Informe o termo que deve ser reconhecido.')
+        duplicate = SpeechFillerTerm.objects.filter(
+            language=self.cleaned_data.get('language') or 'pt',
+            text__iexact=text,
+        ).exclude(pk=self.instance.pk)
+        if duplicate.exists():
+            raise forms.ValidationError('Esse termo já está cadastrado para este idioma.')
+        return text
 
 
 class AdminRenderPresetForm(forms.ModelForm):

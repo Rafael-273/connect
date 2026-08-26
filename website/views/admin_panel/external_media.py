@@ -18,6 +18,7 @@ from ...forms.admin_external_media import (
     AdminMediaTemplateForm,
     AdminMediaTemplateVersionForm,
     AdminRenderPresetForm,
+    AdminSpeechFillerTermForm,
     AdminSubtitleStyleForm,
 )
 from ...models.external_media import (
@@ -28,6 +29,7 @@ from ...models.external_media import (
     MediaTemplate,
     MediaTemplateVersion,
     RenderPreset,
+    SpeechFillerTerm,
     SubtitleStyle,
 )
 from ..mixins import AdminRequiredMixin
@@ -286,6 +288,7 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             block_formset = AdminMediaTemplateBlockFormSet(instance=version, prefix='blocks')
         render_presets = list(RenderPreset.objects.order_by('name'))
         subtitle_styles = list(SubtitleStyle.objects.order_by('name'))
+        speech_filler_terms = list(SpeechFillerTerm.objects.order_by('language', 'text'))
         background_musics = list(BackgroundMusicTrack.objects.order_by('category', 'name'))
         mastering_profiles = list(MasteringProfile.objects.order_by('name'))
         if is_create:
@@ -307,10 +310,12 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
                 for preset in render_presets
             ],
             'subtitle_styles': subtitle_styles,
+            'speech_filler_terms': speech_filler_terms,
             'background_music_rows': background_musics,
             'mastering_profile_rows': mastering_profiles,
             'preset_form': AdminRenderPresetForm(prefix='preset'),
             'style_form': AdminSubtitleStyleForm(prefix='style'),
+            'filler_term_form': AdminSpeechFillerTermForm(prefix='fillerterm'),
             'music_form': AdminBackgroundMusicForm(prefix='bgmusic'),
             'mastering_profile_form': AdminMasteringProfileForm(prefix='masterprofile'),
             'title': title,
@@ -420,6 +425,48 @@ class AdminExternalMediaSubtitleStyleDeleteView(LoginRequiredMixin, AdminRequire
                 messages.success(request, f'Estilo "{name}" removido.')
         else:
             messages.error(request, result)
+        return self._redirect_back(request)
+
+
+class AdminExternalMediaSpeechFillerTermSaveView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):
+    def post(self, request):
+        term_id = request.POST.get('fillerterm_id')
+        instance = SpeechFillerTerm.objects.filter(id=term_id).first() if term_id else None
+        form = AdminSpeechFillerTermForm(request.POST, instance=instance, prefix='fillerterm')
+        if form.is_valid():
+            term = form.save()
+            action = 'atualizado' if instance else 'criado'
+            messages.success(request, f'Vício de fala "{term.text}" {action}.')
+        else:
+            messages.error(request, self._errors_to_text(form))
+        return self._redirect_back(request)
+
+    @staticmethod
+    def _errors_to_text(form):
+        errors = []
+        for field, field_errors in form.errors.items():
+            label = form.fields[field].label if field in form.fields else field
+            errors.append(f'{label}: {field_errors[0]}')
+        return 'Revise o vício de fala. ' + ' '.join(errors)
+
+
+class AdminExternalMediaSpeechFillerTermDeleteView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):
+    def post(self, request, term_id):
+        term = get_object_or_404(SpeechFillerTerm, id=term_id)
+        name = term.text
+        versions = list(term.template_versions.all())
+        with transaction.atomic():
+            for version in versions:
+                version.filler_terms.remove(term)
+                plugin = version.plugins.filter(code='filler_removal').first()
+                if plugin:
+                    plugin.configuration = {
+                        **(plugin.configuration or {}),
+                        'filler_words': list(version.filler_terms.values_list('text', flat=True)),
+                    }
+                    plugin.save(update_fields=['configuration', 'update_at'])
+            term.delete()
+        messages.success(request, f'Vício de fala "{name}" removido.')
         return self._redirect_back(request)
 
 
