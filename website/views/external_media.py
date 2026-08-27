@@ -15,6 +15,7 @@ from safedelete.models import HARD_DELETE
 
 from ..external_media.tasks import (
     analyze_video_mastering,
+    create_project_preview,
     export_premiere_project,
     master_video,
     prepare_external_media,
@@ -29,6 +30,7 @@ from ..forms.external_media import (
     ExternalMediaProjectSettingsForm,
     GlossaryTermForm,
     ProjectBlockMediaForm,
+    ProjectCustomBlockForm,
     VideoMasteringProfileForm,
     VideoMasteringUploadForm,
 )
@@ -41,6 +43,7 @@ from ..models.external_media import (
     MediaTemplateBlock,
     ProjectPipelineStep,
     ProjectBlockMedia,
+    ProjectCustomBlock,
     SubtitleCue,
     VideoMasteringJob,
 )
@@ -342,7 +345,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 'template_version__subtitle_style', 'render_job',
             ).prefetch_related(
                 'template_version__blocks', 'template_version__plugins',
-                'block_media', 'pipeline_steps', 'render_job__assets', 'processing_history__assets',
+                'block_media', 'custom_blocks', 'pipeline_steps', 'render_job__assets', 'processing_history__assets',
             ),
             public_id=public_id,
         )
@@ -361,25 +364,45 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
         missing_media_by_block = {}
         for item in project.block_media.all():
             if ProjectService.file_exists(item.file):
-                media_by_block.setdefault(item.block_id, []).append(item)
+                media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
             else:
-                missing_media_by_block.setdefault(item.block_id, []).append(item)
+                missing_media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
         blocks = [
             {
                 'definition': block,
-                'media': media_by_block.get(block.pk, []),
-                'missing_media': missing_media_by_block.get(block.pk, []),
+                'media': media_by_block.get(('template', block.pk), []),
+                'missing_media': missing_media_by_block.get(('template', block.pk), []),
                 'has_default_video': ProjectService.file_exists(block.default_video),
                 'has_missing_default_video': bool(block.default_video and block.default_video.name),
+                'is_custom': False,
             }
             for block in project.template_version.blocks.all()
         ]
+        blocks.extend({
+            'definition': block,
+            'media': media_by_block.get(('custom', block.pk), []),
+            'missing_media': missing_media_by_block.get(('custom', block.pk), []),
+            'has_default_video': False,
+            'has_missing_default_video': False,
+            'is_custom': True,
+        } for block in project.custom_blocks.all())
+        block_by_key = {
+            f"{'c' if item['is_custom'] else 't'}-{item['definition'].pk}": item
+            for item in blocks
+        }
+        ordered_blocks = []
+        for key in (project.configuration or {}).get('block_order', []):
+            item = block_by_key.pop(key, None)
+            if item:
+                ordered_blocks.append(item)
+        blocks = ordered_blocks + list(block_by_key.values())
         return render(request, 'member/external_media/project_detail.html', self.media_context(
             project=project,
             blocks=blocks,
             plugins=project.template_version.plugins.all(),
             steps=project.pipeline_steps.all(),
             upload_form=ProjectBlockMediaForm(),
+            custom_block_form=ProjectCustomBlockForm(),
             settings_form=ExternalMediaProjectSettingsForm(project=project),
             assets=project.render_job.assets.all() if project.render_job_id else [],
             validation_errors=ProjectService.validate_uploads(project),
@@ -560,25 +583,29 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
 
 
 class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
+    @staticmethod
+    def _error_response(request, public_id, detail):
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'detail': detail}, status=400)
+        messages.error(request, detail)
+        return redirect('external_media_project_detail', public_id=public_id)
+
     def post(self, request, public_id, block_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         if project.status != ExternalMediaProject.Status.DRAFT:
-            messages.error(request, 'Os uploads ficam bloqueados após iniciar o pipeline.')
-            return redirect('external_media_project_detail', public_id=public_id)
+            return self._error_response(request, public_id, 'Os uploads ficam bloqueados após iniciar o pipeline.')
         block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version)
         form = ProjectBlockMediaForm(request.POST, request.FILES)
         if not form.is_valid():
-            messages.error(request, 'Não foi possível enviar o vídeo: ' + ' '.join(
+            return self._error_response(request, public_id, 'Não foi possível enviar o vídeo: ' + ' '.join(
                 error for errors in form.errors.values() for error in errors
             ))
-            return redirect('external_media_project_detail', public_id=public_id)
         count = sum(
             1 for existing in project.block_media.filter(block=block)
             if ProjectService.file_exists(existing.file)
         )
         if block.max_occurrences > 0 and count >= block.max_occurrences:
-            messages.error(request, f'O bloco {block.name} aceita no máximo {block.max_occurrences} vídeo(s).')
-            return redirect('external_media_project_detail', public_id=public_id)
+            return self._error_response(request, public_id, f'O bloco {block.name} aceita no máximo {block.max_occurrences} vídeo(s).')
         item = form.save(commit=False)
         item.project = project
         item.block = block
@@ -590,7 +617,17 @@ class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
         item.file_size = item.file.size
         item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_start_seconds')) or 0
         item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_end_seconds'))
+        item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
         item.save()
+        create_project_preview.delay(item.pk)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'id': item.pk,
+                'name': item.original_filename,
+                'size': item.file_size,
+                'status_url': reverse('external_media_project_media_status', args=[project.public_id, item.pk]),
+                'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, item.pk]),
+            })
         messages.success(request, f'Vídeo adicionado ao bloco {block.name}.')
         return redirect('external_media_project_detail', public_id=public_id)
 
@@ -608,6 +645,68 @@ class ExternalMediaProjectSettingsView(ExternalMediaRequiredMixin, View):
             messages.success(request, 'Configurações do projeto atualizadas.')
         else:
             messages.error(request, 'Não foi possível atualizar as configurações.')
+        return redirect('external_media_project_detail', public_id=public_id)
+
+
+class ExternalMediaProjectCustomBlockView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, block_id=None):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
+        instance = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project) if block_id else None
+        form = ProjectCustomBlockForm(request.POST, instance=instance)
+        if form.is_valid():
+            custom_block = form.save(commit=False)
+            custom_block.project = project
+            if not custom_block.pk:
+                custom_block.position = (project.custom_blocks.aggregate(value=Max('position'))['value'] or 0) + 1
+            custom_block.save()
+            messages.success(request, 'Bloco personalizado salvo.')
+        else:
+            messages.error(request, 'Informe um nome para o bloco personalizado.')
+        return redirect('external_media_project_detail', public_id=public_id)
+
+
+class ExternalMediaProjectCustomBlockDeleteView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, block_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
+        get_object_or_404(ProjectCustomBlock, pk=block_id, project=project).delete()
+        messages.success(request, 'Bloco personalizado removido.')
+        return redirect('external_media_project_detail', public_id=public_id)
+
+
+class ExternalMediaProjectCustomBlockReorderView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
+        item_ids = request.POST.getlist('item_ids[]')
+        template_ids = {f't-{pk}' for pk in project.template_version.blocks.values_list('pk', flat=True)}
+        custom_ids = {f'c-{pk}' for pk in project.custom_blocks.values_list('pk', flat=True)}
+        expected = template_ids | custom_ids
+        if set(item_ids) != expected or len(item_ids) != len(expected):
+            return JsonResponse({'detail': 'Ordem de blocos inválida.'}, status=400)
+        configuration = dict(project.configuration or {})
+        configuration['block_order'] = item_ids
+        project.configuration = configuration
+        project.save(update_fields=['configuration', 'update_at'])
+        return JsonResponse({'ok': True})
+
+
+class ExternalMediaProjectCustomBlockUploadView(ExternalMediaProjectUploadView):
+    def post(self, request, public_id, block_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
+        block = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project)
+        form = ProjectBlockMediaForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return self._error_response(request, public_id, 'Não foi possível enviar o vídeo: ' + ' '.join(error for errors in form.errors.values() for error in errors))
+        item = form.save(commit=False)
+        item.project = project
+        item.custom_block = block
+        item.position = (ProjectBlockMedia.objects.filter(project=project, custom_block=block).aggregate(value=Max('position'))['value'] or 0) + 1
+        item.original_filename = item.file.name
+        item.file_size = item.file.size
+        item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
+        item.save()
+        create_project_preview.delay(item.pk)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'id': item.pk, 'name': item.original_filename, 'size': item.file_size, 'status_url': reverse('external_media_project_media_status', args=[project.public_id, item.pk]), 'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, item.pk])})
         return redirect('external_media_project_detail', public_id=public_id)
 
 
@@ -630,7 +729,45 @@ class ExternalMediaProjectMediaPreviewView(ExternalMediaRequiredMixin, View):
             raise Http404('O vídeo não está mais disponível.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
-        return protected_file_response(request, item.file)
+        preview = item.preview_file if item.preview_status == ProjectBlockMedia.PreviewStatus.READY else item.file
+        return protected_file_response(request, preview)
+
+
+class ExternalMediaProjectMediaStatusView(ExternalMediaRequiredMixin, View):
+    def get(self, request, public_id, media_id):
+        item = get_object_or_404(ProjectBlockMedia, pk=media_id, project__public_id=public_id)
+        return JsonResponse({
+            'status': item.preview_status,
+            'error': item.preview_error,
+            'name': item.original_filename,
+            'preview_url': reverse('external_media_project_media_preview', args=[public_id, item.pk]),
+            'trim_url': reverse('external_media_project_media_trim', args=[public_id, item.pk]),
+            'trim_start_ms': item.trim_start_ms,
+            'trim_end_ms': item.trim_end_ms,
+        })
+
+
+class ExternalMediaProjectMediaTrimView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, media_id):
+        item = get_object_or_404(
+            ProjectBlockMedia,
+            pk=media_id,
+            project__public_id=public_id,
+            project__status=ExternalMediaProject.Status.DRAFT,
+        )
+        try:
+            start = float(request.POST.get('trim_start_seconds') or 0)
+            end_value = request.POST.get('trim_end_seconds')
+            end = float(end_value) if end_value else None
+        except (TypeError, ValueError):
+            return JsonResponse({'detail': 'Informe tempos de corte válidos.'}, status=400)
+        if start < 0 or (end is not None and (end < 0 or end <= start)):
+            return JsonResponse({'detail': 'O fim do corte precisa ser maior que o início.'}, status=400)
+
+        item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(start) or 0
+        item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(end)
+        item.save(update_fields=['trim_start_ms', 'trim_end_ms', 'update_at'])
+        return JsonResponse({'ok': True})
 
 
 class ExternalMediaProjectMediaReorderView(ExternalMediaRequiredMixin, View):

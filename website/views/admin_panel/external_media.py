@@ -2,7 +2,7 @@ import json
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
 from django.http import Http404
@@ -21,10 +21,12 @@ from ...forms.admin_external_media import (
     AdminSpeechFillerTermForm,
     AdminSubtitleStyleForm,
 )
+from ...forms.external_media import GlossaryTermForm
 from ...models.external_media import (
     BackgroundMusicTrack,
     ExternalMediaJob,
     ExternalMediaProject,
+    GlossaryTerm,
     MasteringProfile,
     MediaTemplate,
     MediaTemplateVersion,
@@ -32,6 +34,7 @@ from ...models.external_media import (
     SpeechFillerTerm,
     SubtitleStyle,
 )
+from safedelete.models import HARD_DELETE
 from ..mixins import AdminRequiredMixin
 
 
@@ -59,6 +62,63 @@ class AdminExternalMediaTemplateListView(LoginRequiredMixin, AdminRequiredMixin,
             'search': search,
             'status': status,
         })
+
+
+class AdminExternalMediaGlossaryView(LoginRequiredMixin, AdminRequiredMixin, View):
+    template_name = 'admin_panel/external_media/glossary.html'
+
+    def get(self, request):
+        return self._render(request, GlossaryTermForm())
+
+    def post(self, request):
+        form = GlossaryTermForm(request.POST)
+        if form.is_valid():
+            # Allow a term deleted by an earlier version of the app to be recreated.
+            GlossaryTerm.all_objects.filter(
+                source_language=form.cleaned_data['source_language'],
+                target_language=form.cleaned_data['target_language'],
+                source_text=form.cleaned_data['source_text'],
+                deleted__isnull=False,
+            ).delete(force_policy=HARD_DELETE)
+            try:
+                form.save()
+            except IntegrityError:
+                form.add_error(
+                    'source_text',
+                    'Este termo já existe para este par de idiomas. Edite ou remova o termo existente.',
+                )
+            else:
+                messages.success(request, 'Termo adicionado ao glossário.')
+                return redirect('admin_external_media_glossary')
+        return self._render(request, form)
+
+    def _render(self, request, form, editing_term=None):
+        return render(request, self.template_name, {
+            'form': form,
+            'editing_term': editing_term,
+            'terms': GlossaryTerm.objects.filter(is_active=True).order_by(
+                'source_language', 'target_language', 'source_text',
+            ),
+        })
+
+
+class AdminExternalMediaGlossaryUpdateView(LoginRequiredMixin, AdminRequiredMixin, View):
+    def post(self, request, term_id):
+        term = get_object_or_404(GlossaryTerm, pk=term_id)
+        form = GlossaryTermForm(request.POST, instance=term)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Termo do glossário atualizado.')
+            return redirect('admin_external_media_glossary')
+        return AdminExternalMediaGlossaryView()._render(request, form, editing_term=term)
+
+
+class AdminExternalMediaGlossaryDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
+    def post(self, request, term_id):
+        term = get_object_or_404(GlossaryTerm, pk=term_id)
+        term.delete(force_policy=HARD_DELETE)
+        messages.success(request, 'Termo removido do glossário.')
+        return redirect('admin_external_media_glossary')
 
 
 class AdminExternalMediaTemplateDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):

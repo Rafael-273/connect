@@ -101,10 +101,22 @@
                 <span class="mt-1">Música</span>
             </a>
 
-            <a href="{% url 'admin_external_media_templates' %}" class="sidebar-item {% if 'external_media' in request.resolver_match.url_name %}active{% endif %}">
-                <ion-icon name="videocam-outline"></ion-icon>
-                <span class="mt-1">Mídia Externa</span>
-            </a>
+            <div class="sidebar-group">
+                <div class="sidebar-item-group {% if 'admin_external_media' in request.resolver_match.url_name %}active{% endif %}"
+                     onclick="toggleSubmenu('external-media-submenu')" style="cursor: pointer;">
+                    <div class="sidebar-item-group-main">
+                        <ion-icon name="videocam-outline"></ion-icon>
+                        <span class="mt-1">Mídia Externa</span>
+                    </div>
+                    <ion-icon name="chevron-down-outline" class="submenu-arrow"></ion-icon>
+                </div>
+                <div id="external-media-submenu" class="submenu {% if 'admin_external_media' in request.resolver_match.url_name %}active{% endif %}">
+                    <a href="{% url 'admin_external_media_templates' %}" class="submenu-item {% if 'admin_external_media' in request.resolver_match.url_name %}active{% endif %}">
+                        <ion-icon name="create-outline"></ion-icon>
+                        <span class="mt-1">Edição</span>
+                    </a>
+                </div>
+            </div>
 
             <a href="{% url 'admin_house_of_peace_list' %}" class="sidebar-item {% if 'house_of_peace' in request.resolver_match.url_name %}active{% endif %}">
                 <ion-icon name="home-outline"></ion-icon>
@@ -300,10 +312,22 @@
             <span class="mt-1">Música</span>
         </a>
 
-        <a href="{% url 'admin_external_media_templates' %}" class="sidebar-item {% if 'external_media' in request.resolver_match.url_name %}active{% endif %}">
-            <ion-icon name="videocam-outline"></ion-icon>
-            <span class="mt-1">Mídia Externa</span>
-        </a>
+        <div class="sidebar-group">
+            <div class="sidebar-item-group {% if 'admin_external_media' in request.resolver_match.url_name %}active{% endif %}"
+                 onclick="toggleSubmenu('mobile-external-media-submenu')" style="cursor: pointer;">
+                <div class="sidebar-item-group-main">
+                    <ion-icon name="videocam-outline"></ion-icon>
+                    <span class="mt-1">Mídia Externa</span>
+                </div>
+                <ion-icon name="chevron-down-outline" class="submenu-arrow"></ion-icon>
+            </div>
+            <div id="mobile-external-media-submenu" class="submenu {% if 'admin_external_media' in request.resolver_match.url_name %}active{% endif %}">
+                <a href="{% url 'admin_external_media_templates' %}" class="submenu-item {% if 'admin_external_media' in request.resolver_match.url_name %}active{% endif %}">
+                    <ion-icon name="create-outline"></ion-icon>
+                    <span class="mt-1">Edição</span>
+                </a>
+            </div>
+        </div>
 
         <a href="{% url 'admin_house_of_peace_list' %}" class="sidebar-item {% if 'house_of_peace' in request.resolver_match.url_name %}active{% endif %}">
             <ion-icon name="home-outline"></ion-icon>

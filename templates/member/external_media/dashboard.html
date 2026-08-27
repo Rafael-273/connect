@@ -22,8 +22,8 @@
     .media-project-card {
         background: #fff;
         border-radius: 1rem;
-        border: 1px solid rgba(201, 9, 5, 0.12);
-        box-shadow: 0 1px 3px rgba(38, 2, 0, 0.04);
+        border: 1px solid #e9edf3;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
         overflow: hidden;
         transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
@@ -37,8 +37,8 @@
         align-items: center;
         gap: 0.875rem;
         padding: 1rem 1.125rem;
-        border-bottom: 1px solid rgba(201, 9, 5, 0.08);
-        background: rgba(201, 9, 5, 0.04);
+        border-bottom: 1px solid #eef1f5;
+        background: linear-gradient(90deg, #fff9f9 0%, #fff 58%);
     }
 
     .media-project-avatar {
@@ -57,18 +57,23 @@
     }
 
     .media-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .38rem;
         flex-shrink: 0;
-        padding: 0.25rem 0.625rem;
+        padding: .34rem .62rem;
         border-radius: 9999px;
-        font-size: 0.65rem;
-        font-weight: 700;
-        letter-spacing: 0.02em;
+        border: 1px solid transparent;
+        font-size: .7rem;
+        font-weight: 800;
+        letter-spacing: .01em;
         white-space: nowrap;
     }
-    .media-status-badge.is-finished { background: #dcfce7; color: #15803d; }
-    .media-status-badge.is-error { background: #fee2e2; color: #b91c1c; }
-    .media-status-badge.is-cancelled { background: #f3f4f6; color: #4b5563; }
-    .media-status-badge.is-processing { background: #fef3c7; color: #b45309; }
+    .media-status-badge::before { content: ''; width: .42rem; height: .42rem; border-radius: 9999px; background: currentColor; }
+    .media-status-badge.is-finished { background: #ecfdf3; border-color: #bbf7d0; color: #15803d; }
+    .media-status-badge.is-error { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
+    .media-status-badge.is-cancelled { background: #f8fafc; border-color: #e2e8f0; color: #64748b; }
+    .media-status-badge.is-processing { background: #fffbeb; border-color: #fde68a; color: #b45309; }
 
     .media-project-actions {
         display: flex;
@@ -142,7 +147,7 @@
     .media-confirm-delete { background: #C90905; color: #fff; }
     .media-confirm-delete:hover { background: #a60704; }
 
-    .media-project-card-body { padding: 1rem 1.125rem 1.125rem; }
+    .media-project-card-body { padding: .875rem 1.125rem 1rem; }
 
     .media-info-grid {
         display: grid;
@@ -157,6 +162,9 @@
         display: flex;
         align-items: flex-start;
         gap: 0.5rem;
+        padding: .55rem .65rem;
+        border-radius: .7rem;
+        background: #f8fafc;
         font-size: 0.8125rem;
         color: #374151;
         line-height: 1.45;
@@ -170,44 +178,54 @@
         opacity: 0.85;
     }
 
-    .media-open-btn {
+    .media-project-footer {
         display: flex;
         align-items: center;
-        gap: 0.75rem;
-        width: 100%;
-        margin-top: 1rem;
-        padding: 0.75rem 1rem;
+        justify-content: flex-end;
+        margin-top: .875rem;
+        padding-top: .875rem;
+        border-top: 1px solid #eef1f5;
+    }
+    .media-open-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .55rem;
+        padding: .55rem .85rem;
         border-radius: 0.75rem;
-        border: 1.5px solid rgba(201, 9, 5, 0.18);
-        background: #fff;
-        color: #260200;
+        border: 1px solid #C90905;
+        background: #C90905;
+        color: #fff;
         font-size: 0.875rem;
-        font-weight: 600;
+        font-weight: 700;
         text-decoration: none;
         transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
     }
     .media-open-btn:hover {
-        background: rgba(201, 9, 5, 0.04);
-        border-color: rgba(201, 9, 5, 0.35);
+        background: #ab0704;
+        border-color: #ab0704;
         transform: translateY(-1px);
     }
     .media-open-btn-icon {
         flex-shrink: 0;
-        width: 2.25rem;
-        height: 2.25rem;
-        border-radius: 0.625rem;
+        width: 1.65rem;
+        height: 1.65rem;
+        border-radius: .45rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #C90905;
+        background: rgba(255, 255, 255, .18);
         color: #fff;
-        font-size: 1rem;
+        font-size: .75rem;
     }
     .media-open-btn-arrow {
         margin-left: auto;
-        color: #C90905;
-        opacity: 0.5;
+        color: #fff;
+        opacity: .8;
         font-size: 0.75rem;
+    }
+    @media (max-width: 479px) {
+        .media-project-footer { display: block; }
+        .media-open-btn { width: 100%; justify-content: center; }
     }
 
     .media-legacy-section {
@@ -238,7 +256,6 @@
    title="Novo projeto">
     <i class="fas fa-plus"></i>
 </a>
-<a href="{% url 'external_media_glossary' %}" class="media-btn media-muted"><i class="fas fa-book"></i>Glossário</a>
 {% endblock %}
 
 {% block media_content %}
@@ -336,6 +353,12 @@
                         <a href="{% url 'external_media_project_edit' project.public_id %}" class="media-project-action" title="Editar projeto" aria-label="Editar projeto {{ project.name }}">
                             <i class="fas fa-pen"></i>
                         </a>
+                        <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">
+                            {% csrf_token %}
+                            <button class="media-project-action" title="Clonar projeto" aria-label="Clonar projeto {{ project.name }}">
+                                <i class="fas fa-clone"></i>
+                            </button>
+                        </form>
                         <button type="button" class="media-project-action is-danger" data-delete-project data-project-name="{{ project.name }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}" title="{% if project.status == 'PENDING' or project.status == 'ASSEMBLING' or project.status == 'PROCESSING' or project.status == 'AWAITING_REVIEW' %}Aguarde o processamento terminar{% else %}Excluir projeto{% endif %}" aria-label="Excluir projeto {{ project.name }}" {% if project.status == 'PENDING' or project.status == 'ASSEMBLING' or project.status == 'PROCESSING' or project.status == 'AWAITING_REVIEW' %}disabled{% endif %}>
                             <i class="fas fa-trash"></i>
                         </button>
@@ -346,29 +369,31 @@
                     <div class="media-info-grid">
                         <div class="media-info-item">
                             <i class="fas fa-user"></i>
-                            <span>{{ project.created_by.name }}</span>
+                            <span class="mt-1">{{ project.created_by.name }}</span>
                         </div>
                         <div class="media-info-item">
                             <i class="far fa-calendar-alt"></i>
-                            <span>{{ project.created_at|date:'d/m/Y H:i' }}</span>
+                            <span class="mt-1">{{ project.created_at|date:'d/m/Y H:i' }}</span>
                         </div>
                         <div class="media-info-item">
                             <i class="fas fa-stopwatch"></i>
-                            <span>{% if project.duration_minutes != None %}{{ project.duration_minutes }} min de processamento{% else %}Tempo indisponível{% endif %}</span>
+                            <span class="mt-1">{% if project.duration_minutes != None %}{{ project.duration_minutes }} min de processamento{% else %}Tempo indisponível{% endif %}</span>
                         </div>
                         <div class="media-info-item">
                             <i class="fas fa-download"></i>
                             {% with downloads=project.render_job.download_count|default:0 %}
-                            <span>{{ downloads }} download{{ downloads|pluralize }}</span>
+                            <span class="mt-1">{{ downloads }} download{{ downloads|pluralize }}</span>
                             {% endwith %}
                         </div>
                     </div>
 
-                    <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-open-btn">
-                        <span class="media-open-btn-icon"><i class="fas fa-play"></i></span>
-                        <span class="mt-2">Abrir projeto</span>
-                        <i class="fas fa-arrow-right media-open-btn-arrow mr-1"></i>
-                    </a>
+                    <div class="media-project-footer">
+                        <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-open-btn">
+                            <span class="media-open-btn-icon"><i class="fas fa-play"></i></span>
+                            <span>Abrir projeto</span>
+                            <i class="fas fa-arrow-right media-open-btn-arrow"></i>
+                        </a>
+                    </div>
                 </div>
             </article>
             {% endfor %}

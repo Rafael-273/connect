@@ -53,6 +53,11 @@ def external_media_project_upload_path(instance, filename):
     )
 
 
+def external_media_project_preview_path(instance, filename):
+    block_ref = getattr(instance, 'block_id', None) or getattr(instance.block, 'pk', 'block')
+    return f'external_media/projects/{instance.project.public_id}/b{block_ref}/previews/{instance.position:03d}.mp4'
+
+
 def default_output_languages():
     return ['pt', 'en']
 
@@ -286,7 +291,6 @@ class GlossaryTerm(BaseModel):
     target_language = models.CharField(max_length=10, choices=ExternalMediaJob.LANGUAGE_CHOICES, default='en')
     source_text = models.CharField(max_length=255)
     translated_text = models.CharField(max_length=255)
-    notes = models.CharField(max_length=255, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -777,9 +781,38 @@ class ExternalMediaProject(BaseModel):
         return (seconds + 59) // 60
 
 
+class ProjectCustomBlock(BaseModel):
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='custom_blocks')
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    position = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ['position', 'pk']
+        constraints = [models.UniqueConstraint(fields=['project', 'position'], name='unique_project_custom_block_position')]
+
+    @property
+    def is_required(self):
+        return False
+
+    @property
+    def max_occurrences(self):
+        return 0
+
+    @property
+    def default_video(self):
+        return None
+
+
 class ProjectBlockMedia(BaseModel):
+    class PreviewStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Preparando preview'
+        READY = 'READY', 'Preview pronto'
+        ERROR = 'ERROR', 'Falha no preview'
+
     project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='block_media')
-    block = models.ForeignKey(MediaTemplateBlock, on_delete=models.PROTECT, related_name='project_media')
+    block = models.ForeignKey(MediaTemplateBlock, on_delete=models.PROTECT, related_name='project_media', null=True, blank=True)
+    custom_block = models.ForeignKey(ProjectCustomBlock, on_delete=models.CASCADE, related_name='media', null=True, blank=True)
     file = models.FileField(
         upload_to=external_media_project_upload_path, storage=get_external_media_storage, max_length=255,
     )
@@ -795,6 +828,9 @@ class ProjectBlockMedia(BaseModel):
         blank=True,
         max_length=255,
     )
+    preview_file = models.FileField(upload_to=external_media_project_preview_path, storage=get_external_media_storage, blank=True, max_length=255)
+    preview_status = models.CharField(max_length=16, choices=PreviewStatus.choices, default=PreviewStatus.PENDING)
+    preview_error = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ['block__order', 'position', 'pk']
@@ -807,7 +843,7 @@ class ProjectBlockMedia(BaseModel):
         verbose_name_plural = 'Vídeos dos blocos'
 
     def __str__(self):
-        return f'{self.project}: {self.block.name} #{self.position}'
+        return f'{self.project}: {(self.block or self.custom_block).name} #{self.position}'
 
 
 class ProjectPipelineStep(BaseModel):

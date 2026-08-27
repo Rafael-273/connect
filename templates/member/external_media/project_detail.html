@@ -1,23 +1,42 @@
 {% extends 'member/external_media/base.html' %}
 
-{% block media_content %}
-<div class="mb-7 flex flex-wrap items-start justify-between gap-4">
-    <div>
-        <a href="{% url 'external_media_dashboard' %}" class="text-sm text-gray-500 hover:underline">← Projetos</a>
-        <h1 class="text-3xl font-black mt-2">{{ project.name }}</h1>
-        <p class="text-gray-500">{{ project.template_version.template.name }} · {{ project.created_by.name }}</p>
-    </div>
-    <div class="flex flex-wrap gap-2">
-        {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
-        <form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">
-            {% csrf_token %}
-            <button class="media-btn media-secondary"><i class="fas fa-film"></i>Editar vídeos</button>
-        </form>
-        {% endif %}
-        <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">{% csrf_token %}<button class="media-btn media-muted"><i class="fas fa-copy"></i>Duplicar</button></form>
-    </div>
-</div>
+{% block media_header_title %}
+<a href="{% url 'external_media_dashboard' %}" class="block">
+    <strong class="block text-gray-900 text-lg truncate">{{ project.name }}</strong>
+    <small class="text-gray-500"><i class="fas fa-layer-group mr-1" style="color:#C90905"></i>{{ project.template_version.template.name }}</small>
+</a>
+{% endblock %}
 
+{% block media_header_actions %}
+{% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
+<form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">
+    {% csrf_token %}
+    <button class="media-btn media-secondary"><i class="fas fa-film"></i>Editar vídeos</button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block head %}
+{{ block.super }}
+<style>
+    .media-shell { padding-bottom: 1rem; }
+    .project-media-block { overflow:hidden; border-color:#e8edf3; box-shadow:0 5px 18px rgba(15,23,42,.045); }
+    .project-media-block__header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.15rem; border-bottom:1px solid #eef1f5; background:linear-gradient(90deg, #fffafa 0%, #fff 72%); }
+    .project-media-block__identity { display:flex; align-items:center; gap:.75rem; min-width:0; }
+    .project-media-block__number { display:inline-flex; align-items:center; justify-content:center; width:2rem; height:2rem; flex:none; border-radius:.7rem; background:#fff1f2; color:#C90905; font-size:.78rem; font-weight:900; }
+    .project-media-block__body { padding:1rem 1.15rem 1.15rem; }
+    .project-media-block__required { color:#C90905; background:#fff1f2; border-radius:999px; padding:.22rem .5rem; font-size:.68rem; font-weight:800; }
+    .project-media-block__optional { color:#64748b; background:#f1f5f9; border-radius:999px; padding:.22rem .5rem; font-size:.68rem; font-weight:800; }
+    .project-media-default { display:flex; align-items:center; gap:.65rem; padding:.8rem .9rem; border:1px solid #fecaca; border-radius:.85rem; background:#fff7f7; color:#9f1239; font-size:.875rem; font-weight:700; }
+    .project-media-action { width:2rem; height:2rem; display:inline-flex; align-items:center; justify-content:center; border:1px solid #e2e8f0; border-radius:.6rem; background:#fff; color:#64748b; }
+    .project-media-action:hover { color:#C90905; border-color:#fecaca; background:#fff7f7; }
+    .project-media-action.is-danger:hover { color:#dc2626; background:#fff1f2; }
+</style>
+{% endblock %}
+
+{% block media_bottom_nav %}{% endblock %}
+
+{% block media_content %}
 {% if project.status != 'DRAFT' %}
 <section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}">
     <div class="flex justify-between gap-4 mb-3"><div><p class="font-black" id="status-label">{{ project.get_status_display }}</p><p class="text-sm text-gray-500" id="current-step">{{ project.current_step }}</p></div><strong id="progress-value">{{ project.progress }}%</strong></div>
@@ -91,53 +110,65 @@
     </form>
 </section>
 {% endif %}
-<div class="mb-7">
-    <h2 class="text-xl font-black mb-1">Vídeos do projeto</h2>
-    <p class="text-gray-500">Envie o conteúdo de cada bloco. A ordem já está definida pelo template.</p>
-</div>
-<div class="space-y-4 mb-7">
+<div class="space-y-4 mb-7" data-custom-block-list data-custom-block-reorder-url="{% url 'external_media_project_custom_block_reorder' project.public_id %}">
 {% for item in blocks %}
-    <section class="media-card p-5">
-        <div class="flex flex-wrap justify-between gap-3 mb-4">
-            <div><div class="flex items-center gap-2"><span class="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-black">{{ forloop.counter }}</span><h3 class="font-black text-lg">{{ item.definition.name }}</h3>{% if item.definition.is_required %}<span class="text-xs font-bold text-red-700">Obrigatório</span>{% else %}<span class="text-xs text-gray-500">Opcional</span>{% endif %}</div>{% if item.definition.description %}<p class="text-sm text-gray-500 mt-1 ml-9">{{ item.definition.description }}</p>{% endif %}</div>
+    <section class="media-card project-media-block" data-project-block-id="{% if item.is_custom %}c-{{ item.definition.pk }}{% else %}t-{{ item.definition.pk }}{% endif %}" {% if item.is_custom %}data-custom-block{% endif %}>
+        <div class="project-media-block__header">
+            <div class="project-media-block__identity">{% if item.is_custom %}<button type="button" draggable="true" class="project-media-action cursor-grab active:cursor-grabbing" data-custom-block-drag-handle title="Arraste para mudar a posição"><i class="fas fa-grip-vertical"></i></button>{% endif %}<span class="project-media-block__number">{{ forloop.counter }}</span><div class="min-w-0"><h3 class="font-black text-base sm:text-lg truncate">{{ item.definition.name }}</h3>{% if item.definition.description %}<p class="text-sm text-gray-500 mt-0.5 truncate">{{ item.definition.description }}</p>{% endif %}</div></div>
+            <div class="flex items-center gap-2">{% if item.definition.is_required %}<span class="project-media-block__required">Obrigatório</span>{% else %}<span class="project-media-block__optional">{% if item.is_custom %}Personalizado{% else %}Opcional{% endif %}</span>{% endif %}{% if item.is_custom %}<button type="button" class="project-media-action" data-custom-block-edit data-name="{{ item.definition.name }}" data-description="{{ item.definition.description }}" data-url="{% url 'external_media_project_custom_block_edit' project.public_id item.definition.pk %}" title="Editar bloco"><i class="fas fa-pen"></i></button><button type="button" class="project-media-action is-danger" data-custom-block-delete data-name="{{ item.definition.name }}" data-url="{% url 'external_media_project_custom_block_delete' project.public_id item.definition.pk %}" title="Excluir bloco"><i class="fas fa-trash"></i></button>{% endif %}</div>
         </div>
+        <div class="project-media-block__body">
         {% if item.media %}
         <div class="space-y-2 mb-3" data-media-sortable data-reorder-url="{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}">
         {% for media in item.media %}
-        <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 media-sort-item" draggable="true" data-media-id="{{ media.pk }}">
+        <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 media-sort-item" draggable="{% if media.preview_status == 'READY' %}true{% else %}false{% endif %}" data-media-id="{{ media.pk }}">
             <div class="flex items-center min-w-0 gap-3">
-                <button type="button" class="text-gray-400 cursor-grab active:cursor-grabbing p-1" title="Arraste para mudar a ordem"><i class="fas fa-grip-vertical"></i></button>
+                <button type="button" class="text-gray-400 cursor-grab active:cursor-grabbing p-1 {% if media.preview_status != 'READY' %}invisible{% endif %}" title="Arraste para mudar a ordem"><i class="fas fa-grip-vertical"></i></button>
                 <div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
-                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button>
+                {% if media.preview_status == 'READY' %}
+                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button>
+                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">{% if media.trim_start_ms or media.trim_end_ms %}Editar corte{% else %}Cortar{% endif %}</span></button>
+                {% elif media.preview_status == 'ERROR' %}
+                <span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>
+                {% else %}
+                <span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>
+                {% endif %}
                 <form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form>
             </div>
         </div>
         {% endfor %}
         </div>
+        {% if item.media|length > 1 %}
         <p class="text-xs text-gray-500 mb-3"><i class="fas fa-grip-vertical mr-1"></i>Arraste os vídeos para definir a ordem deste bloco.</p>
+        {% endif %}
         {% else %}
             {% if item.has_default_video %}
-                <p class="rounded-xl bg-green-50 text-green-800 p-3 text-sm mb-3"><i class="fas fa-circle-check mr-2"></i>Usará o vídeo padrão do template.</p>
+                <p class="project-media-default mb-3"><i class="fas fa-circle-play"></i>Este bloco usará o vídeo já definido.</p>
             {% elif item.has_missing_default_video %}
                 <p class="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-3 text-sm mb-3"><i class="fas fa-triangle-exclamation mr-2"></i>Este bloco possui um vídeo padrão configurado, mas o arquivo não está disponível no armazenamento. Reenvie-o no admin-panel para utilizá-lo automaticamente.</p>
             {% else %}
-                <p class="text-sm text-gray-400 mb-3">Nenhum upload.</p>
+                <p class="text-sm text-gray-400 mb-3" data-no-upload>Nenhum upload.</p>
             {% endif %}
         {% endif %}
         {% for media in item.missing_media %}
         <div class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 mb-2"><div class="min-w-0"><strong class="block text-amber-900">Arquivo não disponível</strong><span class="text-xs text-amber-800">{{ media.original_filename }} — envie o vídeo novamente.</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover referência antiga"><i class="fas fa-trash"></i></button></form></div>
         {% endfor %}
+        {% if not item.has_default_video %}
         {% if item.definition.max_occurrences == 0 or item.media|length < item.definition.max_occurrences %}
-        <form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_upload' project.public_id item.definition.pk %}" class="media-form media-upload-form space-y-3">
+        <div class="hidden space-y-2 mb-3" data-upload-results></div>
+        <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload' project.public_id item.definition.pk %}{% endif %}" class="media-form media-upload-form space-y-3" {% if not item.is_custom %}data-reorder-url="{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}"{% endif %}>
             {% csrf_token %}
             <div class="flex flex-col sm:flex-row gap-3">
-                <input type="file" name="file" accept="video/*" required class="flex-1" data-trim-file>
-                <button class="media-btn media-secondary"><i class="fas fa-upload"></i>Enviar</button>
+                <input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="flex-1" data-trim-file>
+                <span class="hidden media-btn media-muted" data-upload-status><i class="fas fa-upload"></i><span data-upload-status-label>Enviando 0%</span></span>
             </div>
             <input type="hidden" name="trim_start_seconds" value="" data-trim-start-hidden>
             <input type="hidden" name="trim_end_seconds" value="" data-trim-end-hidden>
+            <p class="hidden rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900" data-trim-preview-error>
+                <i class="fas fa-circle-info mr-2"></i>O ConnectCut enviará este arquivo e preparará um preview compatível automaticamente.
+            </p>
             <div class="media-trim-panel" data-trim-panel>
                 <div class="flex items-center gap-2 mb-3 text-sm font-black text-red-700"><i class="fas fa-scissors"></i>Cortar antes de enviar</div>
                 <div class="media-trim-player mb-3">
@@ -184,21 +215,127 @@
             </div>
         </form>
         {% endif %}
+        {% endif %}
+        </div>
     </section>
 {% endfor %}
 </div>
 
-<section class="media-card p-5 mb-7">
-    <h2 class="font-black text-lg mb-3">Pipeline do template</h2>
-    <div class="flex flex-wrap gap-2">{% for plugin in plugins %}<span class="px-3 py-2 rounded-xl text-sm {% if plugin.is_enabled %}bg-green-50 text-green-800{% else %}bg-gray-100 text-gray-500{% endif %}"><i class="fas {% if plugin.is_enabled %}fa-check{% else %}fa-minus{% endif %} mr-1"></i>{{ plugin.get_code_display }}</span>{% empty %}<span class="text-gray-500">Somente montagem e renderização.</span>{% endfor %}</div>
-    {% if settings_form.fields %}<form method="post" action="{% url 'external_media_project_settings' project.public_id %}" class="media-form mt-5 pt-5 border-t">{% csrf_token %}<p class="font-bold mb-3">Opções permitidas</p><div class="flex flex-wrap gap-4">{% for field in settings_form %}<label class="flex gap-2 items-center">{{ field }} {{ field.label }}</label>{% endfor %}</div><button class="media-btn media-muted mt-4">Salvar opções</button></form>{% endif %}
-</section>
+<details class="media-card mb-7">
+    <summary class="cursor-pointer list-none p-5 font-black text-gray-800"><i class="fas fa-plus-circle mr-2" style="color:#C90905"></i>Adicionar bloco personalizado</summary>
+    <form method="post" action="{% url 'external_media_project_custom_block_create' project.public_id %}" class="grid gap-3 border-t p-5 sm:grid-cols-[1fr_1fr_auto]">{% csrf_token %}{{ custom_block_form.name }}{{ custom_block_form.description }}<button class="media-btn media-primary">Adicionar bloco</button></form>
+</details>
 
 {% if validation_errors %}<div class="rounded-xl bg-amber-50 text-amber-800 p-4 mb-4">{% for error in validation_errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
 <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
 <script>
 (function(){
     const MIN_TRIM_SECONDS = 0.1;
+    function formatFileSize(bytes) {
+        if (!bytes) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+        return `${(bytes / Math.pow(1024, index)).toFixed(index ? 1 : 0)} ${units[index]}`;
+    }
+    function addUploadResult(form, media) {
+        const block = form.parentElement;
+        block.querySelector('[data-no-upload]')?.remove();
+        let results = block.querySelector('[data-media-sortable]');
+        if (!results) {
+            results = document.createElement('div');
+            results.className = 'space-y-2 mb-3';
+            results.dataset.mediaSortable = '';
+            results.dataset.reorderUrl = form.dataset.reorderUrl;
+            block.insertBefore(results, form);
+        }
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 media-sort-item';
+        row.dataset.mediaId = media.id;
+        row.draggable = false;
+        const identity = document.createElement('div');
+        identity.className = 'flex items-center min-w-0 gap-3';
+        const handle = document.createElement('button');
+        handle.type = 'button';
+        handle.className = 'text-gray-400 cursor-grab active:cursor-grabbing p-1 invisible';
+        handle.title = 'Arraste para mudar a ordem';
+        handle.innerHTML = '<i class="fas fa-grip-vertical"></i>';
+        const details = document.createElement('div');
+        details.className = 'min-w-0';
+        const name = document.createElement('strong');
+        name.className = 'block truncate';
+        name.textContent = media.name;
+        const size = document.createElement('span');
+        size.className = 'text-xs text-gray-500';
+        size.textContent = formatFileSize(media.size);
+        details.append(name, size);
+        identity.append(handle, details);
+        const actions = document.createElement('div');
+        actions.className = 'flex items-center gap-1 shrink-0';
+        const status = document.createElement('span');
+        status.className = 'text-xs text-gray-500';
+        status.dataset.previewPending = '';
+        status.dataset.previewStatusUrl = media.status_url;
+        status.dataset.deleteUrl = media.delete_url;
+        status.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview';
+        actions.append(status);
+        row.append(identity, actions);
+        results.append(row);
+    }
+    async function updatePreviewStates() {
+        const pending = document.querySelectorAll('[data-preview-pending][data-preview-status-url]');
+        for (const status of pending) {
+            try {
+                const response = await fetch(status.dataset.previewStatusUrl, {credentials: 'same-origin'});
+                const media = await response.json();
+                if (!response.ok || media.status === 'PENDING') continue;
+                status.removeAttribute('data-preview-pending');
+                if (media.status === 'READY') {
+                    const actions = status.parentElement;
+                    const row = actions.closest('[data-media-id]');
+                    row.draggable = true;
+                    row.querySelector('.invisible')?.classList.remove('invisible');
+                    const previewButton = document.createElement('button');
+                    previewButton.type = 'button';
+                    previewButton.className = 'media-btn media-muted text-sm !px-3 !py-2';
+                    previewButton.dataset.mediaPreview = '';
+                    previewButton.dataset.mediaName = media.name;
+                    previewButton.dataset.mediaUrl = media.preview_url;
+                    previewButton.dataset.mediaPreviewStart = media.trim_start_ms || 0;
+                    previewButton.dataset.mediaPreviewEnd = media.trim_end_ms || '';
+                    previewButton.innerHTML = '<i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span>';
+                    const trimButton = document.createElement('button');
+                    trimButton.type = 'button';
+                    trimButton.className = 'media-btn media-muted text-sm !px-3 !py-2';
+                    trimButton.dataset.mediaTrim = '';
+                    trimButton.dataset.mediaName = media.name;
+                    trimButton.dataset.mediaUrl = media.preview_url;
+                    trimButton.dataset.mediaTrimUrl = media.trim_url;
+                    trimButton.dataset.mediaTrimStart = media.trim_start_ms || 0;
+                    trimButton.dataset.mediaTrimEnd = media.trim_end_ms || '';
+                    trimButton.innerHTML = `<i class="fas fa-scissors"></i><span class="hidden sm:inline">${media.trim_start_ms || media.trim_end_ms ? 'Editar corte' : 'Cortar'}</span>`;
+                    const deleteForm = document.createElement('form');
+                    deleteForm.method = 'post';
+                    deleteForm.action = status.dataset.deleteUrl;
+                    const csrf = document.createElement('input');
+                    csrf.type = 'hidden'; csrf.name = 'csrfmiddlewaretoken';
+                    csrf.value = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+                    const deleteButton = document.createElement('button');
+                    deleteButton.className = 'text-red-600 p-2';
+                    deleteButton.title = 'Remover';
+                    deleteButton.innerHTML = '<i class="fas fa-trash"></i>';
+                    deleteForm.append(csrf, deleteButton);
+                    actions.replaceChildren(previewButton, trimButton, deleteForm);
+                } else {
+                    status.className = 'text-xs text-amber-700';
+                    status.textContent = 'Preview indisponível';
+                }
+            } catch (error) {
+                // Keep the current state and try again on the next interval.
+            }
+        }
+    }
+    updatePreviewStates();
+    window.setInterval(updatePreviewStates, 3000);
     function clamp(value, min, max) {
         value = Number.isFinite(value) ? value : min;
         return Math.min(Math.max(value, min), max);
@@ -220,6 +357,9 @@
     document.querySelectorAll('.media-upload-form').forEach((form) => {
         const fileInput = form.querySelector('[data-trim-file]');
         const panel = form.querySelector('[data-trim-panel]');
+        const previewError = form.querySelector('[data-trim-preview-error]');
+        const uploadStatus = form.querySelector('[data-upload-status]');
+        const uploadStatusLabel = form.querySelector('[data-upload-status-label]');
         const video = form.querySelector('[data-trim-video]');
         const playButton = form.querySelector('[data-trim-play]');
         const currentLabel = form.querySelector('[data-trim-current-label]');
@@ -344,12 +484,68 @@
             const file = fileInput.files && fileInput.files[0];
             if (!file) {
                 panel?.classList.remove('is-visible');
+                previewError?.classList.add('hidden');
                 video.removeAttribute('src');
+                return;
+            }
+            panel?.classList.remove('is-visible');
+            previewError?.classList.add('hidden');
+            // Disabled inputs are omitted from FormData, so capture the file first.
+            const uploadData = new FormData(form);
+            uploadStatus?.classList.remove('hidden');
+            fileInput.disabled = true;
+            const request = new XMLHttpRequest();
+            request.open('POST', form.action);
+            request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            request.upload.addEventListener('progress', (event) => {
+                if (event.lengthComputable && uploadStatusLabel) {
+                    uploadStatusLabel.textContent = `Enviando ${Math.round((event.loaded / event.total) * 100)}%`;
+                }
+            });
+            request.addEventListener('load', () => {
+                if (request.status >= 200 && request.status < 400) {
+                    try {
+                        addUploadResult(form, JSON.parse(request.responseText));
+                        fileInput.value = '';
+                        fileInput.disabled = false;
+                        uploadStatus?.classList.add('hidden');
+                    } catch (error) {
+                        previewError?.classList.remove('hidden');
+                        if (previewError) previewError.textContent = 'O vídeo foi enviado, mas não foi possível atualizar esta lista.';
+                    }
+                    return;
+                }
+                fileInput.disabled = false;
+                uploadStatus?.classList.add('hidden');
+                previewError?.classList.remove('hidden');
+                if (previewError) {
+                    try { previewError.textContent = JSON.parse(request.responseText).detail || 'Não foi possível enviar o vídeo. Tente novamente.'; }
+                    catch (error) { previewError.textContent = 'Não foi possível enviar o vídeo. Tente novamente.'; }
+                }
+            });
+            request.addEventListener('error', () => {
+                fileInput.disabled = false;
+                uploadStatus?.classList.add('hidden');
+                previewError?.classList.remove('hidden');
+                if (previewError) previewError.textContent = 'Não foi possível enviar o vídeo. Verifique sua conexão e tente novamente.';
+            });
+            request.send(uploadData);
+            return;
+            const isMov = file.name.toLowerCase().endsWith('.mov') || file.type === 'video/quicktime';
+            if (isMov) {
+                panel?.classList.remove('is-visible');
+                previewError?.classList.remove('hidden');
+                video.removeAttribute('src');
+                video.load();
+                startInput.value = '0';
+                endInput.value = '';
+                syncHidden();
                 return;
             }
             objectUrl = URL.createObjectURL(file);
             video.src = objectUrl;
             panel?.classList.add('is-visible');
+            previewError?.classList.add('hidden');
             startInput.value = '0';
             endInput.value = '';
             syncHidden();
@@ -402,7 +598,10 @@
         });
         startInput?.addEventListener('input', syncHidden);
         endInput?.addEventListener('input', syncHidden);
-        form.addEventListener('submit', syncHidden);
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            syncHidden();
+        });
     });
 })();
 </script>
@@ -484,6 +683,7 @@
 
 <script>
 (() => {
+    const closestFromEvent = (event, selector) => event.target instanceof Element ? event.target.closest(selector) : null;
     document.querySelectorAll('[data-export-card][data-terminal="0"]').forEach((card) => {
         const poll = async () => {
             try {
@@ -536,67 +736,387 @@
 </script>
 {% endif %}
 
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-custom-block-edit-modal aria-hidden="true"><section class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div class="flex items-center justify-between mb-4"><h2 class="font-black text-lg">Editar bloco personalizado</h2><button type="button" class="project-media-action" data-custom-modal-close><i class="fas fa-xmark"></i></button></div><form method="post" data-custom-block-edit-form class="space-y-3">{% csrf_token %}<input name="name" class="w-full rounded-xl border px-3 py-2" placeholder="Nome"><input name="description" class="w-full rounded-xl border px-3 py-2" placeholder="Descrição opcional"><div class="flex justify-end gap-2"><button type="button" class="media-btn media-muted" data-custom-modal-close>Cancelar</button><button class="media-btn media-primary">Salvar</button></div></form></section></div>
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-custom-block-delete-modal aria-hidden="true"><section class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><i class="fas fa-trash text-xl text-red-600"></i><h2 class="font-black text-lg mt-3">Excluir bloco personalizado?</h2><p class="text-sm text-gray-500 mt-1">Os vídeos deste bloco também serão removidos.</p><form method="post" data-custom-block-delete-form class="flex justify-end gap-2 mt-5">{% csrf_token %}<button type="button" class="media-btn media-muted" data-custom-modal-close>Cancelar</button><button class="media-btn media-primary">Excluir bloco</button></form></section></div>
+
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-media-trim-modal aria-hidden="true">
+    <section class="w-full max-w-4xl rounded-2xl bg-white p-4 sm:p-5 shadow-2xl">
+        <div class="flex items-center justify-between gap-4 mb-4">
+            <div><h2 class="font-black text-lg truncate" data-media-trim-title>Cortar vídeo</h2><p class="text-sm text-gray-500">Escolha o trecho que será usado no processamento final.</p></div>
+            <button type="button" class="media-btn media-muted !px-3 !py-2" data-media-trim-close aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="media-trim-player">
+            <video preload="metadata" class="media-trim-video" data-media-trim-player></video>
+            <div class="media-trim-controls">
+                <div class="media-trim-control-row">
+                    <button type="button" class="media-trim-icon-btn" data-media-trim-play aria-label="Reproduzir trecho"><i class="fas fa-play"></i></button>
+                    <span class="media-trim-time" data-media-trim-current>00:00 / 00:00</span>
+                    <div class="media-trim-rail" data-media-trim-rail>
+                        <div class="media-trim-selection" data-media-trim-selection></div>
+                        <div class="media-trim-playhead" data-media-trim-playhead></div>
+                        <button type="button" class="media-trim-handle is-start" data-media-trim-start-handle aria-label="Início do corte"></button>
+                        <button type="button" class="media-trim-handle is-end" data-media-trim-end-handle aria-label="Fim do corte"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <input type="hidden" data-media-trim-start>
+        <input type="hidden" data-media-trim-end>
+        <p class="hidden text-sm text-red-700 mt-3" data-media-trim-error></p>
+        <div class="flex flex-wrap items-center justify-between gap-3 mt-5">
+            <p class="flex items-center gap-2 text-xs text-gray-500"><i class="fas fa-circle-info text-gray-400"></i>Prévia otimizada para edição. O vídeo final mantém a qualidade original.</p>
+            <div class="flex gap-3">
+                <button type="button" class="media-btn media-muted" data-media-trim-close>Cancelar</button>
+                <button type="button" class="media-btn media-primary" data-media-trim-save><i class="fas fa-scissors"></i>Salvar corte</button>
+            </div>
+        </div>
+    </section>
+</div>
+
 <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-media-preview-modal aria-hidden="true">
     <section class="w-full max-w-5xl rounded-2xl bg-white p-4 sm:p-5 shadow-2xl">
         <div class="flex items-center justify-between gap-4 mb-4">
             <h2 class="font-black text-lg truncate" data-media-preview-title>Prévia do vídeo</h2>
-            <button type="button" class="media-btn media-muted !px-3 !py-2" data-media-preview-close aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+            <div class="flex items-center gap-2">
+                <button type="button" class="hidden media-btn media-muted text-sm !px-3 !py-2" data-media-preview-full>Ver vídeo completo</button>
+                <button type="button" class="media-btn media-muted !px-3 !py-2" data-media-preview-close aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+            </div>
         </div>
-        <video controls preload="metadata" class="w-full max-h-[72vh] rounded-xl bg-black" data-media-preview-player></video>
+        <div class="media-trim-player">
+            <video preload="metadata" class="media-trim-video" data-media-preview-player></video>
+            <div class="media-trim-controls">
+                <div class="media-trim-control-row">
+                    <button type="button" class="media-trim-icon-btn" data-media-preview-play aria-label="Reproduzir vídeo"><i class="fas fa-play"></i></button>
+                    <span class="media-trim-time" data-media-preview-current>00:00 / 00:00</span>
+                    <div class="media-trim-rail" data-media-preview-rail>
+                        <div class="media-trim-selection" data-media-preview-selection></div>
+                        <div class="media-trim-playhead" data-media-preview-playhead></div>
+                        <span class="media-trim-handle is-start pointer-events-none" data-media-preview-start-handle></span>
+                        <span class="media-trim-handle is-end pointer-events-none" data-media-preview-end-handle></span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </section>
 </div>
 
 <script>
 (() => {
+    const closestFromEvent = (event, selector) => event.target instanceof Element ? event.target.closest(selector) : null;
+    const trimModal = document.querySelector('[data-media-trim-modal]');
+    const trimPlayer = trimModal?.querySelector('[data-media-trim-player]');
+    const trimTitle = trimModal?.querySelector('[data-media-trim-title]');
+    const trimStart = trimModal?.querySelector('[data-media-trim-start]');
+    const trimEnd = trimModal?.querySelector('[data-media-trim-end]');
+    const trimError = trimModal?.querySelector('[data-media-trim-error]');
+    const trimSave = trimModal?.querySelector('[data-media-trim-save]');
+    const trimPlay = trimModal?.querySelector('[data-media-trim-play]');
+    const trimCurrent = trimModal?.querySelector('[data-media-trim-current]');
+    const trimRail = trimModal?.querySelector('[data-media-trim-rail]');
+    const trimSelection = trimModal?.querySelector('[data-media-trim-selection]');
+    const trimPlayhead = trimModal?.querySelector('[data-media-trim-playhead]');
+    const trimStartHandle = trimModal?.querySelector('[data-media-trim-start-handle]');
+    const trimEndHandle = trimModal?.querySelector('[data-media-trim-end-handle]');
+    let trimUrl = '';
+    let activeTrimHandle = null;
+    const trimDuration = () => Number.isFinite(trimPlayer?.duration) && trimPlayer.duration > 0 ? trimPlayer.duration : 0;
+    const clampTrim = (value, minimum, maximum) => Math.min(Math.max(Number.isFinite(value) ? value : minimum, minimum), maximum);
+    const formatTrimTime = (value) => {
+        const seconds = Math.max(0, Math.floor(value || 0));
+        return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    };
+    const selectedTrimStart = () => clampTrim(parseFloat(trimStart?.value || '0'), 0, trimDuration());
+    const selectedTrimEnd = () => {
+        const value = parseFloat(trimEnd?.value || '');
+        return Number.isFinite(value) ? clampTrim(value, selectedTrimStart(), trimDuration()) : trimDuration();
+    };
+    const syncTrimTimeline = () => {
+        const duration = trimDuration();
+        if (!duration || !trimSelection || !trimPlayhead || !trimStartHandle || !trimEndHandle) return;
+        const start = selectedTrimStart();
+        const end = selectedTrimEnd();
+        const current = clampTrim(trimPlayer.currentTime || 0, 0, duration);
+        trimSelection.style.left = `${(start / duration) * 100}%`;
+        trimSelection.style.width = `${Math.max(0, ((end - start) / duration) * 100)}%`;
+        trimPlayhead.style.left = `${(current / duration) * 100}%`;
+        trimStartHandle.style.left = `${(start / duration) * 100}%`;
+        trimEndHandle.style.left = `${(end / duration) * 100}%`;
+        if (trimCurrent) trimCurrent.textContent = `${formatTrimTime(current)} / ${formatTrimTime(duration)}`;
+        trimPlay?.querySelector('i')?.classList.toggle('fa-play', trimPlayer.paused);
+        trimPlay?.querySelector('i')?.classList.toggle('fa-pause', !trimPlayer.paused);
+    };
+    const setTrimStart = (value) => {
+        const end = selectedTrimEnd();
+        if (trimStart) trimStart.value = clampTrim(value, 0, Math.max(0, end - 0.1)).toFixed(3);
+        syncTrimTimeline();
+    };
+    const setTrimEnd = (value) => {
+        const duration = trimDuration();
+        const end = clampTrim(value, Math.min(duration, selectedTrimStart() + 0.1), duration);
+        if (trimEnd) trimEnd.value = end >= duration - 0.02 ? '' : end.toFixed(3);
+        syncTrimTimeline();
+    };
+    const trimPointerTime = (event) => {
+        const rect = trimRail?.getBoundingClientRect();
+        return rect ? clampTrim((event.clientX - rect.left) / Math.max(1, rect.width), 0, 1) * trimDuration() : 0;
+    };
+    const moveTrimHandle = (event) => {
+        if (activeTrimHandle === 'start') { setTrimStart(trimPointerTime(event)); trimPlayer.currentTime = selectedTrimStart(); }
+        if (activeTrimHandle === 'end') { setTrimEnd(trimPointerTime(event)); trimPlayer.currentTime = selectedTrimEnd(); }
+    };
+    const stopTrimHandle = () => {
+        activeTrimHandle = null;
+        window.removeEventListener('pointermove', moveTrimHandle);
+        window.removeEventListener('pointerup', stopTrimHandle);
+    };
+    const beginTrimHandle = (handle, event) => {
+        event.preventDefault();
+        activeTrimHandle = handle;
+        window.addEventListener('pointermove', moveTrimHandle);
+        window.addEventListener('pointerup', stopTrimHandle, {once: true});
+        moveTrimHandle(event);
+    };
+    const closeTrim = () => {
+        if (!trimModal || !trimPlayer) return;
+        trimPlayer.pause(); trimPlayer.removeAttribute('src'); trimPlayer.load();
+        trimModal.classList.add('hidden'); trimModal.classList.remove('flex');
+        trimModal.setAttribute('aria-hidden', 'true');
+    };
+    document.addEventListener('click', (event) => {
+        const button = closestFromEvent(event, '[data-media-trim]');
+        if (!button) return;
+        if (!trimModal || !trimPlayer || !trimStart || !trimEnd) return;
+        trimUrl = button.dataset.mediaTrimUrl || '';
+        trimTitle.textContent = `Cortar: ${button.dataset.mediaName || 'vídeo'}`;
+        trimStart.value = ((Number(button.dataset.mediaTrimStart) || 0) / 1000).toFixed(3);
+        trimEnd.value = button.dataset.mediaTrimEnd ? (Number(button.dataset.mediaTrimEnd) / 1000).toFixed(3) : '';
+        trimError?.classList.add('hidden');
+        trimPlayer.src = `${button.dataset.mediaUrl}?preview=1`;
+        trimPlayer.load();
+        trimModal.classList.remove('hidden'); trimModal.classList.add('flex');
+        trimModal.setAttribute('aria-hidden', 'false');
+    });
+    trimModal?.querySelectorAll('[data-media-trim-close]').forEach((button) => button.addEventListener('click', closeTrim));
+    trimModal?.querySelector('[data-media-trim-set-start]')?.addEventListener('click', () => setTrimStart(trimPlayer.currentTime || 0));
+    trimModal?.querySelector('[data-media-trim-set-end]')?.addEventListener('click', () => setTrimEnd(trimPlayer.currentTime || trimDuration()));
+    trimModal?.querySelector('[data-media-trim-reset]')?.addEventListener('click', () => { if (trimStart) trimStart.value = '0.000'; if (trimEnd) trimEnd.value = ''; trimPlayer.currentTime = 0; syncTrimTimeline(); });
+    trimPlayer?.addEventListener('loadedmetadata', syncTrimTimeline);
+    trimPlayer?.addEventListener('timeupdate', () => {
+        if (!trimPlayer.paused && trimPlayer.currentTime >= selectedTrimEnd()) { trimPlayer.pause(); trimPlayer.currentTime = selectedTrimEnd(); }
+        syncTrimTimeline();
+    });
+    trimPlayer?.addEventListener('play', syncTrimTimeline);
+    trimPlayer?.addEventListener('pause', syncTrimTimeline);
+    trimPlay?.addEventListener('click', () => {
+        if (trimPlayer.paused) {
+            if (trimPlayer.currentTime < selectedTrimStart() || trimPlayer.currentTime >= selectedTrimEnd()) trimPlayer.currentTime = selectedTrimStart();
+            trimPlayer.play();
+        } else trimPlayer.pause();
+    });
+    trimRail?.addEventListener('pointerdown', (event) => {
+        if (event.target === trimStartHandle || event.target === trimEndHandle) return;
+        trimPlayer.currentTime = trimPointerTime(event); syncTrimTimeline();
+    });
+    trimStartHandle?.addEventListener('pointerdown', (event) => beginTrimHandle('start', event));
+    trimEndHandle?.addEventListener('pointerdown', (event) => beginTrimHandle('end', event));
+    trimStart?.addEventListener('input', syncTrimTimeline);
+    trimEnd?.addEventListener('input', syncTrimTimeline);
+    trimSave?.addEventListener('click', async () => {
+        if (!trimUrl || !trimStart || !trimEnd) return;
+        const data = new FormData();
+        data.append('trim_start_seconds', trimStart.value || '0');
+        data.append('trim_end_seconds', trimEnd.value);
+        trimSave.disabled = true;
+        try {
+            const response = await fetch(trimUrl, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '', 'X-Requested-With': 'XMLHttpRequest'}});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.detail || 'Não foi possível salvar o corte.');
+            window.location.reload();
+        } catch (error) {
+            trimError.textContent = error.message;
+            trimError.classList.remove('hidden');
+            trimSave.disabled = false;
+        }
+    });
+    trimModal?.addEventListener('click', (event) => { if (event.target === trimModal) closeTrim(); });
+
     const modal = document.querySelector('[data-media-preview-modal]');
     const player = modal?.querySelector('[data-media-preview-player]');
     const title = modal?.querySelector('[data-media-preview-title]');
+    const fullPreviewButton = modal?.querySelector('[data-media-preview-full]');
+    const previewPlayButton = modal?.querySelector('[data-media-preview-play]');
+    const previewCurrent = modal?.querySelector('[data-media-preview-current]');
+    const previewRail = modal?.querySelector('[data-media-preview-rail]');
+    const previewSelection = modal?.querySelector('[data-media-preview-selection]');
+    const previewPlayhead = modal?.querySelector('[data-media-preview-playhead]');
+    const previewStartHandle = modal?.querySelector('[data-media-preview-start-handle]');
+    const previewEndHandle = modal?.querySelector('[data-media-preview-end-handle]');
+    let previewStart = 0;
+    let previewEnd = null;
+    let isShowingFullPreview = false;
+    const previewDuration = () => Number.isFinite(player?.duration) && player.duration > 0 ? player.duration : 0;
+    const formatPreviewTime = (value) => {
+        const seconds = Math.max(0, Math.floor(value || 0));
+        return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    };
+    const syncPreviewTimeline = () => {
+        const duration = previewDuration();
+        if (!duration || !previewSelection || !previewPlayhead) return;
+        const start = isShowingFullPreview ? 0 : previewStart;
+        const end = isShowingFullPreview ? duration : (previewEnd ?? duration);
+        const current = Math.min(Math.max(player.currentTime || 0, start), end);
+        previewSelection.style.left = `${(start / duration) * 100}%`;
+        previewSelection.style.width = `${Math.max(0, ((end - start) / duration) * 100)}%`;
+        previewPlayhead.style.left = `${(current / duration) * 100}%`;
+        previewStartHandle.style.left = `${(start / duration) * 100}%`;
+        previewEndHandle.style.left = `${(end / duration) * 100}%`;
+        previewStartHandle?.classList.toggle('hidden', isShowingFullPreview);
+        previewEndHandle?.classList.toggle('hidden', isShowingFullPreview);
+        if (previewCurrent) previewCurrent.textContent = `${formatPreviewTime(current)} / ${formatPreviewTime(end - start)}`;
+        previewPlayButton?.querySelector('i')?.classList.toggle('fa-play', player.paused);
+        previewPlayButton?.querySelector('i')?.classList.toggle('fa-pause', !player.paused);
+    };
     const close = () => {
         if (!modal || !player) return;
         player.pause(); player.removeAttribute('src'); player.load();
+        previewStart = 0; previewEnd = null; isShowingFullPreview = false;
+        fullPreviewButton?.classList.add('hidden');
         modal.classList.add('hidden'); modal.classList.remove('flex');
         modal.setAttribute('aria-hidden', 'true');
     };
-    document.querySelectorAll('[data-media-preview]').forEach((button) => button.addEventListener('click', () => {
+    document.addEventListener('click', (event) => {
+        const button = closestFromEvent(event, '[data-media-preview]');
+        if (!button) return;
         if (!modal || !player) return;
-        title.textContent = button.dataset.mediaName || 'Prévia do vídeo';
+        previewStart = (Number(button.dataset.mediaPreviewStart) || 0) / 1000;
+        previewEnd = button.dataset.mediaPreviewEnd ? Number(button.dataset.mediaPreviewEnd) / 1000 : null;
+        const hasTrim = previewStart > 0 || previewEnd !== null;
+        isShowingFullPreview = !hasTrim;
+        title.textContent = hasTrim ? `Prévia do corte: ${button.dataset.mediaName || 'vídeo'}` : (button.dataset.mediaName || 'Prévia do vídeo');
+        fullPreviewButton?.classList.toggle('hidden', !hasTrim);
+        if (fullPreviewButton) fullPreviewButton.textContent = 'Ver vídeo completo';
         player.src = `${button.dataset.mediaUrl}?preview=1`;
         modal.classList.remove('hidden'); modal.classList.add('flex');
         modal.setAttribute('aria-hidden', 'false');
-    }));
+    });
+    player?.addEventListener('loadedmetadata', () => {
+        if (!isShowingFullPreview && previewStart > 0) player.currentTime = previewStart;
+        syncPreviewTimeline();
+    });
+    player?.addEventListener('timeupdate', () => {
+        if (!isShowingFullPreview && previewEnd !== null && player.currentTime >= previewEnd) {
+            player.pause(); player.currentTime = previewEnd;
+        }
+        if (!isShowingFullPreview && player.currentTime < previewStart) player.currentTime = previewStart;
+        syncPreviewTimeline();
+    });
+    player?.addEventListener('play', syncPreviewTimeline);
+    player?.addEventListener('pause', syncPreviewTimeline);
+    previewPlayButton?.addEventListener('click', () => { if (player.paused) player.play(); else player.pause(); });
+    previewRail?.addEventListener('pointerdown', (event) => {
+        if (!isShowingFullPreview) return;
+        const rect = previewRail.getBoundingClientRect();
+        player.currentTime = Math.min(Math.max((event.clientX - rect.left) / Math.max(1, rect.width), 0), 1) * previewDuration();
+        syncPreviewTimeline();
+    });
+    fullPreviewButton?.addEventListener('click', () => {
+        isShowingFullPreview = !isShowingFullPreview;
+        if (isShowingFullPreview) {
+            player.currentTime = 0;
+            fullPreviewButton.textContent = 'Ver somente o corte';
+        } else {
+            player.currentTime = previewStart;
+            fullPreviewButton.textContent = 'Ver vídeo completo';
+        }
+        syncPreviewTimeline();
+    });
     modal?.querySelector('[data-media-preview-close]')?.addEventListener('click', close);
     modal?.addEventListener('click', (event) => { if (event.target === modal) close(); });
     document.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
 
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-    document.querySelectorAll('[data-media-sortable]').forEach((container) => {
-        let dragged = null;
-        const saveOrder = async () => {
-            const data = new FormData();
-            container.querySelectorAll('[data-media-id]').forEach((item) => data.append('media_ids[]', item.dataset.mediaId));
-            const response = await fetch(container.dataset.reorderUrl, {
-                method: 'POST', body: data, credentials: 'same-origin',
-                headers: {'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest'},
-            });
-            if (!response.ok) throw new Error('Não foi possível salvar a nova ordem.');
-        };
-        container.querySelectorAll('[data-media-id]').forEach((item) => {
-            item.addEventListener('dragstart', (event) => {
-                if (event.target.closest('button, form')) { event.preventDefault(); return; }
-                dragged = item; item.classList.add('opacity-50'); event.dataTransfer.effectAllowed = 'move';
-            });
-            item.addEventListener('dragend', () => { item.classList.remove('opacity-50'); dragged = null; });
-            item.addEventListener('dragover', (event) => {
-                event.preventDefault();
-                if (!dragged || dragged === item) return;
-                const before = event.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2;
-                container.insertBefore(dragged, before ? item : item.nextSibling);
-            });
-            item.addEventListener('drop', async (event) => {
-                event.preventDefault();
-                try { await saveOrder(); } catch (error) { window.location.reload(); }
-            });
+    const closeCustomModal = () => document.querySelectorAll('[data-custom-block-edit-modal], [data-custom-block-delete-modal]').forEach((modal) => { modal.classList.add('hidden'); modal.classList.remove('flex'); });
+    document.addEventListener('click', (event) => {
+        const edit = closestFromEvent(event, '[data-custom-block-edit]');
+        const remove = closestFromEvent(event, '[data-custom-block-delete]');
+        if (edit) {
+            const modal = document.querySelector('[data-custom-block-edit-modal]');
+            modal.querySelector('[data-custom-block-edit-form]').action = edit.dataset.url;
+            modal.querySelector('[name=name]').value = edit.dataset.name;
+            modal.querySelector('[name=description]').value = edit.dataset.description;
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+        }
+        if (remove) {
+            const modal = document.querySelector('[data-custom-block-delete-modal]');
+            modal.querySelector('[data-custom-block-delete-form]').action = remove.dataset.url;
+            modal.classList.remove('hidden'); modal.classList.add('flex');
+        }
+        if (closestFromEvent(event, '[data-custom-modal-close]')) closeCustomModal();
+    });
+
+    let draggedCustomBlock = null;
+    const updateProjectBlockNumbers = (list) => {
+        list.querySelectorAll('[data-project-block-id]').forEach((block, index) => {
+            const number = block.querySelector('.project-media-block__number');
+            if (number) number.textContent = index + 1;
         });
+    };
+    document.addEventListener('dragstart', (event) => {
+        const block = closestFromEvent(event, '[data-custom-block]');
+        if (!block || !closestFromEvent(event, '[data-custom-block-drag-handle]')) return;
+        draggedCustomBlock = block;
+        block.classList.add('opacity-50');
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', block.dataset.projectBlockId);
+    });
+    document.addEventListener('dragover', (event) => {
+        const target = closestFromEvent(event, '[data-project-block-id]');
+        if (!draggedCustomBlock || !target || target === draggedCustomBlock) return;
+        event.preventDefault();
+        const before = event.clientY < target.getBoundingClientRect().top + target.offsetHeight / 2;
+        target.parentElement.insertBefore(draggedCustomBlock, before ? target : target.nextSibling);
+        updateProjectBlockNumbers(target.parentElement);
+    });
+    document.addEventListener('drop', async (event) => {
+        const list = closestFromEvent(event, '[data-custom-block-list]');
+        if (!draggedCustomBlock || !list) return;
+        event.preventDefault();
+        const data = new FormData();
+        list.querySelectorAll('[data-project-block-id]').forEach((block) => data.append('item_ids[]', block.dataset.projectBlockId));
+        await fetch(list.dataset.customBlockReorderUrl, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest'}});
+        draggedCustomBlock.classList.remove('opacity-50'); draggedCustomBlock = null;
+    });
+    document.addEventListener('dragend', () => { draggedCustomBlock?.classList.remove('opacity-50'); draggedCustomBlock = null; });
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    let dragged = null;
+    const saveOrder = async (container) => {
+        const data = new FormData();
+        container.querySelectorAll('[data-media-id]').forEach((item) => data.append('media_ids[]', item.dataset.mediaId));
+        const response = await fetch(container.dataset.reorderUrl, {
+            method: 'POST', body: data, credentials: 'same-origin',
+            headers: {'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest'},
+        });
+        if (!response.ok) throw new Error('Não foi possível salvar a nova ordem.');
+    };
+    document.addEventListener('dragstart', (event) => {
+        const item = closestFromEvent(event, '[data-media-sortable] [data-media-id]');
+        if (!item) return;
+        if (item.draggable === false || closestFromEvent(event, 'button, form')) { event.preventDefault(); return; }
+        dragged = item; item.classList.add('opacity-50'); event.dataTransfer.effectAllowed = 'move';
+    });
+    document.addEventListener('dragend', () => { dragged?.classList.remove('opacity-50'); dragged = null; });
+    document.addEventListener('dragover', (event) => {
+        const item = closestFromEvent(event, '[data-media-sortable] [data-media-id]');
+        if (!dragged || !item || dragged === item) return;
+        event.preventDefault();
+        const before = event.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2;
+        item.parentElement.insertBefore(dragged, before ? item : item.nextSibling);
+    });
+    document.addEventListener('drop', async (event) => {
+        const container = closestFromEvent(event, '[data-media-sortable]');
+        if (!dragged || !container) return;
+        event.preventDefault();
+        try { await saveOrder(container); } catch (error) { window.location.reload(); }
     });
 })();
 </script>

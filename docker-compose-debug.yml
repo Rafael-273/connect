@@ -55,11 +55,9 @@ services:
 
 networks:
   connect-network:
-    external: true
+    driver: bridge
 
 volumes:
   postgres_data:
   redis_data:
   media_volume:
-    connect-network:
-        external: true

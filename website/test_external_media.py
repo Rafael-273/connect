@@ -1455,6 +1455,7 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
     def test_admin_panel_media_template_pages_render(self):
         urls = [
             (reverse('admin_external_media_templates'), 200),
+            (reverse('admin_external_media_glossary'), 200),
             (reverse('admin_external_media_template_detail', args=[self.template.pk]), 200),
             (reverse('admin_external_media_template_create'), 200),
             (reverse('admin_external_media_version_edit', args=[self.version.pk]), 200),
@@ -1466,6 +1467,27 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
 
         response = self.client.get(reverse('admin_external_media_template_edit', args=[self.template.pk]))
         self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
+
+    def test_admin_can_edit_glossary_term(self):
+        term = GlossaryTerm.objects.create(
+            source_language='pt', target_language='en',
+            source_text='Culto administrativo de teste', translated_text='Service',
+        )
+
+        response = self.client.post(
+            reverse('admin_external_media_glossary_edit', args=[term.pk]),
+            {
+                'source_language': 'pt',
+                'target_language': 'en',
+                'source_text': 'Culto de domingo',
+                'translated_text': 'Sunday Service',
+            },
+        )
+
+        self.assertRedirects(response, reverse('admin_external_media_glossary'))
+        term.refresh_from_db()
+        self.assertEqual(term.source_text, 'Culto de domingo')
+        self.assertEqual(term.translated_text, 'Sunday Service')
 
     def test_admin_panel_can_create_media_template(self):
         response = self.client.post(reverse('admin_external_media_template_create'), {
@@ -2735,8 +2757,8 @@ class AudioMixingUnitTests(SimpleTestCase):
 
     def test_build_ducking_envelope_prevents_release_from_overlapping_next_block(self):
         # A 2s release would normally end at t=2.5, well past the next block's start (t=0.7);
-        # the envelope must clamp the release so it never re-raises volume after the next
-        # block has already started ducking again.
+        # the envelope must keep the music ducked through the short pause instead of
+        # inserting a full-volume keyframe at the next block's start.
         settings_ = DuckingSettings(attack_ms=100, hold_ms=100, release_ms=2000)
         blocks = [SpeechBlock(0, 500), SpeechBlock(700, 1200)]
         envelope = build_ducking_envelope(blocks, duration_ms=2000, duck_gain=0.5, settings_=settings_)
@@ -2745,7 +2767,8 @@ class AudioMixingUnitTests(SimpleTestCase):
         self.assertNotIn(2.5, times)
         matching = [value for time, value in envelope if abs(time - 0.7) < 0.01]
         self.assertTrue(matching)
-        self.assertEqual(matching[0], 1.0)
+        self.assertEqual(matching[0], 0.5)
+        self.assertFalse(any(value > 0.5 for time, value in envelope if 0.5 <= time <= 1.2))
 
     def test_build_spectral_windows_skips_when_no_cut(self):
         self.assertEqual(build_spectral_windows([SpeechBlock(0, 1000)], cut_db=0), [])

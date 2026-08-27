@@ -30,6 +30,9 @@ from .house_of_peace import (
     AdminHouseOfPeaceStatusView, AdminHouseOfPeaceDeleteView,
 )
 from .external_media import (
+    AdminExternalMediaGlossaryDeleteView,
+    AdminExternalMediaGlossaryUpdateView,
+    AdminExternalMediaGlossaryView,
     AdminExternalMediaBackgroundMusicDeleteView,
     AdminExternalMediaBackgroundMusicSaveView,
     AdminExternalMediaMasteringProfileDeleteView,
@@ -70,6 +73,7 @@ __all__ = [
     'AdminHouseOfPeaceListView', 'AdminHouseOfPeaceDetailView',
     'AdminHouseOfPeaceStatusView', 'AdminHouseOfPeaceDeleteView',
     'AdminExternalMediaTemplateDeleteView',
+    'AdminExternalMediaGlossaryDeleteView', 'AdminExternalMediaGlossaryUpdateView', 'AdminExternalMediaGlossaryView',
     'AdminExternalMediaTemplateDetailView',
     'AdminExternalMediaTemplateEditView', 'AdminExternalMediaTemplateListView',
     'AdminExternalMediaVersionDuplicateView', 'AdminExternalMediaVersionFormView',

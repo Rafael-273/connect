@@ -1320,7 +1320,7 @@ class ProjectService:
                 counts[item.block_id] = counts.get(item.block_id, 0) + 1
             else:
                 errors.append(
-                    f'{item.block.name}: o vídeo enviado não está mais disponível. Envie-o novamente.'
+                    f'{(item.block or item.custom_block).name}: o vídeo enviado não está mais disponível. Envie-o novamente.'
                 )
         for block in project.template_version.blocks.all():
             count = counts.get(block.pk, 0)
@@ -1978,6 +1978,27 @@ class ExternalMediaProjectPipeline:
                     skip_extra_processing=block.skip_extra_processing,
                     remove_background_voice=block.remove_background_voice,
                 ))
+        for custom_block in project.custom_blocks.all():
+            for item in project.block_media.filter(custom_block=custom_block).order_by('position', 'pk'):
+                sources.append(AssemblySource(
+                    copy(item.file, f'custom_{custom_block.position}_{item.position}'),
+                    label=f'custom_{custom_block.position}_{item.position}',
+                    block_id=custom_block.pk,
+                    block_key=f'custom-{custom_block.pk}',
+                    block_name=custom_block.name,
+                    trim_start_ms=item.trim_start_ms,
+                    trim_end_ms=item.trim_end_ms,
+                ))
+        configured_order = (project.configuration or {}).get('block_order', [])
+        if configured_order:
+            order_index = {value: index for index, value in enumerate(configured_order)}
+            fixed_sources = [source for source in sources if source.block_id is None]
+            block_sources = [source for source in sources if source.block_id is not None]
+            block_sources.sort(key=lambda source: order_index.get(
+                f'c-{source.block_id}' if source.block_key.startswith('custom-') else f't-{source.block_id}',
+                len(order_index),
+            ))
+            sources = fixed_sources + block_sources
         if outro:
             sources.append(AssemblySource(copy(outro, 'outro'), label='outro'))
         if not sources:

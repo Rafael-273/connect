@@ -7,7 +7,7 @@ from django.conf import settings
 from django.core.files import File
 from django.utils import timezone
 
-from ..models.external_media import ExternalMediaProjectExport, VideoMasteringJob
+from ..models.external_media import ExternalMediaProjectExport, ProjectBlockMedia, VideoMasteringJob
 from .audio_analysis import AudioAnalysisService
 from .audio_mastering import AudioMasteringService, MasteringTarget
 from .audio_muxing import AudioMuxingService
@@ -15,7 +15,7 @@ from .audio_validation import AudioValidationService
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
 from .premiere_export import PremierePackageService
-from .services import ExternalMediaPipeline, ExternalMediaProjectPipeline
+from .services import ExternalMediaPipeline, ExternalMediaProjectPipeline, VideoAssemblyService
 from .timeline import InternalTimelineBuilder
 
 
@@ -32,6 +32,31 @@ def render_external_media(self, job_id):
 @shared_task(bind=True, autoretry_for=(), name='external_media.run_project')
 def run_external_media_project(self, project_id):
     ExternalMediaProjectPipeline().run(project_id)
+
+
+@shared_task(bind=True, autoretry_for=(), name='external_media.create_project_preview')
+def create_project_preview(self, media_id):
+    item = ProjectBlockMedia.objects.get(pk=media_id)
+    item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
+    item.preview_error = ''
+    item.save(update_fields=['preview_status', 'preview_error', 'update_at'])
+    try:
+        with TemporaryDirectory(prefix='connect-project-preview-') as temp:
+            workdir = Path(temp)
+            source = workdir / f'source{Path(item.file.name).suffix.lower()}'
+            preview = workdir / 'preview.mp4'
+            _local_file(item.file, source)
+            VideoAssemblyService().create_proxy(source, preview)
+            with preview.open('rb') as handle:
+                item.preview_file.save('preview.mp4', File(handle), save=False)
+        item.preview_status = ProjectBlockMedia.PreviewStatus.READY
+        item.preview_error = ''
+        item.save(update_fields=['preview_file', 'preview_status', 'preview_error', 'update_at'])
+    except Exception as exc:
+        item.preview_status = ProjectBlockMedia.PreviewStatus.ERROR
+        item.preview_error = str(exc)[:255]
+        item.save(update_fields=['preview_status', 'preview_error', 'update_at'])
+        raise
 
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.render_project')

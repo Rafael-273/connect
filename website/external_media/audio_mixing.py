@@ -131,15 +131,24 @@ def build_ducking_envelope(blocks, duration_ms, duck_gain, settings_):
     keyframes = [(0.0, 1.0)]
     ordered = sorted(blocks, key=lambda item: item.start_ms)
     for index, block in enumerate(ordered):
-        start_s = block.start_ms / 1000
-        end_s = block.end_ms / 1000
+        start_s = max(0.0, block.start_ms / 1000)
+        end_s = min(duration_s, block.end_ms / 1000)
+        if end_s <= start_s:
+            continue
         attack_end_s = min(end_s, start_s + attack_s)
         next_start_s = ordered[index + 1].start_ms / 1000 if index + 1 < len(ordered) else duration_s
-        release_end_s = min(release_s + end_s, next_start_s)
-        keyframes.append((start_s, 1.0))
-        keyframes.append((attack_end_s, duck_gain))
+        # Do not return to full volume if the next speech block starts before the
+        # release can finish. A full-volume keyframe at that boundary caused brief,
+        # audible music spikes between consecutive spoken phrases.
+        continues_into_next_block = next_start_s - end_s <= release_s
+        if index == 0 or ordered[index - 1].end_ms / 1000 + release_s < start_s:
+            keyframes.append((start_s, 1.0))
+            keyframes.append((attack_end_s, duck_gain))
+        else:
+            keyframes.append((start_s, duck_gain))
         keyframes.append((end_s, duck_gain))
-        keyframes.append((max(end_s, release_end_s), 1.0))
+        if not continues_into_next_block and end_s < duration_s:
+            keyframes.append((min(end_s + release_s, duration_s), 1.0))
     keyframes.append((duration_s, 1.0))
     deduped = []
     for point in keyframes:

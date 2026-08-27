@@ -42,6 +42,9 @@
     .action-btn-delete:hover { background: #fee2e2; }
     .data-table th:last-child,
     .data-table td:last-child { text-align: right; }
+    .editor-tab { color: #6b7280; border-bottom: 2px solid transparent; padding: .65rem .9rem; font-size: .875rem; font-weight: 700; }
+    .editor-tab:hover { color: #111827; }
+    .editor-tab.active { color: var(--color-primary); border-color: var(--color-primary); }
 </style>
 {% endblock %}
 
@@ -56,17 +59,12 @@
             <div class="flex items-center justify-between gap-3 mb-4">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
-                        <ion-icon name="videocam-outline" class="text-xl text-white"></ion-icon>
+                        <ion-icon name="cut-outline" class="text-xl text-white"></ion-icon>
                     </div>
                     <div class="min-w-0">
-                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">Mídia Externa</h1>
-                        <p class="text-sm text-gray-500 mt-0.5 truncate">
-                            {% if templates %}
-                                {{ templates|length }} template{{ templates|length|pluralize }}
-                            {% else %}
-                                Templates de produção usados pelos projetos dos membros
-                            {% endif %}
-                        </p>
+                        <p class="text-sm text-gray-500">Mídia Externa</p>
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">ConnectCut</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">Intelligent editing for ministry media.</p>
                     </div>
                 </div>
                 <a href="{% url 'admin_external_media_template_create' %}"
@@ -77,6 +75,11 @@
                     </svg>
                 </a>
             </div>
+
+            <nav class="flex items-center gap-1 border-b border-gray-200 mb-6" aria-label="Seções de edição">
+                <a href="{% url 'admin_external_media_templates' %}" class="editor-tab active">Templates</a>
+                <a href="{% url 'admin_external_media_glossary' %}" class="editor-tab">Glossário</a>
+            </nav>
 
             <div class="flex items-center gap-2 mb-6">
                 <form method="get" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">

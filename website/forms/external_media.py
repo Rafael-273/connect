@@ -11,6 +11,7 @@ from ..models.external_media import (
     MasteringProfile,
     MediaTemplateVersion,
     ProjectBlockMedia,
+    ProjectCustomBlock,
     RenderPreset,
     SubtitleStyle,
     VideoMasteringJob,
@@ -136,6 +137,16 @@ class ProjectBlockMediaForm(forms.ModelForm):
         return max(0, round(float(value) * 1000))
 
 
+class ProjectCustomBlockForm(forms.ModelForm):
+    class Meta:
+        model = ProjectCustomBlock
+        fields = ['name', 'description']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'w-full rounded-xl border border-gray-300 px-3 py-2', 'placeholder': 'Nome do bloco'}),
+            'description': forms.TextInput(attrs={'class': 'w-full rounded-xl border border-gray-300 px-3 py-2', 'placeholder': 'Descrição opcional'}),
+        }
+
+
 class ExternalMediaProjectSettingsForm(forms.Form):
     def __init__(self, *args, project, **kwargs):
         super().__init__(*args, **kwargs)
@@ -163,13 +174,12 @@ class ExternalMediaProjectSettingsForm(forms.Form):
 class GlossaryTermForm(forms.ModelForm):
     class Meta:
         model = GlossaryTerm
-        fields = ['source_language', 'target_language', 'source_text', 'translated_text', 'notes']
+        fields = ['source_language', 'target_language', 'source_text', 'translated_text']
         labels = {
             'source_language': 'Idioma original',
             'target_language': 'Idioma de destino',
             'source_text': 'Termo original',
             'translated_text': 'Tradução oficial',
-            'notes': 'Observações',
         }
 
     def __init__(self, *args, **kwargs):

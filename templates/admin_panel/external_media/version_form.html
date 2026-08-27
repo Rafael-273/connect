@@ -128,13 +128,7 @@
                             {{ template_form.description }}
                             {% if template_form.description.errors %}<p class="text-xs text-red-600 mt-1">{{ template_form.description.errors.0 }}</p>{% endif %}
                         </div>
-                        <div class="md:col-span-2">
-                            <label class="checkbox-card">
-                                {{ template_form.is_active }}
-                                <span class="text-sm font-medium text-gray-700">{{ template_form.is_active.label }}</span>
-                            </label>
-                            {% if template_form.is_active.errors %}<p class="text-xs text-red-600 mt-1">{{ template_form.is_active.errors.0 }}</p>{% endif %}
-                        </div>
+                        <input type="hidden" name="{{ template_form.is_active.html_name }}" value="{{ template_form.instance.is_active|yesno:'true,false' }}">
                     </div>
 
                     <div class="form-subsection">
@@ -1247,6 +1241,23 @@
         showStyleEditor('Novo estilo');
     }
 
+    function closeOnBackdropClick(modal, close) {
+        if (!modal) return;
+
+        let gestureStartedOnBackdrop = false;
+        modal.addEventListener('pointerdown', (event) => {
+            gestureStartedOnBackdrop = event.target === modal;
+        });
+        modal.addEventListener('pointercancel', () => {
+            gestureStartedOnBackdrop = false;
+        });
+        modal.addEventListener('click', (event) => {
+            const shouldClose = gestureStartedOnBackdrop && event.target === modal;
+            gestureStartedOnBackdrop = false;
+            if (shouldClose) close();
+        });
+    }
+
     let _styleDeleteAction = null;
 
     function openStyleDeleteModal(action, name) {
@@ -1289,9 +1300,7 @@
         form.action = _styleDeleteAction;
         form.submit();
     });
-    byId('styleDeleteModal')?.addEventListener('click', (event) => {
-        if (event.target === byId('styleDeleteModal')) closeStyleDeleteModal();
-    });
+    closeOnBackdropClick(byId('styleDeleteModal'), closeStyleDeleteModal);
 
     let _presetDeleteAction = null;
 
@@ -1335,9 +1344,7 @@
         form.action = _presetDeleteAction;
         form.submit();
     });
-    byId('presetDeleteModal')?.addEventListener('click', (event) => {
-        if (event.target === byId('presetDeleteModal')) closePresetDeleteModal();
-    });
+    closeOnBackdropClick(byId('presetDeleteModal'), closePresetDeleteModal);
 
     document.querySelectorAll('[data-open-modal]').forEach((button) => {
         button.addEventListener('click', () => {
@@ -1356,8 +1363,7 @@
         });
     });
     document.querySelectorAll('.media-modal').forEach((modal) => {
-        modal.addEventListener('click', (event) => {
-            if (event.target !== modal) return;
+        closeOnBackdropClick(modal, () => {
             modal.classList.remove('active');
             if (modal.id === 'style-modal') showStyleList();
         });
@@ -1398,9 +1404,7 @@
         });
     });
     document.querySelector('[data-close-fillerterm-delete]')?.addEventListener('click', closeFillerTermDelete);
-    byId('fillerTermDeleteModal')?.addEventListener('click', (event) => {
-        if (event.target === byId('fillerTermDeleteModal')) closeFillerTermDelete();
-    });
+    closeOnBackdropClick(byId('fillerTermDeleteModal'), closeFillerTermDelete);
     byId('fillerTermDeleteForm')?.addEventListener('submit', (event) => {
         if (!fillerTermDeleteAction) { event.preventDefault(); return; }
         event.currentTarget.action = fillerTermDeleteAction;

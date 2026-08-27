@@ -69,9 +69,7 @@
             </div>
         </div>
         <nav class="flex flex-wrap items-center gap-2 flex-shrink-0">
-            {% block media_header_actions %}
-            <a href="{% url 'external_media_glossary' %}" class="media-btn media-muted"><i class="fas fa-book"></i>Glossário</a>
-            {% endblock %}
+            {% block media_header_actions %}{% endblock %}
         </nav>
     </div>
 </header>
@@ -83,5 +81,5 @@
 {% endif %}
 
 <main class="media-shell w-full px-4 sm:px-6 md:px-8 pt-4">{% block media_content %}{% endblock %}</main>
-{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% block media_bottom_nav %}{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}{% endblock %}
 {% endblock %}
