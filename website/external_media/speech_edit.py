@@ -70,6 +70,14 @@ class SpeechEditPlan:
             'cuts': [cut.as_dict() for cut in self.cuts],
         }
 
+    @classmethod
+    def normalized(cls, cuts, duration_ms, crossfade_ms=40):
+        return cls(
+            tuple(normalize_speech_cuts(cuts, duration_ms)),
+            max(1, int(duration_ms)),
+            max(0, int(crossfade_ms)),
+        )
+
     def without_ranges(self, ranges):
         protected = tuple(
             (
@@ -81,13 +89,26 @@ class SpeechEditPlan:
         )
         if not protected:
             return self
-        cuts = tuple(
-            cut for cut in self.cuts
-            if not any(cut.start_ms < end_ms and cut.end_ms > start_ms for start_ms, end_ms in protected)
-        )
-        if len(cuts) == len(self.cuts):
-            return self
-        return SpeechEditPlan(cuts, self.duration_ms, self.crossfade_ms)
+        cuts = []
+        for cut in self.cuts:
+            segments = [(cut.start_ms, cut.end_ms)]
+            for protected_start, protected_end in protected:
+                remaining = []
+                for start_ms, end_ms in segments:
+                    if protected_end <= start_ms or protected_start >= end_ms:
+                        remaining.append((start_ms, end_ms))
+                        continue
+                    if protected_start > start_ms:
+                        remaining.append((start_ms, protected_start))
+                    if protected_end < end_ms:
+                        remaining.append((protected_end, end_ms))
+                segments = remaining
+            cuts.extend(
+                SpeechCut(start_ms, end_ms, cut.kind, cut.label)
+                for start_ms, end_ms in segments
+                if end_ms - start_ms >= 80
+            )
+        return SpeechEditPlan(tuple(cuts), self.duration_ms, self.crossfade_ms)
 
     @classmethod
     def from_dict(cls, data):
@@ -101,10 +122,10 @@ class SpeechEditPlan:
             )
             for item in data.get('cuts', [])
         )
-        return cls(
-            cuts=cuts,
-            duration_ms=int(data.get('duration_ms') or 1),
-            crossfade_ms=int(data.get('crossfade_ms') or 40),
+        return cls.normalized(
+            cuts,
+            int(data.get('duration_ms') or 1),
+            int(data.get('crossfade_ms') or 40),
         )
 
     def remap_words(self, words):
@@ -149,17 +170,62 @@ class SpeechProfile:
     dramatic_bonus_ms: int
     filler_neighbor_gap_ms: int
     crossfade_ms: int
+    silence_edge_guard_ms: int
 
 
 PROFILES = {
-    'conservative': SpeechProfile(700, 0.75, 450, 550, 350, 260, 50),
-    'balanced': SpeechProfile(250, 0.60, 250, 300, 180, 180, 40),
-    'dynamic': SpeechProfile(250, 0.35, 180, 220, 80, 130, 30),
+    'conservative': SpeechProfile(700, 0.75, 450, 550, 350, 260, 50, 260),
+    'balanced': SpeechProfile(250, 0.60, 250, 300, 180, 180, 40, 220),
+    'dynamic': SpeechProfile(250, 0.35, 180, 220, 80, 130, 30, 180),
 }
 
 DEFAULT_FILLERS = (
     'eh', 'é', 'hum', 'hmm', 'ahn', 'ah', 'hã', 'tipo', 'né', 'então', 'assim',
 )
+
+FILLER_ALIASES = {
+    'ee': 'eh',
+    'eee': 'eh',
+    'eeee': 'eh',
+    'eeh': 'eh',
+    'eeeh': 'eh',
+    'ham': 'hum',
+    'hamm': 'hum',
+    'hmmm': 'hum',
+    'uhm': 'hum',
+    'uhmm': 'hum',
+    'umm': 'hum',
+}
+
+
+def normalize_speech_cuts(cuts, duration_ms):
+    """Clamp, sort and merge cuts so timeline offsets are never counted twice."""
+    result = []
+    precedence = {'silence': 1, 'filler': 2, 'background_voice': 3}
+    for cut in sorted(cuts, key=lambda item: (item.start_ms, item.end_ms)):
+        current = SpeechCut(
+            max(0, int(cut.start_ms)),
+            min(int(duration_ms), int(cut.end_ms)),
+            cut.kind,
+            cut.label,
+        )
+        if current.duration_ms < 80:
+            continue
+        if result and current.start_ms <= result[-1].end_ms:
+            previous = result[-1]
+            kind = max(
+                (previous.kind, current.kind),
+                key=lambda value: precedence.get(value, 0),
+            )
+            result[-1] = SpeechCut(
+                previous.start_ms,
+                max(previous.end_ms, current.end_ms),
+                kind,
+                previous.label or current.label,
+            )
+        else:
+            result.append(current)
+    return result
 
 
 class AudioActivity:
@@ -209,6 +275,27 @@ class AudioActivity:
         values = self._slice(start_ms, end_ms)
         return float(np.median(values)) if values.size else -96.0
 
+    def voiced_regions(self, start_ms, end_ms, minimum_ms=150):
+        """Return voice-like islands inside a gap left by word timestamps."""
+        start_frame = max(0, int(start_ms // self.frame_ms))
+        end_frame = min(len(self.db), int(math.ceil(end_ms / self.frame_ms)))
+        if end_frame <= start_frame:
+            return []
+        active = self.db[start_frame:end_frame] >= self.voice_threshold_db
+        regions = []
+        region_start = None
+        for offset, is_active in enumerate(active):
+            if is_active and region_start is None:
+                region_start = offset
+            if region_start is not None and (not is_active or offset == len(active) - 1):
+                region_end = offset + 1 if is_active and offset == len(active) - 1 else offset
+                absolute_start = (start_frame + region_start) * self.frame_ms
+                absolute_end = min(end_ms, (start_frame + region_end) * self.frame_ms)
+                if absolute_end - absolute_start >= minimum_ms:
+                    regions.append((absolute_start, absolute_end))
+                region_start = None
+        return regions
+
 
 class SpeechEditAnalyzer:
     def analyze(
@@ -225,7 +312,11 @@ class SpeechEditAnalyzer:
             if 'filler_words' in configuration
             else DEFAULT_FILLERS
         )
-        fillers = {self._normalize(value) for value in filler_words if self._normalize(value)}
+        fillers = {
+            self._canonical_filler(value)
+            for value in filler_words
+            if self._canonical_filler(value)
+        }
         activity = AudioActivity(wav_path)
         ordered = sorted(words, key=lambda item: item.start_ms)
         cuts = []
@@ -234,6 +325,7 @@ class SpeechEditAnalyzer:
             cuts.extend(self._leading_take_cuts(ordered, block_ranges, profile))
         if remove_fillers and ordered and all(word.granularity == 'word' for word in ordered):
             cuts.extend(self._filler_cuts(ordered, activity, profile, fillers))
+            cuts.extend(self._untranscribed_filler_cuts(ordered, activity))
         cuts = self._merge_safe_cuts(cuts, duration_ms)
         return SpeechEditPlan(tuple(cuts), duration_ms, profile.crossfade_ms)
 
@@ -251,7 +343,7 @@ class SpeechEditAnalyzer:
         minimum_lead_ms = max(450, profile.minimum_silence_ms)
         # Word timestamps may start a little late; leave enough of the natural
         # lead-in so the first syllable does not feel abruptly cut.
-        speech_guard_ms = 150
+        speech_guard_ms = profile.silence_edge_guard_ms
         cuts = []
         for item in block_ranges:
             start_ms = max(0, int(item.get('start_ms') or 0))
@@ -286,6 +378,11 @@ class SpeechEditAnalyzer:
                 keep += profile.dramatic_bonus_ms
             if activity.contains_breath(previous.end_ms, following.start_ms):
                 keep = max(keep, round(gap * 0.55))
+            # Whisper boundaries are approximate and can land inside a consonant or
+            # vowel. Keep a protected lead-out and lead-in around both words; if a
+            # pause cannot fit those margins, preserving the natural pause is safer
+            # than risking a clipped syllable.
+            keep = max(keep, profile.silence_edge_guard_ms * 2)
             removable = gap - min(gap, keep)
             if removable < 120:
                 continue
@@ -306,7 +403,7 @@ class SpeechEditAnalyzer:
         word_safety_ms = 100
         verified_gap_ms = 110
         for index, word in enumerate(words):
-            if self._normalize(word.text) not in fillers or word.end_ms - word.start_ms > 1600:
+            if self._canonical_filler(word.text) not in fillers or word.end_ms - word.start_ms > 1600:
                 continue
             previous = words[index - 1] if index else None
             following = words[index + 1] if index + 1 < len(words) else None
@@ -336,25 +433,44 @@ class SpeechEditAnalyzer:
         return cuts
 
     @staticmethod
-    def _merge_safe_cuts(cuts, duration_ms):
-        result = []
-        for cut in sorted(cuts, key=lambda item: (item.start_ms, item.end_ms)):
-            cut = SpeechCut(max(0, cut.start_ms), min(duration_ms, cut.end_ms), cut.kind, cut.label)
-            if cut.duration_ms < 80:
+    def _untranscribed_filler_cuts(words, activity):
+        """Find isolated voiced hesitation sounds omitted from Whisper's word list."""
+        cuts = []
+        for previous, following in zip(words, words[1:]):
+            gap_start, gap_end = previous.end_ms, following.start_ms
+            gap_ms = gap_end - gap_start
+            if gap_ms < 320 or gap_ms > 1400:
                 continue
-            if result and cut.start_ms <= result[-1].end_ms:
-                previous = result[-1]
-                kind = 'filler' if 'filler' in {previous.kind, cut.kind} else 'silence'
-                result[-1] = SpeechCut(previous.start_ms, max(previous.end_ms, cut.end_ms), kind, previous.label or cut.label)
-            else:
-                result.append(cut)
-        return result
+            regions = activity.voiced_regions(gap_start, gap_end, minimum_ms=180)
+            if len(regions) != 1:
+                continue
+            start_ms, end_ms = regions[0]
+            if end_ms - start_ms > 1000:
+                continue
+            if start_ms - gap_start < 80 or gap_end - end_ms < 80:
+                continue
+            cuts.append(SpeechCut(
+                max(gap_start + 80, start_ms - 30),
+                min(gap_end - 80, end_ms + 30),
+                'filler',
+                'hesitação',
+            ))
+        return cuts
+
+    @staticmethod
+    def _merge_safe_cuts(cuts, duration_ms):
+        return normalize_speech_cuts(cuts, duration_ms)
 
     @staticmethod
     def _normalize(value):
         value = unicodedata.normalize('NFKD', str(value).lower())
         value = ''.join(char for char in value if not unicodedata.combining(char))
         return re.sub(r'[^a-z0-9]+', '', value)
+
+    @classmethod
+    def _canonical_filler(cls, value):
+        normalized = cls._normalize(value)
+        return FILLER_ALIASES.get(normalized, normalized)
 
     @staticmethod
     def _ends_sentence(value):

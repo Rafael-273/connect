@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -89,11 +90,11 @@ def group_speech_blocks(intervals, gap_threshold_ms=450):
 
 
 def clip_blocks_against_protected_ranges(blocks, protected_ranges):
-    """Removes/trims speech-block time that falls inside a "manter bloco intacto" range.
+    """Removes/trims speech-block time that falls inside a protected edit range.
 
-    Protected ranges must never be touched by automatic ducking, so any overlap is cut
-    out of the block instead of just skipping the whole block (which could otherwise
-    leave a partially-protected block still triggering a duck outside the protected part).
+    This is used by audio transformations that must not change an intact source block,
+    such as dialogue leveling. Music ducking intentionally does not use this helper:
+    the music still needs to sit behind speech in those blocks.
     """
     if not protected_ranges:
         return list(blocks)
@@ -244,16 +245,18 @@ class AudioMixingService:
             [(block.start_ms, block.end_ms) for block in (speech_blocks or [])],
             gap_threshold_ms=max(0, int(settings_.speech_gap_hold_ms)),
         )
-        speech_blocks = clip_blocks_against_protected_ranges(speech_blocks, protected_ranges or [])
         metrics = {
             'speech_block_count': len(speech_blocks),
             'protected_range_count': len(protected_ranges or []),
             'speech_gap_hold_ms': settings_.speech_gap_hold_ms,
         }
         if not ducking_enabled or not speech_blocks or duration_ms <= 0:
-            self._mix_flat(video_path, music_path, output_path, music_volume)
+            loop_metrics = self._mix_flat(
+                video_path, music_path, output_path, music_volume, duration_ms=duration_ms,
+            )
             metrics['duck_db'] = 0.0
             metrics['mode'] = 'flat'
+            metrics.update(loop_metrics)
             return AudioMixResult(output_path, metrics)
 
         music_mean_db = self.measure_mean_volume_db(music_path)
@@ -270,8 +273,10 @@ class AudioMixingService:
             cut_db = spectral_density * settings_.spectral_max_cut_db
             spectral_windows = build_spectral_windows(speech_blocks, cut_db)
 
+        loop_filters, loop_label, loop_metrics = self._build_music_loop_filters(music_path, duration_ms)
         filters = [
-            f'[1:a]volume={float(music_volume):.3f}[music_base]',
+            *loop_filters,
+            f'{loop_label}volume={float(music_volume):.3f}[music_base]',
             f"[music_base]volume=eval=frame:volume='{volume_expression}'[music_ducked]",
         ]
         music_label = '[music_ducked]'
@@ -292,7 +297,7 @@ class AudioMixingService:
         filters.append(f'[0:a]{music_label}amix=inputs=2:duration=first:dropout_transition=2[a]')
 
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-stream_loop', '-1',
+            settings.FFMPEG_BINARY, '-y', '-i', str(video_path),
             '-i', str(music_path), '-filter_complex', ';'.join(filters),
             '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
             '-movflags', '+faststart', str(output_path),
@@ -304,8 +309,71 @@ class AudioMixingService:
             'duck_db': round(duck_db, 2),
             'spectral_applied': bool(spectral_windows),
             'spectral_density': round(spectral_density, 2) if spectral_enabled else None,
+            **loop_metrics,
         })
         return AudioMixResult(output_path, metrics)
+
+    def _probe_duration_s(self, music_path: Path) -> float:
+        """Returns the track duration so its repetitions can overlap cleanly."""
+        try:
+            value = self.runner.run([
+                settings.FFPROBE_BINARY, '-v', 'error', '-show_entries', 'format=duration',
+                '-of', 'default=noprint_wrappers=1:nokey=1',
+                str(music_path),
+            ])
+        except ExternalMediaError as exc:
+            raise ExternalMediaError(
+                'Não foi possível identificar a duração da música de fundo do template.'
+            ) from exc
+        try:
+            duration_s = float(value.strip())
+        except (TypeError, ValueError):
+            duration_s = 0.0
+        if duration_s <= 0:
+            raise ExternalMediaError(
+                'A música de fundo do template não possui uma duração válida.'
+            )
+        return duration_s
+
+    def _build_music_loop_filters(self, music_path: Path, duration_ms: int):
+        """Builds a finite music bed whose loop points are crossfaded.
+
+        ``-stream_loop`` repeats the source with a hard cut.  Creating explicit audio
+        copies lets ``acrossfade`` overlap the tail and beginning of the track, which
+        avoids a noticeable restart and guarantees music remains under the final block.
+        """
+        duration_s = max(0.001, duration_ms / 1000)
+        return self._music_loop_plan(duration_s, self._probe_duration_s(music_path))
+
+    @staticmethod
+    def _music_loop_plan(video_duration_s: float, music_duration_s: float = 0.0):
+        if music_duration_s <= 0:
+            # The caller replaces this placeholder after probing. This avoids creating
+            # a malformed filter graph if a storage backend reports no duration.
+            return [], '[1:a]', {'music_loop_count': 1, 'music_crossfade_s': 0.0}
+        crossfade_s = min(1.25, music_duration_s / 4)
+        crossfade_s = max(0.08, crossfade_s)
+        loop_step_s = max(0.01, music_duration_s - crossfade_s)
+        loop_count = max(1, int(math.ceil((video_duration_s - music_duration_s) / loop_step_s)) + 1)
+        labels = [f'music_loop{index}' for index in range(loop_count)]
+        split_outputs = ''.join(f'[{label}]' for label in labels)
+        filters = [
+            f'[1:a]atrim=duration={music_duration_s:.3f},asetpts=N/SR/TB,'
+            f'asplit={loop_count}{split_outputs}',
+        ]
+        current_label = labels[0]
+        for index, label in enumerate(labels[1:], start=1):
+            next_label = f'music_cross{index}'
+            filters.append(
+                f'[{current_label}][{label}]acrossfade=d={crossfade_s:.3f}:c1=tri:c2=tri[{next_label}]'
+            )
+            current_label = next_label
+        final_label = 'music_looped'
+        filters.append(f'[{current_label}]atrim=duration={video_duration_s:.3f}[{final_label}]')
+        return filters, f'[{final_label}]', {
+            'music_loop_count': loop_count,
+            'music_crossfade_s': round(crossfade_s, 3) if loop_count > 1 else 0.0,
+        }
 
     def _validate_music_input(self, music_path: Path):
         """Fail early with an actionable message when the template track is corrupt.
@@ -338,12 +406,16 @@ class AudioMixingService:
                 'Envie novamente um arquivo de áudio válido no template.'
             )
 
-    def _mix_flat(self, video_path, music_path, output_path, music_volume):
+    def _mix_flat(self, video_path, music_path, output_path, music_volume, *, duration_ms):
+        loop_filters, loop_label, loop_metrics = self._build_music_loop_filters(music_path, duration_ms)
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-stream_loop', '-1',
-            '-i', str(music_path), '-filter_complex',
-            f'[1:a]volume={float(music_volume):.3f}[music];'
+            settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-i', str(music_path), '-filter_complex',
+            ';'.join([
+                *loop_filters,
+                f'{loop_label}volume={float(music_volume):.3f}[music]',
             '[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]',
+            ]),
             '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
             '-movflags', '+faststart', str(output_path),
         ])
+        return loop_metrics

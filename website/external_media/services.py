@@ -43,6 +43,7 @@ from .background_voice import BackgroundVoiceRemovalService
 from .dialogue_processing import DialogueProcessor, DialogueSettings
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
+from .quality_control import MediaQualityService
 from .speech_edit import SpeechEditAnalyzer, SpeechEditPlan, SpeechEditService
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,28 @@ class timed_step:
 def hard_delete_track_cues(track):
     for cue in SubtitleCue.all_objects.filter(track=track):
         cue.delete(force_policy=HARD_DELETE)
+
+
+def replace_file_safely(instance, field_name, source_path, filename, update_fields=()):
+    """Persist a versioned replacement before deleting the previous storage object."""
+    field = getattr(instance, field_name)
+    old_name = field.name
+    storage = field.storage
+    generated = Path(field.field.generate_filename(instance, filename))
+    versioned = generated.with_name(f'{generated.stem}-{uuid.uuid4().hex[:12]}{generated.suffix}')
+    with Path(source_path).open('rb') as source:
+        new_name = storage.save(str(versioned), File(source))
+    setattr(instance, field_name, new_name)
+    fields = list(dict.fromkeys([field_name, *update_fields]))
+    try:
+        instance.save(update_fields=fields or None)
+    except Exception:
+        storage.delete(new_name)
+        setattr(instance, field_name, old_name)
+        raise
+    if old_name and old_name != new_name:
+        storage.delete(old_name)
+    return new_name
 
 
 @dataclass(frozen=True)
@@ -145,6 +168,12 @@ class TranscriptionService:
         'Sermão cristão evangélico. Preserve nomes próprios, '
         'referências bíblicas e termos teológicos com pontuação natural.'
     )
+    DISFLUENCY_PROMPT = (
+        'Transcrição literal para edição de fala em português brasileiro. '
+        'Não omita nem corrija hesitações e sons de preenchimento. '
+        'Registre como palavras separadas exatamente quando forem ouvidos: '
+        'eh, eee, hum, hmm, hamm, ahn, hã e ah.'
+    )
 
     def __init__(self, ai_service=None):
         self.ai_service = ai_service or get_ai_service()
@@ -153,14 +182,17 @@ class TranscriptionService:
         detailed = self.transcribe_detailed(chunks, language)
         return self.group_for_subtitles(detailed)
 
-    def transcribe_detailed(self, chunks: list[AudioChunk], language: str | None) -> list[TranscriptionSegment]:
+    def transcribe_detailed(
+        self, chunks: list[AudioChunk], language: str | None, *, preserve_disfluencies=False,
+    ) -> list[TranscriptionSegment]:
         result = []
+        prompt = self.DISFLUENCY_PROMPT if preserve_disfluencies else self.PROMPT
         for chunk in chunks:
             segments = self.ai_service.transcribe_segments(
                 chunk.path,
                 filename=chunk.path.name,
                 language=language,
-                prompt=self.PROMPT,
+                prompt=prompt,
             )
             result.extend(
                 TranscriptionSegment(
@@ -186,6 +218,27 @@ class TranscriptionService:
             # a block boundary, so the last cue of a block never leaks into the next one's speech.
             cues.extend(cls._group_words(bucket))
         return cues
+
+    @staticmethod
+    def exclude_protected_ranges(items, protected_ranges):
+        """Drops transcript items that overlap a block intentionally kept intact.
+
+        Those blocks are included in the final video as supplied, so burning a caption
+        over them would violate the promise to leave them untouched. Dropping an item
+        that straddles the boundary is safer than clipping its timing and letting text
+        flash over even a few frames of the protected video.
+        """
+        ranges = [
+            (int(item.get('start_ms') or 0), int(item.get('end_ms') or 0))
+            for item in (protected_ranges or [])
+            if int(item.get('end_ms') or 0) > int(item.get('start_ms') or 0)
+        ]
+        if not ranges:
+            return list(items)
+        return [
+            item for item in items
+            if not any(item.start_ms < end_ms and item.end_ms > start_ms for start_ms, end_ms in ranges)
+        ]
 
     @staticmethod
     def _bucket_by_boundaries(items, block_boundaries_ms):
@@ -1240,14 +1293,15 @@ class StorageService:
 
     def save_asset(self, job, kind, language, source_path, filename):
         asset = MediaAsset.objects.filter(job=job, kind=kind, language=language).first()
-        if asset:
-            asset.file.delete(save=False)
-        else:
+        if not asset:
             asset = MediaAsset(job=job, kind=kind, language=language)
-        with source_path.open('rb') as source:
-            asset.file.save(filename, File(source), save=False)
         asset.file_size = source_path.stat().st_size
-        asset.save()
+        if asset.pk:
+            replace_file_safely(asset, 'file', source_path, filename, ('file_size', 'update_at'))
+        else:
+            with source_path.open('rb') as source:
+                asset.file.save(filename, File(source), save=False)
+            asset.save()
         return asset
 
 
@@ -1509,7 +1563,7 @@ class VideoAssemblyService:
     def assemble(
         self, sources, output_path, preset, workdir, lut_path=None, lut_intensity=50, music_path=None,
         music_volume=0.15, auto_reframe_config=None, analysis_sources=None,
-        reframe_plans=None,
+        reframe_plans=None, progress_callback=None,
     ):
         self.last_reframe_plans = []
         self.last_protected_ranges = []
@@ -1585,9 +1639,17 @@ class VideoAssemblyService:
         if workers > 1 and reframe_plans:
             with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='media-assemble') as executor:
                 futures = [executor.submit(self._normalize, **job) for job in normalize_jobs]
-                reframe_results = [future.result() for future in futures]
+                reframe_results = []
+                for index, future in enumerate(futures, start=1):
+                    reframe_results.append(future.result())
+                    if progress_callback:
+                        progress_callback(index, len(futures))
         else:
-            reframe_results = [self._normalize(**job) for job in normalize_jobs]
+            reframe_results = []
+            for index, job in enumerate(normalize_jobs, start=1):
+                reframe_results.append(self._normalize(**job))
+                if progress_callback:
+                    progress_callback(index, len(normalize_jobs))
         for index, reframe_plan in enumerate(reframe_results):
             effective_auto_reframe_config = normalize_jobs[index]['auto_reframe_config']
             used_auto_reframe = bool(reframe_plan) or used_auto_reframe
@@ -1606,23 +1668,20 @@ class VideoAssemblyService:
             '-c', 'copy', '-movflags', '+faststart', str(assembled),
         ])
         if music_path:
-            self.runner.run([
-                settings.FFMPEG_BINARY, '-y', '-i', str(assembled), '-stream_loop', '-1', '-i', str(music_path),
-                '-filter_complex',
-                f'[1:a]volume={float(music_volume):.3f}[music];[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]',
-                '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
-                '-movflags', '+faststart', str(output_path),
-            ])
+            AudioMixingService(self.runner).mix(
+                assembled, music_path, output_path,
+                music_volume=music_volume,
+                duration_ms=self._duration_ms(assembled),
+                ducking_enabled=False,
+            )
         return used_auto_reframe
 
     def create_proxy(self, source, destination, trim_start_ms=0, trim_end_ms=None):
         source_width, source_height = self._video_dimensions(source)
         proxy_width = min(source_width, settings.EXTERNAL_MEDIA_PROXY_WIDTH)
         proxy_height = self._even(proxy_width * source_height / source_width)
-        command = [settings.FFMPEG_BINARY, '-y']
-        command.extend(self._trim_input_args(trim_start_ms))
+        command = [settings.FFMPEG_BINARY, '-y', '-i', str(source)]
         command.extend([
-            '-i', str(source),
             *self._trim_output_args(trim_start_ms, trim_end_ms),
             '-vf', f'scale={proxy_width}:{proxy_height}:flags=fast_bilinear,fps=30,setsar=1',
             '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264',
@@ -1650,9 +1709,7 @@ class VideoAssemblyService:
     ):
         has_audio = self._has_audio(source)
         metadata = RenderService(runner=self.runner).probe_video(source)
-        command = [settings.FFMPEG_BINARY, '-y']
-        command.extend(self._trim_input_args(trim_start_ms))
-        command.extend(['-i', str(source)])
+        command = [settings.FFMPEG_BINARY, '-y', '-i', str(source)]
         if not has_audio:
             command.extend(['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'])
         filters = []
@@ -1784,17 +1841,13 @@ class VideoAssemblyService:
         return AssemblySource(Path(source))
 
     @staticmethod
-    def _trim_input_args(trim_start_ms=0):
-        if not trim_start_ms:
-            return []
-        return ['-ss', f'{max(0, int(trim_start_ms)) / 1000:.3f}']
-
-    @staticmethod
     def _trim_output_args(trim_start_ms=0, trim_end_ms=None):
-        if not trim_end_ms:
-            return []
-        duration_ms = max(1, int(trim_end_ms) - max(0, int(trim_start_ms or 0)))
-        return ['-t', f'{duration_ms / 1000:.3f}']
+        start_ms = max(0, int(trim_start_ms or 0))
+        args = ['-ss', f'{start_ms / 1000:.3f}'] if start_ms else []
+        if trim_end_ms:
+            duration_ms = max(1, int(trim_end_ms) - start_ms)
+            args.extend(['-t', f'{duration_ms / 1000:.3f}'])
+        return args
 
 
 class ExternalMediaProjectPipeline:
@@ -1808,6 +1861,7 @@ class ExternalMediaProjectPipeline:
         self.lut = LUTService()
         self.intro_outro = IntroOutroService()
         self.music = MusicService()
+        self.quality = MediaQualityService(self.assembly.runner)
 
     def run(self, project_id):
         project = self._get_project(project_id)
@@ -1823,17 +1877,26 @@ class ExternalMediaProjectPipeline:
             } & plugin_codes)
             self.projects.initialize_steps(project, plugins)
             self._step(project, 'upload', ProjectPipelineStep.Status.FINISHED, 'Uploads conferidos')
-            self._update(project, ExternalMediaProject.Status.ASSEMBLING, 8, 'Montando os blocos do template')
+            self._update(project, ExternalMediaProject.Status.ASSEMBLING, 8, 'Organizando seus vídeos')
             with TemporaryDirectory(prefix='connect-project-') as temp:
                 workdir = Path(temp)
                 sources, lut_path, music_path = self._materialize(project, plugins, workdir)
                 assembly_sources = sources
                 assembly_preset = project.template_version.preset
                 if wants_subtitles:
-                    self._update(project, ExternalMediaProject.Status.ASSEMBLING, 10, 'Criando proxy de análise')
-                    assembly_sources = self._create_proxies(sources, workdir)
+                    self._update(project, ExternalMediaProject.Status.ASSEMBLING, 10, 'Preparando seus vídeos')
+                    assembly_sources = self._create_proxies(
+                        sources, workdir,
+                        on_progress=lambda completed, total: self._update(
+                            project,
+                            ExternalMediaProject.Status.ASSEMBLING,
+                            10 + round((completed / max(1, total)) * 8),
+                            'Preparando seus vídeos',
+                        ),
+                    )
                     assembly_preset = self.assembly.proxy_preset(project.template_version.preset)
                 assembled = workdir / 'project_source.mp4'
+                self._update(project, ExternalMediaProject.Status.ASSEMBLING, 19, 'Organizando seu vídeo')
                 self._step(project, 'assembly', ProjectPipelineStep.Status.RUNNING)
                 auto_reframe_plugin = next(
                     (plugin for plugin in plugins if plugin.code == MediaTemplatePlugin.Code.AUTO_TRACKING),
@@ -1855,6 +1918,12 @@ class ExternalMediaProjectPipeline:
                     auto_reframe_config=(
                         auto_reframe_plugin.configuration or {'priority': 'face'}
                     ) if auto_reframe_plugin else None,
+                    progress_callback=lambda completed, total: self._update(
+                        project,
+                        ExternalMediaProject.Status.ASSEMBLING,
+                        19 + round((completed / max(1, total)) * 3),
+                        'Organizando seu vídeo',
+                    ),
                 )
                 if auto_reframe_plugin:
                     self._step(
@@ -1871,13 +1940,15 @@ class ExternalMediaProjectPipeline:
                     project.configuration = {
                         **(project.configuration or {}),
                         'proxy_pipeline': True,
+                        'analysis_source_duration_ms': self.assembly._duration_ms(assembled),
+                        'analysis_source_block_ranges': self.assembly.last_block_ranges,
                         'auto_reframe_plan_version': AUTO_REFRAME_PLAN_VERSION,
                         'auto_reframe_plans': self.assembly.last_reframe_plans if auto_reframe_plugin else [],
                         'protected_block_ranges': self.assembly.last_protected_ranges,
                         'block_ranges': self.assembly.last_block_ranges,
                     }
                     project.save(update_fields=['configuration', 'update_at'])
-            self._update(project, ExternalMediaProject.Status.PROCESSING, 22, 'Iniciando processamento do conteúdo')
+            self._update(project, ExternalMediaProject.Status.PROCESSING, 22, 'Preparando seu projeto')
             if wants_subtitles:
                 media_pipeline = ExternalMediaPipeline()
                 media_pipeline.prepare_subtitle_tracks(job.pk)
@@ -1889,9 +1960,15 @@ class ExternalMediaProjectPipeline:
                 with TemporaryDirectory(prefix='connect-project-output-') as temp:
                     source = Path(temp) / 'video.mp4'
                     self.storage.copy_to_local(job.original_video, source)
+                    quality_report = self.quality.validate_media(source, deep_audio=True)
+                    quality_report.require_ok()
                     self.storage.save_asset(
                         job, MediaAsset.Kind.VIDEO, job.original_language, source, 'video_final.mp4',
                     )
+                project.configuration = {
+                    **(project.configuration or {}),
+                    'quality_report': quality_report.as_dict(),
+                }
                 job.status = ExternalMediaJob.Status.FINISHED
                 job.progress = 100
                 job.current_step = 'Processamento finalizado'
@@ -1901,7 +1978,9 @@ class ExternalMediaProjectPipeline:
                 project.progress = 100
                 project.current_step = 'Processamento finalizado'
                 project.finished_at = timezone.now()
-                project.save(update_fields=['status', 'progress', 'current_step', 'finished_at', 'update_at'])
+                project.save(update_fields=[
+                    'configuration', 'status', 'progress', 'current_step', 'finished_at', 'update_at',
+                ])
         except (ExternalMediaError, AIServiceError) as exc:
             self._fail(project, str(exc))
             raise
@@ -1915,12 +1994,18 @@ class ExternalMediaProjectPipeline:
         if not project.render_job_id:
             raise ExternalMediaError('O projeto ainda não possui conteúdo preparado.')
         try:
-            self._update(project, ExternalMediaProject.Status.PROCESSING, 85, 'Renderizando os vídeos finais')
+            self._update(project, ExternalMediaProject.Status.PROCESSING, 68, 'Preparando a versão final')
             self._step(project, 'render', ProjectPipelineStep.Status.RUNNING)
             if (project.configuration or {}).get('proxy_pipeline'):
                 with TemporaryDirectory(prefix='connect-project-final-') as temp:
                     with timed_step('prepare_final_master', project=project.public_id):
                         self._prepare_final_master(project, Path(temp))
+            subtitle_report = self.quality.validate_subtitles(
+                ExternalMediaPipeline._ordered_output_tracks(project.render_job),
+                (project.configuration or {}).get('protected_block_ranges'),
+            )
+            subtitle_report.require_ok()
+            self._update(project, ExternalMediaProject.Status.PROCESSING, 91, 'Finalizando seu vídeo')
             with timed_step('render_outputs', project=project.public_id):
                 ExternalMediaPipeline().render_outputs(project.render_job_id)
             self._step(project, 'render', ProjectPipelineStep.Status.FINISHED)
@@ -2023,7 +2108,7 @@ class ExternalMediaProjectPipeline:
                 )
         return sources, lut, music
 
-    def _create_proxies(self, sources, workdir):
+    def _create_proxies(self, sources, workdir, on_progress=None):
         proxies = []
         for index, source in enumerate(sources):
             source_item = VideoAssemblyService._coerce_source(source)
@@ -2045,6 +2130,8 @@ class ExternalMediaProjectPipeline:
                 trim_start_ms=0,
                 trim_end_ms=None,
             ))
+            if on_progress:
+                on_progress(index + 1, len(sources))
         return proxies
 
     def _prepare_final_master(self, project, workdir):
@@ -2064,7 +2151,16 @@ class ExternalMediaProjectPipeline:
         analysis_sources = None
         if auto_reframe_plugin and not saved_reframe_plans:
             with timed_step('create_final_analysis_proxies', count=len(sources)):
-                analysis_sources = self._create_proxies(sources, workdir)
+                analysis_sources = self._create_proxies(
+                    sources, workdir,
+                    on_progress=lambda completed, total: self._update(
+                        project,
+                        ExternalMediaProject.Status.PROCESSING,
+                        69 + round((completed / max(1, total)) * 2),
+                        'Preparando seu vídeo',
+                    ),
+                )
+        self._update(project, ExternalMediaProject.Status.PROCESSING, 72, 'Montando seu vídeo')
         with timed_step('assemble_final_master', clips=len(sources), reused_reframe_plans=bool(saved_reframe_plans)):
             self.assembly.assemble(
                 sources,
@@ -2083,6 +2179,12 @@ class ExternalMediaProjectPipeline:
                 ) if auto_reframe_plugin else None,
                 analysis_sources=analysis_sources,
                 reframe_plans=saved_reframe_plans,
+                progress_callback=lambda completed, total: self._update(
+                    project,
+                    ExternalMediaProject.Status.PROCESSING,
+                    72 + round((completed / max(1, total)) * 8),
+                    'Montando seu vídeo',
+                ),
             )
         final_path = assembled
         background_plan_data = (project.configuration or {}).get('background_voice_plan')
@@ -2094,6 +2196,11 @@ class ExternalMediaProjectPipeline:
         # This removes an entire 4K re-encode without changing the resulting cuts.
         combined_cuts = []
         original_duration_ms = SpeechEditService(self.assembly.runner).duration_ms(assembled)
+        timeline_report = self._validate_analysis_timeline(
+            configuration,
+            original_duration_ms,
+            self.assembly.last_block_ranges,
+        )
         if background_plan and background_plan.cuts:
             combined_cuts.extend(background_plan.cuts)
         if plan and plan.cuts:
@@ -2110,9 +2217,10 @@ class ExternalMediaProjectPipeline:
             else:
                 combined_cuts.extend(plan.cuts)
         if combined_cuts:
+            self._update(project, ExternalMediaProject.Status.PROCESSING, 82, 'Ajustando seu vídeo')
             edited = workdir / 'project_master_speech_edited.mp4'
-            combined_plan = SpeechEditPlan(
-                tuple(sorted(combined_cuts, key=lambda cut: (cut.start_ms, cut.end_ms))),
+            combined_plan = SpeechEditPlan.normalized(
+                combined_cuts,
                 original_duration_ms,
                 max(
                     getattr(background_plan, 'crossfade_ms', 0) or 0,
@@ -2120,19 +2228,72 @@ class ExternalMediaProjectPipeline:
                     40,
                 ),
             )
+            cut_report = self.quality.validate_cuts(combined_plan.cuts, original_duration_ms)
+            cut_report.require_ok()
             with timed_step('apply_combined_speech_edits_to_final_master', cuts=len(combined_plan.cuts)):
                 SpeechEditService(self.assembly.runner).apply(final_path, edited, combined_plan)
             final_path = edited
+        else:
+            combined_plan = SpeechEditPlan.normalized((), original_duration_ms)
         job = project.render_job
         version = project.template_version
         if music_path or version.audio_mastering_enabled or version.dialogue_processing_enabled:
+            self._update(project, ExternalMediaProject.Status.PROCESSING, 87, 'Ajustando o áudio')
             with timed_step('finalize_audio_final_master'):
                 final_path = self._finalize_audio(project, job, workdir, final_path, music_path, plan)
-        if job.original_video:
-            job.original_video.delete(save=False)
-        with final_path.open('rb') as source:
-            job.original_video.save('project_source.mp4', File(source), save=False)
-        job.save(update_fields=['original_video', 'update_at'])
+        expected_duration_ms = max(1, original_duration_ms - combined_plan.saved_ms)
+        quality_report = self.quality.validate_media(
+            final_path,
+            expected_duration_ms=expected_duration_ms,
+            deep_audio=True,
+        )
+        quality_report.require_ok()
+        project.configuration = {
+            **(project.configuration or {}),
+            'timeline_validation': timeline_report,
+            'quality_report': quality_report.as_dict(),
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+        replace_file_safely(
+            job, 'original_video', final_path, 'project_source.mp4', ('update_at',),
+        )
+        self._update(project, ExternalMediaProject.Status.PROCESSING, 90, 'Finalizando seu vídeo')
+
+    @staticmethod
+    def _validate_analysis_timeline(configuration, original_duration_ms, final_ranges):
+        analysis_duration_ms = int(configuration.get('analysis_source_duration_ms') or 0)
+        analysis_ranges = configuration.get('analysis_source_block_ranges') or []
+        if not analysis_duration_ms:
+            raise ExternalMediaError('A duração da timeline de análise não foi registrada.')
+        duration_drift_ms = abs(original_duration_ms - analysis_duration_ms)
+        duration_tolerance_ms = max(1000, round(original_duration_ms * 0.01))
+        if duration_drift_ms > duration_tolerance_ms:
+            raise ExternalMediaError(
+                'O proxy e o vídeo original perderam sincronismo '
+                f'({duration_drift_ms / 1000:.2f}s de diferença).'
+            )
+        if len(analysis_ranges) != len(final_ranges):
+            raise ExternalMediaError('A quantidade de blocos difere entre o proxy e o vídeo original.')
+        largest_block_drift_ms = 0
+        for analysis, final in zip(analysis_ranges, final_ranges):
+            if analysis.get('block_key') != final.get('block_key'):
+                raise ExternalMediaError('A ordem dos blocos mudou depois da análise do proxy.')
+            analysis_ms = int(analysis.get('end_ms') or 0) - int(analysis.get('start_ms') or 0)
+            final_ms = int(final.get('end_ms') or 0) - int(final.get('start_ms') or 0)
+            block_drift_ms = abs(analysis_ms - final_ms)
+            largest_block_drift_ms = max(largest_block_drift_ms, block_drift_ms)
+            if block_drift_ms > max(500, round(max(analysis_ms, final_ms) * 0.01)):
+                raise ExternalMediaError(
+                    f'O bloco "{analysis.get("block_name") or analysis.get("block_key")}" '
+                    'não está sincronizado entre o proxy e o original.'
+                )
+        return {
+            'ok': True,
+            'analysis_duration_ms': analysis_duration_ms,
+            'original_duration_ms': original_duration_ms,
+            'duration_drift_ms': duration_drift_ms,
+            'largest_block_drift_ms': largest_block_drift_ms,
+        }
 
     def _finalize_audio(self, project, job, workdir, video_path, music_path, plan):
         """Processes dialogue, mixes in music (with adaptive ducking, if enabled), then
@@ -2318,31 +2479,45 @@ class ExternalMediaPipeline:
         self.renderer = RenderService(subtitle_service=self.subtitles)
         self.speech_analyzer = SpeechEditAnalyzer()
         self.speech_editor = SpeechEditService(self.audio.runner)
+        self.quality = MediaQualityService(self.audio.runner)
 
     def prepare_subtitle_tracks(self, job_id):
         job = self._get_job(job_id)
         try:
-            self._update(job, ExternalMediaJob.Status.EXTRACTING_AUDIO, 12, 'Extraindo e preparando o áudio')
+            self._update(job, ExternalMediaJob.Status.EXTRACTING_AUDIO, 12, 'Preparando o áudio')
             with TemporaryDirectory(prefix='connect-media-') as temp:
                 workdir = Path(temp)
                 video_path = workdir / f'original{Path(job.original_video.name).suffix.lower()}'
                 self.storage.copy_to_local(job.original_video, video_path)
                 chunks = self.audio.extract(video_path, workdir)
-                self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 30, 'Transcrevendo com Whisper')
-                detailed = self.transcription.transcribe_detailed(chunks, self._transcription_language(job))
-                self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 36, 'Removendo voz de fundo quando necessário')
+                self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 30, 'Preparando as legendas')
+                project = getattr(job, 'project', None)
+                preserve_disfluencies = bool(project and any(
+                    plugin.code == MediaTemplatePlugin.Code.FILLER_REMOVAL
+                    for plugin in TemplateService.enabled_plugins(project)
+                ))
+                detailed = self.transcription.transcribe_detailed(
+                    chunks,
+                    self._transcription_language(job),
+                    preserve_disfluencies=preserve_disfluencies,
+                )
+                self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 36, 'Ajustando o áudio do vídeo')
                 video_path, detailed = self._apply_background_voice_removal(job, video_path, workdir, detailed)
                 detailed = self._apply_speech_edit(job, video_path, workdir, detailed)
+                detailed = self.transcription.exclude_protected_ranges(
+                    detailed,
+                    (project.configuration or {}).get('protected_block_ranges') if project else [],
+                )
                 boundaries = self._block_boundaries_ms(job)
                 segments = self.transcription.group_for_subtitles(detailed, boundaries)
-                self._update(job, ExternalMediaJob.Status.GENERATING_SUBTITLES, 52, 'Criando blocos sincronizados')
+                self._update(job, ExternalMediaJob.Status.GENERATING_SUBTITLES, 52, 'Sincronizando as legendas')
                 source_track = self._save_source_track(job, segments)
                 targets = [language for language in job.output_languages if language != job.original_language]
                 for index, language in enumerate(targets):
                     progress = 58 + round((index / max(1, len(targets))) * 22)
-                    self._update(job, ExternalMediaJob.Status.TRANSLATING, progress, f'Traduzindo para {language.upper()}')
+                    self._update(job, ExternalMediaJob.Status.TRANSLATING, progress, f'Preparando legendas em {language.upper()}')
                     self.translation.translate_track(source_track, language, job.translation_model)
-            self._update(job, ExternalMediaJob.Status.TRANSLATING, 82, 'Legendas preparadas')
+            self._update(job, ExternalMediaJob.Status.TRANSLATING, 82, 'Legendas prontas')
         except (ExternalMediaError, AIServiceError) as exc:
             self._fail(job, str(exc))
             raise
@@ -2358,11 +2533,14 @@ class ExternalMediaPipeline:
     def render_outputs(self, job_id):
         job = self._get_job(job_id)
         try:
-            self._update(job, ExternalMediaJob.Status.RENDERING, 86, 'Gerando arquivos e renderizando vídeos')
+            self._update(job, ExternalMediaJob.Status.RENDERING, 86, 'Finalizando seu vídeo')
             with TemporaryDirectory(prefix='connect-render-') as temp:
                 workdir = Path(temp)
                 video_path = workdir / f'original{Path(job.original_video.name).suffix.lower()}'
                 self.storage.copy_to_local(job.original_video, video_path)
+                source_report = self.quality.validate_media(video_path)
+                source_report.require_ok()
+                source_duration_ms = source_report.metrics['duration_ms']
                 tracks = self._ordered_output_tracks(job)
                 if not tracks:
                     raise ExternalMediaError('Nenhuma legenda foi encontrada para renderização.')
@@ -2385,6 +2563,10 @@ class ExternalMediaPipeline:
                             job.original_language,
                             job.translated_subtitle_style or job.subtitle_style,
                         )
+                    output_report = self.quality.validate_media(
+                        video_output, expected_duration_ms=source_duration_ms,
+                    )
+                    output_report.require_ok()
                     self._remove_stale_video_assets(job, keep_language=job.original_language)
                     self.storage.save_asset(
                         job, MediaAsset.Kind.VIDEO, job.original_language, video_output, video_output.name,
@@ -2402,6 +2584,10 @@ class ExternalMediaPipeline:
                                 self._style_for_track(job, track.language),
                                 workdir,
                             )
+                        output_report = self.quality.validate_media(
+                            video_output, expected_duration_ms=source_duration_ms,
+                        )
+                        output_report.require_ok()
                         self.storage.save_asset(
                             job, MediaAsset.Kind.VIDEO, track.language, video_output, video_output.name,
                         )
@@ -2517,11 +2703,9 @@ class ExternalMediaPipeline:
             return video_path, detailed
         edited_path = workdir / 'background_voice_removed.mp4'
         service.apply(video_path, edited_path, plan)
-        if job.original_video:
-            job.original_video.delete(save=False)
-        with edited_path.open('rb') as source:
-            job.original_video.save('project_source.mp4', File(source), save=False)
-        job.save(update_fields=['original_video', 'update_at'])
+        replace_file_safely(
+            job, 'original_video', edited_path, 'project_source.mp4', ('update_at',),
+        )
         remap = SpeechEditPlan(plan.cuts, plan.duration_ms).remap_time
         for key in ('block_ranges', 'protected_block_ranges'):
             if configuration.get(key):
@@ -2584,21 +2768,16 @@ class ExternalMediaPipeline:
             music_path = workdir / f'speech_music{Path(music_field.name).suffix.lower()}'
             self.storage.copy_to_local(music_field, music_path)
             mixed_path = workdir / 'speech_edited_with_music.mp4'
-            self.audio.runner.run([
-                settings.FFMPEG_BINARY, '-y', '-i', str(final_path), '-stream_loop', '-1',
-                '-i', str(music_path), '-filter_complex',
-                f'[1:a]volume={float(project.template_version.music_volume):.3f}[music];'
-                '[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]',
-                '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
-                '-movflags', '+faststart', str(mixed_path),
-            ])
-            final_path = mixed_path
+            final_path = AudioMixingService(self.audio.runner).mix(
+                final_path, music_path, mixed_path,
+                music_volume=project.template_version.music_volume,
+                duration_ms=self.speech_editor.duration_ms(final_path),
+                ducking_enabled=False,
+            ).path
         if final_path != video_path:
-            if job.original_video:
-                job.original_video.delete(save=False)
-            with final_path.open('rb') as source:
-                job.original_video.save('project_source.mp4', File(source), save=False)
-            job.save(update_fields=['original_video', 'update_at'])
+            replace_file_safely(
+                job, 'original_video', final_path, 'project_source.mp4', ('update_at',),
+            )
         configuration = project.configuration or {}
         remapped_ranges = {}
         for key in ('block_ranges', 'protected_block_ranges'):
@@ -2666,6 +2845,20 @@ class ExternalMediaPipeline:
             'status', 'progress', 'current_step', 'error_message',
             'finished_at', 'started_at', 'update_at',
         ])
+        project_id = getattr(job, 'processing_project_id', None)
+        if not project_id:
+            return
+        if status == ExternalMediaJob.Status.RENDERING:
+            project_progress = 91 + round((max(86, min(100, progress)) - 86) / 14 * 8)
+        else:
+            project_progress = 24 + round(max(0, min(82, progress)) / 82 * 43)
+        ExternalMediaProject.objects.filter(pk=project_id).update(
+            status=ExternalMediaProject.Status.PROCESSING,
+            progress=min(99, project_progress),
+            current_step=step,
+            error_message='',
+            update_at=timezone.now(),
+        )
 
     @staticmethod
     def _fail(job, message):

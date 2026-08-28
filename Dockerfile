@@ -1,4 +1,4 @@
-FROM python:3.10.5
+FROM python:3.10.5 AS base
 
 EXPOSE 8000
 WORKDIR /usr/src/platform
@@ -14,6 +14,13 @@ RUN pip install -r requirements.txt
 RUN mkdir -p /usr/src/platform/media && \
     chmod -R 755 /usr/src/platform/media
 
-# No need to copy files here since we're using volumes in docker-compose
+FROM base AS web
 
 CMD gunicorn --bind 0.0.0.0:8000 --reload connect.wsgi:application
+
+FROM base AS media-worker
+
+COPY requirements-diarization.txt /usr/src/platform/
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --timeout 600 --retries 10 -r requirements-diarization.txt

@@ -31,6 +31,26 @@
     .project-media-action { width:2rem; height:2rem; display:inline-flex; align-items:center; justify-content:center; border:1px solid #e2e8f0; border-radius:.6rem; background:#fff; color:#64748b; }
     .project-media-action:hover { color:#C90905; border-color:#fecaca; background:#fff7f7; }
     .project-media-action.is-danger:hover { color:#dc2626; background:#fff1f2; }
+    .project-progress { overflow:hidden; border-color:#f1d7d5; background:linear-gradient(135deg, #fff 0%, #fff8f7 100%); }
+    .project-progress__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
+    .project-progress__eyebrow { display:inline-flex; align-items:center; gap:.45rem; color:#a41310; font-size:.72rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+    .project-progress__live { width:.5rem; height:.5rem; border-radius:999px; background:#d90905; box-shadow:0 0 0 4px rgba(201,9,5,.12); animation:project-progress-pulse 1.8s ease-in-out infinite; }
+    .project-progress__percent { flex:none; border:1px solid #fecaca; border-radius:999px; background:rgba(255,255,255,.82); color:#c90905; padding:.45rem .7rem; font-size:1.25rem; font-weight:900; letter-spacing:-.04em; line-height:1; font-variant-numeric:tabular-nums; }
+    .project-progress--terminal .project-progress__percent { color:#15803d; border-color:#bbf7d0; background:#f0fdf4; }
+    .project-progress--terminal .project-progress__live { animation:none; background:#16a34a; box-shadow:0 0 0 4px rgba(22,163,74,.12); }
+    .project-progress__track { height:.85rem; overflow:hidden; border-radius:999px; background:#f0e9e8; box-shadow:inset 0 1px 2px rgba(71,14,10,.06); }
+    .project-progress__bar { height:100%; min-width:.5rem; border-radius:inherit; background:linear-gradient(90deg, #b80704 0%, #e31a15 65%, #ff6b62 100%); box-shadow:0 0 18px rgba(201,9,5,.25); transition:width .7s cubic-bezier(.2,.8,.2,1); }
+    .project-progress__stats { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.75rem; margin-top:1.25rem; }
+    .project-progress__stat { min-height:5.75rem; border:1px solid #f0e6e5; border-radius:1rem; padding:1rem; background:rgba(255,255,255,.8); }
+    .project-progress__stat span { display:block; color:#8b8e98; font-size:.7rem; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
+    .project-progress__stat strong { display:block; margin-top:.42rem; color:#172033; font-size:1.12rem; font-variant-numeric:tabular-nums; }
+    .project-progress__details { margin-top:1.25rem; border-top:1px solid #f0e7e6; padding-top:1rem; }
+    .project-progress__details summary { cursor:pointer; color:#5d6572; font-size:.85rem; font-weight:800; list-style:none; }
+    .project-progress__details summary::-webkit-details-marker { display:none; }
+    .project-progress__details summary::after { content:'+'; float:right; color:#c90905; font-size:1.1rem; }
+    .project-progress__details[open] summary::after { content:'−'; }
+    @keyframes project-progress-pulse { 50% { opacity:.45; transform:scale(.8); } }
+    @media (max-width:640px) { .project-progress__top { align-items:center; } .project-progress__stats { grid-template-columns:1fr; } }
 </style>
 {% endblock %}
 
@@ -38,63 +58,23 @@
 
 {% block media_content %}
 {% if project.status != 'DRAFT' %}
-<section class="media-card p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}">
-    <div class="flex justify-between gap-4 mb-3"><div><p class="font-black" id="status-label">{{ project.get_status_display }}</p><p class="text-sm text-gray-500" id="current-step">{{ project.current_step }}</p></div><strong id="progress-value">{{ project.progress }}%</strong></div>
-    <div class="h-3 rounded-full bg-gray-100 overflow-hidden"><div id="progress-bar" class="h-full transition-all" style="width:{{ project.progress }}%;background:#C90905"></div></div>
-    <div class="mt-4">
-        <div class="inline-flex rounded-xl bg-gray-50 px-4 py-3">
-            <div>
-                <span class="block text-xs uppercase tracking-[0.18em] text-gray-500">Tempo de processamento</span>
-                <strong id="duration-label" class="block mt-1 text-base">{{ project.duration_label|default:"—" }}</strong>
-            </div>
+<section class="media-card project-progress {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}project-progress--terminal{% endif %} p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}" data-elapsed="{{ project.duration_seconds|default:0 }}">
+    <div class="project-progress__top">
+        <div class="min-w-0">
+            <p class="project-progress__eyebrow"><i class="project-progress__live"></i><span id="status-label">{{ project.get_status_display }}</span></p>
+            <h2 class="mt-3 text-xl sm:text-2xl font-black text-gray-900" id="current-step">{{ project.current_step|default:"Preparando seu processamento" }}</h2>
+            <p class="mt-1 text-sm text-gray-500">{% if project.status == 'FINISHED' %}Seu vídeo já está pronto para visualizar e baixar.{% elif project.status == 'ERROR' or project.status == 'CANCELLED' %}Confira os detalhes abaixo para continuar.{% else %}Você pode continuar navegando. Atualizaremos este status automaticamente.{% endif %}</p>
         </div>
+        <strong class="project-progress__percent" id="progress-value">{{ project.progress }}%</strong>
+    </div>
+    <div class="project-progress__track mt-6" aria-label="Progresso do processamento"><div id="progress-bar" class="project-progress__bar" style="width:{{ project.progress }}%"></div></div>
+    <div class="project-progress__stats">
+        <div class="project-progress__stat"><span>{% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}Tempo total{% else %}Tempo decorrido{% endif %}</span><strong id="duration-label">{{ project.duration_label|default:"Agora" }}</strong></div>
+        <div class="project-progress__stat"><span id="eta-title">{% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}Status final{% else %}Previsão para concluir{% endif %}</span><strong id="eta-label">{% if project.status == 'FINISHED' %}Processamento concluído{% elif project.status == 'ERROR' %}Processamento interrompido{% elif project.status == 'CANCELLED' %}Processamento cancelado{% else %}Calculando previsão...{% endif %}</strong><small class="block mt-1 text-xs text-gray-400" id="eta-source"></small></div>
     </div>
     {% if project.error_message %}<p class="mt-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm">{{ project.error_message }}</p>{% endif %}
-    {% if steps %}<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-5">{% for step in steps %}<div class="rounded-xl border p-3 text-sm"><i class="fas {% if step.status == 'FINISHED' %}fa-check-circle text-green-600{% elif step.status == 'ERROR' %}fa-circle-xmark text-red-600{% elif step.status == 'RUNNING' %}fa-circle-notch fa-spin text-amber-600{% else %}fa-circle text-gray-300{% endif %} mr-2"></i>{{ step.label }}{% if step.status == 'SKIPPED' %}<span class="block text-xs text-amber-700 mt-1">{{ step.message }}</span>{% endif %}</div>{% endfor %}</div>{% endif %}
+    {% if steps %}<details class="project-progress__details"><summary>Ver etapas do processamento</summary><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-4">{% for step in steps %}<div class="rounded-xl border border-gray-200 bg-white/70 p-3 text-sm"><i class="fas {% if step.status == 'FINISHED' %}fa-check-circle text-green-600{% elif step.status == 'ERROR' %}fa-circle-xmark text-red-600{% elif step.status == 'RUNNING' %}fa-circle-notch fa-spin text-amber-600{% else %}fa-circle text-gray-300{% endif %} mr-2"></i>{{ step.label }}{% if step.status == 'SKIPPED' %}<span class="block text-xs text-amber-700 mt-1">{{ step.message }}</span>{% endif %}</div>{% endfor %}</div></details>{% endif %}
 </section>
-{% endif %}
-
-{% if processing_history %}
-<section class="media-card p-5 sm:p-6 mb-7">
-    <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
-        <div>
-            <h2 class="text-xl font-black">Histórico de processamentos</h2>
-            <p class="text-sm text-gray-500 mt-1">Todas as execuções realizadas para este projeto.</p>
-        </div>
-        <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">{{ processing_history|length }} execução{{ processing_history|length|pluralize }}</span>
-    </div>
-    <div class="space-y-3">
-        {% for job in processing_history %}
-        <article class="rounded-xl border border-gray-200 p-4 flex flex-wrap items-center justify-between gap-4">
-            <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                    <strong class="text-gray-900">Processamento #{{ forloop.revcounter }}</strong>
-                    <span class="media-status-badge {% if job.status == 'FINISHED' %}is-finished{% elif job.status == 'ERROR' %}is-error{% elif job.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ job.get_status_display }}</span>
-                    {% if job.pk == project.render_job_id %}<span class="text-xs font-bold text-green-700">Resultado atual</span>{% endif %}
-                </div>
-                <p class="text-sm text-gray-500 mt-1"><i class="far fa-calendar-alt mr-1"></i>{{ job.created_at|date:'d/m/Y H:i' }}{% if job.duration_label %} · <i class="fas fa-stopwatch mr-1"></i>{{ job.duration_label }}{% endif %}</p>
-            </div>
-            <a href="{% url 'external_media_detail' job.public_id %}" class="media-btn media-muted text-sm"><i class="fas fa-eye"></i>Ver processamento</a>
-        </article>
-        {% endfor %}
-    </div>
-</section>
-{% endif %}
-
-{% if project.configuration.speech_edit_preview %}
-{% with preview=project.configuration.speech_edit_preview %}
-<section class="media-card p-5 mb-7">
-    <div class="flex items-center gap-3 mb-4">
-        <i class="fas fa-scissors text-xl" style="color:#C90905"></i>
-        <div><h2 class="font-black text-lg">Edição inteligente de fala</h2><p class="text-sm text-gray-500">Prévia dos ajustes aplicados antes da renderização.</p></div>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div class="rounded-xl bg-gray-50 p-4"><span class="text-sm text-gray-500">Silêncios ajustados</span><strong class="block text-2xl mt-1">{{ preview.silence_count }}</strong></div>
-        <div class="rounded-xl bg-gray-50 p-4"><span class="text-sm text-gray-500">Vícios de fala removidos</span><strong class="block text-2xl mt-1">{{ preview.filler_count }}</strong></div>
-        <div class="rounded-xl bg-gray-50 p-4"><span class="text-sm text-gray-500">Tempo economizado</span><strong class="block text-2xl mt-1">{{ preview.saved_seconds }}s</strong></div>
-    </div>
-</section>
-{% endwith %}
 {% endif %}
 
 {% if project.status == 'DRAFT' %}
@@ -714,6 +694,42 @@
 (function(){
     const card=document.getElementById('progress-card');
     if(!card||card.dataset.terminal==='1')return;
+    const userFacingStep=(step)=>{
+        const text=(step||'').trim();
+        if(!text)return 'Preparando seu projeto';
+        if(/whisper|transcrev|legenda|tradu[cç]/i.test(text))return 'Preparando as legendas';
+        if(/an[aá]lis|proxy/i.test(text))return 'Preparando seus vídeos';
+        if(/montando|sequ[eê]ncia|blocos/i.test(text))return 'Organizando seu vídeo';
+        if(/corte|sil[eê]ncio|v[ií]cio|di[aá]logo/i.test(text))return 'Ajustando seu vídeo';
+        if(/m[uú]sica|[aá]udio/i.test(text))return 'Ajustando o áudio';
+        if(/render|arquivo|qualidade original|vers[aã]o final/i.test(text))return 'Finalizando seu vídeo';
+        return text.replace(/\s+\d+\s+de\s+\d+/i, '');
+    };
+    const initialStep=document.getElementById('current-step');
+    if(initialStep)initialStep.textContent=userFacingStep(initialStep.textContent);
+    let elapsedSeconds=Number(card.dataset.elapsed||0);
+    let remainingSeconds=null;
+    const formatDuration=(seconds)=>{
+        if(seconds===null||seconds===undefined||seconds<0)return 'Calculando previsão...';
+        const total=Math.max(0,Math.round(seconds));
+        const hours=Math.floor(total/3600);
+        const minutes=Math.floor((total%3600)/60);
+        const remaining=total%60;
+        if(hours)return `${hours}h ${minutes}min`;
+        if(minutes)return `${minutes}min ${remaining}s`;
+        return `${remaining}s`;
+    };
+    const refreshClocks=()=>{
+        const elapsed=document.getElementById('duration-label');
+        const eta=document.getElementById('eta-label');
+        if(elapsed)elapsed.textContent=formatDuration(elapsedSeconds);
+        if(eta)eta.textContent=remainingSeconds===null?'Calculando previsão...':remainingSeconds<=0?'Quase pronto':`Cerca de ${formatDuration(remainingSeconds)}`;
+    };
+    window.setInterval(()=>{
+        elapsedSeconds+=1;
+        if(remainingSeconds!==null&&remainingSeconds>0)remainingSeconds-=1;
+        refreshClocks();
+    },1000);
     const poll=async()=>{
         try{
             const statusUrl=new URL(card.dataset.statusUrl,window.location.origin);
@@ -722,11 +738,13 @@
             if(!response.ok)throw new Error('Não foi possível consultar o projeto.');
             const data=await response.json();
             document.getElementById('status-label').textContent=data.status_label;
-            document.getElementById('current-step').textContent=data.current_step;
+            document.getElementById('current-step').textContent=userFacingStep(data.current_step);
             document.getElementById('progress-value').textContent=data.progress+'%';
             document.getElementById('progress-bar').style.width=data.progress+'%';
-            const duration=document.getElementById('duration-label');
-            if(duration)duration.textContent=data.duration_label||'—';
+            if(data.elapsed_seconds!==null&&data.elapsed_seconds!==undefined)elapsedSeconds=data.elapsed_seconds;
+            remainingSeconds=data.estimated_remaining_seconds;
+            document.getElementById('eta-source').textContent=data.estimate_source?`Estimativa baseada em ${data.estimate_source}.`:'';
+            refreshClocks();
             if(data.is_terminal){window.location.reload();return;}
             setTimeout(poll,2500);
         }catch(error){setTimeout(poll,5000);}

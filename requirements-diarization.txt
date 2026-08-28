@@ -1,0 +1,5 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+numpy==2.2.6
+torch==2.8.0+cpu
+torchaudio==2.8.0+cpu
+pyannote.audio==4.0.7

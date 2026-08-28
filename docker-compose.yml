@@ -27,6 +27,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: web
     working_dir: /usr/src/platform
     command: >
       bash -c "
@@ -58,6 +59,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: media-worker
     working_dir: /usr/src/platform
     command: >
       python -m watchdog.watchmedo auto-restart --directory=/usr/src/platform/website --pattern='*.py' --recursive --

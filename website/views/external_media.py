@@ -1,5 +1,6 @@
 import mimetypes
 import re
+import uuid
 from pathlib import Path
 
 from django.conf import settings
@@ -9,6 +10,7 @@ from django.db.models import F, Max, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.views import View
 from safedelete.models import HARD_DELETE
@@ -52,6 +54,39 @@ from .mixins import ExternalMediaRequiredMixin
 
 
 _RANGE_RE = re.compile(r'bytes=(\d*)-(\d*)')
+
+
+def project_processing_estimate(project):
+    """Returns a conservative ETA based on this project's completed renders."""
+    if not project.started_at or project.status in {
+        ExternalMediaProject.Status.FINISHED,
+        ExternalMediaProject.Status.ERROR,
+        ExternalMediaProject.Status.CANCELLED,
+        ExternalMediaProject.Status.DRAFT,
+    }:
+        return None, None, None
+    elapsed_seconds = max(0, int((timezone.now() - project.started_at).total_seconds()))
+    completed = list(
+        project.processing_history.filter(
+            status=ExternalMediaJob.Status.FINISHED,
+            started_at__isnull=False,
+            finished_at__isnull=False,
+        ).exclude(pk=project.render_job_id).order_by('-finished_at')[:5]
+    )
+    durations = [max(1, int((job.finished_at - job.started_at).total_seconds())) for job in completed]
+    historical_total = sorted(durations)[len(durations) // 2] if durations else None
+    pace_total = None
+    if project.progress >= 12 and elapsed_seconds >= 20:
+        pace_total = round(elapsed_seconds * 100 / max(1, project.progress))
+    if historical_total and pace_total:
+        estimated_total, source = round(historical_total * 0.8 + pace_total * 0.2), 'histórico e andamento atual'
+    elif historical_total:
+        estimated_total, source = historical_total, 'histórico deste projeto'
+    elif pace_total:
+        estimated_total, source = pace_total, 'andamento atual'
+    else:
+        return elapsed_seconds, None, None
+    return elapsed_seconds, max(0, estimated_total - elapsed_seconds), source
 
 
 def _file_chunks(file_handle, start, length, block_size=8192):
@@ -837,9 +872,10 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
 
     @staticmethod
     def _enqueue(project_id):
+        task_id = str(uuid.uuid4())
         try:
-            result = run_external_media_project.delay(project_id)
-            ExternalMediaProject.objects.filter(pk=project_id).update(celery_task_id=result.id)
+            ExternalMediaProject.objects.filter(pk=project_id).update(celery_task_id=task_id)
+            run_external_media_project.apply_async(args=[project_id], task_id=task_id)
         except Exception:
             ExternalMediaProject.objects.filter(pk=project_id).update(
                 status=ExternalMediaProject.Status.ERROR,
@@ -860,9 +896,10 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
         project.error_message = ''
         project.save(update_fields=['status', 'progress', 'current_step', 'error_message', 'update_at'])
         try:
-            result = render_external_media_project.delay(project.pk)
-            project.celery_task_id = result.id
+            task_id = str(uuid.uuid4())
+            project.celery_task_id = task_id
             project.save(update_fields=['celery_task_id', 'update_at'])
+            render_external_media_project.apply_async(args=[project.pk], task_id=task_id)
         except Exception:
             project.status = ExternalMediaProject.Status.ERROR
             project.error_message = 'Verifique se o Redis e o worker Celery estão ativos.'
@@ -873,12 +910,16 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
 class ExternalMediaProjectStatusView(ExternalMediaRequiredMixin, View):
     def get(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        elapsed_seconds, estimated_remaining_seconds, estimate_source = project_processing_estimate(project)
         response = JsonResponse({
             'status': project.status,
             'status_label': project.get_status_display(),
             'progress': project.progress,
             'current_step': project.current_step,
             'duration_label': project.duration_label,
+            'elapsed_seconds': elapsed_seconds,
+            'estimated_remaining_seconds': estimated_remaining_seconds,
+            'estimate_source': estimate_source,
             'error': project.error_message,
             'is_terminal': project.status in {
                 ExternalMediaProject.Status.DRAFT,

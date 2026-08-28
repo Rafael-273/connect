@@ -1,13 +1,20 @@
 from decimal import Decimal
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from celery import shared_task
 from django.conf import settings
 from django.core.files import File
+from django.db import connection
 from django.utils import timezone
 
-from ..models.external_media import ExternalMediaProjectExport, ProjectBlockMedia, VideoMasteringJob
+from ..models.external_media import (
+    ExternalMediaProject,
+    ExternalMediaProjectExport,
+    ProjectBlockMedia,
+    VideoMasteringJob,
+)
 from .audio_analysis import AudioAnalysisService
 from .audio_mastering import AudioMasteringService, MasteringTarget
 from .audio_muxing import AudioMuxingService
@@ -31,7 +38,12 @@ def render_external_media(self, job_id):
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.run_project')
 def run_external_media_project(self, project_id):
-    ExternalMediaProjectPipeline().run(project_id)
+    with _project_execution_lock(project_id) as acquired:
+        if not acquired:
+            return {'skipped': True, 'reason': 'project-already-processing'}
+        if not _execution_is_current(project_id, self.request.id):
+            return {'skipped': True, 'reason': 'stale-execution'}
+        ExternalMediaProjectPipeline().run(project_id)
 
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.create_project_preview')
@@ -61,7 +73,40 @@ def create_project_preview(self, media_id):
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.render_project')
 def render_external_media_project(self, project_id):
-    ExternalMediaProjectPipeline().render(project_id)
+    with _project_execution_lock(project_id) as acquired:
+        if not acquired:
+            return {'skipped': True, 'reason': 'project-already-processing'}
+        if not _execution_is_current(project_id, self.request.id):
+            return {'skipped': True, 'reason': 'stale-execution'}
+        ExternalMediaProjectPipeline().render(project_id)
+
+
+@contextmanager
+def _project_execution_lock(project_id):
+    """Serialize a project across workers; PostgreSQL releases this lock on crashes."""
+    if connection.vendor != 'postgresql':
+        yield True
+        return
+    namespace = settings.EXTERNAL_MEDIA_TASK_LOCK_NAMESPACE
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_try_advisory_lock(%s, %s)', [namespace, int(project_id)])
+        acquired = bool(cursor.fetchone()[0])
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT pg_advisory_unlock(%s, %s)', [namespace, int(project_id)])
+
+
+def _execution_is_current(project_id, task_id):
+    project = ExternalMediaProject.objects.only('status', 'celery_task_id').get(pk=project_id)
+    if task_id and project.celery_task_id and str(task_id) != project.celery_task_id:
+        return False
+    return project.status not in {
+        ExternalMediaProject.Status.FINISHED,
+        ExternalMediaProject.Status.CANCELLED,
+    }
 
 
 def _mastering_failure(job_id, exc):

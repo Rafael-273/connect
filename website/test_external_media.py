@@ -13,6 +13,7 @@ from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.urls import reverse
+from django.utils import timezone
 from safedelete.models import HARD_DELETE
 
 from website.external_media.exceptions import ExternalMediaError
@@ -28,6 +29,8 @@ from website.external_media.audio_mixing import (
 )
 from website.external_media.auto_reframe import AutoReframePlan, AutoReframeService, ReframeKeyframe, limit_keyframes_for_ffmpeg
 from website.external_media.background_voice import BackgroundVoiceRemovalService, QuietUtterance
+from website.external_media.quality_control import MediaQualityService
+from website.external_media.speaker_diarization import SpeakerTurn
 from website.external_media.dialogue_processing import (
     DialogueProcessor,
     DialogueSettings,
@@ -40,7 +43,9 @@ from website.external_media.premiere_export import (
     PremierePackageService,
 )
 from website.external_media.timeline import InternalTimelineBuilder, KeyframeSimplifier, TimelineSource
+from website.external_media.tasks import _execution_is_current
 from website.external_media.services import (
+    AudioChunk,
     AssemblySource,
     ExternalMediaPipeline,
     ExternalMediaProjectPipeline,
@@ -911,6 +916,8 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
         pipeline = ExternalMediaPipeline()
         pipeline.storage = Mock()
         pipeline.renderer = Mock()
+        pipeline.quality = Mock()
+        pipeline.quality.validate_media.return_value = Mock(metrics={'duration_ms': 5000})
         pipeline.renderer.render_tracks.side_effect = lambda *args: Path(args[2]).write_bytes(b'video')
         pipeline.renderer.render.side_effect = AssertionError('single-language render should not be used')
 
@@ -975,6 +982,15 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         return ExternalMediaProject.objects.create(
             name='Projeto de agosto', template_version=self.version, created_by=self.member,
         )
+
+    def test_worker_rejects_a_stale_execution_identifier(self):
+        project = self.make_project()
+        project.status = ExternalMediaProject.Status.PENDING
+        project.celery_task_id = 'current-task'
+        project.save(update_fields=['status', 'celery_task_id', 'update_at'])
+
+        self.assertTrue(_execution_is_current(project.pk, 'current-task'))
+        self.assertFalse(_execution_is_current(project.pk, 'old-task'))
 
     def test_create_project_freezes_selected_template_version(self):
         response = self.client.post(reverse('external_media_create'), {
@@ -1042,6 +1058,48 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.save(update_fields=['started_at', 'finished_at', 'update_at'])
 
         self.assertEqual(project.duration_minutes, 31)
+
+    def test_project_status_returns_live_elapsed_time_and_historical_eta(self):
+        project = self.make_project()
+        now = timezone.now()
+        previous = self.make_job()
+        previous.processing_project = project
+        previous.started_at = now - timedelta(minutes=22)
+        previous.finished_at = now - timedelta(minutes=2)
+        previous.save(update_fields=['processing_project', 'started_at', 'finished_at', 'update_at'])
+        project.status = ExternalMediaProject.Status.PROCESSING
+        project.progress = 50
+        project.started_at = now - timedelta(minutes=10)
+        project.save(update_fields=['status', 'progress', 'started_at', 'update_at'])
+
+        response = self.client.get(reverse('external_media_project_status', args=[project.public_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertGreaterEqual(response.json()['elapsed_seconds'], 600)
+        self.assertIsNotNone(response.json()['estimated_remaining_seconds'])
+        self.assertIn('histórico', response.json()['estimate_source'])
+
+    def test_finished_project_has_no_remaining_estimate_or_pending_eta_copy(self):
+        project = self.make_project()
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.progress = 100
+        project.started_at = timezone.now() - timedelta(minutes=3)
+        project.finished_at = timezone.now()
+        project.save(update_fields=['status', 'progress', 'started_at', 'finished_at', 'update_at'])
+
+        status_response = self.client.get(
+            reverse('external_media_project_status', args=[project.public_id]),
+        )
+        self.assertTrue(status_response.json()['is_terminal'])
+        self.assertIsNone(status_response.json()['estimated_remaining_seconds'])
+        self.assertIsNone(status_response.json()['estimate_source'])
+
+        detail_response = self.client.get(
+            reverse('external_media_project_detail', args=[project.public_id]),
+        )
+        self.assertContains(detail_response, 'Tempo total')
+        self.assertContains(detail_response, 'Processamento concluído')
+        self.assertNotContains(detail_response, 'Calculando previsão...')
 
     def test_project_can_be_renamed_from_the_edit_screen(self):
         project = self.make_project()
@@ -1121,16 +1179,24 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertFalse(ExternalMediaJob.all_objects.filter(pk=job.pk).exists())
         self.assertFalse(ExternalMediaJob.all_objects.filter(pk=previous_job.pk).exists())
 
-    def test_project_detail_displays_its_processing_history(self):
+    def test_project_detail_hides_processing_diagnostics(self):
         project = self.make_project()
         previous_job = self.make_job()
         previous_job.processing_project = project
         previous_job.save(update_fields=['processing_project', 'update_at'])
+        project.configuration = {
+            'speech_edit_preview': {
+                'silence_count': 2,
+                'filler_count': 1,
+                'saved_seconds': 3,
+            },
+        }
+        project.save(update_fields=['configuration', 'update_at'])
 
         response = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
 
-        self.assertContains(response, 'Histórico de processamentos')
-        self.assertContains(response, 'Processamento #1')
+        self.assertNotContains(response, 'Histórico de processamentos')
+        self.assertNotContains(response, 'Edição inteligente de fala')
 
     def test_processing_project_cannot_be_deleted(self):
         project = self.make_project()
@@ -1190,9 +1256,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         )
         self.assertEqual(ProjectBlockMedia.objects.get(project=project).position, 2)
 
-    @patch('website.views.external_media.run_external_media_project.delay')
-    def test_valid_project_can_enter_the_async_queue(self, delay):
-        delay.return_value.id = 'task-123'
+    @patch('website.views.external_media.run_external_media_project.apply_async')
+    def test_valid_project_can_enter_the_async_queue(self, apply_async):
         project = self.make_project()
         ProjectBlockMedia.objects.create(
             project=project, block=self.block, position=1, original_filename='video.mp4',
@@ -1203,7 +1268,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(response.status_code, 302)
         project.refresh_from_db()
         self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
-        self.assertEqual(project.celery_task_id, 'task-123')
+        self.assertTrue(project.celery_task_id)
+        self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
 
     def test_required_block_prevents_pipeline_without_upload(self):
         project = self.make_project()
@@ -1212,9 +1278,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.refresh_from_db()
         self.assertEqual(project.status, ExternalMediaProject.Status.DRAFT)
 
-    @patch('website.views.external_media.run_external_media_project.delay')
-    def test_project_can_be_retried_after_error(self, delay):
-        delay.return_value.id = 'task-retry-1'
+    @patch('website.views.external_media.run_external_media_project.apply_async')
+    def test_project_can_be_retried_after_error(self, apply_async):
         project = self.make_project()
         project.status = ExternalMediaProject.Status.ERROR
         project.error_message = 'Falhou na tradução'
@@ -1228,11 +1293,11 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
         project.refresh_from_db()
         self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
-        self.assertEqual(project.celery_task_id, 'task-retry-1')
+        self.assertTrue(project.celery_task_id)
+        self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
 
-    @patch('website.views.external_media.run_external_media_project.delay')
-    def test_finished_project_can_be_reprocessed_with_existing_uploads(self, delay):
-        delay.return_value.id = 'task-reprocess-1'
+    @patch('website.views.external_media.run_external_media_project.apply_async')
+    def test_finished_project_can_be_reprocessed_with_existing_uploads(self, apply_async):
         project = self.make_project()
         project.status = ExternalMediaProject.Status.FINISHED
         project.save(update_fields=['status', 'update_at'])
@@ -1245,7 +1310,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
         project.refresh_from_db()
         self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
-        self.assertEqual(project.celery_task_id, 'task-reprocess-1')
+        self.assertTrue(project.celery_task_id)
+        self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
         self.assertEqual(project.block_media.count(), 1)
 
     @patch.object(ExternalMediaProjectPipeline, 'render')
@@ -1253,9 +1319,11 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
     @patch.object(ExternalMediaProjectPipeline, '_create_render_job')
     @patch.object(ExternalMediaProjectPipeline, '_create_proxies')
     @patch.object(ExternalMediaProjectPipeline, '_materialize')
+    @patch.object(VideoAssemblyService, '_duration_ms', return_value=1000)
     @patch.object(VideoAssemblyService, 'assemble')
     def test_project_pipeline_renders_immediately_after_subtitles(
-        self, assemble_mock, materialize_mock, proxies_mock, create_job_mock, prepare_tracks_mock, render_mock,
+        self, assemble_mock, _duration_mock, materialize_mock, proxies_mock, create_job_mock,
+        prepare_tracks_mock, render_mock,
     ):
         project = self.make_project()
         ProjectBlockMedia.objects.create(
@@ -1871,6 +1939,24 @@ class ExternalMediaRetryTests(ExternalMediaFixtureMixin, TestCase):
 
 
 class TranscriptionGroupingTests(SimpleTestCase):
+    def test_detailed_transcription_uses_literal_prompt_for_filler_removal(self):
+        ai_service = Mock()
+        ai_service.transcribe_segments.return_value = [
+            TranscriptionSegment(0, 250, 'eee', 'word'),
+        ]
+        service = TranscriptionService(ai_service=ai_service)
+
+        service.transcribe_detailed(
+            [AudioChunk(Path('/tmp/audio.mp3'), 0)],
+            'pt',
+            preserve_disfluencies=True,
+        )
+
+        prompt = ai_service.transcribe_segments.call_args.kwargs['prompt']
+        self.assertIn('Não omita nem corrija hesitações', prompt)
+        self.assertIn('eee', prompt)
+        self.assertIn('hamm', prompt)
+
     def test_group_for_subtitles_merges_close_words_without_boundaries(self):
         words = [
             TranscriptionSegment(0, 300, 'Bom', 'word'),
@@ -1912,6 +1998,19 @@ class TranscriptionGroupingTests(SimpleTestCase):
         segments = [TranscriptionSegment(0, 900, 'Bom dia igreja', 'segment')]
         cues = TranscriptionService.group_for_subtitles(segments, block_boundaries_ms=[400])
         self.assertEqual(cues, segments)
+
+    def test_subtitles_exclude_items_that_touch_an_intact_block(self):
+        items = [
+            TranscriptionSegment(100, 700, 'Legenda normal', 'word'),
+            TranscriptionSegment(800, 1300, 'Bloco intacto', 'word'),
+            TranscriptionSegment(1450, 1800, 'Também normal', 'word'),
+        ]
+
+        filtered = TranscriptionService.exclude_protected_ranges(items, [
+            {'start_ms': 750, 'end_ms': 1400},
+        ])
+
+        self.assertEqual([item.text for item in filtered], ['Legenda normal', 'Também normal'])
 
     def test_block_boundaries_ms_reads_configured_block_ranges(self):
         job = SimpleNamespace(project=SimpleNamespace(configuration={
@@ -1982,8 +2081,20 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
                 configuration={'profile': 'balanced'},
             )
         self.assertEqual(plan.silence_count, 1)
-        self.assertEqual(plan.cuts[0].duration_ms, 950)
-        self.assertEqual(1700 - 500 - plan.cuts[0].duration_ms, 250)
+        self.assertEqual(plan.cuts[0].duration_ms, 760)
+        self.assertEqual(1700 - 500 - plan.cuts[0].duration_ms, 440)
+
+    def test_proxy_trim_uses_accurate_output_seeking(self):
+        runner = Mock()
+        service = VideoAssemblyService(runner=runner)
+        service._video_dimensions = Mock(return_value=(1920, 1080))
+
+        service.create_proxy(Path('/tmp/take.mov'), Path('/tmp/proxy.mp4'), 1250, 8250)
+
+        command = runner.run.call_args.args[0]
+        self.assertLess(command.index('-i'), command.index('-ss'))
+        self.assertEqual(command[command.index('-ss') + 1], '1.250')
+        self.assertEqual(command[command.index('-t') + 1], '7.000')
 
     def test_speech_edit_removes_leading_breath_before_each_take(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -2002,10 +2113,25 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
                 ],
             )
 
-        self.assertIn(SpeechCut(0, 750, 'silence'), plan.cuts)
+        self.assertIn(SpeechCut(0, 680, 'silence'), plan.cuts)
         self.assertTrue(
-            any(cut.start_ms <= 1500 and cut.end_ms >= 2050 for cut in plan.cuts),
+            any(cut.start_ms <= 1500 and cut.end_ms >= 1980 for cut in plan.cuts),
         )
+
+    def test_speech_edit_keeps_a_pause_without_safe_margins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._silent_wav(wav_path)
+            words = [
+                TranscriptionSegment(100, 400, 'Uma', 'word'),
+                TranscriptionSegment(900, 1200, 'frase', 'word'),
+            ]
+            plan = SpeechEditAnalyzer().analyze(
+                words, wav_path, 1600, remove_fillers=False,
+                configuration={'profile': 'balanced'},
+            )
+
+        self.assertEqual(plan.silence_count, 0)
 
     def test_speech_edit_only_removes_an_isolated_filler(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -2044,6 +2170,28 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(plan.filler_count, 1)
         self.assertEqual(plan.cuts[0].label, 'hum')
 
+    def test_speech_edit_recognizes_stretched_filler_spellings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._silent_wav(wav_path)
+            words = [
+                TranscriptionSegment(100, 400, 'Olá', 'word'),
+                TranscriptionSegment(650, 900, 'eee', 'word'),
+                TranscriptionSegment(1150, 1450, 'pessoal', 'word'),
+                TranscriptionSegment(1700, 1950, 'hamm', 'word'),
+                TranscriptionSegment(2200, 2500, 'vamos', 'word'),
+            ]
+            plan = SpeechEditAnalyzer().analyze(
+                words,
+                wav_path,
+                3000,
+                remove_silence=False,
+                configuration={'profile': 'balanced', 'filler_words': ['eh', 'hum']},
+            )
+
+        self.assertEqual(plan.filler_count, 2)
+        self.assertEqual([cut.label for cut in plan.cuts], ['eee', 'hamm'])
+
     def test_speech_edit_keeps_adjacent_filler_even_when_selected(self):
         with tempfile.TemporaryDirectory() as directory:
             wav_path = Path(directory) / 'analysis.wav'
@@ -2069,7 +2217,81 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         cuts = service._quiet_cuts(utterances, [(0, 4000)], -21, 4000)
 
         self.assertEqual(len(cuts), 1)
-        self.assertEqual((cuts[0].start_ms, cuts[0].end_ms), (1165, 1765))
+        self.assertEqual((cuts[0].start_ms, cuts[0].end_ms), (1165, 2020))
+
+    def test_background_voice_removal_splits_when_the_featured_speaker_returns(self):
+        service = BackgroundVoiceRemovalService(Mock())
+        activity = Mock()
+        activity.average_db.side_effect = lambda start_ms, _end_ms: -42 if start_ms < 800 else -24
+        words = [
+            TranscriptionSegment(0, 300, 'Pergunta', 'word'),
+            TranscriptionSegment(400, 700, 'do entrevistador', 'word'),
+            TranscriptionSegment(800, 1100, 'Resposta', 'word'),
+            TranscriptionSegment(1200, 1500, 'final', 'word'),
+        ]
+
+        utterances = service._utterances(words, [(0, 2000)], activity)
+        cuts = service._quiet_cuts(utterances, [(0, 2000)], reference_db=-24, duration_ms=2000)
+
+        self.assertEqual([(item.start_ms, item.end_ms) for item in utterances], [(0, 700), (800, 1500)])
+        self.assertEqual([(cut.start_ms, cut.end_ms) for cut in cuts], [(0, 720)])
+
+    def test_background_voice_removal_can_remove_a_long_clear_interviewer_turn(self):
+        service = BackgroundVoiceRemovalService(Mock())
+        utterances = [
+            QuietUtterance(0, 4500, -42),
+            QuietUtterance(5000, 5800, -24),
+        ]
+
+        cuts = service._quiet_cuts(utterances, [(0, 6000)], reference_db=-24, duration_ms=6000)
+
+        self.assertEqual([(cut.start_ms, cut.end_ms) for cut in cuts], [(0, 4920)])
+
+    def test_background_voice_removal_keeps_the_last_utterance_in_a_testimony(self):
+        service = BackgroundVoiceRemovalService(Mock())
+        utterances = [
+            QuietUtterance(0, 700, -42),
+            QuietUtterance(800, 1400, -24),
+            QuietUtterance(1600, 2200, -42),
+        ]
+
+        cuts = service._quiet_cuts(utterances, [(0, 2400)], reference_db=-24, duration_ms=2400)
+
+        self.assertEqual([(cut.start_ms, cut.end_ms) for cut in cuts], [(0, 720)])
+
+    def test_community_diarization_removes_interviewer_between_featured_turns(self):
+        service = BackgroundVoiceRemovalService(Mock(), diarizer=Mock())
+        activity = Mock()
+        activity.average_db.side_effect = lambda start, _end: -22 if start in {0, 2200} else -40
+        turns = [
+            SpeakerTurn(0, 900, 'speaker-a'),
+            SpeakerTurn(1000, 2100, 'speaker-b'),
+            SpeakerTurn(2200, 3200, 'speaker-a'),
+        ]
+
+        cuts, reference_db = service._speaker_cuts(turns, [(0, 3400)], activity, 3400)
+
+        self.assertEqual(reference_db, -22)
+        self.assertEqual([(cut.start_ms, cut.end_ms) for cut in cuts], [(980, 2120)])
+
+    def test_protected_range_only_trims_the_overlapping_part_of_a_silence_cut(self):
+        plan = SpeechEditPlan((SpeechCut(800, 1200, 'silence'),), 2000)
+
+        safe = plan.without_ranges([{'start_ms': 1000, 'end_ms': 1500}])
+
+        self.assertEqual(safe.cuts, (SpeechCut(800, 1000, 'silence'),))
+
+    def test_speech_edit_detects_an_untranscribed_voiced_hesitation(self):
+        activity = Mock()
+        activity.voiced_regions.return_value = [(520, 850)]
+        words = [
+            TranscriptionSegment(100, 400, 'Eu', 'word'),
+            TranscriptionSegment(1000, 1300, 'fui', 'word'),
+        ]
+
+        cuts = SpeechEditAnalyzer._untranscribed_filler_cuts(words, activity)
+
+        self.assertEqual(cuts, [SpeechCut(490, 880, 'filler', 'hesitação')])
 
     def test_speech_edit_remaps_words_after_cut_and_crossfade(self):
         plan = SpeechEditPlan((SpeechCut(500, 1000, 'silence'),), 2000, crossfade_ms=40)
@@ -2088,6 +2310,59 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(plan.remap_time(300), 300)
         self.assertEqual(plan.remap_time(1200), 700)
         self.assertEqual(plan.remap_time(0), 0)
+
+    def test_speech_edit_plan_normalizes_overlapping_cuts_before_remapping(self):
+        plan = SpeechEditPlan.normalized([
+            SpeechCut(500, 1200, 'silence'),
+            SpeechCut(900, 1500, 'background_voice'),
+        ], 3000)
+
+        self.assertEqual(plan.cuts, (SpeechCut(500, 1500, 'background_voice'),))
+        self.assertEqual(plan.saved_ms, 1000)
+        self.assertEqual(plan.remap_time(2000), 1000)
+
+    def test_proxy_timeline_validation_rejects_large_duration_drift(self):
+        configuration = {
+            'analysis_source_duration_ms': 10000,
+            'analysis_source_block_ranges': [
+                {'block_key': 'testimony', 'block_name': 'Testemunho', 'start_ms': 0, 'end_ms': 10000},
+            ],
+        }
+
+        with self.assertRaisesMessage(ExternalMediaError, 'perderam sincronismo'):
+            ExternalMediaProjectPipeline._validate_analysis_timeline(
+                configuration,
+                12000,
+                [{'block_key': 'testimony', 'start_ms': 0, 'end_ms': 12000}],
+            )
+
+    def test_quality_control_rejects_subtitles_over_intact_blocks(self):
+        cue = SimpleNamespace(start_ms=900, end_ms=1400, cue_index=3)
+        track = SimpleNamespace(language='pt', cues=SimpleNamespace(all=lambda: [cue]))
+
+        report = MediaQualityService.validate_subtitles(
+            [track], [{'start_ms': 1000, 'end_ms': 2000}],
+        )
+
+        self.assertFalse(report.ok)
+        self.assertEqual(report.metrics['protected_subtitle_overlaps'], [{'language': 'pt', 'cue': 3}])
+
+    def test_quality_control_validates_real_audio_and_video_streams(self):
+        runner = FFmpegRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'quality.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x240:d=2',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2', '-shortest',
+                '-c:v', 'libx264', '-c:a', 'aac', str(output),
+            ])
+            report = MediaQualityService(runner).validate_media(
+                output, expected_duration_ms=2000, deep_audio=True,
+            )
+
+        self.assertTrue(report.ok, report.errors)
+        self.assertTrue(report.metrics['has_video'])
+        self.assertTrue(report.metrics['has_audio'])
 
     def test_speech_edit_ffmpeg_applies_lightweight_join(self):
         runner = FFmpegRunner()
@@ -2770,6 +3045,15 @@ class AudioMixingUnitTests(SimpleTestCase):
         self.assertEqual(matching[0], 0.5)
         self.assertFalse(any(value > 0.5 for time, value in envelope if 0.5 <= time <= 1.2))
 
+    def test_music_loop_plan_crossfades_short_track_until_video_end(self):
+        filters, label, metrics = AudioMixingService._music_loop_plan(10.0, 3.0)
+        self.assertEqual(label, '[music_looped]')
+        self.assertEqual(metrics['music_loop_count'], 5)
+        self.assertEqual(metrics['music_crossfade_s'], 0.75)
+        self.assertIn('asplit=5', filters[0])
+        self.assertEqual(sum('acrossfade=' in item for item in filters), 4)
+        self.assertIn('atrim=duration=10.000', filters[-1])
+
     def test_build_spectral_windows_skips_when_no_cut(self):
         self.assertEqual(build_spectral_windows([SpeechBlock(0, 1000)], cut_db=0), [])
 
@@ -2831,6 +3115,23 @@ class AudioMixingSmokeTests(SimpleTestCase):
             self.assertEqual(result.metrics['speech_block_count'], 1)
             self.assertGreater(result.metrics['duck_db'], 0)
 
+    def test_mix_crossfades_a_track_shorter_than_the_video(self):
+        service = AudioMixingService()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            video = workdir / 'video.mp4'
+            music = workdir / 'music.mp4'
+            output = workdir / 'mixed.mp4'
+            self._render_tone(video, 220, 4)
+            self._render_tone(music, 440, 1)
+            result = service.mix(
+                video, music, output, music_volume=0.5, duration_ms=4000,
+                speech_blocks=[SpeechBlock(500, 3500)], ducking_enabled=True,
+            )
+            self.assertTrue(output.exists())
+            self.assertGreater(result.metrics['music_loop_count'], 1)
+            self.assertGreater(result.metrics['music_crossfade_s'], 0)
+
     def test_mix_keeps_music_ducked_through_a_short_speech_pause(self):
         service = AudioMixingService()
         with tempfile.TemporaryDirectory() as directory:
@@ -2865,7 +3166,7 @@ class AudioMixingSmokeTests(SimpleTestCase):
             self.assertTrue(output.exists())
             self.assertTrue(result.metrics['spectral_applied'])
 
-    def test_clipping_speech_blocks_against_a_protected_range_keeps_music_flat_there(self):
+    def test_protected_range_does_not_disable_music_ducking(self):
         blocks = clip_blocks_against_protected_ranges([SpeechBlock(0, 3000)], [(0, 3000)])
         self.assertEqual(blocks, [])
         service = AudioMixingService()
@@ -2880,7 +3181,8 @@ class AudioMixingSmokeTests(SimpleTestCase):
                 video, music, output, music_volume=0.3, duration_ms=3000,
                 speech_blocks=[SpeechBlock(0, 3000)], protected_ranges=[(0, 3000)], ducking_enabled=True,
             )
-        self.assertEqual(result.metrics['mode'], 'flat')
+        self.assertEqual(result.metrics['mode'], 'adaptive')
+        self.assertEqual(result.metrics['speech_block_count'], 1)
 
 
 class AudioMasteringUnitTests(SimpleTestCase):
