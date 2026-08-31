@@ -13,6 +13,7 @@ from django.views import View
 
 from ...forms.admin_external_media import (
     AdminBackgroundMusicForm,
+    AdminColorLUTForm,
     AdminMasteringProfileForm,
     AdminMediaTemplateBlockFormSet,
     AdminMediaTemplateForm,
@@ -24,6 +25,7 @@ from ...forms.admin_external_media import (
 from ...forms.external_media import GlossaryTermForm
 from ...models.external_media import (
     BackgroundMusicTrack,
+    ColorLUT,
     ExternalMediaJob,
     ExternalMediaProject,
     GlossaryTerm,
@@ -350,6 +352,7 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
         subtitle_styles = list(SubtitleStyle.objects.order_by('name'))
         speech_filler_terms = list(SpeechFillerTerm.objects.order_by('language', 'text'))
         background_musics = list(BackgroundMusicTrack.objects.order_by('category', 'name'))
+        color_luts = list(ColorLUT.objects.order_by('name'))
         mastering_profiles = list(MasteringProfile.objects.order_by('name'))
         if is_create:
             title = 'Novo Template de Mídia'
@@ -372,11 +375,14 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             'subtitle_styles': subtitle_styles,
             'speech_filler_terms': speech_filler_terms,
             'background_music_rows': background_musics,
+            'color_lut_rows': color_luts,
+            'color_lut_defaults_json': json.dumps({str(lut.pk): lut.default_intensity for lut in color_luts}),
             'mastering_profile_rows': mastering_profiles,
             'preset_form': AdminRenderPresetForm(prefix='preset'),
             'style_form': AdminSubtitleStyleForm(prefix='style'),
             'filler_term_form': AdminSpeechFillerTermForm(prefix='fillerterm'),
             'music_form': AdminBackgroundMusicForm(prefix='bgmusic'),
+            'color_lut_form': AdminColorLUTForm(prefix='colorlut'),
             'mastering_profile_form': AdminMasteringProfileForm(prefix='masterprofile'),
             'title': title,
         }
@@ -561,6 +567,32 @@ class AdminExternalMediaBackgroundMusicDeleteView(LoginRequiredMixin, AdminRequi
             return self._redirect_back(request)
         music.delete()
         messages.success(request, f'Trilha "{name}" removida.')
+        return self._redirect_back(request)
+
+
+class AdminExternalMediaColorLUTSaveView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):
+    def post(self, request):
+        lut_id = request.POST.get('colorlut_id')
+        instance = ColorLUT.objects.filter(id=lut_id).first() if lut_id else None
+        form = AdminColorLUTForm(request.POST, request.FILES, instance=instance, prefix='colorlut')
+        if form.is_valid():
+            lut = form.save()
+            messages.success(request, f'LUT "{lut.name}" {"atualizado" if instance else "cadastrado"}.')
+        else:
+            messages.error(request, 'Revise o LUT. ' + ' '.join(
+                f'{form.fields[name].label}: {errors[0]}' for name, errors in form.errors.items() if name in form.fields
+            ))
+        return self._redirect_back(request)
+
+
+class AdminExternalMediaColorLUTDeleteView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):
+    def post(self, request, lut_id):
+        lut = get_object_or_404(ColorLUT, id=lut_id)
+        if lut.template_versions.exists():
+            messages.warning(request, f'O LUT "{lut.name}" está em uso em um template e não pode ser removido.')
+        else:
+            lut.delete()
+            messages.success(request, f'LUT "{lut.name}" removido.')
         return self._redirect_back(request)
 
 

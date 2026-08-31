@@ -1,4 +1,5 @@
 import mimetypes
+import json
 import re
 import uuid
 from pathlib import Path
@@ -11,6 +12,7 @@ from django.http import FileResponse, Http404, HttpResponse, JsonResponse, Strea
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from django.utils.http import content_disposition_header
 from django.views import View
 from safedelete.models import HARD_DELETE
@@ -46,10 +48,19 @@ from ..models.external_media import (
     ProjectPipelineStep,
     ProjectBlockMedia,
     ProjectCustomBlock,
+    ProjectSourceProxy,
     SubtitleCue,
+    SubtitleReviewSession,
+    SubtitleTrack,
     VideoMasteringJob,
 )
 from ..external_media.services import ProjectService
+from tempfile import TemporaryDirectory
+
+from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
+from ..external_media.preview import TimelineRevisionService
+from ..external_media.services import StorageService
+from ..external_media.subtitle_reviews import SubtitleReviewService
 from .mixins import ExternalMediaRequiredMixin
 
 
@@ -100,12 +111,12 @@ def _file_chunks(file_handle, start, length, block_size=8192):
         yield chunk
 
 
-def protected_file_response(request, field_file):
+def protected_file_response(request, field_file, force_stream=False):
     """Serve locally (with HTTP Range for video seek) or redirect to a signed S3 URL."""
     filename = Path(field_file.name).name
     preview = request.GET.get('preview') == '1'
     content_type = mimetypes.guess_type(field_file.name)[0] or 'application/octet-stream'
-    if settings.USE_S3:
+    if settings.USE_S3 and not force_stream:
         disposition = 'inline' if preview else 'attachment'
         try:
             url = field_file.storage.url(
@@ -183,6 +194,7 @@ class ExternalMediaContextMixin:
             'is_external_media_member': True,
             'can_consolidate': self.member.is_available_to_consolidate,
             'is_ministration_member': False,
+            'external_media_max_upload_mb': settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB,
             **kwargs,
         }
 
@@ -380,7 +392,8 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 'template_version__subtitle_style', 'render_job',
             ).prefetch_related(
                 'template_version__blocks', 'template_version__plugins',
-                'block_media', 'custom_blocks', 'pipeline_steps', 'render_job__assets', 'processing_history__assets',
+                'block_media', 'custom_blocks', 'pipeline_steps', 'render_job__assets',
+                'processing_history__assets', 'subtitle_review_sessions',
             ),
             public_id=public_id,
         )
@@ -445,6 +458,12 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             restore_processed_result=restore_job,
             project_exports=project.exports.order_by('-created_at')[:10],
             processing_history=project.processing_history.select_related('preset').prefetch_related('assets'),
+            pending_subtitle_reviews=project.subtitle_review_sessions.filter(
+                status__in=[
+                    SubtitleReviewSession.Status.SUBMITTED,
+                    SubtitleReviewSession.Status.UNDER_REVIEW,
+                ],
+            ).count(),
         ))
 
 
@@ -635,19 +654,63 @@ class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
             return self._error_response(request, public_id, 'Não foi possível enviar o vídeo: ' + ' '.join(
                 error for errors in form.errors.values() for error in errors
             ))
-        count = sum(
-            1 for existing in project.block_media.filter(block=block)
-            if ProjectService.file_exists(existing.file)
+        existing_camera_key = (form.cleaned_data.get('camera_key') or '').strip()
+        existing_camera = project.block_media.filter(
+            block=block, camera_key=existing_camera_key,
+        ).order_by('camera_order', 'pk').first() if existing_camera_key else None
+        requested_camera_role = (
+            existing_camera.camera_role if existing_camera
+            else form.cleaned_data.get('camera_role') or ProjectBlockMedia.CameraRole.PRIMARY
         )
-        if block.max_occurrences > 0 and count >= block.max_occurrences:
+        is_extra_camera = requested_camera_role == ProjectBlockMedia.CameraRole.SECONDARY
+        count = sum(
+            1 for existing in project.block_media.filter(
+                block=block, camera_role=ProjectBlockMedia.CameraRole.PRIMARY,
+            ) if ProjectService.file_exists(existing.file)
+        )
+        if not existing_camera and not is_extra_camera and block.max_occurrences > 0 and count >= block.max_occurrences:
             return self._error_response(request, public_id, f'O bloco {block.name} aceita no máximo {block.max_occurrences} vídeo(s).')
         item = form.save(commit=False)
         item.project = project
         item.block = block
-        item.position = (
-            ProjectBlockMedia.all_objects.filter(project=project, block=block)
-            .aggregate(value=Max('position'))['value'] or 0
-        ) + 1
+        item.camera_role = requested_camera_role
+        item.camera_hint = form.cleaned_data.get('camera_hint') or ProjectBlockMedia.CameraHint.AUTO
+        if existing_camera:
+            item.position = (
+                ProjectBlockMedia.all_objects.filter(project=project, block=block)
+                .aggregate(value=Max('position'))['value'] or 0
+            ) + 1
+            item.camera_order = 1
+            item.camera_key = existing_camera.camera_key
+            item.camera_label = existing_camera.camera_label
+            item.camera_hint = existing_camera.camera_hint
+        elif is_extra_camera:
+            try:
+                item.position = int(request.POST.get('camera_position') or 0)
+            except (TypeError, ValueError):
+                item.position = 0
+            primary_exists = project.block_media.filter(
+                block=block, position=item.position,
+                camera_role=ProjectBlockMedia.CameraRole.PRIMARY,
+            ).exists()
+            if not primary_exists:
+                return self._error_response(request, public_id, 'Escolha o vídeo principal ao qual esta câmera pertence.')
+            item.camera_order = (
+                ProjectBlockMedia.all_objects.filter(project=project, block=block, position=item.position)
+                .aggregate(value=Max('camera_order'))['value'] or 0
+            ) + 1
+            item.camera_key = f'camera-{get_random_string(12).lower()}'
+        else:
+            item.position = (
+                ProjectBlockMedia.all_objects.filter(project=project, block=block)
+                .aggregate(value=Max('position'))['value'] or 0
+            ) + 1
+            item.camera_order = 1
+            item.camera_role = ProjectBlockMedia.CameraRole.PRIMARY
+            item.camera_key = 'primary'
+        item.camera_label = item.camera_label.strip() or (
+            'Câmera extra' if is_extra_camera else 'Câmera principal'
+        )
         item.original_filename = item.file.name
         item.file_size = item.file.size
         item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_start_seconds')) or 0
@@ -865,7 +928,16 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             project.progress = 2
             project.current_step = 'Projeto adicionado à fila'
             project.error_message = ''
-            project.save(update_fields=['status', 'progress', 'current_step', 'error_message', 'update_at'])
+            project.current_timeline_revision = None
+            project.approved_timeline_revision = None
+            project.preview_dirty = False
+            project.final_render_outdated = False
+            project.save(update_fields=[
+                'status', 'progress', 'current_step', 'error_message',
+                'current_timeline_revision', 'approved_timeline_revision',
+                'preview_dirty', 'final_render_outdated', 'update_at',
+            ])
+            project.preview_sessions.update(current_revision=None, undo_stack=[], redo_stack=[])
             transaction.on_commit(lambda: self._enqueue(project.pk))
         messages.success(request, 'Pipeline iniciado em segundo plano.')
         return redirect('external_media_project_detail', public_id=public_id)
@@ -887,9 +959,12 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
 class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
-        if project.status != ExternalMediaProject.Status.ERROR:
+        if project.status not in {ExternalMediaProject.Status.ERROR, ExternalMediaProject.Status.AWAITING_REVIEW}:
             messages.warning(request, 'O projeto ainda não está pronto para renderização.')
             return redirect('external_media_project_detail', public_id=public_id)
+        if project.template_version.interactive_preview_enabled and not project.approved_timeline_revision_id:
+            messages.warning(request, 'Revise e aprove a edição antes de renderizar.')
+            return redirect('external_media_project_preview', public_id=public_id)
         project.status = ExternalMediaProject.Status.PENDING
         project.progress = 84
         project.current_step = 'Renderização adicionada à fila'
@@ -907,10 +982,182 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
         return redirect('external_media_project_detail', public_id=public_id)
 
 
+class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaContextMixin, View):
+    def get(self, request, public_id):
+        project = get_object_or_404(
+            ExternalMediaProject.objects.select_related(
+                'template_version__template', 'template_version__preset', 'current_timeline_revision',
+                'approved_timeline_revision', 'render_job',
+            ).prefetch_related('template_version__plugins', 'source_proxies'),
+            public_id=public_id,
+        )
+        if project.status not in {ExternalMediaProject.Status.AWAITING_REVIEW, ExternalMediaProject.Status.FINISHED}:
+            messages.warning(request, 'O preview ficará disponível após a análise inicial.')
+            return redirect('external_media_project_detail', public_id=public_id)
+        revision = TimelineRevisionService.ensure_initial(project, self.member)
+        session = TimelineRevisionService.session(project, self.member, revision)
+        return render(request, 'member/external_media/preview.html', self.media_context(
+            project=project, revision=revision, session=session,
+        ))
+
+
+class ExternalMediaProjectPreviewSourceView(ExternalMediaRequiredMixin, View):
+    def get(self, request, public_id, source_id):
+        proxy = get_object_or_404(
+            ProjectSourceProxy,
+            project__public_id=public_id,
+            source_id=source_id,
+            status=ProjectSourceProxy.Status.READY,
+        )
+        request.GET = request.GET.copy()
+        request.GET['preview'] = '1'
+        return protected_file_response(request, proxy.proxy_file)
+
+
+class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, decision_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        try:
+            revision = TimelineRevisionService.mutate_decision(
+                project, self.member, decision_id, payload.get('enabled', False),
+            )
+        except ValueError as exc:
+            return JsonResponse({'error': str(exc)}, status=404)
+        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+
+
+class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View):
+    def get(self, request, public_id, decision_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        if not project.render_job_id:
+            raise Http404
+        revision = project.current_timeline_revision
+        if not revision:
+            raise Http404
+        operation = next(
+            (
+                item for item in (revision.edit_decision_set.get('operations') or [])
+                if item.get('id') == decision_id
+            ),
+            None,
+        )
+        if not operation or operation.get('type') != 'audio_noise_reduction':
+            raise Http404
+        metadata = operation.get('metadata') or {}
+        variant = request.GET.get('variant', 'original')
+        if variant not in {'original', 'treated'}:
+            variant = 'original'
+        decision = NoiseReductionDecision(
+            int(operation.get('source_in_ms') or 0),
+            int(operation.get('source_out_ms') or operation.get('source_in_ms') or 0),
+            metadata.get('mode', ReductionMode.LOCAL),
+            metadata.get('strength', 'LIGHT'),
+            metadata.get('source', 'AUTO_NOISE_ANALYSIS'),
+            metadata.get('noise_type', 'UNKNOWN_NOISE'),
+            bool(operation.get('enabled', False)),
+            metadata.get('recommended_action', 'REVIEW'),
+            bool(metadata.get('speech_overlap')),
+            float(operation.get('confidence') or 0),
+            metadata.get('label') or operation.get('reason') or '',
+            metadata.get('event_index'),
+        )
+        storage = StorageService()
+        with TemporaryDirectory(prefix='connect-noise-preview-') as temp:
+            workdir = Path(temp)
+            source = workdir / f'source{Path(project.render_job.original_video.name).suffix.lower()}'
+            output = workdir / f'{variant}.m4a'
+            storage.copy_to_local(project.render_job.original_video, source)
+            AudioCleanupService().render_preview_clip(source, output, decision, variant=variant)
+            return FileResponse(
+                output.open('rb'),
+                content_type='audio/mp4',
+                as_attachment=False,
+                filename=f'noise-{decision_id}-{variant}.m4a',
+            )
+
+
+class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, cue_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        text = str(payload.get('text') or '').strip()
+        if not text:
+            return JsonResponse({'error': 'A legenda não pode ficar vazia.'}, status=400)
+        revision = TimelineRevisionService.update_subtitle(project, self.member, cue_id, text)
+        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+
+
+class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, decision_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        try:
+            revision = TimelineRevisionService.update_transform(
+                project, self.member, decision_id, payload,
+            )
+        except ValueError as exc:
+            return JsonResponse({'error': str(exc)}, status=404)
+        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+
+
+class ExternalMediaProjectPreviewSessionView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        session = TimelineRevisionService.session(project, self.member, project.current_timeline_revision)
+        session.position_ms = max(0, int(payload.get('position_ms') or 0))
+        session.filters = payload.get('filters') or session.filters
+        session.ui_state = payload.get('ui_state') or session.ui_state
+        session.last_seen_at = timezone.now()
+        session.save(update_fields=['position_ms', 'filters', 'ui_state', 'last_seen_at', 'update_at'])
+        return JsonResponse({'saved': True})
+
+
+class ExternalMediaProjectPreviewHistoryView(ExternalMediaRequiredMixin, View):
+    direction = 'undo'
+
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        revision = TimelineRevisionService.navigate_history(project, self.member, self.direction)
+        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+
+
+class ExternalMediaProjectPreviewRedoView(ExternalMediaProjectPreviewHistoryView):
+    direction = 'redo'
+
+
+class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        revision = TimelineRevisionService.approve(project, self.member)
+        project.status = ExternalMediaProject.Status.PENDING
+        project.progress = 68
+        project.current_step = 'Renderização aprovada e adicionada à fila'
+        project.save(update_fields=['status', 'progress', 'current_step', 'update_at'])
+        task_id = str(uuid.uuid4())
+        project.celery_task_id = task_id
+        project.save(update_fields=['celery_task_id', 'update_at'])
+        try:
+            render_external_media_project.apply_async(args=[project.pk], task_id=task_id)
+        except Exception:
+            project.status = ExternalMediaProject.Status.ERROR
+            project.error_message = 'Não foi possível acessar a fila de renderização.'
+            project.save(update_fields=['status', 'error_message', 'update_at'])
+            return JsonResponse({'error': project.error_message}, status=503)
+        return JsonResponse({
+            'approved_revision': revision.revision,
+            'redirect_url': reverse('external_media_project_detail', kwargs={'public_id': project.public_id}),
+        })
+
+
 class ExternalMediaProjectStatusView(ExternalMediaRequiredMixin, View):
     def get(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         elapsed_seconds, estimated_remaining_seconds, estimate_source = project_processing_estimate(project)
+        steps = list(project.pipeline_steps.order_by('order', 'pk').values(
+            'code', 'label', 'status', 'progress', 'message',
+        ))
         response = JsonResponse({
             'status': project.status,
             'status_label': project.get_status_display(),
@@ -920,9 +1167,11 @@ class ExternalMediaProjectStatusView(ExternalMediaRequiredMixin, View):
             'elapsed_seconds': elapsed_seconds,
             'estimated_remaining_seconds': estimated_remaining_seconds,
             'estimate_source': estimate_source,
+            'steps': steps,
             'error': project.error_message,
             'is_terminal': project.status in {
                 ExternalMediaProject.Status.DRAFT,
+                ExternalMediaProject.Status.AWAITING_REVIEW,
                 ExternalMediaProject.Status.FINISHED,
                 ExternalMediaProject.Status.ERROR,
                 ExternalMediaProject.Status.CANCELLED,
@@ -1107,24 +1356,20 @@ class ExternalMediaEditorView(ExternalMediaRequiredMixin, ExternalMediaContextMi
                 changed.append(cue)
         if changed:
             SubtitleCue.objects.bulk_update(changed, ['text'])
-        if job.status == ExternalMediaJob.Status.FINISHED:
-            project = getattr(job, 'project', None)
-            job.status = ExternalMediaJob.Status.PENDING
-            job.progress = 84
-            job.current_step = 'Renderização adicionada à fila'
-            job.save(update_fields=['status', 'progress', 'current_step', 'update_at'])
-            if project:
-                project.status = ExternalMediaProject.Status.PENDING
-                project.progress = 84
-                project.current_step = 'Renderização adicionada à fila'
-                project.error_message = ''
-                project.save(update_fields=['status', 'progress', 'current_step', 'error_message', 'update_at'])
-                project_id = project.pk
-                transaction.on_commit(lambda: render_external_media_project.delay(project_id))
-            else:
-                job_id = job.pk
-                transaction.on_commit(lambda: render_external_media.delay(job_id))
-        messages.success(request, 'Textos salvos. Os timestamps permaneceram inalterados.')
+            changed_track_ids = {cue.track_id for cue in changed}
+            for track in SubtitleTrack.objects.filter(pk__in=changed_track_ids):
+                track.revision += 1
+                track.human_reviewed = True
+                track.subtitle_dirty = True
+                track.save(update_fields=['revision', 'human_reviewed', 'subtitle_dirty', 'update_at'])
+                SubtitleReviewService.ensure_revision_snapshot(
+                    track, member=self.member, reason='Edição interna',
+                )
+                if track.is_source:
+                    SubtitleTrack.objects.filter(job=job).exclude(pk=track.pk).update(
+                        translation_status=SubtitleTrack.TranslationStatus.SOURCE_CHANGED,
+                    )
+        messages.success(request, 'Textos salvos. Aplique as alterações ao vídeo quando terminar a revisão.')
         return redirect('external_media_editor', public_id=public_id)
 
 

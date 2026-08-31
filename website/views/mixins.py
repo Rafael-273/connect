@@ -13,7 +13,9 @@ class StaffRequiredMixin(UserPassesTestMixin):
 
     def handle_no_permission(self):
         messages.error(self.request, 'Você não tem permissão para acessar esta página.')
-        return redirect('admin_dashboard')
+        # Do not send an unauthorized user back to the protected dashboard,
+        # otherwise `/admin-panel/` redirects to itself indefinitely.
+        return redirect('redirect_after_login')
 
 
 class MemberRequiredMixin(LoginRequiredMixin):
@@ -81,7 +83,9 @@ class AdminRequiredMixin(UserPassesTestMixin):
 
     def handle_no_permission(self):
         messages.error(self.request, 'Você não tem permissão para acessar esta página.')
-        return redirect('admin_dashboard')
+        # The admin dashboard uses this mixin too, so redirecting to it would
+        # create a loop for authenticated users without admin access.
+        return redirect('redirect_after_login')
 
 
 class ModulePermissionMixin(UserPassesTestMixin):

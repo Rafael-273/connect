@@ -1,0 +1,103 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_header_title %}
+<a href="{% url 'external_media_project_detail' project.public_id %}" class="block">
+    <strong class="block text-gray-900 text-lg truncate">Revisar edição</strong>
+    <small class="text-gray-500">{{ project.name }}</small>
+</a>
+{% endblock %}
+
+{% block media_header_actions %}
+<button type="button" class="media-btn media-muted" data-history="undo"><i class="fas fa-rotate-left"></i><span class="hidden sm:inline">Desfazer</span></button>
+<button type="button" class="media-btn media-muted" data-history="redo"><i class="fas fa-rotate-right"></i><span class="hidden sm:inline">Refazer</span></button>
+<button type="button" class="media-btn media-primary" id="approve-preview"><i class="fas fa-check"></i>Aprovar edição</button>
+{% endblock %}
+
+{% block head %}
+{{ block.super }}
+<style>
+    .preview-shell{max-width:1500px;margin:0 auto}.preview-stage{overflow:hidden;background:#08090d;border-radius:1.15rem;position:relative;aspect-ratio:16/9}.preview-stage video{width:100%;height:100%;object-fit:contain}.preview-caption{position:absolute;left:8%;right:8%;bottom:11%;text-align:center;color:#fff;font-weight:900;font-size:clamp(1rem,2.5vw,2.2rem);line-height:1.12;text-shadow:0 2px 5px #000,0 0 12px #000;pointer-events:none}.preview-controls{display:grid;grid-template-columns:auto 1fr auto;gap:.8rem;align-items:center;padding:.9rem 1rem;background:#101218;color:#fff}.preview-play{width:2.5rem;height:2.5rem;border-radius:999px;background:#C90905}.preview-range{accent-color:#C90905;width:100%}.preview-pill{display:inline-flex;align-items:center;gap:.4rem;border-radius:999px;padding:.35rem .65rem;background:#f5f6f8;color:#667085;font-size:.72rem;font-weight:800}.preview-pill.is-exact{background:#fff1f2;color:#a41310}.preview-layout{display:grid;gap:1rem}.preview-list{max-height:34rem;overflow:auto;scroll-behavior:smooth}.preview-decision{border:1px solid #e5e7eb;border-radius:1rem;padding:1rem;background:#fff;transition:.2s}.preview-decision.is-current{border-color:#C90905;background:#fff8f7;box-shadow:inset 3px 0 #C90905}.preview-decision.is-restored{opacity:.55}.preview-subtitle{width:100%;resize:none;border:0;background:transparent;line-height:1.45;outline:none}.preview-tabs{display:flex;gap:.4rem;padding:.3rem;background:#f4f5f7;border-radius:.8rem}.preview-tab{padding:.55rem .8rem;border-radius:.65rem;font-weight:800;color:#667085}.preview-tab.is-active{background:#111827;color:#fff}.preview-modal{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:1rem;background:rgba(15,23,42,.58)}.preview-modal.is-open{display:flex}.preview-modal__card{width:min(100%,28rem);border-radius:1.2rem;background:#fff;padding:1.4rem;box-shadow:0 24px 80px rgba(0,0,0,.28)}
+    @media(min-width:1024px){.preview-layout{grid-template-columns:minmax(0,1.7fr) minmax(21rem,.8fr)}.preview-player-card{position:sticky;top:1rem;align-self:start}}
+</style>
+{% endblock %}
+
+{% block media_bottom_nav %}{% endblock %}
+
+{% block media_content %}
+{{ revision.timeline|json_script:"preview-timeline" }}
+<div class="preview-shell">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div><p class="text-xs uppercase tracking-[.16em] font-black text-red-700">ConnectCut Preview</p><h1 class="text-2xl font-black mt-1">Confira somente o que precisa de atenção</h1></div>
+        <div class="flex flex-wrap gap-2" id="fidelity-pills"></div>
+    </div>
+    <div class="preview-layout">
+        <section class="media-card preview-player-card overflow-hidden">
+            <div class="preview-stage"><video id="preview-video" playsinline preload="metadata"></video><div class="preview-caption" id="preview-caption"></div></div>
+            <div class="preview-controls"><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0"><span class="text-sm tabular-nums" id="preview-time">00:00 / 00:00</span></div>
+            <div class="p-4 border-t flex flex-wrap items-center justify-between gap-3">
+                <div><strong id="preview-block">Preparando reprodução</strong><p class="text-xs text-gray-500 mt-1" id="preview-state">Revisão {{ revision.revision }}{% if project.preview_dirty %} · alterações não renderizadas{% endif %}</p></div>
+                <div class="preview-tabs"><button class="preview-tab is-active" data-mode="review">Revisar</button><button class="preview-tab" data-mode="watch">Assistir</button></div>
+            </div>
+        </section>
+        <aside class="media-card overflow-hidden">
+            <div class="p-4 border-b flex items-center justify-between gap-3"><div><h2 class="font-black">Pontos da edição</h2><p class="text-xs text-gray-500 mt-1">Ajustes automáticos e legendas.</p></div><span class="preview-pill" id="revision-label">r{{ revision.revision }}</span></div>
+            <div class="preview-list p-3 space-y-2" id="review-list"></div>
+        </aside>
+    </div>
+</div>
+
+<div class="preview-modal" id="approve-modal" role="dialog" aria-modal="true" aria-labelledby="approve-title">
+    <div class="preview-modal__card"><span class="w-11 h-11 rounded-xl grid place-items-center text-white" style="background:#C90905"><i class="fas fa-check"></i></span><h2 class="text-xl font-black mt-4" id="approve-title">Aprovar esta edição?</h2><p class="text-sm text-gray-500 mt-2">A versão atual será usada exatamente como base para a renderização final.</p><div class="flex justify-end gap-2 mt-6"><button class="media-btn media-muted" id="cancel-approve">Continuar revisando</button><button class="media-btn media-primary" id="confirm-approve">Aprovar e renderizar</button></div></div>
+</div>
+
+<script>
+(() => {
+    let timeline = JSON.parse(document.getElementById('preview-timeline').textContent);
+    const video = document.getElementById('preview-video'), range = document.getElementById('preview-range');
+    const caption = document.getElementById('preview-caption'), time = document.getElementById('preview-time');
+    const list = document.getElementById('review-list'), play = document.getElementById('preview-play');
+    const csrf = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+    let activeClip = null, globalMs = {{ session.position_ms|default:0 }}, loading = false, mode = 'review', saveTimer;
+    const api = (url, body={}) => fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'}, body:JSON.stringify(body)}).then(async r => {const data=await r.json(); if(!r.ok) throw new Error(data.error || 'Não foi possível salvar.'); return data;});
+    const fmt = ms => {const s=Math.max(0,Math.floor(ms/1000)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
+    const asset = id => timeline.assets.find(item => item.id === id);
+    const clipAt = ms => timeline.clips.find(item => ms >= item.timeline_in_ms && ms < item.timeline_out_ms) || timeline.clips.at(-1);
+    function sourceFor(clip){ return asset(clip?.asset_id)?.url || ''; }
+    function seek(ms, autoplay=false){
+        globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs); if(!clip)return;
+        const source=sourceFor(clip), local=(clip.source_in_ms + globalMs-clip.timeline_in_ms)/1000;
+        if(activeClip?.id!==clip.id || video.dataset.source!==source){loading=true;activeClip=clip;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=local;loading=false;if(autoplay)video.play();},{once:true});}
+        else {video.currentTime=local;if(autoplay)video.play();}
+        renderPosition();
+    }
+    function renderPosition(){
+        range.max=timeline.sequence.duration_ms||1; range.value=globalMs; time.textContent=`${fmt(globalMs)} / ${fmt(timeline.sequence.duration_ms)}`;
+        const cue=timeline.captions.find(item=>globalMs>=item.start_ms&&globalMs<item.end_ms); caption.textContent=cue?.text||'';
+        const transform=activeClip?.effects?.find(item=>item.type==='transform'); video.style.transform=transform?`translate(${transform.x*10}%, ${transform.y*10}%) scale(${transform.scale})`:'';
+        document.getElementById('preview-block').textContent=activeClip?.block?.name || asset(activeClip?.asset_id)?.name || 'Vídeo';
+        document.querySelectorAll('[data-start]').forEach(card=>card.classList.toggle('is-current',globalMs>=Number(card.dataset.start)&&globalMs<Number(card.dataset.end)));
+    }
+    video.addEventListener('timeupdate',()=>{if(loading||!activeClip)return; globalMs=activeClip.timeline_in_ms+Math.max(0,video.currentTime*1000-activeClip.source_in_ms); if(video.currentTime*1000>=activeClip.source_out_ms-40){const next=timeline.clips[timeline.clips.indexOf(activeClip)+1]; if(next)seek(next.timeline_in_ms,true);else video.pause();} renderPosition(); clearTimeout(saveTimer);saveTimer=setTimeout(()=>api('{% url "external_media_project_preview_session" project.public_id %}',{position_ms:Math.round(globalMs),ui_state:{mode}}),700);});
+    video.addEventListener('ended',()=>{const next=timeline.clips[timeline.clips.indexOf(activeClip)+1];if(next)seek(next.timeline_in_ms,true)});
+    play.addEventListener('click',()=>{if(video.paused){video.play();play.innerHTML='<i class="fas fa-pause"></i>'}else{video.pause();play.innerHTML='<i class="fas fa-play"></i>'}});
+    range.addEventListener('input',()=>seek(Number(range.value),!video.paused));
+    function decisionStart(item){return Number(item.source_in_ms||0)}
+    function renderList(){
+        list.innerHTML=''; const flagged=new Set(timeline.review_items||[]); const decisions=timeline.decisions.filter(item=>item.type==='remove_segment'&&(mode==='watch'||flagged.has(item.id)));
+        decisions.forEach(item=>{const restored=item.enabled===false, card=document.createElement('article');card.className=`preview-decision ${restored?'is-restored':''}`;card.dataset.start=decisionStart(item);card.dataset.end=Number(item.source_out_ms||item.source_in_ms||0);card.innerHTML=`<button type="button" class="w-full text-left" data-jump><div class="flex items-start justify-between gap-2"><div><span class="preview-pill">${item.metadata?.kind==='filler'?'Vício de fala':'Pausa'}</span><strong class="block mt-2">${item.reason||'Ajuste sugerido'}</strong><small class="text-gray-500">${fmt(item.source_in_ms)} — ${fmt(item.source_out_ms)}</small></div><i class="fas ${restored?'fa-eye':'fa-scissors'} text-red-600 mt-1"></i></div></button><div class="flex gap-2 mt-3"><button class="media-btn media-muted !py-2 flex-1" data-decision="false">Restaurar</button><button class="media-btn media-primary !py-2 flex-1" data-decision="true">Manter corte</button></div>`;card.querySelector('[data-jump]').onclick=()=>seek(decisionStart(item));card.querySelectorAll('[data-decision]').forEach(btn=>btn.onclick=()=>mutateDecision(item.id,btn.dataset.decision==='true'));list.append(card)});
+        timeline.decisions.filter(item=>item.type==='reframe'&&(mode==='watch'||flagged.has(item.id))).forEach(item=>{const current=item.metadata?.manual_transform||{scale:1,x:0,y:0},card=document.createElement('article');card.className='preview-decision';card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Enquadramento</span><strong class="block mt-2">Ajuste fino</strong></div><i class="fas fa-crop-simple text-red-600"></i></div><label class="block text-xs font-bold text-gray-500 mt-3">Zoom <input class="preview-range mt-1" data-transform="scale" type="range" min="1" max="2" step=".01" value="${current.scale}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Horizontal <input class="preview-range mt-1" data-transform="x" type="range" min="-1" max="1" step=".01" value="${current.x}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Vertical <input class="preview-range mt-1" data-transform="y" type="range" min="-1" max="1" step=".01" value="${current.y}"></label><small class="text-gray-400" data-saved>Salvo</small>`;card.querySelectorAll('[data-transform]').forEach(input=>input.oninput=()=>{const values=Object.fromEntries([...card.querySelectorAll('[data-transform]')].map(field=>[field.dataset.transform,Number(field.value)]));card.querySelector('[data-saved]').textContent='Salvando…';clearTimeout(card._timer);card._timer=setTimeout(()=>saveTransform(item.id,values,card),350)});list.append(card)});
+        timeline.decisions.filter(item=>item.type==='audio_noise_reduction'&&(mode==='watch'||flagged.has(item.id))).forEach(item=>{const restored=item.enabled===false,start=Number(item.source_in_ms||0),end=Number(item.source_out_ms||start),card=document.createElement('article');card.className=`preview-decision ${restored?'is-restored':''}`;card.dataset.start=start;card.dataset.end=end;card.innerHTML=`<button type="button" class="w-full text-left" data-jump><div class="flex items-start justify-between gap-2"><div><span class="preview-pill">Ruído</span><strong class="block mt-2">${item.metadata?.label||item.reason||'Ruído detectado'}</strong><small class="text-gray-500">${fmt(start)} — ${fmt(end)}</small></div><i class="fas fa-wave-square text-red-600 mt-1"></i></div></button><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="original"><i class="fas fa-play"></i> Original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="treated"><i class="fas fa-play"></i> Tratado</button></div><div class="flex gap-2 mt-2"><button class="media-btn media-muted !py-2 flex-1" data-decision="false">Usar original</button><button class="media-btn media-primary !py-2 flex-1" data-decision="true">Aplicar redução</button></div><audio class="hidden" preload="none"></audio>`;card.querySelector('[data-jump]').onclick=()=>seek(start);card.querySelectorAll('[data-play]').forEach(btn=>btn.onclick=()=>{const audio=card.querySelector('audio');const url=btn.dataset.play==='treated'?item.metadata?.preview_treated_url:item.metadata?.preview_original_url;if(!url)return;audio.src=url;audio.classList.remove('hidden');audio.play()});card.querySelectorAll('[data-decision]').forEach(btn=>btn.onclick=()=>mutateDecision(item.id,btn.dataset.decision==='true'));list.append(card)});
+        timeline.captions.forEach(cue=>{const card=document.createElement('article');card.className='preview-decision';card.dataset.start=cue.start_ms;card.dataset.end=cue.end_ms;card.innerHTML=`<div class="flex items-center justify-between gap-2 mb-2"><button data-jump class="text-xs font-bold text-gray-500">${fmt(cue.start_ms)} — ${fmt(cue.end_ms)}</button><span class="preview-pill">${cue.language.toUpperCase()}</span></div><textarea class="preview-subtitle" rows="2" aria-label="Editar legenda"></textarea><small class="text-gray-400" data-saved>Salvo</small>`;const input=card.querySelector('textarea');input.value=cue.text;card.querySelector('[data-jump]').onclick=()=>seek(cue.start_ms);input.oninput=()=>{card.querySelector('[data-saved]').textContent='Salvando…';clearTimeout(input._timer);input._timer=setTimeout(()=>saveSubtitle(cue.id,input.value,card),550)};list.append(card)});
+    }
+    async function mutateDecision(id,enabled){const data=await api(`{% url 'external_media_project_preview' project.public_id %}decisions/${id}/`,{enabled});applyTimeline(data)}
+    async function saveSubtitle(id,textValue,card){try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}subtitles/${id}/`,{text:textValue});card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
+    async function saveTransform(id,values,card){try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}transforms/${id}/`,values);card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
+    function applyTimeline(data,rebuild=true){timeline=data.timeline;document.getElementById('revision-label').textContent=`r${data.revision}`;document.getElementById('preview-state').textContent=`Revisão ${data.revision} · alterações não renderizadas`;if(rebuild)renderList();seek(Math.min(globalMs,timeline.sequence.duration_ms));}
+    document.querySelectorAll('[data-history]').forEach(btn=>btn.onclick=async()=>applyTimeline(await api(btn.dataset.history==='undo'?'{% url "external_media_project_preview_undo" project.public_id %}':'{% url "external_media_project_preview_redo" project.public_id %}')));
+    document.querySelectorAll('[data-mode]').forEach(btn=>btn.onclick=()=>{mode=btn.dataset.mode;document.querySelectorAll('[data-mode]').forEach(item=>item.classList.toggle('is-active',item===btn));list.closest('aside').style.display=mode==='watch'?'none':'';document.querySelector('.preview-layout').style.gridTemplateColumns=mode==='watch'?'1fr':''});
+    Object.entries(timeline.fidelity||{}).forEach(([name,value])=>{const pill=document.createElement('span');pill.className=`preview-pill ${value==='EXACT'?'is-exact':''}`;pill.textContent=`${name==='CUTS'?'Cortes':name==='SUBTITLES'?'Legendas':name}: ${value==='EXACT'?'fiel':value==='APPROXIMATE'?'aproximado':'indisponível'}`;document.getElementById('fidelity-pills').append(pill)});
+    const modal=document.getElementById('approve-modal');document.getElementById('approve-preview').onclick=()=>modal.classList.add('is-open');document.getElementById('cancel-approve').onclick=()=>modal.classList.remove('is-open');document.getElementById('confirm-approve').onclick=async event=>{event.currentTarget.disabled=true;event.currentTarget.textContent='Enviando…';try{const data=await api('{% url "external_media_project_preview_approve" project.public_id %}');location.href=data.redirect_url}catch(error){event.currentTarget.disabled=false;event.currentTarget.textContent='Aprovar e renderizar';alert(error.message)}};
+    renderList();seek(globalMs);
+})();
+</script>
+{% endblock %}

@@ -10,9 +10,15 @@ from django.db import connection
 from django.utils import timezone
 
 from ..models.external_media import (
+    ExternalMediaJob,
     ExternalMediaProject,
     ExternalMediaProjectExport,
     ProjectBlockMedia,
+    SubtitleReviewEvent,
+    SubtitleReviewSession,
+    SubtitleTrack,
+    SubtitleVideoVersion,
+    SubtitleVideoVersionAsset,
     VideoMasteringJob,
 )
 from .audio_analysis import AudioAnalysisService
@@ -23,6 +29,7 @@ from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
 from .premiere_export import PremierePackageService
 from .services import ExternalMediaPipeline, ExternalMediaProjectPipeline, VideoAssemblyService
+from .subtitle_reviews import SubtitleReviewService
 from .timeline import InternalTimelineBuilder
 
 
@@ -48,7 +55,11 @@ def run_external_media_project(self, project_id):
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.create_project_preview')
 def create_project_preview(self, media_id):
-    item = ProjectBlockMedia.objects.get(pk=media_id)
+    try:
+        item = ProjectBlockMedia.objects.get(pk=media_id)
+    except ProjectBlockMedia.DoesNotExist:
+        # The upload may have been removed while its preview job was queued.
+        return {'skipped': True, 'reason': 'media-deleted'}
     item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
     item.preview_error = ''
     item.save(update_fields=['preview_status', 'preview_error', 'update_at'])
@@ -69,6 +80,86 @@ def create_project_preview(self, media_id):
         item.preview_error = str(exc)[:255]
         item.save(update_fields=['preview_status', 'preview_error', 'update_at'])
         raise
+
+
+@shared_task(bind=True, autoretry_for=(), name='external_media.create_subtitle_review_preview')
+def create_subtitle_review_preview(self, session_id):
+    session = SubtitleReviewSession.objects.select_related('job').get(pk=session_id)
+    source_file = session.job.original_video
+    with TemporaryDirectory(prefix='connect-subtitle-review-') as temp:
+        workdir = Path(temp)
+        source = workdir / f'source{Path(source_file.name).suffix.lower()}'
+        preview = workdir / 'preview.mp4'
+        _local_file(source_file, source)
+        VideoAssemblyService().create_proxy(source, preview)
+        with preview.open('rb') as handle:
+            session.preview_file.save('preview.mp4', File(handle), save=False)
+        session.save(update_fields=['preview_file', 'update_at'])
+
+
+@shared_task(bind=True, autoretry_for=(), name='external_media.render_reviewed_subtitles')
+def render_reviewed_subtitles(self, project_id, review_session_id=None):
+    with _project_execution_lock(project_id) as acquired:
+        if not acquired:
+            return {'skipped': True, 'reason': 'project-already-processing'}
+        if not _execution_is_current(project_id, self.request.id):
+            return {'skipped': True, 'reason': 'stale-execution'}
+        project = ExternalMediaProject.objects.select_related('render_job').get(pk=project_id)
+        job = project.render_job
+        if not job:
+            raise ExternalMediaError('O projeto ainda não possui um vídeo preparado.')
+        try:
+            project.status = ExternalMediaProject.Status.PROCESSING
+            project.progress = 86
+            project.current_step = 'Aplicando as legendas revisadas'
+            project.error_message = ''
+            project.save(update_fields=[
+                'status', 'progress', 'current_step', 'error_message', 'update_at',
+            ])
+            ExternalMediaPipeline().render_outputs(job.pk)
+            SubtitleTrack.objects.filter(job=job).update(subtitle_dirty=False)
+            session = SubtitleReviewSession.objects.filter(pk=review_session_id).first()
+            video_version = SubtitleVideoVersion.objects.create(
+                project=project,
+                job=job,
+                version=SubtitleReviewService.next_video_version(project),
+                subtitle_revisions={
+                    track.language: track.revision
+                    for track in SubtitleTrack.objects.filter(job=job)
+                },
+                review_session=session,
+            )
+            for asset in job.assets.all():
+                version_asset = SubtitleVideoVersionAsset(
+                    version=video_version,
+                    kind=asset.kind,
+                    language=asset.language,
+                    file_size=asset.file_size,
+                )
+                with asset.file.open('rb') as source:
+                    version_asset.file.save(Path(asset.file.name).name, File(source), save=False)
+                version_asset.save()
+            project.status = ExternalMediaProject.Status.FINISHED
+            project.progress = 100
+            project.current_step = 'Vídeo atualizado'
+            project.finished_at = timezone.now()
+            project.save(update_fields=[
+                'status', 'progress', 'current_step', 'finished_at', 'update_at',
+            ])
+            if session:
+                SubtitleReviewEvent.objects.create(
+                    session=session,
+                    event='RENDER_COMPLETED',
+                    details={'video_version': video_version.version},
+                )
+        except Exception as exc:
+            project.status = ExternalMediaProject.Status.ERROR
+            project.current_step = 'Não foi possível atualizar o vídeo'
+            project.error_message = str(exc)
+            project.save(update_fields=[
+                'status', 'current_step', 'error_message', 'update_at',
+            ])
+            raise
 
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.render_project')
@@ -289,12 +380,13 @@ def export_premiere_project(self, export_id):
                 export.timeline_json.save('timeline.json', File(handle), save=False)
         export.compatibility = timeline.get('compatibility') or {}
         export.validation_report = report
+        export.timeline_revision = timeline.get('timeline_revision')
         export.status = ExternalMediaProjectExport.Status.FINISHED
         export.progress = 100
         export.current_step = 'Projeto editável pronto'
         export.finished_at = timezone.now()
         export.save(update_fields=[
-            'archive', 'timeline_json', 'compatibility', 'validation_report', 'status',
+            'archive', 'timeline_json', 'compatibility', 'validation_report', 'timeline_revision', 'status',
             'progress', 'current_step', 'finished_at', 'update_at',
         ])
     except Exception as exc:

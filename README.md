@@ -287,7 +287,7 @@ Dois consumers em `website/consumers.py`:
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_KEY_VAULT_NAME` | Autenticação Azure Key Vault |
 | `OPENAI_API_KEY` | Chave da OpenAI usada somente no backend |
 | `OPENAI_TRANSCRIPTION_MODEL` | Modelo de transcrição (padrão: `whisper-1`) |
-| `EXTERNAL_MEDIA_MAX_UPLOAD_MB` | Limite de upload de vídeo (padrão: 2048 MB) |
+| `EXTERNAL_MEDIA_MAX_UPLOAD_MB` | Limite de upload de vídeo (padrão: 10240 MB) |
 | `EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS` | Duração dos blocos de áudio enviados ao Whisper (padrão: 1200 s) |
 | `EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE` | Quantidade de legendas traduzidas por chamada (padrão: 40) |
 | `EXTERNAL_MEDIA_FFMPEG_TIMEOUT` | Limite por processo FFmpeg em segundos |

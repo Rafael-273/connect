@@ -112,11 +112,27 @@ class ExternalMediaProjectEditForm(forms.ModelForm):
 class ProjectBlockMediaForm(forms.ModelForm):
     trim_start_seconds = forms.DecimalField(required=False, min_value=0, decimal_places=3, max_digits=12)
     trim_end_seconds = forms.DecimalField(required=False, min_value=0, decimal_places=3, max_digits=12)
+    camera_role = forms.ChoiceField(
+        choices=ProjectBlockMedia.CameraRole.choices,
+        required=False,
+        initial=ProjectBlockMedia.CameraRole.PRIMARY,
+    )
+    camera_label = forms.CharField(required=False, max_length=80)
+    camera_key = forms.CharField(required=False, max_length=80)
+    camera_hint = forms.ChoiceField(
+        choices=ProjectBlockMedia.CameraHint.choices,
+        required=False,
+        initial=ProjectBlockMedia.CameraHint.AUTO,
+    )
 
     class Meta:
         model = ProjectBlockMedia
-        fields = ['file']
-        labels = {'file': 'Vídeo'}
+        fields = ['file', 'camera_role', 'camera_label', 'camera_hint']
+        labels = {
+            'file': 'Vídeo',
+            'camera_label': 'Nome da câmera',
+            'camera_hint': 'Enquadramento',
+        }
         widgets = {'file': forms.ClearableFileInput(attrs={'accept': 'video/*'})}
 
     def clean_file(self):

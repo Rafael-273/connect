@@ -4,6 +4,7 @@ from pathlib import Path
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.core.files.storage import storages
 from django.db import models
+from django.utils import timezone
 
 from ._base import BaseModel
 from .member import Member
@@ -30,6 +31,12 @@ def background_music_upload_path(instance, filename):
     return f'external_media/background_music/{track_id}{suffix}'
 
 
+def color_lut_upload_path(instance, filename):
+    suffix = Path(filename).suffix.lower()
+    lut_id = getattr(instance, 'pk', None) or 'pending'
+    return f'external_media/color_luts/{lut_id}{suffix}'
+
+
 def video_mastering_upload_path(instance, filename):
     suffix = Path(filename).suffix.lower()
     return f'external_media/mastering/{instance.public_id}/source/original{suffix}'
@@ -44,6 +51,17 @@ def project_export_path(instance, filename):
     return f'external_media/projects/{instance.project.public_id}/exports/{instance.public_id}/{filename}'
 
 
+def subtitle_review_preview_path(instance, filename):
+    return f'external_media/projects/{instance.project.public_id}/reviews/{instance.public_id}/preview.mp4'
+
+
+def subtitle_video_version_asset_path(instance, filename):
+    return (
+        f'external_media/projects/{instance.version.project.public_id}/versions/'
+        f'v{instance.version.version}/{instance.language}_{instance.kind.lower()}{Path(filename).suffix.lower()}'
+    )
+
+
 def external_media_project_upload_path(instance, filename):
     suffix = Path(filename).suffix.lower()
     block_ref = getattr(instance, 'block_id', None) or getattr(instance.block, 'pk', 'block')
@@ -56,6 +74,21 @@ def external_media_project_upload_path(instance, filename):
 def external_media_project_preview_path(instance, filename):
     block_ref = getattr(instance, 'block_id', None) or getattr(instance.block, 'pk', 'block')
     return f'external_media/projects/{instance.project.public_id}/b{block_ref}/previews/{instance.position:03d}.mp4'
+
+
+def external_media_source_proxy_path(instance, filename):
+    return (
+        f'external_media/projects/{instance.project.public_id}/preview/'
+        f'{instance.source_id}/{instance.profile.code}.mp4'
+    )
+
+
+def default_preview_capabilities():
+    return ['CUTS', 'SUBTITLES', 'TRANSFORMS']
+
+
+def default_preview_confidence_thresholds():
+    return {'flag_below': 0.72, 'auto_accept_above': 0.92}
 
 
 def default_output_languages():
@@ -163,6 +196,25 @@ class RenderPreset(BaseModel):
         return self.name
 
 
+class ProxyProfile(BaseModel):
+    code = models.SlugField(max_length=50, unique=True)
+    name = models.CharField(max_length=100)
+    max_width = models.PositiveSmallIntegerField(default=960)
+    fps = models.PositiveSmallIntegerField(default=30)
+    video_crf = models.PositiveSmallIntegerField(default=27)
+    audio_bitrate_kbps = models.PositiveSmallIntegerField(default=96)
+    is_default = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-is_default', 'name']
+        verbose_name = 'Perfil de proxy'
+        verbose_name_plural = 'Perfis de proxy'
+
+    def __str__(self):
+        return self.name
+
+
 class ExternalMediaJob(BaseModel):
     class Status(models.TextChoices):
         UPLOADING = 'UPLOADING', 'Enviando vídeo'
@@ -186,6 +238,7 @@ class ExternalMediaJob(BaseModel):
     ]
 
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    rendered_from_timeline_revision = models.PositiveIntegerField(blank=True, null=True)
     name = models.CharField(max_length=180)
     created_by = models.ForeignKey(
         Member,
@@ -254,9 +307,19 @@ class ExternalMediaJob(BaseModel):
 
 
 class SubtitleTrack(BaseModel):
+    class TranslationStatus(models.TextChoices):
+        CURRENT = 'CURRENT', 'Atualizada'
+        SOURCE_CHANGED = 'SOURCE_CHANGED', 'Texto original alterado'
+
     job = models.ForeignKey(ExternalMediaJob, on_delete=models.CASCADE, related_name='subtitle_tracks')
     language = models.CharField(max_length=10, choices=ExternalMediaJob.LANGUAGE_CHOICES)
     is_source = models.BooleanField(default=False)
+    revision = models.PositiveIntegerField(default=1)
+    human_reviewed = models.BooleanField(default=False)
+    subtitle_dirty = models.BooleanField(default=False)
+    translation_status = models.CharField(
+        max_length=24, choices=TranslationStatus.choices, default=TranslationStatus.CURRENT,
+    )
 
     class Meta:
         constraints = [
@@ -284,6 +347,167 @@ class SubtitleCue(BaseModel):
 
     def __str__(self):
         return f'{self.track} #{self.cue_index}'
+
+
+class SubtitleReviewSession(BaseModel):
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', 'Em andamento'
+        SUBMITTED = 'SUBMITTED', 'Aguardando aprovação'
+        UNDER_REVIEW = 'UNDER_REVIEW', 'Em análise'
+        APPROVED = 'APPROVED', 'Aprovada'
+        PARTIALLY_APPROVED = 'PARTIALLY_APPROVED', 'Aprovada parcialmente'
+        REJECTED = 'REJECTED', 'Rejeitada'
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    project = models.ForeignKey(
+        'ExternalMediaProject', on_delete=models.CASCADE, related_name='subtitle_review_sessions',
+    )
+    job = models.ForeignKey(
+        ExternalMediaJob, on_delete=models.CASCADE, related_name='subtitle_review_sessions',
+    )
+    token_hash = models.CharField(max_length=64, unique=True, editable=False)
+    token_prefix = models.CharField(max_length=12, db_index=True, editable=False)
+    languages = models.JSONField(default=list)
+    base_revisions = models.JSONField(default=dict)
+    reviewer_name = models.CharField(max_length=120, blank=True)
+    reviewer_contact = models.CharField(max_length=180, blank=True)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.DRAFT)
+    general_comment = models.TextField(blank=True)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(blank=True, null=True)
+    first_accessed_at = models.DateTimeField(blank=True, null=True)
+    submitted_at = models.DateTimeField(blank=True, null=True)
+    created_by = models.ForeignKey(
+        Member, on_delete=models.PROTECT, related_name='created_subtitle_review_sessions',
+    )
+    preview_file = models.FileField(
+        upload_to=subtitle_review_preview_path,
+        storage=get_external_media_storage,
+        blank=True,
+        max_length=255,
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['project', 'status']),
+            models.Index(fields=['expires_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.project} - {self.reviewer_name or self.token_prefix}'
+
+
+class SubtitleSuggestion(BaseModel):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pendente'
+        APPROVED = 'APPROVED', 'Aprovada'
+        REJECTED = 'REJECTED', 'Rejeitada'
+        CONFLICT = 'CONFLICT', 'Conflito'
+
+    session = models.ForeignKey(
+        SubtitleReviewSession, on_delete=models.CASCADE, related_name='suggestions',
+    )
+    cue = models.ForeignKey(SubtitleCue, on_delete=models.PROTECT, related_name='review_suggestions')
+    language = models.CharField(max_length=10, choices=ExternalMediaJob.LANGUAGE_CHOICES)
+    base_track_revision = models.PositiveIntegerField(default=1)
+    original_text = models.TextField()
+    suggested_text = models.TextField()
+    resolved_text = models.TextField(blank=True)
+    comment = models.TextField(blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(
+        Member, on_delete=models.PROTECT, related_name='reviewed_subtitle_suggestions',
+        blank=True, null=True,
+    )
+    reviewed_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['language', 'cue__cue_index']
+        constraints = [
+            models.UniqueConstraint(fields=['session', 'cue'], name='unique_review_session_cue'),
+        ]
+
+
+class SubtitleRevision(BaseModel):
+    track = models.ForeignKey(SubtitleTrack, on_delete=models.CASCADE, related_name='revisions')
+    revision = models.PositiveIntegerField()
+    cues_snapshot = models.JSONField(default=list)
+    reason = models.CharField(max_length=120, blank=True)
+    created_by = models.ForeignKey(
+        Member, on_delete=models.PROTECT, related_name='subtitle_revisions', blank=True, null=True,
+    )
+    review_session = models.ForeignKey(
+        SubtitleReviewSession, on_delete=models.SET_NULL, related_name='applied_revisions',
+        blank=True, null=True,
+    )
+
+    class Meta:
+        ordering = ['-revision']
+        constraints = [
+            models.UniqueConstraint(fields=['track', 'revision'], name='unique_subtitle_track_revision'),
+        ]
+
+
+class SubtitleReviewEvent(BaseModel):
+    session = models.ForeignKey(
+        SubtitleReviewSession, on_delete=models.CASCADE, related_name='events',
+    )
+    event = models.CharField(max_length=40)
+    details = models.JSONField(default=dict, blank=True)
+    actor = models.ForeignKey(
+        Member, on_delete=models.SET_NULL, related_name='subtitle_review_events', blank=True, null=True,
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class SubtitleVideoVersion(BaseModel):
+    project = models.ForeignKey(
+        'ExternalMediaProject', on_delete=models.CASCADE, related_name='subtitle_video_versions',
+    )
+    job = models.ForeignKey(ExternalMediaJob, on_delete=models.CASCADE, related_name='subtitle_video_versions')
+    version = models.PositiveIntegerField()
+    subtitle_revisions = models.JSONField(default=dict)
+    review_session = models.ForeignKey(
+        SubtitleReviewSession, on_delete=models.SET_NULL, related_name='video_versions',
+        blank=True, null=True,
+    )
+
+    class Meta:
+        ordering = ['-version']
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'version'], name='unique_project_subtitle_video_version'),
+        ]
+
+
+class SubtitleVideoVersionAsset(BaseModel):
+    KIND_CHOICES = [
+        ('VIDEO', 'Vídeo renderizado'),
+        ('SRT', 'Legenda SRT'),
+        ('VTT', 'Legenda VTT'),
+    ]
+
+    version = models.ForeignKey(
+        SubtitleVideoVersion, on_delete=models.CASCADE, related_name='assets',
+    )
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    language = models.CharField(max_length=10, choices=ExternalMediaJob.LANGUAGE_CHOICES)
+    file = models.FileField(
+        upload_to=subtitle_video_version_asset_path,
+        storage=get_external_media_storage,
+        max_length=255,
+    )
+    file_size = models.PositiveBigIntegerField(default=0)
+
+    class Meta:
+        ordering = ['language', 'kind']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['version', 'kind', 'language'], name='unique_subtitle_video_version_asset',
+            ),
+        ]
 
 
 class GlossaryTerm(BaseModel):
@@ -415,6 +639,32 @@ class BackgroundMusicTrack(BaseModel):
         ordering = ['category', 'name']
         verbose_name = 'Trilha de fundo'
         verbose_name_plural = 'Trilhas de fundo'
+
+    def __str__(self):
+        return self.name
+
+
+class ColorLUT(BaseModel):
+    name = models.CharField(max_length=160, unique=True)
+    description = models.TextField(blank=True)
+    lut_file = models.FileField(
+        upload_to=color_lut_upload_path,
+        storage=get_external_media_storage,
+        max_length=255,
+        help_text='Arquivo .cube usado para aplicar a correção de cor.',
+    )
+    is_active = models.BooleanField(default=True)
+    default_intensity = models.PositiveSmallIntegerField(
+        default=50,
+        validators=[MaxValueValidator(100)],
+        verbose_name='Intensidade padrão (%)',
+        help_text='Valor sugerido ao selecionar este LUT em um template.',
+    )
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'LUT de cor'
+        verbose_name_plural = 'LUTs de cor'
 
     def __str__(self):
         return self.name
@@ -588,6 +838,14 @@ class MediaTemplateVersion(BaseModel):
         max_length=10, choices=ExternalMediaJob.LANGUAGE_CHOICES, default='pt',
     )
     output_languages = models.JSONField(default=default_output_languages)
+    interactive_preview_enabled = models.BooleanField(default=True, verbose_name='Preview interativo')
+    preview_proxy_profile = models.ForeignKey(
+        ProxyProfile, on_delete=models.PROTECT, related_name='template_versions', blank=True, null=True,
+    )
+    preview_editable_capabilities = models.JSONField(default=default_preview_capabilities, blank=True)
+    preview_confidence_thresholds = models.JSONField(default=default_preview_confidence_thresholds, blank=True)
+    subtitles_enabled = models.BooleanField(default=True, verbose_name='Gerar legendas')
+    translated_subtitles_enabled = models.BooleanField(default=True, verbose_name='Gerar legenda traduzida')
     default_settings = models.JSONField(default=dict, blank=True)
     allowed_overrides = models.JSONField(default=list, blank=True)
     filler_terms = models.ManyToManyField(
@@ -595,6 +853,14 @@ class MediaTemplateVersion(BaseModel):
         related_name='template_versions',
         blank=True,
         verbose_name='Vícios de fala ativos',
+    )
+    color_lut = models.ForeignKey(
+        ColorLUT,
+        on_delete=models.PROTECT,
+        related_name='template_versions',
+        blank=True,
+        null=True,
+        verbose_name='LUT de cor',
     )
     intro_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
@@ -627,6 +893,10 @@ class MediaTemplateVersion(BaseModel):
     dialogue_processing_enabled = models.BooleanField(default=False, verbose_name='Tratamento de diálogo')
     dialogue_processing_config = models.JSONField(
         default=dict, blank=True, verbose_name='Configuração avançada de tratamento de diálogo',
+    )
+    audio_noise_cleanup_enabled = models.BooleanField(default=False, verbose_name='Limpeza de ruído')
+    audio_noise_cleanup_config = models.JSONField(
+        default=dict, blank=True, verbose_name='Configuração avançada de limpeza de ruído',
     )
     audio_mixing_enabled = models.BooleanField(default=True, verbose_name='Mixagem inteligente')
     audio_ducking_enabled = models.BooleanField(default=True, verbose_name='Ducking automático')
@@ -748,6 +1018,14 @@ class ExternalMediaProject(BaseModel):
     render_job = models.OneToOneField(
         ExternalMediaJob, on_delete=models.SET_NULL, related_name='project', blank=True, null=True,
     )
+    current_timeline_revision = models.ForeignKey(
+        'TimelineRevision', on_delete=models.SET_NULL, related_name='+', blank=True, null=True,
+    )
+    approved_timeline_revision = models.ForeignKey(
+        'TimelineRevision', on_delete=models.SET_NULL, related_name='approved_projects', blank=True, null=True,
+    )
+    preview_dirty = models.BooleanField(default=False)
+    final_render_outdated = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at']
@@ -805,6 +1083,20 @@ class ProjectCustomBlock(BaseModel):
 
 
 class ProjectBlockMedia(BaseModel):
+    class MediaRole(models.TextChoices):
+        CAMERA = 'CAMERA', 'Câmera'
+
+    class CameraRole(models.TextChoices):
+        PRIMARY = 'PRIMARY', 'Câmera principal'
+        SECONDARY = 'SECONDARY', 'Câmera extra'
+
+    class CameraHint(models.TextChoices):
+        AUTO = 'AUTO', 'Automático'
+        SPEAKER_A = 'SPEAKER_A', 'Participante 1'
+        SPEAKER_B = 'SPEAKER_B', 'Participante 2'
+        WIDE = 'WIDE', 'Plano geral'
+        OTHER = 'OTHER', 'Outro'
+
     class PreviewStatus(models.TextChoices):
         PENDING = 'PENDING', 'Preparando preview'
         READY = 'READY', 'Preview pronto'
@@ -818,6 +1110,12 @@ class ProjectBlockMedia(BaseModel):
     )
     original_filename = models.CharField(max_length=255)
     position = models.PositiveSmallIntegerField(default=1)
+    media_role = models.CharField(max_length=16, choices=MediaRole.choices, default=MediaRole.CAMERA)
+    camera_role = models.CharField(max_length=16, choices=CameraRole.choices, default=CameraRole.PRIMARY)
+    camera_key = models.CharField(max_length=80, default='primary', db_index=True)
+    camera_order = models.PositiveSmallIntegerField(default=1)
+    camera_label = models.CharField(max_length=80, blank=True)
+    camera_hint = models.CharField(max_length=16, choices=CameraHint.choices, default=CameraHint.AUTO)
     duration_ms = models.PositiveBigIntegerField(blank=True, null=True)
     trim_start_ms = models.PositiveBigIntegerField(default=0)
     trim_end_ms = models.PositiveBigIntegerField(blank=True, null=True)
@@ -836,7 +1134,8 @@ class ProjectBlockMedia(BaseModel):
         ordering = ['block__order', 'position', 'pk']
         constraints = [
             models.UniqueConstraint(
-                fields=['project', 'block', 'position'], name='unique_project_block_media_position',
+                fields=['project', 'block', 'position', 'camera_order'],
+                name='unique_project_block_media_camera_position',
             ),
         ]
         verbose_name = 'Vídeo de bloco'
@@ -844,6 +1143,85 @@ class ProjectBlockMedia(BaseModel):
 
     def __str__(self):
         return f'{self.project}: {(self.block or self.custom_block).name} #{self.position}'
+
+
+class ProjectSourceProxy(BaseModel):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Preparando'
+        READY = 'READY', 'Pronto'
+        ERROR = 'ERROR', 'Erro'
+
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='source_proxies')
+    source_id = models.CharField(max_length=160)
+    profile = models.ForeignKey(ProxyProfile, on_delete=models.PROTECT, related_name='source_proxies')
+    source_storage_name = models.CharField(max_length=500)
+    proxy_file = models.FileField(
+        upload_to=external_media_source_proxy_path, storage=get_external_media_storage,
+        blank=True, max_length=500,
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    duration_ms = models.PositiveBigIntegerField(blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    error_message = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['source_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['project', 'source_id', 'profile'], name='unique_project_source_proxy_profile',
+            ),
+        ]
+
+
+class TimelineRevision(BaseModel):
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='timeline_revisions')
+    revision = models.PositiveIntegerField()
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL, related_name='children', blank=True, null=True)
+    timeline = models.JSONField(default=dict)
+    source_manifest = models.JSONField(default=dict)
+    edit_decision_set = models.JSONField(default=dict)
+    reason = models.CharField(max_length=120, blank=True)
+    created_by = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='timeline_revisions', blank=True, null=True)
+    approved_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-revision']
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'revision'], name='unique_project_timeline_revision'),
+        ]
+
+    def __str__(self):
+        return f'{self.project} · r{self.revision}'
+
+
+class PreviewSession(BaseModel):
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='preview_sessions')
+    member = models.ForeignKey(Member, on_delete=models.CASCADE, related_name='external_media_preview_sessions')
+    current_revision = models.ForeignKey(TimelineRevision, on_delete=models.SET_NULL, related_name='+', blank=True, null=True)
+    position_ms = models.PositiveBigIntegerField(default=0)
+    reviewed_decision_ids = models.JSONField(default=list, blank=True)
+    filters = models.JSONField(default=dict, blank=True)
+    ui_state = models.JSONField(default=dict, blank=True)
+    undo_stack = models.JSONField(default=list, blank=True)
+    redo_stack = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'member'], name='unique_project_member_preview_session'),
+        ]
+
+
+class TimelineMutation(BaseModel):
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='timeline_mutations')
+    session = models.ForeignKey(PreviewSession, on_delete=models.SET_NULL, related_name='mutations', blank=True, null=True)
+    from_revision = models.ForeignKey(TimelineRevision, on_delete=models.PROTECT, related_name='+')
+    to_revision = models.ForeignKey(TimelineRevision, on_delete=models.PROTECT, related_name='+')
+    operation_type = models.CharField(max_length=40)
+    payload = models.JSONField(default=dict)
+    inverse_payload = models.JSONField(default=dict)
+    created_by = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='timeline_mutations')
 
 
 class ProjectPipelineStep(BaseModel):
@@ -875,6 +1253,14 @@ class ProjectPipelineStep(BaseModel):
     def __str__(self):
         return f'{self.project}: {self.label}'
 
+    @property
+    def duration_ms(self):
+        """Elapsed execution time without introducing a second persisted clock."""
+        if not self.started_at:
+            return None
+        end = self.finished_at or timezone.now()
+        return max(0, round((end - self.started_at).total_seconds() * 1000))
+
 
 class ExternalMediaProjectExport(BaseModel):
     class Format(models.TextChoices):
@@ -891,6 +1277,7 @@ class ExternalMediaProjectExport(BaseModel):
         ERROR = 'ERROR', 'Erro'
 
     public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    timeline_revision = models.PositiveIntegerField(blank=True, null=True)
     project = models.ForeignKey(
         ExternalMediaProject, on_delete=models.CASCADE, related_name='exports',
     )

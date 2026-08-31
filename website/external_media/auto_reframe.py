@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-AUTO_REFRAME_PLAN_VERSION = 8
+AUTO_REFRAME_PLAN_VERSION = 9
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -127,7 +127,7 @@ class AutoReframeService:
         self, priority='face', safe_margin=0.15, interval_frames=None, smoothing=0.18,
         top_margin=None, horizontal_smoothing=None, vertical_lock=None,
     ):
-        self.priority = priority if priority in {'face', 'body'} else 'face'
+        self.priority = priority if priority in {'face', 'body', 'static'} else 'face'
         # A face-only crop feels like a webcam close-up and is very unforgiving if
         # detection misses a strand of hair. Keep enough room for the upper torso.
         requested_safe_margin = min(0.40, max(0.0, float(safe_margin)))
@@ -184,6 +184,10 @@ class AutoReframeService:
             crop_width, crop_height = self.cover_crop_size(
                 source_width, source_height, output_width, output_height,
             )
+            if self.priority == 'static':
+                return self._static_center_plan(
+                    crop_width, crop_height, source_width, source_height,
+                )
             face_detectors = self._face_detectors(cv2)
             body_detector = cv2.HOGDescriptor()
             body_detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
@@ -263,6 +267,20 @@ class AutoReframeService:
             crop_width = source_width
             crop_height = round(crop_width / target_ratio)
         return AutoReframeService._even(crop_width), AutoReframeService._even(crop_height)
+
+    @classmethod
+    def _static_center_plan(cls, cover_width, cover_height, source_width, source_height):
+        """Apply a stable six-percent podcast crop without person tracking."""
+        zoom = 1.06
+        crop_width = cls._even(min(source_width, cover_width / zoom))
+        crop_height = cls._even(min(source_height, cover_height / zoom))
+        x = max(0.0, (source_width - crop_width) / 2.0)
+        y = max(0.0, (source_height - crop_height) / 2.0)
+        return AutoReframePlan(
+            crop_width,
+            crop_height,
+            (ReframeKeyframe(0.0, x, y),),
+        )
 
     def _detect_people(self, frame, face_detectors, body_detector, cv2):
         original_height, original_width = frame.shape[:2]

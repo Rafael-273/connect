@@ -8,11 +8,13 @@ from django.utils.text import slugify
 
 from ..models.external_media import (
     BackgroundMusicTrack,
+    ColorLUT,
     MasteringProfile,
     MediaTemplate,
     MediaTemplateBlock,
     MediaTemplatePlugin,
     MediaTemplateVersion,
+    ProxyProfile,
     RenderPreset,
     SpeechFillerTerm,
     SubtitleStyle,
@@ -88,6 +90,11 @@ class BackgroundMusicChoiceField(forms.ModelChoiceField):
         return f'{obj.get_category_display()} · {obj.name}'
 
 
+class ColorLUTChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return obj.name
+
+
 class MasteringProfileChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         return f'{obj.name} ({obj.target_lufs} LUFS · {obj.true_peak_db} dBTP)'
@@ -139,6 +146,9 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         required=False,
         empty_label='Sem masterização',
     )
+    color_lut = ColorLUTChoiceField(
+        label='LUT de cor', queryset=ColorLUT.objects.none(), required=False, empty_label='Sem LUT',
+    )
     audio_mixing_config_raw = forms.CharField(
         label='Configuração avançada de mixagem (JSON)',
         required=False,
@@ -155,6 +165,15 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         help_text=(
             'Opcional. Ajusta EQ, compressão e nivelamento entre falantes. Exemplo: '
             '{"compression_ratio": 2.5, "leveling_max_gain_db": 6, "deesser_enabled": true}'
+        ),
+    )
+    audio_noise_cleanup_config_raw = forms.CharField(
+        label='Configuração avançada de limpeza de ruído (JSON)',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 4}),
+        help_text=(
+            'Opcional. Exemplo: '
+            '{"global_mode": "LIGHT", "detect_transient_noise": true, "transient_action": "REVIEW"}'
         ),
     )
     LANGUAGE_MODE_SINGLE = 'single'
@@ -194,8 +213,9 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         required=False,
     )
     auto_reframe_priority = forms.ChoiceField(
-        label='Prioridade do enquadramento',
+        label='Modo de enquadramento',
         choices=[
+            ('static', 'Melhorar enquadramento - zoom sutil, sem acompanhar pessoas'),
             ('face', 'Rosto — ideal para sermões e falas'),
             ('body', 'Corpo — ideal para apresentações e movimento'),
         ],
@@ -235,21 +255,29 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
     class Meta:
         model = MediaTemplateVersion
         fields = [
-            'preset', 'subtitle_style', 'translated_subtitle_style', 'original_language',
-            'lut_file', 'lut_intensity', 'background_music',
+            'preset', 'interactive_preview_enabled', 'preview_proxy_profile',
+            'subtitles_enabled', 'subtitle_style', 'translated_subtitle_style',
+            'original_language',
+            'color_lut', 'lut_file', 'lut_intensity', 'background_music',
             'dialogue_processing_enabled',
+            'audio_noise_cleanup_enabled',
             'audio_mixing_enabled', 'audio_ducking_enabled', 'audio_spectral_ducking_enabled',
             'audio_mastering_enabled', 'mastering_profile',
         ]
         labels = {
             'preset': 'Preset de renderização',
+            'interactive_preview_enabled': 'Revisão interativa antes da renderização',
+            'preview_proxy_profile': 'Qualidade do preview',
+            'subtitles_enabled': 'Gerar legendas no vídeo',
             'subtitle_style': 'Estilo da legenda original',
             'translated_subtitle_style': 'Estilo da legenda traduzida',
             'original_language': 'Idioma padrão da legenda',
-            'lut_file': 'Arquivo LUT',
+            'color_lut': 'LUT de cor',
+            'lut_file': 'Arquivo LUT legado',
             'lut_intensity': 'Intensidade do LUT',
             'background_music': 'Trilha de fundo',
             'dialogue_processing_enabled': 'Tratamento de diálogo',
+            'audio_noise_cleanup_enabled': 'Limpeza de ruído',
             'audio_mixing_enabled': 'Mixagem inteligente',
             'audio_ducking_enabled': 'Ducking automático',
             'audio_spectral_ducking_enabled': 'Ducking espectral',
@@ -262,7 +290,32 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         instance = kwargs.get('instance')
+        is_new_instance = not instance or not instance.pk
+        data = kwargs.get('data')
+        if data is None and args:
+            data = args[0]
+        # A few internal/admin clients predate the subtitles checkbox. Preserve
+        # the historical enabled behavior when their POST does not include them.
+        if data is not None:
+            missing = [
+                name for name in ('subtitles_enabled',)
+                if name not in data
+            ]
+            if missing:
+                data = data.copy()
+                for name in missing:
+                    enabled = getattr(instance, name, True) if instance else True
+                    if enabled:
+                        data[name] = 'on'
+                if 'data' in kwargs:
+                    kwargs['data'] = data
+                else:
+                    args = (data, *args[1:])
         initial = kwargs.setdefault('initial', {})
+        if is_new_instance:
+            # The model defaults preserve compatibility for existing templates,
+            # while new templates should opt in to subtitle generation explicitly.
+            initial.setdefault('subtitles_enabled', False)
         if instance:
             initial.setdefault('default_settings_raw', json.dumps(instance.default_settings or {}, indent=2, ensure_ascii=False))
             initial.setdefault('allowed_overrides_raw', json.dumps(instance.allowed_overrides or [], indent=2, ensure_ascii=False))
@@ -270,6 +323,10 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             initial.setdefault(
                 'dialogue_processing_config_raw',
                 json.dumps(instance.dialogue_processing_config or {}, indent=2, ensure_ascii=False),
+            )
+            initial.setdefault(
+                'audio_noise_cleanup_config_raw',
+                json.dumps(instance.audio_noise_cleanup_config or {}, indent=2, ensure_ascii=False),
             )
             initial.setdefault(
                 'language_mode',
@@ -326,7 +383,9 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             if field_name in {'spoken_languages', 'advanced_plugins'}:
                 continue
             if field_name in {
+                'subtitles_enabled', 'translated_subtitles_enabled', 'interactive_preview_enabled',
                 'dialogue_processing_enabled',
+                'audio_noise_cleanup_enabled',
                 'audio_mixing_enabled', 'audio_ducking_enabled',
                 'audio_spectral_ducking_enabled', 'audio_mastering_enabled',
             }:
@@ -341,6 +400,8 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         list(translated_styles_qs)
         background_music_qs = BackgroundMusicTrack.objects.exclude(audio_file='').order_by('category', 'name')
         list(background_music_qs)
+        color_lut_qs = ColorLUT.objects.filter(is_active=True).exclude(lut_file='').order_by('name')
+        list(color_lut_qs)
         mastering_profile_qs = MasteringProfile.objects.filter(is_active=True).order_by('name')
         list(mastering_profile_qs)
         filler_language = (getattr(instance, 'original_language', None) or 'pt')
@@ -350,22 +411,28 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         ).order_by('text')
         list(filler_terms_qs)
         self.fields['preset'].queryset = preset_qs
+        self.fields['preview_proxy_profile'].queryset = ProxyProfile.objects.filter(is_active=True).order_by('-is_default', 'name')
         self.fields['subtitle_style'].queryset = subtitle_styles_qs
         self.fields['translated_subtitle_style'].queryset = translated_styles_qs
         self.fields['translated_subtitle_style'].required = False
+        self.fields['subtitle_style'].required = False
         # Older template submissions do not contain this newly introduced field.
         # Keep them valid and adopt the recommended intensity automatically.
         self.fields['lut_intensity'].required = False
         self.fields['lut_intensity'].initial = self.instance.lut_intensity if self.instance.pk else 50
         self.fields['background_music'].queryset = background_music_qs
+        self.fields['color_lut'].queryset = color_lut_qs
         self.fields['mastering_profile'].queryset = mastering_profile_qs
         self.fields['filler_terms'].queryset = filler_terms_qs
         if instance and instance.pk and instance.filler_terms.exists():
             self.fields['filler_terms'].initial = instance.filler_terms.filter(is_active=True)
         elif not instance or not instance.pk:
             self.fields['filler_terms'].initial = filler_terms_qs
-        if not instance:
+        if is_new_instance:
             self.fields['spoken_languages'].initial = ['pt']
+            preview_profile = ProxyProfile.objects.filter(is_active=True, is_default=True).first()
+            if preview_profile:
+                self.fields['preview_proxy_profile'].initial = preview_profile.pk
             default_profile = MasteringProfile.objects.filter(is_active=True, is_default=True).first()
             if default_profile:
                 self.fields['mastering_profile'].initial = default_profile.pk
@@ -397,6 +464,14 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             raise forms.ValidationError('Use um objeto JSON, por exemplo {"compression_ratio": 2.5}.')
         return value
 
+    def clean_audio_noise_cleanup_config_raw(self):
+        value = self._parse_json(
+            self.cleaned_data.get('audio_noise_cleanup_config_raw'), {}, 'Configuração de limpeza de ruído',
+        )
+        if not isinstance(value, dict):
+            raise forms.ValidationError('Use um objeto JSON, por exemplo {"global_mode": "LIGHT"}.')
+        return value
+
     @staticmethod
     def _parse_json(raw, default, label):
         if not raw:
@@ -414,19 +489,35 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         spoken_languages = self.cleaned_data.get('spoken_languages') or [instance.original_language]
         if language_mode in (self.LANGUAGE_MODE_SINGLE, self.LANGUAGE_MODE_TRANSLATED):
             spoken_languages = [instance.original_language]
+        subtitles_enabled = bool(self.cleaned_data.get('subtitles_enabled'))
         translated_language = self.cleaned_data.get('translated_language') or ''
+        translated_enabled = (
+            subtitles_enabled
+            and language_mode == self.LANGUAGE_MODE_TRANSLATED
+            and bool(translated_language)
+            and translated_language != instance.original_language
+        )
         output_languages = [instance.original_language]
         if (
+            translated_enabled
+            and
             language_mode != self.LANGUAGE_MODE_SINGLE
             and translated_language
             and translated_language != instance.original_language
         ):
             output_languages.append(translated_language)
-        if language_mode == self.LANGUAGE_MODE_SINGLE:
+        if not translated_enabled or language_mode == self.LANGUAGE_MODE_SINGLE:
             translated_language = ''
             instance.translated_subtitle_style = None
         elif not self.cleaned_data.get('translated_subtitle_style'):
             instance.translated_subtitle_style = instance.subtitle_style
+        if not subtitles_enabled:
+            instance.subtitle_style = None
+            instance.translated_subtitle_style = None
+            translated_language = ''
+            output_languages = [instance.original_language]
+        instance.subtitles_enabled = subtitles_enabled
+        instance.translated_subtitles_enabled = translated_enabled
         default_settings['spoken_languages'] = spoken_languages
         default_settings['translated_language'] = translated_language
         instance.output_languages = output_languages
@@ -434,6 +525,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         instance.allowed_overrides = self.cleaned_data.get('allowed_overrides_raw') or []
         instance.audio_mixing_config = self.cleaned_data.get('audio_mixing_config_raw') or {}
         instance.dialogue_processing_config = self.cleaned_data.get('dialogue_processing_config_raw') or {}
+        instance.audio_noise_cleanup_config = self.cleaned_data.get('audio_noise_cleanup_config_raw') or {}
         if commit:
             instance.save()
         return instance
@@ -461,6 +553,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             configuration = plugin.configuration or {} if plugin else {}
             if code == MediaTemplatePlugin.Code.AUTO_TRACKING:
                 reframe_priority = self.cleaned_data.get('auto_reframe_priority') or 'face'
+                is_static_frame = reframe_priority == 'static'
                 configuration = {
                     **configuration,
                     'priority': reframe_priority,
@@ -469,6 +562,9 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                     'interval_frames': 10,
                     'smoothing': 0.18,
                     'horizontal_smoothing': 0.34 if reframe_priority == 'face' else 0.18,
+                    # Podcasts often benefit from a stable, modest crop without
+                    # shifting the frame as speakers move.
+                    'static_zoom': 1.06 if is_static_frame else 1.0,
                 }
             elif code in {
                 MediaTemplatePlugin.Code.SILENCE_REMOVAL,
@@ -973,6 +1069,27 @@ class AdminBackgroundMusicForm(forms.ModelForm):
         for field in self.fields.values():
             field.widget.attrs.update({'class': FIELD_CLASS})
         self.fields['audio_file'].required = not bool(self.instance and self.instance.pk and self.instance.audio_file)
+
+
+class AdminColorLUTForm(forms.ModelForm):
+    class Meta:
+        model = ColorLUT
+        fields = ['name', 'description', 'default_intensity', 'lut_file', 'is_active']
+        labels = {
+            'name': 'Nome do LUT', 'description': 'Descrição', 'default_intensity': 'Intensidade padrão (%)',
+            'lut_file': 'Arquivo .cube', 'is_active': 'LUT ativo',
+        }
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 3}),
+            'lut_file': forms.ClearableFileInput(attrs={'accept': '.cube'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            field.widget.attrs.update({'class': CHECKBOX_CLASS if name == 'is_active' else FIELD_CLASS})
+        self.fields['default_intensity'].widget.attrs.update({'min': 0, 'max': 100, 'step': 1})
+        self.fields['lut_file'].required = not bool(self.instance and self.instance.pk and self.instance.lut_file)
 
 
 class AdminMasteringProfileForm(forms.ModelForm):

@@ -4,7 +4,7 @@ from .models.schedule import ScaleDivision, DivisionMember
 from .models.external_media import (
     ExternalMediaJob, ExternalMediaProject, ExternalMediaProjectExport, GlossaryTerm, MasteringProfile, MediaAsset,
     MediaTemplate, MediaTemplateBlock, MediaTemplatePlugin, MediaTemplateVersion,
-    ProjectBlockMedia, ProjectPipelineStep, RenderPreset, SubtitleCue, SubtitleStyle,
+    ProjectBlockMedia, ProjectPipelineStep, ProxyProfile, RenderPreset, SubtitleCue, SubtitleStyle,
     SubtitleTrack, VideoMasteringJob,
 )
 from django.utils import timezone
@@ -18,6 +18,7 @@ admin.site.register(neighborhood.Neighborhood)
 admin.site.register(user.User)
 admin.site.register(GlossaryTerm)
 admin.site.register(RenderPreset)
+admin.site.register(ProxyProfile)
 admin.site.register(SubtitleStyle)
 
 
@@ -115,11 +116,19 @@ class MediaTemplateVersionAdmin(admin.ModelAdmin):
                 translated_subtitle_style=source.translated_subtitle_style,
                 original_language=source.original_language,
                 output_languages=list(source.output_languages),
+                interactive_preview_enabled=source.interactive_preview_enabled,
+                preview_proxy_profile=source.preview_proxy_profile,
+                preview_editable_capabilities=list(source.preview_editable_capabilities),
+                preview_confidence_thresholds=dict(source.preview_confidence_thresholds),
+                subtitles_enabled=source.subtitles_enabled,
+                translated_subtitles_enabled=source.translated_subtitles_enabled,
                 default_settings=dict(source.default_settings),
                 allowed_overrides=list(source.allowed_overrides),
                 intro_video=source.intro_video.name,
                 outro_video=source.outro_video.name,
                 lut_file=source.lut_file.name,
+                color_lut=source.color_lut,
+                lut_intensity=source.lut_intensity,
                 background_music=source.background_music,
                 music_file=source.music_file.name,
                 music_volume=source.music_volume,

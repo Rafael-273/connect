@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from safedelete.models import HARD_DELETE
@@ -27,6 +27,17 @@ from website.external_media.audio_mixing import (
     clip_blocks_against_protected_ranges,
     group_speech_blocks,
 )
+from website.external_media.audio_noise import (
+    AudioNoiseAnalysisService,
+    NoiseAnalysisPlan,
+    NoiseCleanupSettings,
+    NoiseEvent,
+    NoiseReductionDecisionBuilder,
+    NoiseType,
+    RecommendedAction,
+    ReductionMode,
+    ReductionStrength,
+)
 from website.external_media.auto_reframe import AutoReframePlan, AutoReframeService, ReframeKeyframe, limit_keyframes_for_ffmpeg
 from website.external_media.background_voice import BackgroundVoiceRemovalService, QuietUtterance
 from website.external_media.quality_control import MediaQualityService
@@ -37,13 +48,16 @@ from website.external_media.dialogue_processing import (
     build_leveling_envelope,
 )
 from website.external_media.speech_edit import SpeechCut, SpeechEditAnalyzer, SpeechEditPlan, SpeechEditService
+from website.external_media.subtitle_reviews import SubtitleReviewService
 from website.external_media.premiere_export import (
     ExportValidationService,
     PremiereExporter,
     PremierePackageService,
 )
 from website.external_media.timeline import InternalTimelineBuilder, KeyframeSimplifier, TimelineSource
-from website.external_media.tasks import _execution_is_current
+from website.external_media.canonical import EditDecisionSetBuilder, SourceManifestBuilder, normalize_edit_ranges
+from website.external_media.preview import PreviewCompositionService, TimelineRevisionService
+from website.external_media.tasks import _execution_is_current, create_project_preview, render_reviewed_subtitles
 from website.external_media.services import (
     AudioChunk,
     AssemblySource,
@@ -65,6 +79,7 @@ from website.forms.external_media import ExternalMediaProjectForm
 from website.views.external_media import protected_file_response
 from website.models.external_media import (
     BackgroundMusicTrack,
+    ColorLUT,
     ExternalMediaJob,
     ExternalMediaProject,
     ExternalMediaProjectExport,
@@ -75,11 +90,19 @@ from website.models.external_media import (
     MediaTemplateBlock,
     MediaTemplatePlugin,
     MediaTemplateVersion,
+    ProjectPipelineStep,
     ProjectBlockMedia,
+    ProjectCustomBlock,
+    PreviewSession,
     RenderPreset,
     SubtitleCue,
+    SubtitleReviewSession,
+    SubtitleRevision,
     SubtitleStyle,
+    SubtitleSuggestion,
     SubtitleTrack,
+    SubtitleVideoVersion,
+    TimelineRevision,
 )
 from website.models import Member, Ministry, MinistryMembership, User
 from website.models.external_media import external_media_project_upload_path
@@ -120,6 +143,13 @@ class ExternalMediaFixtureMixin:
 
 
 class ExternalMediaPermissionTests(ExternalMediaFixtureMixin, TestCase):
+    def test_member_without_admin_access_does_not_loop_on_admin_dashboard(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('admin_dashboard'))
+
+        self.assertRedirects(response, reverse('redirect_after_login'), fetch_redirect_response=False)
+
     def test_member_outside_ministry_is_redirected(self):
         self.client.force_login(self.user)
         response = self.client.get(reverse('external_media_dashboard'))
@@ -220,6 +250,26 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
             [(cue.start_ms, cue.end_ms) for cue in self.cues],
         )
         self.assertEqual([cue.cue_index for cue in translated], [1, 2])
+
+    def test_translation_never_overwrites_a_human_reviewed_track(self):
+        translated = SubtitleTrack.objects.create(
+            job=self.job, language='en', human_reviewed=True,
+        )
+        cue = SubtitleCue.objects.create(
+            track=translated, cue_index=1, start_ms=1200, end_ms=4800,
+            text='Human approved translation',
+        )
+        ai = Mock()
+
+        result = TranslationService(ai_service=ai).translate_track(
+            self.track, 'en', 'gpt-4.1-mini',
+        )
+
+        cue.refresh_from_db()
+        result.refresh_from_db()
+        self.assertEqual(cue.text, 'Human approved translation')
+        self.assertEqual(result.translation_status, SubtitleTrack.TranslationStatus.SOURCE_CHANGED)
+        ai.generate_text.assert_not_called()
 
     def test_translation_removes_ellipsis_and_continuation_hyphens(self):
         ai = Mock()
@@ -983,6 +1033,368 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             name='Projeto de agosto', template_version=self.version, created_by=self.member,
         )
 
+    def test_source_manifest_resolves_custom_blocks_and_configured_order(self):
+        project = self.make_project()
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=2)
+        template_media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='template.mov',
+            file=SimpleUploadedFile('template.mov', b'template'), trim_start_ms=120, trim_end_ms=900,
+        )
+        custom_media = ProjectBlockMedia.objects.create(
+            project=project, custom_block=custom, position=1, original_filename='custom.mov',
+            file=SimpleUploadedFile('custom.mov', b'custom'),
+        )
+        project.configuration = {'block_order': [f'c-{custom.pk}', f't-{self.block.pk}']}
+        project.save(update_fields=['configuration', 'update_at'])
+
+        manifest = SourceManifestBuilder.build(project)
+
+        self.assertEqual([item['id'] for item in manifest['sources']], [
+            f'project-media-{custom_media.pk}', f'project-media-{template_media.pk}',
+        ])
+        self.assertEqual(manifest['sources'][1]['trim'], {'start_ms': 120, 'end_ms': 900})
+        self.assertEqual(manifest['sources'][0]['block_type'], 'custom')
+        self.assertEqual(
+            [source.asset_id for source in InternalTimelineBuilder()._sources(project)],
+            [f'project-media-{custom_media.pk}', f'project-media-{template_media.pk}'],
+        )
+
+    def test_source_manifest_preserves_extra_cameras_without_rendering_them_sequentially(self):
+        project = self.make_project()
+        primary = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, camera_order=1,
+            camera_role=ProjectBlockMedia.CameraRole.PRIMARY,
+            camera_label='Câmera aberta', original_filename='wide.mov',
+            file=SimpleUploadedFile('wide.mov', b'wide'),
+        )
+        extra = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, camera_order=2,
+            camera_role=ProjectBlockMedia.CameraRole.SECONDARY,
+            camera_label='Convidada', camera_hint=ProjectBlockMedia.CameraHint.SPEAKER_B,
+            original_filename='guest.mov', file=SimpleUploadedFile('guest.mov', b'guest'),
+        )
+
+        manifest = SourceManifestBuilder.build(project)
+
+        self.assertEqual(len(manifest['sources']), 2)
+        self.assertEqual(manifest['multicam_groups'][0]['reference_source_id'], f'project-media-{primary.pk}')
+        self.assertEqual(manifest['multicam_groups'][0]['source_ids'], [
+            f'project-media-{primary.pk}', f'project-media-{extra.pk}',
+        ])
+        self.assertFalse(manifest['sources'][1]['metadata']['render_enabled'])
+        self.assertEqual(
+            [source.asset_id for source in InternalTimelineBuilder()._sources(project)],
+            [f'project-media-{primary.pk}'],
+        )
+
+    def test_decision_snapshot_maps_speech_cuts_back_after_background_voice(self):
+        project = self.make_project()
+        project.configuration = {
+            'background_voice_plan': {'duration_ms': 1000, 'cuts': [{'start_ms': 100, 'end_ms': 200, 'kind': 'background_voice'}]},
+            'speech_edit_plan': {'duration_ms': 900, 'cuts': [{'start_ms': 250, 'end_ms': 350, 'kind': 'silence'}]},
+        }
+        snapshot = EditDecisionSetBuilder.build(project, SourceManifestBuilder.build(project))
+        cuts = [item for item in snapshot['operations'] if item['type'] == 'remove_segment']
+
+        self.assertEqual([(item['source_in_ms'], item['source_out_ms']) for item in cuts], [(100, 200), (350, 450)])
+
+    def test_preview_revision_restores_an_automatic_cut_without_reanalysis(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        manifest = SourceManifestBuilder.build(project)
+        decisions = {
+            'schema': 'connect.edit_decisions.v1',
+            'operations': [{
+                'id': 'speech-edit-1', 'type': 'remove_segment', 'source_id': 'project-master',
+                'source_in_ms': 2000, 'source_out_ms': 3000, 'reason': 'silence',
+                'metadata': {'kind': 'silence'}, 'enabled': True,
+            }],
+        }
+        project.configuration = {'source_manifest': manifest, 'edit_decision_set': decisions}
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['configuration', 'render_job', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=4000, end_ms=5000, text='Depois do corte',
+        )
+
+        initial = TimelineRevisionService.ensure_initial(project, self.member)
+        restored = TimelineRevisionService.mutate_decision(
+            project, self.member, 'speech-edit-1', False,
+        )
+
+        self.assertEqual(initial.revision, 1)
+        self.assertEqual(restored.revision, 2)
+        self.assertEqual(initial.timeline['sequence']['duration_ms'], 9000)
+        self.assertEqual(restored.timeline['sequence']['duration_ms'], 10000)
+        self.assertFalse(restored.edit_decision_set['operations'][0]['enabled'])
+        cue.refresh_from_db()
+        self.assertEqual((cue.start_ms, cue.end_ms), (5000, 6000))
+        project.refresh_from_db()
+        self.assertTrue(project.preview_dirty)
+        self.assertTrue(project.final_render_outdated)
+        self.assertEqual(PreviewSession.objects.get(project=project).undo_stack, [initial.pk])
+        TimelineRevisionService.navigate_history(project, self.member, 'undo')
+        cue.refresh_from_db()
+        self.assertEqual((cue.start_ms, cue.end_ms), (4000, 5000))
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_approval_pins_the_current_timeline_revision(self):
+        project = self.make_project()
+        manifest = {'schema': 'connect.source_manifest.v1', 'sources': []}
+        decisions = {'schema': 'connect.edit_decisions.v1', 'operations': []}
+        project.configuration = {'source_manifest': manifest, 'edit_decision_set': decisions}
+        project.save(update_fields=['configuration', 'update_at'])
+        revision = TimelineRevisionService.ensure_initial(project, self.member)
+
+        approved = TimelineRevisionService.approve(project, self.member)
+
+        project.refresh_from_db()
+        self.assertEqual(approved, revision)
+        self.assertEqual(project.approved_timeline_revision, revision)
+        self.assertFalse(project.preview_dirty)
+        self.assertTrue(project.final_render_outdated)
+
+    def test_interactive_preview_page_uses_the_persisted_timeline(self):
+        project = self.make_project()
+        project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        project.configuration = {
+            'source_manifest': {'schema': 'connect.source_manifest.v1', 'sources': []},
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        project.save(update_fields=['status', 'configuration', 'update_at'])
+        revision = TimelineRevisionService.ensure_initial(project, self.member)
+
+        response = self.client.get(reverse('external_media_project_preview', args=[project.public_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Revisar edição')
+        self.assertContains(response, f'Revisão {revision.revision}')
+        self.assertContains(response, 'connect.internal_timeline.v1')
+
+    def make_reviewable_project(self):
+        project = self.make_project()
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.progress = 100
+        project.save(update_fields=['render_job', 'status', 'progress', 'update_at'])
+        pt = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        en = SubtitleTrack.objects.create(job=job, language='en')
+        pt_cue = SubtitleCue.objects.create(
+            track=pt, cue_index=1, start_ms=1000, end_ms=3000, text='Um encontro com Jesus',
+        )
+        en_cue = SubtitleCue.objects.create(
+            track=en, cue_index=1, start_ms=1000, end_ms=3000, text='One experience with Jesus',
+        )
+        return project, job, pt, en, pt_cue, en_cue
+
+    def test_review_link_is_hashed_and_public_page_exposes_only_allowed_tracks(self):
+        project, _job, _pt, _en, _pt_cue, _en_cue = self.make_reviewable_project()
+        review, token = SubtitleReviewService.create_session(
+            project, self.member, ['en'], reviewer_name='John',
+        )
+
+        self.assertGreaterEqual(len(token), 64)
+        self.assertNotEqual(review.token_hash, token)
+        self.assertTrue(SubtitleRevision.objects.filter(track__language='en', revision=1).exists())
+
+        response = self.client.get(reverse('public_subtitle_review', args=[token]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'One experience with Jesus')
+        self.assertNotContains(response, 'Um encontro com Jesus')
+
+    def test_internal_review_hub_renders_tracks_and_received_reviews(self):
+        project, _job, _pt, _en, _pt_cue, en_cue = self.make_reviewable_project()
+        review, _token = SubtitleReviewService.create_session(
+            project, self.member, ['en'], reviewer_name='John',
+        )
+        SubtitleReviewService.autosave(review, en_cue.pk, 'One encounter with Jesus')
+        SubtitleReviewService.submit(review)
+
+        response = self.client.get(
+            reverse('external_media_project_subtitle_reviews', args=[project.public_id]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Legendas e revisões')
+        self.assertContains(response, 'John')
+        self.assertContains(response, 'Aguardando aprovação')
+
+    def test_external_autosave_never_changes_the_official_cue(self):
+        project, _job, _pt, _en, _pt_cue, en_cue = self.make_reviewable_project()
+        review, token = SubtitleReviewService.create_session(project, self.member, ['en'])
+
+        response = self.client.post(
+            reverse('public_subtitle_review_autosave', args=[token]),
+            data=json.dumps({
+                'cue_id': en_cue.pk,
+                'suggested_text': 'One encounter with Jesus',
+                'comment': 'Encounter sounds more natural.',
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        en_cue.refresh_from_db()
+        self.assertEqual(en_cue.text, 'One experience with Jesus')
+        suggestion = review.suggestions.get()
+        self.assertEqual(suggestion.suggested_text, 'One encounter with Jesus')
+        self.assertEqual(suggestion.status, SubtitleSuggestion.Status.PENDING)
+
+    def test_submitted_review_cannot_be_edited_again(self):
+        project, _job, _pt, _en, _pt_cue, en_cue = self.make_reviewable_project()
+        review, token = SubtitleReviewService.create_session(project, self.member, ['en'])
+        SubtitleReviewService.autosave(review, en_cue.pk, 'One encounter with Jesus')
+        SubtitleReviewService.submit(review, 'Everything else looks good.')
+
+        response = self.client.post(
+            reverse('public_subtitle_review_autosave', args=[token]),
+            data=json.dumps({
+                'cue_id': en_cue.pk,
+                'suggested_text': 'Another version',
+            }),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(review.suggestions.get().suggested_text, 'One encounter with Jesus')
+
+    def test_reviewer_can_restore_original_text_and_suggest_again(self):
+        project, _job, _pt, _en, _pt_cue, en_cue = self.make_reviewable_project()
+        review, _token = SubtitleReviewService.create_session(project, self.member, ['en'])
+        SubtitleReviewService.autosave(review, en_cue.pk, 'One encounter with Jesus')
+
+        SubtitleReviewService.autosave(review, en_cue.pk, en_cue.text)
+        recreated = SubtitleReviewService.autosave(review, en_cue.pk, 'An encounter with Jesus')
+
+        self.assertEqual(review.suggestions.count(), 1)
+        self.assertEqual(recreated.suggested_text, 'An encounter with Jesus')
+
+    def test_reviewer_can_submit_a_review_without_changes(self):
+        project, _job, _pt, _en, _pt_cue, _en_cue = self.make_reviewable_project()
+        review, _token = SubtitleReviewService.create_session(project, self.member, ['en'])
+
+        SubtitleReviewService.submit(review, 'Everything looks good.')
+
+        review.refresh_from_db()
+        self.assertEqual(review.status, SubtitleReviewSession.Status.SUBMITTED)
+        self.assertEqual(review.general_comment, 'Everything looks good.')
+
+    def test_public_submit_accepts_null_origin_when_token_is_valid(self):
+        project, _job, _pt, _en, _pt_cue, _en_cue = self.make_reviewable_project()
+        _review, token = SubtitleReviewService.create_session(project, self.member, ['en'])
+
+        response = Client(enforce_csrf_checks=True).post(
+            reverse('public_subtitle_review_submit', args=[token]),
+            {'general_comment': 'Everything looks good.'},
+            HTTP_ORIGIN='null',
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+    def test_approved_suggestion_versions_and_marks_only_its_track_dirty(self):
+        project, _job, pt, en, _pt_cue, en_cue = self.make_reviewable_project()
+        review, _token = SubtitleReviewService.create_session(project, self.member, ['en'])
+        suggestion = SubtitleReviewService.autosave(
+            review, en_cue.pk, 'One encounter with Jesus',
+        )
+        SubtitleReviewService.submit(review)
+
+        SubtitleReviewService.decide(suggestion, self.member, approve=True)
+
+        en_cue.refresh_from_db()
+        en.refresh_from_db()
+        pt.refresh_from_db()
+        self.assertEqual(en_cue.text, 'One encounter with Jesus')
+        self.assertEqual(en.revision, 2)
+        self.assertTrue(en.human_reviewed)
+        self.assertTrue(en.subtitle_dirty)
+        self.assertFalse(pt.subtitle_dirty)
+        self.assertTrue(SubtitleRevision.objects.filter(track=en, revision=2).exists())
+
+    def test_changed_official_cue_becomes_a_conflict_instead_of_being_overwritten(self):
+        project, _job, _pt, _en, _pt_cue, en_cue = self.make_reviewable_project()
+        review, _token = SubtitleReviewService.create_session(project, self.member, ['en'])
+        suggestion = SubtitleReviewService.autosave(
+            review, en_cue.pk, 'One encounter with Jesus',
+        )
+        en_cue.text = 'A new official version'
+        en_cue.save(update_fields=['text', 'update_at'])
+
+        result = SubtitleReviewService.decide(suggestion, self.member, approve=True)
+
+        en_cue.refresh_from_db()
+        self.assertEqual(result.status, SubtitleSuggestion.Status.CONFLICT)
+        self.assertEqual(en_cue.text, 'A new official version')
+
+    def test_changing_portuguese_marks_translation_as_outdated(self):
+        project, _job, _pt, en, pt_cue, _en_cue = self.make_reviewable_project()
+        review, _token = SubtitleReviewService.create_session(project, self.member, ['pt'])
+        suggestion = SubtitleReviewService.autosave(review, pt_cue.pk, 'Um encontro real com Jesus')
+
+        SubtitleReviewService.decide(suggestion, self.member, approve=True)
+
+        en.refresh_from_db()
+        self.assertEqual(en.translation_status, SubtitleTrack.TranslationStatus.SOURCE_CHANGED)
+
+    def test_revoked_review_link_stops_working_immediately(self):
+        project, _job, _pt, _en, _pt_cue, _en_cue = self.make_reviewable_project()
+        review, token = SubtitleReviewService.create_session(project, self.member, ['en'])
+        review.revoked_at = timezone.now()
+        review.save(update_fields=['revoked_at', 'update_at'])
+
+        response = self.client.get(reverse('public_subtitle_review', args=[token]))
+
+        self.assertEqual(response.status_code, 404)
+
+    @patch.object(ExternalMediaPipeline, 'render_outputs')
+    def test_applying_review_renders_only_subtitle_outputs(self, render_outputs):
+        project, job, _pt, en, _pt_cue, _en_cue = self.make_reviewable_project()
+        en.subtitle_dirty = True
+        en.save(update_fields=['subtitle_dirty', 'update_at'])
+        project.status = ExternalMediaProject.Status.PENDING
+        project.celery_task_id = 'review-render-task'
+        project.save(update_fields=['status', 'celery_task_id', 'update_at'])
+
+        result = render_reviewed_subtitles.apply(
+            args=[project.pk], task_id='review-render-task', throw=True,
+        )
+
+        project.refresh_from_db()
+        en.refresh_from_db()
+        self.assertTrue(result.successful())
+        render_outputs.assert_called_once_with(job.pk)
+        self.assertEqual(project.status, ExternalMediaProject.Status.FINISHED)
+        self.assertFalse(en.subtitle_dirty)
+        self.assertTrue(SubtitleVideoVersion.objects.filter(project=project, version=1).exists())
+
+    @patch('website.views.subtitle_review.render_reviewed_subtitles.apply_async')
+    def test_applying_approved_review_queues_subtitle_render_without_outer_join_lock(self, apply_async):
+        project, _job, _pt, en, _pt_cue, _en_cue = self.make_reviewable_project()
+        en.subtitle_dirty = True
+        en.save(update_fields=['subtitle_dirty', 'update_at'])
+        review, _token = SubtitleReviewService.create_session(project, self.member, ['en'])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse(
+                'external_media_project_subtitle_review_render', args=[project.public_id, review.pk],
+            ))
+
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
+        apply_async.assert_called_once()
+
     def test_worker_rejects_a_stale_execution_identifier(self):
         project = self.make_project()
         project.status = ExternalMediaProject.Status.PENDING
@@ -1020,6 +1432,11 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(upload.block, self.block)
         self.assertEqual(upload.position, 1)
 
+    def test_preview_task_skips_media_deleted_before_worker_start(self):
+        result = create_project_preview.run(999999)
+
+        self.assertEqual(result, {'skipped': True, 'reason': 'media-deleted'})
+
     def test_project_media_can_be_reordered_before_processing(self):
         project = self.make_project()
         first = ProjectBlockMedia.objects.create(
@@ -1048,8 +1465,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project = self.make_project()
         response = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Vídeos do projeto')
-        self.assertContains(response, 'Legenda PT')
+        self.assertContains(response, 'Gerar vídeo')
+        self.assertContains(response, 'Adicionar bloco personalizado')
 
     def test_project_duration_minutes_rounds_up(self):
         project = self.make_project()
@@ -1071,6 +1488,10 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.progress = 50
         project.started_at = now - timedelta(minutes=10)
         project.save(update_fields=['status', 'progress', 'started_at', 'update_at'])
+        ProjectPipelineStep.objects.create(
+            project=project, code='assembly', label='Montando blocos', order=2,
+            status=ProjectPipelineStep.Status.RUNNING, progress=20,
+        )
 
         response = self.client.get(reverse('external_media_project_status', args=[project.public_id]))
 
@@ -1078,6 +1499,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertGreaterEqual(response.json()['elapsed_seconds'], 600)
         self.assertIsNotNone(response.json()['estimated_remaining_seconds'])
         self.assertIn('histórico', response.json()['estimate_source'])
+        self.assertEqual(response.json()['steps'][0]['code'], 'assembly')
+        self.assertEqual(response.json()['steps'][0]['status'], ProjectPipelineStep.Status.RUNNING)
 
     def test_finished_project_has_no_remaining_estimate_or_pending_eta_copy(self):
         project = self.make_project()
@@ -1097,8 +1520,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         detail_response = self.client.get(
             reverse('external_media_project_detail', args=[project.public_id]),
         )
-        self.assertContains(detail_response, 'Tempo total')
-        self.assertContains(detail_response, 'Processamento concluído')
+        self.assertContains(detail_response, 'Tempo decorrido')
+        self.assertNotContains(detail_response, 'Status final')
         self.assertNotContains(detail_response, 'Calculando previsão...')
 
     def test_project_can_be_renamed_from_the_edit_screen(self):
@@ -1314,6 +1737,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
         self.assertEqual(project.block_media.count(), 1)
 
+    @patch('website.external_media.preview.TimelineRevisionService.ensure_initial')
+    @patch('website.external_media.preview.ProjectProxyService.prepare')
     @patch.object(ExternalMediaProjectPipeline, 'render')
     @patch.object(ExternalMediaPipeline, 'prepare_subtitle_tracks')
     @patch.object(ExternalMediaProjectPipeline, '_create_render_job')
@@ -1321,9 +1746,9 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
     @patch.object(ExternalMediaProjectPipeline, '_materialize')
     @patch.object(VideoAssemblyService, '_duration_ms', return_value=1000)
     @patch.object(VideoAssemblyService, 'assemble')
-    def test_project_pipeline_renders_immediately_after_subtitles(
+    def test_project_pipeline_waits_for_interactive_review_after_subtitles(
         self, assemble_mock, _duration_mock, materialize_mock, proxies_mock, create_job_mock,
-        prepare_tracks_mock, render_mock,
+        prepare_tracks_mock, render_mock, prepare_preview_mock, ensure_revision_mock,
     ):
         project = self.make_project()
         ProjectBlockMedia.objects.create(
@@ -1345,9 +1770,11 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         ExternalMediaProjectPipeline().run(project.pk)
 
         prepare_tracks_mock.assert_called_once_with(job.pk)
-        render_mock.assert_called_once_with(project.pk)
+        prepare_preview_mock.assert_called_once()
+        ensure_revision_mock.assert_called_once()
+        render_mock.assert_not_called()
         project.refresh_from_db()
-        self.assertNotEqual(project.status, ExternalMediaProject.Status.AWAITING_REVIEW)
+        self.assertEqual(project.status, ExternalMediaProject.Status.AWAITING_REVIEW)
 
     def test_prepare_subtitle_tracks_never_pauses_for_review(self):
         job = self.make_job(status=ExternalMediaJob.Status.PENDING)
@@ -1370,7 +1797,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
 
         job.refresh_from_db()
         self.assertNotEqual(job.status, ExternalMediaJob.Status.AWAITING_REVIEW)
-        self.assertEqual(job.current_step, 'Legendas preparadas')
+        self.assertEqual(job.current_step, 'Legendas prontas')
 
     def test_proxy_speech_edit_stores_plan_without_rendering_master_video(self):
         MediaTemplatePlugin.objects.create(
@@ -1465,6 +1892,32 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         plugin_codes = {plugin.code for plugin in plugins}
         self.assertIn(MediaTemplatePlugin.Code.SUBTITLE_PT, plugin_codes)
         self.assertNotIn(MediaTemplatePlugin.Code.TRANSLATION_EN, plugin_codes)
+
+    def test_enabled_plugins_respect_template_without_subtitles(self):
+        project = self.make_project()
+        self.version.subtitles_enabled = False
+        self.version.translated_subtitles_enabled = False
+        self.version.save(update_fields=['subtitles_enabled', 'translated_subtitles_enabled', 'update_at'])
+
+        plugin_codes = {plugin.code for plugin in TemplateService.enabled_plugins(project)}
+
+        self.assertNotIn(MediaTemplatePlugin.Code.SUBTITLE_PT, plugin_codes)
+        self.assertNotIn(MediaTemplatePlugin.Code.TRANSLATION_EN, plugin_codes)
+
+    def test_catalog_lut_has_priority_over_legacy_template_file(self):
+        catalog_lut = ColorLUT.objects.create(
+            name='Warm Film',
+            default_intensity=65,
+            lut_file=SimpleUploadedFile('warm.cube', b'TITLE "Warm"\nLUT_3D_SIZE 2\n'),
+        )
+        self.version.color_lut = catalog_lut
+        self.version.lut_file = SimpleUploadedFile('legacy.cube', b'TITLE "Legacy"\nLUT_3D_SIZE 2\n')
+        self.version.save(update_fields=['color_lut', 'lut_file', 'update_at'])
+
+        selected = LUTService.selected_file(self.version, {MediaTemplatePlugin.Code.LUT})
+
+        self.assertEqual(selected.name, catalog_lut.lut_file.name)
+        self.assertEqual(catalog_lut.default_intensity, 65)
 
 
 class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
@@ -3411,6 +3864,32 @@ class DialogueProcessingSmokeTests(SimpleTestCase):
 
 
 class EditableTimelineExportTests(SimpleTestCase):
+    def test_static_reframe_uses_a_centered_subtle_zoom(self):
+        plan = AutoReframeService(priority='static')._static_center_plan(
+            1920, 1080, 1920, 1080,
+        )
+
+        self.assertLess(plan.crop_width, 1920)
+        self.assertLess(plan.crop_height, 1080)
+        self.assertEqual(len(plan.keyframes), 1)
+        self.assertGreater(plan.keyframes[0].x, 0)
+        self.assertGreater(plan.keyframes[0].y, 0)
+
+    def test_normalize_edit_ranges_merges_overlaps_and_respects_protection(self):
+        ranges = [
+            {'start_ms': 100, 'end_ms': 400, 'kind': 'silence'},
+            {'start_ms': 350, 'end_ms': 700, 'kind': 'filler'},
+            {'start_ms': 800, 'end_ms': 900, 'kind': 'background_voice'},
+        ]
+        self.assertEqual(
+            normalize_edit_ranges(ranges, [{'start_ms': 500, 'end_ms': 600}]),
+            [
+                {'start_ms': 100, 'end_ms': 500, 'kind': 'filler'},
+                {'start_ms': 600, 'end_ms': 700, 'kind': 'filler'},
+                {'start_ms': 800, 'end_ms': 900, 'kind': 'background_voice'},
+            ],
+        )
+
     def test_dialogue_is_exported_as_an_independent_wav_track(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -3533,3 +4012,87 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertIn('Bem-vindos à Filadélfia', xml)
         self.assertIn('Legendas estilizadas (visual final)', xml)
         self.assertIn('../Graphics/captions_pt_styled.mov', xml)
+
+
+class AudioNoiseCleanupUnitTests(SimpleTestCase):
+    def test_decision_builder_marks_transient_events_for_review_by_default(self):
+        plan = NoiseAnalysisPlan(
+            (
+                NoiseEvent(
+                    NoiseType.TRANSIENT_NOISE,
+                    742300,
+                    746800,
+                    0.94,
+                    True,
+                    RecommendedAction.REVIEW,
+                    'Possível veículo passando',
+                ),
+            ),
+            900000,
+        )
+        settings_ = NoiseCleanupSettings(
+            enabled=True,
+            global_mode=ReductionStrength.OFF,
+            detect_transient_noise=True,
+            transient_action=RecommendedAction.REVIEW,
+        )
+        decisions = NoiseReductionDecisionBuilder.build(plan, settings_)
+        self.assertEqual(len(decisions), 1)
+        self.assertFalse(decisions[0].enabled)
+        self.assertEqual(decisions[0].recommended_action, RecommendedAction.REVIEW)
+
+    def test_decision_builder_adds_global_cleanup_for_continuous_noise(self):
+        plan = NoiseAnalysisPlan((), 600000, has_continuous_noise=True)
+        settings_ = NoiseCleanupSettings(
+            enabled=True,
+            global_mode=ReductionStrength.LIGHT,
+            auto_apply_continuous=True,
+        )
+        decisions = NoiseReductionDecisionBuilder.build(plan, settings_)
+        self.assertEqual(len(decisions), 1)
+        self.assertEqual(decisions[0].mode, ReductionMode.GLOBAL)
+        self.assertTrue(decisions[0].enabled)
+
+    def test_edit_decision_snapshot_includes_noise_reduction_operations(self):
+        project = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000001',
+            template_version=SimpleNamespace(
+                pk=1,
+                background_music_id=None,
+                music_file='',
+                music_volume=0.15,
+                audio_ducking_enabled=True,
+                color_lut_id=None,
+                lut_file='',
+                plugins=SimpleNamespace(filter=lambda **kwargs: SimpleNamespace(exists=lambda: False)),
+            ),
+            configuration={
+                'noise_reduction_decisions': [{
+                    'start_ms': 742300,
+                    'end_ms': 746800,
+                    'mode': ReductionMode.LOCAL,
+                    'strength': ReductionStrength.LIGHT,
+                    'source': 'AUTO_NOISE_ANALYSIS',
+                    'noise_type': NoiseType.ENVIRONMENTAL_NOISE,
+                    'enabled': False,
+                    'recommended_action': RecommendedAction.REVIEW,
+                    'speech_overlap': True,
+                    'confidence': 0.94,
+                    'label': 'Possível veículo passando',
+                }],
+            },
+        )
+        snapshot = EditDecisionSetBuilder.build(project, {'sources': []})
+        noise_ops = [item for item in snapshot['operations'] if item['type'] == 'audio_noise_reduction']
+        self.assertEqual(len(noise_ops), 1)
+        self.assertEqual(noise_ops[0]['metadata']['mode'], ReductionMode.LOCAL)
+        self.assertFalse(noise_ops[0]['enabled'])
+
+    def test_merge_events_combines_adjacent_same_type(self):
+        events = [
+            NoiseEvent(NoiseType.TRANSIENT_NOISE, 1000, 1800, 0.8, False, RecommendedAction.REVIEW),
+            NoiseEvent(NoiseType.TRANSIENT_NOISE, 1900, 2600, 0.85, False, RecommendedAction.REVIEW),
+        ]
+        merged = AudioNoiseAnalysisService._merge_events(events, 5000)
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0].end_ms, 2600)

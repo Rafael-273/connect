@@ -147,7 +147,25 @@
                             </div>
                             {% if form.preset.errors %}<p class="text-xs text-red-600 mt-1">{{ form.preset.errors.0 }}</p>{% endif %}
                         </div>
-                        <div>
+                        <label class="inline-card bg-white flex items-center gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                            <input type="hidden" name="{{ form.subtitles_enabled.html_name }}" value="">
+                            {{ form.subtitles_enabled }}
+                            <span>
+                                <span class="block font-semibold text-gray-900">{{ form.subtitles_enabled.label }}</span>
+                                <span class="block text-xs text-gray-500 mt-1">Ative para criar a legenda no idioma principal.</span>
+                            </span>
+                        </label>
+                        <label class="inline-card bg-white flex items-center gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                            <input type="hidden" name="{{ form.interactive_preview_enabled.html_name }}" value="">
+                            {{ form.interactive_preview_enabled }}
+                            <span><span class="block font-semibold text-gray-900">{{ form.interactive_preview_enabled.label }}</span><span class="block text-xs text-gray-500 mt-1">Permite conferir cortes, legendas e enquadramento antes do vídeo final.</span></span>
+                        </label>
+                        <div id="preview-profile-field">
+                            <label class="form-label">{{ form.preview_proxy_profile.label }}</label>
+                            {{ form.preview_proxy_profile }}
+                            <p class="text-xs text-gray-500 mt-1">Use Community 1 para uma prévia leve e sincronizada.</p>
+                        </div>
+                        <div id="subtitle-style-field">
                             <label class="form-label">{{ form.subtitle_style.label }}</label>
                             <div class="manage-select">
                                 {{ form.subtitle_style }}
@@ -169,12 +187,12 @@
                             <p class="text-xs text-gray-500 mt-1">Opcional. Se deixar em branco, a tradução usa o mesmo estilo da legenda original.</p>
                             {% if form.translated_subtitle_style.errors %}<p class="text-xs text-red-600 mt-1">{{ form.translated_subtitle_style.errors.0 }}</p>{% endif %}
                         </div>
-                        <div>
+                        <div id="original-language-field">
                             <label class="form-label">{{ form.original_language.label }}</label>
                             {{ form.original_language }}
                             {% if form.original_language.errors %}<p class="text-xs text-red-600 mt-1">{{ form.original_language.errors.0 }}</p>{% endif %}
                         </div>
-                        <div>
+                        <div id="language-mode-field">
                             <label class="form-label">{{ form.language_mode.label }}</label>
                             {{ form.language_mode }}
                             {% if form.language_mode.errors %}<p class="text-xs text-red-600 mt-1">{{ form.language_mode.errors.0 }}</p>{% endif %}
@@ -194,7 +212,7 @@
                             {{ form.translated_language }}
                             {% if form.translated_language.errors %}<p class="text-xs text-red-600 mt-1">{{ form.translated_language.errors.0 }}</p>{% endif %}
                         </div>
-                        <div class="md:col-span-2 language-help">
+                        <div id="language-help" class="md:col-span-2 language-help">
                             <strong>Apenas um idioma:</strong> use quando o vídeo e a legenda final devem ficar só no idioma padrão.
                             <br>
                             <strong>Idioma padrão + legendas traduzidas:</strong> use quando o vídeo tem uma língua principal e você quer gerar uma segunda legenda em outro idioma.
@@ -208,10 +226,17 @@
                         <div class="form-subsection-title">Assets e áudio</div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                            <label class="form-label">{{ form.lut_file.label }}</label>{{ form.lut_file }}
-                            {% if form.lut_file.errors %}<p class="text-xs text-red-600 mt-1">{{ form.lut_file.errors.0 }}</p>{% endif %}
+                            <label class="form-label">{{ form.color_lut.label }}</label>
+                            <div class="manage-select">
+                                {{ form.color_lut }}
+                                <button type="button" class="manage-btn" data-open-modal="color-lut-modal" title="Gerenciar LUTs">
+                                    <ion-icon name="color-filter-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Escolha um LUT do catálogo para reutilizá-lo em outros templates.</p>
+                            {% if form.color_lut.errors %}<p class="text-xs text-red-600 mt-1">{{ form.color_lut.errors.0 }}</p>{% endif %}
                         </div>
-                        <div>
+                        <div id="lut-intensity-field" class="hidden">
                             <label class="form-label">{{ form.lut_intensity.label }}</label>{{ form.lut_intensity }}
                             <p class="text-xs text-gray-500 mt-1">50% mantém o tratamento mais suave. Blocos marcados como intactos não recebem o LUT.</p>
                             {% if form.lut_intensity.errors %}<p class="text-xs text-red-600 mt-1">{{ form.lut_intensity.errors.0 }}</p>{% endif %}
@@ -243,6 +268,13 @@
                                 </div>
                             </label>
                             <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_noise_cleanup_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_noise_cleanup_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Detecta ruídos indesejados e aplica redução conservadora, preservando a naturalidade da voz.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
                                 <div class="pt-1">{{ form.audio_mixing_enabled }}</div>
                                 <div>
                                     <p class="font-semibold text-gray-900">{{ form.audio_mixing_enabled.label }}</p>
@@ -271,8 +303,8 @@
                                 </div>
                             </label>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
+                            <div id="mastering-profile-field" class="hidden xl:col-span-1">
                                 <label class="form-label">{{ form.mastering_profile.label }}</label>
                                 <div class="manage-select">
                                     {{ form.mastering_profile }}
@@ -282,20 +314,115 @@
                                 </div>
                                 {% if form.mastering_profile.errors %}<p class="text-xs text-red-600 mt-1">{{ form.mastering_profile.errors.0 }}</p>{% endif %}
                             </div>
-                            <div>
+                            <div id="mixing-advanced-control" class="hidden xl:col-span-1">
+                                <button type="button" id="mixing-advanced-toggle" class="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition" aria-expanded="false">
+                                    <ion-icon name="options-outline"></ion-icon> Configurações avançadas da mixagem
+                                    <ion-icon name="chevron-down-outline" data-advanced-chevron></ion-icon>
+                                </button>
+                            </div>
+                            <div id="dialogue-advanced-control" class="hidden xl:col-span-1">
+                                <button type="button" id="dialogue-advanced-toggle" class="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition" aria-expanded="false">
+                                    <ion-icon name="options-outline"></ion-icon> Configurações avançadas do diálogo
+                                    <ion-icon name="chevron-down-outline" data-advanced-chevron></ion-icon>
+                                </button>
+                            </div>
+                            <div id="noise-advanced-control" class="hidden xl:col-span-1">
+                                <button type="button" id="noise-advanced-toggle" class="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition" aria-expanded="false">
+                                    <ion-icon name="options-outline"></ion-icon> Configurações avançadas de ruído
+                                    <ion-icon name="chevron-down-outline" data-advanced-chevron></ion-icon>
+                                </button>
+                            </div>
+                            <div id="mixing-advanced-field" class="hidden md:col-span-2 xl:col-span-3">
                                 <label class="form-label">{{ form.audio_mixing_config_raw.label }}</label>
                                 {{ form.audio_mixing_config_raw }}
                                 <p class="text-xs text-gray-500 mt-1">{{ form.audio_mixing_config_raw.help_text }}</p>
                                 {% if form.audio_mixing_config_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ form.audio_mixing_config_raw.errors.0 }}</p>{% endif %}
                             </div>
-                            <div>
+                            <div id="dialogue-advanced-field" class="hidden md:col-span-2 xl:col-span-3">
                                 <label class="form-label">{{ form.dialogue_processing_config_raw.label }}</label>
                                 {{ form.dialogue_processing_config_raw }}
                                 <p class="text-xs text-gray-500 mt-1">{{ form.dialogue_processing_config_raw.help_text }}</p>
                                 {% if form.dialogue_processing_config_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ form.dialogue_processing_config_raw.errors.0 }}</p>{% endif %}
                             </div>
+                            <div id="noise-advanced-field" class="hidden md:col-span-2 xl:col-span-3">
+                                <label class="form-label">{{ form.audio_noise_cleanup_config_raw.label }}</label>
+                                {{ form.audio_noise_cleanup_config_raw }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.audio_noise_cleanup_config_raw.help_text }}</p>
+                                {% if form.audio_noise_cleanup_config_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ form.audio_noise_cleanup_config_raw.errors.0 }}</p>{% endif %}
+                            </div>
                         </div>
                     </div>
+                </div>
+
+                <div class="admin-card p-6">
+                    <div class="section-title"><ion-icon name="construct-outline"></ion-icon><span>Recursos de edição inteligente</span></div>
+                    <div class="block-help mb-4">
+                        Defina os aprimoramentos automáticos que este template aplicará ao vídeo.
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {% for choice in form.advanced_plugins %}
+                        <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                            <div class="pt-1">{{ choice.tag }}</div>
+                            <div>
+                                <p class="font-semibold text-gray-900">{{ choice.choice_label }}</p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    {% if choice.data.value == 'silence_removal' %}
+                                    Tenta cortar pausas silenciosas para deixar o vídeo mais direto.
+                                    {% elif choice.data.value == 'filler_removal' %}
+                                    Tenta limpar vícios de fala como “é…”, “ahn…” e repetições desnecessárias.
+                                    {% elif choice.data.value == 'auto_tracking' %}
+                                    Ajusta o quadro automaticamente. Você pode acompanhar pessoas ou usar um zoom estável para podcasts.
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div id="auto-reframe-settings" class="mt-4 inline-card bg-white">
+                        <label class="form-label">{{ form.auto_reframe_priority.label }}</label>
+                        {{ form.auto_reframe_priority }}
+                        <p class="text-xs text-gray-500 mt-2">
+                            Melhorar enquadramento aplica um zoom central de 6%, sem acompanhar pessoas, ideal para podcasts.
+                            Rosto mantém o locutor em destaque; Corpo abre mais o quadro para preservar gestos e movimento.
+                        </p>
+                        {% if form.auto_reframe_priority.errors %}<p class="text-xs text-red-600 mt-2">{{ form.auto_reframe_priority.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div id="speech-edit-settings" class="mt-4 inline-card bg-white">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">{{ form.speech_edit_profile.label }}</label>
+                                {{ form.speech_edit_profile }}
+                                <p class="text-xs text-gray-500 mt-2">
+                                    Conservador mantém mais pausas; Equilibrado é o padrão; Dinâmico deixa vídeos curtos mais diretos.
+                                </p>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between gap-3 mb-2">
+                                    <label class="form-label !mb-0">{{ form.filler_terms.label }}</label>
+                                    <button type="button" class="text-xs font-semibold text-[var(--color-primary)] hover:underline" data-open-modal="filler-term-modal">
+                                        <ion-icon name="add-circle-outline" class="align-middle text-base"></ion-icon>
+                                        Criar outro
+                                    </button>
+                                </div>
+                                <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 max-h-40 overflow-y-auto grid grid-cols-2 gap-x-3 gap-y-2">
+                                    {% for choice in form.filler_terms %}
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>
+                                    {% empty %}
+                                    <p class="col-span-2 text-sm text-gray-500">Nenhum termo disponível. Crie o primeiro vício de fala.</p>
+                                    {% endfor %}
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">{{ form.filler_terms.help_text }}</p>
+                            </div>
+                        </div>
+                        <div class="block-help mt-4">
+                            A proteção de 100 ms ao redor das palavras é sempre aplicada. Respirações e pausas após frases
+                            recebem espaço extra; se houver dúvida sobre uma sílaba, o trecho é mantido.
+                        </div>
+                        {% if form.speech_edit_profile.errors %}<p class="text-xs text-red-600 mt-2">{{ form.speech_edit_profile.errors.0 }}</p>{% endif %}
+                        {% if form.filler_terms.errors %}<p class="text-xs text-red-600 mt-2">{{ form.filler_terms.errors.0 }}</p>{% endif %}
+                    </div>
+                    {% if form.advanced_plugins.errors %}<p class="text-xs text-red-600 mt-3">{{ form.advanced_plugins.errors.0 }}</p>{% endif %}
+                    <p class="text-xs text-gray-500 mt-3">Ative os recursos que fazem sentido para este tipo de vídeo.</p>
                 </div>
 
                 <div class="admin-card p-6">
@@ -369,81 +496,6 @@
                             Adicionar bloco
                         </button>
                     </div>
-                </div>
-
-                <div class="admin-card p-6">
-                    <div class="section-title"><ion-icon name="construct-outline"></ion-icon><span>Ajustes extras do pipeline</span></div>
-                    <div class="block-help mb-4">
-                        Aqui ficam só os processamentos <strong>extras</strong> do vídeo.
-                        Legendas, tradução, LUT e música já são definidos nas seções acima e não precisam ser escolhidos de novo aqui.
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {% for choice in form.advanced_plugins %}
-                        <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
-                            <div class="pt-1">{{ choice.tag }}</div>
-                            <div>
-                                <p class="font-semibold text-gray-900">{{ choice.choice_label }}</p>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    {% if choice.data.value == 'silence_removal' %}
-                                    Tenta cortar pausas silenciosas para deixar o vídeo mais direto.
-                                    {% elif choice.data.value == 'filler_removal' %}
-                                    Tenta limpar vícios de fala como “é…”, “ahn…” e repetições desnecessárias.
-                                    {% elif choice.data.value == 'auto_tracking' %}
-                                    Preenche todo o formato e acompanha automaticamente uma ou várias pessoas.
-                                    {% endif %}
-                                </p>
-                            </div>
-                        </label>
-                        {% endfor %}
-                    </div>
-                    <div id="auto-reframe-settings" class="mt-4 inline-card bg-white">
-                        <label class="form-label">{{ form.auto_reframe_priority.label }}</label>
-                        {{ form.auto_reframe_priority }}
-                        <p class="text-xs text-gray-500 mt-2">
-                            Rosto mantém o locutor em destaque. Corpo abre mais o quadro para preservar gestos e movimento.
-                            O sistema usa margem de segurança de 15% e acompanha várias pessoas quando elas aparecem juntas.
-                        </p>
-                        {% if form.auto_reframe_priority.errors %}<p class="text-xs text-red-600 mt-2">{{ form.auto_reframe_priority.errors.0 }}</p>{% endif %}
-                    </div>
-                    <div id="speech-edit-settings" class="mt-4 inline-card bg-white">
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div>
-                                <label class="form-label">{{ form.speech_edit_profile.label }}</label>
-                                {{ form.speech_edit_profile }}
-                                <p class="text-xs text-gray-500 mt-2">
-                                    Conservador mantém mais pausas; Equilibrado é o padrão; Dinâmico deixa vídeos curtos mais diretos.
-                                </p>
-                            </div>
-                            <div>
-                                <div class="flex items-center justify-between gap-3 mb-2">
-                                    <label class="form-label !mb-0">{{ form.filler_terms.label }}</label>
-                                    <button type="button" class="text-xs font-semibold text-[var(--color-primary)] hover:underline" data-open-modal="filler-term-modal">
-                                        <ion-icon name="add-circle-outline" class="align-middle text-base"></ion-icon>
-                                        Criar outro
-                                    </button>
-                                </div>
-                                <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 max-h-40 overflow-y-auto grid grid-cols-2 gap-x-3 gap-y-2">
-                                    {% for choice in form.filler_terms %}
-                                    <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>
-                                    {% empty %}
-                                    <p class="col-span-2 text-sm text-gray-500">Nenhum termo disponível. Crie o primeiro vício de fala.</p>
-                                    {% endfor %}
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2">{{ form.filler_terms.help_text }}</p>
-                            </div>
-                        </div>
-                        <div class="block-help mt-4">
-                            A proteção de 100 ms ao redor das palavras é sempre aplicada. Respirações e pausas após frases
-                            recebem espaço extra; se houver dúvida sobre uma sílaba, o trecho é mantido.
-                        </div>
-                        {% if form.speech_edit_profile.errors %}<p class="text-xs text-red-600 mt-2">{{ form.speech_edit_profile.errors.0 }}</p>{% endif %}
-                        {% if form.filler_terms.errors %}<p class="text-xs text-red-600 mt-2">{{ form.filler_terms.errors.0 }}</p>{% endif %}
-                    </div>
-                    {% if form.advanced_plugins.errors %}<p class="text-xs text-red-600 mt-3">{{ form.advanced_plugins.errors.0 }}</p>{% endif %}
-                    <p class="text-xs text-gray-500 mt-3">
-                        Você pode ativar vários ao mesmo tempo ou deixar todos desligados.
-                        Eles funcionam só como complementos ao template.
-                    </p>
                 </div>
 
                 <div class="admin-card p-4 flex flex-col sm:flex-row justify-end gap-3 sticky bottom-4">
@@ -1037,6 +1089,33 @@
                 </div>
             </div>
 
+            <div id="color-lut-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div><h2 class="text-lg font-black text-gray-900">LUTs de cor</h2><p class="text-sm text-gray-500">Cadastre arquivos .cube para reutilizar o tratamento de cor nos templates.</p></div>
+                        <button type="button" class="asset-action" data-close-modal="color-lut-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+                    <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <form method="post" action="{% url 'admin_external_media_color_lut_save' %}" enctype="multipart/form-data" class="inline-card bg-white">
+                            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><input type="hidden" name="colorlut_id" id="colorlut-id">
+                            <div class="flex items-center justify-between mb-4"><h3 id="colorlut-form-title" class="font-bold text-gray-900">Novo LUT</h3><button type="button" class="text-sm text-gray-500 hover:underline" data-reset-colorlut>Limpar</button></div>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div><label class="form-label">{{ color_lut_form.name.label }}</label>{{ color_lut_form.name }}</div>
+                                <div><label class="form-label">{{ color_lut_form.description.label }}</label>{{ color_lut_form.description }}</div>
+                                <div><label class="form-label">{{ color_lut_form.default_intensity.label }}</label>{{ color_lut_form.default_intensity }}<p class="text-xs text-gray-500 mt-1">Aplicada como sugestão ao selecionar este LUT.</p></div>
+                                <div><label class="form-label">{{ color_lut_form.lut_file.label }}</label>{{ color_lut_form.lut_file }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ color_lut_form.is_active }} {{ color_lut_form.is_active.label }}</label>
+                            </div>
+                            <div class="flex justify-end mt-5 pt-4 border-t border-gray-100"><button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar LUT</button></div>
+                        </form>
+                        <div class="inline-card bg-white"><h3 class="font-bold text-gray-900 mb-4">LUTs cadastrados</h3><div class="overflow-x-auto"><table class="modal-table w-full"><thead><tr><th>LUT</th><th>Arquivo</th><th>Status</th><th class="text-right">Ações</th></tr></thead><tbody>
+                            {% for lut in color_lut_rows %}<tr><td><p class="font-bold text-gray-900">{{ lut.name }}</p><p class="text-xs text-gray-500">{{ lut.description|default:'Sem descrição' }}</p></td><td class="text-sm {% if lut.lut_file %}text-green-700{% else %}text-amber-700{% endif %}">{% if lut.lut_file %}.cube disponível{% else %}Sem arquivo{% endif %}</td><td class="text-sm">{{ lut.default_intensity }}% · {% if lut.is_active %}Ativo{% else %}Inativo{% endif %}</td><td class="text-right"><div class="inline-flex gap-1"><button type="button" class="asset-action" data-edit-colorlut data-id="{{ lut.id }}" data-name="{{ lut.name }}" data-description="{{ lut.description }}" data-intensity="{{ lut.default_intensity }}" data-active="{{ lut.is_active|yesno:'1,0' }}" title="Editar"><ion-icon name="create-outline"></ion-icon></button><form method="post" action="{% url 'admin_external_media_color_lut_delete' lut.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button></form></div></td></tr>
+                            {% empty %}<tr><td colspan="4" class="text-center text-gray-500 py-8">Nenhum LUT cadastrado.</td></tr>{% endfor %}
+                        </tbody></table></div></div>
+                    </div>
+                </div>
+            </div>
+
             <div id="mastering-modal" class="media-modal" aria-hidden="true">
                 <div class="media-modal-panel">
                     <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
@@ -1195,6 +1274,16 @@
     function byId(id) { return document.getElementById(id); }
     function setValue(id, value) { const el = byId(id); if (el) el.value = value || ''; }
     function setChecked(id, value) { const el = byId(id); if (el) el.checked = value === true || value === 'true'; }
+    const colorLUTDefaults = {{ color_lut_defaults_json|safe }};
+    function syncLUTIntensityUI() {
+        const selectedLUT = byId('id_color_lut')?.value;
+        byId('lut-intensity-field')?.classList.toggle('hidden', !selectedLUT);
+    }
+    byId('id_color_lut')?.addEventListener('change', (event) => {
+        const intensity = colorLUTDefaults[event.target.value];
+        if (intensity !== undefined) setValue('id_lut_intensity', intensity);
+        syncLUTIntensityUI();
+    });
     function existingStyleNames() {
         return Array.from(document.querySelectorAll('[data-edit-style],[data-clone-style]'))
             .map((button) => (button.dataset.name || '').trim().toLowerCase())
@@ -1983,6 +2072,28 @@
         });
     });
 
+    function resetColorLUTForm() {
+        byId('colorlut-form-title').textContent = 'Novo LUT';
+        setValue('colorlut-id', '');
+        setValue('id_colorlut-name', '');
+        setValue('id_colorlut-description', '');
+        setValue('id_colorlut-default_intensity', '50');
+        setChecked('id_colorlut-is_active', true);
+        const fileInput = byId('id_colorlut-lut_file');
+        if (fileInput) fileInput.value = '';
+    }
+    document.querySelector('[data-reset-colorlut]')?.addEventListener('click', resetColorLUTForm);
+    document.querySelectorAll('[data-edit-colorlut]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('colorlut-form-title').textContent = `Editar LUT: ${button.dataset.name}`;
+            setValue('colorlut-id', button.dataset.id);
+            setValue('id_colorlut-name', button.dataset.name);
+            setValue('id_colorlut-description', button.dataset.description);
+            setValue('id_colorlut-default_intensity', button.dataset.intensity);
+            setChecked('id_colorlut-is_active', button.dataset.active === '1');
+        });
+    });
+
     function resetMasteringProfileForm() {
         byId('masterprofile-form-title').textContent = 'Novo perfil';
         setValue('masterprofile-id', '');
@@ -2020,13 +2131,17 @@
     });
 
     function syncLanguageModeUI() {
+        const subtitlesEnabled = byId('id_subtitles_enabled')?.checked;
         const mode = byId('id_language_mode')?.value;
+        const translatedEnabled = subtitlesEnabled && mode === 'translated';
         const spoken = byId('spoken-languages-field');
         const translated = byId('translated-language-field');
         const translatedStyle = byId('translated-style-field');
-        if (spoken) spoken.classList.toggle('hidden', mode !== 'bilingual_source');
-        if (translated) translated.classList.toggle('hidden', mode === 'single');
-        if (translatedStyle) translatedStyle.classList.toggle('hidden', mode === 'single');
+        const mainFields = ['subtitle-style-field', 'original-language-field', 'language-mode-field', 'spoken-languages-field', 'language-help'];
+        mainFields.forEach((id) => byId(id)?.classList.toggle('hidden', !subtitlesEnabled));
+        if (spoken) spoken.classList.toggle('hidden', !subtitlesEnabled || mode !== 'bilingual_source');
+        if (translated) translated.classList.toggle('hidden', !translatedEnabled || mode === 'single');
+        if (translatedStyle) translatedStyle.classList.toggle('hidden', !translatedEnabled || mode === 'single');
     }
     function syncAutoReframeUI() {
         const checkbox = document.querySelector(
@@ -2044,6 +2159,28 @@
         );
         const settings = byId('speech-edit-settings');
         if (settings) settings.classList.toggle('hidden', !silence?.checked && !fillers?.checked);
+    }
+    function syncAudioIntelligentUI() {
+        const mixingEnabled = byId('id_audio_mixing_enabled')?.checked;
+        const dialogueEnabled = byId('id_dialogue_processing_enabled')?.checked;
+        const noiseEnabled = byId('id_audio_noise_cleanup_enabled')?.checked;
+        const masteringEnabled = byId('id_audio_mastering_enabled')?.checked;
+        byId('mixing-advanced-control')?.classList.toggle('hidden', !mixingEnabled);
+        byId('dialogue-advanced-control')?.classList.toggle('hidden', !dialogueEnabled);
+        byId('noise-advanced-control')?.classList.toggle('hidden', !noiseEnabled);
+        byId('mastering-profile-field')?.classList.toggle('hidden', !masteringEnabled);
+        if (!mixingEnabled) setAdvancedFieldVisible('mixing', false);
+        if (!dialogueEnabled) setAdvancedFieldVisible('dialogue', false);
+        if (!noiseEnabled) setAdvancedFieldVisible('noise', false);
+    }
+    function setAdvancedFieldVisible(kind, visible) {
+        const field = byId(`${kind}-advanced-field`);
+        const toggle = byId(`${kind}-advanced-toggle`);
+        field?.classList.toggle('hidden', !visible);
+        toggle?.setAttribute('aria-expanded', String(visible));
+        toggle?.querySelector('[data-advanced-chevron]')?.setAttribute(
+            'name', visible ? 'chevron-up-outline' : 'chevron-down-outline',
+        );
     }
     function visibleBlockCards() {
         return Array.from(document.querySelectorAll('#blocks-container [data-block-form]'))
@@ -2100,7 +2237,22 @@
         bindBlockCard(card);
         updateBlockOrder();
     }
+    function syncInteractivePreviewUI() {
+        byId('preview-profile-field')?.classList.toggle('hidden', !byId('id_interactive_preview_enabled')?.checked);
+    }
     byId('id_language_mode')?.addEventListener('change', syncLanguageModeUI);
+    byId('id_subtitles_enabled')?.addEventListener('change', syncLanguageModeUI);
+    byId('id_audio_mixing_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_dialogue_processing_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_audio_noise_cleanup_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_audio_mastering_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_interactive_preview_enabled')?.addEventListener('change', syncInteractivePreviewUI);
+    ['mixing', 'dialogue', 'noise'].forEach((kind) => {
+        byId(`${kind}-advanced-toggle`)?.addEventListener('click', () => {
+            const field = byId(`${kind}-advanced-field`);
+            setAdvancedFieldVisible(kind, field?.classList.contains('hidden'));
+        });
+    });
     document.querySelector('input[name="advanced_plugins"][value="auto_tracking"]')
         ?.addEventListener('change', syncAutoReframeUI);
     document.querySelectorAll(
@@ -2112,6 +2264,9 @@
     syncLanguageModeUI();
     syncAutoReframeUI();
     syncSpeechEditUI();
+    syncAudioIntelligentUI();
+    syncLUTIntensityUI();
+    syncInteractivePreviewUI();
     updateBlockOrder();
     updateStylePreview();
 </script>

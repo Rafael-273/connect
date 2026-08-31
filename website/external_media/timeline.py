@@ -9,6 +9,7 @@ from pathlib import Path
 from django.conf import settings
 
 from .audio_mixing import DuckingSettings, build_ducking_envelope, group_speech_blocks
+from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder, normalize_edit_ranges
 from .ffmpeg_runner import FFmpegRunner
 from .speech_edit import SpeechEditPlan
 
@@ -23,6 +24,7 @@ CAPABILITY_MATRIX = {
     'caption_style': {'exportable': True, 'strategy': 'pre_rendered_alpha_overlay'},
     'lut': {'exportable': 'partial', 'strategy': 'asset_and_metadata'},
     'dialogue_processing': {'exportable': 'partial', 'strategy': 'separate_dialogue_source_plus_metadata'},
+    'audio_noise_reduction': {'exportable': 'partial', 'strategy': 'metadata_and_original_dialogue_source'},
     'mastering': {'exportable': False, 'strategy': 'recommended_after_premiere'},
     'complex_motion': {'exportable': 'partial', 'strategy': 'pre_render_when_available'},
 }
@@ -85,10 +87,12 @@ class InternalTimelineBuilder:
 
     def __init__(self, runner=None):
         self.runner = runner or FFmpegRunner()
+        self._probe_cache = {}
 
     def build(self, project, package_root: Path):
         for folder in ('Media', 'Audio', 'Captions', 'Graphics', 'LUTs', 'Metadata', 'Project'):
             (package_root / folder).mkdir(parents=True, exist_ok=True)
+        project_state = ProjectProcessingState(project)
         sources = self._sources(project)
         assets = []
         local_sources = []
@@ -113,7 +117,8 @@ class InternalTimelineBuilder:
             })
 
         sequence = self._sequence(project, local_sources)
-        cuts = SpeechEditPlan.from_dict((project.configuration or {}).get('speech_edit_plan'))
+        decisions_snapshot = self._edit_decisions(project, project_state)
+        cuts = self._cuts_from_decisions(decisions_snapshot)
         video_clips, decisions, markers = self._video_clips(project, local_sources, cuts, sequence)
         duration_ms = max((clip['timeline_out_ms'] for clip in video_clips), default=0)
         dialogue_assets, dialogue_clips = self._dialogue_assets(local_sources, video_clips, package_root)
@@ -173,41 +178,77 @@ class InternalTimelineBuilder:
                 for keyframe in effect.get('keyframes', [])
             ],
             'markers': markers,
-            'decisions': decisions,
+            'decisions': decisions_snapshot['operations'] or decisions,
+            'source_manifest': project_state.get_source_manifest() or SourceManifestBuilder.build(project),
+            'edit_decision_set': decisions_snapshot,
+            'timeline_schema': 'connect.internal_timeline.v1',
+            'timeline_revision': (
+                project.approved_timeline_revision.revision
+                if project.approved_timeline_revision_id else 1
+            ),
             'capability_matrix': CAPABILITY_MATRIX,
             'compatibility': compatibility,
         }
         return timeline
 
     def _sources(self, project):
-        version = project.template_version
-        enabled_codes = set(version.plugins.filter(is_enabled=True).values_list('code', flat=True))
+        state = ProjectProcessingState(project)
+        manifest = (
+            project.approved_timeline_revision.source_manifest
+            if project.approved_timeline_revision_id else state.get_source_manifest()
+        )
+        if not manifest or manifest.get('schema') != 'connect.source_manifest.v1':
+            manifest = SourceManifestBuilder.build(project)
         result = []
-        if version.intro_video and 'intro' in enabled_codes:
-            result.append(TimelineSource('video_intro', version.intro_video, '', Path(version.intro_video.name).name, 'intro'))
-        media_by_block = {}
-        for item in project.block_media.select_related('block').order_by('block__order', 'position', 'pk'):
-            media_by_block.setdefault(item.block_id, []).append(item)
-        index = 0
-        for block in version.blocks.all().order_by('order', 'pk'):
-            items = media_by_block.get(block.pk, [])
-            if items:
-                for item in items:
-                    index += 1
-                    result.append(TimelineSource(
-                        f'video_{index}', item.file, '', item.original_filename or Path(item.file.name).name,
-                        'main', block.pk, block.key, block.name, int(item.trim_start_ms or 0),
-                        int(item.trim_end_ms) if item.trim_end_ms else None, block.skip_extra_processing,
-                    ))
-            elif block.default_video:
-                index += 1
-                result.append(TimelineSource(
-                    f'video_{index}', block.default_video, '', Path(block.default_video.name).name,
-                    'default', block.pk, block.key, block.name, 0, None, block.skip_extra_processing,
-                ))
-        if version.outro_video and 'outro' in enabled_codes:
-            result.append(TimelineSource('video_outro', version.outro_video, '', Path(version.outro_video.name).name, 'outro'))
+        for item in manifest.get('sources', []):
+            if not (item.get('metadata') or {}).get('render_enabled', True):
+                continue
+            try:
+                field = SourceManifestBuilder.resolve_field(project, item)
+            except Exception:
+                # A deleted upload must never make an old export package point to
+                # an unrelated filename. The next processing run rebuilds it.
+                continue
+            trim = item.get('trim') or {}
+            metadata = item.get('metadata') or {}
+            result.append(TimelineSource(
+                item['id'], field, '', item.get('filename') or Path(field.name).name,
+                item.get('role') or 'main', item.get('block_id'), item.get('block_key') or '',
+                item.get('block_name') or '', int(trim.get('start_ms') or 0), trim.get('end_ms'),
+                bool(metadata.get('skip_extra_processing')),
+            ))
         return result
+
+    @staticmethod
+    def _edit_decisions(project, state):
+        if project.approved_timeline_revision_id:
+            return project.approved_timeline_revision.edit_decision_set
+        snapshot = state.get_edit_decision_set()
+        if snapshot and snapshot.get('schema') == 'connect.edit_decisions.v1':
+            return snapshot
+        return EditDecisionSetBuilder.build(project, state.get_source_manifest() or SourceManifestBuilder.build(project))
+
+    @staticmethod
+    def _cuts_from_decisions(snapshot):
+        protected = [
+            {'start_ms': item.get('source_in_ms'), 'end_ms': item.get('source_out_ms')}
+            for item in snapshot.get('operations', [])
+            if item.get('type') == 'protected_range' and item.get('enabled', True)
+        ]
+        ranges = [
+            {
+                'start_ms': item.get('source_in_ms'), 'end_ms': item.get('source_out_ms'),
+                'kind': (item.get('metadata') or {}).get('kind', 'silence'),
+                'label': item.get('reason') or '',
+            }
+            for item in snapshot.get('operations', [])
+            if item.get('type') == 'remove_segment' and item.get('enabled', True)
+        ]
+        normalized = normalize_edit_ranges(ranges, protected)
+        duration = max((int(item['end_ms']) for item in normalized), default=1)
+        return SpeechEditPlan.normalized(
+            [type('Cut', (), item)() for item in normalized], duration,
+        )
 
     def _sequence(self, project, sources):
         preset = project.template_version.preset
@@ -614,6 +655,28 @@ class InternalTimelineBuilder:
                 'configuration': version.dialogue_processing_config,
                 'note': 'Áudio original incluído; reaplique EQ/compressão/de-esser no Premiere se desejado.',
             })
+        noise_decisions = (project.configuration or {}).get('noise_reduction_decisions') or []
+        for decision in noise_decisions:
+            if decision.get('mode') == 'GLOBAL':
+                effects.append({
+                    'type': 'audio_noise_reduction',
+                    'portability': 'NON_PORTABLE',
+                    'mode': 'GLOBAL',
+                    'strength': decision.get('strength', 'LIGHT'),
+                    'enabled': bool(decision.get('enabled')),
+                    'note': 'Redução global conservadora de ruído constante.',
+                })
+            elif decision.get('enabled'):
+                effects.append({
+                    'type': 'audio_noise_reduction',
+                    'portability': 'NON_PORTABLE',
+                    'mode': 'LOCAL',
+                    'start_ms': decision.get('start_ms'),
+                    'end_ms': decision.get('end_ms'),
+                    'strength': decision.get('strength', 'LIGHT'),
+                    'noise_type': decision.get('noise_type'),
+                    'label': decision.get('label'),
+                })
         if version.audio_mastering_enabled:
             effects.append({
                 'type': 'mastering', 'portability': 'NON_PORTABLE',
@@ -629,6 +692,8 @@ class InternalTimelineBuilder:
             warnings.append('O LUT foi incluído no pacote e documentado, mas pode precisar ser reaplicado no Premiere.')
         if any(effect['type'] == 'dialogue_processing' for effect in effects):
             warnings.append('EQ, compressão e de-esser são metadados não portáveis; o áudio original permanece editável.')
+        if any(effect['type'] == 'audio_noise_reduction' for effect in effects):
+            warnings.append('Reduções de ruído são metadados; o WAV de diálogo original permanece disponível para revisão no Premiere.')
         if project.template_version.audio_mastering_enabled:
             warnings.append('A masterização final não foi aplicada destrutivamente. Use “Masterizar Vídeo” após o Premiere.')
         warnings.append(
@@ -638,12 +703,17 @@ class InternalTimelineBuilder:
         return {'warnings': warnings, 'matrix': CAPABILITY_MATRIX}
 
     def _probe(self, path, audio_only=False):
+        cache_key = (str(Path(path).resolve()), bool(audio_only))
+        cached = self._probe_cache.get(cache_key)
+        if cached is not None:
+            return dict(cached)
         duration = self.runner.run([
             settings.FFPROBE_BINARY, '-v', 'error', '-show_entries', 'format=duration',
             '-of', 'default=noprint_wrappers=1:nokey=1', str(path),
         ]).strip()
         metadata = {'duration_ms': max(1, round(float(duration) * 1000))}
         if audio_only:
+            self._probe_cache[cache_key] = dict(metadata)
             return metadata
         output = self.runner.run([
             settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'v:0',
@@ -652,6 +722,7 @@ class InternalTimelineBuilder:
         width, height = int(output[0]), int(output[1])
         numerator, denominator = (output[2].split('/', 1) + ['1'])[:2]
         metadata.update({'width': width, 'height': height, 'fps': float(numerator) / max(1, float(denominator))})
+        self._probe_cache[cache_key] = dict(metadata)
         return metadata
 
     def _has_audio(self, path):

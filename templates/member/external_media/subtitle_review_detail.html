@@ -1,0 +1,33 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_header_title %}<a href="{% url 'external_media_project_subtitle_reviews' project.public_id %}"><strong class="block text-lg">Analisar revisão</strong><small class="text-gray-500">{{ project.name }}</small></a>{% endblock %}
+
+{% block media_content %}
+<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div><a class="text-sm text-gray-500" href="{% url 'external_media_project_subtitle_reviews' project.public_id %}">← Todas as revisões</a><h1 class="text-2xl sm:text-3xl font-black mt-2">{{ review.reviewer_name|default:"Revisor convidado" }}</h1><p class="text-gray-500">{{ review.suggestions.count }} sugestões · {{ review.languages|join:" + "|upper }}</p></div>
+    {% if review.status == 'SUBMITTED' or review.status == 'UNDER_REVIEW' %}<form method="post" action="{% url 'external_media_project_subtitle_review_approve_all' project.public_id review.pk %}" onsubmit="return confirm('Aprovar todas as sugestões sem conflito?');">{% csrf_token %}<button class="media-btn media-primary"><i class="fas fa-check-double"></i>Aprovar todas</button></form>{% endif %}
+</div>
+{% if review.general_comment %}<div class="rounded-2xl border bg-white p-4 mb-5"><span class="text-xs uppercase tracking-widest text-gray-400">Comentário geral</span><p class="mt-1">{{ review.general_comment }}</p></div>{% endif %}
+
+<div class="space-y-4">
+{% for suggestion in suggestions %}
+<article class="media-card p-5 {% if suggestion.status == 'CONFLICT' or suggestion.has_other_suggestion %}border-amber-300{% endif %}">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4"><div><span class="text-xs uppercase tracking-widest text-gray-400">{{ suggestion.get_language_display }} · <span data-time-ms="{{ suggestion.cue.start_ms }}"></span></span>{% if suggestion.status == 'CONFLICT' or suggestion.has_other_suggestion %}<p class="text-sm text-amber-700 font-bold mt-1"><i class="fas fa-triangle-exclamation mr-1"></i>Conflito de sugestões: confira antes de decidir.</p>{% endif %}</div><span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold">{{ suggestion.get_status_display }}</span></div>
+    <div class="grid md:grid-cols-2 gap-3 mb-4"><div class="rounded-xl bg-gray-50 p-4"><span class="text-xs uppercase tracking-widest text-gray-400">Atual</span><p class="mt-2 whitespace-pre-line" data-diff-current>{{ suggestion.cue.text }}</p></div><div class="rounded-xl bg-red-50/60 p-4"><span class="text-xs uppercase tracking-widest" style="color:#C90905">Sugestão</span><p class="mt-2 whitespace-pre-line" data-diff-suggested>{{ suggestion.suggested_text }}</p></div></div>
+    {% if suggestion.comment %}<p class="rounded-xl border-l-4 bg-gray-50 p-3 text-sm" style="border-color:#C90905"><strong>Comentário:</strong> {{ suggestion.comment }}</p>{% endif %}
+    {% if suggestion.status == 'PENDING' or suggestion.status == 'CONFLICT' %}
+    <form method="post" action="{% url 'external_media_project_subtitle_suggestion_decide' project.public_id review.pk suggestion.pk %}" class="mt-4">{% csrf_token %}<label class="text-sm font-bold">Versão que será aprovada</label><textarea name="resolved_text" class="w-full min-h-[88px] rounded-xl border p-3 mt-1">{{ suggestion.suggested_text }}</textarea><div class="flex flex-wrap items-center justify-between gap-3 mt-3">{% if not suggestion.cue.track.is_source %}<label class="text-sm flex items-center gap-2"><input type="checkbox" name="add_to_glossary" value="1">Adicionar ao Glossário</label>{% else %}<span></span>{% endif %}<div class="flex gap-2"><button name="action" value="reject" class="media-btn media-muted"><i class="fas fa-xmark"></i>Rejeitar</button><button name="action" value="approve" class="media-btn media-primary"><i class="fas fa-check"></i>Aprovar versão</button></div></div></form>
+    {% endif %}
+</article>
+{% empty %}<div class="media-card p-8 text-center text-gray-500">Esta revisão não possui sugestões.</div>{% endfor %}
+</div>
+
+{% if dirty_tracks %}<section class="media-card p-5 mt-7 flex flex-wrap items-center justify-between gap-4"><div><span class="text-xs uppercase tracking-widest text-amber-700">Alterações aprovadas</span><h2 class="font-black text-lg mt-1">Prontas para aplicar ao vídeo</h2><p class="text-sm text-gray-500">A edição, o áudio e os cortes serão preservados.</p></div><form method="post" action="{% url 'external_media_project_subtitle_review_render' project.public_id review.pk %}">{% csrf_token %}<button class="media-btn media-primary"><i class="fas fa-wand-magic-sparkles"></i>Aplicar alterações ao vídeo</button></form></section>{% endif %}
+<script>
+(()=>{
+document.querySelectorAll('[data-time-ms]').forEach(el=>{const total=Number(el.dataset.timeMs||0),m=Math.floor(total/60000),s=Math.floor((total%60000)/1000);el.textContent=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`});
+const append=(root,text,kind)=>{const node=document.createElement(kind?'mark':'span');node.textContent=text+(text?' ':'');if(kind==='removed')node.className='bg-red-100 text-red-800 line-through rounded px-1';if(kind==='added')node.className='bg-green-100 text-green-800 rounded px-1';root.appendChild(node)};
+document.querySelectorAll('[data-diff-current]').forEach(current=>{const suggested=current.closest('article').querySelector('[data-diff-suggested]'),left=current.textContent.trim().split(/\s+/),right=suggested.textContent.trim().split(/\s+/),rows=left.length+1,cols=right.length+1,dp=Array.from({length:rows},()=>Array(cols).fill(0));for(let i=left.length-1;i>=0;i--)for(let j=right.length-1;j>=0;j--)dp[i][j]=left[i]===right[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);current.textContent='';suggested.textContent='';let i=0,j=0;while(i<left.length||j<right.length){if(i<left.length&&j<right.length&&left[i]===right[j]){append(current,left[i]);append(suggested,right[j]);i++;j++}else if(j<right.length&&(i===left.length||dp[i][j+1]>=dp[i+1][j])){append(suggested,right[j],'added');j++}else{append(current,left[i],'removed');i++}}});
+})();
+</script>
+{% endblock %}
