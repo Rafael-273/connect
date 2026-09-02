@@ -3,6 +3,7 @@ import math
 import re
 import tempfile
 import wave
+from decimal import Decimal
 from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -53,11 +54,18 @@ from website.external_media.premiere_export import (
     ExportValidationService,
     PremiereExporter,
     PremierePackageService,
+    PremiereTransformAdapter,
+    json_compatible,
 )
 from website.external_media.timeline import InternalTimelineBuilder, KeyframeSimplifier, TimelineSource
 from website.external_media.canonical import EditDecisionSetBuilder, SourceManifestBuilder, normalize_edit_ranges
 from website.external_media.preview import PreviewCompositionService, TimelineRevisionService
-from website.external_media.tasks import _execution_is_current, create_project_preview, render_reviewed_subtitles
+from website.external_media.tasks import (
+    _execution_is_current,
+    _premiere_archive_filename,
+    create_project_preview,
+    render_reviewed_subtitles,
+)
 from website.external_media.services import (
     AudioChunk,
     AssemblySource,
@@ -3864,6 +3872,46 @@ class DialogueProcessingSmokeTests(SimpleTestCase):
 
 
 class EditableTimelineExportTests(SimpleTestCase):
+    def test_premiere_archive_filename_uses_a_safe_project_name(self):
+        project = SimpleNamespace(name='Anúncio: Setembro / 2026', public_id='a4e7396e-a96b-49ea-866a-19bbb4d52ef3')
+
+        self.assertEqual(_premiere_archive_filename(project), 'anuncio-setembro-2026-premiere.zip')
+
+    def test_selected_background_music_is_exported_without_a_legacy_plugin(self):
+        builder = InternalTimelineBuilder()
+        builder._copy_field = Mock()
+        builder._probe = Mock(return_value={'duration_ms': 1000})
+        music_file = SimpleNamespace(name='background/podcast-theme.mp3')
+        project = SimpleNamespace(
+            template_version=SimpleNamespace(
+                background_music=SimpleNamespace(name='Podcast Theme', audio_file=music_file),
+                music_file=None,
+                audio_mixing_config={},
+                audio_mixing_enabled=False,
+                audio_ducking_enabled=False,
+                music_volume=0.2,
+            ),
+            render_job_id=None,
+            configuration={},
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'Audio').mkdir()
+            asset, track = builder._music(project, Path(directory), 2500)
+
+        self.assertEqual(asset['id'], 'audio_music')
+        self.assertEqual(len(track['clips']), 3)
+        self.assertEqual(track['role'], 'music')
+
+    def test_premiere_json_payload_converts_decimals_to_numbers(self):
+        payload = json_compatible({
+            'mastering': {'target_lufs': Decimal('-16.0')},
+            'mix': [Decimal('0.75')],
+        })
+
+        self.assertEqual(payload['mastering']['target_lufs'], -16.0)
+        self.assertEqual(payload['mix'], [0.75])
+        self.assertEqual(json.loads(json.dumps(payload)), payload)
+
     def test_static_reframe_uses_a_centered_subtle_zoom(self):
         plan = AutoReframeService(priority='static')._static_center_plan(
             1920, 1080, 1920, 1080,
@@ -3924,6 +3972,15 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertEqual(simplified[-1], points[-1])
         self.assertLessEqual(len(simplified), 12)
 
+    def test_keyframe_simplifier_preserves_normalized_tracking_curve(self):
+        points = [
+            {'time_ms': 0, 'center_x': 0.5, 'center_y': 0.5, 'zoom': 1.0},
+            {'time_ms': 500, 'center_x': 0.62, 'center_y': 0.46, 'zoom': 1.08},
+            {'time_ms': 1000, 'center_x': 0.5, 'center_y': 0.5, 'zoom': 1.0},
+        ]
+
+        self.assertEqual(KeyframeSimplifier.simplify(points), points)
+
     def test_reframe_interval_gets_interpolated_boundary_keyframes(self):
         keyframes = [
             {'source_time_ms': 0, 'x': 0, 'y': 10},
@@ -3955,6 +4012,7 @@ class EditableTimelineExportTests(SimpleTestCase):
             }, {
                 'id': 'caption_overlay_pt', 'name': 'captions_pt_styled.mov',
                 'path': './Graphics/captions_pt_styled.mov', 'type': 'video', 'has_audio': False,
+                'alpha_mode': 'straight',
                 'duration_ms': 2000, 'width': 1920, 'height': 1080, 'fps': 30.0,
             }],
             'video_tracks': [{'clips': [
@@ -4012,6 +4070,157 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertIn('Bem-vindos à Filadélfia', xml)
         self.assertIn('Legendas estilizadas (visual final)', xml)
         self.assertIn('../Graphics/captions_pt_styled.mov', xml)
+        self.assertIn('<alphatype>straight</alphatype>', xml)
+
+    def test_premiere_xml_applies_normalized_reframe_motion(self):
+        timeline = {
+            'project': {'name': 'Projeto'},
+            'sequence': {
+                'name': 'Projeto', 'duration_ms': 1000, 'width': 1920, 'height': 1080,
+                'fps': 30.0, 'timebase': 30, 'ntsc': False,
+                'audio_sample_rate': 48000, 'audio_channels': 2,
+            },
+            'assets': [{
+                'id': 'video_1', 'name': 'take.mp4', 'path': './Media/take.mp4',
+                'type': 'video', 'duration_ms': 1000, 'width': 1920, 'height': 1080, 'fps': 30.0,
+            }],
+            'video_tracks': [{'clips': [{
+                'id': 'clip_1', 'asset_id': 'video_1', 'timeline_in_ms': 0, 'timeline_out_ms': 1000,
+                'source_in_ms': 0, 'source_out_ms': 1000,
+                'effects': [{
+                    'type': 'transform', 'coordinate_space': 'normalized_source', 'fit': 'cover',
+                    'source_width': 1920, 'source_height': 1080,
+                    'keyframes': [{'time_ms': 0, 'center_x': 0.5, 'center_y': 0.5, 'zoom': 1}],
+                }],
+            }]}],
+            'audio_tracks': [], 'clips': [{'id': 'clip_1'}], 'captions': [], 'markers': [],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            xml_path = Path(directory) / 'timeline.xml'
+            PremiereExporter().export(timeline, xml_path)
+            xml = xml_path.read_text(encoding='utf-8')
+
+        self.assertIn('<effectid>basic</effectid>', xml)
+        self.assertIn('<horiz>0.0</horiz>', xml)
+        self.assertIn('<vert>0.0</vert>', xml)
+        self.assertNotIn('<horiz>1920</horiz>', xml)
+
+    def test_reframe_keeps_proxy_plan_as_normalized_geometry(self):
+        effect = InternalTimelineBuilder()._transform_effect(
+            {
+                'plan': {
+                    'crop_width': 854,
+                    'crop_height': 266,
+                    'keyframes': [{'time_seconds': 0, 'x': 0, 'y': 31}],
+                },
+                'analysis_width': 854,
+                'analysis_height': 480,
+            },
+            0,
+            1000,
+            0,
+            {'width': 3840, 'height': 1200},
+            {'width': 1920, 'height': 1080},
+        )
+
+        point = effect['keyframes'][0]
+        self.assertEqual(effect['coordinate_space'], 'normalized_source')
+        self.assertEqual(point['center_x'], 0.5)
+        self.assertAlmostEqual(point['center_y'], 0.34143519)
+        self.assertAlmostEqual(point['zoom'], 1.00334448)
+
+    def test_premiere_transform_adapter_handles_common_source_and_sequence_sizes(self):
+        cases = (
+            ((1920, 1080), (1080, 1920), 177.777778),
+            ((3840, 2160), (1080, 1920), 88.888889),
+            ((1920, 1080), (1920, 1080), 100.0),
+            ((3840, 2160), (1920, 1080), 50.0),
+        )
+        for source_size, sequence_size, expected_scale in cases:
+            with self.subTest(source=source_size, sequence=sequence_size):
+                effect = {
+                    'coordinate_space': 'normalized_source',
+                    'source_width': source_size[0], 'source_height': source_size[1],
+                    'keyframes': [{'time_ms': 0, 'center_x': 0.5, 'center_y': 0.5, 'zoom': 1}],
+                }
+                points = PremiereTransformAdapter.adapt(
+                    effect,
+                    {'width': source_size[0], 'height': source_size[1]},
+                    {'width': sequence_size[0], 'height': sequence_size[1]},
+                )
+                self.assertEqual(points[0].center_x, 0.0)
+                self.assertEqual(points[0].center_y, 0.0)
+                self.assertAlmostEqual(points[0].scale, expected_scale, places=5)
+
+    def test_premiere_transform_adapter_bounds_edges_and_applies_zoom(self):
+        effect = {
+            'coordinate_space': 'normalized_source',
+            'source_width': 1920, 'source_height': 1080,
+            'keyframes': [
+                {'time_ms': 1000, 'center_x': 0.0, 'center_y': 0.0, 'zoom': 1.2},
+                {'time_ms': 2000, 'center_x': 1.0, 'center_y': 1.0, 'zoom': 1.2},
+            ],
+        }
+        points = PremiereTransformAdapter.adapt(
+            effect, {'width': 1920, 'height': 1080}, {'width': 1080, 'height': 1920},
+            clip_start_ms=1000,
+        )
+
+        self.assertEqual([point.time_ms for point in points], [0.0, 1000.0])
+        self.assertTrue(all(-100 <= point.center_x <= 100 for point in points))
+        self.assertTrue(all(-100 <= point.center_y <= 100 for point in points))
+        self.assertAlmostEqual(points[0].scale, 213.333333, places=5)
+        self.assertNotEqual(points[0].center_x, points[1].center_x)
+        self.assertNotEqual(points[0].center_y, points[1].center_y)
+
+    def test_caption_overlay_explicitly_processes_alpha_channel(self):
+        runner = Mock()
+        builder = InternalTimelineBuilder(runner=runner)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            builder._render_alpha_caption_movie(
+                root / 'captions.ass', root / 'captions.mov',
+                {'width': 1920, 'height': 1080, 'fps': 30}, 1000,
+            )
+
+        command = runner.run.call_args.args[0]
+        self.assertIn(':alpha=1', command[command.index('-vf') + 1])
+        self.assertIn('yuva444p10le', command)
+
+    def test_caption_overlay_movie_has_transparent_background_and_visible_text(self):
+        ass = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 320
+PlayResY: 180
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Arial,40,&H00FFFFFF,&H000000FF,&H00000000,&HFF000000,-1,0,0,0,100,100,0,0,1,2,0,5,10,10,10,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,TESTE
+"""
+        runner = FFmpegRunner()
+        builder = InternalTimelineBuilder(runner=runner)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ass_path = root / 'captions.ass'
+            movie_path = root / 'captions.mov'
+            ass_path.write_text(ass, encoding='utf-8')
+            builder._render_alpha_caption_movie(
+                ass_path, movie_path, {'width': 320, 'height': 180, 'fps': 1}, 1000,
+            )
+            result = runner.run_capture([
+                'ffmpeg', '-hide_banner', '-i', str(movie_path),
+                '-vf', 'alphaextract,blackframe=amount=0:threshold=1',
+                '-frames:v', '1', '-f', 'null', '-',
+            ])
+
+        percentages = [float(value) for value in re.findall(r'pblack:([0-9.]+)', result.stderr)]
+        self.assertTrue(percentages)
+        self.assertGreater(percentages[0], 50)
+        self.assertLess(percentages[0], 100)
 
 
 class AudioNoiseCleanupUnitTests(SimpleTestCase):

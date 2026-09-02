@@ -81,6 +81,29 @@ services:
     networks:
       - connect-network
 
+  media-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: media-worker
+    working_dir: /usr/src/platform
+    command: celery -A connect beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    volumes:
+      - ./:/usr/src/platform
+    environment:
+      - PYTHONUNBUFFERED=True
+      - USE_S3=${USE_S3:-FALSE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-}
+    env_file:
+      - .env
+    depends_on:
+      - connect-database
+      - redis
+    networks:
+      - connect-network
+
 networks:
   connect-network:
     driver: bridge

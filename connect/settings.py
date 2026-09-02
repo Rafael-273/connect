@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -221,6 +222,16 @@ EXTERNAL_MEDIA_DIARIZATION_MODEL = os.getenv(
 EXTERNAL_MEDIA_DIARIZATION_DEVICE = os.getenv('EXTERNAL_MEDIA_DIARIZATION_DEVICE', 'auto')
 HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN', os.getenv('HF_TOKEN', ''))
 EXTERNAL_MEDIA_TASK_LOCK_NAMESPACE = int(os.getenv('EXTERNAL_MEDIA_TASK_LOCK_NAMESPACE', 73421))
+EXTERNAL_MEDIA_WORKSPACE_ROOT = os.getenv('EXTERNAL_MEDIA_WORKSPACE_ROOT', '/tmp/media-jobs')
+EXTERNAL_MEDIA_WORKSPACE_MIN_FREE_GB = float(os.getenv('EXTERNAL_MEDIA_WORKSPACE_MIN_FREE_GB', 2))
+EXTERNAL_MEDIA_WORKSPACE_SAFETY_FACTOR = float(os.getenv('EXTERNAL_MEDIA_WORKSPACE_SAFETY_FACTOR', 1.15))
+EXTERNAL_MEDIA_WORKSPACE_MAX_AGE_HOURS = int(os.getenv('EXTERNAL_MEDIA_WORKSPACE_MAX_AGE_HOURS', 24))
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-external-media-workspaces': {
+        'task': 'external_media.cleanup_workspaces',
+        'schedule': timedelta(hours=1),
+    },
+}
 FFMPEG_BINARY = os.getenv('FFMPEG_BINARY', 'ffmpeg')
 FFPROBE_BINARY = os.getenv('FFPROBE_BINARY', 'ffprobe')
 

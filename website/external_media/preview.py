@@ -22,6 +22,7 @@ from ..models.external_media import (
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder
 from .exceptions import ExternalMediaError
 from .services import StorageService, VideoAssemblyService
+from .workspace import JobWorkspace, estimate_media_workspace_bytes
 
 
 class ProjectProxyService:
@@ -46,6 +47,13 @@ class ProjectProxyService:
                 profile=profile,
                 defaults={'source_storage_name': field.name},
             )
+            if (
+                proxy.status == ProjectSourceProxy.Status.READY
+                and proxy.proxy_file
+                and proxy.source_storage_name == field.name
+            ):
+                # A proxy is a persistent project asset; opening the review must not rebuild it.
+                continue
             proxy.source_storage_name = field.name
             try:
                 reference = cls._ready_upload_preview(project, source)
@@ -53,16 +61,21 @@ class ProjectProxyService:
                     proxy.proxy_file.name = reference.preview_file.name
                     proxy.duration_ms = reference.duration_ms
                     if not proxy.duration_ms:
-                        with TemporaryDirectory(prefix='connect-proxy-duration-') as temp:
-                            local_proxy = Path(temp) / 'proxy.mp4'
+                        with JobWorkspace(project.public_id, 'proxy-duration') as workspace:
+                            local_proxy = workspace.file('proxy', 'proxy.mp4')
                             storage.copy_to_local(reference.preview_file, local_proxy)
                             proxy.duration_ms = assembly._duration_ms(local_proxy)
                     proxy.metadata = {'reused_upload_proxy': True, 'temporal_parity': 'trim_applied_at_playback'}
                 else:
-                    with TemporaryDirectory(prefix='connect-interactive-preview-') as temp:
-                        workdir = Path(temp)
-                        original = workdir / f'original{Path(field.name).suffix.lower()}'
-                        output = workdir / 'proxy.mp4'
+                    with JobWorkspace(
+                        project.public_id,
+                        'interactive-preview',
+                        estimated_bytes=estimate_media_workspace_bytes(
+                            getattr(field, 'size', 0), needs_proxy=True,
+                        ),
+                    ) as workspace:
+                        original = workspace.file('source', f'original{Path(field.name).suffix.lower()}')
+                        output = workspace.file('proxy', 'proxy.mp4')
                         storage.copy_to_local(field, original)
                         assembly.create_proxy(original, output, profile=profile)
                         proxy.duration_ms = assembly._duration_ms(output)

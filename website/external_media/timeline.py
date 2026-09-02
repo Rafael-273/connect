@@ -52,6 +52,8 @@ class KeyframeSimplifier:
     def simplify(cls, keyframes, tolerance=1.5, max_points=64):
         if len(keyframes) <= 2:
             return list(keyframes)
+        if 'center_x' in keyframes[0]:
+            tolerance = min(float(tolerance), 0.0015)
         points = cls._douglas_peucker(list(keyframes), float(tolerance))
         if len(points) <= max_points:
             return points
@@ -66,11 +68,15 @@ class KeyframeSimplifier:
         first, last = points[0], points[-1]
         span = max(1, last['time_ms'] - first['time_ms'])
         greatest, greatest_index = 0.0, 0
+        dimensions = (
+            ('center_x', 'center_y', 'zoom')
+            if 'center_x' in first else ('x', 'y', 'scale')
+        )
         for index, point in enumerate(points[1:-1], start=1):
             ratio = (point['time_ms'] - first['time_ms']) / span
             expected = {
                 key: first.get(key, 0) + (last.get(key, 0) - first.get(key, 0)) * ratio
-                for key in ('x', 'y', 'scale')
+                for key in dimensions
             }
             distance = math.sqrt(sum((point.get(key, 0) - expected[key]) ** 2 for key in expected))
             if distance > greatest:
@@ -376,9 +382,16 @@ class InternalTimelineBuilder:
 
     def _transform_effect(self, payload, local_start, local_end, timeline_start, sequence, metadata):
         plan = payload['plan']
-        crop_width = max(1, int(plan.get('crop_width') or metadata['width']))
-        crop_height = max(1, int(plan.get('crop_height') or metadata['height']))
-        scale = max(sequence['width'] / crop_width, sequence['height'] / crop_height) * 100
+        analysis_width = max(1, int(payload.get('analysis_width') or metadata['width']))
+        analysis_height = max(1, int(payload.get('analysis_height') or metadata['height']))
+        x_factor = metadata['width'] / analysis_width
+        y_factor = metadata['height'] / analysis_height
+        crop_width = max(1, int(round(float(plan.get('crop_width') or metadata['width']) * x_factor)))
+        crop_height = max(1, int(round(float(plan.get('crop_height') or metadata['height']) * y_factor)))
+        cover_width, cover_height = self._cover_crop_size(
+            metadata['width'], metadata['height'], sequence['width'], sequence['height'],
+        )
+        zoom = max(cover_width / crop_width, cover_height / crop_height)
         points = []
         raw_keyframes = sorted(
             ({
@@ -389,39 +402,36 @@ class InternalTimelineBuilder:
         )
         for item in self._keyframes_for_interval(raw_keyframes, local_start, local_end):
             source_time = item['source_time_ms']
-            crop_x, crop_y = float(item.get('x', 0)), float(item.get('y', 0))
+            crop_x = float(item.get('x', 0)) * x_factor
+            crop_y = float(item.get('y', 0)) * y_factor
             center_x = crop_x + crop_width / 2
             center_y = crop_y + crop_height / 2
-            scale_factor = scale / 100
             points.append({
                 'time_ms': timeline_start + source_time - local_start,
-                # FCP 7 XML Basic Motion uses sequence pixel coordinates for Center.
-                # Moving the scaled source in the inverse direction recreates the crop
-                # selected by Auto Reframe without baking it into a new video.
-                'x': round(
-                    sequence['width'] / 2
-                    - (center_x - metadata['width'] / 2) * scale_factor,
-                    4,
-                ),
-                'y': round(
-                    sequence['height'] / 2
-                    - (center_y - metadata['height'] / 2) * scale_factor,
-                    4,
-                ),
-                'scale': round(scale, 4),
-                'source_crop_x': crop_x,
-                'source_crop_y': crop_y,
+                'center_x': round(center_x / metadata['width'], 8),
+                'center_y': round(center_y / metadata['height'], 8),
+                'zoom': round(zoom, 8),
             })
         if not points:
             return None
         return {
             'type': 'transform',
             'portability': 'PORTABLE_PARTIAL',
-            'position_unit': 'sequence_pixels',
-            'crop_width': crop_width,
-            'crop_height': crop_height,
+            'coordinate_space': 'normalized_source',
+            'fit': 'cover',
+            'source_width': int(metadata['width']),
+            'source_height': int(metadata['height']),
+            'pixel_aspect_ratio': 1.0,
             'keyframes': KeyframeSimplifier.simplify(points),
         }
+
+    @staticmethod
+    def _cover_crop_size(source_width, source_height, output_width, output_height):
+        target_ratio = output_width / output_height
+        source_ratio = source_width / source_height
+        if source_ratio > target_ratio:
+            return source_height * target_ratio, source_height
+        return source_width, source_width / target_ratio
 
     @classmethod
     def _keyframes_for_interval(cls, keyframes, start_ms, end_ms):
@@ -459,9 +469,10 @@ class InternalTimelineBuilder:
 
     def _music(self, project, package_root, duration_ms):
         version = project.template_version
-        enabled = version.plugins.filter(is_enabled=True, code='music').exists()
         track = version.background_music
-        field = track.audio_file if enabled and track and track.audio_file else version.music_file if enabled else None
+        # The selected track is the source of truth. Older versions may not have a
+        # persisted music plugin even though the platform render already uses it.
+        field = track.audio_file if track and track.audio_file else version.music_file
         if not field:
             return None, None
         suffix = Path(field.name).suffix.lower() or '.wav'
@@ -593,6 +604,7 @@ class InternalTimelineBuilder:
             'name': 'Legendas estilizadas (referência visual)',
             'path': f'./{movie_relative}',
             'has_audio': False,
+            'alpha_mode': 'straight',
             **metadata,
         }
         clip = {
@@ -618,9 +630,9 @@ class InternalTimelineBuilder:
         fonts_dir = Path(settings.BASE_DIR) / 'static' / 'fonts' / 'subtitles'
         if fonts_dir.is_dir() and any(fonts_dir.glob('*.[ot]tf')):
             escaped_fonts_dir = str(fonts_dir).replace('\\', r'\\').replace(':', r'\:').replace("'", r"\'")
-            ass_filter = f"ass='{escaped_ass_path}':fontsdir='{escaped_fonts_dir}'"
+            ass_filter = f"ass='{escaped_ass_path}':fontsdir='{escaped_fonts_dir}':alpha=1"
         else:
-            ass_filter = f"ass='{escaped_ass_path}'"
+            ass_filter = f"ass='{escaped_ass_path}':alpha=1"
         duration_seconds = max(0.04, duration_ms / 1000)
         # ProRes 4444 is broadly supported by Premiere and preserves the alpha channel.
         # The transparent source makes the exported layer sit naturally over V1.
@@ -696,6 +708,7 @@ class InternalTimelineBuilder:
             warnings.append('Reduções de ruído são metadados; o WAV de diálogo original permanece disponível para revisão no Premiere.')
         if project.template_version.audio_mastering_enabled:
             warnings.append('A masterização final não foi aplicada destrutivamente. Use “Masterizar Vídeo” após o Premiere.')
+        warnings.append('O reenquadramento automatico e aplicado como Basic Motion editavel no Premiere.')
         warnings.append(
             'As legendas têm uma camada ProRes 4444 transparente com o visual final; '
             'os títulos e SRT permanecem editáveis em trilhas separadas.'

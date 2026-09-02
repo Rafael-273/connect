@@ -59,6 +59,7 @@ from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
 from .quality_control import MediaQualityService
 from .speech_edit import SpeechCut, SpeechEditAnalyzer, SpeechEditPlan, SpeechEditService
+from .workspace import JobWorkspace, estimate_media_workspace_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -1904,8 +1905,12 @@ class ExternalMediaProjectPipeline:
             self.projects.initialize_steps(project, plugins)
             self._step(project, 'upload', ProjectPipelineStep.Status.FINISHED, 'Uploads conferidos')
             self._update(project, ExternalMediaProject.Status.ASSEMBLING, 8, 'Organizando seus vídeos')
-            with TemporaryDirectory(prefix='connect-project-') as temp:
-                workdir = Path(temp)
+            with JobWorkspace(
+                project.public_id,
+                'project',
+                estimated_bytes=self._project_workspace_estimate(project, needs_proxy=wants_subtitles),
+            ) as workspace:
+                workdir = workspace.path
                 sources, lut_path, music_path = self._materialize(project, plugins, workdir)
                 assembly_sources = sources
                 assembly_preset = project.template_version.preset
@@ -1983,9 +1988,12 @@ class ExternalMediaProjectPipeline:
                     if code in plugin_codes:
                         self._step(project, code, ProjectPipelineStep.Status.FINISHED)
             elif project.template_version.audio_noise_cleanup_enabled:
-                with TemporaryDirectory(prefix='connect-noise-analysis-') as temp:
-                    workdir = Path(temp)
-                    analysis_path = workdir / f'noise_source{Path(job.original_video.name).suffix.lower()}'
+                with JobWorkspace(
+                    project.public_id,
+                    'noise-analysis',
+                    estimated_bytes=self._job_workspace_estimate(job),
+                ) as workspace:
+                    analysis_path = workspace.file('source', f'noise_source{Path(job.original_video.name).suffix.lower()}')
                     self.storage.copy_to_local(job.original_video, analysis_path)
                     ExternalMediaPipeline()._apply_noise_analysis(job, analysis_path)
             if not project.template_version.interactive_preview_enabled:
@@ -2023,9 +2031,13 @@ class ExternalMediaProjectPipeline:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 68, 'Preparando a versão final')
             self._step(project, 'render', ProjectPipelineStep.Status.RUNNING)
             if (project.configuration or {}).get('proxy_pipeline'):
-                with TemporaryDirectory(prefix='connect-project-final-') as temp:
+                with JobWorkspace(
+                    project.public_id,
+                    'project-final',
+                    estimated_bytes=self._job_workspace_estimate(project.render_job),
+                ) as workspace:
                     with timed_step('prepare_final_master', project=project.public_id):
-                        self._prepare_final_master(project, Path(temp))
+                        self._prepare_final_master(project, workspace.path)
             subtitle_report = self.quality.validate_subtitles(
                 ExternalMediaPipeline._ordered_output_tracks(project.render_job),
                 (project.configuration or {}).get('protected_block_ranges'),
@@ -2036,8 +2048,12 @@ class ExternalMediaProjectPipeline:
                 with timed_step('render_outputs', project=project.public_id):
                     ExternalMediaPipeline().render_outputs(project.render_job_id)
             else:
-                with TemporaryDirectory(prefix='connect-project-output-') as temp:
-                    source = Path(temp) / 'video.mp4'
+                with JobWorkspace(
+                    project.public_id,
+                    'project-output',
+                    estimated_bytes=self._job_workspace_estimate(project.render_job),
+                ) as workspace:
+                    source = workspace.file('source', 'video.mp4')
                     self.storage.copy_to_local(project.render_job.original_video, source)
                     self.quality.validate_media(source, deep_audio=True).require_ok()
                     self.storage.save_asset(
@@ -2069,6 +2085,21 @@ class ExternalMediaProjectPipeline:
         except Exception as exc:
             self._fail(project, str(exc) if isinstance(exc, ExternalMediaError) else 'Erro durante a renderização.')
             raise
+
+    @staticmethod
+    def _job_workspace_estimate(job):
+        if not job or not job.original_video:
+            return 0
+        return estimate_media_workspace_bytes(getattr(job.original_video, 'size', 0))
+
+    @staticmethod
+    def _project_workspace_estimate(project, *, needs_proxy=False):
+        source_bytes = sum(
+            int(item.file_size or 0)
+            for item in project.block_media.all()
+            if item.camera_role == item.CameraRole.PRIMARY
+        )
+        return estimate_media_workspace_bytes(source_bytes, needs_proxy=needs_proxy)
 
     def _materialize(self, project, plugins, workdir):
         codes = {plugin.code for plugin in plugins}
@@ -2626,9 +2657,15 @@ class ExternalMediaPipeline:
         job = self._get_job(job_id)
         try:
             self._update(job, ExternalMediaJob.Status.EXTRACTING_AUDIO, 12, 'Preparando o áudio')
-            with TemporaryDirectory(prefix='connect-media-') as temp:
-                workdir = Path(temp)
-                video_path = workdir / f'original{Path(job.original_video.name).suffix.lower()}'
+            with JobWorkspace(
+                job.public_id,
+                'subtitle-analysis',
+                estimated_bytes=estimate_media_workspace_bytes(
+                    getattr(job.original_video, 'size', 0), needs_proxy=True,
+                ),
+            ) as workspace:
+                workdir = workspace.path
+                video_path = workspace.file('source', f'original{Path(job.original_video.name).suffix.lower()}')
                 self.storage.copy_to_local(job.original_video, video_path)
                 chunks = self.audio.extract(video_path, workdir)
                 self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 30, 'Preparando as legendas')
@@ -2678,9 +2715,15 @@ class ExternalMediaPipeline:
         job = self._get_job(job_id)
         try:
             self._update(job, ExternalMediaJob.Status.RENDERING, 86, 'Finalizando seu vídeo')
-            with TemporaryDirectory(prefix='connect-render-') as temp:
-                workdir = Path(temp)
-                video_path = workdir / f'original{Path(job.original_video.name).suffix.lower()}'
+            with JobWorkspace(
+                job.public_id,
+                'subtitle-render',
+                estimated_bytes=estimate_media_workspace_bytes(
+                    getattr(job.original_video, 'size', 0), output_count=max(1, len(job.output_languages)),
+                ),
+            ) as workspace:
+                workdir = workspace.path
+                video_path = workspace.file('source', f'original{Path(job.original_video.name).suffix.lower()}')
                 self.storage.copy_to_local(job.original_video, video_path)
                 source_report = self.quality.validate_media(video_path)
                 source_report.require_ok()

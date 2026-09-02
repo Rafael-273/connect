@@ -1,12 +1,12 @@
 from decimal import Decimal
 from contextlib import contextmanager
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 from celery import shared_task
 from django.conf import settings
 from django.core.files import File
 from django.db import connection
+from django.utils.text import slugify
 from django.utils import timezone
 
 from ..models.external_media import (
@@ -31,6 +31,7 @@ from .premiere_export import PremierePackageService
 from .services import ExternalMediaPipeline, ExternalMediaProjectPipeline, VideoAssemblyService
 from .subtitle_reviews import SubtitleReviewService
 from .timeline import InternalTimelineBuilder
+from .workspace import JobWorkspace, MediaWorkspaceGarbageCollector, estimate_media_workspace_bytes
 
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.prepare_subtitles')
@@ -41,6 +42,12 @@ def prepare_external_media(self, job_id):
 @shared_task(bind=True, autoretry_for=(), name='external_media.render_outputs')
 def render_external_media(self, job_id):
     ExternalMediaPipeline().render_outputs(job_id)
+
+
+@shared_task(name='external_media.cleanup_workspaces')
+def cleanup_external_media_workspaces():
+    """Safety net for scratch directories left by interrupted workers."""
+    return MediaWorkspaceGarbageCollector.collect()
 
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.run_project')
@@ -64,10 +71,13 @@ def create_project_preview(self, media_id):
     item.preview_error = ''
     item.save(update_fields=['preview_status', 'preview_error', 'update_at'])
     try:
-        with TemporaryDirectory(prefix='connect-project-preview-') as temp:
-            workdir = Path(temp)
-            source = workdir / f'source{Path(item.file.name).suffix.lower()}'
-            preview = workdir / 'preview.mp4'
+        with JobWorkspace(
+            item.pk,
+            'upload-preview',
+            estimated_bytes=estimate_media_workspace_bytes(getattr(item.file, 'size', 0), needs_proxy=True),
+        ) as workspace:
+            source = workspace.file('source', f'source{Path(item.file.name).suffix.lower()}')
+            preview = workspace.file('proxy', 'preview.mp4')
             _local_file(item.file, source)
             VideoAssemblyService().create_proxy(source, preview)
             with preview.open('rb') as handle:
@@ -86,10 +96,13 @@ def create_project_preview(self, media_id):
 def create_subtitle_review_preview(self, session_id):
     session = SubtitleReviewSession.objects.select_related('job').get(pk=session_id)
     source_file = session.job.original_video
-    with TemporaryDirectory(prefix='connect-subtitle-review-') as temp:
-        workdir = Path(temp)
-        source = workdir / f'source{Path(source_file.name).suffix.lower()}'
-        preview = workdir / 'preview.mp4'
+    with JobWorkspace(
+        session.pk,
+        'subtitle-review-preview',
+        estimated_bytes=estimate_media_workspace_bytes(getattr(source_file, 'size', 0), needs_proxy=True),
+    ) as workspace:
+        source = workspace.file('source', f'source{Path(source_file.name).suffix.lower()}')
+        preview = workspace.file('proxy', 'preview.mp4')
         _local_file(source_file, source)
         VideoAssemblyService().create_proxy(source, preview)
         with preview.open('rb') as handle:
@@ -232,10 +245,13 @@ def analyze_video_mastering(self, job_id):
         job.started_at = job.started_at or timezone.now()
         job.error_message = ''
         job.save(update_fields=['status', 'progress', 'current_step', 'started_at', 'error_message', 'update_at'])
-        with TemporaryDirectory(prefix='connect-mastering-analysis-') as temp:
-            workdir = Path(temp)
-            source = workdir / f'original{Path(job.original_video.name).suffix.lower()}'
-            audio = workdir / 'audio_extracted.wav'
+        with JobWorkspace(
+            job.public_id,
+            'mastering-analysis',
+            estimated_bytes=estimate_media_workspace_bytes(getattr(job.original_video, 'size', 0)),
+        ) as workspace:
+            source = workspace.file('source', f'original{Path(job.original_video.name).suffix.lower()}')
+            audio = workspace.file('audio', 'audio_extracted.wav')
             _local_file(job.original_video, source)
             runner = FFmpegRunner()
             _extract_audio(runner, source, audio)
@@ -269,12 +285,15 @@ def master_video(self, job_id):
         job.finished_at = None
         job.error_message = ''
         job.save(update_fields=['status', 'progress', 'current_step', 'started_at', 'finished_at', 'error_message', 'update_at'])
-        with TemporaryDirectory(prefix='connect-mastering-') as temp:
-            workdir = Path(temp)
-            source = workdir / f'original{Path(job.original_video.name).suffix.lower()}'
-            extracted = workdir / 'audio_extracted.wav'
-            mastered = workdir / 'audio_mastered.wav'
-            output = workdir / 'video_mastered.mp4'
+        with JobWorkspace(
+            job.public_id,
+            'mastering',
+            estimated_bytes=estimate_media_workspace_bytes(getattr(job.original_video, 'size', 0)),
+        ) as workspace:
+            source = workspace.file('source', f'original{Path(job.original_video.name).suffix.lower()}')
+            extracted = workspace.file('audio', 'audio_extracted.wav')
+            mastered = workspace.file('audio', 'audio_mastered.wav')
+            output = workspace.file('output', 'video_mastered.mp4')
             _local_file(job.original_video, source)
             runner = FFmpegRunner()
             _extract_audio(runner, source, extracted)
@@ -326,6 +345,13 @@ def _decimal_or_none(value):
     return Decimal(str(value)) if value is not None else None
 
 
+def _premiere_archive_filename(project):
+    stem = slugify(project.name)[:120]
+    if not stem:
+        stem = f'projeto-{str(project.public_id).split("-")[0]}'
+    return f'{stem}-premiere.zip'
+
+
 @shared_task(bind=True, autoretry_for=(), name='external_media.export_premiere_project')
 def export_premiere_project(self, export_id):
     export = ExternalMediaProjectExport.objects.select_related(
@@ -354,10 +380,10 @@ def export_premiere_project(self, export_id):
             'status', 'progress', 'current_step', 'started_at', 'finished_at',
             'error_message', 'update_at',
         ])
-        with TemporaryDirectory(prefix='connect-premiere-export-') as temp:
-            workdir = Path(temp)
-            package_root = workdir / 'package'
-            output_zip = workdir / 'premiere_project.zip'
+        with JobWorkspace(export.public_id, 'premiere-export') as workspace:
+            package_root = workspace.path / 'package'
+            archive_filename = _premiere_archive_filename(export.project)
+            output_zip = workspace.file('output', archive_filename)
             progress(
                 ExternalMediaProjectExport.Status.BUILDING_TIMELINE,
                 18,
@@ -375,7 +401,7 @@ def export_premiere_project(self, export_id):
             if export.timeline_json:
                 export.timeline_json.delete(save=False)
             with archive_path.open('rb') as handle:
-                export.archive.save('premiere_project.zip', File(handle), save=False)
+                export.archive.save(archive_filename, File(handle), save=False)
             with timeline_path.open('rb') as handle:
                 export.timeline_json.save('timeline.json', File(handle), save=False)
         export.compatibility = timeline.get('compatibility') or {}

@@ -2,10 +2,85 @@ from __future__ import annotations
 
 import json
 import zipfile
+from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from .exceptions import ExternalMediaError
+
+
+def json_compatible(value):
+    """Converts model numeric values into portable JSON primitives for exports."""
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {str(key): json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_compatible(item) for item in value]
+    return value
+
+
+@dataclass(frozen=True)
+class PremiereTransformPoint:
+    time_ms: float
+    center_x: float
+    center_y: float
+    scale: float
+
+
+class PremiereTransformAdapter:
+    """Converts renderer-neutral framing into FCP 7 XML Motion values."""
+
+    @classmethod
+    def adapt(cls, effect, asset, sequence, clip_start_ms=0):
+        if effect.get('coordinate_space') != 'normalized_source':
+            return cls._legacy_pixels(effect, sequence, clip_start_ms)
+
+        source_width = max(1.0, float(effect.get('source_width') or asset.get('width') or 1))
+        source_height = max(1.0, float(effect.get('source_height') or asset.get('height') or 1))
+        pixel_aspect_ratio = max(0.01, float(effect.get('pixel_aspect_ratio') or 1))
+        sequence_width = max(1.0, float(sequence['width']))
+        sequence_height = max(1.0, float(sequence['height']))
+        base_scale = max(
+            sequence_width / (source_width * pixel_aspect_ratio),
+            sequence_height / source_height,
+        )
+        result = []
+        for point in effect.get('keyframes') or []:
+            zoom = max(0.01, float(point.get('zoom') or 1))
+            scale_factor = base_scale * zoom
+            position_x = sequence_width / 2 - (
+                float(point.get('center_x', 0.5)) - 0.5
+            ) * source_width * pixel_aspect_ratio * scale_factor
+            position_y = sequence_height / 2 - (
+                float(point.get('center_y', 0.5)) - 0.5
+            ) * source_height * scale_factor
+            result.append(PremiereTransformPoint(
+                time_ms=max(0.0, float(point.get('time_ms') or 0) - clip_start_ms),
+                center_x=cls._xmeml_center(position_x, sequence_width),
+                center_y=cls._xmeml_center(position_y, sequence_height),
+                scale=round(scale_factor * 100, 6),
+            ))
+        return result
+
+    @classmethod
+    def _legacy_pixels(cls, effect, sequence, clip_start_ms):
+        return [
+            PremiereTransformPoint(
+                time_ms=max(0.0, float(point.get('time_ms') or 0) - clip_start_ms),
+                center_x=cls._xmeml_center(float(point.get('x') or 0), float(sequence['width'])),
+                center_y=cls._xmeml_center(float(point.get('y') or 0), float(sequence['height'])),
+                scale=float(point.get('scale') or 100),
+            )
+            for point in effect.get('keyframes') or []
+        ]
+
+    @staticmethod
+    def _xmeml_center(position, dimension):
+        # XMEML Basic Motion uses -100..100, where zero is the sequence center.
+        normalized = (position - dimension / 2) / (dimension / 2) * 100
+        return round(max(-100.0, min(100.0, normalized)), 6)
 
 
 class PremiereExporter:
@@ -87,6 +162,7 @@ class PremiereExporter:
         node = ET.SubElement(parent, 'clipitem', id=clip_id)
         self._text(node, 'name', clip.get('name') or asset['name'])
         self._text(node, 'enabled', 'TRUE')
+        self._text(node, 'alphatype', asset.get('alpha_mode') or 'none')
         source_fps = float(asset.get('fps') or sequence['fps'])
         self._rate(node, {
             'fps': source_fps,
@@ -107,7 +183,7 @@ class PremiereExporter:
         if media_type == 'video':
             for effect in clip.get('effects', []):
                 if effect.get('type') == 'transform':
-                    self._motion_filter(node, effect, sequence['fps'])
+                    self._motion_filter(node, effect, asset, sequence, clip)
         elif automation:
             self._volume_filter(node, automation, clip, sequence['fps'])
         return node
@@ -199,6 +275,8 @@ class PremiereExporter:
         media = ET.SubElement(file_node, 'media')
         if asset.get('type') == 'video':
             video = ET.SubElement(media, 'video')
+            if asset.get('alpha_mode'):
+                self._text(video, 'alphatype', asset['alpha_mode'])
             sample = ET.SubElement(video, 'samplecharacteristics')
             self._text(sample, 'width', asset.get('width') or sequence['width'])
             self._text(sample, 'height', asset.get('height') or sequence['height'])
@@ -209,7 +287,12 @@ class PremiereExporter:
             self._text(sample, 'samplerate', sequence['audio_sample_rate'])
             self._text(audio, 'channelcount', sequence['audio_channels'])
 
-    def _motion_filter(self, clip_node, effect, fps):
+    def _motion_filter(self, clip_node, effect, asset, sequence, clip):
+        points = PremiereTransformAdapter.adapt(
+            effect, asset, sequence, clip_start_ms=clip.get('timeline_in_ms', 0),
+        )
+        if not points:
+            return
         filter_node = ET.SubElement(clip_node, 'filter')
         effect_node = ET.SubElement(filter_node, 'effect')
         self._text(effect_node, 'name', 'Basic Motion')
@@ -222,16 +305,17 @@ class PremiereExporter:
             parameter = ET.SubElement(effect_node, 'parameter')
             self._text(parameter, 'parameterid', parameter_id)
             self._text(parameter, 'name', label)
-            for point in effect.get('keyframes', []):
+            for point in points:
                 keyframe = ET.SubElement(parameter, 'keyframe')
-                self._text(keyframe, 'when', self._frames(point['time_ms'], fps))
+                self._text(keyframe, 'when', self._frames(point.time_ms, sequence['fps']))
                 if key is None:
                     value = ET.SubElement(keyframe, 'value')
-                    self._text(value, 'horiz', point.get('x', 0))
-                    self._text(value, 'vert', point.get('y', 0))
+                    self._text(value, 'horiz', point.center_x)
+                    self._text(value, 'vert', point.center_y)
                 else:
-                    self._text(keyframe, 'value', point.get(key, 100))
-                self._text(keyframe, 'interp', 'smooth')
+                    self._text(keyframe, 'value', point.scale)
+                interpolation = ET.SubElement(keyframe, 'interpolation')
+                self._text(interpolation, 'name', 'FCPCurve')
 
     def _volume_filter(self, clip_node, automation, clip, fps):
         relevant = [
@@ -336,7 +420,7 @@ class ExportValidationService:
 class PremierePackageService:
     def build(self, project, package_root: Path, output_zip: Path, timeline_builder, progress=None):
         progress = progress or (lambda *args: None)
-        timeline = timeline_builder.build(project, package_root)
+        timeline = json_compatible(timeline_builder.build(project, package_root))
         progress('CONVERTING', 48, 'Convertendo a timeline para Adobe Premiere')
         timeline_path = package_root / 'Metadata' / 'timeline.json'
         timeline_path.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -344,7 +428,7 @@ class PremierePackageService:
         PremiereExporter().export(timeline, xml_path)
         progress('PACKAGING_ASSETS', 66, 'Organizando originais, áudio, legendas e LUTs')
         progress('VALIDATING', 78, 'Validando XML, referências e mídia offline')
-        report = ExportValidationService().validate(package_root, timeline, xml_path)
+        report = json_compatible(ExportValidationService().validate(package_root, timeline, xml_path))
         (package_root / 'Metadata' / 'validation.json').write_text(
             json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8',
         )
