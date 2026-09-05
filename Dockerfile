@@ -1,4 +1,7 @@
-FROM python:3.10.5 AS base
+# A versão fixa 3.10.5 usava Debian Bullseye, cujos pacotes de segurança já
+# não estão mais disponíveis de forma consistente. Bookworm mantém o FFmpeg
+# instalável também em imagens ARM64.
+FROM python:3.10-slim-bookworm AS base
 
 EXPOSE 8000
 WORKDIR /usr/src/platform

@@ -193,6 +193,13 @@ CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv('CELERY_TASK_SOFT_TIME_LIMIT', 21000
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_ACKS_LATE = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+# Preview generation can take as long as a full transcode for large 4K uploads.
+# Keep it off the main pipeline queue so a user can start processing while its
+# optional browser preview is still being generated.
+CELERY_TASK_ROUTES = {
+    'external_media.create_project_preview': {'queue': 'media_previews'},
+    'external_media.create_subtitle_review_preview': {'queue': 'media_previews'},
+}
 EXTERNAL_MEDIA_MAX_UPLOAD_MB = int(os.getenv('EXTERNAL_MEDIA_MAX_UPLOAD_MB', 10240))
 EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS = int(os.getenv('EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS', 1200))
 EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE = int(os.getenv('EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE', 40))
