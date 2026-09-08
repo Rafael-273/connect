@@ -2,8 +2,10 @@ import mimetypes
 import json
 import re
 import uuid
+from copy import deepcopy
 from pathlib import Path
 
+from PIL import Image, UnidentifiedImageError
 from django.conf import settings
 from django.contrib import messages
 from django.db import IntegrityError, transaction
@@ -49,16 +51,19 @@ from ..models.external_media import (
     ProjectBlockMedia,
     ProjectCustomBlock,
     ProjectSourceProxy,
+    ProjectOverlay,
+    OverlayPreset,
     SubtitleCue,
     SubtitleReviewSession,
     SubtitleTrack,
     VideoMasteringJob,
 )
-from ..external_media.services import ProjectService
+from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
 
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
-from ..external_media.preview import TimelineRevisionService
+from ..external_media.preview import PreviewCompositionService, TimelineRevisionService
+from ..external_media.overlays import OverlayAssetRenderer, OverlayTimelineService
 from ..external_media.services import StorageService
 from ..external_media.subtitle_reviews import SubtitleReviewService
 from .mixins import ExternalMediaRequiredMixin
@@ -400,6 +405,24 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
 
     def get(self, request, public_id):
         project = self.get_project(public_id)
+        project_overlays = OverlayTimelineService.ensure_project_overlays(project)
+        overlays_by_block = {}
+        for overlay in project_overlays:
+            overlay.form_fields = [
+                {
+                    'key': key,
+                    'label': options.get('label') or key.replace('_', ' ').title(),
+                    'required': bool(options.get('required')),
+                    'placeholder': options.get('placeholder', ''),
+                    'max_length': int(options.get('max_length') or 2048),
+                    'value': (overlay.content or {}).get(
+                        key, options.get('default', options.get('default_value', '')),
+                    ),
+                }
+                for key, options in (overlay.content_schema or {}).items()
+                if isinstance(options, dict)
+            ]
+            overlays_by_block.setdefault(overlay.block_id, []).append(overlay)
         restore_job = None
         restore_job_id = (project.configuration or {}).get('_editable_previous_render_job_id')
         if project.status == ExternalMediaProject.Status.DRAFT and restore_job_id:
@@ -423,6 +446,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 'has_default_video': ProjectService.file_exists(block.default_video),
                 'has_missing_default_video': bool(block.default_video and block.default_video.name),
                 'is_custom': False,
+                'overlays': overlays_by_block.get(block.pk, []),
             }
             for block in project.template_version.blocks.all()
         ]
@@ -433,6 +457,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             'has_default_video': False,
             'has_missing_default_video': False,
             'is_custom': True,
+            'overlays': [],
         } for block in project.custom_blocks.all())
         block_by_key = {
             f"{'c' if item['is_custom'] else 't'}-{item['definition'].pk}": item
@@ -842,6 +867,7 @@ class ExternalMediaProjectMediaStatusView(ExternalMediaRequiredMixin, View):
             'trim_url': reverse('external_media_project_media_trim', args=[public_id, item.pk]),
             'trim_start_ms': item.trim_start_ms,
             'trim_end_ms': item.trim_end_ms,
+            'trim_ranges': item.trim_ranges or [],
         })
 
 
@@ -859,12 +885,31 @@ class ExternalMediaProjectMediaTrimView(ExternalMediaRequiredMixin, View):
             end = float(end_value) if end_value else None
         except (TypeError, ValueError):
             return JsonResponse({'detail': 'Informe tempos de corte válidos.'}, status=400)
+        raw_ranges = request.POST.get('trim_ranges')
+        ranges = []
+        if raw_ranges:
+            try:
+                values = json.loads(raw_ranges)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return JsonResponse({'detail': 'Os trechos selecionados não são válidos.'}, status=400)
+            if not isinstance(values, list) or len(values) > 20:
+                return JsonResponse({'detail': 'Informe entre um e 20 trechos válidos.'}, status=400)
+            previous_end = -1
+            for value in values:
+                if not isinstance(value, dict):
+                    return JsonResponse({'detail': 'Os trechos selecionados não são válidos.'}, status=400)
+                range_start, range_end = float(value.get('start_seconds', -1)), float(value.get('end_seconds', -1))
+                if range_start < 0 or range_end <= range_start or range_start < previous_end:
+                    return JsonResponse({'detail': 'Os trechos precisam estar em ordem e não podem se sobrepor.'}, status=400)
+                ranges.append({'start_ms': ProjectBlockMediaForm.seconds_to_ms(range_start), 'end_ms': ProjectBlockMediaForm.seconds_to_ms(range_end)})
+                previous_end = range_end
         if start < 0 or (end is not None and (end < 0 or end <= start)):
             return JsonResponse({'detail': 'O fim do corte precisa ser maior que o início.'}, status=400)
 
-        item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(start) or 0
-        item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(end)
-        item.save(update_fields=['trim_start_ms', 'trim_end_ms', 'update_at'])
+        item.trim_ranges = ranges
+        item.trim_start_ms = ranges[0]['start_ms'] if ranges else (ProjectBlockMediaForm.seconds_to_ms(start) or 0)
+        item.trim_end_ms = ranges[0]['end_ms'] if ranges else ProjectBlockMediaForm.seconds_to_ms(end)
+        item.save(update_fields=['trim_start_ms', 'trim_end_ms', 'trim_ranges', 'update_at'])
         return JsonResponse({'ok': True})
 
 
@@ -996,8 +1041,58 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             return redirect('external_media_project_detail', public_id=public_id)
         revision = TimelineRevisionService.ensure_initial(project, self.member)
         session = TimelineRevisionService.session(project, self.member, revision)
+        # Revisions are immutable snapshots. Older ones were created before the
+        # normalized master was exposed to the browser, so enrich only this
+        # response rather than rewriting editorial history just to change a URL.
+        timeline = deepcopy(revision.timeline)
+        # Caption styling was added after some revision snapshots already existed.
+        # Enrich those read-only snapshots with the exact styles frozen on the job.
+        if project.render_job_id:
+            timeline['caption_styles'] = {
+                'source': PreviewCompositionService.subtitle_style_payload(project.render_job.subtitle_style),
+                'translated': PreviewCompositionService.subtitle_style_payload(
+                    project.render_job.translated_subtitle_style or project.render_job.subtitle_style,
+                ),
+                'source_language': project.template_version.original_language,
+            }
+            for cue in timeline.get('captions', []):
+                cue['is_source'] = cue.get('language') == project.template_version.original_language
+        job = project.render_job
+        if job and job.original_video and ProjectService.file_exists(job.original_video):
+            timeline['review_master_url'] = reverse(
+                'external_media_project_preview_master', kwargs={'public_id': project.public_id},
+            )
+            has_manual_transform = any(
+                item.get('type') == 'reframe'
+                and item.get('enabled', True)
+                and (item.get('metadata') or {}).get('manual_transform')
+                for item in revision.edit_decision_set.get('operations', [])
+            )
+            if not has_manual_transform and 'TRANSFORMS' in (timeline.get('fidelity') or {}):
+                timeline['fidelity']['TRANSFORMS'] = 'EXACT'
+        music = MusicService.selected_file(project.template_version)
+        timeline['has_music'] = bool(music and ProjectService.file_exists(music))
+        if music and ProjectService.file_exists(music):
+            timeline['music'] = {
+                'url': reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id}),
+                'volume': float(project.template_version.music_volume),
+                'fade_in_seconds': float(project.template_version.fade_in_seconds),
+                'fade_out_seconds': float(project.template_version.fade_out_seconds),
+                'ducking_enabled': bool(
+                    project.template_version.audio_mixing_enabled
+                    and project.template_version.audio_ducking_enabled
+                ),
+                'duck_db': float((project.template_version.audio_mixing_config or {}).get('base_duck_db', 14)),
+                'attack_ms': int((project.template_version.audio_mixing_config or {}).get('attack_ms', 140)),
+                'hold_ms': int((project.template_version.audio_mixing_config or {}).get('hold_ms', 300)),
+                'release_ms': int((project.template_version.audio_mixing_config or {}).get('release_ms', 850)),
+                'speech_gap_hold_ms': int((project.template_version.audio_mixing_config or {}).get('speech_gap_hold_ms', 1800)),
+            }
         return render(request, 'member/external_media/preview.html', self.media_context(
-            project=project, revision=revision, session=session,
+            project=project, revision=revision, session=session, timeline=timeline,
+            overlay_presets=list(OverlayPreset.objects.filter(is_active=True).values(
+                'code', 'name', 'overlay_type', 'style', 'position', 'animation',
+            )),
         ))
 
 
@@ -1014,6 +1109,39 @@ class ExternalMediaProjectPreviewSourceView(ExternalMediaRequiredMixin, View):
         return protected_file_response(request, proxy.proxy_file)
 
 
+class ExternalMediaProjectPreviewMasterView(ExternalMediaRequiredMixin, View):
+    """Serve the normalized review master, including the pipeline's auto reframe."""
+
+    def get(self, request, public_id):
+        project = get_object_or_404(
+            ExternalMediaProject.objects.select_related('render_job'), public_id=public_id,
+        )
+        job = project.render_job
+        if not job or not job.original_video or not ProjectService.file_exists(job.original_video):
+            raise Http404('A prévia com enquadramento final ainda não está disponível.')
+        request.GET = request.GET.copy()
+        request.GET['preview'] = '1'
+        return protected_file_response(request, job.original_video)
+
+
+class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
+    """Streams the template music so it can be synchronized in the browser."""
+
+    def get(self, request, public_id):
+        project = get_object_or_404(
+            ExternalMediaProject.objects.select_related(
+                'template_version__background_music',
+            ).prefetch_related('template_version__plugins'),
+            public_id=public_id,
+        )
+        music = MusicService.selected_file(project.template_version)
+        if not music or not ProjectService.file_exists(music):
+            raise Http404('A trilha deste template não está disponível.')
+        request.GET = request.GET.copy()
+        request.GET['preview'] = '1'
+        return protected_file_response(request, music)
+
+
 class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id, decision_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
@@ -1024,6 +1152,19 @@ class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
             )
         except ValueError as exc:
             return JsonResponse({'error': str(exc)}, status=404)
+        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+
+
+class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        try:
+            revision = TimelineRevisionService.create_manual_cut(
+                project, self.member, payload.get('start_ms'), payload.get('end_ms'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
         return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
 
 
@@ -1099,6 +1240,109 @@ class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View)
         except ValueError as exc:
             return JsonResponse({'error': str(exc)}, status=404)
         return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+
+
+class ExternalMediaProjectOverlayDataView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, overlay_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        overlay = get_object_or_404(ProjectOverlay, project=project, overlay_id=overlay_id)
+        if project.status != ExternalMediaProject.Status.DRAFT:
+            messages.warning(request, 'Edite overlays processados diretamente no Preview.')
+            return redirect('external_media_project_detail', public_id=public_id)
+        content = {
+            key: request.POST.get(f'content_{key}', '')
+            for key in (overlay.content_schema or {})
+        }
+        image_upload = request.FILES.get('image_file')
+        try:
+            if image_upload:
+                if not str(image_upload.content_type or '').startswith('image/'):
+                    raise ValueError('Selecione um arquivo de imagem válido.')
+                if image_upload.size > 20 * 1024 * 1024:
+                    raise ValueError('A imagem deve ter no máximo 20 MB.')
+                try:
+                    Image.open(image_upload).verify()
+                    image_upload.seek(0)
+                except (UnidentifiedImageError, OSError, ValueError) as exc:
+                    raise ValueError('A imagem enviada está corrompida ou não é suportada.') from exc
+            if not overlay.is_required and not OverlayTimelineService.has_renderable_content(
+                overlay.overlay_type, content, image_upload or overlay.image_file,
+            ):
+                overlay.content = content
+            else:
+                overlay.content = OverlayTimelineService.validate_content(
+                    overlay.overlay_type, overlay.content_schema, content,
+                    image_upload or overlay.image_file,
+                )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        else:
+            update_fields = ['content', 'update_at']
+            if image_upload:
+                overlay.image_file.save(image_upload.name, image_upload, save=False)
+                update_fields.append('image_file')
+            overlay.save(update_fields=update_fields)
+            messages.success(request, 'Conteúdo visual salvo.')
+        return redirect('external_media_project_detail', public_id=public_id)
+
+
+class ExternalMediaProjectPreviewOverlayView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, overlay_id=None):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        create = overlay_id is None
+        if create:
+            overlay_id = f'manual-{uuid.uuid4()}'
+        try:
+            preset_code = payload.get('preset')
+            if preset_code:
+                preset = OverlayPreset.objects.filter(code=preset_code, is_active=True).first()
+                if not preset:
+                    raise ValueError('Preset de overlay não encontrado.')
+                payload['type'] = payload.get('type') or preset.overlay_type
+                payload['style'] = {**preset.style, **(payload.get('style') or {})}
+                payload['position'] = {**preset.position, **(payload.get('position') or {})}
+                payload['animation'] = {**preset.animation, **(payload.get('animation') or {})}
+            if create:
+                payload['content'] = OverlayTimelineService.validate_content(
+                    str(payload.get('type') or 'TEXT').upper(), {}, payload.get('content') or {},
+                )
+            if not create and not payload.get('delete'):
+                current = project.current_timeline_revision
+                target = next(
+                    (item for item in ((current.timeline if current else {}).get('overlays') or []) if item.get('id') == overlay_id),
+                    None,
+                )
+                if target and 'content' in payload:
+                    payload['content'] = OverlayTimelineService.validate_content(
+                        target.get('type'), target.get('content_schema') or {}, payload['content'],
+                        target.get('image_storage_name'),
+                    )
+            revision = TimelineRevisionService.mutate_overlay(
+                project, self.member, overlay_id, payload,
+                create=create, delete=bool(payload.get('delete')),
+            )
+        except ValueError as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline, 'overlay_id': overlay_id})
+
+
+class ExternalMediaProjectPreviewOverlayAssetView(ExternalMediaRequiredMixin, View):
+    def get(self, request, public_id, overlay_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        revision = project.current_timeline_revision or TimelineRevisionService.ensure_initial(project, self.member)
+        overlay = next(
+            (item for item in (revision.timeline.get('overlays') or []) if item.get('id') == overlay_id),
+            None,
+        )
+        if not overlay:
+            raise Http404('Overlay não encontrado.')
+        width = project.template_version.preset.width or 1920
+        height = project.template_version.preset.height or 1080
+        with TemporaryDirectory(prefix='connect-overlay-preview-') as temp:
+            output = Path(temp) / 'overlay.png'
+            OverlayAssetRenderer().render(overlay, width, height, output)
+            return HttpResponse(output.read_bytes(), content_type='image/png')
 
 
 class ExternalMediaProjectPreviewSessionView(ExternalMediaRequiredMixin, View):

@@ -15,6 +15,7 @@ from ...forms.admin_external_media import (
     AdminBackgroundMusicForm,
     AdminColorLUTForm,
     AdminMasteringProfileForm,
+    AdminOverlayPresetForm,
     AdminMediaTemplateBlockFormSet,
     AdminMediaTemplateForm,
     AdminMediaTemplateVersionForm,
@@ -32,6 +33,7 @@ from ...models.external_media import (
     MasteringProfile,
     MediaTemplate,
     MediaTemplateVersion,
+    OverlayPreset,
     RenderPreset,
     SpeechFillerTerm,
     SubtitleStyle,
@@ -354,6 +356,7 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
         background_musics = list(BackgroundMusicTrack.objects.order_by('category', 'name'))
         color_luts = list(ColorLUT.objects.order_by('name'))
         mastering_profiles = list(MasteringProfile.objects.order_by('name'))
+        overlay_presets = list(OverlayPreset.objects.filter(is_active=True).order_by('name'))
         if is_create:
             title = 'Novo Template de Mídia'
         elif template.pk:
@@ -378,6 +381,17 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             'color_lut_rows': color_luts,
             'color_lut_defaults_json': json.dumps({str(lut.pk): lut.default_intensity for lut in color_luts}),
             'mastering_profile_rows': mastering_profiles,
+            'overlay_presets': overlay_presets,
+            'overlay_preset_rows': [
+                {
+                    'code': item.code,
+                    'name': item.name,
+                    'overlay_type': item.overlay_type,
+                    'position': item.position,
+                    'animation': item.animation,
+                }
+                for item in overlay_presets
+            ],
             'preset_form': AdminRenderPresetForm(prefix='preset'),
             'style_form': AdminSubtitleStyleForm(prefix='style'),
             'filler_term_form': AdminSpeechFillerTermForm(prefix='fillerterm'),
@@ -416,6 +430,42 @@ class AdminExternalMediaAssetRedirectMixin:
         ):
             return redirect(target)
         return redirect('admin_external_media_templates')
+
+
+class AdminExternalMediaOverlayPresetListView(LoginRequiredMixin, AdminRequiredMixin, View):
+    template_name = 'admin_panel/external_media/overlay_presets.html'
+
+    def get(self, request, preset_id=None):
+        instance = get_object_or_404(OverlayPreset, pk=preset_id) if preset_id else None
+        return render(request, self.template_name, {
+            'presets': OverlayPreset.objects.order_by('name'),
+            'form': AdminOverlayPresetForm(instance=instance),
+            'editing': instance,
+        })
+
+    def post(self, request, preset_id=None):
+        instance = get_object_or_404(OverlayPreset, pk=preset_id) if preset_id else None
+        form = AdminOverlayPresetForm(request.POST, instance=instance)
+        if form.is_valid():
+            preset = form.save()
+            messages.success(request, f'Preset visual "{preset.name}" salvo.')
+            return redirect('admin_external_media_overlay_presets')
+        return render(request, self.template_name, {
+            'presets': OverlayPreset.objects.order_by('name'), 'form': form, 'editing': instance,
+        })
+
+
+class AdminExternalMediaOverlayPresetDeleteView(LoginRequiredMixin, AdminRequiredMixin, View):
+    def post(self, request, preset_id):
+        preset = get_object_or_404(OverlayPreset, pk=preset_id)
+        try:
+            preset.delete()
+            messages.success(request, 'Preset visual removido.')
+        except ProtectedError:
+            preset.is_active = False
+            preset.save(update_fields=['is_active', 'update_at'])
+            messages.warning(request, 'O preset está em uso e foi apenas desativado.')
+        return redirect('admin_external_media_overlay_presets')
 
 
 class AdminExternalMediaPresetSaveView(LoginRequiredMixin, AdminRequiredMixin, AdminExternalMediaAssetRedirectMixin, View):

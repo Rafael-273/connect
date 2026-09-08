@@ -2,6 +2,7 @@ import uuid
 from pathlib import Path
 
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.serializers.json import DjangoJSONEncoder
 from django.core.files.storage import storages
 from django.db import models
 from django.utils import timezone
@@ -74,6 +75,11 @@ def external_media_project_upload_path(instance, filename):
 def external_media_project_preview_path(instance, filename):
     block_ref = getattr(instance, 'block_id', None) or getattr(instance.block, 'pk', 'block')
     return f'external_media/projects/{instance.project.public_id}/b{block_ref}/previews/{instance.position:03d}.mp4'
+
+
+def external_media_overlay_asset_path(instance, filename):
+    suffix = Path(filename).suffix.lower()
+    return f'external_media/projects/{instance.project.public_id}/overlays/{instance.overlay_id}{suffix}'
 
 
 def external_media_source_proxy_path(instance, filename):
@@ -171,6 +177,42 @@ class SubtitleStyle(BaseModel):
         ordering = ['name']
         verbose_name = 'Estilo de legenda'
         verbose_name_plural = 'Estilos de legenda'
+
+    def __str__(self):
+        return self.name
+
+
+class OverlayPreset(BaseModel):
+    """Reusable visual design for data-driven timeline overlays."""
+
+    class Type(models.TextChoices):
+        TEXT = 'TEXT', 'Texto'
+        QR_CODE = 'QR_CODE', 'QR Code'
+        QR_CODE_CARD = 'QR_CODE_CARD', 'QR Code + CTA'
+        IMAGE = 'IMAGE', 'Imagem'
+
+    name = models.CharField(max_length=120, unique=True)
+    code = models.SlugField(max_length=80, unique=True)
+    overlay_type = models.CharField(max_length=24, choices=Type.choices, default=Type.TEXT)
+    style = models.JSONField(default=dict, blank=True)
+    position = models.JSONField(default=dict, blank=True)
+    animation = models.JSONField(default=dict, blank=True)
+    timing_mode = models.CharField(
+        max_length=24,
+        choices=[
+            ('BLOCK_START', 'Início do bloco'),
+            ('BLOCK_END', 'Final do bloco'),
+            ('AUTO_BEST_MOMENT', 'Melhor momento automático'),
+        ],
+        default='BLOCK_START',
+    )
+    duration_ms = models.PositiveIntegerField(default=5000)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Preset de overlay'
+        verbose_name_plural = 'Presets de overlays'
 
     def __str__(self):
         return self.name
@@ -943,6 +985,12 @@ class MediaTemplateBlock(BaseModel):
         verbose_name='Remover voz de fundo',
         help_text='Remove falas isoladas de um entrevistador/voz sem microfone. Sobreposições são preservadas.',
     )
+    overlay_definitions = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='Overlays deste bloco',
+        help_text='Definições estruturadas de textos, QR Codes e imagens preenchidas em cada projeto.',
+    )
     default_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
@@ -1007,7 +1055,7 @@ class ExternalMediaProject(BaseModel):
         MediaTemplateVersion, on_delete=models.PROTECT, related_name='projects',
     )
     created_by = models.ForeignKey(Member, on_delete=models.PROTECT, related_name='external_media_projects')
-    configuration = models.JSONField(default=dict, blank=True)
+    configuration = models.JSONField(default=dict, blank=True, encoder=DjangoJSONEncoder)
     status = models.CharField(max_length=24, choices=Status.choices, default=Status.DRAFT)
     progress = models.PositiveSmallIntegerField(default=0)
     current_step = models.CharField(max_length=180, blank=True)
@@ -1119,6 +1167,10 @@ class ProjectBlockMedia(BaseModel):
     duration_ms = models.PositiveBigIntegerField(blank=True, null=True)
     trim_start_ms = models.PositiveBigIntegerField(default=0)
     trim_end_ms = models.PositiveBigIntegerField(blank=True, null=True)
+    trim_ranges = models.JSONField(
+        default=list, blank=True,
+        help_text='Trechos preservados do vídeo, em milissegundos e na ordem de reprodução.',
+    )
     file_size = models.PositiveBigIntegerField(default=0)
     thumbnail = models.ImageField(
         upload_to=external_media_project_upload_path,
@@ -1143,6 +1195,56 @@ class ProjectBlockMedia(BaseModel):
 
     def __str__(self):
         return f'{self.project}: {(self.block or self.custom_block).name} #{self.position}'
+
+
+class ProjectOverlay(BaseModel):
+    """Project content/overrides. The composed InternalTimeline remains the render source."""
+
+    class Source(models.TextChoices):
+        TEMPLATE = 'TEMPLATE', 'Template'
+        MANUAL = 'MANUAL', 'Adicionado no preview'
+
+    class TimingMode(models.TextChoices):
+        BLOCK_START = 'BLOCK_START', 'Início do bloco'
+        BLOCK_END = 'BLOCK_END', 'Final do bloco'
+        MANUAL = 'MANUAL', 'Manual'
+        AUTO_BEST_MOMENT = 'AUTO_BEST_MOMENT', 'Melhor momento automático'
+
+    class Portability(models.TextChoices):
+        PORTABLE = 'PORTABLE', 'Editável'
+        APPROXIMATE = 'APPROXIMATE', 'Aproximado'
+        PRE_RENDERED = 'PRE_RENDERED', 'Pré-renderizado'
+
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='overlays')
+    block = models.ForeignKey(MediaTemplateBlock, on_delete=models.SET_NULL, related_name='project_overlays', null=True, blank=True)
+    overlay_id = models.CharField(max_length=160)
+    source = models.CharField(max_length=16, choices=Source.choices, default=Source.TEMPLATE)
+    overlay_type = models.CharField(max_length=24, choices=OverlayPreset.Type.choices)
+    purpose = models.CharField(max_length=80, blank=True)
+    preset = models.ForeignKey(OverlayPreset, on_delete=models.PROTECT, related_name='project_overlays', null=True, blank=True)
+    content_schema = models.JSONField(default=dict, blank=True)
+    content = models.JSONField(default=dict, blank=True)
+    position = models.JSONField(default=dict, blank=True)
+    style = models.JSONField(default=dict, blank=True)
+    animation = models.JSONField(default=dict, blank=True)
+    timing_mode = models.CharField(max_length=24, choices=TimingMode.choices, default=TimingMode.BLOCK_START)
+    start_ms = models.PositiveBigIntegerField(default=0)
+    end_ms = models.PositiveBigIntegerField(blank=True, null=True)
+    duration_ms = models.PositiveIntegerField(default=5000)
+    allowed_overrides = models.JSONField(default=list, blank=True)
+    portability = models.CharField(max_length=16, choices=Portability.choices, default=Portability.APPROXIMATE)
+    image_file = models.FileField(upload_to=external_media_overlay_asset_path, storage=get_external_media_storage, blank=True, max_length=500)
+    is_required = models.BooleanField(default=False)
+    is_enabled = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['block__order', 'created_at', 'pk']
+        constraints = [
+            models.UniqueConstraint(fields=['project', 'overlay_id'], name='unique_project_overlay_id'),
+        ]
+
+    def __str__(self):
+        return f'{self.project}: {self.overlay_id}'
 
 
 class ProjectSourceProxy(BaseModel):

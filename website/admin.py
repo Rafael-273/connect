@@ -4,7 +4,7 @@ from .models.schedule import ScaleDivision, DivisionMember
 from .models.external_media import (
     ExternalMediaJob, ExternalMediaProject, ExternalMediaProjectExport, GlossaryTerm, MasteringProfile, MediaAsset,
     MediaTemplate, MediaTemplateBlock, MediaTemplatePlugin, MediaTemplateVersion,
-    ProjectBlockMedia, ProjectPipelineStep, ProxyProfile, RenderPreset, SubtitleCue, SubtitleStyle,
+    OverlayPreset, ProjectBlockMedia, ProjectOverlay, ProjectPipelineStep, ProxyProfile, RenderPreset, SubtitleCue, SubtitleStyle,
     SubtitleTrack, VideoMasteringJob,
 )
 from django.utils import timezone
@@ -20,6 +20,21 @@ admin.site.register(GlossaryTerm)
 admin.site.register(RenderPreset)
 admin.site.register(ProxyProfile)
 admin.site.register(SubtitleStyle)
+
+
+@admin.register(OverlayPreset)
+class OverlayPresetAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'overlay_type', 'is_active')
+    list_filter = ('overlay_type', 'is_active')
+    search_fields = ('name', 'code')
+    prepopulated_fields = {'code': ('name',)}
+
+
+@admin.register(ProjectOverlay)
+class ProjectOverlayAdmin(admin.ModelAdmin):
+    list_display = ('overlay_id', 'project', 'overlay_type', 'source', 'is_enabled')
+    list_filter = ('overlay_type', 'source', 'is_enabled')
+    search_fields = ('overlay_id', 'project__name', 'purpose')
 
 
 @admin.register(MasteringProfile)
@@ -43,6 +58,7 @@ class MediaTemplateBlockInline(admin.StackedInline):
     fields = (
         'key', 'name', 'description', 'order', 'is_required', 'allows_multiple',
         'min_occurrences', 'max_occurrences', 'skip_extra_processing', 'default_video',
+        'overlay_definitions',
     )
 
     def has_add_permission(self, request, obj=None):
@@ -141,6 +157,8 @@ class MediaTemplateVersionAdmin(admin.ModelAdmin):
                     order=item.order, is_required=item.is_required, allows_multiple=item.allows_multiple,
                     min_occurrences=item.min_occurrences, max_occurrences=item.max_occurrences,
                     skip_extra_processing=item.skip_extra_processing,
+                    remove_background_voice=item.remove_background_voice,
+                    overlay_definitions=list(item.overlay_definitions or []),
                     default_video=item.default_video.name,
                 ) for item in source.blocks.all()
             ])

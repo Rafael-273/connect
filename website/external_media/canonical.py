@@ -190,7 +190,7 @@ class SourceManifestBuilder:
             if not field:
                 return
             entity = custom_block or block
-            sources.append({
+            base = {
                 'id': source_id,
                 'kind': kind,
                 'role': role,
@@ -219,8 +219,25 @@ class SourceManifestBuilder:
                     # source enters the legacy sequential renderer.
                     'render_enabled': getattr(media, 'camera_role', 'PRIMARY') == 'PRIMARY',
                 },
-            })
-            position += 1
+            }
+            ranges = getattr(media, 'trim_ranges', None) or []
+            valid_ranges = []
+            for item in ranges:
+                if not isinstance(item, dict):
+                    continue
+                start, end = _int(item.get('start_ms')), _int(item.get('end_ms'))
+                if end and end > start:
+                    valid_ranges.append({'start_ms': start, 'end_ms': end})
+            if not valid_ranges:
+                sources.append(base)
+                position += 1
+                return
+            for index, trim in enumerate(valid_ranges, start=1):
+                sources.append({
+                    **base, 'id': f'{source_id}-trecho-{index}', 'position': position,
+                    'trim': trim, 'segment_index': index,
+                })
+                position += 1
 
         # Keep the current capability semantics; intro/outro remain absent until
         # a template enables them through the same effective resolver.

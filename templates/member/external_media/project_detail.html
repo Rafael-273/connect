@@ -111,12 +111,12 @@
         <div class="flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 media-sort-item" draggable="{% if media.preview_status == 'READY' %}true{% else %}false{% endif %}" data-media-id="{{ media.pk }}">
             <div class="flex items-center min-w-0 gap-3">
                 <button type="button" class="text-gray-400 cursor-grab active:cursor-grabbing p-1 {% if media.preview_status != 'READY' %}invisible{% endif %}" title="Arraste para mudar a ordem"><i class="fas fa-grip-vertical"></i></button>
-                <div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.camera_label|default:"Câmera principal" }} · {{ media.file_size|filesizeformat }}{% if media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div>
+                <div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.camera_label|default:"Câmera principal" }} · {{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div>
             </div>
             <div class="flex items-center gap-1 shrink-0">
                 {% if media.preview_status == 'READY' %}
                 <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button>
-                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">{% if media.trim_start_ms or media.trim_end_ms %}Editar corte{% else %}Cortar{% endif %}</span></button>
+                <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges|default:'[]'|escapejs }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">{% if media.trim_ranges or media.trim_start_ms or media.trim_end_ms %}Editar corte{% else %}Cortar{% endif %}</span></button>
                 {% elif media.preview_status == 'ERROR' %}
                 <span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>
                 {% else %}
@@ -142,6 +142,25 @@
         {% for media in item.missing_media %}
         <div class="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 mb-2"><div class="min-w-0"><strong class="block text-amber-900">Arquivo não disponível</strong><span class="text-xs text-amber-800">{{ media.original_filename }} — envie o vídeo novamente.</span></div><form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover referência antiga"><i class="fas fa-trash"></i></button></form></div>
         {% endfor %}
+        {% if item.overlays %}
+        <div class="mt-4 space-y-3">
+            {% for overlay in item.overlays %}
+            <form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_overlay_data' project.public_id overlay.overlay_id %}" class="rounded-xl border border-red-100 bg-red-50/40 p-4">
+                {% csrf_token %}
+                <div class="flex items-center gap-2 mb-3"><i class="fas {% if overlay.overlay_type == 'TEXT' %}fa-font{% elif overlay.overlay_type == 'IMAGE' %}fa-image{% else %}fa-qrcode{% endif %} text-red-700"></i><strong>{{ overlay.purpose|default:overlay.get_overlay_type_display }}</strong>{% if overlay.preset %}<span class="text-xs text-gray-500">· {{ overlay.preset.name }}</span>{% endif %}</div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    {% for field in overlay.form_fields %}
+                    <label class="text-sm font-semibold text-gray-700 {% if overlay.form_fields|length == 1 %}sm:col-span-2{% endif %}">{{ field.label }}{% if field.required %} <span class="text-red-600">*</span>{% endif %}<input type="text" name="content_{{ field.key }}" value="{{ field.value }}" placeholder="{{ field.placeholder }}" maxlength="{{ field.max_length }}" {% if field.required %}required{% endif %} class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal"></label>
+                    {% endfor %}
+                    {% if overlay.overlay_type == 'IMAGE' %}
+                    <label class="text-sm font-semibold text-gray-700 sm:col-span-2">Imagem{% if overlay.is_required %} <span class="text-red-600">*</span>{% endif %}<input type="file" name="image_file" accept="image/png,image/jpeg,image/webp" {% if overlay.is_required and not overlay.image_file %}required{% endif %} class="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal">{% if overlay.image_file %}<small class="block mt-1 text-gray-500">Arquivo atual: {{ overlay.image_file.name }}</small>{% endif %}</label>
+                    {% endif %}
+                </div>
+                <div class="flex justify-end mt-3"><button class="media-btn media-muted text-sm"><i class="fas fa-floppy-disk"></i>Salvar conteúdo</button></div>
+            </form>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% if not item.has_default_video %}
         {% if item.definition.max_occurrences == 0 or item.media|length < item.definition.max_occurrences %}
         <div class="hidden space-y-2 mb-3" data-upload-results></div>
@@ -808,7 +827,7 @@
 <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-media-trim-modal aria-hidden="true">
     <section class="w-full max-w-4xl rounded-2xl bg-white p-4 sm:p-5 shadow-2xl">
         <div class="flex items-center justify-between gap-4 mb-4">
-            <div><h2 class="font-black text-lg truncate" data-media-trim-title>Cortar vídeo</h2><p class="text-sm text-gray-500">Escolha o trecho que será usado no processamento final.</p></div>
+            <div><h2 class="font-black text-lg truncate" data-media-trim-title>Cortar vídeo</h2><p class="text-sm text-gray-500">Escolha um ou mais trechos. Eles serão unidos na ordem exibida.</p></div>
             <button type="button" class="media-btn media-muted !px-3 !py-2" data-media-trim-close aria-label="Fechar"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="media-trim-player">
@@ -828,6 +847,10 @@
         </div>
         <input type="hidden" data-media-trim-start>
         <input type="hidden" data-media-trim-end>
+        <div class="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2"><div><strong class="text-sm text-gray-800">Trechos preservados</strong><p class="text-xs text-gray-500 mt-0.5">Ajuste o trecho ativo na linha do tempo e adicione outro quando precisar.</p></div><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim-add><i class="fas fa-plus"></i>Adicionar trecho</button></div>
+            <div class="flex flex-wrap gap-2 mt-3" data-media-trim-ranges></div>
+        </div>
         <p class="hidden text-sm text-red-700 mt-3" data-media-trim-error></p>
         <div class="flex flex-wrap items-center justify-between gap-3 mt-5">
             <p class="flex items-center gap-2 text-xs text-gray-500"><i class="fas fa-circle-info text-gray-400"></i>Prévia otimizada para edição. O vídeo final mantém a qualidade original.</p>
@@ -883,17 +906,21 @@
     const trimPlayhead = trimModal?.querySelector('[data-media-trim-playhead]');
     const trimStartHandle = trimModal?.querySelector('[data-media-trim-start-handle]');
     const trimEndHandle = trimModal?.querySelector('[data-media-trim-end-handle]');
+    const trimRangesList = trimModal?.querySelector('[data-media-trim-ranges]');
+    const trimAddRange = trimModal?.querySelector('[data-media-trim-add]');
     let trimUrl = '';
     let activeTrimHandle = null;
+    let trimRanges = [];
+    let activeTrimRange = 0;
     const trimDuration = () => Number.isFinite(trimPlayer?.duration) && trimPlayer.duration > 0 ? trimPlayer.duration : 0;
     const clampTrim = (value, minimum, maximum) => Math.min(Math.max(Number.isFinite(value) ? value : minimum, minimum), maximum);
     const formatTrimTime = (value) => {
         const seconds = Math.max(0, Math.floor(value || 0));
         return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
     };
-    const selectedTrimStart = () => clampTrim(parseFloat(trimStart?.value || '0'), 0, trimDuration());
+    const selectedTrimStart = () => clampTrim(Number(trimRanges[activeTrimRange]?.start_seconds ?? parseFloat(trimStart?.value || '0')), 0, trimDuration());
     const selectedTrimEnd = () => {
-        const value = parseFloat(trimEnd?.value || '');
+        const value = Number(trimRanges[activeTrimRange]?.end_seconds ?? parseFloat(trimEnd?.value || ''));
         return Number.isFinite(value) ? clampTrim(value, selectedTrimStart(), trimDuration()) : trimDuration();
     };
     const syncTrimTimeline = () => {
@@ -913,14 +940,33 @@
     };
     const setTrimStart = (value) => {
         const end = selectedTrimEnd();
-        if (trimStart) trimStart.value = clampTrim(value, 0, Math.max(0, end - 0.1)).toFixed(3);
+        const previousEnd = activeTrimRange ? trimRanges[activeTrimRange - 1].end_seconds + .01 : 0;
+        const start = clampTrim(value, previousEnd, Math.max(previousEnd, end - 0.1));
+        if (trimRanges[activeTrimRange]) trimRanges[activeTrimRange].start_seconds = start;
+        if (trimStart) trimStart.value = start.toFixed(3);
+        renderTrimRanges();
         syncTrimTimeline();
     };
     const setTrimEnd = (value) => {
         const duration = trimDuration();
-        const end = clampTrim(value, Math.min(duration, selectedTrimStart() + 0.1), duration);
+        const nextStart = activeTrimRange < trimRanges.length - 1 ? trimRanges[activeTrimRange + 1].start_seconds - .01 : duration;
+        const end = clampTrim(value, Math.min(nextStart, selectedTrimStart() + 0.1), nextStart);
+        if (trimRanges[activeTrimRange]) trimRanges[activeTrimRange].end_seconds = end;
         if (trimEnd) trimEnd.value = end >= duration - 0.02 ? '' : end.toFixed(3);
+        renderTrimRanges();
         syncTrimTimeline();
+    };
+    const renderTrimRanges = () => {
+        if (!trimRangesList) return;
+        trimRangesList.replaceChildren(...trimRanges.map((range, index) => {
+            const item = document.createElement('div');
+            item.className = `inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs ${index === activeTrimRange ? 'border-red-300 bg-red-50 text-red-800' : 'border-gray-200 bg-white text-gray-600'}`;
+            const select = document.createElement('button'); select.type = 'button'; select.textContent = `Trecho ${index + 1}: ${formatTrimTime(range.start_seconds)}–${formatTrimTime(range.end_seconds)}`;
+            select.onclick = () => { activeTrimRange = index; trimStart.value = range.start_seconds.toFixed(3); trimEnd.value = range.end_seconds.toFixed(3); trimPlayer.currentTime = range.start_seconds; renderTrimRanges(); syncTrimTimeline(); };
+            item.append(select);
+            if (trimRanges.length > 1) { const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'ml-1 text-red-600'; remove.innerHTML = '<i class="fas fa-xmark"></i>'; remove.onclick = () => { trimRanges.splice(index, 1); activeTrimRange = Math.min(activeTrimRange, trimRanges.length - 1); const active = trimRanges[activeTrimRange]; trimStart.value = active.start_seconds.toFixed(3); trimEnd.value = active.end_seconds.toFixed(3); renderTrimRanges(); syncTrimTimeline(); }; item.append(remove); }
+            return item;
+        }));
     };
     const trimPointerTime = (event) => {
         const rect = trimRail?.getBoundingClientRect();
@@ -954,8 +1000,11 @@
         if (!trimModal || !trimPlayer || !trimStart || !trimEnd) return;
         trimUrl = button.dataset.mediaTrimUrl || '';
         trimTitle.textContent = `Cortar: ${button.dataset.mediaName || 'vídeo'}`;
-        trimStart.value = ((Number(button.dataset.mediaTrimStart) || 0) / 1000).toFixed(3);
-        trimEnd.value = button.dataset.mediaTrimEnd ? (Number(button.dataset.mediaTrimEnd) / 1000).toFixed(3) : '';
+        try { trimRanges = (JSON.parse(button.dataset.mediaTrimRanges || '[]') || []).map(item => ({start_seconds: Number(item.start_ms) / 1000, end_seconds: Number(item.end_ms) / 1000})).filter(item => Number.isFinite(item.start_seconds) && Number.isFinite(item.end_seconds) && item.end_seconds > item.start_seconds); } catch (_) { trimRanges = []; }
+        if (!trimRanges.length) trimRanges = [{start_seconds: (Number(button.dataset.mediaTrimStart) || 0) / 1000, end_seconds: button.dataset.mediaTrimEnd ? Number(button.dataset.mediaTrimEnd) / 1000 : 0}];
+        activeTrimRange = 0;
+        trimStart.value = trimRanges[0].start_seconds.toFixed(3);
+        trimEnd.value = trimRanges[0].end_seconds ? trimRanges[0].end_seconds.toFixed(3) : '';
         trimError?.classList.add('hidden');
         trimPlayer.src = `${button.dataset.mediaUrl}?preview=1`;
         trimPlayer.load();
@@ -966,7 +1015,7 @@
     trimModal?.querySelector('[data-media-trim-set-start]')?.addEventListener('click', () => setTrimStart(trimPlayer.currentTime || 0));
     trimModal?.querySelector('[data-media-trim-set-end]')?.addEventListener('click', () => setTrimEnd(trimPlayer.currentTime || trimDuration()));
     trimModal?.querySelector('[data-media-trim-reset]')?.addEventListener('click', () => { if (trimStart) trimStart.value = '0.000'; if (trimEnd) trimEnd.value = ''; trimPlayer.currentTime = 0; syncTrimTimeline(); });
-    trimPlayer?.addEventListener('loadedmetadata', syncTrimTimeline);
+    trimPlayer?.addEventListener('loadedmetadata', () => { if (!trimRanges[activeTrimRange].end_seconds) trimRanges[activeTrimRange].end_seconds = trimDuration(); renderTrimRanges(); syncTrimTimeline(); });
     trimPlayer?.addEventListener('timeupdate', () => {
         if (!trimPlayer.paused && trimPlayer.currentTime >= selectedTrimEnd()) { trimPlayer.pause(); trimPlayer.currentTime = selectedTrimEnd(); }
         syncTrimTimeline();
@@ -987,11 +1036,13 @@
     trimEndHandle?.addEventListener('pointerdown', (event) => beginTrimHandle('end', event));
     trimStart?.addEventListener('input', syncTrimTimeline);
     trimEnd?.addEventListener('input', syncTrimTimeline);
+    trimAddRange?.addEventListener('click', () => { const start = selectedTrimEnd() + .1; if (start >= trimDuration()) { trimError.textContent = 'Reduza o fim do trecho atual para abrir espaço para outro trecho.'; trimError.classList.remove('hidden'); return; } trimError?.classList.add('hidden'); trimRanges.push({start_seconds: start, end_seconds: trimDuration()}); activeTrimRange = trimRanges.length - 1; trimStart.value = start.toFixed(3); trimEnd.value = trimDuration().toFixed(3); trimPlayer.currentTime = start; renderTrimRanges(); syncTrimTimeline(); });
     trimSave?.addEventListener('click', async () => {
         if (!trimUrl || !trimStart || !trimEnd) return;
         const data = new FormData();
         data.append('trim_start_seconds', trimStart.value || '0');
         data.append('trim_end_seconds', trimEnd.value);
+        data.append('trim_ranges', JSON.stringify(trimRanges));
         trimSave.disabled = true;
         try {
             const response = await fetch(trimUrl, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '', 'X-Requested-With': 'XMLHttpRequest'}});

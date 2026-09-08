@@ -1,6 +1,7 @@
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import uuid
 
 from django.core.files import File
 from django.db import transaction
@@ -22,6 +23,7 @@ from ..models.external_media import (
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder
 from .exceptions import ExternalMediaError
 from .services import StorageService, VideoAssemblyService
+from .overlays import OverlayTimelineService
 from .workspace import JobWorkspace, estimate_media_workspace_bytes
 
 
@@ -144,8 +146,12 @@ class PreviewCapabilityRegistry:
         if MediaTemplatePlugin.Code.LUT in plugin_codes:
             available.add(cls.COLOR)
         available.update(declared)
-        implemented_editable = {cls.CUTS, cls.SUBTITLES, cls.TRANSFORMS}
+        if project.template_version.blocks.exclude(overlay_definitions=[]).exists() or project.overlays.exists():
+            available.add(cls.GRAPHICS)
+        implemented_editable = {cls.CUTS, cls.SUBTITLES, cls.TRANSFORMS, cls.GRAPHICS}
         editable = [item for item in configured if item in available and item in implemented_editable]
+        if cls.GRAPHICS in available and cls.GRAPHICS not in editable:
+            editable.append(cls.GRAPHICS)
         return {
             'available': sorted(available),
             'editable': editable,
@@ -162,15 +168,32 @@ class PreviewCompositionService:
         'TRANSFORMS': 'APPROXIMATE',
         'CAMERA_SWITCHES': 'NOT_AVAILABLE',
         'LAYOUTS': 'NOT_AVAILABLE',
-        'GRAPHICS': 'NOT_AVAILABLE',
+        'GRAPHICS': 'APPROXIMATE',
         'BROLL': 'NOT_AVAILABLE',
         'AUDIO_AUTOMATION': 'APPROXIMATE',
         'AUDIO_NOISE_CLEANUP': 'APPROXIMATE',
         'COLOR': 'APPROXIMATE',
     }
 
+    @staticmethod
+    def subtitle_style_payload(style):
+        if not style:
+            return {}
+        return {
+            'font': style.font_name, 'font_weight': style.font_weight,
+            'font_size': style.font_size, 'color': style.primary_color,
+            'primary_opacity': style.primary_opacity, 'alignment': style.alignment,
+            'margin_bottom': style.margin_bottom, 'background_enabled': style.background_enabled,
+            'background_color': style.background_color, 'background_opacity': style.background_opacity,
+            'background_padding_x': style.background_padding_x, 'background_padding_y': style.background_padding_y,
+            'background_radius': style.background_radius, 'outline_color': style.outline_color,
+            'outline_width': style.outline_width, 'shadow': style.shadow,
+            'shadow_angle': style.shadow_angle, 'shadow_size': style.shadow_size,
+            'shadow_blur': style.shadow_blur, 'shadow_opacity': style.shadow_opacity,
+        }
+
     @classmethod
-    def compose(cls, project, source_manifest, decisions, revision):
+    def compose(cls, project, source_manifest, decisions, revision, overlays_override=None):
         proxies = {
             item.source_id: item
             for item in project.source_proxies.filter(status=ProjectSourceProxy.Status.READY).select_related('profile')
@@ -258,8 +281,14 @@ class PreviewCompositionService:
                     'start_ms': cue.start_ms,
                     'end_ms': cue.end_ms,
                     'text': cue.text,
+                    'is_source': cue.track.is_source,
                 })
         capabilities = PreviewCapabilityRegistry.resolve(project)
+        overlays = (
+            deepcopy(overlays_override)
+            if overlays_override is not None
+            else OverlayTimelineService.compose(project, clips, timeline_cursor)
+        )
         thresholds = project.template_version.preview_confidence_thresholds or {}
         flag_below = float(thresholds.get('flag_below') or 0.72)
         review_items = [
@@ -284,6 +313,25 @@ class PreviewCompositionService:
                 'external_media_project_preview_noise_clip',
                 kwargs={'public_id': project.public_id, 'decision_id': item.get('id')},
             ) + '?variant=treated'
+        # The assembled source is the same normalized master used as input by the
+        # final renderer.  Playing it in the review UI makes the automatically
+        # calculated reframe (and LUT) faithful instead of trying to recreate it
+        # with CSS on the individual camera proxies.
+        review_master_url = None
+        if project.render_job_id and project.render_job.original_video:
+            review_master_url = reverse(
+                'external_media_project_preview_master',
+                kwargs={'public_id': project.public_id},
+            )
+        has_manual_transforms = any(
+            item.get('type') == 'reframe'
+            and item.get('enabled', True)
+            and (item.get('metadata') or {}).get('manual_transform')
+            for item in operations
+        )
+        fidelity = {key: cls.FIDELITY[key] for key in capabilities['available']}
+        if review_master_url and not has_manual_transforms and 'TRANSFORMS' in fidelity:
+            fidelity['TRANSFORMS'] = 'EXACT'
         return {
             'schema': 'connect.internal_timeline.v1',
             'timeline_revision': revision,
@@ -294,9 +342,25 @@ class PreviewCompositionService:
                 'duration_ms': timeline_cursor,
             },
             'assets': assets,
+            'review_master_url': review_master_url,
+            'has_music': bool(
+                project.template_version.background_music_id or project.template_version.music_file
+            ),
             'clips': clips,
-            'video_tracks': [{'id': 'V1', 'role': 'main', 'clips': clips}],
+            'video_tracks': [
+                {'id': 'V1', 'role': 'main', 'clips': clips},
+                {'id': 'V2', 'role': 'overlay', 'clips': overlays},
+            ],
+            'overlay_tracks': [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': overlays}],
+            'overlays': overlays,
             'captions': captions,
+            'caption_styles': {
+                'source': cls.subtitle_style_payload(getattr(project.render_job, 'subtitle_style', None))
+                if project.render_job_id else {},
+                'translated': cls.subtitle_style_payload(getattr(project.render_job, 'translated_subtitle_style', None))
+                if project.render_job_id else {},
+                'source_language': project.template_version.original_language,
+            },
             'markers': markers,
             'decisions': operations,
             'review_items': review_items,
@@ -358,6 +422,39 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def create_manual_cut(cls, project, member, start_ms, end_ms):
+        """Add a user-selected removal in original-master time coordinates."""
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        start, end = max(0, int(start_ms)), max(0, int(end_ms))
+        if end - start < 100:
+            raise ValueError('Selecione um trecho de pelo menos 0,1 segundo.')
+        decisions = deepcopy(current.edit_decision_set)
+        operations = decisions.setdefault('operations', [])
+        for item in operations:
+            if item.get('type') != 'remove_segment' or not item.get('enabled', True):
+                continue
+            other_start, other_end = int(item.get('source_in_ms') or 0), int(item.get('source_out_ms') or 0)
+            if start < other_end and end > other_start:
+                raise ValueError('O trecho escolhido se sobrepõe a um corte já existente.')
+        target = {
+            'id': f'user-cut-{uuid.uuid4().hex[:12]}', 'type': 'remove_segment',
+            'source_id': 'project-master', 'source_in_ms': start, 'source_out_ms': end,
+            'origin': 'USER', 'producer': 'member_review', 'producer_version': '1',
+            'reason': 'Corte manual', 'confidence': 1.0, 'enabled': True,
+            'metadata': {'kind': 'manual', 'recommended_action': 'KEEP'},
+        }
+        operations.append(target)
+        cls._shift_cues_for_decision(locked, decisions, target, enabling=True)
+        revision = cls._create(locked, current.source_manifest, decisions, 'Corte manual adicionado', member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'CREATE_MANUAL_CUT', {
+            'decision_id': target['id'], 'source_in_ms': start, 'source_out_ms': end,
+        }, {'decision_id': target['id']}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
     def update_subtitle(cls, project, member, cue_id, text):
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         cue = SubtitleCue.objects.select_for_update().get(pk=cue_id, track__job=locked.render_job)
@@ -400,6 +497,63 @@ class TimelineRevisionService:
         cls._record(session, current, revision, 'UPDATE_TRANSFORM', {
             'decision_id': decision_id, **transform,
         }, {'decision_id': decision_id, 'manual_transform': previous}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
+    def mutate_overlay(cls, project, member, overlay_id, payload, *, create=False, delete=False):
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        overlays = deepcopy(current.timeline.get('overlays') or [])
+        target = next((item for item in overlays if item.get('id') == overlay_id), None)
+        previous = deepcopy(target)
+        if delete:
+            if not target:
+                raise ValueError('Overlay não encontrado nesta timeline.')
+            overlays.remove(target)
+            reason, operation = 'Overlay removido', 'DELETE_OVERLAY'
+        elif create:
+            if target:
+                raise ValueError('Já existe um overlay com este identificador.')
+            overlay_type = str(payload.get('type') or 'TEXT').upper()
+            if overlay_type not in {'TEXT', 'QR_CODE', 'QR_CODE_CARD', 'IMAGE'}:
+                raise ValueError('Tipo de overlay não suportado.')
+            target = {
+                'id': overlay_id, 'type': overlay_type, 'purpose': payload.get('purpose', ''),
+                'start_ms': max(0, int(payload.get('start_ms') or 0)),
+                'end_ms': max(1, int(payload.get('end_ms') or min(current.timeline['sequence']['duration_ms'], 5000))),
+                'position': payload.get('position') or {'x': .5, 'y': .82, 'width': .25},
+                'style': payload.get('style') or {},
+                'animation': payload.get('animation') or {'type': 'FADE', 'duration': .35, 'easing': 'ease-out'},
+                'content': payload.get('content') or {}, 'content_schema': {},
+                'allowed_overrides': ['content', 'position', 'style', 'animation', 'timing'],
+                'source': 'MANUAL', 'block_id': None, 'preset': payload.get('preset'),
+                'portability': 'APPROXIMATE',
+            }
+            overlays.append(target)
+            reason, operation = 'Overlay adicionado', 'CREATE_OVERLAY'
+        else:
+            if not target:
+                raise ValueError('Overlay não encontrado nesta timeline.')
+            allowed = set(target.get('allowed_overrides') or [])
+            for key in ('content', 'position', 'style', 'animation'):
+                if key in payload and (key == 'content' or key in allowed):
+                    target[key] = deepcopy(payload[key])
+            if 'timing' in allowed:
+                if 'start_ms' in payload:
+                    target['start_ms'] = max(0, int(payload['start_ms']))
+                if 'end_ms' in payload:
+                    target['end_ms'] = max(target['start_ms'] + 1, int(payload['end_ms']))
+            target['end_ms'] = min(target['end_ms'], current.timeline['sequence']['duration_ms'])
+            reason, operation = 'Overlay atualizado', 'UPDATE_OVERLAY'
+        revision = cls._create(
+            locked, current.source_manifest, current.edit_decision_set, reason, member, current,
+            overlays=overlays,
+        )
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, operation, {
+            'overlay_id': overlay_id, 'overlay': deepcopy(target),
+        }, {'overlay_id': overlay_id, 'overlay': previous}, member)
         return revision
 
     @classmethod
@@ -453,9 +607,14 @@ class TimelineRevisionService:
         return revision
 
     @classmethod
-    def _create(cls, project, manifest, decisions, reason, member, parent=None):
+    def _create(cls, project, manifest, decisions, reason, member, parent=None, overlays=None):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
-        timeline = PreviewCompositionService.compose(project, manifest, decisions, number)
+        # Overlay edits live in the revision itself. Preserve them when another
+        # kind of edit creates a child revision, otherwise template overlays
+        # would silently return and manual overlays would disappear.
+        if overlays is None and parent:
+            overlays = deepcopy(parent.timeline.get('overlays') or [])
+        timeline = PreviewCompositionService.compose(project, manifest, decisions, number, overlays_override=overlays)
         revision = TimelineRevision.objects.create(
             project=project, revision=number, parent=parent, timeline=timeline,
             source_manifest=manifest, edit_decision_set=decisions, reason=reason, created_by=member,

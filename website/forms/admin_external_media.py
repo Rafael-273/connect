@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 from math import gcd
 
 from django import forms
@@ -14,6 +15,7 @@ from ..models.external_media import (
     MediaTemplateBlock,
     MediaTemplatePlugin,
     MediaTemplateVersion,
+    OverlayPreset,
     ProxyProfile,
     RenderPreset,
     SpeechFillerTerm,
@@ -599,6 +601,16 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
 
 
 class AdminMediaTemplateBlockForm(forms.ModelForm):
+    overlay_definitions_raw = forms.CharField(
+        label='Elementos visuais automáticos',
+        required=False,
+        widget=forms.HiddenInput(),
+        help_text=(
+            'Configure os elementos que devem aparecer automaticamente neste bloco. '
+            'O conteúdo será solicitado ao membro no projeto.'
+        ),
+    )
+
     class Meta:
         model = MediaTemplateBlock
         fields = [
@@ -628,6 +640,13 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        instance = kwargs.get('instance')
+        initial = kwargs.setdefault('initial', {})
+        if instance:
+            initial.setdefault(
+                'overlay_definitions_raw',
+                json.dumps(instance.overlay_definitions or [], indent=2, ensure_ascii=False),
+            )
         super().__init__(*args, **kwargs)
         self.fields['key'].required = False
         self.fields['allows_multiple'].required = False
@@ -671,6 +690,37 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         # para manter compatibilidade com registros e migrations anteriores.
         cleaned_data['allows_multiple'] = True
         cleaned_data['max_occurrences'] = 0
+        raw = cleaned_data.get('overlay_definitions_raw') or ''
+        try:
+            definitions = json.loads(raw) if raw.strip() else []
+        except json.JSONDecodeError as exc:
+            self.add_error('overlay_definitions_raw', 'Informe uma lista JSON válida.')
+            return cleaned_data
+        if not isinstance(definitions, list):
+            self.add_error('overlay_definitions_raw', 'Os overlays precisam estar em uma lista JSON.')
+            return cleaned_data
+        valid_types = set(OverlayPreset.Type.values)
+        used_keys = set()
+        for index, definition in enumerate(definitions, start=1):
+            if not isinstance(definition, dict):
+                self.add_error('overlay_definitions_raw', f'O overlay {index} precisa ser um objeto.')
+                continue
+            key = slugify(str(definition.get('key') or ''))
+            if not key or key in used_keys:
+                self.add_error('overlay_definitions_raw', f'O overlay {index} precisa de uma chave única.')
+            used_keys.add(key)
+            definition['key'] = key
+            if definition.get('type') not in valid_types:
+                self.add_error('overlay_definitions_raw', f'O tipo do overlay {index} não é suportado.')
+            preset_code = definition.get('preset')
+            if not preset_code:
+                self.add_error('overlay_definitions_raw', f'Selecione um preset visual para o overlay {index}.')
+            elif not OverlayPreset.objects.filter(code=preset_code, is_active=True).exists():
+                self.add_error('overlay_definitions_raw', f'O preset "{preset_code}" não existe ou está inativo.')
+            schema = definition.get('fields') or {}
+            if not isinstance(schema, dict):
+                self.add_error('overlay_definitions_raw', f'Os campos do overlay {index} precisam ser um objeto.')
+        cleaned_data['_overlay_definitions'] = definitions
         return cleaned_data
 
     def save(self, commit=True):
@@ -682,6 +732,122 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
             instance.allows_multiple = True
         instance.allows_multiple = True
         instance.max_occurrences = 0
+        instance.overlay_definitions = self.cleaned_data.get('_overlay_definitions') or []
+        if commit:
+            instance.save()
+        return instance
+
+
+class AdminOverlayPresetForm(forms.ModelForm):
+    """Friendly editor for the visual decisions shared by overlay declarations."""
+
+    POSITION_CHOICES = [
+        ('bottom-center', 'Embaixo, centralizado'),
+        ('bottom-right', 'Embaixo, à direita'),
+        ('bottom-left', 'Embaixo, à esquerda'),
+        ('center', 'No centro'),
+    ]
+    ANIMATION_CHOICES = [
+        ('NONE', 'Sem animação'), ('FADE', 'Aparecer suavemente'),
+        ('SLIDE_UP', 'Subir'), ('SLIDE_DOWN', 'Descer'),
+        ('SLIDE_LEFT', 'Entrar pela esquerda'), ('SLIDE_RIGHT', 'Entrar pela direita'),
+        ('POP', 'Pop'),
+    ]
+    TIMING_CHOICES = [
+        ('BLOCK_START', 'No início do bloco'),
+        ('BLOCK_END', 'No final do bloco'),
+        ('AUTO_BEST_MOMENT', 'No melhor momento do bloco'),
+    ]
+    position_choice = forms.ChoiceField(label='Posição', choices=POSITION_CHOICES)
+    animation_type = forms.ChoiceField(label='Animação', choices=ANIMATION_CHOICES)
+    duration_seconds = forms.DecimalField(label='Duração (segundos)', min_value=Decimal('0.25'), max_value=120, decimal_places=2, initial=5)
+    width_percent = forms.IntegerField(label='Largura do elemento (%)', min_value=10, max_value=90, initial=30)
+    font = forms.ChoiceField(label='Tipografia', choices=[
+        ('Montserrat-Bold.ttf', 'Montserrat Bold'),
+        ('Montserrat-SemiBold.ttf', 'Montserrat SemiBold'),
+        ('Montserrat-Regular.ttf', 'Montserrat Regular'),
+    ])
+    font_size = forms.IntegerField(label='Tamanho do texto', min_value=12, max_value=160, initial=42)
+    text_color = forms.CharField(label='Cor do texto', initial='#111827', widget=forms.TextInput(attrs={'type': 'color'}))
+    background_color = forms.CharField(label='Cor do cartão', initial='#FFFFFF', widget=forms.TextInput(attrs={'type': 'color'}))
+    background_opacity = forms.IntegerField(label='Opacidade do cartão (%)', min_value=0, max_value=100, initial=100)
+    padding = forms.IntegerField(label='Espaço interno', min_value=0, max_value=120, initial=28)
+    border_radius = forms.IntegerField(label='Arredondamento dos cantos', min_value=0, max_value=120, initial=18)
+    qr_color = forms.CharField(label='Cor do QR Code', initial='#111111', widget=forms.TextInput(attrs={'type': 'color'}))
+    qr_background = forms.CharField(label='Fundo do QR Code', initial='#FFFFFF', widget=forms.TextInput(attrs={'type': 'color'}))
+    card_layout = forms.ChoiceField(label='Montagem do QR Code', choices=[
+        ('vertical', 'Chamada em cima e QR Code abaixo'),
+        ('horizontal', 'QR Code ao lado da chamada'),
+    ], initial='vertical')
+
+    class Meta:
+        model = OverlayPreset
+        fields = ['name', 'overlay_type', 'timing_mode', 'is_active']
+        labels = {
+            'name': 'Nome do preset', 'overlay_type': 'Tipo de elemento',
+            'timing_mode': 'Quando aparece', 'is_active': 'Disponível para uso',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        position = self.instance.position or {}
+        known_positions = {
+            'bottom-center': {'x': .5, 'y': .82, 'width': .48},
+            'bottom-right': {'x': .86, 'y': .76, 'width': .18},
+            'bottom-left': {'x': .18, 'y': .76, 'width': .28},
+            'center': {'x': .5, 'y': .5, 'width': .4},
+        }
+        self.fields['position_choice'].initial = next((key for key, value in known_positions.items() if all(abs(position.get(axis, value[axis]) - value[axis]) < .01 for axis in ('x', 'y'))), 'bottom-center')
+        self.fields['animation_type'].initial = (self.instance.animation or {}).get('type', 'NONE')
+        self.fields['duration_seconds'].initial = (self.instance.duration_ms or 5000) / 1000
+        style = self.instance.style or {}
+        self.fields['width_percent'].initial = round(float(position.get('width') or .3) * 100)
+        for field_name, default in {
+            'font': 'Montserrat-Bold.ttf', 'font_size': 42, 'text_color': '#111827',
+            'background_color': '#FFFFFF', 'padding': 28, 'border_radius': 18,
+            'qr_color': '#111111', 'qr_background': '#FFFFFF', 'card_layout': 'vertical',
+        }.items():
+            self.fields[field_name].initial = style.get(field_name, default)
+        self.fields['background_opacity'].initial = round(float(style.get('background_opacity', 1)) * 100)
+        for field in self.fields.values():
+            field.widget.attrs.update({'class': FIELD_CLASS})
+        self.fields['is_active'].widget.attrs.update({'class': CHECKBOX_CLASS})
+
+    def clean_name(self):
+        return self.cleaned_data['name'].strip()
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if not instance.code:
+            base = slugify(instance.name)[:72] or 'preset-visual'
+            code = base
+            suffix = 2
+            while OverlayPreset.objects.exclude(pk=instance.pk).filter(code=code).exists():
+                code = f'{base[:72-len(str(suffix))-1]}-{suffix}'
+                suffix += 1
+            instance.code = code
+        positions = {
+            'bottom-center': {'x': .5, 'y': .82, 'width': .48},
+            'bottom-right': {'x': .86, 'y': .76, 'width': .18},
+            'bottom-left': {'x': .18, 'y': .76, 'width': .28},
+            'center': {'x': .5, 'y': .5, 'width': .4},
+        }
+        instance.position = {**positions[self.cleaned_data['position_choice']], 'width': self.cleaned_data['width_percent'] / 100}
+        instance.animation = {'type': self.cleaned_data['animation_type'], 'duration': .35, 'easing': 'ease-out'}
+        instance.duration_ms = int(self.cleaned_data['duration_seconds'] * 1000)
+        instance.style = {
+            **(instance.style or {}),
+            'font': self.cleaned_data['font'],
+            'font_size': self.cleaned_data['font_size'],
+            'color': self.cleaned_data['text_color'],
+            'background': self.cleaned_data['background_color'],
+            'background_opacity': self.cleaned_data['background_opacity'] / 100,
+            'padding': self.cleaned_data['padding'],
+            'border_radius': self.cleaned_data['border_radius'],
+            'qr_color': self.cleaned_data['qr_color'],
+            'qr_background': self.cleaned_data['qr_background'],
+            'card_layout': self.cleaned_data['card_layout'],
+        }
         if commit:
             instance.save()
         return instance

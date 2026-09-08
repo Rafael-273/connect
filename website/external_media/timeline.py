@@ -22,6 +22,7 @@ CAPABILITY_MATRIX = {
     'auto_reframe': {'exportable': 'partial', 'strategy': 'transform_keyframes'},
     'captions': {'exportable': True, 'strategy': 'srt_editable_titles_and_alpha_overlay'},
     'caption_style': {'exportable': True, 'strategy': 'pre_rendered_alpha_overlay'},
+    'overlays': {'exportable': 'partial', 'strategy': 'portable_text_or_png_with_timeline_metadata'},
     'lut': {'exportable': 'partial', 'strategy': 'asset_and_metadata'},
     'dialogue_processing': {'exportable': 'partial', 'strategy': 'separate_dialogue_source_plus_metadata'},
     'audio_noise_reduction': {'exportable': 'partial', 'strategy': 'metadata_and_original_dialogue_source'},
@@ -155,6 +156,10 @@ class InternalTimelineBuilder:
         )
         if caption_overlay_asset:
             assets.append(caption_overlay_asset)
+        overlay_assets, overlay_track, overlays = self._graphic_overlays(
+            project, package_root, sequence, duration_ms, video_clips,
+        )
+        assets.extend(overlay_assets)
         effects = self._effects(project, lut)
         compatibility = self._compatibility(project, effects)
         timeline = {
@@ -169,13 +174,15 @@ class InternalTimelineBuilder:
             'assets': assets,
             'video_tracks': [
                 {'id': 'V1', 'name': 'Main Video', 'role': 'main', 'clips': video_clips},
-                {'id': 'V2', 'name': 'Overlays', 'role': 'overlay', 'clips': []},
+                overlay_track,
                 {'id': 'V3', 'name': 'Titles', 'role': 'title', 'clips': []},
                 {'id': 'V4', 'name': 'Graphics', 'role': 'graphic', 'clips': []},
             ] + ([caption_overlay_track] if caption_overlay_track else []),
             'audio_tracks': audio_tracks,
             'clips': video_clips,
             'captions': captions,
+            'overlay_tracks': [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': overlays}],
+            'overlays': overlays,
             'transitions': [],
             'effects': effects,
             'keyframes': [
@@ -196,6 +203,55 @@ class InternalTimelineBuilder:
             'compatibility': compatibility,
         }
         return timeline
+
+    def _graphic_overlays(self, project, package_root, sequence, duration_ms, video_clips=None):
+        from .overlays import OverlayAssetRenderer, OverlayTimelineService
+
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        overlays = list((revision.timeline if revision else {}).get('overlays') or [])
+        if not overlays:
+            overlays = OverlayTimelineService.compose(project, video_clips or [], duration_ms)
+        assets, clips = [], []
+        renderer = OverlayAssetRenderer()
+        for index, overlay in enumerate(overlays, start=1):
+            relative = f'Graphics/{index:03d}_{self._safe_name(overlay.get("id") or "overlay")}.png'
+            output = package_root / relative
+            width, height = renderer.render(
+                overlay, sequence['width'], sequence['height'], output,
+            )
+            asset_id = f'overlay_{index}'
+            assets.append({
+                'id': asset_id, 'type': 'video', 'role': 'overlay',
+                'name': overlay.get('purpose') or overlay.get('id') or f'Overlay {index}',
+                'path': f'./{relative}', 'has_audio': False, 'alpha_mode': 'straight',
+                'width': width, 'height': height, 'fps': sequence['fps'],
+                'duration_ms': max(1, int(overlay['end_ms']) - int(overlay['start_ms'])),
+                'portability': overlay.get('portability', 'APPROXIMATE'),
+            })
+            clips.append({
+                'id': f'{asset_id}_clip', 'asset_id': asset_id,
+                'name': assets[-1]['name'],
+                'timeline_in_ms': int(overlay['start_ms']),
+                'timeline_out_ms': int(overlay['end_ms']),
+                'source_in_ms': 0,
+                'source_out_ms': max(1, int(overlay['end_ms']) - int(overlay['start_ms'])),
+                'audio_enabled': False,
+                'effects': [{
+                    'type': 'transform',
+                    'coordinate_space': 'sequence_pixels',
+                    'keyframes': [{
+                        'time_ms': int(overlay['start_ms']),
+                        'x': round(float((overlay.get('position') or {}).get('x', .5)) * sequence['width'], 3),
+                        'y': round(float((overlay.get('position') or {}).get('y', .82)) * sequence['height'], 3),
+                        'scale': 100,
+                    }],
+                }],
+                'overlay': overlay,
+            })
+        return assets, {
+            'id': 'V2', 'name': 'Overlays', 'role': 'overlay', 'clips': clips,
+            'locked': False,
+        }, overlays
 
     def _sources(self, project):
         state = ProjectProcessingState(project)

@@ -430,6 +430,12 @@
                     <div class="block-help mb-4">
                         Cada bloco pode receber <strong>quantos vídeos forem necessários</strong>. Você só precisa definir o nome, a descrição e a ordem das partes do projeto.
                     </div>
+                    {% if overlay_presets %}
+                    <div class="block-help mb-4">
+                        <strong>Elementos visuais automáticos:</strong> configure uma vez aqui; no projeto, o membro preenche apenas dados como texto, data, URL ou CTA.
+                    </div>
+                    {% endif %}
+                    {{ overlay_preset_rows|json_script:"overlay-preset-data" }}
                     {{ block_formset.management_form }}
                     {% if block_formset.non_form_errors %}<div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ block_formset.non_form_errors }}</div>{% endif %}
                     <div id="blocks-container" class="space-y-4">
@@ -457,6 +463,15 @@
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.is_required }} {{ block_form.is_required.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.skip_extra_processing }} {{ block_form.skip_extra_processing.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.remove_background_voice }} {{ block_form.remove_background_voice.label }}</label>
+                                <div class="md:col-span-3">
+                                    {{ block_form.overlay_definitions_raw }}
+                                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4" data-overlay-builder>
+                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem neste bloco.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
+                                        <div class="space-y-3" data-overlay-items></div>
+                                        <p class="text-sm text-gray-500" data-overlay-empty>Nenhum elemento visual configurado.</p>
+                                    </div>
+                                    {% if block_form.overlay_definitions_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ block_form.overlay_definitions_raw.errors.0 }}</p>{% endif %}
+                                </div>
                                 {{ block_form.min_occurrences }}
                                 {{ block_form.max_occurrences }}
                             </div>
@@ -485,6 +500,14 @@
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.is_required }} {{ block_formset.empty_form.is_required.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.skip_extra_processing }} {{ block_formset.empty_form.skip_extra_processing.label }}</label>
                                 <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.remove_background_voice }} {{ block_formset.empty_form.remove_background_voice.label }}</label>
+                                <div class="md:col-span-3">
+                                    {{ block_formset.empty_form.overlay_definitions_raw }}
+                                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4" data-overlay-builder>
+                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem neste bloco.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
+                                        <div class="space-y-3" data-overlay-items></div>
+                                        <p class="text-sm text-gray-500" data-overlay-empty>Nenhum elemento visual configurado.</p>
+                                    </div>
+                                </div>
                                 {{ block_formset.empty_form.min_occurrences }}
                                 {{ block_formset.empty_form.max_occurrences }}
                             </div>
@@ -2182,6 +2205,111 @@
             'name', visible ? 'chevron-up-outline' : 'chevron-down-outline',
         );
     }
+    const overlayPresets = JSON.parse(byId('overlay-preset-data')?.textContent || '[]');
+    const overlayTypeLabels = {
+        TEXT: 'Texto', QR_CODE: 'QR Code', QR_CODE_CARD: 'QR Code + chamada', IMAGE: 'Imagem',
+    };
+    const escapeOverlay = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+    }[char]));
+    function schemaForOverlay(type) {
+        if (type === 'TEXT') return { text: { label: 'Texto', required: true } };
+        if (type === 'QR_CODE') return { payload: { label: 'URL do QR Code', required: true } };
+        if (type === 'QR_CODE_CARD') return {
+            payload: { label: 'URL do QR Code', required: true },
+            cta: { label: 'Texto da chamada', required: false },
+        };
+        return {};
+    }
+    function memberDataSummary(type) {
+        if (type === 'TEXT') return 'O membro preencherá o texto que será exibido.';
+        if (type === 'QR_CODE') return 'O membro informará a URL que será transformada em QR Code.';
+        if (type === 'QR_CODE_CARD') return 'O membro informará a URL do QR Code e, se quiser, o texto da chamada.';
+        return 'O membro enviará a imagem ao criar o projeto.';
+    }
+    function defaultOverlayDefinition(index) {
+        return {
+            key: `elemento-${index + 1}`, type: 'TEXT', preset: 'event-date-filadelfia',
+            fields: schemaForOverlay('TEXT'),
+        };
+    }
+    function syncOverlayBuilder(builder) {
+        const raw = builder.parentElement.querySelector('input[name$="-overlay_definitions_raw"]');
+        if (!raw) return;
+        const definitions = builder._overlayDefinitions || [];
+        builder.querySelectorAll('[data-overlay-card]').forEach((card) => {
+            const item = definitions[Number(card.dataset.overlayIndex)];
+            if (!item) return;
+            item.type = card.querySelector('[data-overlay-type]').value;
+            item.preset = card.querySelector('[data-overlay-preset]').value || undefined;
+            item.key = item.key || `elemento-${Number(card.dataset.overlayIndex) + 1}`;
+            item.fields = schemaForOverlay(item.type);
+            ['timing', 'duration_ms', 'position', 'animation', 'style'].forEach((key) => delete item[key]);
+        });
+        raw.value = JSON.stringify(definitions);
+        builder.querySelector('[data-overlay-empty]').classList.toggle('hidden', definitions.length > 0);
+    }
+    function renderOverlayBuilder(builder) {
+        const items = builder.querySelector('[data-overlay-items]');
+        const definitions = builder._overlayDefinitions || [];
+        items.innerHTML = definitions.map((item, index) => {
+            const compatiblePresets = overlayPresets.filter((preset) => preset.overlay_type === item.type);
+            const typeOptions = Object.entries(overlayTypeLabels).map(([value, label]) => `<option value="${value}" ${item.type === value ? 'selected' : ''}>${label}</option>`).join('');
+            const presetOptions = [`<option value="">Selecione um preset visual</option>`, ...compatiblePresets.map((preset) => `<option value="${escapeOverlay(preset.code)}" ${item.preset === preset.code ? 'selected' : ''}>${escapeOverlay(preset.name)}</option>`)].join('');
+            return `<article class="rounded-xl border border-gray-200 bg-white p-4" data-overlay-card data-overlay-index="${index}">
+                <div class="flex items-center justify-between gap-3 mb-3"><strong class="text-sm text-gray-900">Elemento ${index + 1}</strong><button type="button" class="text-sm font-bold text-red-600" data-remove-overlay>Remover</button></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label class="text-xs font-bold text-gray-600">Tipo<select data-overlay-type class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-normal">${typeOptions}</select></label>
+                    <label class="text-xs font-bold text-gray-600">Preset visual<select required data-overlay-preset class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-normal">${presetOptions}</select><span class="block mt-1 text-xs font-normal text-gray-500">Define posição, momento, duração e animação.</span></label>
+                </div>
+                <div class="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3"><p class="text-xs font-black uppercase tracking-wide text-gray-500">O que será solicitado ao membro</p><p class="mt-1 text-sm text-gray-700">${memberDataSummary(item.type)}</p></div>
+            </article>`;
+        }).join('');
+        syncOverlayBuilder(builder);
+    }
+    function bindOverlayBuilder(builder) {
+        if (builder.dataset.boundOverlayBuilder === 'true') return;
+        builder.dataset.boundOverlayBuilder = 'true';
+        const raw = builder.parentElement.querySelector('input[name$="-overlay_definitions_raw"]');
+        try {
+            builder._overlayDefinitions = JSON.parse(raw?.value || '[]');
+            if (!Array.isArray(builder._overlayDefinitions)) builder._overlayDefinitions = [];
+        } catch (_) {
+            builder._overlayDefinitions = [];
+        }
+        builder.querySelector('[data-add-overlay]').addEventListener('click', () => {
+            builder._overlayDefinitions.push(defaultOverlayDefinition(builder._overlayDefinitions.length));
+            renderOverlayBuilder(builder);
+        });
+        builder.addEventListener('input', (event) => {
+            if (!event.target.closest('[data-overlay-card]')) return;
+            syncOverlayBuilder(builder);
+        });
+        builder.addEventListener('change', (event) => {
+            const card = event.target.closest('[data-overlay-card]');
+            if (!card) return;
+            const index = Number(card.dataset.overlayIndex);
+            if (event.target.matches('[data-overlay-type]')) {
+                const type = event.target.value;
+                const preset = overlayPresets.find((item) => item.overlay_type === type);
+                builder._overlayDefinitions[index] = {
+                    ...builder._overlayDefinitions[index], type, preset: preset?.code,
+                    fields: schemaForOverlay(type),
+                };
+                renderOverlayBuilder(builder);
+            } else {
+                syncOverlayBuilder(builder);
+            }
+        });
+        builder.addEventListener('click', (event) => {
+            const remove = event.target.closest('[data-remove-overlay]');
+            if (!remove) return;
+            const index = Number(remove.closest('[data-overlay-card]').dataset.overlayIndex);
+            builder._overlayDefinitions.splice(index, 1);
+            renderOverlayBuilder(builder);
+        });
+        renderOverlayBuilder(builder);
+    }
     function visibleBlockCards() {
         return Array.from(document.querySelectorAll('#blocks-container [data-block-form]'))
             .filter((card) => card.style.display !== 'none');
@@ -2208,6 +2336,7 @@
             card.style.display = 'none';
             updateBlockOrder();
         });
+        card.querySelectorAll('[data-overlay-builder]').forEach(bindOverlayBuilder);
     }
     function bindBlockDragAndDrop() {
         const container = byId('blocks-container');

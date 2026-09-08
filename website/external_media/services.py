@@ -1381,6 +1381,8 @@ class ProjectService:
 
     @staticmethod
     def validate_uploads(project):
+        from .overlays import OverlayTimelineService
+
         counts = {}
         errors = []
         for item in project.block_media.all():
@@ -1404,6 +1406,17 @@ class ProjectService:
                 errors.append(f'{block.name}: envie pelo menos {minimum} vídeo(s).')
             if block.max_occurrences > 0 and count > block.max_occurrences:
                 errors.append(f'{block.name}: máximo de {block.max_occurrences} vídeo(s).')
+        for overlay in OverlayTimelineService.ensure_project_overlays(project):
+            if not overlay.is_required and not OverlayTimelineService.has_renderable_content(
+                overlay.overlay_type, overlay.content, overlay.image_file,
+            ):
+                continue
+            try:
+                OverlayTimelineService.validate_content(
+                    overlay.overlay_type, overlay.content_schema, overlay.content, overlay.image_file,
+                )
+            except ValueError as exc:
+                errors.append(f'{overlay.block.name if overlay.block else "Overlay"}: {exc}')
         version = project.template_version
         track = getattr(version, 'background_music', None)
         if track and track.audio_file and not ProjectService.file_exists(track.audio_file):
@@ -1563,9 +1576,13 @@ class IntroOutroService:
 
 class MusicService:
     @staticmethod
-    def selected_file(version, enabled_codes):
-        if MediaTemplatePlugin.Code.MUSIC not in enabled_codes:
-            return None
+    def selected_file(version, enabled_codes=None):
+        """Return the template track.
+
+        Music is configured directly on a template version, unlike optional
+        editorial plugins.  ``enabled_codes`` remains accepted for compatibility
+        with existing callers, but must not suppress a selected track.
+        """
         selected_music = getattr(version, 'background_music', None)
         if selected_music and selected_music.audio_file:
             return selected_music.audio_file
@@ -2315,6 +2332,33 @@ class ExternalMediaProjectPipeline:
             with timed_step('finalize_audio_final_master'):
                 final_path = self._finalize_audio(project, job, workdir, final_path, music_path, combined_plan)
         expected_duration_ms = max(1, original_duration_ms - combined_plan.saved_ms)
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        overlays = list((revision.timeline if revision else {}).get('overlays') or [])
+        if not revision:
+            from .overlays import OverlayTimelineService
+
+            overlay_clips = [
+                {
+                    'timeline_in_ms': combined_plan.remap_time(int(item.get('start_ms') or 0)),
+                    'timeline_out_ms': combined_plan.remap_time(int(item.get('end_ms') or 0)),
+                    'block': {'id': item.get('block_id')},
+                }
+                for item in self.assembly.last_block_ranges
+                if item.get('block_id')
+            ]
+            overlays = OverlayTimelineService.compose(project, overlay_clips, expected_duration_ms)
+        if overlays:
+            from .overlays import OverlayRenderService
+
+            self._update(project, ExternalMediaProject.Status.PROCESSING, 89, 'Aplicando elementos visuais')
+            overlay_output = workdir / 'project_master_overlays.mp4'
+            metadata = RenderService(self.assembly.runner).probe_video(final_path)
+            canvas_width = version.preset.width or metadata.width or 1920
+            canvas_height = version.preset.height or metadata.height or 1080
+            with timed_step('render_timeline_overlays', count=len(overlays)):
+                final_path = OverlayRenderService(self.assembly.runner).apply(
+                    final_path, overlay_output, overlays, canvas_width, canvas_height, workdir,
+                )
         quality_report = self.quality.validate_media(
             final_path,
             expected_duration_ms=expected_duration_ms,
