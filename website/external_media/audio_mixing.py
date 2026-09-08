@@ -274,7 +274,12 @@ class AudioMixingService:
             spectral_windows = build_spectral_windows(speech_blocks, cut_db)
 
         loop_filters, loop_label, loop_metrics = self._build_music_loop_filters(music_path, duration_ms)
+        duration_s = max(0.001, duration_ms / 1000)
         filters = [
+            # The dialogue stream can be a few frames shorter than the video after
+            # concatenation/cuts. Pad it to the explicit master duration so amix
+            # never makes the music bed disappear near the end of the picture.
+            f'[0:a]apad=whole_dur={duration_s:.3f},atrim=duration={duration_s:.3f}[dialogue]',
             *loop_filters,
             f'{loop_label}volume={float(music_volume):.3f}[music_base]',
             f"[music_base]volume=eval=frame:volume='{volume_expression}'[music_ducked]",
@@ -294,7 +299,10 @@ class AudioMixingService:
                 current_label = next_label
             filters.extend(eq_chain)
             music_label = f'[{current_label}]'
-        filters.append(f'[0:a]{music_label}amix=inputs=2:duration=first:dropout_transition=2[a]')
+        filters.append(
+            f'[dialogue]{music_label}amix=inputs=2:duration=longest:dropout_transition=0,'
+            f'atrim=duration={duration_s:.3f}[a]'
+        )
 
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', str(video_path),
@@ -408,12 +416,15 @@ class AudioMixingService:
 
     def _mix_flat(self, video_path, music_path, output_path, music_volume, *, duration_ms):
         loop_filters, loop_label, loop_metrics = self._build_music_loop_filters(music_path, duration_ms)
+        duration_s = max(0.001, duration_ms / 1000)
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-i', str(music_path), '-filter_complex',
             ';'.join([
+                f'[0:a]apad=whole_dur={duration_s:.3f},atrim=duration={duration_s:.3f}[dialogue]',
                 *loop_filters,
                 f'{loop_label}volume={float(music_volume):.3f}[music]',
-            '[0:a][music]amix=inputs=2:duration=first:dropout_transition=2[a]',
+                f'[dialogue][music]amix=inputs=2:duration=longest:dropout_transition=0,'
+                f'atrim=duration={duration_s:.3f}[a]',
             ]),
             '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
             '-movflags', '+faststart', str(output_path),

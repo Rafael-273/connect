@@ -1,6 +1,7 @@
 import json
 import math
 import re
+import struct
 import tempfile
 import wave
 from decimal import Decimal
@@ -1151,6 +1152,17 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         TimelineRevisionService.navigate_history(project, self.member, 'undo')
         cue.refresh_from_db()
         self.assertEqual((cue.start_ms, cue.end_ms), (4000, 5000))
+        self.assertEqual(
+            TimelineRevisionService.history_state(project, self.member),
+            {'can_undo': False, 'can_redo': True},
+        )
+        TimelineRevisionService.navigate_history(project, self.member, 'redo')
+        cue.refresh_from_db()
+        self.assertEqual((cue.start_ms, cue.end_ms), (5000, 6000))
+        self.assertEqual(
+            TimelineRevisionService.history_state(project, self.member),
+            {'can_undo': True, 'can_redo': False},
+        )
         media.delete(force_policy=HARD_DELETE)
 
     def test_approval_pins_the_current_timeline_revision(self):
@@ -2529,6 +2541,22 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             stream.setframerate(16000)
             stream.writeframes(b'\x00\x00' * round(16000 * duration_ms / 1000))
 
+    @staticmethod
+    def _wav_with_voice(path, duration_ms, voice_ranges):
+        """Build a small PCM fixture with clearly detectable speech-like activity."""
+        rate = 16000
+        samples = []
+        for index in range(round(rate * duration_ms / 1000)):
+            time_ms = index * 1000 / rate
+            active = any(start <= time_ms < end for start, end in voice_ranges)
+            value = round(12000 * math.sin(2 * math.pi * 220 * index / rate)) if active else 0
+            samples.append(value)
+        with wave.open(str(path), 'wb') as stream:
+            stream.setnchannels(1)
+            stream.setsampwidth(2)
+            stream.setframerate(rate)
+            stream.writeframes(struct.pack(f'<{len(samples)}h', *samples))
+
     def test_speech_edit_reduces_medium_silence_but_keeps_a_natural_pause(self):
         with tempfile.TemporaryDirectory() as directory:
             wav_path = Path(directory) / 'analysis.wav'
@@ -2542,8 +2570,8 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
                 configuration={'profile': 'balanced'},
             )
         self.assertEqual(plan.silence_count, 1)
-        self.assertEqual(plan.cuts[0].duration_ms, 760)
-        self.assertEqual(1700 - 500 - plan.cuts[0].duration_ms, 440)
+        self.assertEqual(plan.cuts[0].duration_ms, 560)
+        self.assertEqual(1700 - 500 - plan.cuts[0].duration_ms, 640)
 
     def test_proxy_trim_uses_accurate_output_seeking(self):
         runner = Mock()
@@ -2560,24 +2588,94 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
     def test_speech_edit_removes_leading_breath_before_each_take(self):
         with tempfile.TemporaryDirectory() as directory:
             wav_path = Path(directory) / 'analysis.wav'
-            self._silent_wav(wav_path)
+            self._wav_with_voice(wav_path, 3000, [(700, 1200), (2000, 2500)])
             words = [
                 TranscriptionSegment(900, 1200, 'Olá', 'word'),
                 TranscriptionSegment(2200, 2500, 'pessoal', 'word'),
             ]
             plan = SpeechEditAnalyzer().analyze(
                 words, wav_path, 3000, remove_fillers=False,
-                configuration={'profile': 'balanced'},
+                configuration={'profile': 'balanced', 'trim_take_lead_silence': True},
                 block_ranges=[
                     {'start_ms': 0, 'end_ms': 1500},
                     {'start_ms': 1500, 'end_ms': 3000},
                 ],
             )
 
-        self.assertIn(SpeechCut(0, 680, 'silence'), plan.cuts)
+        self.assertIn(SpeechCut(0, 340, 'silence'), plan.cuts)
         self.assertTrue(
-            any(cut.start_ms <= 1500 and cut.end_ms >= 1980 for cut in plan.cuts),
+            any(cut.start_ms == 1500 for cut in plan.cuts),
         )
+
+    def test_speech_edit_preserves_a_take_start_when_voice_onset_is_uncertain(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._silent_wav(wav_path, 1500)
+            plan = SpeechEditAnalyzer().analyze(
+                [TranscriptionSegment(900, 1200, 'Olá', 'word')],
+                wav_path,
+                1500,
+                remove_fillers=False,
+                configuration={'profile': 'balanced'},
+                block_ranges=[{'start_ms': 0, 'end_ms': 1500}],
+            )
+
+        self.assertFalse(any(cut.start_ms == 0 for cut in plan.cuts))
+
+    def test_speech_edit_never_uses_a_cross_take_gap_to_cut_the_next_take(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._silent_wav(wav_path, 2000)
+            plan = SpeechEditAnalyzer().analyze(
+                [
+                    TranscriptionSegment(100, 400, 'Fim', 'word'),
+                    TranscriptionSegment(1200, 1500, 'Início', 'word'),
+                ],
+                wav_path,
+                2000,
+                remove_fillers=False,
+                configuration={'profile': 'balanced'},
+                block_ranges=[
+                    {'start_ms': 0, 'end_ms': 700},
+                    {'start_ms': 700, 'end_ms': 2000},
+                ],
+            )
+
+        self.assertEqual(plan.silence_count, 0)
+
+    def test_speech_edit_keeps_an_internal_gap_when_it_contains_voice_activity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._wav_with_voice(wav_path, 2600, [(100, 500), (1000, 1200), (2000, 2400)])
+            plan = SpeechEditAnalyzer().analyze(
+                [
+                    TranscriptionSegment(100, 500, 'Primeira', 'word'),
+                    TranscriptionSegment(2000, 2400, 'segunda', 'word'),
+                ],
+                wav_path,
+                2600,
+                remove_fillers=False,
+                configuration={'profile': 'balanced'},
+            )
+
+        self.assertEqual(plan.silence_count, 0)
+
+    def test_speech_edit_removes_verified_silence_after_the_last_phrase_of_a_take(self):
+        with tempfile.TemporaryDirectory() as directory:
+            wav_path = Path(directory) / 'analysis.wav'
+            self._silent_wav(wav_path)
+            plan = SpeechEditAnalyzer().analyze(
+                [TranscriptionSegment(200, 600, 'Encerramos', 'word')],
+                wav_path,
+                2000,
+                remove_fillers=False,
+                configuration={'profile': 'balanced'},
+                block_ranges=[{'start_ms': 0, 'end_ms': 2000}],
+            )
+
+        # A 350 ms safety margin remains after the word; the residual room tone
+        # at the end of the take is removed.
+        self.assertIn(SpeechCut(950, 2000, 'silence'), plan.cuts)
 
     def test_speech_edit_keeps_a_pause_without_safe_margins(self):
         with tempfile.TemporaryDirectory() as directory:

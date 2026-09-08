@@ -321,29 +321,39 @@ class SpeechEditAnalyzer:
         ordered = sorted(words, key=lambda item: item.start_ms)
         cuts = []
         if remove_silence:
-            cuts.extend(self._silence_cuts(ordered, activity, profile))
-            cuts.extend(self._leading_take_cuts(ordered, block_ranges, profile))
+            cuts.extend(self._silence_cuts(ordered, activity, profile, block_ranges))
+            # Edge timestamps are the least reliable part of a transcription.
+            # Leading trims remain available for an explicitly opted-in template,
+            # but the safe default is to leave the start of every take untouched.
+            if configuration.get('trim_take_lead_silence', False):
+                cuts.extend(self._leading_take_cuts(ordered, block_ranges, activity, profile))
+            cuts.extend(self._trailing_take_cuts(ordered, block_ranges, activity, profile))
         if remove_fillers and ordered and all(word.granularity == 'word' for word in ordered):
             cuts.extend(self._filler_cuts(ordered, activity, profile, fillers))
-            cuts.extend(self._untranscribed_filler_cuts(ordered, activity))
+            # A voiced sound that was not transcribed cannot be reliably
+            # distinguished from a quiet syllable. Never remove it by default:
+            # preserving a word is more important than catching an extra "hum".
+            if configuration.get('remove_untranscribed_fillers', False):
+                cuts.extend(self._untranscribed_filler_cuts(ordered, activity))
         cuts = self._merge_safe_cuts(cuts, duration_ms)
         return SpeechEditPlan(tuple(cuts), duration_ms, profile.crossfade_ms)
 
     @staticmethod
-    def _leading_take_cuts(words, block_ranges, profile):
+    def _leading_take_cuts(words, block_ranges, activity, profile):
         """Removes a detached inhale/silence before speech starts in each take.
 
         A regular silence cut only has a previous and a following word. At the start
         of a clip there is no previous word, which previously left a short image of a
-        presenter inhaling before the first spoken phrase. Keep a tiny lead-in so the
-        first consonant is never clipped, but do not preserve a standalone breath.
+        presenter inhaling before the first spoken phrase. The transcription boundary
+        is not safe enough by itself, so only an observed voice onset may authorize
+        this edge trim.
         """
         if not words or not block_ranges:
             return []
         minimum_lead_ms = max(450, profile.minimum_silence_ms)
         # Word timestamps may start a little late; leave enough of the natural
         # lead-in so the first syllable does not feel abruptly cut.
-        speech_guard_ms = profile.silence_edge_guard_ms
+        speech_guard_ms = max(350, profile.silence_edge_guard_ms)
         cuts = []
         for item in block_ranges:
             start_ms = max(0, int(item.get('start_ms') or 0))
@@ -357,14 +367,84 @@ class SpeechEditAnalyzer:
             )
             if not first_word or first_word.start_ms - start_ms < minimum_lead_ms:
                 continue
-            cut_end = max(start_ms, first_word.start_ms - speech_guard_ms)
-            if cut_end - start_ms >= 120:
+            # Locate speech in the audio itself. If the VAD cannot establish a
+            # voice onset, preserving the lead-in is the deliberate safe default.
+            onset_regions = activity.voiced_regions(
+                start_ms,
+                min(end_ms, first_word.start_ms + speech_guard_ms),
+                minimum_ms=90,
+            )
+            if not onset_regions:
+                continue
+            first_voice_start, _ = onset_regions[0]
+            cut_end = max(start_ms, first_voice_start - speech_guard_ms)
+            if (
+                cut_end - start_ms >= 120
+                and SpeechEditAnalyzer._is_verified_quiet(activity, start_ms, cut_end)
+            ):
                 cuts.append(SpeechCut(start_ms, cut_end, 'silence'))
         return cuts
 
-    def _silence_cuts(self, words, activity, profile):
+    @staticmethod
+    def _trailing_take_cuts(words, block_ranges, activity, profile):
+        """Removes verified silence left after the last phrase of each take.
+
+        Internal pauses are handled by ``_silence_cuts``. A take ending has no
+        following word, though, so that pass cannot remove the common one or two
+        seconds of room tone after the presenter has finished. Keep a protected
+        lead-out after the final recognized word and only trim when the remaining
+        area is demonstrably quiet. Any voice-like island makes us preserve it.
+        """
+        if not words or not block_ranges:
+            return []
+        minimum_tail_ms = max(650, profile.minimum_silence_ms)
+        speech_guard_ms = max(350, profile.silence_edge_guard_ms)
+        cuts = []
+        for item in block_ranges:
+            start_ms = max(0, int(item.get('start_ms') or 0))
+            end_ms = max(start_ms, int(item.get('end_ms') or 0))
+            last_word = next(
+                (
+                    word for word in reversed(words)
+                    if word.end_ms > start_ms and word.end_ms <= end_ms
+                ),
+                None,
+            )
+            if not last_word or end_ms - last_word.end_ms < minimum_tail_ms:
+                continue
+            cut_start = min(end_ms, last_word.end_ms + speech_guard_ms)
+            if cut_start >= end_ms or end_ms - cut_start < 120:
+                continue
+            # Whisper can finish a word early, or omit a quiet final phrase.
+            # In both cases, audio activity is the safety net that keeps speech.
+            if not SpeechEditAnalyzer._is_verified_quiet(activity, cut_start, end_ms):
+                continue
+            cuts.append(SpeechCut(cut_start, end_ms, 'silence'))
+        return cuts
+
+    @staticmethod
+    def _is_verified_quiet(activity, start_ms, end_ms):
+        """Return true only for a cut window with no credible voice activity.
+
+        Word boundaries are estimates.  It is therefore not sufficient for an
+        interval to be *mostly* quiet: an automatic cut is safe only when its
+        own removable portion is at least 90% quiet and contains no sustained
+        voiced island.
+        """
+        return (
+            end_ms - start_ms >= 80
+            and activity.silence_ratio(start_ms, end_ms) >= 0.90
+            and not activity.voiced_regions(start_ms, end_ms, minimum_ms=90)
+        )
+
+    def _silence_cuts(self, words, activity, profile, block_ranges=None):
         cuts = []
         for previous, following in zip(words, words[1:]):
+            # Two clips often have an arbitrary gap between their final/first
+            # transcript words. That gap is not an internal pause and must never
+            # be used to trim the onset of the following take.
+            if block_ranges and not self._same_block(previous, following, block_ranges):
+                continue
             gap = following.start_ms - previous.end_ms
             if gap < profile.minimum_silence_ms or activity.silence_ratio(previous.end_ms, following.start_ms) < 0.68:
                 continue
@@ -382,17 +462,35 @@ class SpeechEditAnalyzer:
             # vowel. Keep a protected lead-out and lead-in around both words; if a
             # pause cannot fit those margins, preserving the natural pause is safer
             # than risking a clipped syllable.
-            keep = max(keep, profile.silence_edge_guard_ms * 2)
+            # Keep a deliberately generous boundary on both sides.  Whisper's
+            # timestamps can land inside vowels/consonants, especially around
+            # a cut between takes; compacting slightly less is preferable to
+            # ever taking part of a spoken word.
+            edge_guard_ms = max(320, profile.silence_edge_guard_ms)
+            keep = max(keep, edge_guard_ms * 2)
             removable = gap - min(gap, keep)
             if removable < 120:
                 continue
             left_keep = (gap - removable) // 2
-            cuts.append(SpeechCut(
-                previous.end_ms + left_keep,
-                following.start_ms - (gap - removable - left_keep),
-                'silence',
-            ))
+            cut_start = previous.end_ms + left_keep
+            cut_end = following.start_ms - (gap - removable - left_keep)
+            if self._is_verified_quiet(activity, cut_start, cut_end):
+                cuts.append(SpeechCut(cut_start, cut_end, 'silence'))
         return cuts
+
+    @staticmethod
+    def _same_block(previous, following, block_ranges):
+        for item in block_ranges:
+            start_ms = max(0, int(item.get('start_ms') or 0))
+            end_ms = max(start_ms, int(item.get('end_ms') or 0))
+            if (
+                previous.start_ms >= start_ms
+                and previous.end_ms <= end_ms
+                and following.start_ms >= start_ms
+                and following.end_ms <= end_ms
+            ):
+                return True
+        return False
 
     def _filler_cuts(self, words, activity, profile, fillers):
         cuts = []

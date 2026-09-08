@@ -1045,6 +1045,9 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # normalized master was exposed to the browser, so enrich only this
         # response rather than rewriting editorial history just to change a URL.
         timeline = deepcopy(revision.timeline)
+        # Keep legacy revisions aligned with the final assembly frame rate.
+        # RenderPreset has no fps field.
+        timeline.setdefault('sequence', {})['fps'] = 30
         # Caption styling was added after some revision snapshots already existed.
         # Enrich those read-only snapshots with the exact styles frozen on the job.
         if project.render_job_id:
@@ -1142,6 +1145,16 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
         return protected_file_response(request, music)
 
 
+def preview_revision_response(project, member, revision, **extra):
+    """Keep preview mutations and history navigation on the same response shape."""
+    return JsonResponse({
+        'revision': revision.revision,
+        'timeline': revision.timeline,
+        'history': TimelineRevisionService.history_state(project, member),
+        **extra,
+    })
+
+
 class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id, decision_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
@@ -1152,7 +1165,7 @@ class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
             )
         except ValueError as exc:
             return JsonResponse({'error': str(exc)}, status=404)
-        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+        return preview_revision_response(project, self.member, revision)
 
 
 class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
@@ -1165,7 +1178,7 @@ class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
             )
         except (TypeError, ValueError) as exc:
             return JsonResponse({'error': str(exc)}, status=400)
-        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+        return preview_revision_response(project, self.member, revision)
 
 
 class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View):
@@ -1226,7 +1239,7 @@ class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, View):
         if not text:
             return JsonResponse({'error': 'A legenda não pode ficar vazia.'}, status=400)
         revision = TimelineRevisionService.update_subtitle(project, self.member, cue_id, text)
-        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+        return preview_revision_response(project, self.member, revision)
 
 
 class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View):
@@ -1239,7 +1252,7 @@ class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View)
             )
         except ValueError as exc:
             return JsonResponse({'error': str(exc)}, status=404)
-        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+        return preview_revision_response(project, self.member, revision)
 
 
 class ExternalMediaProjectOverlayDataView(ExternalMediaRequiredMixin, View):
@@ -1324,7 +1337,7 @@ class ExternalMediaProjectPreviewOverlayView(ExternalMediaRequiredMixin, View):
             )
         except ValueError as exc:
             return JsonResponse({'error': str(exc)}, status=400)
-        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline, 'overlay_id': overlay_id})
+        return preview_revision_response(project, self.member, revision, overlay_id=overlay_id)
 
 
 class ExternalMediaProjectPreviewOverlayAssetView(ExternalMediaRequiredMixin, View):
@@ -1364,7 +1377,7 @@ class ExternalMediaProjectPreviewHistoryView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         revision = TimelineRevisionService.navigate_history(project, self.member, self.direction)
-        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline})
+        return preview_revision_response(project, self.member, revision)
 
 
 class ExternalMediaProjectPreviewRedoView(ExternalMediaProjectPreviewHistoryView):

@@ -27,6 +27,11 @@ from .overlays import OverlayTimelineService
 from .workspace import JobWorkspace, estimate_media_workspace_bytes
 
 
+# The final interactive-review assembly is 30 fps. A manual cut may be as
+# short as one rendered frame, which is important for trimming a take's tail.
+MIN_MANUAL_CUT_MS = 33
+
+
 class ProjectProxyService:
     @classmethod
     def prepare(cls, project):
@@ -339,6 +344,9 @@ class PreviewCompositionService:
             'sequence': {
                 'width': project.template_version.preset.width or 1920,
                 'height': project.template_version.preset.height or 1080,
+                # The final assembly is rendered at 30 fps. RenderPreset only
+                # describes the output dimensions/codecs, not a frame rate.
+                'fps': 30,
                 'duration_ms': timeline_cursor,
             },
             'assets': assets,
@@ -427,8 +435,8 @@ class TimelineRevisionService:
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
         start, end = max(0, int(start_ms)), max(0, int(end_ms))
-        if end - start < 100:
-            raise ValueError('Selecione um trecho de pelo menos 0,1 segundo.')
+        if end - start < MIN_MANUAL_CUT_MS:
+            raise ValueError('Selecione um trecho de pelo menos um quadro.')
         decisions = deepcopy(current.edit_decision_set)
         operations = decisions.setdefault('operations', [])
         for item in operations:
@@ -564,6 +572,17 @@ class TimelineRevisionService:
             session.last_seen_at = timezone.now()
             session.save(update_fields=['current_revision', 'last_seen_at', 'update_at'])
         return session
+
+    @staticmethod
+    def history_state(project, member):
+        """Return the availability of per-edit undo/redo for this member."""
+        session = PreviewSession.objects.filter(project=project, member=member).only(
+            'undo_stack', 'redo_stack',
+        ).first()
+        return {
+            'can_undo': bool(session and session.undo_stack),
+            'can_redo': bool(session and session.redo_stack),
+        }
 
     @classmethod
     @transaction.atomic

@@ -426,9 +426,11 @@ class AutoReframeService:
         # its small adaptive zoom, which is useful for vertical social formats.
         if self.priority == 'face':
             # A 16:5 cover crop normally uses the entire source width, leaving no
-            # horizontal room for the tracker. Only when the speaker consistently
-            # stands away from center reserve up to 4% for a subtle pan.
-            tracking_zoom = 0.96 if self._needs_tracking_pan(observations, source_width) else 1.0
+            # horizontal room for the tracker. When the speaker is consistently
+            # off-center, reserve enough room for a stable correction in every
+            # take. A modest 10% crop is substantially less distracting than a
+            # presenter visibly jumping left/right at each edit boundary.
+            tracking_zoom = 0.90 if self._needs_tracking_pan(observations, source_width) else 1.0
             crop_width = cover_width * tracking_zoom
             crop_height = cover_height * tracking_zoom
         else:

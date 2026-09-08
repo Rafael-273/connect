@@ -589,17 +589,18 @@ class AudioCleanupService:
     def _apply_local(self, media_path, output_path, decision, segment_start, segment_end):
         duration_ms = self.editor.duration_ms(media_path)
         segment_end = min(duration_ms, segment_end)
-        fade_s = CROSSFADE_MS / 1000
         start_s = segment_start / 1000
         end_s = segment_end / 1000
         duration_s = duration_ms / 1000
         nr = FFmpegAfftdnProvider.STRENGTH_NR.get(decision.strength, 8)
+        # Crossfading overlaps samples and shortens the audio while the copied
+        # video stream keeps its duration. Concatenating the treated slice keeps
+        # the original timestamp and duration exactly intact.
         filter_complex = (
             f'[0:a]atrim=0:{start_s},asetpts=PTS-STARTPTS[head];'
             f'[0:a]atrim={start_s}:{end_s},asetpts=PTS-STARTPTS,afftdn=nf=-25:nr={nr}:nt=w[body];'
             f'[0:a]atrim={end_s}:{duration_s},asetpts=PTS-STARTPTS[tail];'
-            f'[head][body]acrossfade=d={fade_s}:c1=tri:c2=tri[hb];'
-            f'[hb][tail]acrossfade=d={fade_s}:c1=tri:c2=tri[aout]'
+            '[head][body][tail]concat=n=3:v=0:a=1[aout]'
         )
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', str(media_path),
