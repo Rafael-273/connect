@@ -23,3 +23,7 @@ __all__ = [
     'WordOfKnowledgeForm',
     'HealingForm',
 ]
+from .external_media import (
+    ExternalMediaJobForm, ExternalMediaProjectForm, ExternalMediaProjectSettingsForm,
+    GlossaryTermForm, ProjectBlockMediaForm,
+)

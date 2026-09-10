@@ -1,0 +1,140 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}{{ title }} - Painel Administrativo{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+    .admin-card {
+        background: white;
+        border-radius: 14px;
+        box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+    }
+    .section-header {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1.5px solid #f1f5f9;
+    }
+    .section-header .icon-wrap {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: var(--color-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .section-header .icon-wrap ion-icon { color: white; font-size: 15px; }
+    .section-header span {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #374151;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .form-group { margin-bottom: 1.25rem; }
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.375rem;
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+    }
+    .checkbox-card {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.625rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: border-color 0.18s, background-color 0.18s;
+        background: #fafafa;
+    }
+    .checkbox-card:has(input:checked) {
+        border-color: var(--color-primary);
+        background-color: rgba(201,9,5,0.04);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24 w-full">
+            <div class="flex items-center justify-between gap-3 mb-5">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center shadow-sm">
+                        <ion-icon name="albums-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{{ title }}</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">Identidade base do template de produção</p>
+                    </div>
+                </div>
+                <a href="{% if template %}{% url 'admin_external_media_template_detail' template.id %}{% else %}{% url 'admin_external_media_templates' %}{% endif %}" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                    <ion-icon name="arrow-back-outline"></ion-icon>
+                    Voltar
+                </a>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" class="admin-card p-6 md:p-8">
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                <div class="mb-5 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="section-header">
+                    <div class="icon-wrap"><ion-icon name="information-circle-outline"></ion-icon></div>
+                    <span>Informações do Template</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6">
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">{{ form.name.label }}</label>
+                        {{ form.name }}
+                        {% if form.name.errors %}<p class="text-xs text-red-600 mt-1">{{ form.name.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">{{ form.description.label }}</label>
+                        {{ form.description }}
+                        {% if form.description.errors %}<p class="text-xs text-red-600 mt-1">{{ form.description.errors.0 }}</p>{% endif %}
+                    </div>
+
+                    <div class="form-group md:col-span-2 mb-0">
+                        <label class="checkbox-card">
+                            {{ form.is_active }}
+                            <span class="text-sm font-medium text-gray-700">{{ form.is_active.label }}</span>
+                        </label>
+                        {% if form.is_active.errors %}<p class="text-xs text-red-600 mt-1">{{ form.is_active.errors.0 }}</p>{% endif %}
+                    </div>
+                </div>
+
+                <div class="section-header mt-6">
+                    <div class="icon-wrap"><ion-icon name="sparkles-outline"></ion-icon></div>
+                    <span>Como Isso Vai Funcionar</span>
+                </div>
+
+                <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                    O nome será usado para gerar a identificação interna automaticamente. Depois de salvar, você poderá configurar blocos, processamentos, estilos e regras de renderização do template atual.
+                </div>
+
+                <div class="flex flex-col sm:flex-row justify-end gap-3 mt-8 pt-5 border-t border-gray-100">
+                    <a href="{% if template %}{% url 'admin_external_media_template_detail' template.id %}{% else %}{% url 'admin_external_media_templates' %}{% endif %}" class="px-5 py-2.5 border border-gray-300 bg-white text-gray-600 rounded-lg text-center font-semibold">Cancelar</a>
+                    <button class="px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-lg font-semibold">Salvar Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

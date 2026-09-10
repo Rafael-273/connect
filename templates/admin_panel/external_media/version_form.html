@@ -1,0 +1,2402 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}{{ title }} - Template de Mídia{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+    .admin-card { background: white; border-radius: 14px; box-shadow: 0 2px 16px rgba(0,0,0,0.07); }
+    .section-title { display: flex; align-items: center; gap: .6rem; padding-bottom: .75rem; margin-bottom: 1.25rem; border-bottom: 1px solid #f1f5f9; font-weight: 800; color: #374151; }
+    .section-title ion-icon { color: var(--color-primary); font-size: 1.2rem; }
+    .form-label { display: block; font-weight: 700; color: #374151; margin-bottom: .375rem; font-size: .8rem; }
+    .inline-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fafafa; }
+    .manage-select { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; align-items: start; }
+    .manage-btn { width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(201,9,5,.08); color: var(--color-primary); transition: background .15s; }
+    .manage-btn:hover { background: rgba(201,9,5,.16); }
+    .media-modal { position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(17,24,39,.55); }
+    .media-modal.active { display: flex; }
+    .media-modal-panel { width: min(1040px, 100%); max-height: 90vh; overflow-y: auto; background: white; border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.22); }
+    .modal-table th { padding: .75rem 1rem; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; background: #f8fafc; text-align: left; }
+    .modal-table td { padding: .85rem 1rem; border-top: 1px solid #f1f5f9; vertical-align: middle; }
+    .asset-action { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: #f8fafc; color: #4b5563; }
+    .asset-action:hover { background: #eef2ff; color: #1f2937; }
+    .asset-action-danger:hover { background: #fee2e2; color: #dc2626; }
+    .language-help { border: 1px solid #e5e7eb; border-radius: 12px; background: #f8fafc; padding: .9rem 1rem; color: #4b5563; font-size: .82rem; line-height: 1.45; }
+    .block-help { border: 1px solid #e5e7eb; border-radius: 12px; background: #f8fafc; padding: .85rem 1rem; color: #4b5563; font-size: .82rem; line-height: 1.45; }
+    .block-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fafafa; transition: border-color .15s, box-shadow .15s, opacity .15s; }
+    .block-card.dragging { opacity: .55; border-color: var(--color-primary); box-shadow: 0 12px 28px rgba(0,0,0,.08); }
+    .drag-handle { width: 36px; height: 36px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: white; border: 1px solid #e5e7eb; color: #6b7280; cursor: grab; }
+    .drag-handle:active { cursor: grabbing; }
+    .block-position-badge { min-width: 36px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: rgba(201,9,5,.08); color: var(--color-primary); font-size: .75rem; font-weight: 800; }
+    .block-remove-btn { display: inline-flex; align-items: center; gap: .35rem; color: #dc2626; font-size: .9rem; font-weight: 700; }
+    .media-modal-panel.media-modal-panel-wide { width: min(1480px, 100%); }
+    .style-preview-shell { border: 1px solid #e5e7eb; border-radius: 18px; padding: 18px; transition: background .2s ease; }
+    .style-preview-shell[data-backdrop="dark"] { background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); }
+    .style-preview-shell[data-backdrop="light"] { background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%); border-color: #cbd5e1; }
+    .style-preview-stage { position: relative; width: 100%; border-radius: 18px; overflow: hidden; transition: background .2s ease; }
+    .style-preview-shell[data-backdrop="dark"] .style-preview-stage { background:
+        radial-gradient(circle at 75% 18%, rgba(148,163,184,.22), transparent 16%),
+        linear-gradient(135deg, rgba(15,23,42,.96), rgba(30,41,59,.82)); }
+    .style-preview-shell[data-backdrop="light"] .style-preview-stage { background:
+        radial-gradient(circle at 75% 18%, rgba(148,163,184,.35), transparent 18%),
+        linear-gradient(135deg, #f1f5f9, #e2e8f0 55%, #cbd5e1); }
+    .style-preview-stage::before { content: ""; display: block; padding-top: var(--preview-ratio, 56.25%); }
+    .style-preview-overlay { position: absolute; inset: 0; }
+    .style-preview-subtitle {
+        position: absolute; left: 50%; transform: translateX(-50%);
+        display: inline-block; width: max-content; max-width: min(92%, calc(100% - 80px));
+        text-align: center; line-height: 1;
+        letter-spacing: .01em; white-space: pre-wrap; word-break: break-word;
+        paint-order: stroke fill;
+        -webkit-font-smoothing: antialiased;
+    }
+    .style-preview-subtitle.single-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .style-preview-frame-label { display: inline-flex; align-items: center; gap: .35rem; padding: .35rem .65rem; border-radius: 999px; font-size: .72rem; font-weight: 700; transition: background .2s ease, color .2s ease; }
+    .style-preview-shell[data-backdrop="dark"] .style-preview-frame-label { background: rgba(255,255,255,.12); color: rgba(255,255,255,.9); }
+    .style-preview-shell[data-backdrop="light"] .style-preview-frame-label { background: rgba(15,23,42,.08); color: #334155; }
+    .style-preview-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(400px, .95fr); gap: 1.25rem; }
+    @media (max-width: 1100px) { .style-preview-grid { grid-template-columns: 1fr; } }
+    .style-preview-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+    .style-preview-meta-card { border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; padding: .85rem 1rem; }
+    .style-font-chip { display: inline-flex; align-items: center; gap: .45rem; border-radius: 999px; background: #f8fafc; padding: .3rem .7rem; font-size: .75rem; color: #475569; }
+    .style-form-section { border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; padding: 14px; }
+    .style-form-section + .style-form-section { margin-top: .85rem; }
+    .style-form-section-title { font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #94a3b8; margin-bottom: .85rem; }
+    .style-field-help { font-size: .72rem; color: #94a3b8; margin-top: .3rem; line-height: 1.35; }
+    .style-bg-fields[data-disabled="true"] { opacity: .45; pointer-events: none; }
+    .style-backdrop-toggle { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; background: #fff; }
+    .style-backdrop-toggle button { padding: .45rem .85rem; font-size: .78rem; font-weight: 700; color: #64748b; background: transparent; transition: background .15s, color .15s; }
+    .style-backdrop-toggle button[data-backdrop="dark"].active { background: #0f172a; color: #fff; }
+    .style-backdrop-toggle button[data-backdrop="light"].active { background: #e2e8f0; color: #0f172a; }
+    .style-list-empty { border: 1px dashed #d1d5db; border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; color: #6b7280; background: #fafafa; }
+    .checkbox-card {
+        display: flex; align-items: center; gap: .625rem;
+        padding: .625rem .875rem; border: 1.5px solid #e5e7eb; border-radius: 10px;
+        cursor: pointer; transition: border-color .18s, background-color .18s; background: #fafafa;
+    }
+    .checkbox-card:has(input:checked) { border-color: var(--color-primary); background-color: rgba(201,9,5,0.04); }
+    .form-subsection { padding-top: 1.25rem; margin-top: 1.25rem; border-top: 1px solid #f1f5f9; }
+    .form-subsection-title { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #94a3b8; margin-bottom: 1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="flex items-center justify-between gap-3 mb-5">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center shadow-sm">
+                        <ion-icon name="film-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        {% if is_create %}
+                        <a href="{% url 'admin_external_media_templates' %}" class="text-xs text-gray-500 hover:underline">Mídia Externa</a>
+                        {% else %}
+                        <a href="{% url 'admin_external_media_template_detail' template.id %}" class="text-xs text-gray-500 hover:underline">{{ template.name }}</a>
+                        {% endif %}
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{{ title }}</h1>
+                        <p class="text-sm text-gray-500 mt-0.5">Identidade, renderização, blocos e processamentos do template.</p>
+                    </div>
+                </div>
+                <a href="{% if is_create %}{% url 'admin_external_media_templates' %}{% else %}{% url 'admin_external_media_template_detail' template.id %}{% endif %}" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
+                    <ion-icon name="arrow-back-outline"></ion-icon>
+                    Voltar
+                </a>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" class="space-y-6">
+                {% csrf_token %}
+
+                <div class="admin-card p-6">
+                    <div class="section-title"><ion-icon name="information-circle-outline"></ion-icon><span>Informações do template</span></div>
+                    {% if template_form.non_field_errors %}
+                    <div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ template_form.non_field_errors }}</div>
+                    {% endif %}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="md:col-span-2">
+                            <label class="form-label">{{ template_form.name.label }}</label>
+                            {{ template_form.name }}
+                            {% if template_form.name.errors %}<p class="text-xs text-red-600 mt-1">{{ template_form.name.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="form-label">{{ template_form.description.label }}</label>
+                            {{ template_form.description }}
+                            {% if template_form.description.errors %}<p class="text-xs text-red-600 mt-1">{{ template_form.description.errors.0 }}</p>{% endif %}
+                        </div>
+                        <input type="hidden" name="{{ template_form.is_active.html_name }}" value="{{ template_form.instance.is_active|yesno:'true,false' }}">
+                    </div>
+
+                    <div class="form-subsection">
+                        <div class="form-subsection-title">Renderização e idiomas</div>
+                    {% if form.non_field_errors %}
+                    <div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ form.non_field_errors }}</div>
+                    {% endif %}
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="form-label">{{ form.preset.label }}</label>
+                            <div class="manage-select">
+                                {{ form.preset }}
+                                <button type="button" class="manage-btn" data-open-modal="preset-modal" title="Gerenciar presets">
+                                    <ion-icon name="options-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            {% if form.preset.errors %}<p class="text-xs text-red-600 mt-1">{{ form.preset.errors.0 }}</p>{% endif %}
+                        </div>
+                        <label class="inline-card bg-white flex items-center gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                            <input type="hidden" name="{{ form.subtitles_enabled.html_name }}" value="">
+                            {{ form.subtitles_enabled }}
+                            <span>
+                                <span class="block font-semibold text-gray-900">{{ form.subtitles_enabled.label }}</span>
+                                <span class="block text-xs text-gray-500 mt-1">Ative para criar a legenda no idioma principal.</span>
+                            </span>
+                        </label>
+                        <label class="inline-card bg-white flex items-center gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                            <input type="hidden" name="{{ form.interactive_preview_enabled.html_name }}" value="">
+                            {{ form.interactive_preview_enabled }}
+                            <span><span class="block font-semibold text-gray-900">{{ form.interactive_preview_enabled.label }}</span><span class="block text-xs text-gray-500 mt-1">Permite conferir cortes, legendas e enquadramento antes do vídeo final.</span></span>
+                        </label>
+                        <div id="preview-profile-field">
+                            <label class="form-label">{{ form.preview_proxy_profile.label }}</label>
+                            {{ form.preview_proxy_profile }}
+                            <p class="text-xs text-gray-500 mt-1">Use Community 1 para uma prévia leve e sincronizada.</p>
+                        </div>
+                        <div id="subtitle-style-field">
+                            <label class="form-label">{{ form.subtitle_style.label }}</label>
+                            <div class="manage-select">
+                                {{ form.subtitle_style }}
+                                <button type="button" class="manage-btn" data-open-modal="style-modal" title="Gerenciar estilos de legenda">
+                                    <ion-icon name="color-palette-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Esse estilo será usado na legenda principal do vídeo.</p>
+                            {% if form.subtitle_style.errors %}<p class="text-xs text-red-600 mt-1">{{ form.subtitle_style.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="translated-style-field">
+                            <label class="form-label">{{ form.translated_subtitle_style.label }}</label>
+                            <div class="manage-select">
+                                {{ form.translated_subtitle_style }}
+                                <button type="button" class="manage-btn" data-open-modal="style-modal" title="Gerenciar estilos de legenda">
+                                    <ion-icon name="layers-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Opcional. Se deixar em branco, a tradução usa o mesmo estilo da legenda original.</p>
+                            {% if form.translated_subtitle_style.errors %}<p class="text-xs text-red-600 mt-1">{{ form.translated_subtitle_style.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="original-language-field">
+                            <label class="form-label">{{ form.original_language.label }}</label>
+                            {{ form.original_language }}
+                            {% if form.original_language.errors %}<p class="text-xs text-red-600 mt-1">{{ form.original_language.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="language-mode-field">
+                            <label class="form-label">{{ form.language_mode.label }}</label>
+                            {{ form.language_mode }}
+                            {% if form.language_mode.errors %}<p class="text-xs text-red-600 mt-1">{{ form.language_mode.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="spoken-languages-field">
+                            <label class="form-label">{{ form.spoken_languages.label }}</label>
+                            <div class="flex flex-wrap gap-4 text-sm text-gray-700">
+                                {% for choice in form.spoken_languages %}
+                                <label class="inline-flex items-center gap-2">{{ choice.tag }} {{ choice.choice_label }}</label>
+                                {% endfor %}
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">{{ form.spoken_languages.help_text }}</p>
+                            {% if form.spoken_languages.errors %}<p class="text-xs text-red-600 mt-1">{{ form.spoken_languages.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="translated-language-field">
+                            <label class="form-label">{{ form.translated_language.label }}</label>
+                            {{ form.translated_language }}
+                            {% if form.translated_language.errors %}<p class="text-xs text-red-600 mt-1">{{ form.translated_language.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="language-help" class="md:col-span-2 language-help">
+                            <strong>Apenas um idioma:</strong> use quando o vídeo e a legenda final devem ficar só no idioma padrão.
+                            <br>
+                            <strong>Idioma padrão + legendas traduzidas:</strong> use quando o vídeo tem uma língua principal e você quer gerar uma segunda legenda em outro idioma.
+                            <br>
+                            <strong>Dois idiomas falados no mesmo vídeo:</strong> use quando o áudio já mistura português e inglês. Nesse modo a transcrição deixa o modelo detectar os idiomas falados.
+                        </div>
+                    </div>
+                    </div>
+
+                    <div class="form-subsection">
+                        <div class="form-subsection-title">Assets e áudio</div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="form-label">{{ form.color_lut.label }}</label>
+                            <div class="manage-select">
+                                {{ form.color_lut }}
+                                <button type="button" class="manage-btn" data-open-modal="color-lut-modal" title="Gerenciar LUTs">
+                                    <ion-icon name="color-filter-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Escolha um LUT do catálogo para reutilizá-lo em outros templates.</p>
+                            {% if form.color_lut.errors %}<p class="text-xs text-red-600 mt-1">{{ form.color_lut.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div id="lut-intensity-field" class="hidden">
+                            <label class="form-label">{{ form.lut_intensity.label }}</label>{{ form.lut_intensity }}
+                            <p class="text-xs text-gray-500 mt-1">50% mantém o tratamento mais suave. Blocos marcados como intactos não recebem o LUT.</p>
+                            {% if form.lut_intensity.errors %}<p class="text-xs text-red-600 mt-1">{{ form.lut_intensity.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="form-label">{{ form.background_music.label }}</label>
+                            <div class="manage-select">
+                                {{ form.background_music }}
+                                <button type="button" class="manage-btn" data-open-modal="music-modal" title="Gerenciar trilhas">
+                                    <ion-icon name="musical-notes-outline" class="text-xl"></ion-icon>
+                                </button>
+                            </div>
+                            {% if form.background_music.errors %}<p class="text-xs text-red-600 mt-1">{{ form.background_music.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+                    </div>
+
+                    <div class="form-subsection">
+                        <div class="form-subsection-title">Áudio inteligente</div>
+                        <div class="block-help mb-4">
+                            Controla o tratamento de diálogo, a mixagem automática (ducking da música durante a fala) e a masterização final (loudness/true peak) deste template. O operador não precisa ajustar nada disso por vídeo.
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-5">
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.dialogue_processing_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.dialogue_processing_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Limpa e equilibra a voz (EQ, compressão) antes da mixagem, e nivela automaticamente falantes com volumes diferentes.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_noise_cleanup_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_noise_cleanup_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Detecta ruídos indesejados e aplica redução conservadora, preservando a naturalidade da voz.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_mixing_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_mixing_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Reduz a música de forma adaptativa quando há fala, e devolve a presença dela nos trechos sem fala.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_ducking_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_ducking_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Liga o ducking dentro da mixagem inteligente. Se desligado, a música fica em volume fixo.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_spectral_ducking_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_spectral_ducking_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Além de reduzir o volume, abre espaço na frequência da voz quando a música é densa nessa faixa.</p>
+                                </div>
+                            </label>
+                            <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                                <div class="pt-1">{{ form.audio_mastering_enabled }}</div>
+                                <div>
+                                    <p class="font-semibold text-gray-900">{{ form.audio_mastering_enabled.label }}</p>
+                                    <p class="text-xs text-gray-500 mt-1">Normaliza loudness e limita o true peak do mix final, usando o perfil escolhido ao lado.</p>
+                                </div>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
+                            <div id="mastering-profile-field" class="hidden xl:col-span-1">
+                                <label class="form-label">{{ form.mastering_profile.label }}</label>
+                                <div class="manage-select">
+                                    {{ form.mastering_profile }}
+                                    <button type="button" class="manage-btn" data-open-modal="mastering-modal" title="Gerenciar perfis de masterização">
+                                        <ion-icon name="speedometer-outline" class="text-xl"></ion-icon>
+                                    </button>
+                                </div>
+                                {% if form.mastering_profile.errors %}<p class="text-xs text-red-600 mt-1">{{ form.mastering_profile.errors.0 }}</p>{% endif %}
+                            </div>
+                            <div id="mixing-advanced-control" class="hidden xl:col-span-1">
+                                <button type="button" id="mixing-advanced-toggle" class="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition" aria-expanded="false">
+                                    <ion-icon name="options-outline"></ion-icon> Configurações avançadas da mixagem
+                                    <ion-icon name="chevron-down-outline" data-advanced-chevron></ion-icon>
+                                </button>
+                            </div>
+                            <div id="dialogue-advanced-control" class="hidden xl:col-span-1">
+                                <button type="button" id="dialogue-advanced-toggle" class="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition" aria-expanded="false">
+                                    <ion-icon name="options-outline"></ion-icon> Configurações avançadas do diálogo
+                                    <ion-icon name="chevron-down-outline" data-advanced-chevron></ion-icon>
+                                </button>
+                            </div>
+                            <div id="noise-advanced-control" class="hidden xl:col-span-1">
+                                <button type="button" id="noise-advanced-toggle" class="inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition" aria-expanded="false">
+                                    <ion-icon name="options-outline"></ion-icon> Configurações avançadas de ruído
+                                    <ion-icon name="chevron-down-outline" data-advanced-chevron></ion-icon>
+                                </button>
+                            </div>
+                            <div id="mixing-advanced-field" class="hidden md:col-span-2 xl:col-span-3">
+                                <label class="form-label">{{ form.audio_mixing_config_raw.label }}</label>
+                                {{ form.audio_mixing_config_raw }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.audio_mixing_config_raw.help_text }}</p>
+                                {% if form.audio_mixing_config_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ form.audio_mixing_config_raw.errors.0 }}</p>{% endif %}
+                            </div>
+                            <div id="dialogue-advanced-field" class="hidden md:col-span-2 xl:col-span-3">
+                                <label class="form-label">{{ form.dialogue_processing_config_raw.label }}</label>
+                                {{ form.dialogue_processing_config_raw }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.dialogue_processing_config_raw.help_text }}</p>
+                                {% if form.dialogue_processing_config_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ form.dialogue_processing_config_raw.errors.0 }}</p>{% endif %}
+                            </div>
+                            <div id="noise-advanced-field" class="hidden md:col-span-2 xl:col-span-3">
+                                <label class="form-label">{{ form.audio_noise_cleanup_config_raw.label }}</label>
+                                {{ form.audio_noise_cleanup_config_raw }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.audio_noise_cleanup_config_raw.help_text }}</p>
+                                {% if form.audio_noise_cleanup_config_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ form.audio_noise_cleanup_config_raw.errors.0 }}</p>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-card p-6">
+                    <div class="section-title"><ion-icon name="construct-outline"></ion-icon><span>Recursos de edição inteligente</span></div>
+                    <div class="block-help mb-4">
+                        Defina os aprimoramentos automáticos que este template aplicará ao vídeo.
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        {% for choice in form.advanced_plugins %}
+                        <label class="inline-card bg-white flex items-start gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                            <div class="pt-1">{{ choice.tag }}</div>
+                            <div>
+                                <p class="font-semibold text-gray-900">{{ choice.choice_label }}</p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    {% if choice.data.value == 'silence_removal' %}
+                                    Tenta cortar pausas silenciosas para deixar o vídeo mais direto.
+                                    {% elif choice.data.value == 'filler_removal' %}
+                                    Tenta limpar vícios de fala como “é…”, “ahn…” e repetições desnecessárias.
+                                    {% elif choice.data.value == 'auto_tracking' %}
+                                    Ajusta o quadro automaticamente. Você pode acompanhar pessoas ou usar um zoom estável para podcasts.
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </label>
+                        {% endfor %}
+                    </div>
+                    <div id="auto-reframe-settings" class="mt-4 inline-card bg-white">
+                        <label class="form-label">{{ form.auto_reframe_priority.label }}</label>
+                        {{ form.auto_reframe_priority }}
+                        <p class="text-xs text-gray-500 mt-2">
+                            Melhorar enquadramento aplica um zoom central de 6%, sem acompanhar pessoas, ideal para podcasts.
+                            Rosto mantém o locutor em destaque; Corpo abre mais o quadro para preservar gestos e movimento.
+                        </p>
+                        {% if form.auto_reframe_priority.errors %}<p class="text-xs text-red-600 mt-2">{{ form.auto_reframe_priority.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div id="speech-edit-settings" class="mt-4 inline-card bg-white">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">{{ form.speech_edit_profile.label }}</label>
+                                {{ form.speech_edit_profile }}
+                                <p class="text-xs text-gray-500 mt-2">
+                                    Conservador mantém mais pausas; Equilibrado é o padrão; Dinâmico deixa vídeos curtos mais diretos.
+                                </p>
+                            </div>
+                            <div>
+                                <div class="flex items-center justify-between gap-3 mb-2">
+                                    <label class="form-label !mb-0">{{ form.filler_terms.label }}</label>
+                                    <button type="button" class="text-xs font-semibold text-[var(--color-primary)] hover:underline" data-open-modal="filler-term-modal">
+                                        <ion-icon name="add-circle-outline" class="align-middle text-base"></ion-icon>
+                                        Criar outro
+                                    </button>
+                                </div>
+                                <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 max-h-40 overflow-y-auto grid grid-cols-2 gap-x-3 gap-y-2">
+                                    {% for choice in form.filler_terms %}
+                                    <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">{{ choice.tag }}<span>{{ choice.choice_label }}</span></label>
+                                    {% empty %}
+                                    <p class="col-span-2 text-sm text-gray-500">Nenhum termo disponível. Crie o primeiro vício de fala.</p>
+                                    {% endfor %}
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">{{ form.filler_terms.help_text }}</p>
+                            </div>
+                        </div>
+                        <div class="block-help mt-4">
+                            A proteção de 100 ms ao redor das palavras é sempre aplicada. Respirações e pausas após frases
+                            recebem espaço extra; se houver dúvida sobre uma sílaba, o trecho é mantido.
+                        </div>
+                        {% if form.speech_edit_profile.errors %}<p class="text-xs text-red-600 mt-2">{{ form.speech_edit_profile.errors.0 }}</p>{% endif %}
+                        {% if form.filler_terms.errors %}<p class="text-xs text-red-600 mt-2">{{ form.filler_terms.errors.0 }}</p>{% endif %}
+                    </div>
+                    {% if form.advanced_plugins.errors %}<p class="text-xs text-red-600 mt-3">{{ form.advanced_plugins.errors.0 }}</p>{% endif %}
+                    <p class="text-xs text-gray-500 mt-3">Ative os recursos que fazem sentido para este tipo de vídeo.</p>
+                </div>
+
+                <div class="admin-card p-6">
+                    <div class="section-title"><ion-icon name="albums-outline"></ion-icon><span>Blocos do projeto</span></div>
+                    <div class="block-help mb-4">
+                        Cada bloco pode receber <strong>quantos vídeos forem necessários</strong>. Você só precisa definir o nome, a descrição e a ordem das partes do projeto.
+                    </div>
+                    {% if overlay_presets %}
+                    <div class="block-help mb-4">
+                        <strong>Elementos visuais automáticos:</strong> configure uma vez aqui; no projeto, o membro preenche apenas dados como texto, data, URL ou CTA.
+                    </div>
+                    {% endif %}
+                    {{ overlay_preset_rows|json_script:"overlay-preset-data" }}
+                    {{ block_formset.management_form }}
+                    {% if block_formset.non_form_errors %}<div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ block_formset.non_form_errors }}</div>{% endif %}
+                    <div id="blocks-container" class="space-y-4">
+                        {% for block_form in block_formset %}
+                        <div class="block-card" draggable="true" data-block-form>
+                            {{ block_form.id }}
+                            {{ block_form.key }}
+                            {{ block_form.order }}
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex items-center gap-3">
+                                    <button type="button" class="drag-handle" title="Arrastar bloco"><ion-icon name="reorder-three-outline" class="text-xl"></ion-icon></button>
+                                    <span class="block-position-badge" data-block-position>{{ forloop.counter }}</span>
+                                    <span class="text-sm font-bold text-gray-700">Bloco</span>
+                                </div>
+                                {{ block_form.allows_multiple }}
+                                {% if block_form.DELETE %}
+                                <div class="hidden">{{ block_form.DELETE }}</div>
+                                <button type="button" class="block-remove-btn" data-remove-block><ion-icon name="trash-outline"></ion-icon> Remover</button>
+                                {% endif %}
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2"><label class="form-label">{{ block_form.name.label }}</label>{{ block_form.name }}{% if block_form.name.errors %}<p class="text-xs text-red-600 mt-1">{{ block_form.name.errors.0 }}</p>{% endif %}</div>
+                                <div><label class="form-label">{{ block_form.default_video.label }}</label>{{ block_form.default_video }}</div>
+                                <div class="md:col-span-3"><label class="form-label">{{ block_form.description.label }}</label>{{ block_form.description }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.is_required }} {{ block_form.is_required.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.skip_extra_processing }} {{ block_form.skip_extra_processing.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_form.remove_background_voice }} {{ block_form.remove_background_voice.label }}</label>
+                                <div class="md:col-span-3">
+                                    {{ block_form.overlay_definitions_raw }}
+                                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4" data-overlay-builder>
+                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem neste bloco.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
+                                        <div class="space-y-3" data-overlay-items></div>
+                                        <p class="text-sm text-gray-500" data-overlay-empty>Nenhum elemento visual configurado.</p>
+                                    </div>
+                                    {% if block_form.overlay_definitions_raw.errors %}<p class="text-xs text-red-600 mt-1">{{ block_form.overlay_definitions_raw.errors.0 }}</p>{% endif %}
+                                </div>
+                                {{ block_form.min_occurrences }}
+                                {{ block_form.max_occurrences }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <template id="empty-block-template">
+                        <div class="block-card" draggable="true" data-block-form>
+                            {{ block_formset.empty_form.id }}
+                            {{ block_formset.empty_form.key }}
+                            {{ block_formset.empty_form.order }}
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <div class="flex items-center gap-3">
+                                    <button type="button" class="drag-handle" title="Arrastar bloco"><ion-icon name="reorder-three-outline" class="text-xl"></ion-icon></button>
+                                    <span class="block-position-badge" data-block-position>1</span>
+                                    <span class="text-sm font-bold text-gray-700">Bloco</span>
+                                </div>
+                                {{ block_formset.empty_form.allows_multiple }}
+                                <div class="hidden">{{ block_formset.empty_form.DELETE }}</div>
+                                <button type="button" class="block-remove-btn" data-remove-block><ion-icon name="trash-outline"></ion-icon> Remover</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="md:col-span-2"><label class="form-label">{{ block_formset.empty_form.name.label }}</label>{{ block_formset.empty_form.name }}</div>
+                                <div><label class="form-label">{{ block_formset.empty_form.default_video.label }}</label>{{ block_formset.empty_form.default_video }}</div>
+                                <div class="md:col-span-3"><label class="form-label">{{ block_formset.empty_form.description.label }}</label>{{ block_formset.empty_form.description }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.is_required }} {{ block_formset.empty_form.is_required.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.skip_extra_processing }} {{ block_formset.empty_form.skip_extra_processing.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ block_formset.empty_form.remove_background_voice }} {{ block_formset.empty_form.remove_background_voice.label }}</label>
+                                <div class="md:col-span-3">
+                                    {{ block_formset.empty_form.overlay_definitions_raw }}
+                                    <div class="rounded-xl border border-gray-200 bg-gray-50 p-4" data-overlay-builder>
+                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem neste bloco.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
+                                        <div class="space-y-3" data-overlay-items></div>
+                                        <p class="text-sm text-gray-500" data-overlay-empty>Nenhum elemento visual configurado.</p>
+                                    </div>
+                                </div>
+                                {{ block_formset.empty_form.min_occurrences }}
+                                {{ block_formset.empty_form.max_occurrences }}
+                            </div>
+                        </div>
+                    </template>
+                    <div class="mt-4">
+                        <button type="button" id="add-block-button" class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">
+                            <ion-icon name="add-outline"></ion-icon>
+                            Adicionar bloco
+                        </button>
+                    </div>
+                </div>
+
+                <div class="admin-card p-4 flex flex-col sm:flex-row justify-end gap-3 sticky bottom-4">
+                    <a href="{% if is_create %}{% url 'admin_external_media_templates' %}{% else %}{% url 'admin_external_media_template_detail' template.id %}{% endif %}" class="px-5 py-2.5 border border-gray-300 bg-white text-gray-700 rounded-lg text-center font-semibold">Cancelar</a>
+                    <button class="px-5 py-2.5 bg-[var(--color-primary)] text-white rounded-lg font-semibold">Salvar Template</button>
+                </div>
+            </form>
+
+            <div id="preset-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel media-modal-panel-wide">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Presets de renderização</h2>
+                            <p class="text-sm text-gray-500">Crie, edite, visualize ou remova presets usados nos templates.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="preset-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+
+                    <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <form method="post" action="{% url 'admin_external_media_preset_save' %}" class="inline-card bg-white">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="preset_id" id="preset-id">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 id="preset-form-title" class="font-bold text-gray-900">Novo preset</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-preset>Limpar</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="md:col-span-2"><label class="form-label">{{ preset_form.name.label }}</label>{{ preset_form.name }}</div>
+                                <div><label class="form-label">{{ preset_form.width.label }}</label>{{ preset_form.width }}</div>
+                                <div><label class="form-label">{{ preset_form.height.label }}</label>{{ preset_form.height }}</div>
+                                <div><label class="form-label">{{ preset_form.video_codec.label }}</label>{{ preset_form.video_codec }}{% if preset_form.video_codec.errors %}<p class="text-xs text-red-600 mt-1">{{ preset_form.video_codec.errors.0 }}</p>{% endif %}{% if preset_form.video_codec.help_text %}<p class="text-xs text-gray-500 mt-1">{{ preset_form.video_codec.help_text }}</p>{% endif %}</div>
+                                <div><label class="form-label">{{ preset_form.audio_codec.label }}</label>{{ preset_form.audio_codec }}{% if preset_form.audio_codec.errors %}<p class="text-xs text-red-600 mt-1">{{ preset_form.audio_codec.errors.0 }}</p>{% endif %}{% if preset_form.audio_codec.help_text %}<p class="text-xs text-gray-500 mt-1">{{ preset_form.audio_codec.help_text }}</p>{% endif %}</div>
+                                <div><label class="form-label">{{ preset_form.video_crf.label }}</label>{{ preset_form.video_crf }}{% if preset_form.video_crf.errors %}<p class="text-xs text-red-600 mt-1">{{ preset_form.video_crf.errors.0 }}</p>{% endif %}{% if preset_form.video_crf.help_text %}<p class="text-xs text-gray-500 mt-1">{{ preset_form.video_crf.help_text }}</p>{% endif %}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 mt-7">{{ preset_form.is_active }} {{ preset_form.is_active.label }}</label>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">{{ preset_form.extra_ffmpeg_profile.label }}</label>
+                                    {{ preset_form.extra_ffmpeg_profile }}
+                                    {% if preset_form.extra_ffmpeg_profile.errors %}<p class="text-xs text-red-600 mt-1">{{ preset_form.extra_ffmpeg_profile.errors.0 }}</p>{% endif %}
+                                    {% if preset_form.extra_ffmpeg_profile.help_text %}<p class="text-xs text-gray-500 mt-1">{{ preset_form.extra_ffmpeg_profile.help_text }}</p>{% endif %}
+                                </div>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar preset</button>
+                            </div>
+                        </form>
+
+                        <div class="inline-card bg-white">
+                            <h3 class="font-bold text-gray-900 mb-4">Presets cadastrados</h3>
+                            <div class="overflow-x-auto">
+                                <table class="modal-table w-full">
+                                    <thead><tr><th>Preset</th><th>Saída</th><th>Status</th><th class="text-right">Ações</th></tr></thead>
+                                    <tbody>
+                                        {% for row in render_preset_rows %}
+                                        {% with preset=row.preset %}
+                                        <tr>
+                                            <td>
+                                                <p class="font-bold text-gray-900">{{ preset.name }}</p>
+                                                <p class="text-xs text-gray-500">{{ preset.video_codec }} · áudio {{ preset.audio_codec }} · CRF {{ preset.video_crf }}</p>
+                                            </td>
+                                            <td class="text-sm text-gray-600">{% if preset.width and preset.height %}{{ preset.width }}x{{ preset.height }}{% else %}Original{% endif %}</td>
+                                            <td class="text-sm {% if preset.is_active %}text-green-700{% else %}text-gray-500{% endif %}">{% if preset.is_active %}Ativo{% else %}Inativo{% endif %}</td>
+                                            <td class="text-right">
+                                                <div class="inline-flex gap-1">
+                                                    <button type="button" class="asset-action"
+                                                            data-edit-preset
+                                                            data-id="{{ preset.id }}"
+                                                            data-name="{{ preset.name }}"
+                                                            data-width="{{ preset.width|default:'' }}"
+                                                            data-height="{{ preset.height|default:'' }}"
+                                                            data-video-codec="{{ preset.video_codec }}"
+                                                            data-audio-codec="{{ preset.audio_codec }}"
+                                                            data-crf="{{ preset.video_crf }}"
+                                                            data-extra="{{ row.extra_args_json|escape }}"
+                                                            data-active="{% if preset.is_active %}true{% else %}false{% endif %}"
+                                                            title="Editar"><ion-icon name="create-outline"></ion-icon></button>
+                                                    <button type="button" class="asset-action asset-action-danger" title="Remover"
+                                                            data-delete-preset
+                                                            data-name="{{ preset.name }}"
+                                                            data-action="{% url 'admin_external_media_preset_delete' preset.id %}">
+                                                        <ion-icon name="trash-outline"></ion-icon>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endwith %}
+                                        {% empty %}
+                                        <tr><td colspan="4" class="text-center text-gray-500 py-8">Nenhum preset cadastrado.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="filler-term-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel max-w-3xl">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Vícios de fala</h2>
+                            <p class="text-sm text-gray-500">Cadastre termos reutilizáveis e selecione quais ficam ativos neste template.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="filler-term-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+                    <div class="p-5 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-5">
+                        <form method="post" action="{% url 'admin_external_media_speech_filler_term_save' %}" class="inline-card bg-white h-fit">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="fillerterm_id" id="fillerterm-id">
+                            <div class="flex items-center justify-between gap-3 mb-4">
+                                <h3 id="fillerterm-form-title" class="font-bold text-gray-900">Novo vício de fala</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-fillerterm>Limpar</button>
+                            </div>
+                            <div class="space-y-4">
+                                <div><label class="form-label">{{ filler_term_form.text.label }}</label>{{ filler_term_form.text }}</div>
+                                <div><label class="form-label">{{ filler_term_form.language.label }}</label>{{ filler_term_form.language }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ filler_term_form.is_active }} {{ filler_term_form.is_active.label }}</label>
+                            </div>
+                            <div class="flex justify-end mt-5 pt-4 border-t border-gray-100">
+                                <button class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar termo</button>
+                            </div>
+                        </form>
+                        <div class="inline-card bg-white">
+                            <div class="mb-4">
+                                <h3 class="font-bold text-gray-900">Termos cadastrados</h3>
+                                <p class="text-sm text-gray-500">Os termos inativos permanecem no histórico, mas não podem ser selecionados em novos templates.</p>
+                            </div>
+                            <div class="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                                {% for term in speech_filler_terms %}
+                                <div class="flex items-center justify-between gap-3 rounded-lg border border-gray-100 p-3">
+                                    <div class="min-w-0"><strong class="block text-gray-900">{{ term.text }}</strong><span class="text-xs text-gray-500">{{ term.get_language_display }} · {% if term.is_active %}Disponível{% else %}Inativo{% endif %}</span></div>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <button type="button" class="asset-action" title="Editar" data-edit-fillerterm data-id="{{ term.id }}" data-text="{{ term.text }}" data-language="{{ term.language }}" data-active="{% if term.is_active %}true{% else %}false{% endif %}"><ion-icon name="create-outline"></ion-icon></button>
+                                        <button type="button" class="asset-action asset-action-danger" title="Remover" data-delete-fillerterm data-name="{{ term.text }}" data-action="{% url 'admin_external_media_speech_filler_term_delete' term.id %}"><ion-icon name="trash-outline"></ion-icon></button>
+                                    </div>
+                                </div>
+                                {% empty %}
+                                <p class="text-sm text-gray-500">Nenhum termo cadastrado.</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fillerTermDeleteModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-slate-950/50 p-4">
+                <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+                    <h2 class="text-lg font-black text-gray-900">Remover vício de fala?</h2>
+                    <p class="text-sm text-gray-600 mt-2">O termo <strong id="fillerTermDeleteName"></strong> será removido dos templates que o utilizam.</p>
+                    <form id="fillerTermDeleteForm" method="post" class="flex justify-end gap-3 mt-6">{% csrf_token %}
+                        <button type="button" class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold" data-close-fillerterm-delete>Cancelar</button>
+                        <button class="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold"><ion-icon name="trash-outline"></ion-icon> Excluir</button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="style-modal" class="media-modal" aria-hidden="true" data-style-view="list">
+                <div class="media-modal-panel media-modal-panel-wide">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div class="min-w-0">
+                            <h2 class="text-lg font-black text-gray-900">Estilos de legenda</h2>
+                            <p id="style-modal-subtitle" class="text-sm text-gray-500">Gerencie os estilos disponíveis para os templates.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="style-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+
+                    <div id="style-list-view" class="p-5">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <div>
+                                <h3 class="font-bold text-gray-900">Estilos cadastrados</h3>
+                                <p class="text-sm text-gray-500">Edite, clone ou remova um estilo existente.</p>
+                            </div>
+                            <button type="button" id="style-create-button" class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">
+                                <ion-icon name="add-outline" class="text-lg"></ion-icon>
+                                Novo estilo
+                            </button>
+                        </div>
+
+                        {% if subtitle_styles %}
+                        <div class="overflow-x-auto rounded-xl border border-gray-200">
+                            <table class="modal-table w-full">
+                                <thead><tr><th>Estilo</th><th>Aparência</th><th>Status</th><th class="text-right">Ações</th></tr></thead>
+                                <tbody>
+                                    {% for style in subtitle_styles %}
+                                    <tr>
+                                        <td>
+                                            <p class="font-bold text-gray-900">{{ style.name }}</p>
+                                            <div class="mt-1 flex flex-wrap gap-2">
+                                                <span class="style-font-chip">{{ style.font_name }}</span>
+                                                <span class="style-font-chip">{{ style.get_font_weight_display }}</span>
+                                                {% if style.background_enabled %}<span class="style-font-chip">com fundo</span>{% endif %}
+                                                <span class="style-font-chip">{{ style.font_size }}px</span>
+                                                <span class="style-font-chip">{{ style.max_lines }} linhas</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-6 h-6 rounded border border-gray-200" style="background: {{ style.primary_color }}"></span>
+                                                <span class="w-6 h-6 rounded border border-gray-200" style="background: {{ style.outline_color }}"></span>
+                                                <span class="text-xs text-gray-500">contorno {{ style.outline_width }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="text-sm {% if style.is_active %}text-green-700{% else %}text-gray-500{% endif %}">{% if style.is_active %}Ativo{% else %}Inativo{% endif %}</td>
+                                        <td class="text-right whitespace-nowrap">
+                                            <div class="inline-flex gap-2 items-center justify-end">
+                                                <button type="button" class="inline-flex items-center gap-2 px-3 h-8 rounded-lg bg-slate-50 text-slate-700 text-sm font-semibold hover:bg-slate-100"
+                                                        data-edit-style
+                                                        data-id="{{ style.id }}"
+                                                        data-name="{{ style.name }}"
+                                                        data-font="{{ style.font_name }}"
+                                                        data-font-weight="{{ style.font_weight }}"
+                                                        data-font-size="{{ style.font_size }}"
+                                                        data-primary="{{ style.primary_color }}"
+                                                        data-background-enabled="{% if style.background_enabled %}true{% else %}false{% endif %}"
+                                                        data-background-color="{{ style.background_color }}"
+                                                        data-background-opacity="{{ style.background_opacity }}"
+                                                        data-background-padding-x="{{ style.background_padding_x }}"
+                                                        data-background-padding-y="{{ style.background_padding_y }}"
+                                                        data-background-height-percent="{{ style.background_height_percent }}"
+                                                        data-background-radius="{{ style.background_radius }}"
+                                                        data-outline="{{ style.outline_color }}"
+                                                        data-outline-width="{{ style.outline_width }}"
+                                                        data-shadow="{{ style.shadow }}"
+                                                        data-shadow-opacity="{{ style.shadow_opacity }}"
+                                                        data-shadow-angle="{{ style.shadow_angle }}"
+                                                        data-shadow-size="{{ style.shadow_size }}"
+                                                        data-shadow-blur="{{ style.shadow_blur }}"
+                                                        data-margin="{{ style.margin_bottom }}"
+                                                        data-alignment="{{ style.alignment }}"
+                                                        data-lines="{{ style.max_lines }}"
+                                                        data-chars="{{ style.max_characters }}"
+                                                        data-active="{% if style.is_active %}true{% else %}false{% endif %}"
+                                                        title="Editar"><ion-icon name="create-outline"></ion-icon><span>Editar</span></button>
+                                                <button type="button" class="inline-flex items-center gap-2 px-3 h-8 rounded-lg bg-amber-50 text-amber-700 text-sm font-semibold hover:bg-amber-100"
+                                                        data-clone-style
+                                                        data-id="{{ style.id }}"
+                                                        data-name="{{ style.name }}"
+                                                        data-font="{{ style.font_name }}"
+                                                        data-font-weight="{{ style.font_weight }}"
+                                                        data-font-size="{{ style.font_size }}"
+                                                        data-primary="{{ style.primary_color }}"
+                                                        data-background-enabled="{% if style.background_enabled %}true{% else %}false{% endif %}"
+                                                        data-background-color="{{ style.background_color }}"
+                                                        data-background-opacity="{{ style.background_opacity }}"
+                                                        data-background-padding-x="{{ style.background_padding_x }}"
+                                                        data-background-padding-y="{{ style.background_padding_y }}"
+                                                        data-background-height-percent="{{ style.background_height_percent }}"
+                                                        data-background-radius="{{ style.background_radius }}"
+                                                        data-outline="{{ style.outline_color }}"
+                                                        data-outline-width="{{ style.outline_width }}"
+                                                        data-shadow="{{ style.shadow }}"
+                                                        data-shadow-opacity="{{ style.shadow_opacity }}"
+                                                        data-shadow-angle="{{ style.shadow_angle }}"
+                                                        data-shadow-size="{{ style.shadow_size }}"
+                                                        data-shadow-blur="{{ style.shadow_blur }}"
+                                                        data-margin="{{ style.margin_bottom }}"
+                                                        data-alignment="{{ style.alignment }}"
+                                                        data-lines="{{ style.max_lines }}"
+                                                        data-chars="{{ style.max_characters }}"
+                                                        data-active="{% if style.is_active %}true{% else %}false{% endif %}"
+                                                        title="Clonar"><ion-icon name="copy-outline"></ion-icon><span>Clonar</span></button>
+                                                <button type="button" class="asset-action asset-action-danger" title="Remover"
+                                                        data-delete-style
+                                                        data-name="{{ style.name }}"
+                                                        data-action="{% url 'admin_external_media_subtitle_style_delete' style.id %}">
+                                                    <ion-icon name="trash-outline"></ion-icon>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="style-list-empty">
+                            <p class="font-semibold text-gray-700 mb-1">Nenhum estilo cadastrado</p>
+                            <p class="text-sm mb-4">Crie o primeiro estilo para usar nas legendas dos templates.</p>
+                            <button type="button" class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold" data-style-create>
+                                <ion-icon name="add-outline" class="text-lg"></ion-icon>
+                                Criar estilo
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div id="style-editor-view" class="p-5 hidden">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <button type="button" id="style-back-to-list" class="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900">
+                                <ion-icon name="arrow-back-outline" class="text-lg"></ion-icon>
+                                Voltar para a lista
+                            </button>
+                            <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-style>Limpar formulário</button>
+                        </div>
+
+                        <div class="style-preview-grid">
+                            <form method="post" action="{% url 'admin_external_media_subtitle_style_save' %}" class="inline-card bg-white">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                <input type="hidden" name="style_id" id="style-id">
+                                <div class="mb-4">
+                                    <h3 id="style-form-title" class="font-bold text-gray-900">Novo estilo</h3>
+                                    <p class="text-sm text-gray-500">Ajuste tipografia, posição e contraste com o preview ao lado.</p>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <div class="style-form-section-title">Identidade</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div class="md:col-span-2"><label class="form-label">{{ style_form.name.label }}</label>{{ style_form.name }}</div>
+                                        <div><label class="form-label">{{ style_form.font_name.label }}</label>{{ style_form.font_name }}</div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.font_weight.label }}</label>{{ style_form.font_weight }}
+                                            <p class="style-field-help">{{ style_form.font_weight.help_text }}</p>
+                                        </div>
+                                        <div><label class="form-label">{{ style_form.font_size.label }}</label>{{ style_form.font_size }}</div>
+                                        <div><label class="form-label">{{ style_form.primary_color.label }}</label>{{ style_form.primary_color }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <div class="style-form-section-title">Posição e texto</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="form-label">{{ style_form.alignment.label }}</label>{{ style_form.alignment }}
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.margin_bottom.label }}</label>{{ style_form.margin_bottom }}
+                                            <p class="style-field-help">{{ style_form.margin_bottom.help_text }}</p>
+                                        </div>
+                                        <div><label class="form-label">{{ style_form.max_lines.label }}</label>{{ style_form.max_lines }}</div>
+                                        <div><label class="form-label">{{ style_form.max_characters.label }}</label>{{ style_form.max_characters }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <div class="style-form-section-title">Contorno e sombra</div>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><label class="form-label">{{ style_form.outline_color.label }}</label>{{ style_form.outline_color }}</div>
+                                        <div><label class="form-label">{{ style_form.outline_width.label }}</label>{{ style_form.outline_width }}</div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.shadow.label }}</label>{{ style_form.shadow }}
+                                            <p class="style-field-help">{{ style_form.shadow.help_text }}</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.shadow_angle.label }}</label>{{ style_form.shadow_angle }}
+                                            <p class="style-field-help">{{ style_form.shadow_angle.help_text }}</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.shadow_size.label }}</label>{{ style_form.shadow_size }}
+                                            <p class="style-field-help">{{ style_form.shadow_size.help_text }}</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.shadow_blur.label }}</label>{{ style_form.shadow_blur }}
+                                            <p class="style-field-help">{{ style_form.shadow_blur.help_text }}</p>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="form-label">{{ style_form.shadow_opacity.label }}</label>{{ style_form.shadow_opacity }}
+                                            <p class="style-field-help">{{ style_form.shadow_opacity.help_text }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <div class="flex items-center justify-between gap-3 mb-3">
+                                        <div class="style-form-section-title mb-0">Plano de fundo</div>
+                                        <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ style_form.background_enabled }} {{ style_form.background_enabled.label }}</label>
+                                    </div>
+                                    <div id="style-bg-fields" class="style-bg-fields grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><label class="form-label">{{ style_form.background_color.label }}</label>{{ style_form.background_color }}</div>
+                                        <div><label class="form-label">{{ style_form.background_opacity.label }}</label>{{ style_form.background_opacity }}</div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.background_padding_x.label }}</label>{{ style_form.background_padding_x }}
+                                            <p class="style-field-help">{{ style_form.background_padding_x.help_text }}</p>
+                                        </div>
+                                        <div>
+                                            <label class="form-label">{{ style_form.background_padding_y.label }}</label>{{ style_form.background_padding_y }}
+                                            <p class="style-field-help">{{ style_form.background_padding_y.help_text }}</p>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="form-label">{{ style_form.background_height_percent.label }}</label>{{ style_form.background_height_percent }}
+                                            <p class="style-field-help">{{ style_form.background_height_percent.help_text }}</p>
+                                        </div>
+                                        <div class="md:col-span-2 flex flex-wrap items-center gap-2">
+                                            <button type="button" id="style-bg-fit-text" class="px-3 py-1.5 border border-gray-300 text-gray-700 rounded-lg text-xs font-semibold hover:bg-gray-50">
+                                                Ajustar fundo ao texto
+                                            </button>
+                                            <span class="text-xs text-gray-500">Zera os extras e usa 100% de altura (fundo colado na fonte).</span>
+                                        </div>
+                                        <div class="md:col-span-2">
+                                            <label class="form-label">{{ style_form.background_radius.label }}</label>{{ style_form.background_radius }}
+                                            <p class="style-field-help">{{ style_form.background_radius.help_text }}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="style-form-section">
+                                    <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ style_form.is_active }} {{ style_form.is_active.label }}</label>
+                                </div>
+
+                                <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                    <button type="button" class="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50" data-style-back>Cancelar</button>
+                                    <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar estilo</button>
+                                </div>
+                            </form>
+
+                            <div class="inline-card bg-white">
+                                <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                                    <div>
+                                        <h3 class="font-bold text-gray-900">Preview do estilo</h3>
+                                        <p class="text-sm text-gray-500">Compare contraste em fundo escuro ou claro.</p>
+                                    </div>
+                                    <div class="style-backdrop-toggle" id="style-backdrop-toggle" data-active="dark">
+                                        <button type="button" data-backdrop="dark" class="active">Escuro</button>
+                                        <button type="button" data-backdrop="light">Claro</button>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="form-label">Formato do preview</label>
+                                        <select id="style-preview-preset" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                                            {% for row in render_preset_rows %}
+                                            {% with preset=row.preset %}
+                                            <option value="{{ preset.id }}"
+                                                    data-width="{{ preset.width|default:'1920' }}"
+                                                    data-height="{{ preset.height|default:'1080' }}"
+                                                    {% if forloop.first %}selected{% endif %}>
+                                                {{ preset.name }} {% if preset.width and preset.height %}({{ preset.width }}x{{ preset.height }}){% else %}(Original){% endif %}
+                                            </option>
+                                            {% endwith %}
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label">Comparar tradução com</label>
+                                        <select id="style-preview-compare" class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-sm">
+                                            <option value="">Selecione um estilo salvo para fixar a tradução</option>
+                                            {% for style in subtitle_styles %}
+                                            <option value="{{ style.id }}"
+                                                    data-name="{{ style.name }}"
+                                                    data-font="{{ style.font_name }}"
+                                                    data-font-weight="{{ style.font_weight }}"
+                                                    data-font-size="{{ style.font_size }}"
+                                                    data-primary="{{ style.primary_color }}"
+                                                    data-background-enabled="{% if style.background_enabled %}true{% else %}false{% endif %}"
+                                                    data-background-color="{{ style.background_color }}"
+                                                    data-background-opacity="{{ style.background_opacity }}"
+                                                    data-background-padding-x="{{ style.background_padding_x }}"
+                                                    data-background-padding-y="{{ style.background_padding_y }}"
+                                                        data-background-height-percent="{{ style.background_height_percent }}"
+                                                    data-background-radius="{{ style.background_radius }}"
+                                                    data-outline="{{ style.outline_color }}"
+                                                    data-outline-width="{{ style.outline_width }}"
+                                                    data-shadow="{{ style.shadow }}"
+                                                        data-shadow-opacity="{{ style.shadow_opacity }}"
+                                                        data-shadow-angle="{{ style.shadow_angle }}"
+                                                        data-shadow-size="{{ style.shadow_size }}"
+                                                        data-shadow-blur="{{ style.shadow_blur }}"
+                                                    data-margin="{{ style.margin_bottom }}"
+                                                    data-alignment="{{ style.alignment }}"
+                                                    data-lines="{{ style.max_lines }}"
+                                                    data-chars="{{ style.max_characters }}">
+                                                {{ style.name }} · margem {{ style.margin_bottom }}px · {{ style.font_size }}px
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <p class="style-field-help">A tradução fica travada no estilo salvo. Só o formulário à esquerda se move.</p>
+                                    </div>
+                                    <div class="md:col-span-2 flex flex-wrap gap-3">
+                                        <label class="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                                            <input type="checkbox" id="style-preview-show-translation" class="h-4 w-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]" checked>
+                                            Mostrar legenda traduzida junto
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="style-preview-shell" id="style-preview-shell" data-backdrop="dark">
+                                    <div class="flex items-center justify-between gap-3 mb-3">
+                                        <span id="style-preview-format-label" class="style-preview-frame-label">16:9 · 1920x1080</span>
+                                        <span class="style-preview-frame-label">Escala 1:1 com o preset selecionado</span>
+                                    </div>
+                                    <div id="style-preview-stage" class="style-preview-stage" style="--preview-ratio: 56.25%;">
+                                        <div class="style-preview-overlay">
+                                            <div id="style-preview-vignette" class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent"></div>
+                                            <div id="style-preview-original" class="style-preview-subtitle">Hoje queremos convidar você para estar conosco.</div>
+                                            <div id="style-preview-translated" class="style-preview-subtitle">Today we want to invite you to join us.</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="style-preview-meta mt-4">
+                                    <div class="style-preview-meta-card">
+                                        <p class="text-xs uppercase tracking-[0.18em] text-gray-400 mb-2">Legenda original</p>
+                                        <div id="style-preview-original-meta" class="text-sm text-gray-700"></div>
+                                    </div>
+                                    <div class="style-preview-meta-card">
+                                        <p class="text-xs uppercase tracking-[0.18em] text-gray-400 mb-2">Legenda traduzida</p>
+                                        <div id="style-preview-translated-meta" class="text-sm text-gray-700"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="music-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Trilhas de fundo</h2>
+                            <p class="text-sm text-gray-500">Cadastre trilhas exclusivas para templates de mídia. Não são vinculadas às músicas/cifras do site.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="music-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+
+                    <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <form method="post" action="{% url 'admin_external_media_background_music_save' %}" enctype="multipart/form-data" class="inline-card bg-white">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="bgmusic_id" id="bgmusic-id">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 id="bgmusic-form-title" class="font-bold text-gray-900">Nova trilha</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-bgmusic>Limpar</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label class="form-label">{{ music_form.name.label }}</label>{{ music_form.name }}</div>
+                                <div><label class="form-label">{{ music_form.category.label }}</label>{{ music_form.category }}</div>
+                                <div><label class="form-label">{{ music_form.tempo.label }}</label>{{ music_form.tempo }}</div>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">{{ music_form.audio_file.label }}</label>
+                                    {{ music_form.audio_file }}
+                                </div>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar trilha</button>
+                            </div>
+                        </form>
+
+                        <div class="inline-card bg-white">
+                            <h3 class="font-bold text-gray-900 mb-4">Trilhas cadastradas</h3>
+                            <div id="music-details" class="hidden mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"></div>
+                            <div class="overflow-x-auto">
+                                <table class="modal-table w-full">
+                                    <thead><tr><th>Trilha</th><th>Categoria</th><th>Andamento</th><th>Áudio</th><th class="text-right">Ações</th></tr></thead>
+                                    <tbody>
+                                        {% for music in background_music_rows %}
+                                        <tr>
+                                            <td>
+                                                <p class="font-bold text-gray-900">{{ music.name }}</p>
+                                            </td>
+                                            <td class="text-sm text-gray-600">{{ music.get_category_display }}</td>
+                                            <td class="text-sm text-gray-600">{{ music.get_tempo_display|default:"—" }}</td>
+                                            <td class="text-sm {% if music.audio_file %}text-green-700{% else %}text-amber-700{% endif %}">
+                                                {% if music.audio_file %}Disponível{% else %}Sem arquivo{% endif %}
+                                            </td>
+                                            <td class="text-right">
+                                                <div class="inline-flex gap-1">
+                                                    <button type="button" class="asset-action"
+                                                            data-view-bgmusic
+                                                            data-name="{{ music.name }}"
+                                                            data-category="{{ music.get_category_display }}"
+                                                            data-tempo="{{ music.get_tempo_display|default:'Não definido' }}"
+                                                            data-audio="{% if music.audio_file %}{{ music.audio_file.name }}{% else %}Sem arquivo{% endif %}"
+                                                            title="Visualizar"><ion-icon name="eye-outline"></ion-icon></button>
+                                                    <button type="button" class="asset-action"
+                                                            data-edit-bgmusic
+                                                            data-id="{{ music.id }}"
+                                                            data-name="{{ music.name }}"
+                                                            data-category="{{ music.category }}"
+                                                            data-tempo="{{ music.tempo }}"
+                                                            data-audio="{% if music.audio_file %}{{ music.audio_file.name }}{% endif %}"
+                                                            title="Editar"><ion-icon name="create-outline"></ion-icon></button>
+                                                    <form method="post" action="{% url 'admin_external_media_background_music_delete' music.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                        <button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr><td colspan="5" class="text-center text-gray-500 py-8">Nenhuma trilha cadastrada.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="color-lut-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div><h2 class="text-lg font-black text-gray-900">LUTs de cor</h2><p class="text-sm text-gray-500">Cadastre arquivos .cube para reutilizar o tratamento de cor nos templates.</p></div>
+                        <button type="button" class="asset-action" data-close-modal="color-lut-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+                    <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <form method="post" action="{% url 'admin_external_media_color_lut_save' %}" enctype="multipart/form-data" class="inline-card bg-white">
+                            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><input type="hidden" name="colorlut_id" id="colorlut-id">
+                            <div class="flex items-center justify-between mb-4"><h3 id="colorlut-form-title" class="font-bold text-gray-900">Novo LUT</h3><button type="button" class="text-sm text-gray-500 hover:underline" data-reset-colorlut>Limpar</button></div>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div><label class="form-label">{{ color_lut_form.name.label }}</label>{{ color_lut_form.name }}</div>
+                                <div><label class="form-label">{{ color_lut_form.description.label }}</label>{{ color_lut_form.description }}</div>
+                                <div><label class="form-label">{{ color_lut_form.default_intensity.label }}</label>{{ color_lut_form.default_intensity }}<p class="text-xs text-gray-500 mt-1">Aplicada como sugestão ao selecionar este LUT.</p></div>
+                                <div><label class="form-label">{{ color_lut_form.lut_file.label }}</label>{{ color_lut_form.lut_file }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ color_lut_form.is_active }} {{ color_lut_form.is_active.label }}</label>
+                            </div>
+                            <div class="flex justify-end mt-5 pt-4 border-t border-gray-100"><button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar LUT</button></div>
+                        </form>
+                        <div class="inline-card bg-white"><h3 class="font-bold text-gray-900 mb-4">LUTs cadastrados</h3><div class="overflow-x-auto"><table class="modal-table w-full"><thead><tr><th>LUT</th><th>Arquivo</th><th>Status</th><th class="text-right">Ações</th></tr></thead><tbody>
+                            {% for lut in color_lut_rows %}<tr><td><p class="font-bold text-gray-900">{{ lut.name }}</p><p class="text-xs text-gray-500">{{ lut.description|default:'Sem descrição' }}</p></td><td class="text-sm {% if lut.lut_file %}text-green-700{% else %}text-amber-700{% endif %}">{% if lut.lut_file %}.cube disponível{% else %}Sem arquivo{% endif %}</td><td class="text-sm">{{ lut.default_intensity }}% · {% if lut.is_active %}Ativo{% else %}Inativo{% endif %}</td><td class="text-right"><div class="inline-flex gap-1"><button type="button" class="asset-action" data-edit-colorlut data-id="{{ lut.id }}" data-name="{{ lut.name }}" data-description="{{ lut.description }}" data-intensity="{{ lut.default_intensity }}" data-active="{{ lut.is_active|yesno:'1,0' }}" title="Editar"><ion-icon name="create-outline"></ion-icon></button><form method="post" action="{% url 'admin_external_media_color_lut_delete' lut.id %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button></form></div></td></tr>
+                            {% empty %}<tr><td colspan="4" class="text-center text-gray-500 py-8">Nenhum LUT cadastrado.</td></tr>{% endfor %}
+                        </tbody></table></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="mastering-modal" class="media-modal" aria-hidden="true">
+                <div class="media-modal-panel">
+                    <div class="p-5 border-b border-gray-100 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-black text-gray-900">Perfis de masterização</h2>
+                            <p class="text-sm text-gray-500">Definem o alvo de loudness/true peak usado pelo AudioMasteringService. "PA Igreja" é o ponto de partida para o telão.</p>
+                        </div>
+                        <button type="button" class="asset-action" data-close-modal="mastering-modal" title="Fechar"><ion-icon name="close-outline"></ion-icon></button>
+                    </div>
+
+                    <div class="p-5 grid grid-cols-1 xl:grid-cols-2 gap-5">
+                        <form method="post" action="{% url 'admin_external_media_mastering_profile_save' %}" class="inline-card bg-white">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <input type="hidden" name="masterprofile_id" id="masterprofile-id">
+                            <div class="flex items-center justify-between mb-4">
+                                <h3 id="masterprofile-form-title" class="font-bold text-gray-900">Novo perfil</h3>
+                                <button type="button" class="text-sm text-gray-500 hover:underline" data-reset-masterprofile>Limpar</button>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="md:col-span-2"><label class="form-label">{{ mastering_profile_form.name.label }}</label>{{ mastering_profile_form.name }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.target_lufs.label }}</label>{{ mastering_profile_form.target_lufs }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.true_peak_db.label }}</label>{{ mastering_profile_form.true_peak_db }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.dynamic_range_target.label }}</label>{{ mastering_profile_form.dynamic_range_target }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.max_gain_db.label }}</label>{{ mastering_profile_form.max_gain_db }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.max_limiter_reduction_db.label }}</label>{{ mastering_profile_form.max_limiter_reduction_db }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.low_frequency_control.label }}</label>{{ mastering_profile_form.low_frequency_control }}</div>
+                                <div><label class="form-label">{{ mastering_profile_form.high_frequency_control.label }}</label>{{ mastering_profile_form.high_frequency_control }}</div>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ mastering_profile_form.bus_compression_enabled }} {{ mastering_profile_form.bus_compression_enabled.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ mastering_profile_form.limiter_enabled }} {{ mastering_profile_form.limiter_enabled.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ mastering_profile_form.is_default }} {{ mastering_profile_form.is_default.label }}</label>
+                                <label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700">{{ mastering_profile_form.is_active }} {{ mastering_profile_form.is_active.label }}</label>
+                            </div>
+                            <div class="flex justify-end gap-2 mt-5 pt-4 border-t border-gray-100">
+                                <button type="submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Salvar perfil</button>
+                            </div>
+                        </form>
+
+                        <div class="inline-card bg-white">
+                            <h3 class="font-bold text-gray-900 mb-4">Perfis cadastrados</h3>
+                            <div class="overflow-x-auto">
+                                <table class="modal-table w-full">
+                                    <thead><tr><th>Perfil</th><th>LUFS</th><th>True Peak</th><th>Padrão</th><th class="text-right">Ações</th></tr></thead>
+                                    <tbody>
+                                        {% for profile in mastering_profile_rows %}
+                                        <tr>
+                                            <td><p class="font-bold text-gray-900">{{ profile.name }}</p></td>
+                                            <td class="text-sm text-gray-600">{{ profile.target_lufs }}</td>
+                                            <td class="text-sm text-gray-600">{{ profile.true_peak_db }}</td>
+                                            <td class="text-sm {% if profile.is_default %}text-green-700{% else %}text-gray-400{% endif %}">
+                                                {% if profile.is_default %}Padrão{% else %}—{% endif %}
+                                            </td>
+                                            <td class="text-right">
+                                                <div class="inline-flex gap-1">
+                                                    <button type="button" class="asset-action"
+                                                            data-edit-masterprofile
+                                                            data-id="{{ profile.id }}"
+                                                            data-name="{{ profile.name }}"
+                                                            data-target-lufs="{{ profile.target_lufs }}"
+                                                            data-true-peak="{{ profile.true_peak_db }}"
+                                                            data-dynamic-range="{{ profile.dynamic_range_target }}"
+                                                            data-max-gain="{{ profile.max_gain_db }}"
+                                                            data-max-limiter="{{ profile.max_limiter_reduction_db }}"
+                                                            data-low-frequency="{{ profile.low_frequency_control }}"
+                                                            data-high-frequency="{{ profile.high_frequency_control }}"
+                                                            data-bus-compression="{{ profile.bus_compression_enabled|yesno:'1,0' }}"
+                                                            data-limiter="{{ profile.limiter_enabled|yesno:'1,0' }}"
+                                                            data-default="{{ profile.is_default|yesno:'1,0' }}"
+                                                            data-active="{{ profile.is_active|yesno:'1,0' }}"
+                                                            title="Editar"><ion-icon name="create-outline"></ion-icon></button>
+                                                    <form method="post" action="{% url 'admin_external_media_mastering_profile_delete' profile.id %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                                        <button type="submit" class="asset-action asset-action-danger" title="Remover"><ion-icon name="trash-outline"></ion-icon></button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% empty %}
+                                        <tr><td colspan="5" class="text-center text-gray-500 py-8">Nenhum perfil cadastrado.</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form id="styleDeleteForm" method="post" action="" class="hidden">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+</form>
+
+<form id="presetDeleteForm" method="post" action="" class="hidden">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+</form>
+
+<div id="presetDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[90] p-3">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir preset de renderização</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-2">
+            Tem certeza que deseja excluir <strong id="presetDeleteModalName" class="text-gray-900"></strong>?
+        </p>
+        <p class="text-sm text-gray-500 mb-5">
+            Se o preset estiver em uso por templates, ele será desativado em vez de removido.
+        </p>
+        <div class="flex gap-2 justify-end">
+            <button type="button" id="presetDeleteModalCancel" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button type="button" id="presetDeleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">
+                <ion-icon name="trash-outline"></ion-icon> Excluir
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="styleDeleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-[90] p-3">
+    <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir estilo de legenda</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-2">
+            Tem certeza que deseja excluir <strong id="styleDeleteModalName" class="text-gray-900"></strong>?
+        </p>
+        <p class="text-sm text-gray-500 mb-5">
+            Templates e processamentos que usam este estilo serão atualizados automaticamente.
+        </p>
+        <div class="flex gap-2 justify-end">
+            <button type="button" id="styleDeleteModalCancel" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button type="button" id="styleDeleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">
+                <ion-icon name="trash-outline"></ion-icon> Excluir
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function byId(id) { return document.getElementById(id); }
+    function setValue(id, value) { const el = byId(id); if (el) el.value = value || ''; }
+    function setChecked(id, value) { const el = byId(id); if (el) el.checked = value === true || value === 'true'; }
+    const colorLUTDefaults = {{ color_lut_defaults_json|safe }};
+    function syncLUTIntensityUI() {
+        const selectedLUT = byId('id_color_lut')?.value;
+        byId('lut-intensity-field')?.classList.toggle('hidden', !selectedLUT);
+    }
+    byId('id_color_lut')?.addEventListener('change', (event) => {
+        const intensity = colorLUTDefaults[event.target.value];
+        if (intensity !== undefined) setValue('id_lut_intensity', intensity);
+        syncLUTIntensityUI();
+    });
+    function existingStyleNames() {
+        return Array.from(document.querySelectorAll('[data-edit-style],[data-clone-style]'))
+            .map((button) => (button.dataset.name || '').trim().toLowerCase())
+            .filter(Boolean);
+    }
+    function nextCloneStyleName(baseName) {
+        const original = (baseName || 'Novo estilo').trim();
+        const names = new Set(existingStyleNames());
+        let candidate = `${original} (Cópia)`;
+        if (!names.has(candidate.toLowerCase())) return candidate;
+        let index = 2;
+        while (names.has(`${original} (Cópia ${index})`.toLowerCase())) {
+            index += 1;
+        }
+        return `${original} (Cópia ${index})`;
+    }
+
+    function showStyleList() {
+        const modal = byId('style-modal');
+        const listView = byId('style-list-view');
+        const editorView = byId('style-editor-view');
+        const subtitle = byId('style-modal-subtitle');
+        if (modal) modal.dataset.styleView = 'list';
+        listView?.classList.remove('hidden');
+        editorView?.classList.add('hidden');
+        if (subtitle) subtitle.textContent = 'Gerencie os estilos disponíveis para os templates.';
+    }
+
+    function showStyleEditor(title) {
+        const modal = byId('style-modal');
+        const listView = byId('style-list-view');
+        const editorView = byId('style-editor-view');
+        const subtitle = byId('style-modal-subtitle');
+        if (modal) modal.dataset.styleView = 'editor';
+        listView?.classList.add('hidden');
+        editorView?.classList.remove('hidden');
+        if (byId('style-form-title') && title) byId('style-form-title').textContent = title;
+        if (subtitle) subtitle.textContent = 'O preview usa a mesma escala e empilhamento do ASS final.';
+        requestAnimationFrame(updateStylePreview);
+    }
+
+    function openStyleCreate() {
+        resetStyleForm();
+        showStyleEditor('Novo estilo');
+    }
+
+    function closeOnBackdropClick(modal, close) {
+        if (!modal) return;
+
+        let gestureStartedOnBackdrop = false;
+        modal.addEventListener('pointerdown', (event) => {
+            gestureStartedOnBackdrop = event.target === modal;
+        });
+        modal.addEventListener('pointercancel', () => {
+            gestureStartedOnBackdrop = false;
+        });
+        modal.addEventListener('click', (event) => {
+            const shouldClose = gestureStartedOnBackdrop && event.target === modal;
+            gestureStartedOnBackdrop = false;
+            if (shouldClose) close();
+        });
+    }
+
+    let _styleDeleteAction = null;
+
+    function openStyleDeleteModal(action, name) {
+        _styleDeleteAction = action;
+        const nameEl = byId('styleDeleteModalName');
+        if (nameEl) nameEl.textContent = name || '';
+        const modal = byId('styleDeleteModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeStyleDeleteModal() {
+        _styleDeleteAction = null;
+        const modal = byId('styleDeleteModal');
+        if (!modal) return;
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        const confirmBtn = byId('styleDeleteModalConfirm');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+        }
+    }
+
+    document.querySelectorAll('[data-delete-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+            openStyleDeleteModal(button.dataset.action, button.dataset.name);
+        });
+    });
+    byId('styleDeleteModalCancel')?.addEventListener('click', closeStyleDeleteModal);
+    byId('styleDeleteModalConfirm')?.addEventListener('click', () => {
+        const form = byId('styleDeleteForm');
+        if (!_styleDeleteAction || !form) return;
+        const btn = byId('styleDeleteModalConfirm');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        }
+        form.action = _styleDeleteAction;
+        form.submit();
+    });
+    closeOnBackdropClick(byId('styleDeleteModal'), closeStyleDeleteModal);
+
+    let _presetDeleteAction = null;
+
+    function openPresetDeleteModal(action, name) {
+        _presetDeleteAction = action;
+        const nameEl = byId('presetDeleteModalName');
+        if (nameEl) nameEl.textContent = name || '';
+        const modal = byId('presetDeleteModal');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closePresetDeleteModal() {
+        _presetDeleteAction = null;
+        const modal = byId('presetDeleteModal');
+        if (!modal) return;
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        const confirmBtn = byId('presetDeleteModalConfirm');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+        }
+    }
+
+    document.querySelectorAll('[data-delete-preset]').forEach((button) => {
+        button.addEventListener('click', () => {
+            openPresetDeleteModal(button.dataset.action, button.dataset.name);
+        });
+    });
+    byId('presetDeleteModalCancel')?.addEventListener('click', closePresetDeleteModal);
+    byId('presetDeleteModalConfirm')?.addEventListener('click', () => {
+        const form = byId('presetDeleteForm');
+        if (!_presetDeleteAction || !form) return;
+        const btn = byId('presetDeleteModalConfirm');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        }
+        form.action = _presetDeleteAction;
+        form.submit();
+    });
+    closeOnBackdropClick(byId('presetDeleteModal'), closePresetDeleteModal);
+
+    document.querySelectorAll('[data-open-modal]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const modal = byId(button.dataset.openModal);
+            if (!modal) return;
+            modal.classList.add('active');
+            if (button.dataset.openModal === 'style-modal') showStyleList();
+        });
+    });
+    document.querySelectorAll('[data-close-modal]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const modal = byId(button.dataset.closeModal);
+            if (!modal) return;
+            modal.classList.remove('active');
+            if (button.dataset.closeModal === 'style-modal') showStyleList();
+        });
+    });
+    document.querySelectorAll('.media-modal').forEach((modal) => {
+        closeOnBackdropClick(modal, () => {
+            modal.classList.remove('active');
+            if (modal.id === 'style-modal') showStyleList();
+        });
+    });
+
+    function resetFillerTermForm() {
+        setValue('fillerterm-id', '');
+        setValue('id_fillerterm-text', '');
+        setValue('id_fillerterm-language', 'pt');
+        setChecked('id_fillerterm-is_active', true);
+        if (byId('fillerterm-form-title')) byId('fillerterm-form-title').textContent = 'Novo vício de fala';
+    }
+    document.querySelectorAll('[data-open-modal="filler-term-modal"]').forEach((button) => {
+        button.addEventListener('click', resetFillerTermForm);
+    });
+    document.querySelector('[data-reset-fillerterm]')?.addEventListener('click', resetFillerTermForm);
+    document.querySelectorAll('[data-edit-fillerterm]').forEach((button) => {
+        button.addEventListener('click', () => {
+            setValue('fillerterm-id', button.dataset.id);
+            setValue('id_fillerterm-text', button.dataset.text);
+            setValue('id_fillerterm-language', button.dataset.language || 'pt');
+            setChecked('id_fillerterm-is_active', button.dataset.active === 'true');
+            if (byId('fillerterm-form-title')) byId('fillerterm-form-title').textContent = `Editar: ${button.dataset.text}`;
+        });
+    });
+    let fillerTermDeleteAction = null;
+    const closeFillerTermDelete = () => {
+        fillerTermDeleteAction = null;
+        const modal = byId('fillerTermDeleteModal');
+        modal?.classList.add('hidden'); modal?.classList.remove('flex');
+    };
+    document.querySelectorAll('[data-delete-fillerterm]').forEach((button) => {
+        button.addEventListener('click', () => {
+            fillerTermDeleteAction = button.dataset.action;
+            if (byId('fillerTermDeleteName')) byId('fillerTermDeleteName').textContent = button.dataset.name || '';
+            const modal = byId('fillerTermDeleteModal');
+            modal?.classList.remove('hidden'); modal?.classList.add('flex');
+        });
+    });
+    document.querySelector('[data-close-fillerterm-delete]')?.addEventListener('click', closeFillerTermDelete);
+    closeOnBackdropClick(byId('fillerTermDeleteModal'), closeFillerTermDelete);
+    byId('fillerTermDeleteForm')?.addEventListener('submit', (event) => {
+        if (!fillerTermDeleteAction) { event.preventDefault(); return; }
+        event.currentTarget.action = fillerTermDeleteAction;
+    });
+
+    function resetPresetForm() {
+        byId('preset-form-title').textContent = 'Novo preset';
+        setValue('preset-id', '');
+        setValue('id_preset-name', '');
+        setValue('id_preset-width', '');
+        setValue('id_preset-height', '');
+        setValue('id_preset-video_codec', 'libx264');
+        setValue('id_preset-audio_codec', 'copy');
+        setValue('id_preset-video_crf', '23');
+        setValue('id_preset-extra_ffmpeg_profile', '[]');
+        setChecked('id_preset-is_active', true);
+    }
+    document.querySelector('[data-reset-preset]')?.addEventListener('click', resetPresetForm);
+    document.querySelectorAll('[data-edit-preset]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('preset-form-title').textContent = `Editar preset: ${button.dataset.name}`;
+            setValue('preset-id', button.dataset.id);
+            setValue('id_preset-name', button.dataset.name);
+            setValue('id_preset-width', button.dataset.width);
+            setValue('id_preset-height', button.dataset.height);
+            setValue('id_preset-video_codec', button.dataset.videoCodec);
+            setValue('id_preset-audio_codec', button.dataset.audioCodec);
+            setValue('id_preset-video_crf', button.dataset.crf);
+            setValue('id_preset-extra_ffmpeg_profile', button.dataset.extra || '[]');
+            setChecked('id_preset-is_active', button.dataset.active);
+        });
+    });
+
+    const FONT_WEIGHT_LABELS = {
+        400: 'Regular',
+        500: 'Medium',
+        600: 'SemiBold',
+        700: 'Bold',
+        800: 'ExtraBold',
+        900: 'Black',
+    };
+    const ALIGNMENT_LABELS = {
+        1: 'Inferior esquerdo',
+        2: 'Inferior centro',
+        3: 'Inferior direito',
+        4: 'Meio esquerdo',
+        5: 'Meio centro',
+        6: 'Meio direito',
+        7: 'Superior esquerdo',
+        8: 'Superior centro',
+        9: 'Superior direito',
+    };
+
+    function syncStyleBackgroundFields() {
+        const enabled = !!byId('id_style-background_enabled')?.checked;
+        const fields = byId('style-bg-fields');
+        if (fields) fields.dataset.disabled = enabled ? 'false' : 'true';
+    }
+
+    function fillStyleForm(dataset, { clone = false } = {}) {
+        setValue('id_style-name', clone ? nextCloneStyleName(dataset.name) : dataset.name);
+        setValue('id_style-font_name', dataset.font);
+        setValue('id_style-font_weight', dataset.fontWeight || '700');
+        setValue('id_style-font_size', dataset.fontSize);
+        setValue('id_style-primary_color', dataset.primary);
+        setChecked('id_style-background_enabled', dataset.backgroundEnabled);
+        setValue('id_style-background_color', dataset.backgroundColor);
+        setValue('id_style-background_opacity', dataset.backgroundOpacity);
+        setValue('id_style-background_padding_x', dataset.backgroundPaddingX);
+        setValue('id_style-background_padding_y', dataset.backgroundPaddingY);
+        setValue('id_style-background_height_percent', dataset.backgroundHeightPercent ?? '100');
+        setValue('id_style-background_radius', dataset.backgroundRadius);
+        setValue('id_style-outline_color', dataset.outline);
+        setValue('id_style-outline_width', dataset.outlineWidth);
+        setValue('id_style-shadow', dataset.shadow);
+        setValue('id_style-shadow_angle', dataset.shadowAngle ?? '45');
+        setValue('id_style-shadow_size', dataset.shadowSize ?? '0');
+        setValue('id_style-shadow_blur', dataset.shadowBlur ?? '0');
+        setValue('id_style-shadow_opacity', dataset.shadowOpacity ?? '70');
+        setValue('id_style-margin_bottom', dataset.margin);
+        setValue('id_style-alignment', dataset.alignment);
+        setValue('id_style-max_lines', dataset.lines);
+        setValue('id_style-max_characters', dataset.chars);
+        setChecked('id_style-is_active', dataset.active);
+        syncStyleBackgroundFields();
+        updateStylePreview();
+    }
+
+    function resetStyleForm() {
+        byId('style-form-title').textContent = 'Novo estilo';
+        setValue('style-id', '');
+        setValue('id_style-name', '');
+        setValue('id_style-font_name', 'Arial');
+        setValue('id_style-font_weight', '700');
+        setValue('id_style-font_size', '48');
+        setValue('id_style-primary_color', '#FFFFFF');
+        setChecked('id_style-background_enabled', false);
+        setValue('id_style-background_color', '#000000');
+        setValue('id_style-background_opacity', '70');
+        setValue('id_style-background_padding_x', '14');
+        setValue('id_style-background_padding_y', '8');
+        setValue('id_style-background_height_percent', '100');
+        setValue('id_style-background_radius', '10');
+        setValue('id_style-outline_color', '#000000');
+        setValue('id_style-outline_width', '3');
+        setValue('id_style-shadow', '1');
+        setValue('id_style-shadow_angle', '45');
+        setValue('id_style-shadow_size', '0');
+        setValue('id_style-shadow_blur', '0');
+        setValue('id_style-shadow_opacity', '70');
+        setValue('id_style-margin_bottom', '60');
+        setValue('id_style-alignment', '2');
+        setValue('id_style-max_lines', '2');
+        setValue('id_style-max_characters', '42');
+        setChecked('id_style-is_active', true);
+        setValue('style-preview-compare', '');
+        setChecked('style-preview-show-translation', true);
+        syncStyleBackgroundFields();
+        updateStylePreview();
+    }
+
+    function styleDataFromForm() {
+        return {
+            name: byId('id_style-name')?.value || 'Legenda original',
+            font: byId('id_style-font_name')?.value || 'Arial',
+            fontWeight: parseInt(byId('id_style-font_weight')?.value || '700', 10),
+            fontSize: parseInt(byId('id_style-font_size')?.value || '48', 10),
+            primary: byId('id_style-primary_color')?.value || '#FFFFFF',
+            backgroundEnabled: !!byId('id_style-background_enabled')?.checked,
+            backgroundColor: byId('id_style-background_color')?.value || '#000000',
+            backgroundOpacity: parseInt(byId('id_style-background_opacity')?.value || '70', 10),
+            backgroundPaddingX: Math.max(0, parseInt(byId('id_style-background_padding_x')?.value || '0', 10) || 0),
+            backgroundPaddingY: Math.max(0, parseInt(byId('id_style-background_padding_y')?.value || '0', 10) || 0),
+            backgroundHeightPercent: Math.max(40, Math.min(100, parseInt(byId('id_style-background_height_percent')?.value || '100', 10) || 100)),
+            backgroundRadius: parseInt(byId('id_style-background_radius')?.value || '10', 10),
+            outline: byId('id_style-outline_color')?.value || '#000000',
+            outlineWidth: parseInt(byId('id_style-outline_width')?.value || '3', 10),
+            shadow: Math.max(0, parseInt(byId('id_style-shadow')?.value || '0', 10) || 0),
+            shadowAngle: ((parseInt(byId('id_style-shadow_angle')?.value || '45', 10) || 0) % 360 + 360) % 360,
+            shadowSize: Math.max(0, parseInt(byId('id_style-shadow_size')?.value || '0', 10) || 0),
+            shadowBlur: Math.max(0, parseInt(byId('id_style-shadow_blur')?.value || '0', 10) || 0),
+            shadowOpacity: Math.max(0, Math.min(100, parseInt(byId('id_style-shadow_opacity')?.value || '70', 10) || 0)),
+            margin: Math.max(0, parseInt(byId('id_style-margin_bottom')?.value ?? '60', 10) || 0),
+            alignment: parseInt(byId('id_style-alignment')?.value || '2', 10),
+            lines: parseInt(byId('id_style-max_lines')?.value || '2', 10),
+            chars: parseInt(byId('id_style-max_characters')?.value || '42', 10),
+        };
+    }
+
+    function styleDataFromOption(option, fallback) {
+        if (!option || !option.value) return fallback;
+        return {
+            name: option.dataset.name || fallback.name,
+            font: option.dataset.font || fallback.font,
+            fontWeight: parseInt(option.dataset.fontWeight || fallback.fontWeight, 10),
+            fontSize: parseInt(option.dataset.fontSize || fallback.fontSize, 10),
+            primary: option.dataset.primary || fallback.primary,
+            backgroundEnabled: option.dataset.backgroundEnabled === 'true',
+            backgroundColor: option.dataset.backgroundColor || fallback.backgroundColor,
+            backgroundOpacity: parseInt(option.dataset.backgroundOpacity || fallback.backgroundOpacity, 10),
+            backgroundPaddingX: parseInt(option.dataset.backgroundPaddingX || fallback.backgroundPaddingX, 10),
+            backgroundPaddingY: parseInt(option.dataset.backgroundPaddingY || fallback.backgroundPaddingY, 10),
+            backgroundHeightPercent: parseInt(option.dataset.backgroundHeightPercent || fallback.backgroundHeightPercent || '100', 10),
+            backgroundRadius: parseInt(option.dataset.backgroundRadius || fallback.backgroundRadius, 10),
+            outline: option.dataset.outline || fallback.outline,
+            outlineWidth: parseInt(option.dataset.outlineWidth || fallback.outlineWidth, 10),
+            shadow: parseInt(option.dataset.shadow || fallback.shadow, 10),
+            shadowAngle: parseInt(option.dataset.shadowAngle || fallback.shadowAngle || '45', 10),
+            shadowSize: parseInt(option.dataset.shadowSize || fallback.shadowSize || '0', 10),
+            shadowBlur: parseInt(option.dataset.shadowBlur || fallback.shadowBlur || '0', 10),
+            shadowOpacity: parseInt(option.dataset.shadowOpacity || fallback.shadowOpacity || '70', 10),
+            margin: parseInt(option.dataset.margin || fallback.margin, 10),
+            alignment: parseInt(option.dataset.alignment || fallback.alignment, 10),
+            lines: parseInt(option.dataset.lines || fallback.lines, 10),
+            chars: parseInt(option.dataset.chars || fallback.chars, 10),
+        };
+    }
+
+    function previewText(text, style) {
+        const clean = String(text || '').replace(/\s+/g, ' ').trim();
+        if (style.lines <= 1) return clean;
+        const limit = Math.max(12, style.chars || 42);
+        if (clean.length <= limit) return clean;
+        const slice = clean.slice(0, limit);
+        const pivot = slice.lastIndexOf(' ');
+        const breakpoint = pivot > Math.floor(limit * 0.45) ? pivot : limit;
+        return `${slice.slice(0, breakpoint).trim()}\n${clean.slice(breakpoint).trim()}`;
+    }
+
+    function ratioLabel(width, height) {
+        const gcdValue = (a, b) => (b ? gcdValue(b, a % b) : a);
+        const divisor = gcdValue(width, height);
+        return `${width / divisor}:${height / divisor}`;
+    }
+
+    function hardOutlineShadow(color, widthPx) {
+        const width = Math.max(0, widthPx);
+        if (width <= 0) return '';
+        const layers = [];
+        const steps = Math.max(8, Math.ceil(width) * 4);
+        for (let i = 0; i < steps; i += 1) {
+            const angle = (Math.PI * 2 * i) / steps;
+            for (let distance = 1; distance <= Math.ceil(width); distance += 1) {
+                const x = Math.cos(angle) * Math.min(distance, width);
+                const y = Math.sin(angle) * Math.min(distance, width);
+                layers.push(`${x.toFixed(2)}px ${y.toFixed(2)}px 0 ${color}`);
+            }
+        }
+        return layers.join(', ');
+    }
+
+    function subtitleStackGap(originalStyle, translatedStyle) {
+        const fontSize = Math.max(Number(originalStyle.fontSize) || 48, Number(translatedStyle.fontSize) || 48);
+        const outline = Math.max(Number(originalStyle.outlineWidth) || 0, Number(translatedStyle.outlineWidth) || 0);
+        const shadow = Math.max(
+            (Number(originalStyle.shadow) || 0) + (Number(originalStyle.shadowSize) || 0) + (Number(originalStyle.shadowBlur) || 0),
+            (Number(translatedStyle.shadow) || 0) + (Number(translatedStyle.shadowSize) || 0) + (Number(translatedStyle.shadowBlur) || 0),
+        );
+        // A caixa de fundo da legenda traduzida (âncora fixa embaixo) se estende com padding
+        // para cima E para baixo do próprio texto, então a original precisa pular o padding
+        // DOBRADO da traduzida (não o maior entre as duas). Espelha
+        // SubtitleService._subtitle_stack_gap (services.py) para o preview bater com o ASS renderizado.
+        const heightPercent = translatedStyle.backgroundEnabled
+            ? Math.max(40, Math.min(100, Number(translatedStyle.backgroundHeightPercent) || 100))
+            : 100;
+        const translatedPadding = translatedStyle.backgroundEnabled
+            ? (Number(translatedStyle.backgroundPaddingY) || 0) * 2
+            : 0;
+        return Math.ceil(fontSize * 1.0 * (heightPercent / 100)) + outline + shadow + translatedPadding + 8;
+    }
+
+    function effectiveMarginV(style, marginBottom) {
+        const alignment = Math.max(1, Math.min(9, Number(style.alignment) || 2));
+        const margin = Math.max(0, Number(marginBottom) || 0);
+        if (!style.backgroundEnabled || (alignment >= 4 && alignment <= 6)) {
+            return margin;
+        }
+        return margin + Math.max(0, Number(style.backgroundPaddingY) || 0);
+    }
+
+    function dualStyleMargins(originalStyle, translatedStyle) {
+        // Espelha SubtitleService._dual_style_margins. Mantém a legenda mais baixa
+        // na margem escolhida e compacta a outra logo acima dela.
+        let originalMargin = Math.max(0, Number(originalStyle.margin) || 0);
+        let translatedMargin = Math.max(0, Number(translatedStyle.margin) || 0);
+        const originalBottom = Math.max(1, Math.min(3, Number(originalStyle.alignment) || 2));
+        const translatedBottom = Math.max(1, Math.min(3, Number(translatedStyle.alignment) || 2));
+        if (originalBottom <= 3 && translatedBottom <= 3) {
+            if (originalMargin <= translatedMargin) {
+                translatedMargin = Math.min(
+                    translatedMargin,
+                    originalMargin + subtitleStackGap(translatedStyle, originalStyle),
+                );
+            } else {
+                originalMargin = Math.min(
+                    originalMargin,
+                    translatedMargin + subtitleStackGap(originalStyle, translatedStyle),
+                );
+            }
+        }
+        return { originalMargin, translatedMargin };
+    }
+
+    function applyAlignment(element, style, marginRatio, sideMarginRatio) {
+        const alignment = Math.max(1, Math.min(9, Number(style.alignment) || 2));
+        const horizontal = alignment % 3 === 1 ? 'left' : (alignment % 3 === 0 ? 'right' : 'center');
+        const vertical = alignment <= 3 ? 'bottom' : (alignment <= 6 ? 'middle' : 'top');
+        const marginPercent = `${Math.max(0, marginRatio) * 100}%`;
+        const sidePercent = `${Math.max(0, sideMarginRatio) * 100}%`;
+
+        element.style.position = 'absolute';
+        element.style.left = 'auto';
+        element.style.right = 'auto';
+        element.style.top = 'auto';
+        element.style.bottom = 'auto';
+        element.style.transform = 'none';
+
+        if (horizontal === 'left') {
+            element.style.left = sidePercent;
+            element.style.textAlign = 'left';
+        } else if (horizontal === 'right') {
+            element.style.right = sidePercent;
+            element.style.textAlign = 'right';
+        } else {
+            element.style.left = '50%';
+            element.style.transform = 'translateX(-50%)';
+            element.style.textAlign = 'center';
+        }
+
+        if (vertical === 'bottom') {
+            element.style.bottom = marginPercent;
+        } else if (vertical === 'top') {
+            element.style.top = marginPercent;
+        } else if (horizontal === 'center') {
+            element.style.top = '50%';
+            element.style.transform = 'translate(-50%, -50%)';
+        } else {
+            element.style.top = '50%';
+            element.style.transform = 'translateY(-50%)';
+        }
+    }
+
+    function applyPreviewStyle(element, style, text, metrics, { singleLine = false, marginOverride = null } = {}) {
+        if (!element) return;
+        const scale = metrics?.scale || 1;
+        const playResX = metrics?.playResX || 1920;
+        const playResY = metrics?.playResY || 1080;
+        const margin = Number(marginOverride == null ? style.margin : marginOverride);
+        const safeMargin = Number.isFinite(margin) ? Math.max(0, margin) : 0;
+
+        element.textContent = previewText(text, style);
+        element.style.fontFamily = `"${style.font}", Arial, sans-serif`;
+        element.style.fontWeight = String(style.fontWeight || 700);
+        element.style.fontSize = `${Math.max(1, style.fontSize * scale)}px`;
+        element.style.color = style.primary;
+        const heightPercent = Math.max(40, Math.min(100, Number(style.backgroundHeightPercent) || 100));
+        // Com altura < 100%, a faixa ASS usa \fscy na camada BG; no preview aproximamos
+        // com line-height menor para a caixa ficar mais baixa que o texto.
+        element.style.lineHeight = style.backgroundEnabled
+            ? String(Math.max(0.55, 1.0 * (heightPercent / 100)))
+            : '1.0';
+        element.style.overflow = 'visible';
+        // MarginV no ASS é fração da PlayResY — usar % evita erro de escala do preview.
+        applyAlignment(element, style, safeMargin / playResY, 40 / playResX);
+
+        const outlinePx = Math.max(0, style.outlineWidth * scale);
+        const shadowDistance = Math.max(0, Number(style.shadow) || 0);
+        const shadowAngle = ((Number(style.shadowAngle) || 0) % 360 + 360) % 360;
+        const shadowSize = Math.max(0, Number(style.shadowSize) || 0);
+        const shadowBlurPx = Math.max(0, Number(style.shadowBlur) || 0) * scale;
+        const shadowAlpha = Math.max(0, Math.min(100, Number(style.shadowOpacity) || 0)) / 100;
+        const radians = shadowAngle * Math.PI / 180;
+        const shadowDx = shadowDistance * Math.cos(radians) * scale;
+        const shadowDy = shadowDistance * Math.sin(radians) * scale;
+        // Passos/tamanho usam unidades PlayRes (como SubtitleService._shadow_layer_overrides),
+        // não pixels escalados — senão o preview subestima tamanho/distância vs o ASS final.
+        const sizeSteps = shadowSize > 0 ? Math.min(4, Math.max(1, Math.round(shadowSize / 3))) : 0;
+        let dropShadow = '';
+        if (shadowAlpha > 0 && (shadowDistance > 0 || shadowSize > 0 || Number(style.shadowBlur) > 0)) {
+            const parts = [];
+            for (let i = 0; i <= sizeSteps; i += 1) {
+                const grow = 1 + (sizeSteps ? (i / sizeSteps) * (shadowSize * 0.04) : 0);
+                parts.push(
+                    `${(shadowDx * grow).toFixed(2)}px ${(shadowDy * grow).toFixed(2)}px `
+                    + `${shadowBlurPx.toFixed(2)}px rgba(0,0,0,${shadowAlpha})`
+                );
+            }
+            dropShadow = parts.join(', ');
+        }
+
+        if (style.backgroundEnabled) {
+            const color = style.backgroundColor || '#000000';
+            const r = parseInt(color.slice(1, 3), 16);
+            const g = parseInt(color.slice(3, 5), 16);
+            const b = parseInt(color.slice(5, 7), 16);
+            const alpha = Math.max(0, Math.min(100, style.backgroundOpacity)) / 100;
+            const padX = Math.max(0, style.backgroundPaddingX || 0) * scale;
+            const padY = Math.max(0, style.backgroundPaddingY || 0) * scale;
+            element.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            element.style.padding = `${padY}px ${padX}px`;
+            element.style.borderRadius = `${Math.max(0, style.backgroundRadius * scale)}px`;
+            element.style.webkitTextStroke = outlinePx > 0 ? `${outlinePx}px ${style.outline}` : '0';
+            element.style.textShadow = dropShadow || 'none';
+        } else {
+            element.style.backgroundColor = 'transparent';
+            element.style.padding = '0';
+            element.style.borderRadius = '0';
+            element.style.webkitTextStroke = outlinePx > 0 ? `${outlinePx}px ${style.outline}` : '0';
+            const outlineShadow = hardOutlineShadow(style.outline, outlinePx);
+            element.style.textShadow = [outlineShadow, dropShadow].filter(Boolean).join(', ') || 'none';
+        }
+        element.classList.toggle('single-line', singleLine || style.lines <= 1);
+    }
+
+    function updateStylePreviewMeta(targetId, style) {
+        const target = byId(targetId);
+        if (!target) return;
+        const weightLabel = FONT_WEIGHT_LABELS[style.fontWeight] || style.fontWeight;
+        const alignmentLabel = ALIGNMENT_LABELS[style.alignment] || style.alignment;
+        target.innerHTML = `
+            <div class="flex flex-wrap gap-2 mb-2">
+                <span class="style-font-chip">${style.name}</span>
+                <span class="style-font-chip">${style.font} ${weightLabel}</span>
+                <span class="style-font-chip">${style.fontSize}px</span>
+                ${style.backgroundEnabled ? '<span class="style-font-chip">plano de fundo ativo</span>' : '<span class="style-font-chip">sem fundo</span>'}
+            </div>
+            <div class="text-xs text-gray-500">
+                ${alignmentLabel} · margem ${style.margin}px · contorno ${style.outlineWidth}
+                · sombra ${style.shadow || 0}px · ${style.shadowAngle ?? 45}° · tam ${style.shadowSize || 0} · blur ${style.shadowBlur || 0} · ${style.shadowOpacity ?? 70}%
+                · até ${style.lines} linha(s) · ${style.chars} caracteres
+                ${style.backgroundEnabled
+                    ? ` · fundo ${style.backgroundOpacity}% · altura ${style.backgroundHeightPercent || 100}% · extra ${style.backgroundPaddingX || 0}×${style.backgroundPaddingY || 0}px`
+                    : ''}
+            </div>
+        `;
+    }
+
+    function setPreviewBackdrop(mode) {
+        const backdrop = mode === 'light' ? 'light' : 'dark';
+        const shell = byId('style-preview-shell');
+        const toggle = byId('style-backdrop-toggle');
+        const vignette = byId('style-preview-vignette');
+        if (shell) shell.dataset.backdrop = backdrop;
+        if (toggle) {
+            toggle.dataset.active = backdrop;
+            toggle.querySelectorAll('button[data-backdrop]').forEach((button) => {
+                button.classList.toggle('active', button.dataset.backdrop === backdrop);
+            });
+        }
+        if (vignette) {
+            vignette.className = backdrop === 'light'
+                ? 'absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent'
+                : 'absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent';
+        }
+    }
+
+    function updateStylePreview() {
+        syncStyleBackgroundFields();
+        const originalStyle = styleDataFromForm();
+        const compareOption = byId('style-preview-compare')?.selectedOptions?.[0];
+        const hasCompareStyle = !!(compareOption && compareOption.value);
+        const translatedStyle = hasCompareStyle
+            ? styleDataFromOption(compareOption, originalStyle)
+            : null;
+        const presetOption = byId('style-preview-preset')?.selectedOptions?.[0];
+        const width = parseInt(presetOption?.dataset.width || '1920', 10);
+        const height = parseInt(presetOption?.dataset.height || '1080', 10);
+        const stage = byId('style-preview-stage');
+        const original = byId('style-preview-original');
+        const translated = byId('style-preview-translated');
+        const showTranslation = !!byId('style-preview-show-translation')?.checked && hasCompareStyle;
+
+        if (stage) {
+            stage.style.setProperty('--preview-ratio', `${(height / width) * 100}%`);
+        }
+        const label = byId('style-preview-format-label');
+        if (label) {
+            label.textContent = `${ratioLabel(width, height)} · ${width}x${height}`;
+        }
+
+        requestAnimationFrame(() => {
+            const stageWidth = stage?.clientWidth || 0;
+            const scale = stageWidth > 0 ? stageWidth / width : 1;
+            const metrics = {
+                scale,
+                playResX: width,
+                playResY: height,
+            };
+            // Margens independentes (igual ao backend): formulário mexe só a legenda atual;
+            // a traduzida usa a margem salva do estilo comparado.
+            let originalMargin = originalStyle.margin;
+            let translatedMargin = translatedStyle?.margin;
+            if (showTranslation && translatedStyle) {
+                const margins = dualStyleMargins(originalStyle, translatedStyle);
+                originalMargin = margins.originalMargin;
+                translatedMargin = margins.translatedMargin;
+            }
+
+            applyPreviewStyle(
+                original,
+                originalStyle,
+                'Hoje queremos convidar você para estar conosco.',
+                metrics,
+                { singleLine: false, marginOverride: originalMargin },
+            );
+            if (translated) {
+                translated.style.display = showTranslation ? 'block' : 'none';
+                if (showTranslation && translatedStyle) {
+                    applyPreviewStyle(
+                        translated,
+                        translatedStyle,
+                        'Today we want to invite you to join us.',
+                        metrics,
+                        { singleLine: true, marginOverride: translatedMargin },
+                    );
+                }
+            }
+
+            updateStylePreviewMeta('style-preview-original-meta', originalStyle);
+            updateStylePreviewMeta(
+                'style-preview-translated-meta',
+                translatedStyle || {
+                    name: 'Selecione um estilo salvo',
+                    font: '—',
+                    fontWeight: '',
+                    fontSize: '—',
+                    margin: '—',
+                    outlineWidth: '—',
+                    lines: '—',
+                    chars: '—',
+                    alignment: '',
+                    backgroundEnabled: false,
+                },
+            );
+        });
+    }
+
+    document.querySelectorAll('[data-reset-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+            resetStyleForm();
+            showStyleEditor('Novo estilo');
+        });
+    });
+    document.querySelectorAll('#style-create-button, [data-style-create]').forEach((button) => {
+        button.addEventListener('click', openStyleCreate);
+    });
+    document.querySelectorAll('#style-back-to-list, [data-style-back]').forEach((button) => {
+        button.addEventListener('click', showStyleList);
+    });
+    document.querySelectorAll('[data-edit-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+            setValue('style-id', button.dataset.id);
+            fillStyleForm(button.dataset);
+            showStyleEditor(`Editar estilo: ${button.dataset.name}`);
+        });
+    });
+    document.querySelectorAll('[data-clone-style]').forEach((button) => {
+        button.addEventListener('click', () => {
+            setValue('style-id', '');
+            fillStyleForm(button.dataset, { clone: true });
+            showStyleEditor(`Clonar estilo: ${button.dataset.name}`);
+        });
+    });
+    byId('style-backdrop-toggle')?.querySelectorAll('button[data-backdrop]').forEach((button) => {
+        button.addEventListener('click', () => setPreviewBackdrop(button.dataset.backdrop));
+    });
+    const styleEditorForm = byId('style-editor-view')?.querySelector('form');
+    styleEditorForm?.addEventListener('input', updateStylePreview);
+    styleEditorForm?.addEventListener('change', updateStylePreview);
+    [
+        'style-preview-preset',
+        'style-preview-compare',
+        'style-preview-show-translation',
+    ].forEach((id) => {
+        byId(id)?.addEventListener('input', updateStylePreview);
+        byId(id)?.addEventListener('change', updateStylePreview);
+    });
+    byId('id_style-background_enabled')?.addEventListener('change', syncStyleBackgroundFields);
+    byId('style-bg-fit-text')?.addEventListener('click', () => {
+        setChecked('id_style-background_enabled', true);
+        setValue('id_style-background_padding_x', '0');
+        setValue('id_style-background_padding_y', '0');
+        setValue('id_style-background_height_percent', '100');
+        syncStyleBackgroundFields();
+        updateStylePreview();
+    });
+    setPreviewBackdrop('dark');
+
+    function resetBackgroundMusicForm() {
+        byId('bgmusic-form-title').textContent = 'Nova trilha';
+        setValue('bgmusic-id', '');
+        setValue('id_bgmusic-name', '');
+        setValue('id_bgmusic-category', 'instrumental');
+        setValue('id_bgmusic-tempo', '');
+        const fileInput = byId('id_bgmusic-audio_file');
+        if (fileInput) fileInput.value = '';
+    }
+    document.querySelector('[data-reset-bgmusic]')?.addEventListener('click', resetBackgroundMusicForm);
+    document.querySelectorAll('[data-edit-bgmusic]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('bgmusic-form-title').textContent = `Editar trilha: ${button.dataset.name}`;
+            setValue('bgmusic-id', button.dataset.id);
+            setValue('id_bgmusic-name', button.dataset.name);
+            setValue('id_bgmusic-category', button.dataset.category);
+            setValue('id_bgmusic-tempo', button.dataset.tempo);
+            const details = byId('music-details');
+            details.classList.remove('hidden');
+            details.innerHTML = `<strong>${button.dataset.name}</strong><br>Arquivo atual: ${button.dataset.audio || 'Sem arquivo enviado'}`;
+        });
+    });
+    document.querySelectorAll('[data-view-bgmusic]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const target = byId('music-details');
+            target.classList.remove('hidden');
+            target.innerHTML = `<strong>${button.dataset.name}</strong><br>Categoria: ${button.dataset.category || '—'}<br>Andamento: ${button.dataset.tempo}<br>Áudio: ${button.dataset.audio}`;
+        });
+    });
+
+    function resetColorLUTForm() {
+        byId('colorlut-form-title').textContent = 'Novo LUT';
+        setValue('colorlut-id', '');
+        setValue('id_colorlut-name', '');
+        setValue('id_colorlut-description', '');
+        setValue('id_colorlut-default_intensity', '50');
+        setChecked('id_colorlut-is_active', true);
+        const fileInput = byId('id_colorlut-lut_file');
+        if (fileInput) fileInput.value = '';
+    }
+    document.querySelector('[data-reset-colorlut]')?.addEventListener('click', resetColorLUTForm);
+    document.querySelectorAll('[data-edit-colorlut]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('colorlut-form-title').textContent = `Editar LUT: ${button.dataset.name}`;
+            setValue('colorlut-id', button.dataset.id);
+            setValue('id_colorlut-name', button.dataset.name);
+            setValue('id_colorlut-description', button.dataset.description);
+            setValue('id_colorlut-default_intensity', button.dataset.intensity);
+            setChecked('id_colorlut-is_active', button.dataset.active === '1');
+        });
+    });
+
+    function resetMasteringProfileForm() {
+        byId('masterprofile-form-title').textContent = 'Novo perfil';
+        setValue('masterprofile-id', '');
+        setValue('id_masterprofile-name', '');
+        setValue('id_masterprofile-target_lufs', '-16.0');
+        setValue('id_masterprofile-true_peak_db', '-1.0');
+        setValue('id_masterprofile-dynamic_range_target', '11.0');
+        setValue('id_masterprofile-max_gain_db', '12.0');
+        setValue('id_masterprofile-max_limiter_reduction_db', '4.0');
+        setValue('id_masterprofile-low_frequency_control', '0.0');
+        setValue('id_masterprofile-high_frequency_control', '0.0');
+        setChecked('id_masterprofile-bus_compression_enabled', false);
+        setChecked('id_masterprofile-limiter_enabled', true);
+        setChecked('id_masterprofile-is_default', false);
+        setChecked('id_masterprofile-is_active', true);
+    }
+    document.querySelector('[data-reset-masterprofile]')?.addEventListener('click', resetMasteringProfileForm);
+    document.querySelectorAll('[data-edit-masterprofile]').forEach((button) => {
+        button.addEventListener('click', () => {
+            byId('masterprofile-form-title').textContent = `Editar perfil: ${button.dataset.name}`;
+            setValue('masterprofile-id', button.dataset.id);
+            setValue('id_masterprofile-name', button.dataset.name);
+            setValue('id_masterprofile-target_lufs', button.dataset.targetLufs);
+            setValue('id_masterprofile-true_peak_db', button.dataset.truePeak);
+            setValue('id_masterprofile-dynamic_range_target', button.dataset.dynamicRange);
+            setValue('id_masterprofile-max_gain_db', button.dataset.maxGain);
+            setValue('id_masterprofile-max_limiter_reduction_db', button.dataset.maxLimiter);
+            setValue('id_masterprofile-low_frequency_control', button.dataset.lowFrequency);
+            setValue('id_masterprofile-high_frequency_control', button.dataset.highFrequency);
+            setChecked('id_masterprofile-bus_compression_enabled', button.dataset.busCompression === '1');
+            setChecked('id_masterprofile-limiter_enabled', button.dataset.limiter === '1');
+            setChecked('id_masterprofile-is_default', button.dataset.default === '1');
+            setChecked('id_masterprofile-is_active', button.dataset.active === '1');
+        });
+    });
+
+    function syncLanguageModeUI() {
+        const subtitlesEnabled = byId('id_subtitles_enabled')?.checked;
+        const mode = byId('id_language_mode')?.value;
+        const translatedEnabled = subtitlesEnabled && mode === 'translated';
+        const spoken = byId('spoken-languages-field');
+        const translated = byId('translated-language-field');
+        const translatedStyle = byId('translated-style-field');
+        const mainFields = ['subtitle-style-field', 'original-language-field', 'language-mode-field', 'spoken-languages-field', 'language-help'];
+        mainFields.forEach((id) => byId(id)?.classList.toggle('hidden', !subtitlesEnabled));
+        if (spoken) spoken.classList.toggle('hidden', !subtitlesEnabled || mode !== 'bilingual_source');
+        if (translated) translated.classList.toggle('hidden', !translatedEnabled || mode === 'single');
+        if (translatedStyle) translatedStyle.classList.toggle('hidden', !translatedEnabled || mode === 'single');
+    }
+    function syncAutoReframeUI() {
+        const checkbox = document.querySelector(
+            'input[name="advanced_plugins"][value="auto_tracking"]'
+        );
+        const settings = byId('auto-reframe-settings');
+        if (settings) settings.classList.toggle('hidden', !checkbox?.checked);
+    }
+    function syncSpeechEditUI() {
+        const silence = document.querySelector(
+            'input[name="advanced_plugins"][value="silence_removal"]'
+        );
+        const fillers = document.querySelector(
+            'input[name="advanced_plugins"][value="filler_removal"]'
+        );
+        const settings = byId('speech-edit-settings');
+        if (settings) settings.classList.toggle('hidden', !silence?.checked && !fillers?.checked);
+    }
+    function syncAudioIntelligentUI() {
+        const mixingEnabled = byId('id_audio_mixing_enabled')?.checked;
+        const dialogueEnabled = byId('id_dialogue_processing_enabled')?.checked;
+        const noiseEnabled = byId('id_audio_noise_cleanup_enabled')?.checked;
+        const masteringEnabled = byId('id_audio_mastering_enabled')?.checked;
+        byId('mixing-advanced-control')?.classList.toggle('hidden', !mixingEnabled);
+        byId('dialogue-advanced-control')?.classList.toggle('hidden', !dialogueEnabled);
+        byId('noise-advanced-control')?.classList.toggle('hidden', !noiseEnabled);
+        byId('mastering-profile-field')?.classList.toggle('hidden', !masteringEnabled);
+        if (!mixingEnabled) setAdvancedFieldVisible('mixing', false);
+        if (!dialogueEnabled) setAdvancedFieldVisible('dialogue', false);
+        if (!noiseEnabled) setAdvancedFieldVisible('noise', false);
+    }
+    function setAdvancedFieldVisible(kind, visible) {
+        const field = byId(`${kind}-advanced-field`);
+        const toggle = byId(`${kind}-advanced-toggle`);
+        field?.classList.toggle('hidden', !visible);
+        toggle?.setAttribute('aria-expanded', String(visible));
+        toggle?.querySelector('[data-advanced-chevron]')?.setAttribute(
+            'name', visible ? 'chevron-up-outline' : 'chevron-down-outline',
+        );
+    }
+    const overlayPresets = JSON.parse(byId('overlay-preset-data')?.textContent || '[]');
+    const overlayTypeLabels = {
+        TEXT: 'Texto', QR_CODE: 'QR Code', QR_CODE_CARD: 'QR Code + chamada', IMAGE: 'Imagem',
+    };
+    const escapeOverlay = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+    }[char]));
+    function schemaForOverlay(type) {
+        if (type === 'TEXT') return { text: { label: 'Texto', required: true } };
+        if (type === 'QR_CODE') return { payload: { label: 'URL do QR Code', required: true } };
+        if (type === 'QR_CODE_CARD') return {
+            payload: { label: 'URL do QR Code', required: true },
+            cta: { label: 'Texto da chamada', required: false },
+        };
+        return {};
+    }
+    function memberDataSummary(type) {
+        if (type === 'TEXT') return 'O membro preencherá o texto que será exibido.';
+        if (type === 'QR_CODE') return 'O membro informará a URL que será transformada em QR Code.';
+        if (type === 'QR_CODE_CARD') return 'O membro informará a URL do QR Code e, se quiser, o texto da chamada.';
+        return 'O membro enviará a imagem ao criar o projeto.';
+    }
+    function defaultOverlayDefinition(index) {
+        return {
+            key: `elemento-${index + 1}`, type: 'TEXT', preset: 'event-date-filadelfia',
+            fields: schemaForOverlay('TEXT'),
+        };
+    }
+    function syncOverlayBuilder(builder) {
+        const raw = builder.parentElement.querySelector('input[name$="-overlay_definitions_raw"]');
+        if (!raw) return;
+        const definitions = builder._overlayDefinitions || [];
+        builder.querySelectorAll('[data-overlay-card]').forEach((card) => {
+            const item = definitions[Number(card.dataset.overlayIndex)];
+            if (!item) return;
+            item.type = card.querySelector('[data-overlay-type]').value;
+            item.preset = card.querySelector('[data-overlay-preset]').value || undefined;
+            item.key = item.key || `elemento-${Number(card.dataset.overlayIndex) + 1}`;
+            item.fields = schemaForOverlay(item.type);
+            ['timing', 'duration_ms', 'position', 'animation', 'style'].forEach((key) => delete item[key]);
+        });
+        raw.value = JSON.stringify(definitions);
+        builder.querySelector('[data-overlay-empty]').classList.toggle('hidden', definitions.length > 0);
+    }
+    function renderOverlayBuilder(builder) {
+        const items = builder.querySelector('[data-overlay-items]');
+        const definitions = builder._overlayDefinitions || [];
+        items.innerHTML = definitions.map((item, index) => {
+            const compatiblePresets = overlayPresets.filter((preset) => preset.overlay_type === item.type);
+            const typeOptions = Object.entries(overlayTypeLabels).map(([value, label]) => `<option value="${value}" ${item.type === value ? 'selected' : ''}>${label}</option>`).join('');
+            const presetOptions = [`<option value="">Selecione um preset visual</option>`, ...compatiblePresets.map((preset) => `<option value="${escapeOverlay(preset.code)}" ${item.preset === preset.code ? 'selected' : ''}>${escapeOverlay(preset.name)}</option>`)].join('');
+            return `<article class="rounded-xl border border-gray-200 bg-white p-4" data-overlay-card data-overlay-index="${index}">
+                <div class="flex items-center justify-between gap-3 mb-3"><strong class="text-sm text-gray-900">Elemento ${index + 1}</strong><button type="button" class="text-sm font-bold text-red-600" data-remove-overlay>Remover</button></div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <label class="text-xs font-bold text-gray-600">Tipo<select data-overlay-type class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-normal">${typeOptions}</select></label>
+                    <label class="text-xs font-bold text-gray-600">Preset visual<select required data-overlay-preset class="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm font-normal">${presetOptions}</select><span class="block mt-1 text-xs font-normal text-gray-500">Define posição, momento, duração e animação.</span></label>
+                </div>
+                <div class="mt-4 rounded-lg border border-gray-200 bg-gray-50 p-3"><p class="text-xs font-black uppercase tracking-wide text-gray-500">O que será solicitado ao membro</p><p class="mt-1 text-sm text-gray-700">${memberDataSummary(item.type)}</p></div>
+            </article>`;
+        }).join('');
+        syncOverlayBuilder(builder);
+    }
+    function bindOverlayBuilder(builder) {
+        if (builder.dataset.boundOverlayBuilder === 'true') return;
+        builder.dataset.boundOverlayBuilder = 'true';
+        const raw = builder.parentElement.querySelector('input[name$="-overlay_definitions_raw"]');
+        try {
+            builder._overlayDefinitions = JSON.parse(raw?.value || '[]');
+            if (!Array.isArray(builder._overlayDefinitions)) builder._overlayDefinitions = [];
+        } catch (_) {
+            builder._overlayDefinitions = [];
+        }
+        builder.querySelector('[data-add-overlay]').addEventListener('click', () => {
+            builder._overlayDefinitions.push(defaultOverlayDefinition(builder._overlayDefinitions.length));
+            renderOverlayBuilder(builder);
+        });
+        builder.addEventListener('input', (event) => {
+            if (!event.target.closest('[data-overlay-card]')) return;
+            syncOverlayBuilder(builder);
+        });
+        builder.addEventListener('change', (event) => {
+            const card = event.target.closest('[data-overlay-card]');
+            if (!card) return;
+            const index = Number(card.dataset.overlayIndex);
+            if (event.target.matches('[data-overlay-type]')) {
+                const type = event.target.value;
+                const preset = overlayPresets.find((item) => item.overlay_type === type);
+                builder._overlayDefinitions[index] = {
+                    ...builder._overlayDefinitions[index], type, preset: preset?.code,
+                    fields: schemaForOverlay(type),
+                };
+                renderOverlayBuilder(builder);
+            } else {
+                syncOverlayBuilder(builder);
+            }
+        });
+        builder.addEventListener('click', (event) => {
+            const remove = event.target.closest('[data-remove-overlay]');
+            if (!remove) return;
+            const index = Number(remove.closest('[data-overlay-card]').dataset.overlayIndex);
+            builder._overlayDefinitions.splice(index, 1);
+            renderOverlayBuilder(builder);
+        });
+        renderOverlayBuilder(builder);
+    }
+    function visibleBlockCards() {
+        return Array.from(document.querySelectorAll('#blocks-container [data-block-form]'))
+            .filter((card) => card.style.display !== 'none');
+    }
+    function updateBlockOrder() {
+        visibleBlockCards().forEach((card, index) => {
+            const orderInput = card.querySelector('input[name$="-order"]');
+            const badge = card.querySelector('[data-block-position]');
+            if (orderInput) orderInput.value = index + 1;
+            if (badge) badge.textContent = index + 1;
+        });
+    }
+    function bindBlockCard(card) {
+        if (card.dataset.boundBlock === 'true') return;
+        card.dataset.boundBlock = 'true';
+        card.addEventListener('dragstart', () => card.classList.add('dragging'));
+        card.addEventListener('dragend', () => {
+            card.classList.remove('dragging');
+            updateBlockOrder();
+        });
+        card.querySelector('[data-remove-block]')?.addEventListener('click', () => {
+            const deleteInput = card.querySelector('input[name$="-DELETE"]');
+            if (deleteInput) deleteInput.checked = true;
+            card.style.display = 'none';
+            updateBlockOrder();
+        });
+        card.querySelectorAll('[data-overlay-builder]').forEach(bindOverlayBuilder);
+    }
+    function bindBlockDragAndDrop() {
+        const container = byId('blocks-container');
+        if (!container || container.dataset.boundDrag === 'true') return;
+        container.dataset.boundDrag = 'true';
+        container.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            const dragging = container.querySelector('.dragging');
+            if (!dragging) return;
+            const siblings = visibleBlockCards().filter((card) => card !== dragging);
+            const next = siblings.find((card) => event.clientY <= card.getBoundingClientRect().top + card.offsetHeight / 2);
+            container.insertBefore(dragging, next || null);
+        });
+    }
+    function addBlockForm() {
+        const container = byId('blocks-container');
+        const template = byId('empty-block-template');
+        const totalInput = byId('id_blocks-TOTAL_FORMS');
+        if (!container || !template || !totalInput) return;
+        const index = parseInt(totalInput.value, 10);
+        const html = template.innerHTML.replace(/__prefix__/g, index);
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = html.trim();
+        const card = wrapper.firstElementChild;
+        container.appendChild(card);
+        totalInput.value = index + 1;
+        bindBlockCard(card);
+        updateBlockOrder();
+    }
+    function syncInteractivePreviewUI() {
+        byId('preview-profile-field')?.classList.toggle('hidden', !byId('id_interactive_preview_enabled')?.checked);
+    }
+    byId('id_language_mode')?.addEventListener('change', syncLanguageModeUI);
+    byId('id_subtitles_enabled')?.addEventListener('change', syncLanguageModeUI);
+    byId('id_audio_mixing_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_dialogue_processing_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_audio_noise_cleanup_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_audio_mastering_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_interactive_preview_enabled')?.addEventListener('change', syncInteractivePreviewUI);
+    ['mixing', 'dialogue', 'noise'].forEach((kind) => {
+        byId(`${kind}-advanced-toggle`)?.addEventListener('click', () => {
+            const field = byId(`${kind}-advanced-field`);
+            setAdvancedFieldVisible(kind, field?.classList.contains('hidden'));
+        });
+    });
+    document.querySelector('input[name="advanced_plugins"][value="auto_tracking"]')
+        ?.addEventListener('change', syncAutoReframeUI);
+    document.querySelectorAll(
+        'input[name="advanced_plugins"][value="silence_removal"], input[name="advanced_plugins"][value="filler_removal"]'
+    ).forEach((input) => input.addEventListener('change', syncSpeechEditUI));
+    document.querySelectorAll('#blocks-container [data-block-form]').forEach(bindBlockCard);
+    bindBlockDragAndDrop();
+    byId('add-block-button')?.addEventListener('click', addBlockForm);
+    syncLanguageModeUI();
+    syncAutoReframeUI();
+    syncSpeechEditUI();
+    syncAudioIntelligentUI();
+    syncLUTIntensityUI();
+    syncInteractivePreviewUI();
+    updateBlockOrder();
+    updateStylePreview();
+</script>
+{% endblock %}

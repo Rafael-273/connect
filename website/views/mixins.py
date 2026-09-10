@@ -13,7 +13,9 @@ class StaffRequiredMixin(UserPassesTestMixin):
 
     def handle_no_permission(self):
         messages.error(self.request, 'Você não tem permissão para acessar esta página.')
-        return redirect('admin_dashboard')
+        # Do not send an unauthorized user back to the protected dashboard,
+        # otherwise `/admin-panel/` redirects to itself indefinitely.
+        return redirect('redirect_after_login')
 
 
 class MemberRequiredMixin(LoginRequiredMixin):
@@ -81,7 +83,9 @@ class AdminRequiredMixin(UserPassesTestMixin):
 
     def handle_no_permission(self):
         messages.error(self.request, 'Você não tem permissão para acessar esta página.')
-        return redirect('admin_dashboard')
+        # The admin dashboard uses this mixin too, so redirecting to it would
+        # create a loop for authenticated users without admin access.
+        return redirect('redirect_after_login')
 
 
 class ModulePermissionMixin(UserPassesTestMixin):
@@ -118,3 +122,27 @@ class MinistrationContextMixin:
             ministry__name__icontains='ministração',
             is_active=True,
         ).exists()
+
+
+class ExternalMediaRequiredMixin(MemberRequiredMixin):
+    """Restrict the media workspace to its ministry (and superusers)."""
+
+    ministry_code = 'midia_externa'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+        if not hasattr(request.user, 'member'):
+            messages.error(request, 'Você precisa estar cadastrado como membro para acessar esta área.')
+            return redirect('member_dashboard')
+        self.member = request.user.member
+        allowed = MinistryMembership.objects.filter(
+            member=self.member,
+            ministry__code=self.ministry_code,
+            ministry__is_active=True,
+            is_active=True,
+        ).exists()
+        if not allowed:
+            messages.error(request, 'Acesso exclusivo ao Ministério de Mídia Externa.')
+            return redirect('member_dashboard')
+        return super(MemberRequiredMixin, self).dispatch(request, *args, **kwargs)

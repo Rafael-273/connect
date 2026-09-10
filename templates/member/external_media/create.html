@@ -1,0 +1,20 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_content %}
+<div class="w-full">
+    <div class="mb-6">
+        <p class="text-sm font-bold uppercase tracking-widest" style="color:#C90905">Novo projeto</p>
+        <h1 class="text-3xl font-black">Crie um projeto de mídia</h1>
+        <p class="text-gray-500 mt-2">Defina um nome e escolha o template que guiará os blocos, o formato e as etapas automáticas.</p>
+    </div>
+    <form method="post" class="media-card media-form p-5 sm:p-6 space-y-6" id="media-upload-form">
+        {% csrf_token %}
+        {% for error in form.non_field_errors %}<p class="text-red-700">{{ error }}</p>{% endfor %}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div>{{ form.name.label_tag }}{{ form.name }}{{ form.name.errors }}</div>
+            <div>{{ form.template_version.label_tag }}{{ form.template_version }}{{ form.template_version.errors }}</div>
+        </div>
+        <button class="media-btn media-primary w-full" type="submit"><i class="fas fa-arrow-right"></i>Criar projeto e enviar vídeos</button>
+    </form>
+</div>
+{% endblock %}

@@ -24,6 +24,12 @@ class Music(BaseModel):
         default='',
         verbose_name='Andamento',
     )
+    audio_file = models.FileField(
+        upload_to='music/audio/',
+        max_length=255,
+        blank=True,
+        help_text='Arquivo de áudio usado como trilha ou referência sonora.',
+    )
 
     def __str__(self):
         return f"{self.name} - {self.singer}"

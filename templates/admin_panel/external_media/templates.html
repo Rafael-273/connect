@@ -1,0 +1,340 @@
+{% extends 'admin_base.html' %}
+{% load static %}
+
+{% block title %}Mídia Externa - Templates{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+    .admin-card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .status-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+    .status-active { background: #dcfce7; color: #166534; }
+    .status-inactive { background: #f3f4f6; color: #374151; }
+    .data-table thead th {
+        background: #f8fafc;
+        font-size: .7rem;
+        font-weight: 700;
+        letter-spacing: .07em;
+        text-transform: uppercase;
+        color: #6b7280;
+        border-bottom: 2px solid #f1f5f9;
+        padding: 14px 24px;
+    }
+    .data-table tbody tr {
+        border-bottom: 1px solid #f8fafc;
+        transition: background .15s, box-shadow .15s;
+    }
+    .data-table tbody tr:hover {
+        background: #fafbff;
+        box-shadow: inset 3px 0 0 var(--color-primary);
+    }
+    .data-table tbody td { padding: 14px 24px; vertical-align: middle; }
+    .action-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 34px; height: 34px; border-radius: 9px;
+        font-size: 1.1rem; transition: all .15s; flex-shrink: 0;
+    }
+    .action-btn-view { background: rgba(201,9,5,.08); color: var(--color-primary); }
+    .action-btn-view:hover { background: rgba(201,9,5,.16); }
+    .action-btn-edit { background: #eff6ff; color: #2563eb; }
+    .action-btn-edit:hover { background: #dbeafe; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; border: none; cursor: pointer; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .data-table th:last-child,
+    .data-table td:last-child { text-align: right; }
+    .editor-tab { color: #6b7280; border-bottom: 2px solid transparent; padding: .65rem .9rem; font-size: .875rem; font-weight: 700; }
+    .editor-tab:hover { color: #111827; }
+    .editor-tab.active { color: var(--color-primary); border-color: var(--color-primary); }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 md:p-6 mt-24">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                        <ion-icon name="cut-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-sm text-gray-500">Mídia Externa</p>
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">ConnectCut</h1>
+                        <p class="text-sm text-gray-500 mt-0.5 truncate">Intelligent editing for ministry media.</p>
+                    </div>
+                </div>
+                <a href="{% url 'admin_external_media_template_create' %}"
+                   class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center"
+                   title="Novo Template">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                </a>
+            </div>
+
+            <nav class="flex items-center gap-1 border-b border-gray-200 mb-6" aria-label="Seções de edição">
+                <a href="{% url 'admin_external_media_templates' %}" class="editor-tab active">Templates</a>
+                <a href="{% url 'admin_external_media_glossary' %}" class="editor-tab">Glossário</a>
+            </nav>
+
+            <div class="flex items-center gap-2 mb-6">
+                <form method="get" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+                    <input type="hidden" name="status" id="hidden-status" value="{{ status }}">
+
+                    <div class="relative flex-1 min-w-0">
+                        <input type="text" name="search" id="search-input" value="{{ search }}"
+                               placeholder="Buscar por nome ou descrição do template..."
+                               class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+                    </div>
+
+                    <button type="submit"
+                            class="flex-shrink-0 p-2.5 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 flex items-center justify-center"
+                            title="Buscar">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+
+                    <div class="relative flex-shrink-0">
+                        <button type="button" id="filter-toggle-templates"
+                                class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                            </svg>
+                            Filtros
+                            {% if status %}
+                            <span class="w-2 h-2 bg-[var(--color-primary)] rounded-full"></span>
+                            {% endif %}
+                        </button>
+
+                        <div id="filter-panel-templates"
+                             class="hidden absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                                    <select id="panel-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] text-sm bg-white cursor-pointer">
+                                        <option value="">Todos os status</option>
+                                        <option value="active" {% if status == 'active' %}selected{% endif %}>Ativos</option>
+                                        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inativos</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                                <a href="{% url 'admin_external_media_templates' %}"
+                                   class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                                    Limpar filtros
+                                </a>
+                                <button type="button" id="apply-filters-templates"
+                                        class="flex-1 px-3 py-2 text-sm bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all">
+                                    Aplicar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <a href="{% url 'admin_external_media_template_create' %}"
+                   class="hidden sm:flex flex-shrink-0 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition-all duration-200 items-center gap-2 text-sm font-medium">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Novo Template
+                </a>
+            </div>
+
+            <div class="admin-card overflow-hidden">
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="data-table w-full">
+                        <thead>
+                            <tr>
+                                <th>Template</th>
+                                <th>Categoria</th>
+                                <th>Blocos</th>
+                                <th>Uso</th>
+                                <th>Status</th>
+                                <th class="text-right">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for template in templates %}
+                            <tr>
+                                <td>
+                                    <p class="font-bold text-gray-900">{{ template.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ template.description|default:'Sem descrição'|truncatechars:80 }}</p>
+                                </td>
+                                <td class="text-sm text-gray-600">{{ template.get_category_display }}</td>
+                                <td class="text-sm text-gray-600">{{ template.blocks_count }} bloco{{ template.blocks_count|pluralize }}</td>
+                                <td class="text-sm text-gray-600">{{ template.projects_count }} projeto{{ template.projects_count|pluralize }}</td>
+                                <td><span class="status-badge {% if template.is_active %}status-active{% else %}status-inactive{% endif %}">{% if template.is_active %}Ativo{% else %}Inativo{% endif %}</span></td>
+                                <td class="text-right">
+                                    <div class="inline-flex gap-2">
+                                        <a href="{% url 'admin_external_media_template_detail' template.id %}" class="action-btn action-btn-view" title="Ver"><ion-icon name="eye-outline"></ion-icon></a>
+                                        <a href="{% url 'admin_external_media_template_edit' template.id %}" class="action-btn action-btn-edit" title="Editar"><ion-icon name="create-outline"></ion-icon></a>
+                                        <button type="button" class="action-btn action-btn-delete" title="Excluir"
+                                                onclick="deleteTemplate('{{ template.name|escapejs }}', '{% url 'admin_external_media_template_delete' template.id %}', {{ template.projects_count }})">
+                                            <ion-icon name="trash-outline"></ion-icon>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center text-gray-500 py-10">Nenhum template de mídia cadastrado.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="md:hidden divide-y divide-gray-100">
+                    {% for template in templates %}
+                    <div class="p-4">
+                        <div class="flex items-start justify-between gap-3 mb-3">
+                            <div class="min-w-0">
+                                <h3 class="font-bold text-gray-900">{{ template.name }}</h3>
+                                <p class="text-xs text-gray-500 mt-1">{{ template.get_category_display }} · {{ template.blocks_count }} bloco{{ template.blocks_count|pluralize }} · {{ template.projects_count }} projeto{{ template.projects_count|pluralize }}</p>
+                            </div>
+                            <span class="status-badge {% if template.is_active %}status-active{% else %}status-inactive{% endif %}">{% if template.is_active %}Ativo{% else %}Inativo{% endif %}</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <a href="{% url 'admin_external_media_template_detail' template.id %}"
+                               class="flex-1 flex items-center justify-center gap-1.5 bg-[var(--color-primary)] text-white hover:bg-opacity-90 px-3 py-2 rounded-lg text-xs font-medium transition">
+                                <ion-icon name="eye-outline"></ion-icon>
+                                <span>Ver</span>
+                            </a>
+                            <a href="{% url 'admin_external_media_template_edit' template.id %}"
+                               class="flex items-center justify-center gap-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 px-3 py-2 rounded-lg text-xs font-medium transition">
+                                <ion-icon name="create-outline"></ion-icon>
+                                <span>Editar</span>
+                            </a>
+                            <button type="button"
+                                    onclick="deleteTemplate('{{ template.name|escapejs }}', '{% url 'admin_external_media_template_delete' template.id %}', {{ template.projects_count }})"
+                                    class="flex items-center justify-center gap-1.5 bg-red-50 text-red-600 hover:bg-red-100 px-3 py-2 rounded-lg text-xs font-medium transition">
+                                <ion-icon name="trash-outline"></ion-icon>
+                                <span>Excluir</span>
+                            </button>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="p-8 text-center text-gray-500">Nenhum template cadastrado.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 p-3">
+    <div class="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" style="color:#dc2626;font-size:1.2rem;"></ion-icon>
+            </div>
+            <div>
+                <h3 class="text-base font-bold text-gray-900">Excluir Template</h3>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-2">Tem certeza que deseja excluir <strong id="deleteModalName" class="text-gray-900"></strong>?</p>
+        <p id="deleteModalWarning" class="hidden text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-5"></p>
+        <div class="flex gap-2 justify-end">
+            <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button type="button" id="deleteModalConfirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">
+                <ion-icon name="trash-outline"></ion-icon> Excluir
+            </button>
+        </div>
+        <form id="deleteTemplateForm" method="post" class="hidden">{% csrf_token %}</form>
+    </div>
+</div>
+
+<script>
+    let _deleteTemplateUrl = null;
+
+    function deleteTemplate(templateName, deleteUrl, projectsCount) {
+        _deleteTemplateUrl = deleteUrl;
+        document.getElementById('deleteModalName').textContent = templateName;
+        const warning = document.getElementById('deleteModalWarning');
+        const confirmBtn = document.getElementById('deleteModalConfirm');
+        if (projectsCount > 0) {
+            warning.textContent = 'Este template possui ' + projectsCount + ' projeto' + (projectsCount === 1 ? '' : 's') + ' vinculado' + (projectsCount === 1 ? '' : 's') + ' e não poderá ser excluído.';
+            warning.classList.remove('hidden');
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            warning.classList.add('hidden');
+            warning.textContent = '';
+            confirmBtn.disabled = false;
+            confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
+
+    function closeDeleteModal() {
+        const modal = document.getElementById('deleteModal');
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+        _deleteTemplateUrl = null;
+        const confirmBtn = document.getElementById('deleteModalConfirm');
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.innerHTML = '<ion-icon name="trash-outline"></ion-icon> Excluir';
+            confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (!_deleteTemplateUrl || this.disabled) return;
+        const form = document.getElementById('deleteTemplateForm');
+        this.disabled = true;
+        this.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        form.action = _deleteTemplateUrl;
+        form.submit();
+    });
+
+    document.getElementById('deleteModal').addEventListener('click', function (e) {
+        if (e.target === this) closeDeleteModal();
+    });
+
+    (function () {
+        var toggle = document.getElementById('filter-toggle-templates');
+        var panel = document.getElementById('filter-panel-templates');
+        var applyBtn = document.getElementById('apply-filters-templates');
+        var hiddenStatus = document.getElementById('hidden-status');
+        var panelStatus = document.getElementById('panel-status');
+        if (!toggle || !panel) return;
+        toggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            panel.classList.toggle('hidden');
+        });
+        document.addEventListener('click', function (e) {
+            if (!panel.contains(e.target) && e.target !== toggle) panel.classList.add('hidden');
+        });
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                hiddenStatus.value = panelStatus.value;
+                document.getElementById('filter-form').submit();
+            });
+        }
+    })();
+
+    (function () {
+        if (!document.getElementById('filter-loading-overlay')) {
+            var ov = document.createElement('div');
+            ov.id = 'filter-loading-overlay';
+            ov.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            ov.style.display = 'none';
+            ov.innerHTML = '<div class="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl"><div class="animate-spin rounded-full h-12 w-12 border-b-4 mb-4" style="border-color:var(--color-primary);"></div><p class="text-gray-700 text-base font-semibold">Buscando...</p></div>';
+            document.body.appendChild(ov);
+        }
+        var overlay = document.getElementById('filter-loading-overlay');
+        var form = document.getElementById('filter-form');
+        if (!form || !overlay) return;
+        form.addEventListener('submit', function () { overlay.style.display = 'flex'; });
+    })();
+</script>
+{% endblock %}

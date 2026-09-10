@@ -1,0 +1,85 @@
+{% extends 'member_base.html' %}
+{% load static %}
+
+{% block title %}Mídia Externa{% endblock %}
+
+{% block head %}
+<style>
+    .media-shell { width: 100%; max-width: none; margin: 0; padding-bottom: 8rem; }
+    .media-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 1.25rem; box-shadow: 0 8px 30px rgba(38,2,0,.06); }
+    .media-btn { display:inline-flex; align-items:center; justify-content:center; gap:.55rem; border-radius:.8rem; padding:.75rem 1rem; font-weight:800; transition:.2s; }
+    .media-btn:hover { transform: translateY(-1px); }
+    .media-primary { color:#fff; background:#C90905; }
+    .media-secondary { color:#C90905; border:2px solid #C90905; background:#fff; }
+    .media-muted { color:#374151; border:1px solid #d1d5db; background:#fff; }
+    .media-form label { display:block; margin-bottom:.4rem; font-weight:800; color:#1f2937; }
+    .media-form input[type=text], .media-form input[type=file], .media-form select, .media-form textarea { width:100%; border:1px solid #d1d5db; border-radius:.75rem; padding:.75rem; background:#fff; }
+    .media-form ul { display:flex; flex-wrap:wrap; gap:1rem; }
+    .media-form li label { display:flex; gap:.5rem; align-items:center; font-weight:600; }
+    .media-form .errorlist { display:block; color:#b91c1c; margin:.35rem 0; font-size:.875rem; }
+    .media-trim-panel { display:none; border:1px solid #fee2e2; background:#fff7f7; border-radius:1rem; padding:1rem; }
+    .media-trim-panel.is-visible { display:block; }
+    .media-trim-player { position:relative; overflow:hidden; border-radius:.95rem; background:#050505; }
+    .media-trim-video { display:block; width:100%; max-height:420px; background:#050505; }
+    .media-trim-controls { position:absolute; left:0; right:0; bottom:0; padding:2.75rem 1rem 1rem; color:#fff; background:linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.84) 55%, rgba(0,0,0,.95) 100%); }
+    .media-trim-control-row { display:flex; align-items:center; gap:.75rem; margin-top:.75rem; }
+    .media-trim-icon-btn { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:999px; background:rgba(255,255,255,.14); color:#fff; border:1px solid rgba(255,255,255,.22); }
+    .media-trim-time { min-width:112px; font-weight:800; font-variant-numeric:tabular-nums; color:#fff; }
+    .media-trim-input { width:100%; border:1px solid #fecaca; border-radius:.75rem; padding:.65rem .75rem; background:#fff; }
+    .media-trim-chip { border:1px solid #fecaca; background:#fff; color:#C90905; border-radius:.75rem; padding:.55rem .75rem; font-weight:800; font-size:.875rem; }
+    .media-trim-shell { background:#fff; border:1px solid #fecaca; border-radius:1rem; padding:1rem; }
+    .media-trim-rail { position:relative; flex:1; height:18px; border-radius:999px; background:rgba(255,255,255,.35); cursor:pointer; touch-action:none; }
+    .media-trim-selection { position:absolute; top:0; bottom:0; border-radius:999px; background:linear-gradient(90deg, #C90905 0%, #ef4444 100%); box-shadow:0 0 0 1px rgba(201,9,5,.15) inset; }
+    .media-trim-playhead { position:absolute; top:-6px; bottom:-6px; width:2px; background:#111827; opacity:.7; pointer-events:none; }
+    .media-trim-player .media-trim-playhead { background:#fff; opacity:.9; }
+    .media-trim-handle { position:absolute; top:50%; width:24px; height:24px; border-radius:999px; border:3px solid #fff; background:#C90905; box-shadow:0 8px 18px rgba(0,0,0,.34); transform:translate(-50%, -50%); cursor:grab; z-index:5; }
+    .media-trim-handle:active { cursor:grabbing; transform:translate(-50%, -50%) scale(1.06); }
+    .media-trim-handle.is-end { background:#ef4444; }
+    .media-trim-stats { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:.75rem; }
+    .media-trim-stat { border:1px solid #fee2e2; background:#fff; border-radius:1rem; padding:.85rem 1rem; }
+    .media-trim-stat strong { display:block; color:#111827; font-size:1rem; margin-top:.2rem; }
+    .media-trim-actions { display:flex; flex-wrap:wrap; gap:.75rem; }
+    .media-trim-actions .media-trim-chip { min-height:48px; }
+    .media-trim-hidden-fields { display:none; }
+    @media (max-width: 640px) {
+        .media-trim-controls { padding:2.25rem .75rem .75rem; }
+        .media-trim-control-row { flex-wrap:wrap; }
+        .media-trim-rail { flex-basis:100%; order:3; }
+        .media-trim-stats { grid-template-columns:1fr; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<header class="bg-white border-b-2" style="border-color: rgba(201, 9, 5, 0.2);">
+    <div class="media-header-inner w-full px-4 sm:px-6 md:px-8 py-5 flex flex-wrap items-center justify-between gap-4">
+        <div class="media-header-identity flex items-center gap-3 min-w-0 flex-1">
+            {% block media_header_icon %}
+            <a href="{% url 'external_media_dashboard' %}" class="flex-shrink-0">
+                <span class="w-11 h-11 rounded-xl text-white flex items-center justify-center" style="background:#C90905"><i class="fas fa-film"></i></span>
+            </a>
+            {% endblock %}
+            <div class="min-w-0">
+                {% block media_header_title %}
+                <a href="{% url 'external_media_dashboard' %}" class="block">
+                    <strong class="block text-gray-900 text-lg">Mídia Externa</strong>
+                    <small class="text-gray-500">Produção por templates</small>
+                </a>
+                {% endblock %}
+            </div>
+        </div>
+        <nav class="media-header-actions flex flex-wrap items-center gap-2 flex-shrink-0">
+            {% block media_header_actions %}{% endblock %}
+        </nav>
+    </div>
+</header>
+
+{% if messages %}
+<div class="w-full px-4 sm:px-6 md:px-8 pt-4">
+    {% for message in messages %}<div class="p-3 mb-2 rounded-xl border bg-white text-sm font-bold">{{ message }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<main class="media-shell w-full px-4 sm:px-6 md:px-8 pt-4">{% block media_content %}{% endblock %}</main>
+{% block media_bottom_nav %}{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}{% endblock %}
+{% endblock %}

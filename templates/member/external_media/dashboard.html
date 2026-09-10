@@ -1,0 +1,604 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block title %}Projetos de mídia{% endblock %}
+
+{% block head %}
+{{ block.super }}
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade { animation: fadeIn 0.45s ease-out; }
+
+    .media-filter-bar {
+        padding-bottom: 1rem;
+        margin-bottom: 1.25rem;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .media-project-list { width: 100%; }
+
+    .media-project-card {
+        background: #fff;
+        border-radius: 1rem;
+        border: 1px solid #e9edf3;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+        overflow: hidden;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+    }
+    .media-project-card:hover {
+        box-shadow: 0 8px 24px rgba(38, 2, 0, 0.08);
+        transform: translateY(-1px);
+    }
+
+    .media-project-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        padding: 1rem 1.125rem;
+        border-bottom: 1px solid #eef1f5;
+        background: linear-gradient(90deg, #fff9f9 0%, #fff 58%);
+    }
+
+    .media-project-avatar {
+        flex-shrink: 0;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 800;
+        font-size: 1.05rem;
+        background: #C90905;
+        box-shadow: 0 2px 8px rgba(201, 9, 5, 0.2);
+    }
+
+    .media-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: .42rem;
+        flex-shrink: 0;
+        padding: .36rem .6rem;
+        border-radius: 9999px;
+        border: 0;
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .015em;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .media-status-badge::before {
+        content: '';
+        width: .4rem;
+        height: .4rem;
+        border-radius: 9999px;
+        background: currentColor;
+        opacity: .85;
+    }
+    .media-status-badge.is-finished { background: #f0fdf4; color: #15803d; }
+    .media-status-badge.is-error { background: #fff1f2; color: #be123c; }
+    .media-status-badge.is-cancelled { background: #f1f5f9; color: #64748b; }
+    .media-status-badge.is-processing { background: #fff8e6; color: #b45309; }
+
+    .media-project-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-left: auto;
+    }
+    .media-project-action {
+        width: 2rem;
+        height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.6rem;
+        background: #fff;
+        color: #6b7280;
+        transition: 0.18s ease;
+    }
+    .media-project-action:hover { border-color: rgba(201, 9, 5, .35); color: #C90905; background: #fff7f7; }
+    .media-project-action.is-danger:hover { border-color: #fecaca; color: #dc2626; background: #fff1f2; }
+    .media-project-action:disabled { cursor: not-allowed; opacity: .42; }
+
+    .media-confirm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(15, 23, 42, .58);
+        backdrop-filter: blur(2px);
+    }
+    .media-confirm-overlay.is-open { display: flex; animation: fadeIn .18s ease-out; }
+    .media-confirm-dialog {
+        width: min(28rem, 100%);
+        border-radius: 1.25rem;
+        background: #fff;
+        box-shadow: 0 24px 64px rgba(15, 23, 42, .24);
+        overflow: hidden;
+    }
+    .media-confirm-content { padding: 1.6rem; }
+    .media-confirm-icon {
+        width: 2.8rem;
+        height: 2.8rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: .9rem;
+        color: #C90905;
+        background: #fff1f2;
+        font-size: 1.1rem;
+    }
+    .media-confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: .65rem;
+        margin-top: 1.5rem;
+    }
+    .media-confirm-actions button {
+        min-height: 2.75rem;
+        padding: .65rem 1rem;
+        border-radius: .75rem;
+        font-size: .875rem;
+        font-weight: 700;
+        transition: .18s ease;
+    }
+    .media-confirm-cancel { background: #f3f4f6; color: #4b5563; }
+    .media-confirm-cancel:hover { background: #e5e7eb; }
+    .media-confirm-delete { background: #C90905; color: #fff; }
+    .media-confirm-delete:hover { background: #a60704; }
+
+    .media-project-card-body { padding: .875rem 1.125rem 1rem; }
+
+    .media-info-grid {
+        display: grid;
+        gap: 0.625rem;
+    }
+    @media (min-width: 480px) {
+        .media-info-grid { grid-template-columns: 1fr 1fr; }
+        .media-info-grid .span-full { grid-column: 1 / -1; }
+    }
+
+    .media-info-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: .55rem .65rem;
+        border-radius: .7rem;
+        background: #f8fafc;
+        font-size: 0.8125rem;
+        color: #374151;
+        line-height: 1.45;
+    }
+    .media-info-item i {
+        width: 1rem;
+        text-align: center;
+        margin-top: 0.15rem;
+        flex-shrink: 0;
+        color: #C90905;
+        opacity: 0.85;
+    }
+
+    .media-project-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem 1rem;
+        padding: .15rem 0;
+        color: #667085;
+        font-size: .8125rem;
+    }
+    .media-project-meta span { display: inline-flex; align-items: center; gap: .45rem; }
+    .media-project-meta i { color: #C90905; opacity: .85; }
+    .media-project-meta .media-status-badge { justify-self: start; }
+
+    .media-project-footer {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        margin-top: .875rem;
+        padding-top: .875rem;
+        border-top: 1px solid #eef1f5;
+    }
+    .media-open-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .55rem;
+        position: relative;
+        width: 100%;
+        padding: .55rem .85rem;
+        border-radius: 0.75rem;
+        border: 1px solid #C90905;
+        background: #C90905;
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 700;
+        text-decoration: none;
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+    .media-open-btn:hover {
+        background: #ab0704;
+        border-color: #ab0704;
+        transform: translateY(-1px);
+    }
+    .media-open-btn-icon {
+        flex-shrink: 0;
+        width: 1.65rem;
+        height: 1.65rem;
+        border-radius: .45rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, .18);
+        color: #fff;
+        font-size: .75rem;
+    }
+    .media-open-btn-arrow {
+        position: absolute;
+        right: .9rem;
+        color: #fff;
+        opacity: .8;
+        font-size: 0.75rem;
+    }
+    @media (min-width: 640px) {
+        .media-open-btn { width: auto; justify-content: flex-start; }
+        .media-open-btn-arrow { position: static; margin-left: auto; }
+    }
+    @media (max-width: 479px) {
+        .media-project-footer { display: block; }
+        .media-open-btn { width: 100%; justify-content: center; }
+    }
+
+    .media-legacy-section {
+        margin-top: 2.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid rgba(201, 9, 5, 0.12);
+    }
+
+    @media (max-width: 640px) {
+        .media-header-inner {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            gap: .85rem;
+            align-items: flex-start;
+        }
+        .media-header-identity { flex-basis: 100%; }
+        .media-header-actions { display: none; }
+
+        .media-filter-bar { margin-bottom: 1rem; }
+        .media-project-card-header {
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: .75rem;
+            padding: .9rem;
+        }
+        .media-project-card-header > .flex-1 {
+            min-width: 0;
+            padding-top: .1rem;
+        }
+        .media-project-actions {
+            order: initial;
+            width: auto;
+            margin-left: auto;
+            padding-top: 0;
+            border-top: 0;
+            align-self: center;
+        }
+        .media-project-action { width: 2.2rem; height: 2.2rem; }
+        .media-project-card-body { padding: .9rem; }
+        .media-project-meta { display: grid; gap: .65rem; }
+        .media-project-footer { margin-top: .75rem; padding-top: .75rem; }
+    }
+</style>
+{% endblock %}
+
+{% block media_header_title %}
+<p class="text-xs font-bold uppercase tracking-widest mb-0.5" style="color:#C90905">Histórico de processamentos</p>
+<h1 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">Projetos de <span style="color:#C90905">mídia</span></h1>
+<p class="text-sm text-gray-600 font-medium mt-1">
+    {% if query or status != 'all' %}
+        {{ total }} resultado{{ total|pluralize }} encontrado{{ total|pluralize }}
+    {% else %}
+        {{ total_all }} projeto{{ total_all|pluralize }} · {{ processing_count }} em andamento · {{ total_downloads }} download{{ total_downloads|pluralize }}
+    {% endif %}
+</p>
+{% endblock %}
+
+{% block media_header_actions %}
+<a href="{% url 'external_media_mastering_create' %}" class="hidden sm:inline-flex media-btn media-secondary"><i class="fas fa-wave-square"></i>Masterizar vídeo</a>
+{% endblock %}
+
+{% block media_content %}
+<div class="media-filter-bar">
+    <div class="flex items-center gap-2">
+        <form method="get" id="media-filter-form" class="flex items-center gap-2 flex-1 min-w-0">
+        <input type="hidden" name="status" id="hidden-status" value="{{ status }}">
+
+        <div class="relative flex-1 min-w-0">
+            <input
+                type="text"
+                name="q"
+                id="search-input"
+                value="{{ query }}"
+                placeholder="Buscar por nome ou template…"
+                class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#C90905] bg-white text-sm"
+            >
+        </div>
+
+        <button type="submit"
+                class="flex-shrink-0 p-2.5 text-white rounded-lg transition-all duration-200 flex items-center justify-center"
+                style="background-color: #C90905;"
+                title="Buscar">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+        </button>
+
+        <div class="relative flex-shrink-0">
+            <button type="button" id="filter-toggle"
+                    title="Filtros"
+                    class="relative flex-shrink-0 p-2.5 sm:px-3 sm:py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center justify-center sm:justify-start gap-0 sm:gap-2 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/>
+                </svg>
+                <span class="hidden sm:inline">Filtros</span>
+                {% if status != 'all' %}
+                <span class="absolute top-1.5 right-1.5 sm:static w-2 h-2 rounded-full flex-shrink-0" style="background-color: #C90905;"></span>
+                {% endif %}
+            </button>
+
+            <div id="filter-panel" class="hidden absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50 p-4">
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">Status</label>
+                    <select id="panel-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none text-sm bg-white cursor-pointer">
+                        <option value="all" {% if status == 'all' %}selected{% endif %}>Todos</option>
+                        <option value="processing" {% if status == 'processing' %}selected{% endif %}>Em andamento</option>
+                        <option value="finished" {% if status == 'finished' %}selected{% endif %}>Finalizados</option>
+                        <option value="error" {% if status == 'error' %}selected{% endif %}>Com erro</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                    <a href="{% url 'external_media_dashboard' %}"
+                       class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">
+                        Limpar
+                    </a>
+                    <button type="button" id="apply-filters"
+                            class="flex-1 px-3 py-2 text-sm text-white rounded-lg transition-all"
+                            style="background-color: #C90905;">
+                        Aplicar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <a href="{% url 'external_media_create' %}"
+           class="sm:hidden flex-shrink-0 w-10 h-10 text-white rounded-lg transition-all flex items-center justify-center"
+           style="background-color: #C90905;"
+           title="Novo projeto"
+           aria-label="Novo projeto">
+            <i class="fas fa-plus"></i>
+        </a>
+        </form>
+
+        <a href="{% url 'external_media_create' %}"
+           class="hidden sm:flex flex-shrink-0 px-4 py-2 text-white rounded-lg transition-all duration-200 items-center gap-2 text-sm font-semibold"
+           style="background-color: #C90905;">
+            <i class="fas fa-plus"></i>
+            Novo projeto
+        </a>
+    </div>
+</div>
+
+<div class="animate-fade">
+    <div class="media-project-list space-y-3">
+        {% if projects %}
+            {% for project in projects %}
+            <article class="media-project-card">
+                <div class="media-project-card-header">
+                    <div class="media-project-avatar"><span class="mt-1">{{ project.name|slice:":1"|upper }}</span></div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-base font-bold text-gray-900 truncate">{{ project.name }}</h3>
+                        <p class="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
+                            <i class="fas fa-layer-group" style="color: #C90905;"></i>
+                            {{ project.template_version.template.name }}
+                        </p>
+                    </div>
+                    <div class="media-project-actions">
+                        <a href="{% url 'external_media_project_edit' project.public_id %}" class="media-project-action" title="Editar projeto" aria-label="Editar projeto {{ project.name }}">
+                            <i class="fas fa-pen"></i>
+                        </a>
+                        <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">
+                            {% csrf_token %}
+                            <button class="media-project-action" title="Clonar projeto" aria-label="Clonar projeto {{ project.name }}">
+                                <i class="fas fa-clone"></i>
+                            </button>
+                        </form>
+                        <button type="button" class="media-project-action is-danger" data-delete-project data-project-name="{{ project.name }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}" title="{% if project.status == 'PENDING' or project.status == 'ASSEMBLING' or project.status == 'PROCESSING' or project.status == 'AWAITING_REVIEW' %}Aguarde o processamento terminar{% else %}Excluir projeto{% endif %}" aria-label="Excluir projeto {{ project.name }}" {% if project.status == 'PENDING' or project.status == 'ASSEMBLING' or project.status == 'PROCESSING' or project.status == 'AWAITING_REVIEW' %}disabled{% endif %}>
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="media-project-card-body">
+                    <div class="media-project-meta sm:hidden">
+                        <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
+                        <span><i class="fas fa-user"></i>{{ project.created_by.name }}</span>
+                        <span><i class="far fa-calendar-alt"></i>{{ project.created_at|date:'d/m/Y H:i' }}</span>
+                    </div>
+                    <div class="hidden sm:grid media-info-grid">
+                        <div class="media-info-item">
+                            <i class="fas fa-user"></i>
+                            <span class="mt-1">{{ project.created_by.name }}</span>
+                        </div>
+                        <div class="media-info-item">
+                            <i class="far fa-calendar-alt"></i>
+                            <span class="mt-1">{{ project.created_at|date:'d/m/Y H:i' }}</span>
+                        </div>
+                        <div class="media-info-item">
+                            <i class="fas fa-stopwatch"></i>
+                            <span class="mt-1">{% if project.duration_minutes != None %}{{ project.duration_minutes }} min de processamento{% else %}Tempo indisponível{% endif %}</span>
+                        </div>
+                        <div class="media-info-item">
+                            <i class="fas fa-download"></i>
+                            {% with downloads=project.render_job.download_count|default:0 %}
+                            <span class="mt-1">{{ downloads }} download{{ downloads|pluralize }}</span>
+                            {% endwith %}
+                        </div>
+                        <div class="media-info-item span-full">
+                            <i class="fas fa-circle-info"></i>
+                            <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
+                        </div>
+                    </div>
+
+                    <div class="media-project-footer">
+                        <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-open-btn">
+                            <span class="media-open-btn-icon"><i class="fas fa-play"></i></span>
+                            <span>Abrir projeto</span>
+                            <i class="fas fa-arrow-right media-open-btn-arrow"></i>
+                        </a>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        {% else %}
+            <div class="text-center py-16 px-4">
+                <div class="w-24 h-24 mx-auto mb-6 rounded-3xl flex items-center justify-center" style="background: rgba(201, 9, 5, 0.1);">
+                    <i class="fas fa-film text-4xl" style="color: #C90905;"></i>
+                </div>
+                <h3 class="text-2xl font-black text-gray-800 mb-3">Nenhum projeto encontrado</h3>
+                <p class="text-gray-600 mb-8 max-w-md mx-auto">
+                    {% if query or status != 'all' %}
+                        Tente ajustar os filtros de busca.
+                    {% else %}
+                        Ainda não há projetos criados. Comece produzindo o primeiro vídeo!
+                    {% endif %}
+                </p>
+                <a href="{% url 'external_media_create' %}" class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
+                    <i class="fas fa-plus"></i>
+                    Novo projeto
+                </a>
+            </div>
+        {% endif %}
+    </div>
+
+    {% if mastering_jobs %}
+    <section class="media-legacy-section">
+        <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
+            <div>
+                <h2 class="text-lg font-black text-gray-900 mb-1">Masterizações</h2>
+                <p class="text-sm text-gray-500">Vídeos finalizados tratados sem recompressão da imagem.</p>
+            </div>
+            <a href="{% url 'external_media_mastering_create' %}" class="media-btn media-secondary text-sm"><i class="fas fa-plus"></i>Nova masterização</a>
+        </div>
+        <div class="media-project-list space-y-3">
+            {% for mastering in mastering_jobs %}
+            <article class="media-project-card">
+                <div class="media-project-card-header">
+                    <div class="media-project-avatar"><i class="fas fa-wave-square"></i></div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="text-base font-bold text-gray-900 truncate">{{ mastering.name }}</h3>
+                        <p class="text-xs text-gray-500">{{ mastering.mastering_profile.name|default:'Aguardando perfil' }}</p>
+                    </div>
+                    <span class="media-status-badge {% if mastering.status == 'FINISHED' %}is-finished{% elif mastering.status == 'ERROR' %}is-error{% else %}is-processing{% endif %}">{{ mastering.get_status_display }}</span>
+                </div>
+                <div class="media-project-card-body">
+                    <div class="media-info-grid">
+                        <div class="media-info-item"><i class="far fa-calendar-alt"></i><span>{{ mastering.created_at|date:'d/m/Y H:i' }}</span></div>
+                        <div class="media-info-item"><i class="fas fa-volume-up"></i><span>{% if mastering.output_metrics.integrated_lufs != None %}{{ mastering.output_metrics.integrated_lufs|floatformat:1 }} LUFS{% else %}Análise em andamento{% endif %}</span></div>
+                        <div class="media-info-item"><i class="fas fa-download"></i><span>{{ mastering.download_count }} download{{ mastering.download_count|pluralize }}</span></div>
+                    </div>
+                    <a href="{% url 'external_media_mastering_detail' mastering.public_id %}" class="media-open-btn">
+                        <span class="media-open-btn-icon"><i class="fas fa-sliders-h"></i></span>
+                        <span class="mt-2">Abrir masterização</span>
+                        <i class="fas fa-arrow-right media-open-btn-arrow mr-1"></i>
+                    </a>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+</div>
+
+<div id="delete-project-modal" class="media-confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
+    <div class="media-confirm-dialog" role="document">
+        <div class="media-confirm-content">
+            <span class="media-confirm-icon"><i class="fas fa-trash"></i></span>
+            <h2 id="delete-project-title" class="text-xl font-black text-gray-900 mt-4">Excluir projeto?</h2>
+            <p class="text-sm text-gray-600 leading-relaxed mt-2">
+                Você está prestes a excluir <strong id="delete-project-name" class="text-gray-900"></strong>.
+                Os vídeos, legendas e exportações vinculados serão removidos permanentemente.
+            </p>
+            <form id="delete-project-form" method="post">
+                {% csrf_token %}
+                <div class="media-confirm-actions">
+                    <button type="button" class="media-confirm-cancel" data-close-delete-modal>Cancelar</button>
+                    <button type="submit" class="media-confirm-delete"><i class="fas fa-trash mr-1"></i>Excluir projeto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const filterToggle = document.getElementById('filter-toggle');
+    const filterPanel  = document.getElementById('filter-panel');
+
+    filterToggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        filterPanel.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!filterPanel.contains(e.target) && e.target !== filterToggle) {
+            filterPanel.classList.add('hidden');
+        }
+    });
+
+    document.getElementById('apply-filters').addEventListener('click', function() {
+        document.getElementById('hidden-status').value = document.getElementById('panel-status').value;
+        document.getElementById('media-filter-form').submit();
+    });
+
+    (function() {
+        const modal = document.getElementById('delete-project-modal');
+        const form = document.getElementById('delete-project-form');
+        const name = document.getElementById('delete-project-name');
+        let trigger = null;
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            form.removeAttribute('action');
+            trigger?.focus();
+        }
+
+        document.querySelectorAll('[data-delete-project]').forEach((button) => {
+            button.addEventListener('click', () => {
+                trigger = button;
+                name.textContent = `“${button.dataset.projectName}”`;
+                form.action = button.dataset.deleteUrl;
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                modal.querySelector('.media-confirm-delete').focus();
+            });
+        });
+        modal.querySelector('[data-close-delete-modal]').addEventListener('click', closeModal);
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) closeModal();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+        });
+    })();
+</script>
+{% endblock %}

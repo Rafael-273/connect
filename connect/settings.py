@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from datetime import timedelta
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -70,6 +71,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'website.context_processors.member_module_access',
             ],
         },
     },
@@ -141,6 +143,13 @@ STORAGES = {
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
+    "external_media": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {
+            "location": os.path.join(BASE_DIR, 'media'),
+            "base_url": "/media/",
+        },
+    },
 }
 
 AUTH_USER_MODEL = 'website.User'
@@ -165,6 +174,81 @@ EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 SITE_DOMAIN = os.getenv('SITE_DOMAIN', 'localhost:8000')
+
+# OpenAI (texto + transcrição de arquivos). O tradutor ao vivo continua usando
+# Azure Speech; o modelo de texto deve ser escolhido por cada fluxo/view.
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+OPENAI_TRANSCRIPTION_MODEL = os.getenv(
+    'OPENAI_TRANSCRIPTION_MODEL',
+    'whisper-1',
+)
+
+# Mídia Externa. O modelo de tradução é escolhido pelo fluxo que usa AIService;
+# apenas o modelo de transcrição é centralizado na variável acima.
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', os.getenv('REDIS_URL', 'redis://redis:6379/1'))
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', CELERY_BROKER_URL)
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = int(os.getenv('CELERY_TASK_TIME_LIMIT', 21600))
+CELERY_TASK_SOFT_TIME_LIMIT = int(os.getenv('CELERY_TASK_SOFT_TIME_LIMIT', 21000))
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ACKS_LATE = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+# Preview generation can take as long as a full transcode for large 4K uploads.
+# Keep it off the main pipeline queue so a user can start processing while its
+# optional browser preview is still being generated.
+CELERY_TASK_ROUTES = {
+    'external_media.create_project_preview': {'queue': 'media_previews'},
+    'external_media.create_subtitle_review_preview': {'queue': 'media_previews'},
+}
+EXTERNAL_MEDIA_MAX_UPLOAD_MB = int(os.getenv('EXTERNAL_MEDIA_MAX_UPLOAD_MB', 10240))
+EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS = int(os.getenv('EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS', 1200))
+EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE = int(os.getenv('EXTERNAL_MEDIA_TRANSLATION_BATCH_SIZE', 40))
+EXTERNAL_MEDIA_FFMPEG_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_FFMPEG_TIMEOUT', 21600))
+EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfast')
+EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
+EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')
+EXTERNAL_MEDIA_INTERMEDIATE_CRF = int(os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_CRF', 22))
+# Mantém a renderização final rápida em máquinas multi-core sem abrir encodes
+# demais e deixar o computador sem responsividade.
+EXTERNAL_MEDIA_ASSEMBLY_WORKERS = int(os.getenv('EXTERNAL_MEDIA_ASSEMBLY_WORKERS', 2))
+EXTERNAL_MEDIA_PROXY_WIDTH = int(os.getenv('EXTERNAL_MEDIA_PROXY_WIDTH', 854))
+EXTERNAL_MEDIA_PROXY_CRF = int(os.getenv('EXTERNAL_MEDIA_PROXY_CRF', 30))
+EXTERNAL_MEDIA_PROXY_PRESET = os.getenv('EXTERNAL_MEDIA_PROXY_PRESET', 'ultrafast')
+EXTERNAL_MEDIA_AUTO_REFRAME_INTERVAL_FRAMES = int(
+    os.getenv('EXTERNAL_MEDIA_AUTO_REFRAME_INTERVAL_FRAMES', 10)
+)
+EXTERNAL_MEDIA_AUTO_REFRAME_MAX_ANALYSIS_WIDTH = int(
+    os.getenv('EXTERNAL_MEDIA_AUTO_REFRAME_MAX_ANALYSIS_WIDTH', 640)
+)
+EXTERNAL_MEDIA_DIARIZATION_ENABLED = os.getenv(
+    'EXTERNAL_MEDIA_DIARIZATION_ENABLED', 'True',
+).lower() in {'1', 'true', 'yes', 'on'}
+EXTERNAL_MEDIA_DIARIZATION_MODEL = os.getenv(
+    'EXTERNAL_MEDIA_DIARIZATION_MODEL', 'pyannote/speaker-diarization-community-1',
+)
+EXTERNAL_MEDIA_DIARIZATION_DEVICE = os.getenv('EXTERNAL_MEDIA_DIARIZATION_DEVICE', 'auto')
+HUGGINGFACE_TOKEN = os.getenv('HUGGINGFACE_TOKEN', os.getenv('HF_TOKEN', ''))
+EXTERNAL_MEDIA_TASK_LOCK_NAMESPACE = int(os.getenv('EXTERNAL_MEDIA_TASK_LOCK_NAMESPACE', 73421))
+EXTERNAL_MEDIA_WORKSPACE_ROOT = os.getenv('EXTERNAL_MEDIA_WORKSPACE_ROOT', '/tmp/media-jobs')
+EXTERNAL_MEDIA_WORKSPACE_MIN_FREE_GB = float(os.getenv('EXTERNAL_MEDIA_WORKSPACE_MIN_FREE_GB', 2))
+EXTERNAL_MEDIA_WORKSPACE_SAFETY_FACTOR = float(os.getenv('EXTERNAL_MEDIA_WORKSPACE_SAFETY_FACTOR', 1.15))
+EXTERNAL_MEDIA_WORKSPACE_MAX_AGE_HOURS = int(os.getenv('EXTERNAL_MEDIA_WORKSPACE_MAX_AGE_HOURS', 24))
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-external-media-workspaces': {
+        'task': 'external_media.cleanup_workspaces',
+        'schedule': timedelta(hours=1),
+    },
+}
+
+# Render Workflows is opt-in.  The web application remains on the primary
+# host and only dispatches heavyweight project video jobs when this is enabled.
+RENDER_WORKFLOW_ENABLED = os.getenv('RENDER_WORKFLOW_ENABLED', 'False').lower() in {
+    '1', 'true', 'yes', 'on',
+}
+RENDER_WORKFLOW_TASK = os.getenv('RENDER_WORKFLOW_TASK', '')
+RENDER_API_KEY = os.getenv('RENDER_API_KEY', '')
+FFMPEG_BINARY = os.getenv('FFMPEG_BINARY', 'ffmpeg')
+FFPROBE_BINARY = os.getenv('FFPROBE_BINARY', 'ffprobe')
 
 # Configuração de arquivos de mídia
 MEDIA_URL = '/media/'
@@ -232,6 +316,15 @@ if USE_S3:
             'default_acl': None,  # Não definir ACL nos arquivos
             'querystring_auth': False,  # Não usar query string auth nas URLs
         }
+    }
+    STORAGES['external_media'] = {
+        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        'OPTIONS': {
+            'location': 'private_media',
+            'file_overwrite': False,
+            'default_acl': None,
+            'querystring_auth': True,
+        },
     }
     
     # Override MEDIA_URL when using S3
