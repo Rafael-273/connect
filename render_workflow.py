@@ -31,7 +31,7 @@ from website.models.external_media import ExternalMediaProject
 app = Workflows()
 
 
-@app.task(plan='4c-8g', timeout=21600, retry=Retry(max_retries=0))
+@app.task(plan='4c-8g', timeout=21600, retry=Retry(max_retries=0, wait_duration_ms=1000))
 def process_video_work(operation: str, primary_id: int, secondary_id: int | None = None):
     """Execute every external-media task without requiring a Celery worker."""
     primary_id = int(primary_id)
