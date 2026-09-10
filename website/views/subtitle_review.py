@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.utils.decorators import method_decorator
 from django.views import View
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from ..external_media.subtitle_reviews import SubtitleReviewService
 from ..external_media.tasks import (
@@ -310,7 +310,6 @@ class PublicSubtitleReviewView(PublicSubtitleReviewMixin, View):
         return response
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class PublicSubtitleReviewAutosaveView(PublicSubtitleReviewMixin, View):
     def post(self, request, token):
         review = self.get_review(token)
@@ -331,7 +330,6 @@ class PublicSubtitleReviewAutosaveView(PublicSubtitleReviewMixin, View):
         })
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 class PublicSubtitleReviewSubmitView(PublicSubtitleReviewMixin, View):
     def post(self, request, token):
         review = self.get_review(token)

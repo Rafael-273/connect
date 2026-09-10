@@ -295,37 +295,44 @@ class VideoMasteringDetailView(ExternalMediaRequiredMixin, ExternalMediaContextM
 
 class VideoMasteringRunView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
-        job = get_object_or_404(VideoMasteringJob, public_id=public_id)
-        if job.status not in {
-            VideoMasteringJob.Status.READY,
-            VideoMasteringJob.Status.FINISHED,
-            VideoMasteringJob.Status.ERROR,
-        }:
-            messages.warning(request, 'Aguarde a etapa atual terminar.')
-            return redirect('external_media_mastering_detail', public_id=public_id)
         form = VideoMasteringProfileForm(request.POST)
         if not form.is_valid():
             messages.error(request, 'Selecione um perfil de masterização válido.')
             return redirect('external_media_mastering_detail', public_id=public_id)
-        job.mastering_profile = form.cleaned_data['mastering_profile']
-        job.status = VideoMasteringJob.Status.MASTERING
-        job.progress = 30
-        job.current_step = 'Masterização adicionada à fila'
-        job.error_message = ''
-        job.finished_at = None
-        job.save(update_fields=[
-            'mastering_profile', 'status', 'progress', 'current_step', 'error_message',
-            'finished_at', 'update_at',
-        ])
-        try:
-            result = master_video.delay(job.pk)
-            job.celery_task_id = result.id
-            job.save(update_fields=['celery_task_id', 'update_at'])
-        except Exception:
-            job.status = VideoMasteringJob.Status.ERROR
-            job.error_message = 'Não foi possível acessar a fila. Verifique o Redis e o worker.'
-            job.save(update_fields=['status', 'error_message', 'update_at'])
+        with transaction.atomic():
+            job = get_object_or_404(
+                VideoMasteringJob.objects.select_for_update(), public_id=public_id,
+            )
+            if job.status not in {
+                VideoMasteringJob.Status.READY,
+                VideoMasteringJob.Status.FINISHED,
+                VideoMasteringJob.Status.ERROR,
+            }:
+                messages.warning(request, 'Aguarde a etapa atual terminar.')
+                return redirect('external_media_mastering_detail', public_id=public_id)
+            job.mastering_profile = form.cleaned_data['mastering_profile']
+            job.status = VideoMasteringJob.Status.MASTERING
+            job.progress = 30
+            job.current_step = 'Masterização adicionada à fila'
+            job.error_message = ''
+            job.finished_at = None
+            job.save(update_fields=[
+                'mastering_profile', 'status', 'progress', 'current_step', 'error_message',
+                'finished_at', 'update_at',
+            ])
+            transaction.on_commit(lambda: self._enqueue(job.pk))
         return redirect('external_media_mastering_detail', public_id=public_id)
+
+    @staticmethod
+    def _enqueue(job_id):
+        try:
+            result = master_video.delay(job_id)
+            VideoMasteringJob.objects.filter(pk=job_id).update(celery_task_id=result.id)
+        except Exception:
+            VideoMasteringJob.objects.filter(pk=job_id).update(
+                status=VideoMasteringJob.Status.ERROR,
+                error_message='Não foi possível acessar a fila. Verifique o Redis e o worker.',
+            )
 
 
 class VideoMasteringStatusView(ExternalMediaRequiredMixin, View):
@@ -1003,28 +1010,36 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
 
 class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
-        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
-        if project.status not in {ExternalMediaProject.Status.ERROR, ExternalMediaProject.Status.AWAITING_REVIEW}:
-            messages.warning(request, 'O projeto ainda não está pronto para renderização.')
-            return redirect('external_media_project_detail', public_id=public_id)
-        if project.template_version.interactive_preview_enabled and not project.approved_timeline_revision_id:
-            messages.warning(request, 'Revise e aprove a edição antes de renderizar.')
-            return redirect('external_media_project_preview', public_id=public_id)
-        project.status = ExternalMediaProject.Status.PENDING
-        project.progress = 84
-        project.current_step = 'Renderização adicionada à fila'
-        project.error_message = ''
-        project.save(update_fields=['status', 'progress', 'current_step', 'error_message', 'update_at'])
-        try:
-            task_id = str(uuid.uuid4())
-            project.celery_task_id = task_id
-            project.save(update_fields=['celery_task_id', 'update_at'])
-            render_external_media_project.apply_async(args=[project.pk], task_id=task_id)
-        except Exception:
-            project.status = ExternalMediaProject.Status.ERROR
-            project.error_message = 'Verifique se o Redis e o worker Celery estão ativos.'
-            project.save(update_fields=['status', 'error_message', 'update_at'])
+        with transaction.atomic():
+            project = get_object_or_404(
+                ExternalMediaProject.objects.select_for_update().select_related('template_version'),
+                public_id=public_id,
+            )
+            if project.status not in {ExternalMediaProject.Status.ERROR, ExternalMediaProject.Status.AWAITING_REVIEW}:
+                messages.warning(request, 'O projeto ainda não está pronto para renderização.')
+                return redirect('external_media_project_detail', public_id=public_id)
+            if project.template_version.interactive_preview_enabled and not project.approved_timeline_revision_id:
+                messages.warning(request, 'Revise e aprove a edição antes de renderizar.')
+                return redirect('external_media_project_preview', public_id=public_id)
+            project.status = ExternalMediaProject.Status.PENDING
+            project.progress = 84
+            project.current_step = 'Renderização adicionada à fila'
+            project.error_message = ''
+            project.save(update_fields=['status', 'progress', 'current_step', 'error_message', 'update_at'])
+            transaction.on_commit(lambda: self._enqueue(project.pk))
         return redirect('external_media_project_detail', public_id=public_id)
+
+    @staticmethod
+    def _enqueue(project_id):
+        task_id = str(uuid.uuid4())
+        try:
+            ExternalMediaProject.objects.filter(pk=project_id).update(celery_task_id=task_id)
+            render_external_media_project.apply_async(args=[project_id], task_id=task_id)
+        except Exception:
+            ExternalMediaProject.objects.filter(pk=project_id, celery_task_id=task_id).update(
+                status=ExternalMediaProject.Status.ERROR,
+                error_message='Verifique se o Redis e o worker Celery estão ativos.',
+            )
 
 
 class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaContextMixin, View):
@@ -1386,22 +1401,18 @@ class ExternalMediaProjectPreviewRedoView(ExternalMediaProjectPreviewHistoryView
 
 class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
-        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
-        revision = TimelineRevisionService.approve(project, self.member)
-        project.status = ExternalMediaProject.Status.PENDING
-        project.progress = 68
-        project.current_step = 'Renderização aprovada e adicionada à fila'
-        project.save(update_fields=['status', 'progress', 'current_step', 'update_at'])
-        task_id = str(uuid.uuid4())
-        project.celery_task_id = task_id
-        project.save(update_fields=['celery_task_id', 'update_at'])
-        try:
-            render_external_media_project.apply_async(args=[project.pk], task_id=task_id)
-        except Exception:
-            project.status = ExternalMediaProject.Status.ERROR
-            project.error_message = 'Não foi possível acessar a fila de renderização.'
-            project.save(update_fields=['status', 'error_message', 'update_at'])
-            return JsonResponse({'error': project.error_message}, status=503)
+        with transaction.atomic():
+            project = get_object_or_404(
+                ExternalMediaProject.objects.select_for_update(), public_id=public_id,
+            )
+            if project.status != ExternalMediaProject.Status.AWAITING_REVIEW:
+                return JsonResponse({'error': 'Este projeto não está aguardando revisão.'}, status=409)
+            revision = TimelineRevisionService.approve(project, self.member)
+            project.status = ExternalMediaProject.Status.PENDING
+            project.progress = 68
+            project.current_step = 'Renderização aprovada e adicionada à fila'
+            project.save(update_fields=['status', 'progress', 'current_step', 'update_at'])
+            transaction.on_commit(lambda: ExternalMediaProjectRenderView._enqueue(project.pk))
         return JsonResponse({
             'approved_revision': revision.revision,
             'redirect_url': reverse('external_media_project_detail', kwargs={'public_id': project.public_id}),
