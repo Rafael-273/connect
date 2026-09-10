@@ -3,7 +3,7 @@ from django.contrib.auth import views as auth_views
 from django.conf import settings
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView, MusicUserListView
 from .views.home import HomeView, TestimonyListView, ContactView
-from .views.visitor import VisitorCreateView, MemberVisitorCreateView, MemberVisitorListView
+from .views.visitor import VisitorCreateView, MemberVisitorCreateView, MemberVisitorListView, PastoralVisitorListView, PastoralVisitorReportView
 from .views.evangelism import EvangelismCreateView, EvangelismListView
 from .views.member import (
     MemberCreateView, 
@@ -342,6 +342,8 @@ urlpatterns = [
     # Boas Vindas - member visitor registration & list
     path('register-visitor/', MemberVisitorCreateView.as_view(), name='member_visitor_create'),
     path('visitors/', MemberVisitorListView.as_view(), name='member_visitor_list'),
+    path('pastoral/visitors/', PastoralVisitorListView.as_view(), name='pastoral_visitor_list'),
+    path('pastoral/visitors/report/', PastoralVisitorReportView.as_view(), name='pastoral_visitor_report'),
 
     # Member Schedules
     path('schedule/<int:schedule_id>/', MemberScheduleDetailView.as_view(), name='member_schedule_detail'),

@@ -21,6 +21,7 @@ class Visitor(BaseModel):
     prayer_request = models.TextField(blank=True, null=True)
     profile_notes = models.TextField(blank=True, null=True)
     wants_home_prayer = models.BooleanField(default=False, verbose_name='Deseja oração na casa?')
+    wants_house_of_peace = models.BooleanField(default=False, verbose_name='Tem interesse em Casa de Paz?')
 
     def __str__(self):
         return self.name

@@ -348,7 +348,13 @@
                     <div class="min-w-0 flex-1">
                         <p class="text-xs sm:text-xs text-gray-600 tracking-wide">Bem-vindo(a)</p>
                         <h2 class="font-black text-xl sm:text-2xl text-gray-900 truncate leading-tight">{{member.name}}</h2>
-                        <p class="text-sm sm:text-sm text-gray-600 font-medium hidden sm:block">Família Filadélfia</p>
+                        <p class="text-sm sm:text-sm text-gray-600 font-medium hidden sm:block">
+                            {% if member.church_role != 'member' %}
+                                {{ member.get_church_role_display }} · Família Filadélfia
+                            {% else %}
+                                Família Filadélfia
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
 
@@ -480,16 +486,66 @@
 
 
     <!-- Cards de Ministério -->
-    {% if is_ministration_member or can_consolidate or is_boas_vindas_member or is_moderacao_member or member_schedules or can_music_member or is_house_of_peace_member or is_external_media_member %}
+    {% if is_boas_vindas_member or is_pastor or is_moderacao_member or member_schedules or can_music_member or is_external_media_member %}
     <div id="ministry-cards-container" class="space-y-3">
 
         {% if is_external_media_member %}
-        <a href="{% url 'external_media_dashboard' %}" class="block rounded-xl sm:rounded-2xl border-2 p-4 sm:p-5 transition-all hover:-translate-y-1 hover:shadow-lg" style="border-color:rgba(201,9,5,.25);background:#fff">
-            <div class="flex items-center gap-4"><div class="w-12 h-12 rounded-xl flex items-center justify-center text-white" style="background:#C90905"><i class="fas fa-closed-captioning"></i></div><div><h3 class="text-xl font-black">Mídia Externa</h3><p class="text-sm text-gray-500">Transcrever, traduzir e renderizar legendas</p></div><i class="fas fa-chevron-right ml-auto text-gray-400"></i></div>
-        </a>
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
+            data-card-label="Mídia Externa" data-card-icon="share-nodes"
+            style="border-color:rgba(201,9,5,.25);background:#fff">
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                <div class="flex items-center gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 rounded-xl flex items-center justify-center text-white" style="background:#C90905"><i class="fas fa-film"></i></div>
+                    <div class="text-left"><h3 class="text-xl font-black">Edição de Vídeos</h3><p class="text-sm text-gray-500">Transcreva, traduza e edite seus vídeos</p></div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <a href="{% url 'external_media_dashboard' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color:rgba(201,9,5,.3)">
+                        <div><h4 class="text-sm font-black text-gray-900 mb-1">Abrir editor de vídeo</h4><p class="text-xs text-gray-500">Gerencie transcrições, traduções e legendas</p></div>
+                        <i class="fas fa-arrow-right text-lg transition-transform group-hover:translate-x-1" style="color:#C90905"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
         {% endif %}
 
-        {% if is_ministration_member %}
+        {% if is_pastor %}
+        <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card data-card-label="Área Pastoral"
+            data-card-icon="user-tie"
+            style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
+            <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
+                <div class="flex items-center gap-3 sm:gap-4">
+                    <div class="accordion-icon-wrap w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center flex-shrink-0" style="background-color: #C90905;">
+                        <i class="fas fa-user-tie text-white text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="text-left">
+                        <h3 class="text-xl sm:text-2xl font-black text-gray-900 leading-tight">Área <span style="color: #C90905;">Pastoral</span></h3>
+                        <p class="text-sm text-gray-500 mt-0.5">Visitantes, mensagens e relatório</p>
+                    </div>
+                </div>
+                <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
+            </button>
+            <div class="accordion-content">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <a href="{% url 'pastoral_visitor_list' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div><h4 class="text-sm font-black text-gray-900 mb-1">Ver visitantes</h4><p class="text-xs text-gray-500">Enviar mensagens e acompanhar visitas</p></div>
+                            <i class="fas fa-users text-lg" style="color: #C90905;"></i>
+                        </a>
+                        <a href="{% url 'pastoral_visitor_report' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color: rgba(201, 9, 5, 0.3);">
+                            <div><h4 class="text-sm font-black text-gray-900 mb-1">Ver relatório</h4><p class="text-xs text-gray-500">Visitas e pedidos de oração</p></div>
+                            <i class="fas fa-chart-bar text-lg" style="color: #C90905;"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Temporariamente oculto no dashboard; a lógica e o card foram preservados. #}
+        {% if is_ministration_member and False %}
         <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
             data-card-label="Palavras de Conhecimento" data-card-icon="lightbulb"
             style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
@@ -575,7 +631,8 @@
         </div>
         {% endif %}
 
-        {% if can_consolidate %}
+        {# Temporariamente oculto no dashboard; a lógica e o card foram preservados. #}
+        {% if can_consolidate and False %}
         <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
             data-card-label="Consolidação" data-card-icon="user-graduate"
             style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
@@ -810,7 +867,8 @@
         </div>
         {% endif %}
 
-        {% if is_house_of_peace_member %}
+        {# Temporariamente oculto no dashboard; a lógica e o card foram preservados. #}
+        {% if is_house_of_peace_member and False %}
         <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
             data-card-label="Casa de Paz" data-card-icon="home"
             style="border-color: rgba(201, 9, 5, 0.25); background: linear-gradient(to bottom right, #ffffff, #f9fafb, #ffffff);">
@@ -927,7 +985,7 @@
                 const tabBtn = document.createElement('button');
                 tabBtn.type = 'button';
                 tabBtn.className = 'ministry-tab-btn' + (idx === 0 ? ' active' : '');
-                tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> <span class="inline-block mt-1">${label}</span>`;
+                tabBtn.innerHTML = `<i class="fas fa-${icon}"></i> <span class="inline-block">${label}</span>`;
                 tabBtn.addEventListener('click', () => switchMinistryTab(cards, tabBar, idx));
                 tabBar.appendChild(tabBtn);
 

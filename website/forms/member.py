@@ -52,7 +52,7 @@ class MemberAdminForm(forms.ModelForm):
         model = Member
         fields = [
             'name', 'phone', 'birth_date', 'gender', 'marital_status',
-            'neighborhood', 'conversion', 'conversion_date',
+            'church_role', 'neighborhood', 'conversion', 'conversion_date',
             'address', 'profile_picture', 'testimony',
             'is_active', 'is_available_to_consolidate',
             'is_available_to_disciple', 'is_approver',
@@ -71,6 +71,7 @@ class MemberAdminForm(forms.ModelForm):
             }),
             'gender': forms.Select(attrs={'class': _A_SELECT}),
             'marital_status': forms.Select(attrs={'class': _A_SELECT}),
+            'church_role': forms.Select(attrs={'class': _A_SELECT}),
             'neighborhood': forms.Select(attrs={'class': _A_SELECT}),
             'conversion': forms.Select(attrs={'class': _A_SELECT}),
             'conversion_date': forms.DateInput(attrs={

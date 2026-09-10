@@ -7,6 +7,14 @@ from .neighborhood import Neighborhood
 
 
 class Member(BaseModel):
+    CHURCH_ROLE_CHOICES = [
+        ('member', 'Membro'),
+        ('pastor', 'Pastor(a)'),
+        ('elder', 'Presbítero(a)'),
+        ('deacon', 'Diácono(a)'),
+        ('leader', 'Líder'),
+    ]
+
     CONVERSION_CHOICES = [
         ('new_convert', 'Novo Convertido'),
         ('reconciled', 'Reconciliado'),
@@ -38,6 +46,13 @@ class Member(BaseModel):
     neighborhood = models.ForeignKey(Neighborhood, on_delete=models.SET_NULL, blank=True, null=True)
     birth_date = models.DateField(blank=True, null=True)
     tags = models.CharField(max_length=255, blank=True, null=True)
+    church_role = models.CharField(
+        max_length=20,
+        choices=CHURCH_ROLE_CHOICES,
+        default='member',
+        verbose_name='Função na igreja',
+        help_text='Função ministerial do membro, independente das permissões de acesso.',
+    )
 
     conversion = models.CharField(max_length=20, choices=CONVERSION_CHOICES, blank=True, null=True)
     conversion_date = models.DateField(blank=True, null=True)

@@ -487,6 +487,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
 
                         <div class="form-group">
+                            <label class="form-label">Função na Igreja</label>
+                            {{ form.church_role }}
+                            <p class="text-xs text-gray-400 mt-1">Não altera as permissões de acesso ao painel.</p>
+                            {% if form.church_role.errors %}<p class="text-red-500 text-xs mt-1">{{ form.church_role.errors.0 }}</p>{% endif %}
+                        </div>
+
+                        <div class="form-group">
                             <label class="form-label">Bairro</label>
                             {{ form.neighborhood }}
                             {% if form.neighborhood.errors %}<p class="text-red-500 text-xs mt-1">{{ form.neighborhood.errors.0 }}</p>{% endif %}

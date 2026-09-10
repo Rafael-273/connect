@@ -188,6 +188,13 @@
                     {% endif %}
                 </div>
 
+                <div class="flex items-center gap-3 p-4 mt-3 rounded-xl" style="background: rgba(201, 9, 5, 0.04); border: 2px solid rgba(201, 9, 5, 0.12);">
+                    {{ form.wants_house_of_peace }}
+                    <label for="{{ form.wants_house_of_peace.id_for_label }}" class="text-sm font-medium text-gray-700 cursor-pointer">
+                        <i class="fas fa-house-user mr-2" style="color: #C90905;"></i>{{ form.wants_house_of_peace.label }}
+                    </label>
+                </div>
+
                 {% if form.non_field_errors %}
                 <div class="mt-4">
                     <p class="text-sm font-bold" style="color: #C90905;">{{ form.non_field_errors.0 }}</p>

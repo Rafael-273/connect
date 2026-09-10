@@ -59,21 +59,29 @@
     .media-status-badge {
         display: inline-flex;
         align-items: center;
-        gap: .38rem;
+        gap: .42rem;
         flex-shrink: 0;
-        padding: .34rem .62rem;
+        padding: .36rem .6rem;
         border-radius: 9999px;
-        border: 1px solid transparent;
-        font-size: .7rem;
-        font-weight: 800;
-        letter-spacing: .01em;
+        border: 0;
+        font-size: .72rem;
+        font-weight: 700;
+        letter-spacing: .015em;
+        line-height: 1;
         white-space: nowrap;
     }
-    .media-status-badge::before { content: ''; width: .42rem; height: .42rem; border-radius: 9999px; background: currentColor; }
-    .media-status-badge.is-finished { background: #ecfdf3; border-color: #bbf7d0; color: #15803d; }
-    .media-status-badge.is-error { background: #fff1f2; border-color: #fecdd3; color: #be123c; }
-    .media-status-badge.is-cancelled { background: #f8fafc; border-color: #e2e8f0; color: #64748b; }
-    .media-status-badge.is-processing { background: #fffbeb; border-color: #fde68a; color: #b45309; }
+    .media-status-badge::before {
+        content: '';
+        width: .4rem;
+        height: .4rem;
+        border-radius: 9999px;
+        background: currentColor;
+        opacity: .85;
+    }
+    .media-status-badge.is-finished { background: #f0fdf4; color: #15803d; }
+    .media-status-badge.is-error { background: #fff1f2; color: #be123c; }
+    .media-status-badge.is-cancelled { background: #f1f5f9; color: #64748b; }
+    .media-status-badge.is-processing { background: #fff8e6; color: #b45309; }
 
     .media-project-actions {
         display: flex;
@@ -178,6 +186,18 @@
         opacity: 0.85;
     }
 
+    .media-project-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .5rem 1rem;
+        padding: .15rem 0;
+        color: #667085;
+        font-size: .8125rem;
+    }
+    .media-project-meta span { display: inline-flex; align-items: center; gap: .45rem; }
+    .media-project-meta i { color: #C90905; opacity: .85; }
+    .media-project-meta .media-status-badge { justify-self: start; }
+
     .media-project-footer {
         display: flex;
         align-items: center;
@@ -189,7 +209,10 @@
     .media-open-btn {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: .55rem;
+        position: relative;
+        width: 100%;
         padding: .55rem .85rem;
         border-radius: 0.75rem;
         border: 1px solid #C90905;
@@ -218,10 +241,15 @@
         font-size: .75rem;
     }
     .media-open-btn-arrow {
-        margin-left: auto;
+        position: absolute;
+        right: .9rem;
         color: #fff;
         opacity: .8;
         font-size: 0.75rem;
+    }
+    @media (min-width: 640px) {
+        .media-open-btn { width: auto; justify-content: flex-start; }
+        .media-open-btn-arrow { position: static; margin-left: auto; }
     }
     @media (max-width: 479px) {
         .media-project-footer { display: block; }
@@ -232,6 +260,41 @@
         margin-top: 2.5rem;
         padding-top: 1.5rem;
         border-top: 1px solid rgba(201, 9, 5, 0.12);
+    }
+
+    @media (max-width: 640px) {
+        .media-header-inner {
+            padding-top: 1rem;
+            padding-bottom: 1rem;
+            gap: .85rem;
+            align-items: flex-start;
+        }
+        .media-header-identity { flex-basis: 100%; }
+        .media-header-actions { display: none; }
+
+        .media-filter-bar { margin-bottom: 1rem; }
+        .media-project-card-header {
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: .75rem;
+            padding: .9rem;
+        }
+        .media-project-card-header > .flex-1 {
+            min-width: 0;
+            padding-top: .1rem;
+        }
+        .media-project-actions {
+            order: initial;
+            width: auto;
+            margin-left: auto;
+            padding-top: 0;
+            border-top: 0;
+            align-self: center;
+        }
+        .media-project-action { width: 2.2rem; height: 2.2rem; }
+        .media-project-card-body { padding: .9rem; }
+        .media-project-meta { display: grid; gap: .65rem; }
+        .media-project-footer { margin-top: .75rem; padding-top: .75rem; }
     }
 </style>
 {% endblock %}
@@ -249,13 +312,7 @@
 {% endblock %}
 
 {% block media_header_actions %}
-<a href="{% url 'external_media_mastering_create' %}" class="media-btn media-secondary"><i class="fas fa-wave-square"></i>Masterizar vídeo</a>
-<a href="{% url 'external_media_create' %}"
-   class="sm:hidden flex-shrink-0 w-10 h-10 text-white rounded-lg transition-all flex items-center justify-center"
-   style="background-color: #C90905;"
-   title="Novo projeto">
-    <i class="fas fa-plus"></i>
-</a>
+<a href="{% url 'external_media_mastering_create' %}" class="hidden sm:inline-flex media-btn media-secondary"><i class="fas fa-wave-square"></i>Masterizar vídeo</a>
 {% endblock %}
 
 {% block media_content %}
@@ -321,6 +378,14 @@
                 </div>
             </div>
         </div>
+
+        <a href="{% url 'external_media_create' %}"
+           class="sm:hidden flex-shrink-0 w-10 h-10 text-white rounded-lg transition-all flex items-center justify-center"
+           style="background-color: #C90905;"
+           title="Novo projeto"
+           aria-label="Novo projeto">
+            <i class="fas fa-plus"></i>
+        </a>
         </form>
 
         <a href="{% url 'external_media_create' %}"
@@ -347,9 +412,6 @@
                         </p>
                     </div>
                     <div class="media-project-actions">
-                        <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">
-                            {{ project.get_status_display }}
-                        </span>
                         <a href="{% url 'external_media_project_edit' project.public_id %}" class="media-project-action" title="Editar projeto" aria-label="Editar projeto {{ project.name }}">
                             <i class="fas fa-pen"></i>
                         </a>
@@ -366,7 +428,12 @@
                 </div>
 
                 <div class="media-project-card-body">
-                    <div class="media-info-grid">
+                    <div class="media-project-meta sm:hidden">
+                        <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
+                        <span><i class="fas fa-user"></i>{{ project.created_by.name }}</span>
+                        <span><i class="far fa-calendar-alt"></i>{{ project.created_at|date:'d/m/Y H:i' }}</span>
+                    </div>
+                    <div class="hidden sm:grid media-info-grid">
                         <div class="media-info-item">
                             <i class="fas fa-user"></i>
                             <span class="mt-1">{{ project.created_by.name }}</span>
@@ -384,6 +451,10 @@
                             {% with downloads=project.render_job.download_count|default:0 %}
                             <span class="mt-1">{{ downloads }} download{{ downloads|pluralize }}</span>
                             {% endwith %}
+                        </div>
+                        <div class="media-info-item span-full">
+                            <i class="fas fa-circle-info"></i>
+                            <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
                         </div>
                     </div>
 
