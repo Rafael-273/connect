@@ -64,6 +64,7 @@ from tempfile import TemporaryDirectory
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
 from ..external_media.preview import PreviewCompositionService, TimelineRevisionService
 from ..external_media.overlays import OverlayAssetRenderer, OverlayTimelineService
+from ..external_media.render_workflow import enqueue_project as enqueue_render_project, enqueue_video_work
 from ..external_media.services import StorageService
 from ..external_media.subtitle_reviews import SubtitleReviewService
 from .mixins import ExternalMediaRequiredMixin
@@ -270,8 +271,11 @@ class VideoMasteringCreateView(ExternalMediaRequiredMixin, ExternalMediaContextM
         job.current_step = 'Análise adicionada à fila'
         job.save()
         try:
-            result = analyze_video_mastering.delay(job.pk)
-            job.celery_task_id = result.id
+            if settings.RENDER_WORKFLOW_ENABLED:
+                task_id = enqueue_video_work('mastering-analyze', job.pk)
+            else:
+                task_id = analyze_video_mastering.delay(job.pk).id
+            job.celery_task_id = task_id
             job.save(update_fields=['celery_task_id', 'update_at'])
         except Exception:
             job.status = VideoMasteringJob.Status.ERROR
@@ -326,8 +330,11 @@ class VideoMasteringRunView(ExternalMediaRequiredMixin, View):
     @staticmethod
     def _enqueue(job_id):
         try:
-            result = master_video.delay(job_id)
-            VideoMasteringJob.objects.filter(pk=job_id).update(celery_task_id=result.id)
+            task_id = (
+                enqueue_video_work('mastering-render', job_id)
+                if settings.RENDER_WORKFLOW_ENABLED else master_video.delay(job_id).id
+            )
+            VideoMasteringJob.objects.filter(pk=job_id).update(celery_task_id=task_id)
         except Exception:
             VideoMasteringJob.objects.filter(pk=job_id).update(
                 status=VideoMasteringJob.Status.ERROR,
@@ -670,6 +677,25 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
 
 class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
     @staticmethod
+    def _enqueue_preview(item):
+        try:
+            if settings.RENDER_WORKFLOW_ENABLED:
+                task_id = enqueue_video_work('project-preview', item.pk)
+                ProjectBlockMedia.objects.filter(pk=item.pk).update(preview_error='')
+                return task_id
+            return create_project_preview.delay(item.pk).id
+        except Exception:
+            ProjectBlockMedia.objects.filter(pk=item.pk).update(
+                preview_status=ProjectBlockMedia.PreviewStatus.ERROR,
+                preview_error=(
+                    'Não foi possível iniciar a prévia no worker de vídeo do Render.'
+                    if settings.RENDER_WORKFLOW_ENABLED else
+                    'Não foi possível iniciar a prévia no worker Celery.'
+                ),
+            )
+            return None
+
+    @staticmethod
     def _error_response(request, public_id, detail):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({'detail': detail}, status=400)
@@ -749,7 +775,7 @@ class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
         item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_end_seconds'))
         item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
         item.save()
-        create_project_preview.delay(item.pk)
+        self._enqueue_preview(item)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({
                 'id': item.pk,
@@ -834,7 +860,7 @@ class ExternalMediaProjectCustomBlockUploadView(ExternalMediaProjectUploadView):
         item.file_size = item.file.size
         item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
         item.save()
-        create_project_preview.delay(item.pk)
+        self._enqueue_preview(item)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({'id': item.pk, 'name': item.original_filename, 'size': item.file_size, 'status_url': reverse('external_media_project_media_status', args=[project.public_id, item.pk]), 'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, item.pk])})
         return redirect('external_media_project_detail', public_id=public_id)
@@ -996,15 +1022,23 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
 
     @staticmethod
     def _enqueue(project_id):
-        task_id = str(uuid.uuid4())
         try:
+            if settings.RENDER_WORKFLOW_ENABLED:
+                task_id = enqueue_render_project(project_id, 'run')
+                ExternalMediaProject.objects.filter(pk=project_id).update(celery_task_id=task_id)
+                return
+            task_id = str(uuid.uuid4())
             ExternalMediaProject.objects.filter(pk=project_id).update(celery_task_id=task_id)
             run_external_media_project.apply_async(args=[project_id], task_id=task_id)
         except Exception:
             ExternalMediaProject.objects.filter(pk=project_id).update(
                 status=ExternalMediaProject.Status.ERROR,
                 current_step='Não foi possível acessar a fila de processamento',
-                error_message='Verifique se o Redis e o worker Celery estão ativos.',
+                error_message=(
+                    'Não foi possível iniciar o worker de vídeo no Render.'
+                    if settings.RENDER_WORKFLOW_ENABLED else
+                    'Verifique se o Redis e o worker Celery estão ativos.'
+                ),
             )
 
 
@@ -1031,14 +1065,26 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
 
     @staticmethod
     def _enqueue(project_id):
-        task_id = str(uuid.uuid4())
+        task_id = None
         try:
+            if settings.RENDER_WORKFLOW_ENABLED:
+                task_id = enqueue_render_project(project_id, 'render')
+                ExternalMediaProject.objects.filter(pk=project_id).update(celery_task_id=task_id)
+                return
+            task_id = str(uuid.uuid4())
             ExternalMediaProject.objects.filter(pk=project_id).update(celery_task_id=task_id)
             render_external_media_project.apply_async(args=[project_id], task_id=task_id)
         except Exception:
-            ExternalMediaProject.objects.filter(pk=project_id, celery_task_id=task_id).update(
+            query = ExternalMediaProject.objects.filter(pk=project_id)
+            if task_id:
+                query = query.filter(celery_task_id=task_id)
+            query.update(
                 status=ExternalMediaProject.Status.ERROR,
-                error_message='Verifique se o Redis e o worker Celery estão ativos.',
+                error_message=(
+                    'Não foi possível iniciar o worker de vídeo no Render.'
+                    if settings.RENDER_WORKFLOW_ENABLED else
+                    'Verifique se o Redis e o worker Celery estão ativos.'
+                ),
             )
 
 
@@ -1490,8 +1536,11 @@ class ExternalMediaProjectPremiereExportView(ExternalMediaRequiredMixin, View):
             current_step='Exportação adicionada à fila',
         )
         try:
-            result = export_premiere_project.delay(export.pk)
-            export.celery_task_id = result.id
+            task_id = (
+                enqueue_video_work('premiere-export', export.pk)
+                if settings.RENDER_WORKFLOW_ENABLED else export_premiere_project.delay(export.pk).id
+            )
+            export.celery_task_id = task_id
             export.save(update_fields=['celery_task_id', 'update_at'])
             messages.success(request, 'A exportação editável foi iniciada em segundo plano.')
         except Exception:
@@ -1663,8 +1712,11 @@ class ExternalMediaRenderView(ExternalMediaRequiredMixin, View):
     @staticmethod
     def _enqueue(job_id):
         try:
-            result = render_external_media.delay(job_id)
-            ExternalMediaJob.objects.filter(pk=job_id).update(celery_task_id=result.id)
+            task_id = (
+                enqueue_video_work('legacy-render', job_id)
+                if settings.RENDER_WORKFLOW_ENABLED else render_external_media.delay(job_id).id
+            )
+            ExternalMediaJob.objects.filter(pk=job_id).update(celery_task_id=task_id)
         except Exception:
             ExternalMediaJob.objects.filter(pk=job_id).update(
                 status=ExternalMediaJob.Status.ERROR,
@@ -1695,8 +1747,11 @@ class ExternalMediaRetryView(ExternalMediaRequiredMixin, View):
     @staticmethod
     def _enqueue(job_id):
         try:
-            result = prepare_external_media.delay(job_id)
-            ExternalMediaJob.objects.filter(pk=job_id).update(celery_task_id=result.id)
+            task_id = (
+                enqueue_video_work('legacy-prepare', job_id)
+                if settings.RENDER_WORKFLOW_ENABLED else prepare_external_media.delay(job_id).id
+            )
+            ExternalMediaJob.objects.filter(pk=job_id).update(celery_task_id=task_id)
         except Exception:
             ExternalMediaJob.objects.filter(pk=job_id).update(
                 status=ExternalMediaJob.Status.ERROR,

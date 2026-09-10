@@ -280,6 +280,7 @@ Dois consumers em `website/consumers.py`:
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | Conexão PostgreSQL |
 | `REDIS_URL` | Channel layer Redis (opcional; fallback in-memory) |
 | `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Redis usado pela fila de Mídia Externa |
+| `RENDER_WORKFLOW_ENABLED`, `RENDER_API_KEY`, `RENDER_WORKFLOW_TASK` | Worker de vídeo sob demanda no Render; desativado por padrão |
 | `DOMAIN` | Host permitido no deploy |
 | `HOSTNAME`, `PORT` | Binding do servidor Docker (dev) |
 | `USE_S3` | `TRUE` para usar S3 como storage de mídia |
@@ -393,6 +394,14 @@ O projeto está configurado para deploy no **Railway** (nixpacks) ou **Heroku/Do
 | `nixpacks.toml` | Instala libs de sistema para renderização PDF (pango, cairo, gobject, etc.) |
 | `Aptfile` | Mesmas libs para buildpacks Heroku/Dokku |
 | `Dockerfile` | Base Python 3.10.5; produção usa `gunicorn`; volume de mídia em `/usr/src/platform/media` |
+
+### Worker de vídeo sob demanda no Render
+
+O site pode permanecer na hospedagem principal e enviar somente os jobs pesados
+de projeto de mídia para um Render Workflow. A integração é ativada apenas com
+`RENDER_WORKFLOW_ENABLED=TRUE` e exige S3 compartilhado entre as duas
+infraestruturas. Consulte [docs/render_video_workflow.md](docs/render_video_workflow.md)
+para o Dockerfile, as variáveis e o procedimento de deploy.
 
 ---
 

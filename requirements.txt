@@ -37,3 +37,4 @@ redis==5.2.1
 watchdog==6.0.0
 numpy==1.26.4
 opencv-python-headless==4.10.0.84
+render_sdk==0.7.0

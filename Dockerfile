@@ -27,3 +27,9 @@ COPY requirements-diarization.txt /usr/src/platform/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --timeout 600 --retries 10 -r requirements-diarization.txt
+
+# Default target for Render Workflows. Docker Compose continues to select the
+# explicit ``web`` and ``media-worker`` targets above for local development.
+FROM media-worker AS render-workflow
+
+COPY . /usr/src/platform/

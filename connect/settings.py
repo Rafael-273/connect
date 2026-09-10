@@ -239,6 +239,14 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': timedelta(hours=1),
     },
 }
+
+# Render Workflows is opt-in.  The web application remains on the primary
+# host and only dispatches heavyweight project video jobs when this is enabled.
+RENDER_WORKFLOW_ENABLED = os.getenv('RENDER_WORKFLOW_ENABLED', 'False').lower() in {
+    '1', 'true', 'yes', 'on',
+}
+RENDER_WORKFLOW_TASK = os.getenv('RENDER_WORKFLOW_TASK', '')
+RENDER_API_KEY = os.getenv('RENDER_API_KEY', '')
 FFMPEG_BINARY = os.getenv('FFMPEG_BINARY', 'ffmpeg')
 FFPROBE_BINARY = os.getenv('FFPROBE_BINARY', 'ffprobe')
 

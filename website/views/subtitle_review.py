@@ -2,6 +2,7 @@ import json
 import uuid
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.db import transaction
 from django.http import Http404, JsonResponse
@@ -14,6 +15,7 @@ from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from ..external_media.subtitle_reviews import SubtitleReviewService
+from ..external_media.render_workflow import enqueue_video_work
 from ..external_media.tasks import (
     create_subtitle_review_preview,
     render_reviewed_subtitles,
@@ -32,6 +34,35 @@ from .mixins import ExternalMediaRequiredMixin
 
 
 LANGUAGE_LABELS = {'pt': 'Português', 'en': 'English'}
+
+
+def _enqueue_review_preview(session_id):
+    if settings.RENDER_WORKFLOW_ENABLED:
+        return enqueue_video_work('review-preview', session_id)
+    return create_subtitle_review_preview.delay(session_id).id
+
+
+def _enqueue_review_render(project_id, review_id, celery_task_id):
+    try:
+        if settings.RENDER_WORKFLOW_ENABLED:
+            task_id = enqueue_video_work('review-render', project_id, review_id)
+            ExternalMediaProject.objects.filter(pk=project_id).update(celery_task_id=task_id)
+            return task_id
+        render_reviewed_subtitles.apply_async(
+            args=[project_id, review_id], task_id=celery_task_id,
+        )
+        return celery_task_id
+    except Exception:
+        ExternalMediaProject.objects.filter(pk=project_id).update(
+            status=ExternalMediaProject.Status.ERROR,
+            current_step='Não foi possível iniciar a atualização do vídeo',
+            error_message=(
+                'Não foi possível iniciar o worker de vídeo no Render.'
+                if settings.RENDER_WORKFLOW_ENABLED else
+                'Verifique se o Redis e o worker Celery estão ativos.'
+            ),
+        )
+        return None
 
 
 class ProjectSubtitleReviewsView(ExternalMediaRequiredMixin, View):
@@ -103,7 +134,7 @@ class ProjectSubtitleReviewsView(ExternalMediaRequiredMixin, View):
         except ValueError as exc:
             messages.error(request, str(exc))
             return redirect('external_media_project_subtitle_reviews', public_id=public_id)
-        transaction.on_commit(lambda: create_subtitle_review_preview.delay(review.pk))
+        transaction.on_commit(lambda: _enqueue_review_preview(review.pk))
         request.session['subtitle_review_created_link'] = request.build_absolute_uri(
             reverse('public_subtitle_review', args=[token]),
         )
@@ -245,8 +276,8 @@ class ProjectSubtitleReviewRenderView(ExternalMediaRequiredMixin, View):
             ])
             if review:
                 SubtitleReviewService.log(review, 'RENDER_REQUESTED', self.member)
-            transaction.on_commit(lambda: render_reviewed_subtitles.apply_async(
-                args=[project.pk, review.pk if review else None], task_id=task_id,
+            transaction.on_commit(lambda: _enqueue_review_render(
+                project.pk, review.pk if review else None, task_id,
             ))
         messages.success(request, 'Atualização do vídeo iniciada. Apenas as legendas serão renderizadas novamente.')
         return redirect('external_media_project_detail', public_id=public_id)
