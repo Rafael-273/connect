@@ -136,6 +136,11 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
 
+# The Workflow keeps only scratch files locally; production media itself is in
+# S3.  MEDIA_ROOT can therefore point to a writable temporary directory there.
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.getenv('MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
+
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
@@ -146,8 +151,8 @@ STORAGES = {
     "external_media": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
         "OPTIONS": {
-            "location": os.path.join(BASE_DIR, 'media'),
-            "base_url": "/media/",
+            "location": MEDIA_ROOT,
+            "base_url": MEDIA_URL,
         },
     },
 }
@@ -249,10 +254,6 @@ RENDER_WORKFLOW_TASK = os.getenv('RENDER_WORKFLOW_TASK', '')
 RENDER_API_KEY = os.getenv('RENDER_API_KEY', '')
 FFMPEG_BINARY = os.getenv('FFMPEG_BINARY', 'ffmpeg')
 FFPROBE_BINARY = os.getenv('FFPROBE_BINARY', 'ffprobe')
-
-# Configuração de arquivos de mídia
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Garante que os diretórios de mídia existam
 os.makedirs(os.path.join(MEDIA_ROOT, 'avatars'), exist_ok=True)

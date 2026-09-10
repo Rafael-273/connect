@@ -32,4 +32,6 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # explicit ``web`` and ``media-worker`` targets above for local development.
 FROM media-worker AS render-workflow
 
+ENV MEDIA_ROOT=/tmp/media
+
 COPY . /usr/src/platform/
