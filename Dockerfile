@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fontconf
 
 COPY requirements.txt /usr/src/platform/
     
-RUN pip install -r requirements.txt
+RUN python -m pip install --no-cache-dir --retries 10 --timeout 120 \
+    --index-url https://pypi.org/simple -r requirements.txt
 
 # Criar diretório de mídia e garantir permissões
 RUN mkdir -p /usr/src/platform/media && \
@@ -26,7 +27,8 @@ FROM base AS media-worker
 COPY requirements-diarization.txt /usr/src/platform/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --timeout 600 --retries 10 -r requirements-diarization.txt
+    python -m pip install --timeout 600 --retries 10 \
+    --index-url https://pypi.org/simple -r requirements-diarization.txt
 
 # Default target for Render Workflows. Docker Compose continues to select the
 # explicit ``web`` and ``media-worker`` targets above for local development.

@@ -10,6 +10,7 @@ import django
 
 django.setup()
 
+from asgiref.sync import sync_to_async
 from django.conf import settings
 from render_sdk import Retry, Workflows
 
@@ -32,7 +33,14 @@ app = Workflows()
 
 
 @app.task(plan='4c-8g', timeout_seconds=21600, retry=Retry(max_retries=0, wait_duration_ms=1000))
-def process_video_work(operation: str, primary_id: int, secondary_id: int | None = None):
+async def process_video_work(operation: str, primary_id: int, secondary_id: int | None = None):
+    """Run the synchronous Django pipeline outside Render's async event loop."""
+    return await sync_to_async(_process_video_work, thread_sensitive=True)(
+        operation, primary_id, secondary_id,
+    )
+
+
+def _process_video_work(operation: str, primary_id: int, secondary_id: int | None = None):
     """Execute every external-media task without requiring a Celery worker."""
     primary_id = int(primary_id)
     if not settings.USE_S3:
