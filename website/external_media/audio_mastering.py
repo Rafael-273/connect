@@ -72,7 +72,7 @@ class AudioMasteringService:
         filters = self._filter_chain(target, measured, effective_target)
         try:
             self.runner.run([
-                settings.FFMPEG_BINARY, '-y', '-i', str(input_path),
+                settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(input_path),
                 '-map', '0:v?', '-map', '0:a', '-c:v', 'copy',
                 '-af', ','.join(filters), '-c:a', 'aac', '-b:a', '192k',
                 '-movflags', '+faststart', str(output_path),
@@ -89,7 +89,7 @@ class AudioMasteringService:
         effective_target = self._effective_target(target, measured)
         filters = self._filter_chain(target, measured, effective_target)
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(input_path),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(input_path),
             '-vn', '-af', ','.join(filters), '-c:a', 'pcm_s24le', str(output_path),
         ])
         return AudioMasterResult(output_path, self._result_metrics(measured, target, effective_target))
@@ -127,7 +127,7 @@ class AudioMasteringService:
     def _measure(self, input_path: Path, target: MasteringTarget) -> dict:
         try:
             result = self.runner.run_capture([
-                settings.FFMPEG_BINARY, '-i', str(input_path), '-af',
+                settings.FFMPEG_BINARY, '-i', FFmpegRunner.input_arg(input_path), '-af',
                 f'loudnorm=I={target.target_lufs}:TP={target.true_peak_db}:LRA=11:print_format=json',
                 '-f', 'null', '-',
             ])

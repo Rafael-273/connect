@@ -14,6 +14,7 @@ from django.conf import settings
 from website.ai import TranscriptionSegment
 
 from .exceptions import ExternalMediaError
+from .ffmpeg_runner import FFmpegRunner
 
 
 @dataclass(frozen=True)
@@ -581,14 +582,14 @@ class SpeechEditService:
 
     def extract_analysis_audio(self, video_path: Path, wav_path: Path):
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-vn', '-ac', '1',
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-vn', '-ac', '1',
             '-ar', '16000', '-c:a', 'pcm_s16le', str(wav_path),
         ])
 
     def duration_ms(self, video_path: Path):
         output = self.runner.run([
             settings.FFPROBE_BINARY, '-v', 'error', '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1', str(video_path),
+            '-of', 'default=noprint_wrappers=1:nokey=1', FFmpegRunner.input_arg(video_path),
         ])
         return max(1, round(float(output.strip()) * 1000))
 
@@ -613,7 +614,7 @@ class SpeechEditService:
             ''.join(concat_inputs) + f'concat=n={len(keeps)}:v=1:a=1[v][a]'
         )
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(source_path), '-filter_complex', ';'.join(filters),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source_path), '-filter_complex', ';'.join(filters),
             '-map', '[v]', '-map', '[a]', '-c:v', 'libx264',
             '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
             '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p',

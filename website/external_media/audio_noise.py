@@ -235,7 +235,7 @@ class FFmpegAfftdnProvider:
                 f'aselect=between(t\\,{start_s}\\,{end_s}),asetpts=PTS-STARTPTS,{audio_filter}'
             )
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(input_path),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(input_path),
             '-af', audio_filter,
             '-c:a', 'pcm_s16le', str(output_path),
         ])
@@ -564,7 +564,7 @@ class AudioCleanupService:
             self.runner.run([
                 settings.FFMPEG_BINARY, '-y',
                 '-ss', f'{start_ms / 1000:.3f}',
-                '-i', str(media_path),
+                '-i', FFmpegRunner.input_arg(media_path),
                 '-t', f'{(end_ms - start_ms) / 1000:.3f}',
                 '-vn', '-c:a', 'aac', '-b:a', '128k', str(output_path),
             ])
@@ -574,7 +574,7 @@ class AudioCleanupService:
         self.runner.run([
             settings.FFMPEG_BINARY, '-y',
             '-ss', f'{start_ms / 1000:.3f}',
-            '-i', str(media_path),
+            '-i', FFmpegRunner.input_arg(media_path),
             '-t', f'{(end_ms - start_ms) / 1000:.3f}',
             '-vn', '-c:a', 'pcm_s16le', str(segment),
         ])
@@ -603,7 +603,7 @@ class AudioCleanupService:
             '[head][body][tail]concat=n=3:v=0:a=1[aout]'
         )
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(media_path),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(media_path),
             '-filter_complex', filter_complex,
             '-map', '0:v:0?', '-map', '[aout]',
             '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
@@ -612,14 +612,14 @@ class AudioCleanupService:
 
     def _extract_audio(self, media_path, wav_path):
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(media_path),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(media_path),
             '-vn', '-ac', '2', '-ar', '48000', '-c:a', 'pcm_s16le', str(wav_path),
         ])
 
     def _mux_audio(self, video_path, audio_path, output_path):
         self.runner.run([
             settings.FFMPEG_BINARY, '-y',
-            '-i', str(video_path), '-i', str(audio_path),
+            '-i', FFmpegRunner.input_arg(video_path), '-i', str(audio_path),
             '-map', '0:v:0?', '-map', '1:a:0',
             '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
             '-shortest', str(output_path),
@@ -627,5 +627,5 @@ class AudioCleanupService:
 
     def _copy(self, source, destination):
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(source), '-c', 'copy', str(destination),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source), '-c', 'copy', str(destination),
         ])

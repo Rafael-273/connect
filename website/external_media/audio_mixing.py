@@ -305,7 +305,7 @@ class AudioMixingService:
         )
 
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(video_path),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path),
             '-i', str(music_path), '-filter_complex', ';'.join(filters),
             '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
             '-movflags', '+faststart', str(output_path),
@@ -418,7 +418,7 @@ class AudioMixingService:
         loop_filters, loop_label, loop_metrics = self._build_music_loop_filters(music_path, duration_ms)
         duration_s = max(0.001, duration_ms / 1000)
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-i', str(music_path), '-filter_complex',
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-i', str(music_path), '-filter_complex',
             ';'.join([
                 f'[0:a]apad=whole_dur={duration_s:.3f},atrim=duration={duration_s:.3f}[dialogue]',
                 *loop_filters,

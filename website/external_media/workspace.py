@@ -188,5 +188,13 @@ def estimate_media_workspace_bytes(source_bytes, *, output_count=1, needs_proxy=
     return int(source_bytes * multiplier * settings.EXTERNAL_MEDIA_WORKSPACE_SAFETY_FACTOR)
 
 
+def estimate_streaming_workspace_bytes(*, output_count=1, needs_proxy=False):
+    """Estimate scratch outputs without charging the remote input against disk."""
+    output_count = max(1, int(output_count or 1))
+    estimate_mb = settings.EXTERNAL_MEDIA_STREAMING_WORKSPACE_ESTIMATE_MB
+    multiplier = output_count + (0.35 if needs_proxy else 0)
+    return int(estimate_mb * 1024 ** 2 * multiplier * settings.EXTERNAL_MEDIA_WORKSPACE_SAFETY_FACTOR)
+
+
 def _directory_size(path):
     return sum(item.stat().st_size for item in path.rglob('*') if item.is_file())

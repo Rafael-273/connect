@@ -217,7 +217,7 @@ class DialogueProcessor:
             current_label = 'leveled'
 
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-filter_complex', ';'.join(filters),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-filter_complex', ';'.join(filters),
             '-map', '0:v?', '-map', f'[{current_label}]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
             '-movflags', '+faststart', str(output_path),
         ])
@@ -231,7 +231,7 @@ class DialogueProcessor:
         return DialogueProcessResult(output_path, metrics)
     def _copy(self, video_path, output_path):
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-c', 'copy', str(output_path),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-c', 'copy', str(output_path),
         ])
 
 

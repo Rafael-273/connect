@@ -165,6 +165,9 @@ class AutoReframeService:
         self.vertical_lock = (self.priority == 'face') if vertical_lock is None else bool(vertical_lock)
 
     def analyze(self, video_path: Path, output_width: int, output_height: int):
+        input_label = getattr(video_path, 'storage_name', '') or (
+            '<remote-media>' if str(video_path).startswith(('http://', 'https://')) else Path(video_path).name
+        )
         try:
             import cv2
         except ImportError:
@@ -173,7 +176,7 @@ class AutoReframeService:
 
         capture = cv2.VideoCapture(str(video_path))
         if not capture.isOpened():
-            logger.warning('Não foi possível abrir %s para Auto Reframe.', video_path)
+            logger.warning('Não foi possível abrir %s para Auto Reframe.', input_label)
             return None
         try:
             source_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
@@ -240,7 +243,7 @@ class AutoReframeService:
                     observations.append((frame_index / max(fps, 0.001), box))
                 frame_index += 1
             if not observations:
-                logger.info('Nenhuma pessoa detectada em %s; usando crop central.', video_path)
+                logger.info('Nenhuma pessoa detectada em %s; usando crop central.', input_label)
                 return None
             crop_width, crop_height = self._smart_crop_size(
                 observations, crop_width, crop_height, source_width, source_height,
@@ -250,8 +253,14 @@ class AutoReframeService:
                 observations, crop_width, crop_height, source_width, source_height,
             )
             return AutoReframePlan(crop_width, crop_height, tuple(keyframes))
-        except Exception:
-            logger.exception('Falha na análise do Auto Reframe; usando crop central.')
+        except Exception as exc:
+            # Some OpenCV exceptions include the source string. Log only its
+            # class so a presigned query can never escape into diagnostics.
+            logger.warning(
+                'Falha na análise do Auto Reframe em %s; usando crop central. error_type=%s',
+                input_label,
+                type(exc).__name__,
+            )
             return None
         finally:
             capture.release()

@@ -34,6 +34,10 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # explicit ``web`` and ``media-worker`` targets above for local development.
 FROM media-worker AS render-workflow
 
-ENV MEDIA_ROOT=/tmp/media
+# Render Workflows currently expose about 2 GB of ephemeral scratch. Keep a
+# safety reserve while allowing the streaming estimate to pass the disk guard.
+ENV MEDIA_ROOT=/tmp/media \
+    EXTERNAL_MEDIA_WORKSPACE_ROOT=/tmp/media-jobs \
+    EXTERNAL_MEDIA_WORKSPACE_MIN_FREE_GB=0.25
 
 COPY . /usr/src/platform/

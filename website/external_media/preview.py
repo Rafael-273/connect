@@ -24,7 +24,7 @@ from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceMan
 from .exceptions import ExternalMediaError
 from .services import StorageService, VideoAssemblyService
 from .overlays import OverlayTimelineService
-from .workspace import JobWorkspace, estimate_media_workspace_bytes
+from .workspace import JobWorkspace
 
 
 # The final interactive-review assembly is 30 fps. A manual cut may be as
@@ -68,23 +68,19 @@ class ProjectProxyService:
                     proxy.proxy_file.name = reference.preview_file.name
                     proxy.duration_ms = reference.duration_ms
                     if not proxy.duration_ms:
-                        with JobWorkspace(project.public_id, 'proxy-duration') as workspace:
-                            local_proxy = workspace.file('proxy', 'proxy.mp4')
-                            storage.copy_to_local(reference.preview_file, local_proxy)
-                            proxy.duration_ms = assembly._duration_ms(local_proxy)
+                        proxy.duration_ms = assembly._duration_ms(
+                            storage.ffmpeg_input(reference.preview_file)
+                        )
                     proxy.metadata = {'reused_upload_proxy': True, 'temporal_parity': 'trim_applied_at_playback'}
                 else:
+                    media_input = storage.input(field)
                     with JobWorkspace(
                         project.public_id,
                         'interactive-preview',
-                        estimated_bytes=estimate_media_workspace_bytes(
-                            getattr(field, 'size', 0), needs_proxy=True,
-                        ),
+                        estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
                     ) as workspace:
-                        original = workspace.file('source', f'original{Path(field.name).suffix.lower()}')
                         output = workspace.file('proxy', 'proxy.mp4')
-                        storage.copy_to_local(field, original)
-                        assembly.create_proxy(original, output, profile=profile)
+                        assembly.create_proxy(media_input.get_ffmpeg_input(), output, profile=profile)
                         proxy.duration_ms = assembly._duration_ms(output)
                         with output.open('rb') as handle:
                             proxy.proxy_file.save('proxy.mp4', File(handle), save=False)

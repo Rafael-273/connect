@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from django.conf import settings
 from .audio_mixing import DuckingSettings, build_ducking_envelope, group_speech_blocks
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder, normalize_edit_ranges
 from .ffmpeg_runner import FFmpegRunner
+from .media_input import media_input_factory
 from .speech_edit import SpeechEditPlan
 
 
@@ -402,7 +402,7 @@ class InternalTimelineBuilder:
             relative = f'Audio/dialogue_{index:03d}_{safe_name}.wav'
             output = package_root / relative
             self.runner.run([
-                settings.FFMPEG_BINARY, '-y', '-i', str(source_path),
+                settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source_path),
                 '-map', '0:a:0', '-vn', '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2', str(output),
             ])
             asset_id = f'{source.asset_id}_dialogue'
@@ -802,9 +802,10 @@ class InternalTimelineBuilder:
 
     @staticmethod
     def _copy_field(field_file, destination):
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        with field_file.open('rb') as source, destination.open('wb') as target:
-            shutil.copyfileobj(source, target, length=1024 * 1024)
+        media_input_factory(field_file).materialize(
+            destination,
+            purpose='premiere-portable-package',
+        )
 
     @staticmethod
     def _safe_name(value):

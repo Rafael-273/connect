@@ -1280,9 +1280,8 @@ class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View)
         storage = StorageService()
         with TemporaryDirectory(prefix='connect-noise-preview-') as temp:
             workdir = Path(temp)
-            source = workdir / f'source{Path(project.render_job.original_video.name).suffix.lower()}'
             output = workdir / f'{variant}.m4a'
-            storage.copy_to_local(project.render_job.original_video, source)
+            source = storage.ffmpeg_input(project.render_job.original_video)
             AudioCleanupService().render_preview_clip(source, output, decision, variant=variant)
             return FileResponse(
                 output.open('rb'),

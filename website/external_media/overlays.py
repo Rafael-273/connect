@@ -334,7 +334,7 @@ class OverlayRenderService:
         ]
         if not overlays:
             return video_path
-        command = [settings.FFMPEG_BINARY, '-y', '-i', str(video_path)]
+        command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path)]
         rendered = []
         for index, overlay in enumerate(overlays):
             path = Path(workdir) / f'overlay_{index:03d}.png'

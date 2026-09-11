@@ -26,7 +26,7 @@ class AudioMuxingService:
 
     def mux(self, video_path: Path, audio_path: Path, output_path: Path) -> AudioMuxResult:
         common = [
-            settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-i', str(audio_path),
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-i', str(audio_path),
             '-map', '0:v:0', '-map', '1:a:0', '-c:a', 'aac', '-b:a', '256k',
             '-shortest', '-movflags', '+faststart',
         ]
@@ -40,4 +40,3 @@ class AudioMuxingService:
                 '-pix_fmt', 'yuv420p', str(output_path),
             ])
             return AudioMuxResult(output_path, True)
-

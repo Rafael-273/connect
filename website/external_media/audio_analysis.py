@@ -17,7 +17,7 @@ class AudioAnalysisService:
 
     def analyze(self, input_path: Path) -> dict:
         result = self.runner.run_capture([
-            settings.FFMPEG_BINARY, '-hide_banner', '-i', str(input_path),
+            settings.FFMPEG_BINARY, '-hide_banner', '-i', FFmpegRunner.input_arg(input_path),
             '-af', 'loudnorm=I=-16:TP=-1:LRA=11:print_format=json', '-f', 'null', '-',
         ])
         data = self._parse(result.stderr)
@@ -81,4 +81,3 @@ class AudioAnalysisService:
         if not diagnostics and peak is not None:
             diagnostics.append('Áudio já bem equilibrado')
         return diagnostics
-

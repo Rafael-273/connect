@@ -27,11 +27,12 @@ from .audio_muxing import AudioMuxingService
 from .audio_validation import AudioValidationService
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
+from .media_input import media_input_factory
 from .premiere_export import PremierePackageService
 from .services import ExternalMediaPipeline, ExternalMediaProjectPipeline, VideoAssemblyService
 from .subtitle_reviews import SubtitleReviewService
 from .timeline import InternalTimelineBuilder
-from .workspace import JobWorkspace, MediaWorkspaceGarbageCollector, estimate_media_workspace_bytes
+from .workspace import JobWorkspace, MediaWorkspaceGarbageCollector
 
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.prepare_subtitles')
@@ -71,15 +72,14 @@ def create_project_preview(self, media_id):
     item.preview_error = ''
     item.save(update_fields=['preview_status', 'preview_error', 'update_at'])
     try:
+        media_input = media_input_factory(item.file)
         with JobWorkspace(
             item.pk,
             'upload-preview',
-            estimated_bytes=estimate_media_workspace_bytes(getattr(item.file, 'size', 0), needs_proxy=True),
+            estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
         ) as workspace:
-            source = workspace.file('source', f'source{Path(item.file.name).suffix.lower()}')
             preview = workspace.file('proxy', 'preview.mp4')
-            _local_file(item.file, source)
-            VideoAssemblyService().create_proxy(source, preview)
+            VideoAssemblyService().create_proxy(media_input.get_ffmpeg_input(), preview)
             with preview.open('rb') as handle:
                 item.preview_file.save('preview.mp4', File(handle), save=False)
         item.preview_status = ProjectBlockMedia.PreviewStatus.READY
@@ -96,15 +96,14 @@ def create_project_preview(self, media_id):
 def create_subtitle_review_preview(self, session_id):
     session = SubtitleReviewSession.objects.select_related('job').get(pk=session_id)
     source_file = session.job.original_video
+    media_input = media_input_factory(source_file)
     with JobWorkspace(
         session.pk,
         'subtitle-review-preview',
-        estimated_bytes=estimate_media_workspace_bytes(getattr(source_file, 'size', 0), needs_proxy=True),
+        estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
     ) as workspace:
-        source = workspace.file('source', f'source{Path(source_file.name).suffix.lower()}')
         preview = workspace.file('proxy', 'preview.mp4')
-        _local_file(source_file, source)
-        VideoAssemblyService().create_proxy(source, preview)
+        VideoAssemblyService().create_proxy(media_input.get_ffmpeg_input(), preview)
         with preview.open('rb') as handle:
             session.preview_file.save('preview.mp4', File(handle), save=False)
         session.save(update_fields=['preview_file', 'update_at'])
@@ -222,15 +221,9 @@ def _mastering_failure(job_id, exc):
     )
 
 
-def _local_file(field_file, destination):
-    with field_file.open('rb') as source, destination.open('wb') as target:
-        for chunk in iter(lambda: source.read(1024 * 1024), b''):
-            target.write(chunk)
-
-
 def _extract_audio(runner, video_path, audio_path):
     runner.run([
-        settings.FFMPEG_BINARY, '-y', '-i', str(video_path), '-vn',
+        settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-vn',
         '-ac', '2', '-ar', '48000', '-c:a', 'pcm_s24le', str(audio_path),
     ])
 
@@ -245,16 +238,15 @@ def analyze_video_mastering(self, job_id):
         job.started_at = job.started_at or timezone.now()
         job.error_message = ''
         job.save(update_fields=['status', 'progress', 'current_step', 'started_at', 'error_message', 'update_at'])
+        media_input = media_input_factory(job.original_video)
         with JobWorkspace(
             job.public_id,
             'mastering-analysis',
-            estimated_bytes=estimate_media_workspace_bytes(getattr(job.original_video, 'size', 0)),
+            estimated_bytes=media_input.workspace_estimate(),
         ) as workspace:
-            source = workspace.file('source', f'original{Path(job.original_video.name).suffix.lower()}')
             audio = workspace.file('audio', 'audio_extracted.wav')
-            _local_file(job.original_video, source)
             runner = FFmpegRunner()
-            _extract_audio(runner, source, audio)
+            _extract_audio(runner, media_input.get_ffmpeg_input(), audio)
             metrics = AudioAnalysisService(runner).analyze(audio)
         job.input_metrics = metrics
         job.input_lufs = _decimal_or_none(metrics.get('integrated_lufs'))
@@ -285,17 +277,17 @@ def master_video(self, job_id):
         job.finished_at = None
         job.error_message = ''
         job.save(update_fields=['status', 'progress', 'current_step', 'started_at', 'finished_at', 'error_message', 'update_at'])
+        media_input = media_input_factory(job.original_video)
         with JobWorkspace(
             job.public_id,
             'mastering',
-            estimated_bytes=estimate_media_workspace_bytes(getattr(job.original_video, 'size', 0)),
+            estimated_bytes=media_input.workspace_estimate(),
         ) as workspace:
-            source = workspace.file('source', f'original{Path(job.original_video.name).suffix.lower()}')
             extracted = workspace.file('audio', 'audio_extracted.wav')
             mastered = workspace.file('audio', 'audio_mastered.wav')
             output = workspace.file('output', 'video_mastered.mp4')
-            _local_file(job.original_video, source)
             runner = FFmpegRunner()
+            source = media_input.get_ffmpeg_input()
             _extract_audio(runner, source, extracted)
             result = AudioMasteringService(runner).master_audio(
                 extracted, mastered, MasteringTarget.from_profile(profile),
