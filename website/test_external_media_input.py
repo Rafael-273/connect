@@ -145,6 +145,16 @@ class MediaInputTests(SimpleTestCase):
             service = VideoAssemblyService(runner=runner, storage=storage)
             service._effective_duration_ms = Mock(return_value=1000)
             service._normalize = Mock(side_effect=normalize)
+            serializer = Mock(return_value={})
+            service._serialize_reframe_plan = serializer
+
+            def delete_temporary(name):
+                if name.startswith('external_media/tmp/proxy-'):
+                    # A proxy is only safe to delete after its reframe plan
+                    # captured its dimensions.
+                    self.assertTrue(serializer.called)
+
+            storage.delete_temporary.side_effect = delete_temporary
             service.assemble(
                 [
                     AssemblySource(
@@ -159,13 +169,15 @@ class MediaInputTests(SimpleTestCase):
                 workdir / 'output.mp4',
                 SimpleNamespace(width=1920, height=1080),
                 workdir,
+                auto_reframe_config={'priority': 'face'},
             )
 
         self.assertEqual(storage.stage_temporary.call_count, 2)
         self.assertEqual(storage.delete_temporary.call_count, 4)
+        self.assertEqual(serializer.call_count, 2)
 
     @override_settings(USE_S3=True, EXTERNAL_MEDIA_ASSEMBLY_WORKERS=1)
-    def test_s3_assembly_cleans_staged_clips_when_manifest_preparation_fails(self):
+    def test_s3_assembly_does_not_stage_output_when_reframe_serialization_fails(self):
         runner = Mock()
         storage = Mock()
 
@@ -201,5 +213,5 @@ class MediaInputTests(SimpleTestCase):
                     auto_reframe_config={'priority': 'face'},
                 )
 
-        self.assertEqual(storage.stage_temporary.call_count, 2)
-        self.assertEqual(storage.delete_temporary.call_count, 2)
+        self.assertEqual(storage.stage_temporary.call_count, 0)
+        self.assertEqual(storage.delete_temporary.call_count, 0)

@@ -1755,6 +1755,7 @@ class VideoAssemblyService:
             # Upload each completed segment before starting the next one. This
             # deliberately trades some parallelism for a bounded scratch peak.
             workers = 1
+        serialized_reframe_plans = {}
         if workers > 1 and reframe_plans:
             with ThreadPoolExecutor(max_workers=workers, thread_name_prefix='media-assemble') as executor:
                 futures = [executor.submit(self._normalize, **job) for job in normalize_jobs]
@@ -1767,7 +1768,16 @@ class VideoAssemblyService:
             reframe_results = []
             try:
                 for index, job in enumerate(normalize_jobs, start=1):
-                    reframe_results.append(self._normalize(**job))
+                    reframe_plan = self._normalize(**job)
+                    reframe_results.append(reframe_plan)
+                    effective_auto_reframe_config = job['auto_reframe_config']
+                    if effective_auto_reframe_config:
+                        # This can point at a temporary S3 proxy. Record its
+                        # dimensions before deleting that proxy below.
+                        serialized_reframe_plans[index - 1] = self._serialize_reframe_plan(
+                            reframe_plan,
+                            analysis_sources[index - 1],
+                        )
                     source_temporary_name = source_items[index - 1].temporary_storage_name
                     if source_temporary_name:
                         self.storage.delete_temporary(source_temporary_name)
@@ -1799,8 +1809,11 @@ class VideoAssemblyService:
                 effective_auto_reframe_config = normalize_jobs[index]['auto_reframe_config']
                 used_auto_reframe = bool(reframe_plan) or used_auto_reframe
                 self.last_reframe_plans.append(
-                    self._serialize_reframe_plan(reframe_plan, analysis_sources[index])
-                    if effective_auto_reframe_config else None
+                    (
+                        serialized_reframe_plans[index]
+                        if index in serialized_reframe_plans
+                        else self._serialize_reframe_plan(reframe_plan, analysis_sources[index])
+                    ) if effective_auto_reframe_config else None
                 )
             concat_file = workdir / 'concat.txt'
             concat_file.write_text(
