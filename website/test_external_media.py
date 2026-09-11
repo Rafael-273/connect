@@ -3665,14 +3665,12 @@ class AudioMixingUnitTests(SimpleTestCase):
         self.assertEqual(matching[0], 0.5)
         self.assertFalse(any(value > 0.5 for time, value in envelope if 0.5 <= time <= 1.2))
 
-    def test_music_loop_plan_crossfades_short_track_until_video_end(self):
+    def test_music_loop_plan_trims_native_loop_at_video_end(self):
         filters, label, metrics = AudioMixingService._music_loop_plan(10.0, 3.0)
         self.assertEqual(label, '[music_looped]')
-        self.assertEqual(metrics['music_loop_count'], 5)
-        self.assertEqual(metrics['music_crossfade_s'], 0.75)
-        self.assertIn('asplit=5', filters[0])
-        self.assertEqual(sum('acrossfade=' in item for item in filters), 4)
-        self.assertIn('atrim=duration=10.000', filters[-1])
+        self.assertEqual(metrics['music_loop_count'], 4)
+        self.assertEqual(metrics['music_crossfade_s'], 0.0)
+        self.assertEqual(filters, ['[1:a]asetpts=N/SR/TB,atrim=duration=10.000[music_looped]'])
 
     def test_build_spectral_windows_skips_when_no_cut(self):
         self.assertEqual(build_spectral_windows([SpeechBlock(0, 1000)], cut_db=0), [])
@@ -3735,7 +3733,7 @@ class AudioMixingSmokeTests(SimpleTestCase):
             self.assertEqual(result.metrics['speech_block_count'], 1)
             self.assertGreater(result.metrics['duck_db'], 0)
 
-    def test_mix_crossfades_a_track_shorter_than_the_video(self):
+    def test_mix_loops_a_track_shorter_than_the_video(self):
         service = AudioMixingService()
         with tempfile.TemporaryDirectory() as directory:
             workdir = Path(directory)
@@ -3750,7 +3748,7 @@ class AudioMixingSmokeTests(SimpleTestCase):
             )
             self.assertTrue(output.exists())
             self.assertGreater(result.metrics['music_loop_count'], 1)
-            self.assertGreater(result.metrics['music_crossfade_s'], 0)
+            self.assertEqual(result.metrics['music_crossfade_s'], 0)
 
     def test_mix_keeps_music_ducked_through_a_short_speech_pause(self):
         service = AudioMixingService()

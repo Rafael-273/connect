@@ -400,7 +400,7 @@ class AudioMixingService:
 
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path),
-            '-i', str(music_path), '-filter_complex', ';'.join(filters),
+            '-stream_loop', '-1', '-i', str(music_path), '-filter_complex', ';'.join(filters),
             '-map', '0:v:0', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
             '-movflags', '+faststart', str(output_path),
         ])
@@ -441,11 +441,11 @@ class AudioMixingService:
         return duration_s
 
     def _build_music_loop_filters(self, music_path: Path, duration_ms: int):
-        """Builds a finite music bed whose loop points are crossfaded.
+        """Builds a music bed trimmed to the master duration.
 
-        ``-stream_loop`` repeats the source with a hard cut.  Creating explicit audio
-        copies lets ``acrossfade`` overlap the tail and beginning of the track, which
-        avoids a noticeable restart and guarantees music remains under the final block.
+        The input itself is looped with FFmpeg's native ``-stream_loop -1``. A fixed
+        `asplit`/`acrossfade` graph grows with the video duration and can leave the
+        final part of long renders without a music bed.
         """
         duration_s = max(0.001, duration_ms / 1000)
         return self._music_loop_plan(duration_s, self._probe_duration_s(music_path))
@@ -453,31 +453,11 @@ class AudioMixingService:
     @staticmethod
     def _music_loop_plan(video_duration_s: float, music_duration_s: float = 0.0):
         if music_duration_s <= 0:
-            # The caller replaces this placeholder after probing. This avoids creating
-            # a malformed filter graph if a storage backend reports no duration.
             return [], '[1:a]', {'music_loop_count': 1, 'music_crossfade_s': 0.0}
-        crossfade_s = min(1.25, music_duration_s / 4)
-        crossfade_s = max(0.08, crossfade_s)
-        loop_step_s = max(0.01, music_duration_s - crossfade_s)
-        loop_count = max(1, int(math.ceil((video_duration_s - music_duration_s) / loop_step_s)) + 1)
-        labels = [f'music_loop{index}' for index in range(loop_count)]
-        split_outputs = ''.join(f'[{label}]' for label in labels)
-        filters = [
-            f'[1:a]atrim=duration={music_duration_s:.3f},asetpts=N/SR/TB,'
-            f'asplit={loop_count}{split_outputs}',
-        ]
-        current_label = labels[0]
-        for index, label in enumerate(labels[1:], start=1):
-            next_label = f'music_cross{index}'
-            filters.append(
-                f'[{current_label}][{label}]acrossfade=d={crossfade_s:.3f}:c1=tri:c2=tri[{next_label}]'
-            )
-            current_label = next_label
-        final_label = 'music_looped'
-        filters.append(f'[{current_label}]atrim=duration={video_duration_s:.3f}[{final_label}]')
-        return filters, f'[{final_label}]', {
+        loop_count = max(1, int(math.ceil(video_duration_s / music_duration_s)))
+        return [f'[1:a]asetpts=N/SR/TB,atrim=duration={video_duration_s:.3f}[music_looped]'], '[music_looped]', {
             'music_loop_count': loop_count,
-            'music_crossfade_s': round(crossfade_s, 3) if loop_count > 1 else 0.0,
+            'music_crossfade_s': 0.0,
         }
 
     def _validate_music_input(self, music_path: Path):
@@ -515,7 +495,8 @@ class AudioMixingService:
         loop_filters, loop_label, loop_metrics = self._build_music_loop_filters(music_path, duration_ms)
         duration_s = max(0.001, duration_ms / 1000)
         self.runner.run([
-            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-i', str(music_path), '-filter_complex',
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path),
+            '-stream_loop', '-1', '-i', str(music_path), '-filter_complex',
             ';'.join([
                 f'[0:a]aresample=async=1:first_pts=0,apad=whole_dur={duration_s:.3f},'
                 f'atrim=duration={duration_s:.3f}[dialogue]',
