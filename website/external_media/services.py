@@ -2654,7 +2654,9 @@ class ExternalMediaProjectPipeline:
         if version.dialogue_processing_enabled:
             speech_blocks = self._speech_blocks_for_job(job)
             protected_ranges = self._protected_ranges_ms(project, plan)
-            duration_ms = SpeechEditService(self.assembly.runner).duration_ms(video_path)
+            # The preceding noise pass may have staged and removed the original
+            # local master. Measure the current output, not that stale path.
+            duration_ms = SpeechEditService(self.assembly.runner).duration_ms(final_path)
             dialogue_settings = DialogueSettings.from_config(version.dialogue_processing_config)
             processed_path = workdir / 'dialogue_processed.mp4'
             with self.storage.staged_processing_input(
