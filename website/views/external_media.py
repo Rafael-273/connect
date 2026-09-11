@@ -1,9 +1,12 @@
+import hashlib
+import hmac as _hmac
 import mimetypes
 import json
 import re
 import uuid
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 
 from PIL import Image, UnidentifiedImageError
 from django.conf import settings
@@ -37,6 +40,7 @@ from ..forms.external_media import (
     GlossaryTermForm,
     ProjectBlockMediaForm,
     ProjectCustomBlockForm,
+    VIDEO_EXTENSIONS,
     VideoMasteringProfileForm,
     VideoMasteringUploadForm,
 )
@@ -57,6 +61,8 @@ from ..models.external_media import (
     SubtitleReviewSession,
     SubtitleTrack,
     VideoMasteringJob,
+    external_media_project_upload_path,
+    get_external_media_storage,
 )
 from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
@@ -495,6 +501,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             validation_errors=ProjectService.validate_uploads(project),
             can_retry_render=self._can_retry_project_render(project),
             restore_processed_result=restore_job,
+            use_s3=settings.USE_S3,
             project_exports=project.exports.order_by('-created_at')[:10],
             processing_history=project.processing_history.select_related('preset').prefetch_related('assets'),
             pending_subtitle_reviews=project.subtitle_review_sessions.filter(
@@ -864,6 +871,263 @@ class ExternalMediaProjectCustomBlockUploadView(ExternalMediaProjectUploadView):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({'id': item.pk, 'name': item.original_filename, 'size': item.file_size, 'status_url': reverse('external_media_project_media_status', args=[project.public_id, item.pk]), 'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, item.pk])})
         return redirect('external_media_project_detail', public_id=public_id)
+
+
+# ── S3 direct-upload helpers ──────────────────────────────────────────────────
+
+def _sign_upload_allocation(allocation: dict) -> str:
+    """HMAC-SHA256 over the sorted JSON allocation so the client cannot tamper."""
+    message = json.dumps(allocation, sort_keys=True, ensure_ascii=True).encode()
+    return _hmac.new(settings.SECRET_KEY.encode(), message, hashlib.sha256).hexdigest()
+
+
+def _verify_upload_allocation(allocation: dict, signature: str) -> bool:
+    return _hmac.compare_digest(_sign_upload_allocation(allocation), signature)
+
+
+def _generate_presigned_put(storage_key: str, content_type: str) -> str:
+    """Return a presigned PUT URL for the given storage key."""
+    storage = get_external_media_storage()
+    location = str(getattr(storage, 'location', '') or '').strip('/')
+    s3_key = storage_key.lstrip('/')
+    if location and not s3_key.startswith(f'{location}/'):
+        s3_key = f'{location}/{s3_key}'
+    return storage.connection.meta.client.generate_presigned_url(
+        'put_object',
+        Params={'Bucket': storage.bucket_name, 'Key': s3_key, 'ContentType': content_type},
+        ExpiresIn=3600,
+    )
+
+
+class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
+    """Allocate position/camera, sign the allocation and return a presigned S3 PUT URL.
+
+    The browser uploads directly to S3 (no bytes through Django), then POSTs to
+    ExternalMediaProjectUploadCompleteView to create the DB record.
+    """
+
+    def post(self, request, public_id, block_id):
+        if not settings.USE_S3:
+            return JsonResponse({'detail': 'Upload direto ao S3 requer USE_S3=TRUE.'}, status=400)
+
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        if project.status != ExternalMediaProject.Status.DRAFT:
+            return JsonResponse({'detail': 'Os uploads ficam bloqueados após iniciar o pipeline.'}, status=400)
+        block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version)
+
+        try:
+            data = json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'detail': 'Corpo da requisição inválido.'}, status=400)
+
+        filename = str(data.get('filename') or '').strip()
+        file_size = int(data.get('size') or 0)
+        content_type = str(data.get('content_type') or 'video/octet-stream').strip() or 'video/octet-stream'
+
+        if Path(filename).suffix.lower() not in VIDEO_EXTENSIONS:
+            return JsonResponse({'detail': 'Formato não suportado. Envie MP4, MOV, MKV, WEBM, AVI ou M4V.'}, status=400)
+        if file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
+            return JsonResponse({'detail': f'O vídeo excede o limite de {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.'}, status=400)
+
+        # ── camera/position allocation (mirrors ExternalMediaProjectUploadView) ──
+        existing_camera_key = str(data.get('camera_key') or '').strip()
+        existing_camera = project.block_media.filter(
+            block=block, camera_key=existing_camera_key,
+        ).order_by('camera_order', 'pk').first() if existing_camera_key else None
+        camera_role = (
+            existing_camera.camera_role if existing_camera
+            else str(data.get('camera_role') or ProjectBlockMedia.CameraRole.PRIMARY)
+        )
+        is_extra = camera_role == ProjectBlockMedia.CameraRole.SECONDARY
+
+        count = sum(
+            1 for m in project.block_media.filter(block=block, camera_role=ProjectBlockMedia.CameraRole.PRIMARY)
+            if ProjectService.file_exists(m.file)
+        )
+        if not existing_camera and not is_extra and block.max_occurrences > 0 and count >= block.max_occurrences:
+            return JsonResponse({'detail': f'O bloco {block.name} aceita no máximo {block.max_occurrences} vídeo(s).'}, status=400)
+
+        camera_hint = str(data.get('camera_hint') or ProjectBlockMedia.CameraHint.AUTO)
+        camera_label = str(data.get('camera_label') or '').strip()
+
+        if existing_camera:
+            position = (ProjectBlockMedia.all_objects.filter(project=project, block=block)
+                        .aggregate(v=Max('position'))['v'] or 0) + 1
+            camera_order = 1
+            camera_key = existing_camera.camera_key
+            camera_label = existing_camera.camera_label
+            camera_hint = existing_camera.camera_hint
+        elif is_extra:
+            camera_pos = int(data.get('camera_position') or 0)
+            if not project.block_media.filter(block=block, position=camera_pos, camera_role=ProjectBlockMedia.CameraRole.PRIMARY).exists():
+                return JsonResponse({'detail': 'Escolha o vídeo principal ao qual esta câmera pertence.'}, status=400)
+            camera_order = (ProjectBlockMedia.all_objects.filter(project=project, block=block, position=camera_pos)
+                            .aggregate(v=Max('camera_order'))['v'] or 0) + 1
+            camera_key = f'camera-{get_random_string(12).lower()}'
+            position = camera_pos
+        else:
+            position = (ProjectBlockMedia.all_objects.filter(project=project, block=block)
+                        .aggregate(v=Max('position'))['v'] or 0) + 1
+            camera_order = 1
+            camera_key = 'primary'
+            camera_role = ProjectBlockMedia.CameraRole.PRIMARY
+
+        camera_label = camera_label or ('Câmera extra' if is_extra else 'Câmera principal')
+
+        # ── compute storage key ──
+        storage_key = external_media_project_upload_path(
+            SimpleNamespace(project=project, block_id=block.pk, block=block, position=position),
+            filename,
+        )
+
+        try:
+            upload_url = _generate_presigned_put(storage_key, content_type)
+        except Exception:
+            return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
+
+        allocation = {
+            'project_id': str(project.public_id),
+            'block_id': block.pk,
+            'custom_block_id': None,
+            'storage_key': storage_key,
+            'filename': filename,
+            'size': file_size,
+            'position': position,
+            'camera_key': camera_key,
+            'camera_role': camera_role,
+            'camera_order': camera_order,
+            'camera_label': camera_label,
+            'camera_hint': camera_hint,
+            'trim_start_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_start_seconds')) or 0,
+            'trim_end_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_end_seconds')),
+        }
+        return JsonResponse({
+            'upload_url': upload_url,
+            'content_type': content_type,
+            'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
+            'allocation': allocation,
+            'allocation_sig': _sign_upload_allocation(allocation),
+        })
+
+
+class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixin, View):
+    """Same as ExternalMediaProjectUploadPresignView but for custom blocks (no camera logic)."""
+
+    def post(self, request, public_id, block_id):
+        if not settings.USE_S3:
+            return JsonResponse({'detail': 'Upload direto ao S3 requer USE_S3=TRUE.'}, status=400)
+
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
+        block = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project)
+
+        try:
+            data = json.loads(request.body)
+        except (ValueError, TypeError):
+            return JsonResponse({'detail': 'Corpo da requisição inválido.'}, status=400)
+
+        filename = str(data.get('filename') or '').strip()
+        file_size = int(data.get('size') or 0)
+        content_type = str(data.get('content_type') or 'video/octet-stream').strip() or 'video/octet-stream'
+
+        if Path(filename).suffix.lower() not in VIDEO_EXTENSIONS:
+            return JsonResponse({'detail': 'Formato não suportado. Envie MP4, MOV, MKV, WEBM, AVI ou M4V.'}, status=400)
+        if file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
+            return JsonResponse({'detail': f'O vídeo excede o limite de {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.'}, status=400)
+
+        position = (ProjectBlockMedia.objects.filter(project=project, custom_block=block)
+                    .aggregate(v=Max('position'))['v'] or 0) + 1
+        storage_key = external_media_project_upload_path(
+            SimpleNamespace(project=project, block_id=None, block=None, position=position),
+            filename,
+        )
+
+        try:
+            upload_url = _generate_presigned_put(storage_key, content_type)
+        except Exception:
+            return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
+
+        allocation = {
+            'project_id': str(project.public_id),
+            'block_id': None,
+            'custom_block_id': block.pk,
+            'storage_key': storage_key,
+            'filename': filename,
+            'size': file_size,
+            'position': position,
+            'camera_key': 'primary',
+            'camera_role': ProjectBlockMedia.CameraRole.PRIMARY,
+            'camera_order': 1,
+            'camera_label': 'Câmera principal',
+            'camera_hint': ProjectBlockMedia.CameraHint.AUTO,
+            'trim_start_ms': 0,
+            'trim_end_ms': None,
+        }
+        return JsonResponse({
+            'upload_url': upload_url,
+            'content_type': content_type,
+            'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
+            'allocation': allocation,
+            'allocation_sig': _sign_upload_allocation(allocation),
+        })
+
+
+class ExternalMediaProjectUploadCompleteView(ExternalMediaRequiredMixin, View):
+    """Create the ProjectBlockMedia record after the browser successfully PUT the file to S3."""
+
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
+
+        try:
+            data = json.loads(request.body)
+            allocation = data['allocation']
+            sig = data['allocation_sig']
+        except (ValueError, TypeError, KeyError):
+            return JsonResponse({'detail': 'Dados de confirmação inválidos.'}, status=400)
+
+        if not _verify_upload_allocation(allocation, sig):
+            return JsonResponse({'detail': 'Assinatura de upload inválida.'}, status=400)
+        if str(allocation.get('project_id')) != str(project.public_id):
+            return JsonResponse({'detail': 'Projeto não corresponde.'}, status=400)
+
+        block_id = allocation.get('block_id')
+        custom_block_id = allocation.get('custom_block_id')
+        block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version) if block_id else None
+        custom_block = get_object_or_404(ProjectCustomBlock, pk=custom_block_id, project=project) if custom_block_id else None
+
+        item = ProjectBlockMedia(
+            project=project,
+            block=block,
+            custom_block=custom_block,
+            file=allocation['storage_key'],
+            original_filename=allocation['filename'],
+            file_size=int(allocation.get('size') or 0),
+            position=int(allocation['position']),
+            camera_key=allocation.get('camera_key', 'primary'),
+            camera_role=allocation.get('camera_role', ProjectBlockMedia.CameraRole.PRIMARY),
+            camera_order=int(allocation.get('camera_order', 1)),
+            camera_label=allocation.get('camera_label', ''),
+            camera_hint=allocation.get('camera_hint', ProjectBlockMedia.CameraHint.AUTO),
+            trim_start_ms=int(allocation.get('trim_start_ms') or 0),
+            trim_end_ms=allocation.get('trim_end_ms'),
+            preview_status=ProjectBlockMedia.PreviewStatus.PENDING,
+            preview_error='',
+        )
+        try:
+            item.save()
+        except IntegrityError:
+            return JsonResponse({'detail': 'Conflito ao registrar o vídeo. Tente novamente.'}, status=409)
+
+        ExternalMediaProjectUploadView._enqueue_preview(item)
+        return JsonResponse({
+            'id': item.pk,
+            'name': item.original_filename,
+            'size': item.file_size,
+            'status_url': reverse('external_media_project_media_status', args=[project.public_id, item.pk]),
+            'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, item.pk]),
+        })
+
+
+# ── end S3 direct-upload ──────────────────────────────────────────────────────
 
 
 class ExternalMediaProjectMediaDeleteView(ExternalMediaRequiredMixin, View):

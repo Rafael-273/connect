@@ -164,7 +164,7 @@
         {% if not item.has_default_video %}
         {% if item.definition.max_occurrences == 0 or item.media|length < item.definition.max_occurrences %}
         <div class="hidden space-y-2 mb-3" data-upload-results></div>
-        <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload' project.public_id item.definition.pk %}{% endif %}" class="media-form media-upload-form space-y-3" {% if not item.is_custom %}data-reorder-url="{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}"{% endif %}>
+        <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload' project.public_id item.definition.pk %}{% endif %}" class="media-form media-upload-form space-y-3" {% if not item.is_custom %}data-reorder-url="{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}"{% endif %}{% if use_s3 %} data-presign-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload_presign' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload_presign' project.public_id item.definition.pk %}{% endif %}"{% endif %}>
             {% csrf_token %}
             <div class="flex flex-col sm:flex-row gap-3">
                 <input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="flex-1" data-trim-file>
@@ -500,7 +500,14 @@
             window.addEventListener('pointerup', stopDrag, { once: true });
             handlePointerMove(event);
         }
-        fileInput?.addEventListener('change', () => {
+        function showUploadError(msg) {
+            fileInput.disabled = false;
+            uploadStatus?.classList.add('hidden');
+            previewError?.classList.remove('hidden');
+            if (previewError) previewError.textContent = msg;
+        }
+
+        fileInput?.addEventListener('change', async () => {
             if (objectUrl) URL.revokeObjectURL(objectUrl);
             const file = fileInput.files && fileInput.files[0];
             if (!file) {
@@ -511,10 +518,86 @@
             }
             panel?.classList.remove('is-visible');
             previewError?.classList.add('hidden');
-            // Disabled inputs are omitted from FormData, so capture the file first.
-            const uploadData = new FormData(form);
+
+            const presignUrl = form.dataset.presignUrl;
+            const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
             uploadStatus?.classList.remove('hidden');
             fileInput.disabled = true;
+
+            // ── S3 direct upload (produção) ──────────────────────────────────
+            if (presignUrl) {
+                // 1. Solicitar URL assinada ao Django
+                let presign;
+                try {
+                    const res = await fetch(presignUrl, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                        body: JSON.stringify({
+                            filename: file.name,
+                            size: file.size,
+                            content_type: file.type || 'video/octet-stream',
+                            trim_start_seconds: form.querySelector('[data-trim-start-hidden]')?.value || null,
+                            trim_end_seconds: form.querySelector('[data-trim-end-hidden]')?.value || null,
+                        }),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        showUploadError(err.detail || 'Não foi possível iniciar o upload.');
+                        return;
+                    }
+                    presign = await res.json();
+                } catch (e) {
+                    showUploadError('Não foi possível iniciar o upload. Verifique sua conexão.');
+                    return;
+                }
+
+                // 2. PUT direto no S3 com progress
+                try {
+                    await new Promise((resolve, reject) => {
+                        const xhr = new XMLHttpRequest();
+                        xhr.open('PUT', presign.upload_url);
+                        xhr.setRequestHeader('Content-Type', presign.content_type);
+                        xhr.upload.addEventListener('progress', (ev) => {
+                            if (ev.lengthComputable && uploadStatusLabel) {
+                                uploadStatusLabel.textContent = `Enviando ${Math.round((ev.loaded / ev.total) * 100)}%`;
+                            }
+                        });
+                        xhr.addEventListener('load', () => {
+                            xhr.status >= 200 && xhr.status < 400 ? resolve() : reject(new Error(`S3 ${xhr.status}`));
+                        });
+                        xhr.addEventListener('error', () => reject(new Error('network')));
+                        xhr.send(file);
+                    });
+                } catch (e) {
+                    showUploadError('Falha ao enviar o arquivo. Verifique sua conexão e tente novamente.');
+                    return;
+                }
+
+                // 3. Confirmar com Django para criar o registro e enfileirar preview
+                try {
+                    const res = await fetch(presign.complete_url, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                        body: JSON.stringify({allocation: presign.allocation, allocation_sig: presign.allocation_sig}),
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        showUploadError(err.detail || 'Vídeo enviado, mas não foi possível registrar. Recarregue a página.');
+                        return;
+                    }
+                    addUploadResult(form, await res.json());
+                    fileInput.value = '';
+                    fileInput.disabled = false;
+                    uploadStatus?.classList.add('hidden');
+                } catch (e) {
+                    showUploadError('Vídeo enviado, mas não foi possível registrar. Recarregue a página.');
+                }
+                return;
+            }
+
+            // ── Fallback multipart POST (dev local sem S3) ───────────────────
+            const uploadData = new FormData(form);
             const request = new XMLHttpRequest();
             request.open('POST', form.action);
             request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
@@ -536,19 +619,11 @@
                     }
                     return;
                 }
-                fileInput.disabled = false;
-                uploadStatus?.classList.add('hidden');
-                previewError?.classList.remove('hidden');
-                if (previewError) {
-                    try { previewError.textContent = JSON.parse(request.responseText).detail || 'Não foi possível enviar o vídeo. Tente novamente.'; }
-                    catch (error) { previewError.textContent = 'Não foi possível enviar o vídeo. Tente novamente.'; }
-                }
+                try { showUploadError(JSON.parse(request.responseText).detail || 'Não foi possível enviar o vídeo. Tente novamente.'); }
+                catch (error) { showUploadError('Não foi possível enviar o vídeo. Tente novamente.'); }
             });
             request.addEventListener('error', () => {
-                fileInput.disabled = false;
-                uploadStatus?.classList.add('hidden');
-                previewError?.classList.remove('hidden');
-                if (previewError) previewError.textContent = 'Não foi possível enviar o vídeo. Verifique sua conexão e tente novamente.';
+                showUploadError('Não foi possível enviar o vídeo. Verifique sua conexão e tente novamente.');
             });
             request.send(uploadData);
             return;
