@@ -20,7 +20,7 @@ RUN mkdir -p /usr/src/platform/media && \
 
 FROM base AS web
 
-CMD gunicorn --bind 0.0.0.0:8000 --reload connect.wsgi:application
+CMD gunicorn --bind 0.0.0.0:8000 --reload --timeout 1800 --graceful-timeout 30 connect.wsgi:application
 
 FROM base AS media-worker
 
