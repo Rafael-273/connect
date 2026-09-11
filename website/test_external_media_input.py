@@ -7,6 +7,8 @@ from django.test import SimpleTestCase, override_settings
 
 from website.external_media.exceptions import ExternalMediaError
 from website.external_media.ffmpeg_runner import FFmpegRunner
+from website.external_media.audio_noise import AudioNoiseAnalysisService
+from website.external_media.background_voice import BackgroundVoiceRemovalService
 from website.external_media.media_input import (
     LocalMediaInput,
     RemoteMediaSource,
@@ -111,6 +113,24 @@ class MediaInputTests(SimpleTestCase):
 
         self.assertIs(FFmpegRunner.input_arg(remote), remote)
         self.assertEqual(FFmpegRunner.input_arg(Path('/tmp/video.mp4')), '/tmp/video.mp4')
+
+    def test_noise_analysis_uses_workspace_for_remote_input(self):
+        remote = RemoteMediaSource('https://bucket/video.mp4?X-Amz-Signature=secret')
+        with TemporaryDirectory() as root:
+            wav_path = AudioNoiseAnalysisService._analysis_wav_path(remote, root)
+
+        self.assertEqual(wav_path, Path(root) / 'noise-analysis.wav')
+        with self.assertRaisesRegex(ExternalMediaError, 'workspace temporário'):
+            AudioNoiseAnalysisService._analysis_wav_path(remote)
+
+    def test_background_voice_analysis_uses_workspace_for_remote_input(self):
+        remote = RemoteMediaSource('https://bucket/video.mp4?X-Amz-Signature=secret')
+        with TemporaryDirectory() as root:
+            wav_path = BackgroundVoiceRemovalService._analysis_wav_path(remote, root)
+
+        self.assertEqual(wav_path, Path(root) / 'quiet-voice.wav')
+        with self.assertRaisesRegex(ExternalMediaError, 'workspace temporário'):
+            BackgroundVoiceRemovalService._analysis_wav_path(remote)
 
     @override_settings(USE_S3=True, EXTERNAL_MEDIA_ASSEMBLY_WORKERS=2)
     def test_s3_assembly_stages_each_normalized_clip_before_the_next(self):

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
 
+from .exceptions import ExternalMediaError
 from .speaker_diarization import CommunitySpeakerDiarizer, DiarizationUnavailable, SpeakerTurn
 from .speech_edit import AudioActivity, SpeechCut, SpeechEditAnalyzer, SpeechEditPlan, SpeechEditService
 
@@ -55,12 +56,12 @@ class BackgroundVoiceRemovalService:
         self.editor = SpeechEditService(runner)
         self.diarizer = diarizer or CommunitySpeakerDiarizer()
 
-    def analyze(self, video_path: Path, words, selected_ranges) -> BackgroundVoicePlan:
+    def analyze(self, video_path: Path | str, words, selected_ranges, *, workspace=None) -> BackgroundVoicePlan:
         duration_ms = self.editor.duration_ms(video_path)
         ranges = self._ranges(selected_ranges, duration_ms)
         if not ranges:
             return BackgroundVoicePlan((), duration_ms)
-        wav_path = video_path.with_suffix('.quiet-voice.wav')
+        wav_path = self._analysis_wav_path(video_path, workspace)
         self.editor.extract_analysis_audio(video_path, wav_path)
         try:
             activity = AudioActivity(wav_path)
@@ -84,6 +85,16 @@ class BackgroundVoiceRemovalService:
         reference_db = self._reference_level(utterances)
         cuts = self._quiet_cuts(utterances, ranges, reference_db, duration_ms)
         return BackgroundVoicePlan(tuple(cuts), duration_ms, reference_db)
+
+    @staticmethod
+    def _analysis_wav_path(video_path, workspace=None):
+        if workspace is not None:
+            return Path(workspace) / 'quiet-voice.wav'
+        if str(video_path).startswith(('http://', 'https://')):
+            raise ExternalMediaError(
+                'A análise de voz de fundo com fonte remota exige um workspace temporário.'
+            )
+        return Path(video_path).with_suffix('.quiet-voice.wav')
 
     def _speaker_cuts(self, turns, ranges, activity, duration_ms):
         cuts = []

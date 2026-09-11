@@ -2151,7 +2151,11 @@ class ExternalMediaProjectPipeline:
                     'noise-analysis',
                     estimated_bytes=media_input.workspace_estimate(),
                 ) as workspace:
-                    ExternalMediaPipeline()._apply_noise_analysis(job, media_input.get_ffmpeg_input())
+                    ExternalMediaPipeline()._apply_noise_analysis(
+                        job,
+                        media_input.get_ffmpeg_input(),
+                        workdir=workspace.path,
+                    )
             if not project.template_version.interactive_preview_enabled:
                 self.render(project_id)
                 return
@@ -2912,7 +2916,7 @@ class ExternalMediaPipeline:
                     self._update(job, ExternalMediaJob.Status.TRANSLATING, progress, f'Preparando legendas em {language.upper()}')
                     self.translation.translate_track(source_track, language, job.translation_model)
                 noise_input = media_input_factory(job.original_video).get_ffmpeg_input()
-                self._apply_noise_analysis(job, noise_input, source_track)
+                self._apply_noise_analysis(job, noise_input, source_track, workdir=workdir)
             self._update(job, ExternalMediaJob.Status.TRANSLATING, 82, 'Legendas prontas')
         except (ExternalMediaError, AIServiceError) as exc:
             self._fail(job, str(exc))
@@ -3099,7 +3103,7 @@ class ExternalMediaPipeline:
         if not selected_ranges:
             return video_path, detailed
         service = BackgroundVoiceRemovalService(self.audio.runner)
-        plan = service.analyze(video_path, detailed, selected_ranges)
+        plan = service.analyze(video_path, detailed, selected_ranges, workspace=workdir)
         if not plan.cuts:
             configuration['background_voice_plan'] = plan.as_dict()
             project.configuration = configuration
@@ -3128,7 +3132,7 @@ class ExternalMediaPipeline:
         ExternalMediaProjectPipeline._persist_canonical_state(project, project.render_job_id)
         return edited_path, SpeechEditPlan(plan.cuts, plan.duration_ms).remap_words(detailed)
 
-    def _apply_noise_analysis(self, job, video_path, source_track=None, speech_blocks=None):
+    def _apply_noise_analysis(self, job, video_path, source_track=None, speech_blocks=None, workdir=None):
         project = getattr(job, 'project', None)
         if not project or not project.template_version.audio_noise_cleanup_enabled:
             return
@@ -3143,6 +3147,7 @@ class ExternalMediaPipeline:
             video_path,
             speech_blocks=speech_blocks,
             settings_=settings_,
+            workspace=workdir,
         )
         decisions = NoiseReductionDecisionBuilder.build(plan, settings_)
         state = ProjectProcessingState(project)

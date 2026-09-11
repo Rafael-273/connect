@@ -10,6 +10,7 @@ from typing import Protocol
 from django.conf import settings
 
 from .audio_utils import clamp, settings_from_config
+from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
 from .speech_edit import AudioActivity, SpeechEditService
 
@@ -311,16 +312,17 @@ class AudioNoiseAnalysisService:
 
     def analyze(
         self,
-        media_path: Path,
+        media_path: Path | str,
         *,
         speech_blocks=None,
         settings_: NoiseCleanupSettings | None = None,
+        workspace=None,
     ) -> NoiseAnalysisPlan:
         settings_ = settings_ or NoiseCleanupSettings()
         duration_ms = self.editor.duration_ms(media_path)
         if not settings_.enabled or duration_ms <= 0:
             return NoiseAnalysisPlan((), duration_ms)
-        wav_path = media_path.with_suffix('.noise-analysis.wav')
+        wav_path = self._analysis_wav_path(media_path, workspace)
         self.editor.extract_analysis_audio(media_path, wav_path)
         try:
             activity = AudioActivity(wav_path, frame_ms=FRAME_MS)
@@ -349,6 +351,17 @@ class AudioNoiseAnalysisService:
             )
         finally:
             wav_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _analysis_wav_path(media_path, workspace=None):
+        """Choose scratch output independently from a local or remote input."""
+        if workspace is not None:
+            return Path(workspace) / 'noise-analysis.wav'
+        if str(media_path).startswith(('http://', 'https://')):
+            raise ExternalMediaError(
+                'A análise de ruído com fonte remota exige um workspace temporário.'
+            )
+        return Path(media_path).with_suffix('.noise-analysis.wav')
 
     def _speech_overlap(self, start_ms, end_ms, blocks):
         return any(start_ms < block_end and end_ms > block_start for block_start, block_end in blocks)
