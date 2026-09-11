@@ -22,7 +22,7 @@ from website.external_media.exceptions import ExternalMediaError
 from website.external_media.audio_mastering import AudioMasteringService, MasteringTarget
 from website.external_media.audio_mixing import (
     AudioMixingService,
-    DuckingSettings,
+    DuckingSettings, build_dynamic_ducking_envelope,
     SpeechBlock,
     build_ducking_envelope,
     build_spectral_windows,
@@ -3097,6 +3097,36 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertFalse(AutoReframeService._needs_tracking_pan(centered, 1920))
         self.assertTrue(AutoReframeService._needs_tracking_pan(off_center, 1920))
 
+    def test_auto_reframe_does_not_pan_for_a_transient_hand_detection(self):
+        # The last, very wide box mimics a detector including an extended arm.
+        # It must not turn a normally centred talking-head take into a moving crop.
+        observations = [
+            (0.0, (760, 250, 1160, 900)),
+            (1.0, (770, 250, 1170, 900)),
+            (2.0, (740, 250, 1140, 900)),
+            (3.0, (1120, 250, 1760, 900)),
+        ]
+        self.assertFalse(AutoReframeService._needs_tracking_pan(observations, 1920))
+
+    def test_auto_reframe_face_plan_keeps_one_stable_position_and_zoom(self):
+        service = AutoReframeService(priority='face')
+        keyframes = service._stable_face_keyframes(
+            observations=[
+                (0.0, (720, 290, 1220, 850)),
+                (1.0, (740, 300, 1240, 860)),
+                # Detector outlier caused by a gesture.
+                (2.0, (1060, 300, 1720, 860)),
+                (3.0, (730, 295, 1230, 855)),
+            ],
+            crop_width=960,
+            crop_height=600,
+            source_width=1920,
+            source_height=1080,
+        )
+        self.assertEqual(len(keyframes), 1)
+        self.assertEqual(keyframes[0].time_seconds, 0.0)
+        self.assertAlmostEqual(keyframes[0].x, 480.0)
+
     def test_auto_reframe_vertical_crop_reduces_excessive_headroom(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
         centered_y = ((260 + 560) / 2) - (600 / 2)
@@ -3585,6 +3615,27 @@ class AudioMixingUnitTests(SimpleTestCase):
     def test_estimate_duck_db_falls_back_to_base_when_unmeasured(self):
         settings_ = DuckingSettings()
         self.assertEqual(AudioMixingService.estimate_duck_db(None, -14.0, settings_), settings_.base_duck_db)
+
+    def test_default_ducking_keeps_background_music_audible(self):
+        settings_ = DuckingSettings()
+        self.assertEqual(settings_.base_duck_db, 11.0)
+        self.assertEqual(settings_.min_duck_db, 8.0)
+        self.assertEqual(settings_.max_duck_db, 15.0)
+
+    def test_dynamic_ducking_uses_voice_and_music_levels_after_template_gain(self):
+        settings_ = DuckingSettings(target_voice_to_music_gap_db=14)
+        quiet_voice = AudioMixingService.estimate_block_duck_db(-8, -24, 0.5, settings_)
+        loud_voice = AudioMixingService.estimate_block_duck_db(-8, -12, 0.5, settings_)
+        self.assertGreater(quiet_voice, loud_voice)
+        self.assertGreaterEqual(quiet_voice, settings_.min_duck_db)
+
+    def test_dynamic_ducking_envelope_keeps_individual_speech_block_levels(self):
+        settings_ = DuckingSettings(attack_ms=100, release_ms=200)
+        envelope = build_dynamic_ducking_envelope(
+            [SpeechBlock(1000, 1800), SpeechBlock(3000, 3800)], 5000, [0.2, 0.5], settings_,
+        )
+        self.assertIn((1.1, 0.2), envelope)
+        self.assertIn((3.1, 0.5), envelope)
 
     def test_build_ducking_envelope_holds_through_the_block_and_releases_after(self):
         settings_ = DuckingSettings(attack_ms=200, hold_ms=180, release_ms=400)

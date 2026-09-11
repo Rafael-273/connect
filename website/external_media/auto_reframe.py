@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-AUTO_REFRAME_PLAN_VERSION = 9
+AUTO_REFRAME_PLAN_VERSION = 10
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -155,8 +155,8 @@ class AutoReframeService:
             (0.48 if self.priority == 'face' else max(0.15, self.smoothing))
             if horizontal_smoothing is None else horizontal_smoothing,
         )))
-        # Ignore short lateral gestures, but follow a speaker who remains outside
-        # the center for successive samples.
+        # The dynamic smoother remains available for body framing. Face-priority
+        # plans use `_stable_face_keyframes` below and never follow this curve.
         self.horizontal_deadzone_ratio = 0.025
         self.horizontal_persistence_samples = 2
         # Primeiros ~1.2s: suavização horizontal um pouco maior só para encontrar a pessoa,
@@ -249,8 +249,13 @@ class AutoReframeService:
                 observations, crop_width, crop_height, source_width, source_height,
                 output_width / output_height,
             )
-            keyframes = self._smooth_keyframes(
-                observations, crop_width, crop_height, source_width, source_height,
+            keyframes = (
+                self._stable_face_keyframes(
+                    observations, crop_width, crop_height, source_width, source_height,
+                )
+                if self.priority == 'face' else self._smooth_keyframes(
+                    observations, crop_width, crop_height, source_width, source_height,
+                )
             )
             return AutoReframePlan(crop_width, crop_height, tuple(keyframes))
         except Exception as exc:
@@ -434,12 +439,10 @@ class AutoReframeService:
         # possible while still filling the output canvas. The body profile retains
         # its small adaptive zoom, which is useful for vertical social formats.
         if self.priority == 'face':
-            # A 16:5 cover crop normally uses the entire source width, leaving no
-            # horizontal room for the tracker. When the speaker is consistently
-            # off-center, reserve enough room for a stable correction in every
-            # take. A modest 10% crop is substantially less distracting than a
-            # presenter visibly jumping left/right at each edit boundary.
-            tracking_zoom = 0.90 if self._needs_tracking_pan(observations, source_width) else 1.0
+            # Reserve a small amount of room only for a speaker who stays clearly
+            # on one side for most of the take. A normal centred take retains its
+            # cover crop and therefore a fixed zoom level.
+            tracking_zoom = 0.94 if self._needs_tracking_pan(observations, source_width) else 1.0
             crop_width = cover_width * tracking_zoom
             crop_height = cover_height * tracking_zoom
         else:
@@ -461,10 +464,50 @@ class AutoReframeService:
             AutoReframeService._horizontal_anchor_x(left, top, right, bottom)
             for _time, (left, top, right, bottom) in observations
         )
+        center = source_width / 2.0
         median_anchor = anchors[len(anchors) // 2]
-        # Ignore natural small variation around center; reserve pan only for a
-        # speaker who occupies one side through most of the clip.
-        return abs(median_anchor - (source_width / 2.0)) > source_width * 0.08
+        # A correction needs a robust, one-sided displacement. This rejects a
+        # momentary wide detection caused by an arm/hands while preserving a
+        # composition that was actually recorded off-centre.
+        threshold = source_width * 0.14
+        if abs(median_anchor - center) <= threshold:
+            return False
+        direction = 1 if median_anchor > center else -1
+        persistent = sum(
+            1 for anchor in anchors
+            if (anchor - center) * direction > source_width * 0.10
+        )
+        return persistent / len(anchors) >= 0.75
+
+    def _stable_face_keyframes(self, observations, crop_width, crop_height, source_width, source_height):
+        """Returns one stable face-priority crop for the entire source clip.
+
+        A face-priority template is used for talking-head material.  Maintaining
+        the original composition is more important than correcting an isolated
+        gesture, so we take robust medians and emit a single keyframe.  This keeps
+        position and zoom constant from beginning to end.
+        """
+        max_x = max(0.0, source_width - crop_width)
+        max_y = max(0.0, source_height - crop_height)
+        targets = [
+            (
+                min(max_x, max(0.0, self._horizontal_anchor_x(left, top, right, bottom) - crop_width / 2.0)),
+                self._target_crop_y(top, bottom, crop_height, max_y),
+            )
+            for _time, (left, top, right, bottom) in observations
+        ]
+        x_values = sorted(item[0] for item in targets)
+        y_values = sorted(item[1] for item in targets)
+        target_x = x_values[len(x_values) // 2]
+        target_y = self._locked_vertical_target(y_values, max_y)
+        if target_y is None:
+            target_y = y_values[len(y_values) // 2]
+        # When the speaker is within the central safe area, use geometric centre
+        # rather than a detector-derived coordinate.
+        geometric_center_x = max_x / 2.0
+        if abs(target_x - geometric_center_x) <= crop_width * 0.10:
+            target_x = geometric_center_x
+        return [ReframeKeyframe(0.0, target_x, target_y)]
 
     def _smooth_keyframes(self, observations, crop_width, crop_height, source_width, source_height):
         keyframes = []

@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 # the filter graph would grow large enough to slow down (or risk failing) the ffmpeg
 # render for very long videos, so spectral ducking is skipped for the overflow blocks.
 MAX_SPECTRAL_BLOCKS = 40
+# Measuring each speaking segment is more accurate than measuring the entire
+# timeline (which includes silence), but must stay bounded on long interviews.
+MAX_DYNAMIC_DUCK_BLOCKS = 32
 
 
 @dataclass(frozen=True)
@@ -46,11 +49,15 @@ class DuckingSettings:
     # Subtitle cues often have a small gap around breaths or natural pauses.
     # Keep them in the same dialogue bed so the music does not audibly pump.
     speech_gap_hold_ms: int = 1800
-    # Music needs to sit clearly behind dialogue.  With the old 8 dB default,
-    # louder background tracks still competed with the speaker.
-    base_duck_db: float = 14.0
-    min_duck_db: float = 10.0
-    max_duck_db: float = 20.0
+    # Keep the voice distinctly in front without making the music disappear. The
+    # former 14–20 dB range was too strong; 5–12 dB, on the other hand, still let
+    # a dense track compete with speech. This middle range is the default balance.
+    base_duck_db: float = 11.0
+    min_duck_db: float = 8.0
+    max_duck_db: float = 15.0
+    # Desired separation between the measured dialogue and the music bed while
+    # somebody is speaking. This is applied after `music_volume`.
+    target_voice_to_music_gap_db: float = 14.0
     spectral_max_cut_db: float = 5.0
     spectral_center_hz: int = 1200
     spectral_bandwidth_octaves: float = 2.2
@@ -160,6 +167,46 @@ def build_ducking_envelope(blocks, duration_ms, duck_gain, settings_):
     return deduped
 
 
+def build_dynamic_ducking_envelope(blocks, duration_ms, duck_gains, settings_):
+    """Build a smooth ducking envelope with a gain chosen for each speech block."""
+    if not blocks:
+        return [(0.0, 1.0), (max(0.001, duration_ms / 1000), 1.0)]
+    duration_s = max(0.001, duration_ms / 1000)
+    attack_s = max(0.01, settings_.attack_ms / 1000)
+    release_s = max(0.01, settings_.release_ms / 1000)
+    keyframes = [(0.0, 1.0)]
+    ordered = list(zip(sorted(blocks, key=lambda item: item.start_ms), duck_gains))
+    previous_end = None
+    previous_gain = 1.0
+    for index, (block, duck_gain) in enumerate(ordered):
+        start_s = max(0.0, block.start_ms / 1000)
+        end_s = min(duration_s, block.end_ms / 1000)
+        if end_s <= start_s:
+            continue
+        next_start_s = ordered[index + 1][0].start_ms / 1000 if index + 1 < len(ordered) else duration_s
+        previous_release_end = (previous_end + release_s) if previous_end is not None else -1
+        if previous_end is None or start_s > previous_release_end:
+            keyframes.append((start_s, 1.0))
+        else:
+            # Keep the bed under speech across short pauses, transitioning to the
+            # next block's measured target instead of briefly rising to full level.
+            keyframes.append((start_s, previous_gain))
+        keyframes.append((min(end_s, start_s + attack_s), duck_gain))
+        keyframes.append((end_s, duck_gain))
+        if next_start_s - end_s > release_s and end_s < duration_s:
+            keyframes.append((min(duration_s, end_s + release_s), 1.0))
+        previous_end = end_s
+        previous_gain = duck_gain
+    keyframes.append((duration_s, 1.0))
+    deduped = []
+    for point in keyframes:
+        if deduped and abs(point[0] - deduped[-1][0]) < 0.0005:
+            deduped[-1] = point
+        else:
+            deduped.append(point)
+    return deduped
+
+
 def build_spectral_windows(blocks, cut_db):
     """Returns (start_s, end_s) windows where a moderate EQ cut opens space for the voice."""
     if not blocks or cut_db <= 0:
@@ -231,6 +278,47 @@ class AudioMixingService:
         gap = voice_mean_db - music_mean_db
         return clamp(settings_.base_duck_db - 0.6 * gap, settings_.min_duck_db, settings_.max_duck_db)
 
+    def measure_block_mean_volume_db(self, path: Path, block: SpeechBlock) -> float | None:
+        try:
+            start_s = max(0, int(block.start_ms)) / 1000
+            duration_s = max(0.05, int(block.duration_ms)) / 1000
+            result = self.runner.run_capture([
+                settings.FFMPEG_BINARY, '-ss', f'{start_s:.3f}', '-t', f'{duration_s:.3f}',
+                '-i', FFmpegRunner.input_arg(path), '-vn', '-af', 'volumedetect', '-f', 'null', '-',
+            ])
+        except Exception:
+            logger.warning('Não foi possível medir o volume da fala no bloco %sms-%sms.', block.start_ms, block.end_ms)
+            return None
+        return parse_mean_volume_db(result.stderr)
+
+    @staticmethod
+    def estimate_block_duck_db(music_mean_db, voice_mean_db, music_volume, settings_: DuckingSettings) -> float:
+        """Compute attenuation required for this voice block's measured level."""
+        if music_mean_db is None or voice_mean_db is None:
+            return settings_.base_duck_db
+        music_bed_db = music_mean_db + (20 * math.log10(max(0.0001, float(music_volume))))
+        desired_music_db = voice_mean_db - settings_.target_voice_to_music_gap_db
+        return clamp(
+            music_bed_db - desired_music_db,
+            settings_.min_duck_db,
+            settings_.max_duck_db,
+        )
+
+    def _dynamic_duck_dbs(self, video_path, music_mean_db, speech_blocks, music_volume, settings_):
+        measured = [
+            self.measure_block_mean_volume_db(video_path, block)
+            for block in speech_blocks[:MAX_DYNAMIC_DUCK_BLOCKS]
+        ]
+        measured_dbs = [
+            self.estimate_block_duck_db(music_mean_db, voice_db, music_volume, settings_)
+            for voice_db in measured
+        ]
+        fallback = (
+            sorted(measured_dbs)[len(measured_dbs) // 2]
+            if measured_dbs else settings_.base_duck_db
+        )
+        return [*measured_dbs, *([fallback] * (len(speech_blocks) - len(measured_dbs)))], measured
+
     def mix(
         self, video_path: Path, music_path: Path, output_path: Path, *,
         music_volume: float, duration_ms: int, speech_blocks=None, protected_ranges=None,
@@ -261,9 +349,11 @@ class AudioMixingService:
 
         music_mean_db = self.measure_mean_volume_db(music_path)
         voice_mean_db = self.measure_mean_volume_db(video_path)
-        duck_db = self.estimate_duck_db(music_mean_db, voice_mean_db, settings_)
-        duck_gain = linear_gain_from_db(-duck_db)
-        envelope = build_ducking_envelope(speech_blocks, duration_ms, duck_gain, settings_)
+        duck_dbs, voice_block_levels = self._dynamic_duck_dbs(
+            video_path, music_mean_db, speech_blocks, music_volume, settings_,
+        )
+        duck_gains = [linear_gain_from_db(-duck_db) for duck_db in duck_dbs]
+        envelope = build_dynamic_ducking_envelope(speech_blocks, duration_ms, duck_gains, settings_)
         volume_expression = build_piecewise_expression(envelope)
 
         spectral_density = 0.0
@@ -279,7 +369,11 @@ class AudioMixingService:
             # The dialogue stream can be a few frames shorter than the video after
             # concatenation/cuts. Pad it to the explicit master duration so amix
             # never makes the music bed disappear near the end of the picture.
-            f'[0:a]apad=whole_dur={duration_s:.3f},atrim=duration={duration_s:.3f}[dialogue]',
+            # Regenerate audio timestamps before padding.  Normalized source clips
+            # can carry fractional timestamps; preserving them here can accumulate
+            # into an audible lip-sync drift near the end of a long render.
+            f'[0:a]aresample=async=1:first_pts=0,apad=whole_dur={duration_s:.3f},'
+            f'atrim=duration={duration_s:.3f}[dialogue]',
             *loop_filters,
             f'{loop_label}volume={float(music_volume):.3f}[music_base]',
             f"[music_base]volume=eval=frame:volume='{volume_expression}'[music_ducked]",
@@ -314,7 +408,10 @@ class AudioMixingService:
             'mode': 'adaptive',
             'music_mean_db': music_mean_db,
             'voice_mean_db': voice_mean_db,
-            'duck_db': round(duck_db, 2),
+            'duck_db': round(sum(duck_dbs) / max(1, len(duck_dbs)), 2),
+            'duck_db_by_block': [round(value, 2) for value in duck_dbs],
+            'voice_block_levels_db': [round(value, 2) if value is not None else None for value in voice_block_levels],
+            'target_voice_to_music_gap_db': settings_.target_voice_to_music_gap_db,
             'spectral_applied': bool(spectral_windows),
             'spectral_density': round(spectral_density, 2) if spectral_enabled else None,
             **loop_metrics,
@@ -420,7 +517,8 @@ class AudioMixingService:
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-i', str(music_path), '-filter_complex',
             ';'.join([
-                f'[0:a]apad=whole_dur={duration_s:.3f},atrim=duration={duration_s:.3f}[dialogue]',
+                f'[0:a]aresample=async=1:first_pts=0,apad=whole_dur={duration_s:.3f},'
+                f'atrim=duration={duration_s:.3f}[dialogue]',
                 *loop_filters,
                 f'{loop_label}volume={float(music_volume):.3f}[music]',
                 f'[dialogue][music]amix=inputs=2:duration=longest:dropout_transition=0,'

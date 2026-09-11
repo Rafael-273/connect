@@ -613,7 +613,7 @@ class AudioCleanupService:
             f'[0:a]atrim=0:{start_s},asetpts=PTS-STARTPTS[head];'
             f'[0:a]atrim={start_s}:{end_s},asetpts=PTS-STARTPTS,afftdn=nf=-25:nr={nr}:nt=w[body];'
             f'[0:a]atrim={end_s}:{duration_s},asetpts=PTS-STARTPTS[tail];'
-            '[head][body][tail]concat=n=3:v=0:a=1[aout]'
+            '[head][body][tail]concat=n=3:v=0:a=1,aresample=async=1:first_pts=0[aout]'
         )
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(media_path),

@@ -157,7 +157,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         widget=forms.Textarea(attrs={'rows': 4}),
         help_text=(
             'Opcional. Ajusta o ducking automático. Exemplo: '
-            '{"attack_ms": 140, "hold_ms": 300, "release_ms": 850, "base_duck_db": 14}'
+            '{"attack_ms": 140, "hold_ms": 300, "release_ms": 850, "base_duck_db": 11}'
         ),
     )
     dialogue_processing_config_raw = forms.CharField(

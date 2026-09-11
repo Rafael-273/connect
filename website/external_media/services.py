@@ -1867,7 +1867,12 @@ class VideoAssemblyService:
             '-preset', settings.EXTERNAL_MEDIA_PROXY_PRESET,
             '-crf', str(crf),
             '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', f'{audio_bitrate}k',
-            '-ar', '48000', '-ac', '2', '-shortest', '-movflags', '+faststart', str(destination),
+            # Every proxy has a zero-based, 48 kHz audio timeline.  This makes the
+            # proxy reliable for analysis and prevents timestamp drift when it is
+            # later used as the source of an edit decision.
+            '-af', 'aresample=async=1:first_pts=0',
+            '-ar', '48000', '-ac', '2', '-shortest', '-avoid_negative_ts', 'make_zero',
+            '-movflags', '+faststart', str(destination),
         ])
         self.runner.run(command)
         return destination
@@ -1960,8 +1965,12 @@ class VideoAssemblyService:
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',
             '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
             '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k',
+            # Reset and compensate the audio clock at the one place every source
+            # passes through before concat.  Without this, a VFR upload converted
+            # to 30 fps can keep its original audio timestamps and slowly diverge.
+            '-af', 'aresample=async=1:first_pts=0',
             '-ar', '48000', '-ac', '2', '-colorspace', 'bt709', '-color_primaries', 'bt709',
-            '-color_trc', 'bt709', '-shortest', str(destination),
+            '-color_trc', 'bt709', '-shortest', '-avoid_negative_ts', 'make_zero', str(destination),
         ])
         self.runner.run(command)
         return reframe_plan
