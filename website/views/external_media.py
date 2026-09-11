@@ -886,7 +886,12 @@ def _verify_upload_allocation(allocation: dict, signature: str) -> bool:
 
 
 def _generate_presigned_put(storage_key: str, content_type: str) -> str:
-    """Return a presigned PUT URL for the given storage key."""
+    """Return a presigned PUT URL for the given storage key.
+
+    ContentType is intentionally omitted from the signed params so the browser
+    does not need to send an exact header match (avoids video/quicktime vs
+    video/mp4 mismatches on .mov files).
+    """
     storage = get_external_media_storage()
     location = str(getattr(storage, 'location', '') or '').strip('/')
     s3_key = storage_key.lstrip('/')
@@ -894,7 +899,7 @@ def _generate_presigned_put(storage_key: str, content_type: str) -> str:
         s3_key = f'{location}/{s3_key}'
     return storage.connection.meta.client.generate_presigned_url(
         'put_object',
-        Params={'Bucket': storage.bucket_name, 'Key': s3_key, 'ContentType': content_type},
+        Params={'Bucket': storage.bucket_name, 'Key': s3_key},
         ExpiresIn=3600,
     )
 

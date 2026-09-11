@@ -557,7 +557,6 @@
                     await new Promise((resolve, reject) => {
                         const xhr = new XMLHttpRequest();
                         xhr.open('PUT', presign.upload_url);
-                        xhr.setRequestHeader('Content-Type', presign.content_type);
                         xhr.upload.addEventListener('progress', (ev) => {
                             if (ev.lengthComputable && uploadStatusLabel) {
                                 uploadStatusLabel.textContent = `Enviando ${Math.round((ev.loaded / ev.total) * 100)}%`;
