@@ -14,6 +14,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from ..external_media.preview import PreviewCompositionService
 from ..external_media.subtitle_reviews import SubtitleReviewService
 from ..external_media.render_workflow import enqueue_video_work
 from ..external_media.tasks import (
@@ -299,6 +300,11 @@ class PublicSubtitleReviewView(PublicSubtitleReviewMixin, View):
             review.first_accessed_at = timezone.now()
             review.save(update_fields=['first_accessed_at', 'update_at'])
             SubtitleReviewService.log(review, 'LINK_ACCESSED')
+        review = SubtitleReviewSession.objects.select_related(
+            'job__subtitle_style',
+            'job__translated_subtitle_style',
+            'project__template_version__preset',
+        ).get(pk=review.pk)
         tracks = list(review.job.subtitle_tracks.filter(
             language__in=review.languages,
         ).prefetch_related('cues'))
@@ -313,28 +319,43 @@ class PublicSubtitleReviewView(PublicSubtitleReviewMixin, View):
                 cue.saved_suggestion = existing.get(cue.pk)
                 cues.append(cue)
             cue_groups.append((track, cues))
-        caption_style = (
-            review.job.subtitle_style
-            if review.languages and review.languages[0] == review.job.original_language
-            else review.job.translated_subtitle_style or review.job.subtitle_style
-        )
-        alignment = caption_style.alignment if caption_style else 2
-        caption_classes = []
-        if alignment in {1, 4, 7}:
-            caption_classes.append('align-left')
-        elif alignment in {3, 6, 9}:
-            caption_classes.append('align-right')
-        if alignment in {7, 8, 9}:
-            caption_classes.append('align-top')
-        elif alignment in {4, 5, 6}:
-            caption_classes.append('align-middle')
+        preset = review.project.template_version.preset
+        source_language = review.job.original_language
+        output_languages = review.job.output_languages or review.languages
+        caption_styles = {
+            'source': PreviewCompositionService.subtitle_style_payload(review.job.subtitle_style),
+            'translated': PreviewCompositionService.subtitle_style_payload(
+                review.job.translated_subtitle_style or review.job.subtitle_style,
+            ),
+            'source_language': source_language,
+        }
+        overlay_tracks = []
+        for track in review.job.subtitle_tracks.filter(language__in=output_languages).prefetch_related('cues'):
+            overlay_tracks.append({
+                'language': track.language,
+                'is_source': track.language == source_language,
+                'cues': [
+                    {
+                        'id': cue.pk,
+                        'start_ms': cue.start_ms,
+                        'end_ms': cue.end_ms,
+                        'text': (
+                            existing[cue.pk].suggested_text
+                            if cue.pk in existing else cue.text
+                        ) or '',
+                    }
+                    for cue in track.cues.all()
+                ],
+            })
         response = render(request, 'external_media/public_subtitle_review.html', {
             'review': review,
             'token': token,
             'cue_groups': cue_groups,
             'suggestion_count': len(existing),
-            'caption_style': caption_style,
-            'caption_classes': ' '.join(caption_classes),
+            'caption_styles': caption_styles,
+            'overlay_tracks': overlay_tracks,
+            'sequence_width': preset.width if preset else 1920,
+            'sequence_height': preset.height if preset else 1080,
         })
         response['Cache-Control'] = 'no-store, private'
         response['Referrer-Policy'] = 'no-referrer'

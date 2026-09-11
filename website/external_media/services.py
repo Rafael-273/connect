@@ -2534,9 +2534,11 @@ class ExternalMediaProjectPipeline:
             for item in operations
             if item.get('type') == 'reframe' and item.get('enabled', True)
         }
+        fallback_plans = list(fallback_plans or [])
         result = []
         for index, source in enumerate(manifest.get('sources') or []):
-            fallback = dict(fallback_plans[index]) if index < len(fallback_plans) else None
+            raw_fallback = fallback_plans[index] if index < len(fallback_plans) else None
+            fallback = dict(raw_fallback) if raw_fallback else None
             operation = by_source.get(source.get('id'))
             plan_data = dict((operation or {}).get('plan_reference') or fallback or {})
             manual = ((operation or {}).get('metadata') or {}).get('manual_transform')

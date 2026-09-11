@@ -521,6 +521,8 @@
 
             const presignUrl = form.dataset.presignUrl;
             const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+            // Disabled inputs are omitted from FormData — capture before disabling.
+            const uploadData = new FormData(form);
 
             uploadStatus?.classList.remove('hidden');
             fileInput.disabled = true;
@@ -596,7 +598,6 @@
             }
 
             // ── Fallback multipart POST (dev local sem S3) ───────────────────
-            const uploadData = new FormData(form);
             const request = new XMLHttpRequest();
             request.open('POST', form.action);
             request.setRequestHeader('X-Requested-With', 'XMLHttpRequest');

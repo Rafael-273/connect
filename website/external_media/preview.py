@@ -187,6 +187,7 @@ class PreviewCompositionService:
             'margin_bottom': style.margin_bottom, 'background_enabled': style.background_enabled,
             'background_color': style.background_color, 'background_opacity': style.background_opacity,
             'background_padding_x': style.background_padding_x, 'background_padding_y': style.background_padding_y,
+            'background_height_percent': style.background_height_percent,
             'background_radius': style.background_radius, 'outline_color': style.outline_color,
             'outline_width': style.outline_width, 'shadow': style.shadow,
             'shadow_angle': style.shadow_angle, 'shadow_size': style.shadow_size,
