@@ -1726,7 +1726,11 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project = self.make_project()
         project.status = ExternalMediaProject.Status.ERROR
         project.error_message = 'Falhou na tradução'
-        project.save(update_fields=['status', 'error_message', 'update_at'])
+        project.started_at = timezone.now() - timedelta(minutes=44)
+        project.finished_at = timezone.now() - timedelta(minutes=1)
+        project.save(update_fields=[
+            'status', 'error_message', 'started_at', 'finished_at', 'update_at',
+        ])
         ProjectBlockMedia.objects.create(
             project=project, block=self.block, position=1, original_filename='video.mp4',
             file=SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4'), file_size=5,
@@ -1737,13 +1741,17 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.refresh_from_db()
         self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
         self.assertTrue(project.celery_task_id)
+        self.assertIsNone(project.started_at)
+        self.assertIsNone(project.finished_at)
         self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
 
     @patch('website.views.external_media.run_external_media_project.apply_async')
     def test_finished_project_can_be_reprocessed_with_existing_uploads(self, apply_async):
         project = self.make_project()
         project.status = ExternalMediaProject.Status.FINISHED
-        project.save(update_fields=['status', 'update_at'])
+        project.started_at = timezone.now() - timedelta(minutes=44)
+        project.finished_at = timezone.now() - timedelta(minutes=1)
+        project.save(update_fields=['status', 'started_at', 'finished_at', 'update_at'])
         ProjectBlockMedia.objects.create(
             project=project, block=self.block, position=1, original_filename='video.mp4',
             file=SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4'), file_size=5,
@@ -1754,6 +1762,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.refresh_from_db()
         self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
         self.assertTrue(project.celery_task_id)
+        self.assertIsNone(project.started_at)
+        self.assertIsNone(project.finished_at)
         self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
         self.assertEqual(project.block_media.count(), 1)
 

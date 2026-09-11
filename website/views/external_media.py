@@ -1275,12 +1275,16 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             project.progress = 2
             project.current_step = 'Projeto adicionado à fila'
             project.error_message = ''
+            # A reprocess is a new execution. Keep prior jobs in
+            # processing_history, but restart the timer shown for this project.
+            project.started_at = None
+            project.finished_at = None
             project.current_timeline_revision = None
             project.approved_timeline_revision = None
             project.preview_dirty = False
             project.final_render_outdated = False
             project.save(update_fields=[
-                'status', 'progress', 'current_step', 'error_message',
+                'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at',
                 'current_timeline_revision', 'approved_timeline_revision',
                 'preview_dirty', 'final_render_outdated', 'update_at',
             ])
@@ -1328,7 +1332,12 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
             project.progress = 84
             project.current_step = 'Renderização adicionada à fila'
             project.error_message = ''
-            project.save(update_fields=['status', 'progress', 'current_step', 'error_message', 'update_at'])
+            # Retrying only the final render is also a distinct execution.
+            project.started_at = None
+            project.finished_at = None
+            project.save(update_fields=[
+                'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at', 'update_at',
+            ])
             transaction.on_commit(lambda: self._enqueue(project.pk))
         return redirect('external_media_project_detail', public_id=public_id)
 
