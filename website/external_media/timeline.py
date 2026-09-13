@@ -12,7 +12,7 @@ from .audio_mixing import DuckingSettings, build_ducking_envelope, group_speech_
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder, normalize_edit_ranges
 from .ffmpeg_runner import FFmpegRunner
 from .exceptions import ExternalMediaError
-from .media_input import media_input_factory
+from .media_input import RemoteMediaSource, media_input_factory
 from .speech_edit import SpeechEditPlan
 
 
@@ -100,8 +100,12 @@ class InternalTimelineBuilder:
     def __init__(self, runner=None):
         self.runner = runner or FFmpegRunner()
         self._probe_cache = {}
+        # Sources kept in S3 are written straight into the final ZIP. Keeping
+        # them out of package/Media prevents a second full copy on the worker.
+        self.package_source_files = {}
 
     def build(self, project, package_root: Path):
+        self.package_source_files = {}
         for folder in ('Media', 'Audio', 'Captions', 'Graphics', 'LUTs', 'Metadata', 'Project'):
             (package_root / folder).mkdir(parents=True, exist_ok=True)
         project_state = ProjectProcessingState(project)
@@ -113,8 +117,16 @@ class InternalTimelineBuilder:
             safe_name = self._safe_name(Path(source.original_name).stem)
             relative_path = f'Media/{index:03d}_{safe_name}{suffix}'
             local_path = package_root / relative_path
-            self._copy_field(source.field_file, local_path)
-            metadata = self._probe(local_path)
+            media_input = media_input_factory(source.field_file)
+            ffmpeg_input = media_input.get_ffmpeg_input()
+            if isinstance(ffmpeg_input, RemoteMediaSource):
+                # FFprobe/FFmpeg consume the presigned URL, while the archive
+                # service streams the original object into Media/ later.
+                self.package_source_files[relative_path] = source.field_file
+                metadata = self._probe(ffmpeg_input)
+            else:
+                self._copy_field(source.field_file, local_path)
+                metadata = self._probe(local_path)
             source = TimelineSource(**{**source.__dict__, 'relative_path': relative_path})
             local_sources.append((source, metadata))
             assets.append({
@@ -401,6 +413,9 @@ class InternalTimelineBuilder:
         assets, clips, asset_by_video = [], [], {}
         for index, (source, _metadata) in enumerate(sources, start=1):
             source_path = package_root / source.relative_path
+            remote_field = self.package_source_files.get(source.relative_path)
+            if remote_field:
+                source_path = media_input_factory(remote_field).get_ffmpeg_input()
             if not self._has_audio(source_path):
                 continue
             safe_name = self._safe_name(Path(source.original_name).stem)
@@ -794,7 +809,7 @@ class InternalTimelineBuilder:
         return {'warnings': warnings, 'matrix': CAPABILITY_MATRIX}
 
     def _probe(self, path, audio_only=False):
-        cache_key = (str(Path(path).resolve()), bool(audio_only))
+        cache_key = (str(path), bool(audio_only))
         cached = self._probe_cache.get(cache_key)
         if cached is not None:
             return dict(cached)

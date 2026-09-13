@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import zipfile
 from dataclasses import dataclass
 from decimal import Decimal
@@ -366,7 +367,16 @@ class PremiereExporter:
 
 
 class ExportValidationService:
-    def validate(self, package_root: Path, timeline: dict, xml_path: Path):
+    def validate(self, package_root: Path, timeline: dict, xml_path: Path, *, virtual_assets=()):
+        virtual_assets = {str(path).removeprefix('./') for path in virtual_assets}
+
+        def exists_in_package(path):
+            try:
+                relative = path.resolve().relative_to(package_root.resolve()).as_posix()
+            except ValueError:
+                return False
+            return path.exists() or relative in virtual_assets
+
         errors, warnings = [], list(timeline.get('compatibility', {}).get('warnings') or [])
         xml_root = None
         try:
@@ -378,7 +388,7 @@ class ExportValidationService:
             if not relative or relative.startswith('/') or '..' in Path(relative).parts:
                 errors.append(f'Path de asset inválido: {asset.get("path")}')
                 continue
-            if not (package_root / relative).exists():
+            if not exists_in_package(package_root / relative):
                 errors.append(f'Asset ausente: {relative}')
         if xml_root is not None:
             for node in xml_root.findall('.//pathurl'):
@@ -392,7 +402,7 @@ class ExportValidationService:
                 except ValueError:
                     errors.append(f'Referência fora do pacote: {value}')
                     continue
-                if not resolved.exists():
+                if not exists_in_package(resolved):
                     errors.append(f'Mídia offline no XML: {value}')
         if not timeline.get('clips'):
             errors.append('A timeline não possui clips.')
@@ -400,7 +410,10 @@ class ExportValidationService:
             errors.append('A timeline possui duração inválida.')
         if not timeline.get('video_tracks'):
             errors.append('Nenhuma trilha de vídeo foi criada.')
-        offline = [asset['path'] for asset in timeline.get('assets', []) if not (package_root / asset['path'].removeprefix('./')).exists()]
+        offline = [
+            asset['path'] for asset in timeline.get('assets', [])
+            if not exists_in_package(package_root / asset['path'].removeprefix('./'))
+        ]
         report = {
             'valid': not errors,
             'errors': errors,
@@ -421,6 +434,7 @@ class PremierePackageService:
     def build(self, project, package_root: Path, output_zip: Path, timeline_builder, progress=None):
         progress = progress or (lambda *args: None)
         timeline = json_compatible(timeline_builder.build(project, package_root))
+        source_files = dict(getattr(timeline_builder, 'package_source_files', {}))
         progress('CONVERTING', 48, 'Convertendo a timeline para Adobe Premiere')
         timeline_path = package_root / 'Metadata' / 'timeline.json'
         timeline_path.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -428,7 +442,9 @@ class PremierePackageService:
         PremiereExporter().export(timeline, xml_path)
         progress('PACKAGING_ASSETS', 66, 'Organizando originais, áudio, legendas e LUTs')
         progress('VALIDATING', 78, 'Validando XML, referências e mídia offline')
-        report = json_compatible(ExportValidationService().validate(package_root, timeline, xml_path))
+        report = json_compatible(ExportValidationService().validate(
+            package_root, timeline, xml_path, virtual_assets=source_files,
+        ))
         (package_root / 'Metadata' / 'validation.json').write_text(
             json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8',
         )
@@ -458,6 +474,12 @@ class PremierePackageService:
         )
         progress('COMPRESSING', 88, 'Compactando o pacote completo')
         with zipfile.ZipFile(output_zip, 'w', compression=zipfile.ZIP_STORED) as archive:
+            # S3 source files are copied in chunks directly into the ZIP. They
+            # are deliberately absent from package_root, avoiding the former
+            # package/Media + output ZIP peak that exhausted Render's 2 GB disk.
+            for relative, field_file in sorted(source_files.items()):
+                with field_file.open('rb') as source, archive.open(relative, 'w', force_zip64=True) as target:
+                    shutil.copyfileobj(source, target, length=1024 * 1024)
             for path in sorted(package_root.rglob('*')):
                 if path.is_file():
                     relative = path.relative_to(package_root)

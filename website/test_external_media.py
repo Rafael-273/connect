@@ -1,9 +1,11 @@
 import json
+import io
 import math
 import re
 import struct
 import tempfile
 import wave
+import zipfile
 from decimal import Decimal
 from datetime import timedelta
 from pathlib import Path
@@ -4029,6 +4031,48 @@ class DialogueProcessingSmokeTests(SimpleTestCase):
 
 
 class EditableTimelineExportTests(SimpleTestCase):
+    def test_premiere_package_streams_virtual_s3_source_directly_to_zip(self):
+        source_file = Mock()
+        source_file.open.return_value = io.BytesIO(b'video-from-s3')
+
+        class StreamingTimelineBuilder:
+            package_source_files = {'Media/001_take.mp4': source_file}
+
+            def build(self, _project, package_root):
+                for folder in ('Media', 'Metadata', 'Project'):
+                    (package_root / folder).mkdir(parents=True, exist_ok=True)
+                return {
+                    'project': {'name': 'Projeto'},
+                    'sequence': {
+                        'name': 'Projeto', 'duration_ms': 1000, 'width': 1920, 'height': 1080,
+                        'fps': 30.0, 'timebase': 30, 'ntsc': False,
+                        'audio_sample_rate': 48000, 'audio_channels': 2,
+                    },
+                    'assets': [{
+                        'id': 'video_1', 'name': 'take.mp4', 'path': './Media/001_take.mp4',
+                        'type': 'video', 'duration_ms': 1000, 'width': 1920, 'height': 1080, 'fps': 30.0,
+                    }],
+                    'video_tracks': [{'clips': [{
+                        'id': 'clip_1', 'asset_id': 'video_1', 'name': 'Take',
+                        'timeline_in_ms': 0, 'timeline_out_ms': 1000,
+                        'source_in_ms': 0, 'source_out_ms': 1000,
+                    }]}],
+                    'audio_tracks': [], 'clips': [{'id': 'clip_1'}], 'captions': [], 'markers': [],
+                    'compatibility': {'warnings': []},
+                }
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / 'package.zip'
+            _, report, _, archive_path = PremierePackageService().build(
+                SimpleNamespace(), root / 'package', archive, StreamingTimelineBuilder(),
+            )
+            with zipfile.ZipFile(archive_path) as package:
+                self.assertEqual(package.read('Media/001_take.mp4'), b'video-from-s3')
+
+        self.assertTrue(report['valid'])
+        source_file.open.assert_called_once_with('rb')
+
     def test_premiere_archive_filename_uses_a_safe_project_name(self):
         project = SimpleNamespace(name='Anúncio: Setembro / 2026', public_id='a4e7396e-a96b-49ea-866a-19bbb4d52ef3')
 
