@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import re
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from django.conf import settings
 from .audio_mixing import DuckingSettings, build_ducking_envelope, group_speech_blocks
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder, normalize_edit_ranges
 from .ffmpeg_runner import FFmpegRunner
+from .exceptions import ExternalMediaError
 from .media_input import media_input_factory
 from .speech_edit import SpeechEditPlan
 
@@ -29,6 +31,9 @@ CAPABILITY_MATRIX = {
     'mastering': {'exportable': False, 'strategy': 'recommended_after_premiere'},
     'complex_motion': {'exportable': 'partial', 'strategy': 'pre_render_when_available'},
 }
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -161,7 +166,7 @@ class InternalTimelineBuilder:
         )
         assets.extend(overlay_assets)
         effects = self._effects(project, lut)
-        compatibility = self._compatibility(project, effects)
+        compatibility = self._compatibility(project, effects, bool(caption_overlay_asset))
         timeline = {
             'schema': 'connect.internal_timeline.v1',
             'project': {
@@ -650,7 +655,18 @@ class InternalTimelineBuilder:
             subtitle_service.write_ass(
                 source_track, ass_path, source_style, sequence['width'], sequence['height'],
             )
-        self._render_alpha_caption_movie(ass_path, movie_path, sequence, duration_ms)
+        try:
+            self._render_alpha_caption_movie(ass_path, movie_path, sequence, duration_ms)
+        except ExternalMediaError:
+            # The ProRes layer is a visual convenience. The SRT and editable title
+            # clips are already included, so a worker built without libass or
+            # prores_ks must not make the whole Premiere package unavailable.
+            logger.warning(
+                'Não foi possível gerar a camada ProRes de legendas para a exportação do Premiere; '
+                'o pacote seguirá com SRT e títulos editáveis.',
+                exc_info=True,
+            )
+            return None, None
         metadata = self._probe(movie_path)
         asset_id = f'caption_overlay_{suffix}'
         asset = {
@@ -754,7 +770,7 @@ class InternalTimelineBuilder:
         return effects
 
     @staticmethod
-    def _compatibility(project, effects):
+    def _compatibility(project, effects, caption_overlay_available=True):
         warnings = []
         if any(effect['type'] == 'lut' for effect in effects):
             warnings.append('O LUT foi incluído no pacote e documentado, mas pode precisar ser reaplicado no Premiere.')
@@ -765,10 +781,16 @@ class InternalTimelineBuilder:
         if project.template_version.audio_mastering_enabled:
             warnings.append('A masterização final não foi aplicada destrutivamente. Use “Masterizar Vídeo” após o Premiere.')
         warnings.append('O reenquadramento automatico e aplicado como Basic Motion editavel no Premiere.')
-        warnings.append(
-            'As legendas têm uma camada ProRes 4444 transparente com o visual final; '
-            'os títulos e SRT permanecem editáveis em trilhas separadas.'
-        )
+        if caption_overlay_available:
+            warnings.append(
+                'As legendas têm uma camada ProRes 4444 transparente com o visual final; '
+                'os títulos e SRT permanecem editáveis em trilhas separadas.'
+            )
+        else:
+            warnings.append(
+                'A camada ProRes de referência visual das legendas não pôde ser gerada neste worker; '
+                'use os títulos e SRT editáveis incluídos no pacote.'
+            )
         return {'warnings': warnings, 'matrix': CAPABILITY_MATRIX}
 
     def _probe(self, path, audio_only=False):

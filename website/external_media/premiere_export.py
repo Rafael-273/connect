@@ -432,15 +432,24 @@ class PremierePackageService:
         (package_root / 'Metadata' / 'validation.json').write_text(
             json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8',
         )
+        caption_overlay_available = any(
+            asset.get('role') == 'caption_overlay' for asset in timeline.get('assets', [])
+        )
+        caption_instructions = (
+            'A trilha “Legendas estilizadas (visual final)” é um ProRes 4444 com transparência '
+            'e reproduz o visual final das legendas. Ela vem bloqueada: mantenha-a visível para '
+            'fidelidade visual ou oculte-a para editar os títulos/SRT nativos.\n'
+            'Os SRTs ficam em Captions/. As trilhas de títulos PT/EN permanecem editáveis, mas o ProRes '
+            'é a referência fiel para fundo, opacidade, sombra, contorno e posicionamento.\n'
+            if caption_overlay_available else
+            'A camada ProRes de referência visual das legendas não pôde ser gerada neste worker. '
+            'Os SRTs em Captions/ e os títulos PT/EN no XML continuam disponíveis para edição.\n'
+        )
         (package_root / 'README.txt').write_text(
             'Abra Project/timeline.xml no Adobe Premiere Pro.\n'
             'Media contém os vídeos originais. Audio contém os WAVs de diálogo e a música de fundo.\n'
             'A1 é o diálogo separado; A2 é a música, com keyframes de volume equivalentes ao ducking do render.\n'
-            'A trilha “Legendas estilizadas (visual final)” é um ProRes 4444 com transparência '\
-            'e reproduz o visual final das legendas. Ela vem bloqueada: mantenha-a visível para '\
-            'fidelidade visual ou oculte-a para editar os títulos/SRT nativos.\n'
-            'Os SRTs ficam em Captions/. As trilhas de títulos PT/EN permanecem editáveis, mas o ProRes '\
-            'é a referência fiel para fundo, opacidade, sombra, contorno e posicionamento.\n'
+            + caption_instructions +
             'LUT, tratamento de diálogo e masterização constam nos metadados; reaplique-os no Premiere '\
             'quando quiser uma edição não destrutiva.\n'
             'Consulte Metadata/timeline.json e Metadata/validation.json para detalhes.\n'
