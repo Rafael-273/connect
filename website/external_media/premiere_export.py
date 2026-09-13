@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import zipfile
 from dataclasses import dataclass
@@ -9,6 +10,90 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from .exceptions import ExternalMediaError
+
+
+logger = logging.getLogger(__name__)
+
+
+class S3MultipartUploadWriter:
+    """Write a ZIP to S3 without first creating a full local archive."""
+
+    PART_SIZE = 8 * 1024 * 1024  # S3 requires every non-final part to be >= 5 MiB.
+
+    def __init__(self, storage, name):
+        self.storage = storage
+        self.name = str(name).lstrip('/')
+        location = str(getattr(storage, 'location', '') or '').strip('/')
+        self.key = f'{location}/{self.name}' if location else self.name
+        self.client = storage.connection.meta.client
+        response = self.client.create_multipart_upload(
+            Bucket=storage.bucket_name, Key=self.key, ContentType='application/zip',
+        )
+        self.upload_id = response['UploadId']
+        self.parts = []
+        self.buffer = bytearray()
+        self.position = 0
+        self.closed = False
+
+    def writable(self):
+        return True
+
+    def seekable(self):
+        return False
+
+    def tell(self):
+        return self.position
+
+    def flush(self):
+        return None
+
+    def write(self, data):
+        if self.closed:
+            raise ValueError('I/O operation on closed multipart upload.')
+        data = bytes(data)
+        self.buffer.extend(data)
+        self.position += len(data)
+        while len(self.buffer) >= self.PART_SIZE:
+            self._upload_part(bytes(self.buffer[:self.PART_SIZE]))
+            del self.buffer[:self.PART_SIZE]
+        return len(data)
+
+    def _upload_part(self, data):
+        number = len(self.parts) + 1
+        response = self.client.upload_part(
+            Bucket=self.storage.bucket_name, Key=self.key, UploadId=self.upload_id,
+            PartNumber=number, Body=data,
+        )
+        self.parts.append({'PartNumber': number, 'ETag': response['ETag']})
+
+    def complete(self):
+        if self.closed:
+            return self.name
+        try:
+            if self.buffer:
+                self._upload_part(bytes(self.buffer))
+                self.buffer.clear()
+            self.client.complete_multipart_upload(
+                Bucket=self.storage.bucket_name, Key=self.key, UploadId=self.upload_id,
+                MultipartUpload={'Parts': self.parts},
+            )
+            self.closed = True
+            return self.name
+        except Exception:
+            self.abort()
+            raise
+
+    def abort(self):
+        if self.closed:
+            return
+        try:
+            self.client.abort_multipart_upload(
+                Bucket=self.storage.bucket_name, Key=self.key, UploadId=self.upload_id,
+            )
+        except Exception:
+            logger.exception('premiere_zip_multipart_abort_failed key=%s', self.key)
+        finally:
+            self.closed = True
 
 
 def json_compatible(value):

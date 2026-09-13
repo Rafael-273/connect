@@ -4073,6 +4073,32 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertTrue(report['valid'])
         source_file.open.assert_called_once_with('rb')
 
+    def test_s3_multipart_writer_creates_valid_zip_without_local_archive(self):
+        uploaded_parts = []
+        client = Mock()
+        client.create_multipart_upload.return_value = {'UploadId': 'upload-1'}
+
+        def upload_part(**kwargs):
+            uploaded_parts.append(kwargs['Body'])
+            return {'ETag': f'etag-{kwargs["PartNumber"]}'}
+
+        client.upload_part.side_effect = upload_part
+        storage = SimpleNamespace(
+            location='private_media', bucket_name='bucket',
+            connection=SimpleNamespace(meta=SimpleNamespace(client=client)),
+        )
+        from website.external_media.premiere_export import S3MultipartUploadWriter
+
+        writer = S3MultipartUploadWriter(storage, 'exports/project.zip')
+        with zipfile.ZipFile(writer, 'w', compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr('Media/take.mp4', b'video-from-s3')
+        writer.complete()
+
+        with zipfile.ZipFile(io.BytesIO(b''.join(uploaded_parts))) as archive:
+            self.assertEqual(archive.read('Media/take.mp4'), b'video-from-s3')
+        client.complete_multipart_upload.assert_called_once()
+        self.assertEqual(client.create_multipart_upload.call_args.kwargs['Key'], 'private_media/exports/project.zip')
+
     def test_premiere_archive_filename_uses_a_safe_project_name(self):
         project = SimpleNamespace(name='Anúncio: Setembro / 2026', public_id='a4e7396e-a96b-49ea-866a-19bbb4d52ef3')
 
