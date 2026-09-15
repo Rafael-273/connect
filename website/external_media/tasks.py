@@ -20,6 +20,7 @@ from ..models.external_media import (
     SubtitleVideoVersion,
     SubtitleVideoVersionAsset,
     VideoMasteringJob,
+    project_export_path,
 )
 from .audio_analysis import AudioAnalysisService
 from .audio_mastering import AudioMasteringService, MasteringTarget
@@ -28,7 +29,7 @@ from .audio_validation import AudioValidationService
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
 from .media_input import media_input_factory
-from .premiere_export import PremierePackageService
+from .premiere_export import PremierePackageService, S3MultipartUploadWriter
 from .services import ExternalMediaPipeline, ExternalMediaProjectPipeline, VideoAssemblyService
 from .subtitle_reviews import SubtitleReviewService
 from .timeline import InternalTimelineBuilder
@@ -372,28 +373,51 @@ def export_premiere_project(self, export_id):
             'status', 'progress', 'current_step', 'started_at', 'finished_at',
             'error_message', 'update_at',
         ])
+        # Delete an earlier retry's objects before creating the replacement at
+        # the same deterministic S3 key. Deleting afterwards would remove the
+        # newly completed multipart archive.
+        if export.archive:
+            export.archive.delete(save=False)
+            export.archive.name = ''
+        if export.timeline_json:
+            export.timeline_json.delete(save=False)
+            export.timeline_json.name = ''
         with JobWorkspace(export.public_id, 'premiere-export') as workspace:
             package_root = workspace.path / 'package'
             archive_filename = _premiere_archive_filename(export.project)
-            output_zip = workspace.file('output', archive_filename)
+            archive_writer = None
+            if settings.USE_S3:
+                archive_writer = S3MultipartUploadWriter(
+                    export.archive.storage, project_export_path(export, archive_filename),
+                )
+                output_zip = archive_writer
+            else:
+                output_zip = workspace.file('output', archive_filename)
             progress(
                 ExternalMediaProjectExport.Status.BUILDING_TIMELINE,
                 18,
                 'Construindo timeline a partir dos arquivos originais',
             )
-            timeline, report, timeline_path, archive_path = PremierePackageService().build(
-                export.project,
-                package_root,
-                output_zip,
-                InternalTimelineBuilder(),
-                progress=progress,
-            )
-            if export.archive:
-                export.archive.delete(save=False)
-            if export.timeline_json:
-                export.timeline_json.delete(save=False)
-            with archive_path.open('rb') as handle:
-                export.archive.save(archive_filename, File(handle), save=False)
+            try:
+                timeline, report, timeline_path, archive_path = PremierePackageService().build(
+                    export.project,
+                    package_root,
+                    output_zip,
+                    InternalTimelineBuilder(),
+                    progress=progress,
+                )
+                if archive_writer:
+                    archive_writer.complete()
+            except Exception:
+                if archive_writer:
+                    archive_writer.abort()
+                raise
+            if archive_writer:
+                # The multipart upload already used the final FieldFile key.
+                export.archive.name = archive_writer.name
+            else:
+                with archive_path.open('rb') as handle:
+                    export.archive.save(archive_filename, File(handle), save=False)
             with timeline_path.open('rb') as handle:
                 export.timeline_json.save('timeline.json', File(handle), save=False)
         export.compatibility = timeline.get('compatibility') or {}

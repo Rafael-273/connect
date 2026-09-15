@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import re
 from dataclasses import dataclass
@@ -10,7 +11,8 @@ from django.conf import settings
 from .audio_mixing import DuckingSettings, build_ducking_envelope, group_speech_blocks
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder, normalize_edit_ranges
 from .ffmpeg_runner import FFmpegRunner
-from .media_input import media_input_factory
+from .exceptions import ExternalMediaError
+from .media_input import RemoteMediaSource, media_input_factory
 from .speech_edit import SpeechEditPlan
 
 
@@ -29,6 +31,9 @@ CAPABILITY_MATRIX = {
     'mastering': {'exportable': False, 'strategy': 'recommended_after_premiere'},
     'complex_motion': {'exportable': 'partial', 'strategy': 'pre_render_when_available'},
 }
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -95,8 +100,12 @@ class InternalTimelineBuilder:
     def __init__(self, runner=None):
         self.runner = runner or FFmpegRunner()
         self._probe_cache = {}
+        # Sources kept in S3 are written straight into the final ZIP. Keeping
+        # them out of package/Media prevents a second full copy on the worker.
+        self.package_source_files = {}
 
     def build(self, project, package_root: Path):
+        self.package_source_files = {}
         for folder in ('Media', 'Audio', 'Captions', 'Graphics', 'LUTs', 'Metadata', 'Project'):
             (package_root / folder).mkdir(parents=True, exist_ok=True)
         project_state = ProjectProcessingState(project)
@@ -108,8 +117,16 @@ class InternalTimelineBuilder:
             safe_name = self._safe_name(Path(source.original_name).stem)
             relative_path = f'Media/{index:03d}_{safe_name}{suffix}'
             local_path = package_root / relative_path
-            self._copy_field(source.field_file, local_path)
-            metadata = self._probe(local_path)
+            media_input = media_input_factory(source.field_file)
+            ffmpeg_input = media_input.get_ffmpeg_input()
+            if isinstance(ffmpeg_input, RemoteMediaSource):
+                # FFprobe/FFmpeg consume the presigned URL, while the archive
+                # service streams the original object into Media/ later.
+                self.package_source_files[relative_path] = source.field_file
+                metadata = self._probe(ffmpeg_input)
+            else:
+                self._copy_field(source.field_file, local_path)
+                metadata = self._probe(local_path)
             source = TimelineSource(**{**source.__dict__, 'relative_path': relative_path})
             local_sources.append((source, metadata))
             assets.append({
@@ -161,7 +178,7 @@ class InternalTimelineBuilder:
         )
         assets.extend(overlay_assets)
         effects = self._effects(project, lut)
-        compatibility = self._compatibility(project, effects)
+        compatibility = self._compatibility(project, effects, bool(caption_overlay_asset))
         timeline = {
             'schema': 'connect.internal_timeline.v1',
             'project': {
@@ -396,6 +413,9 @@ class InternalTimelineBuilder:
         assets, clips, asset_by_video = [], [], {}
         for index, (source, _metadata) in enumerate(sources, start=1):
             source_path = package_root / source.relative_path
+            remote_field = self.package_source_files.get(source.relative_path)
+            if remote_field:
+                source_path = media_input_factory(remote_field).get_ffmpeg_input()
             if not self._has_audio(source_path):
                 continue
             safe_name = self._safe_name(Path(source.original_name).stem)
@@ -650,7 +670,18 @@ class InternalTimelineBuilder:
             subtitle_service.write_ass(
                 source_track, ass_path, source_style, sequence['width'], sequence['height'],
             )
-        self._render_alpha_caption_movie(ass_path, movie_path, sequence, duration_ms)
+        try:
+            self._render_alpha_caption_movie(ass_path, movie_path, sequence, duration_ms)
+        except ExternalMediaError:
+            # The ProRes layer is a visual convenience. The SRT and editable title
+            # clips are already included, so a worker built without libass or
+            # prores_ks must not make the whole Premiere package unavailable.
+            logger.warning(
+                'Não foi possível gerar a camada ProRes de legendas para a exportação do Premiere; '
+                'o pacote seguirá com SRT e títulos editáveis.',
+                exc_info=True,
+            )
+            return None, None
         metadata = self._probe(movie_path)
         asset_id = f'caption_overlay_{suffix}'
         asset = {
@@ -754,7 +785,7 @@ class InternalTimelineBuilder:
         return effects
 
     @staticmethod
-    def _compatibility(project, effects):
+    def _compatibility(project, effects, caption_overlay_available=True):
         warnings = []
         if any(effect['type'] == 'lut' for effect in effects):
             warnings.append('O LUT foi incluído no pacote e documentado, mas pode precisar ser reaplicado no Premiere.')
@@ -765,14 +796,20 @@ class InternalTimelineBuilder:
         if project.template_version.audio_mastering_enabled:
             warnings.append('A masterização final não foi aplicada destrutivamente. Use “Masterizar Vídeo” após o Premiere.')
         warnings.append('O reenquadramento automatico e aplicado como Basic Motion editavel no Premiere.')
-        warnings.append(
-            'As legendas têm uma camada ProRes 4444 transparente com o visual final; '
-            'os títulos e SRT permanecem editáveis em trilhas separadas.'
-        )
+        if caption_overlay_available:
+            warnings.append(
+                'As legendas têm uma camada ProRes 4444 transparente com o visual final; '
+                'os títulos e SRT permanecem editáveis em trilhas separadas.'
+            )
+        else:
+            warnings.append(
+                'A camada ProRes de referência visual das legendas não pôde ser gerada neste worker; '
+                'use os títulos e SRT editáveis incluídos no pacote.'
+            )
         return {'warnings': warnings, 'matrix': CAPABILITY_MATRIX}
 
     def _probe(self, path, audio_only=False):
-        cache_key = (str(Path(path).resolve()), bool(audio_only))
+        cache_key = (str(path), bool(audio_only))
         cached = self._probe_cache.get(cache_key)
         if cached is not None:
             return dict(cached)

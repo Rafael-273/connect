@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import shutil
 import zipfile
 from dataclasses import dataclass
 from decimal import Decimal
@@ -8,6 +10,90 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from .exceptions import ExternalMediaError
+
+
+logger = logging.getLogger(__name__)
+
+
+class S3MultipartUploadWriter:
+    """Write a ZIP to S3 without first creating a full local archive."""
+
+    PART_SIZE = 8 * 1024 * 1024  # S3 requires every non-final part to be >= 5 MiB.
+
+    def __init__(self, storage, name):
+        self.storage = storage
+        self.name = str(name).lstrip('/')
+        location = str(getattr(storage, 'location', '') or '').strip('/')
+        self.key = f'{location}/{self.name}' if location else self.name
+        self.client = storage.connection.meta.client
+        response = self.client.create_multipart_upload(
+            Bucket=storage.bucket_name, Key=self.key, ContentType='application/zip',
+        )
+        self.upload_id = response['UploadId']
+        self.parts = []
+        self.buffer = bytearray()
+        self.position = 0
+        self.closed = False
+
+    def writable(self):
+        return True
+
+    def seekable(self):
+        return False
+
+    def tell(self):
+        return self.position
+
+    def flush(self):
+        return None
+
+    def write(self, data):
+        if self.closed:
+            raise ValueError('I/O operation on closed multipart upload.')
+        data = bytes(data)
+        self.buffer.extend(data)
+        self.position += len(data)
+        while len(self.buffer) >= self.PART_SIZE:
+            self._upload_part(bytes(self.buffer[:self.PART_SIZE]))
+            del self.buffer[:self.PART_SIZE]
+        return len(data)
+
+    def _upload_part(self, data):
+        number = len(self.parts) + 1
+        response = self.client.upload_part(
+            Bucket=self.storage.bucket_name, Key=self.key, UploadId=self.upload_id,
+            PartNumber=number, Body=data,
+        )
+        self.parts.append({'PartNumber': number, 'ETag': response['ETag']})
+
+    def complete(self):
+        if self.closed:
+            return self.name
+        try:
+            if self.buffer:
+                self._upload_part(bytes(self.buffer))
+                self.buffer.clear()
+            self.client.complete_multipart_upload(
+                Bucket=self.storage.bucket_name, Key=self.key, UploadId=self.upload_id,
+                MultipartUpload={'Parts': self.parts},
+            )
+            self.closed = True
+            return self.name
+        except Exception:
+            self.abort()
+            raise
+
+    def abort(self):
+        if self.closed:
+            return
+        try:
+            self.client.abort_multipart_upload(
+                Bucket=self.storage.bucket_name, Key=self.key, UploadId=self.upload_id,
+            )
+        except Exception:
+            logger.exception('premiere_zip_multipart_abort_failed key=%s', self.key)
+        finally:
+            self.closed = True
 
 
 def json_compatible(value):
@@ -366,7 +452,16 @@ class PremiereExporter:
 
 
 class ExportValidationService:
-    def validate(self, package_root: Path, timeline: dict, xml_path: Path):
+    def validate(self, package_root: Path, timeline: dict, xml_path: Path, *, virtual_assets=()):
+        virtual_assets = {str(path).removeprefix('./') for path in virtual_assets}
+
+        def exists_in_package(path):
+            try:
+                relative = path.resolve().relative_to(package_root.resolve()).as_posix()
+            except ValueError:
+                return False
+            return path.exists() or relative in virtual_assets
+
         errors, warnings = [], list(timeline.get('compatibility', {}).get('warnings') or [])
         xml_root = None
         try:
@@ -378,7 +473,7 @@ class ExportValidationService:
             if not relative or relative.startswith('/') or '..' in Path(relative).parts:
                 errors.append(f'Path de asset inválido: {asset.get("path")}')
                 continue
-            if not (package_root / relative).exists():
+            if not exists_in_package(package_root / relative):
                 errors.append(f'Asset ausente: {relative}')
         if xml_root is not None:
             for node in xml_root.findall('.//pathurl'):
@@ -392,7 +487,7 @@ class ExportValidationService:
                 except ValueError:
                     errors.append(f'Referência fora do pacote: {value}')
                     continue
-                if not resolved.exists():
+                if not exists_in_package(resolved):
                     errors.append(f'Mídia offline no XML: {value}')
         if not timeline.get('clips'):
             errors.append('A timeline não possui clips.')
@@ -400,7 +495,10 @@ class ExportValidationService:
             errors.append('A timeline possui duração inválida.')
         if not timeline.get('video_tracks'):
             errors.append('Nenhuma trilha de vídeo foi criada.')
-        offline = [asset['path'] for asset in timeline.get('assets', []) if not (package_root / asset['path'].removeprefix('./')).exists()]
+        offline = [
+            asset['path'] for asset in timeline.get('assets', [])
+            if not exists_in_package(package_root / asset['path'].removeprefix('./'))
+        ]
         report = {
             'valid': not errors,
             'errors': errors,
@@ -421,6 +519,7 @@ class PremierePackageService:
     def build(self, project, package_root: Path, output_zip: Path, timeline_builder, progress=None):
         progress = progress or (lambda *args: None)
         timeline = json_compatible(timeline_builder.build(project, package_root))
+        source_files = dict(getattr(timeline_builder, 'package_source_files', {}))
         progress('CONVERTING', 48, 'Convertendo a timeline para Adobe Premiere')
         timeline_path = package_root / 'Metadata' / 'timeline.json'
         timeline_path.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -428,19 +527,30 @@ class PremierePackageService:
         PremiereExporter().export(timeline, xml_path)
         progress('PACKAGING_ASSETS', 66, 'Organizando originais, áudio, legendas e LUTs')
         progress('VALIDATING', 78, 'Validando XML, referências e mídia offline')
-        report = json_compatible(ExportValidationService().validate(package_root, timeline, xml_path))
+        report = json_compatible(ExportValidationService().validate(
+            package_root, timeline, xml_path, virtual_assets=source_files,
+        ))
         (package_root / 'Metadata' / 'validation.json').write_text(
             json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8',
+        )
+        caption_overlay_available = any(
+            asset.get('role') == 'caption_overlay' for asset in timeline.get('assets', [])
+        )
+        caption_instructions = (
+            'A trilha “Legendas estilizadas (visual final)” é um ProRes 4444 com transparência '
+            'e reproduz o visual final das legendas. Ela vem bloqueada: mantenha-a visível para '
+            'fidelidade visual ou oculte-a para editar os títulos/SRT nativos.\n'
+            'Os SRTs ficam em Captions/. As trilhas de títulos PT/EN permanecem editáveis, mas o ProRes '
+            'é a referência fiel para fundo, opacidade, sombra, contorno e posicionamento.\n'
+            if caption_overlay_available else
+            'A camada ProRes de referência visual das legendas não pôde ser gerada neste worker. '
+            'Os SRTs em Captions/ e os títulos PT/EN no XML continuam disponíveis para edição.\n'
         )
         (package_root / 'README.txt').write_text(
             'Abra Project/timeline.xml no Adobe Premiere Pro.\n'
             'Media contém os vídeos originais. Audio contém os WAVs de diálogo e a música de fundo.\n'
             'A1 é o diálogo separado; A2 é a música, com keyframes de volume equivalentes ao ducking do render.\n'
-            'A trilha “Legendas estilizadas (visual final)” é um ProRes 4444 com transparência '\
-            'e reproduz o visual final das legendas. Ela vem bloqueada: mantenha-a visível para '\
-            'fidelidade visual ou oculte-a para editar os títulos/SRT nativos.\n'
-            'Os SRTs ficam em Captions/. As trilhas de títulos PT/EN permanecem editáveis, mas o ProRes '\
-            'é a referência fiel para fundo, opacidade, sombra, contorno e posicionamento.\n'
+            + caption_instructions +
             'LUT, tratamento de diálogo e masterização constam nos metadados; reaplique-os no Premiere '\
             'quando quiser uma edição não destrutiva.\n'
             'Consulte Metadata/timeline.json e Metadata/validation.json para detalhes.\n'
@@ -449,6 +559,12 @@ class PremierePackageService:
         )
         progress('COMPRESSING', 88, 'Compactando o pacote completo')
         with zipfile.ZipFile(output_zip, 'w', compression=zipfile.ZIP_STORED) as archive:
+            # S3 source files are copied in chunks directly into the ZIP. They
+            # are deliberately absent from package_root, avoiding the former
+            # package/Media + output ZIP peak that exhausted Render's 2 GB disk.
+            for relative, field_file in sorted(source_files.items()):
+                with field_file.open('rb') as source, archive.open(relative, 'w', force_zip64=True) as target:
+                    shutil.copyfileobj(source, target, length=1024 * 1024)
             for path in sorted(package_root.rglob('*')):
                 if path.is_file():
                     relative = path.relative_to(package_root)
