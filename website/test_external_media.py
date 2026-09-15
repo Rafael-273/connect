@@ -4488,13 +4488,11 @@ class AudioNoiseCleanupUnitTests(SimpleTestCase):
         remote = RemoteMediaSource('https://example.test/source.mp4', storage_name='temporary/source.mp4')
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output.mp4'
-            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')), \
-                    patch.object(service, '_copy') as copy:
+            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
                 result = service.apply(remote, output, [decision])
 
         self.assertIs(result.path, remote)
         self.assertEqual(result.metrics['applied'], 0)
-        copy.assert_not_called()
 
     def test_cleanup_skips_a_failed_local_suggestion_and_preserves_the_render(self):
         service = AudioCleanupService()
@@ -4505,13 +4503,13 @@ class AudioNoiseCleanupUnitTests(SimpleTestCase):
         )
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'output.mp4'
-            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')), \
-                    patch.object(service, '_copy') as copy:
-                result = service.apply(Path(directory) / 'source.mp4', output, [decision])
+            source = Path(directory) / 'source.mp4'
+            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')):
+                result = service.apply(source, output, [decision])
 
         self.assertEqual(result.metrics['applied'], 0)
         self.assertEqual(result.metrics['skipped'][0]['reason'], 'ffmpeg_local_filter_failed')
-        copy.assert_called_once()
+        self.assertEqual(result.path, source)
 
     def test_decision_builder_marks_transient_events_for_review_by_default(self):
         plan = NoiseAnalysisPlan(
