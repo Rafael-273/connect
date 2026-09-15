@@ -12,6 +12,7 @@ from django.conf import settings
 from .audio_utils import clamp, settings_from_config
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
+from .media_input import RemoteMediaSource
 from .speech_edit import AudioActivity, SpeechEditService
 
 logger = logging.getLogger(__name__)
@@ -523,6 +524,11 @@ class AudioCleanupService:
             if decision.enabled and decision.strength != ReductionStrength.OFF
         ]
         if not active:
+            # A streamed S3 input is already a valid final media source.  Do not
+            # start FFmpeg merely to copy it: that creates an unnecessary HTTP
+            # remux and can fail even though no noise operation was requested.
+            if isinstance(media_path, RemoteMediaSource):
+                return NoiseCleanupResult(media_path, {'applied': 0})
             self._copy(media_path, output_path)
             return NoiseCleanupResult(output_path, {'applied': 0})
         global_decisions = [item for item in active if item.mode == ReductionMode.GLOBAL]
@@ -577,6 +583,11 @@ class AudioCleanupService:
                 'strength': decision.strength,
                 'noise_type': decision.noise_type,
             })
+        # If every optional local operation was skipped, keep the original
+        # streamed input.  Re-muxing it through FFmpeg was the source of an
+        # avoidable render failure on the Render worker.
+        if metrics['applied'] == 0 and isinstance(current, RemoteMediaSource):
+            return NoiseCleanupResult(current, metrics)
         self._copy(current, output_path)
         return NoiseCleanupResult(output_path, metrics)
 

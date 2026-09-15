@@ -21,6 +21,7 @@ from django.utils import timezone
 from safedelete.models import HARD_DELETE
 
 from website.external_media.exceptions import ExternalMediaError
+from website.external_media.media_input import RemoteMediaSource
 from website.external_media.audio_mastering import AudioMasteringService, MasteringTarget
 from website.external_media.audio_mixing import (
     AudioMixingService,
@@ -4477,6 +4478,24 @@ Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,TESTE
 
 
 class AudioNoiseCleanupUnitTests(SimpleTestCase):
+    def test_cleanup_keeps_remote_input_when_all_local_suggestions_fail(self):
+        service = AudioCleanupService()
+        decision = NoiseReductionDecision(
+            1000, 1800, ReductionMode.LOCAL, ReductionStrength.LIGHT,
+            'test', NoiseType.TRANSIENT_NOISE, True, RecommendedAction.REVIEW,
+            False, 0.9, 'Ruído de teste', None,
+        )
+        remote = RemoteMediaSource('https://example.test/source.mp4', storage_name='temporary/source.mp4')
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'output.mp4'
+            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')), \
+                    patch.object(service, '_copy') as copy:
+                result = service.apply(remote, output, [decision])
+
+        self.assertIs(result.path, remote)
+        self.assertEqual(result.metrics['applied'], 0)
+        copy.assert_not_called()
+
     def test_cleanup_skips_a_failed_local_suggestion_and_preserves_the_render(self):
         service = AudioCleanupService()
         decision = NoiseReductionDecision(

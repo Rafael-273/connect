@@ -119,7 +119,15 @@ def replace_file_safely(instance, field_name, source_path, filename, update_fiel
     storage = field.storage
     generated = Path(field.field.generate_filename(instance, filename))
     versioned = generated.with_name(f'{generated.stem}-{uuid.uuid4().hex[:12]}{generated.suffix}')
-    with Path(source_path).open('rb') as source:
+    # A no-op audio stage may deliberately return the S3-backed source instead
+    # of writing a redundant local FFmpeg copy.  Stream that object directly
+    # into the destination storage rather than treating its signed URL as a
+    # filesystem path.
+    if isinstance(source_path, RemoteMediaSource):
+        source_context = storages['external_media'].open(source_path.storage_name, 'rb')
+    else:
+        source_context = Path(source_path).open('rb')
+    with source_context as source:
         new_name = storage.save(str(versioned), File(source))
     setattr(instance, field_name, new_name)
     fields = list(dict.fromkeys([field_name, *update_fields]))
@@ -1360,7 +1368,7 @@ class StorageService:
             logger.exception('media_temporary_delete_failed storage_name=%s', name)
 
     @contextmanager
-    def staged_processing_input(self, source_path, namespace):
+    def staged_processing_input(self, source_path, namespace, *, retain_temporary=False):
         """Bound local peak usage to the next output when S3 streaming is active."""
         if isinstance(source_path, RemoteMediaSource) or not settings.USE_S3:
             yield source_path
@@ -1369,7 +1377,8 @@ class StorageService:
         try:
             yield staged
         finally:
-            self.delete_temporary(temporary_name)
+            if not retain_temporary:
+                self.delete_temporary(temporary_name)
 
     def save_asset(self, job, kind, language, source_path, filename):
         asset = MediaAsset.objects.filter(job=job, kind=kind, language=language).first()
@@ -2561,9 +2570,14 @@ class ExternalMediaProjectPipeline:
         project.save(update_fields=['configuration', 'update_at'])
         if not approved:
             self._persist_canonical_state(project, job.pk, self._source_manifest)
-        replace_file_safely(
-            job, 'original_video', final_path, 'project_source.mp4', ('update_at',),
-        )
+        retained_temporary_names = getattr(final_path, 'retained_temporary_names', ())
+        try:
+            replace_file_safely(
+                job, 'original_video', final_path, 'project_source.mp4', ('update_at',),
+            )
+        finally:
+            for temporary_name in retained_temporary_names:
+                self.storage.delete_temporary(temporary_name)
         self._update(project, ExternalMediaProject.Status.PROCESSING, 90, 'Finalizando seu vídeo')
 
     @staticmethod
@@ -2661,6 +2675,7 @@ class ExternalMediaProjectPipeline:
         """
         version = project.template_version
         final_path = video_path
+        retained_temporary_names = []
         noise_metrics = None
         if version.audio_noise_cleanup_enabled:
             cleanup_settings = NoiseCleanupSettings.from_config(version.audio_noise_cleanup_config)
@@ -2668,11 +2683,19 @@ class ExternalMediaProjectPipeline:
             if decisions:
                 cleaned_path = workdir / 'noise_cleaned.mp4'
                 with self.storage.staged_processing_input(
-                    final_path, f'project-{project.public_id}-noise-cleanup',
+                    final_path, f'project-{project.public_id}-noise-cleanup', retain_temporary=True,
                 ) as processing_input:
                     cleanup_result = AudioCleanupService(self.assembly.runner).apply(
                         processing_input, cleaned_path, decisions, settings_=cleanup_settings,
                     )
+                temporary_name = getattr(processing_input, 'storage_name', '')
+                if isinstance(cleanup_result.path, RemoteMediaSource):
+                    # The no-op result still points at this staged S3 object.
+                    # Keep it through the remaining audio stages or until it is
+                    # persisted as the job's final original video below.
+                    retained_temporary_names.append(temporary_name)
+                else:
+                    self.storage.delete_temporary(temporary_name)
                 final_path = cleanup_result.path
                 noise_metrics = cleanup_result.metrics
             self._step(project, 'audio_noise_cleanup', ProjectPipelineStep.Status.FINISHED)
@@ -2750,6 +2773,12 @@ class ExternalMediaProjectPipeline:
                 audio_metrics['mastering'] = master_metrics
             project.configuration = {**(project.configuration or {}), 'audio_metrics': audio_metrics}
             project.save(update_fields=['configuration', 'update_at'])
+        if retained_temporary_names:
+            if isinstance(final_path, RemoteMediaSource):
+                final_path.retained_temporary_names = tuple(retained_temporary_names)
+            else:
+                for temporary_name in retained_temporary_names:
+                    self.storage.delete_temporary(temporary_name)
         return final_path
 
     @staticmethod
