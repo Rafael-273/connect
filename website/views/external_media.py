@@ -1568,12 +1568,15 @@ class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View)
             output = workdir / f'{variant}.m4a'
             source = storage.ffmpeg_input(project.render_job.original_video)
             AudioCleanupService().render_preview_clip(source, output, decision, variant=variant)
-            return FileResponse(
-                output.open('rb'),
-                content_type='audio/mp4',
-                as_attachment=False,
-                filename=f'noise-{decision_id}-{variant}.m4a',
+            # A FileResponse reads lazily, but this temporary directory is removed
+            # as soon as the view returns. Return the short comparison clip in
+            # memory so browser playback never receives a deleted file/HTTP 500.
+            response = HttpResponse(output.read_bytes(), content_type='audio/mp4')
+            response['Content-Length'] = str(output.stat().st_size)
+            response['Content-Disposition'] = content_disposition_header(
+                False, f'noise-{decision_id}-{variant}.m4a',
             )
+            return response
 
 
 class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, View):
