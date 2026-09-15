@@ -2008,15 +2008,32 @@ class VideoAssemblyService:
         return max(1, end - start)
 
     def _video_dimensions(self, source):
+        # Mobile/Reels uploads are frequently MOV/HEVC or MP4 files with their
+        # metadata atom at the end of a large object. Give ffprobe enough data to
+        # identify the stream and use JSON instead of the locale/format-sensitive
+        # ``WIDTHxHEIGHT`` CSV representation.
         output = self.runner.run([
-            settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'v:0',
-            '-show_entries', 'stream=width,height', '-of', 'csv=s=x:p=0', FFmpegRunner.input_arg(source),
-        ]).strip()
+            settings.FFPROBE_BINARY, '-v', 'error', '-probesize', '50M', '-analyzeduration', '50M',
+            '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json',
+            FFmpegRunner.input_arg(source),
+        ])
         try:
-            width, height = output.split('x', 1)
-            return max(2, int(width)), max(2, int(height))
-        except ValueError as exc:
-            raise ExternalMediaError('Não foi possível identificar a resolução do vídeo.') from exc
+            streams = json.loads(output).get('streams') or []
+            stream = streams[0] if streams else {}
+            width = int(stream.get('width') or 0)
+            height = int(stream.get('height') or 0)
+            if width < 2 or height < 2:
+                raise ValueError('missing dimensions')
+            return width, height
+        except (TypeError, ValueError, KeyError, IndexError, json.JSONDecodeError) as exc:
+            logger.warning(
+                'media_probe_invalid_video_stream input_mode=%s output_length=%s',
+                'S3_STREAM' if isinstance(source, RemoteMediaSource) else 'LOCAL', len(output or ''),
+            )
+            raise ExternalMediaError(
+                'O arquivo enviado não possui uma faixa de vídeo válida ou seus metadados não puderam ser lidos. '
+                'Exporte o Reels como MP4 (H.264) e envie-o novamente.'
+            ) from exc
 
     @staticmethod
     def _even(value):

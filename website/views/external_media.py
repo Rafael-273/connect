@@ -1507,6 +1507,13 @@ class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
         return preview_revision_response(project, self.member, revision)
 
 
+class ExternalMediaProjectPreviewApplyAllNoiseView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        revision = TimelineRevisionService.apply_all_noise_reductions(project, self.member)
+        return preview_revision_response(project, self.member, revision)
+
+
 class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)

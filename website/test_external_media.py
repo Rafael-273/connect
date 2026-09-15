@@ -1165,6 +1165,30 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         )
         media.delete(force_policy=HARD_DELETE)
 
+    def test_preview_applies_all_pending_noise_reductions_in_one_revision(self):
+        project = self.make_project()
+        manifest = SourceManifestBuilder.build(project)
+        decisions = {
+            'schema': 'connect.edit_decisions.v1',
+            'operations': [
+                {'id': 'noise-1', 'type': 'audio_noise_reduction', 'enabled': False},
+                {'id': 'noise-2', 'type': 'audio_noise_reduction', 'enabled': False},
+                {'id': 'noise-3', 'type': 'audio_noise_reduction', 'enabled': True},
+            ],
+        }
+        project.configuration = {'source_manifest': manifest, 'edit_decision_set': decisions}
+        project.save(update_fields=['configuration', 'update_at'])
+        initial = TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.apply_all_noise_reductions(project, self.member)
+
+        self.assertEqual(revision.revision, initial.revision + 1)
+        self.assertTrue(all(item['enabled'] for item in revision.edit_decision_set['operations']))
+        self.assertEqual(
+            TimelineMutation.objects.filter(
+                to_revision=revision, operation_type='APPLY_ALL_NOISE_REDUCTIONS',
+            ).count(), 1,
+        )
+
     def test_approval_pins_the_current_timeline_revision(self):
         project = self.make_project()
         manifest = {'schema': 'connect.source_manifest.v1', 'sources': []}

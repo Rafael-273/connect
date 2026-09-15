@@ -427,6 +427,35 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def apply_all_noise_reductions(cls, project, member):
+        """Accept every pending noise recommendation in one undoable revision."""
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        decisions = deepcopy(current.edit_decision_set)
+        pending = [
+            item for item in decisions.get('operations', [])
+            if item.get('type') == 'audio_noise_reduction' and not item.get('enabled', False)
+        ]
+        if not pending:
+            return current
+        reviewed_at = timezone.now().isoformat()
+        for item in pending:
+            item['enabled'] = True
+            item['review'] = {'member_id': member.pk, 'reviewed_at': reviewed_at}
+        revision = cls._create(
+            locked, current.source_manifest, decisions,
+            f'{len(pending)} redução(ões) de ruído aplicada(s)', member, current,
+        )
+        session = cls.session(locked, member, revision)
+        cls._record(
+            session, current, revision, 'APPLY_ALL_NOISE_REDUCTIONS',
+            {'decision_ids': [item['id'] for item in pending]},
+            {'decision_ids': [item['id'] for item in pending], 'enabled': False}, member,
+        )
+        return revision
+
+    @classmethod
+    @transaction.atomic
     def create_manual_cut(cls, project, member, start_ms, end_ms):
         """Add a user-selected removal in original-master time coordinates."""
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
