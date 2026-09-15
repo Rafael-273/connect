@@ -528,7 +528,7 @@ class AudioCleanupService:
         global_decisions = [item for item in active if item.mode == ReductionMode.GLOBAL]
         local_decisions = [item for item in active if item.mode == ReductionMode.LOCAL]
         current = media_path
-        metrics = {'applied': 0, 'global': 0, 'local': 0, 'segments': []}
+        metrics = {'applied': 0, 'global': 0, 'local': 0, 'segments': [], 'skipped': []}
         workdir = output_path.parent
         if global_decisions:
             strongest = max(
@@ -550,7 +550,24 @@ class AudioCleanupService:
             segment_start = max(0, decision.start_ms - LOCAL_MARGIN_MS)
             segment_end = decision.end_ms + LOCAL_MARGIN_MS
             treated = workdir / f'noise_local_{index}.mp4'
-            self._apply_local(current, treated, decision, segment_start, segment_end)
+            try:
+                self._apply_local(current, treated, decision, segment_start, segment_end)
+            except ExternalMediaError:
+                # A local reduction is an optional editorial enhancement. It must
+                # never fail an otherwise valid final render (for example, when a
+                # particular source has an audio stream FFmpeg cannot filter).
+                logger.exception(
+                    'noise_cleanup_local_skipped start_ms=%s end_ms=%s noise_type=%s',
+                    decision.start_ms, decision.end_ms, decision.noise_type,
+                )
+                treated.unlink(missing_ok=True)
+                metrics['skipped'].append({
+                    'start_ms': decision.start_ms,
+                    'end_ms': decision.end_ms,
+                    'noise_type': decision.noise_type,
+                    'reason': 'ffmpeg_local_filter_failed',
+                })
+                continue
             current = treated
             metrics['local'] += 1
             metrics['applied'] += 1

@@ -32,11 +32,13 @@ from website.external_media.audio_mixing import (
     group_speech_blocks,
 )
 from website.external_media.audio_noise import (
+    AudioCleanupService,
     AudioNoiseAnalysisService,
     NoiseAnalysisPlan,
     NoiseCleanupSettings,
     NoiseEvent,
     NoiseReductionDecisionBuilder,
+    NoiseReductionDecision,
     NoiseType,
     RecommendedAction,
     ReductionMode,
@@ -4475,6 +4477,23 @@ Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,TESTE
 
 
 class AudioNoiseCleanupUnitTests(SimpleTestCase):
+    def test_cleanup_skips_a_failed_local_suggestion_and_preserves_the_render(self):
+        service = AudioCleanupService()
+        decision = NoiseReductionDecision(
+            1000, 1800, ReductionMode.LOCAL, ReductionStrength.LIGHT,
+            'test', NoiseType.TRANSIENT_NOISE, True, RecommendedAction.REVIEW,
+            False, 0.9, 'Ruído de teste', None,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'output.mp4'
+            with patch.object(service, '_apply_local', side_effect=ExternalMediaError('falha')), \
+                    patch.object(service, '_copy') as copy:
+                result = service.apply(Path(directory) / 'source.mp4', output, [decision])
+
+        self.assertEqual(result.metrics['applied'], 0)
+        self.assertEqual(result.metrics['skipped'][0]['reason'], 'ffmpeg_local_filter_failed')
+        copy.assert_called_once()
+
     def test_decision_builder_marks_transient_events_for_review_by_default(self):
         plan = NoiseAnalysisPlan(
             (
