@@ -1,0 +1,77 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block media_header_title %}
+<a href="{% url 'external_media_project_detail' project.public_id %}" class="block">
+    <strong class="block text-gray-900 text-lg truncate">Revisão de legendas</strong>
+    <small class="text-gray-500">{{ project.name }}</small>
+</a>
+{% endblock %}
+
+{% block media_content %}
+<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+        <a href="{% url 'external_media_project_detail' project.public_id %}" class="text-sm text-gray-500">← Voltar ao projeto</a>
+        <h1 class="text-2xl sm:text-3xl font-black mt-2">Legendas e revisões</h1>
+        <p class="text-gray-500 mt-1">Compartilhe uma revisão sem dar acesso ao restante da plataforma.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">{% if tracks %}<a href="{% url 'external_media_editor' project.render_job.public_id %}" class="media-btn media-muted"><i class="fas fa-pen"></i>Editar diretamente</a>{% endif %}{% if has_dirty_tracks %}<form method="post" action="{% url 'external_media_project_subtitle_render' project.public_id %}">{% csrf_token %}<button class="media-btn media-secondary"><i class="fas fa-wand-magic-sparkles"></i>Aplicar ao vídeo</button></form>{% endif %}{% if tracks %}<button type="button" class="media-btn media-primary" data-open-review-link><i class="fas fa-link"></i>Compartilhar revisão</button>{% endif %}</div>
+</div>
+
+{% if created_link %}
+<section class="media-card p-5 mb-6 border-red-200" data-created-link>
+    <span class="text-xs font-black uppercase tracking-widest" style="color:#C90905">Link criado</span>
+    <h2 class="font-black text-lg mt-1">Pronto para compartilhar</h2>
+    <div class="flex gap-2 mt-3">
+        <input readonly value="{{ created_link }}" class="min-w-0 flex-1 rounded-xl border border-gray-200 px-4 py-3 bg-gray-50" data-review-link-value>
+        <button type="button" class="media-btn media-primary" data-copy-review-link><i class="far fa-copy"></i>Copiar</button>
+    </div>
+    <p class="text-xs text-gray-500 mt-2">Por segurança, este endereço completo será exibido somente agora.</p>
+</section>
+{% endif %}
+
+<section class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-7">
+    {% for track in tracks %}
+    <article class="media-card p-5 flex items-center justify-between gap-4">
+        <div><span class="text-xs uppercase tracking-widest text-gray-400">Legenda</span><h2 class="font-black text-lg mt-1">{{ track.get_language_display }}</h2></div>
+        <div class="text-right"><span class="block text-sm {% if track.subtitle_dirty %}text-amber-700{% else %}text-green-700{% endif %}">{% if track.subtitle_dirty %}Alterações pendentes{% else %}Atualizada{% endif %}</span>{% if track.human_reviewed %}<small class="text-gray-500"><i class="fas fa-user-check mr-1"></i>Revisada por humano</small>{% endif %}</div>
+    </article>
+    {% empty %}
+    <div class="media-card p-7 text-center text-gray-500 sm:col-span-2">As legendas estarão disponíveis aqui depois do processamento.</div>
+    {% endfor %}
+</section>
+
+<div class="flex items-center justify-between gap-3 mb-3">
+    <div><h2 class="text-xl font-black">Revisões recebidas</h2><p class="text-sm text-gray-500">{{ pending_reviews }} aguardando sua análise.</p></div>
+</div>
+<section class="media-card overflow-hidden">
+    {% for review in sessions %}
+    <article class="p-4 sm:p-5 border-b last:border-b-0 flex flex-wrap items-center justify-between gap-4">
+        <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2"><strong>{{ review.reviewer_name|default:"Revisor convidado" }}</strong><span class="rounded-full px-2.5 py-1 text-xs font-bold {% if review.status == 'SUBMITTED' or review.status == 'UNDER_REVIEW' %}bg-amber-50 text-amber-700{% elif review.status == 'APPROVED' %}bg-green-50 text-green-700{% else %}bg-gray-100 text-gray-600{% endif %}">{{ review.get_status_display }}</span>{% if review.revoked_at %}<span class="rounded-full bg-red-50 text-red-700 px-2.5 py-1 text-xs font-bold">Link revogado</span>{% endif %}</div>
+            <p class="text-sm text-gray-500 mt-1">{{ review.languages|join:" + "|upper }} · {{ review.suggestions.count }} {% if review.suggestions.count == 1 %}sugestão{% else %}sugestões{% endif %} · válido até {{ review.expires_at|date:'d/m/Y H:i' }}</p>
+        </div>
+        <div class="flex gap-2">
+            {% if review.suggestions.exists %}<a class="media-btn media-secondary text-sm" href="{% url 'external_media_project_subtitle_review_detail' project.public_id review.pk %}"><i class="fas fa-code-compare"></i>Analisar</a>{% endif %}
+            {% if not review.revoked_at %}<form method="post" action="{% url 'external_media_project_subtitle_review_revoke' project.public_id review.pk %}" onsubmit="return confirm('Revogar este link agora?');">{% csrf_token %}<button class="media-btn media-muted text-sm" title="Revogar link"><i class="fas fa-ban"></i></button></form>{% endif %}
+        </div>
+    </article>
+    {% empty %}<div class="p-8 text-center text-gray-500">Nenhuma revisão compartilhada ainda.</div>{% endfor %}
+</section>
+
+{% if video_versions %}<div class="mt-7 mb-3"><h2 class="text-xl font-black">Versões com legendas revisadas</h2><p class="text-sm text-gray-500">Cada aplicação preserva os arquivos e as revisões usadas.</p></div><section class="media-card overflow-hidden">{% for version in video_versions %}<article class="p-4 sm:p-5 border-b last:border-b-0 flex flex-wrap items-center justify-between gap-4"><div><strong>Versão {{ version.version }}</strong><p class="text-sm text-gray-500 mt-1">{{ version.created_at|date:'d/m/Y H:i' }}{% for language,revision in version.subtitle_revisions.items %} · {{ language|upper }} revisão {{ revision }}{% endfor %}</p></div><div class="flex flex-wrap gap-2">{% for asset in version.assets.all %}<a class="media-btn media-muted text-sm" href="{% url 'external_media_project_subtitle_version_asset' project.public_id asset.pk %}"><i class="fas fa-download"></i>{{ asset.language|upper }} {{ asset.kind }}</a>{% endfor %}</div></article>{% endfor %}</section>{% endif %}
+
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4" data-review-link-modal>
+    <section class="w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-2xl">
+        <div class="flex justify-between gap-4"><div><h2 class="text-xl font-black">Compartilhar revisão</h2><p class="text-sm text-gray-500 mt-1">Escolha o que essa pessoa poderá revisar.</p></div><button type="button" class="media-btn media-muted !px-3" data-close-review-link><i class="fas fa-xmark"></i></button></div>
+        <form method="post" class="mt-5 space-y-5">{% csrf_token %}
+            <fieldset><legend class="font-black mb-2">Idioma</legend><div class="grid grid-cols-1 sm:grid-cols-2 gap-2">{% for track in tracks %}<label class="rounded-xl border p-3 flex items-center gap-3 cursor-pointer"><input type="checkbox" name="languages" value="{{ track.language }}" {% if track.language == 'en' %}checked{% endif %}><span>{{ track.get_language_display }}</span></label>{% endfor %}</div></fieldset>
+            <fieldset><legend class="font-black mb-2">Validade</legend><div class="grid grid-cols-2 gap-2"><label class="rounded-xl border p-3"><input type="radio" name="validity" value="1"> 24 horas</label><label class="rounded-xl border p-3"><input type="radio" name="validity" value="7"> 7 dias</label><label class="rounded-xl border p-3"><input type="radio" name="validity" value="30" checked> 30 dias</label><label class="rounded-xl border p-3"><input type="radio" name="validity" value="custom"> Personalizado</label></div><input type="datetime-local" name="custom_expires_at" class="w-full mt-2 rounded-xl border px-3 py-2"></fieldset>
+            <div class="grid sm:grid-cols-2 gap-3"><label><span class="text-sm font-bold">Nome do revisor <small class="font-normal text-gray-400">(opcional)</small></span><input name="reviewer_name" class="w-full mt-1 rounded-xl border px-3 py-2"></label><label><span class="text-sm font-bold">E-mail ou identificação</span><input name="reviewer_contact" class="w-full mt-1 rounded-xl border px-3 py-2"></label></div>
+            <button class="media-btn media-primary w-full"><i class="fas fa-link"></i>Gerar link seguro</button>
+        </form>
+    </section>
+</div>
+<script>
+(()=>{const modal=document.querySelector('[data-review-link-modal]');document.querySelector('[data-open-review-link]')?.addEventListener('click',()=>{modal.classList.remove('hidden');modal.classList.add('flex')});document.querySelector('[data-close-review-link]')?.addEventListener('click',()=>{modal.classList.add('hidden');modal.classList.remove('flex')});document.querySelector('[data-copy-review-link]')?.addEventListener('click',async(e)=>{const input=document.querySelector('[data-review-link-value]');await navigator.clipboard.writeText(input.value);e.currentTarget.innerHTML='<i class="fas fa-check"></i>Copiado';});})();
+</script>
+{% endblock %}

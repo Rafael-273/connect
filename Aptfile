@@ -6,3 +6,4 @@ libffi-dev
 shared-mime-info
 libcairo2
 libpangocairo-1.0-0
+ffmpeg

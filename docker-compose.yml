@@ -27,6 +27,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: web
     working_dir: /usr/src/platform
     command: >
       bash -c "
@@ -50,6 +51,84 @@ services:
       - .env
     depends_on:
       - connect-database 
+      - redis
+    networks:
+      - connect-network
+
+  media-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: media-worker
+    working_dir: /usr/src/platform
+    command: >
+      python -m watchdog.watchmedo auto-restart --directory=/usr/src/platform/website --pattern='*.py' --recursive --
+      celery -A connect worker --loglevel=info --concurrency=1 -Q celery
+    volumes:
+      - ./:/usr/src/platform
+      - media_volume:/usr/src/platform/media
+    environment:
+      - PYTHONUNBUFFERED=True
+      - USE_S3=${USE_S3:-FALSE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-}
+    env_file:
+      - .env
+    depends_on:
+      - connect-database
+      - redis
+    networks:
+      - connect-network
+
+  # Preview transcoding is deliberately isolated from the main media pipeline.
+  # A large 4K upload can spend many minutes generating a preview; it must not
+  # prevent the project worker from starting the actual processing job.
+  media-preview-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: media-worker
+    working_dir: /usr/src/platform
+    command: >
+      python -m watchdog.watchmedo auto-restart --directory=/usr/src/platform/website --pattern='*.py' --recursive --
+      celery -A connect worker --loglevel=info --concurrency=1 -Q media_previews
+    volumes:
+      - ./:/usr/src/platform
+      - media_volume:/usr/src/platform/media
+    environment:
+      - PYTHONUNBUFFERED=True
+      - USE_S3=${USE_S3:-FALSE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-}
+    env_file:
+      - .env
+    depends_on:
+      - connect-database
+      - redis
+    networks:
+      - connect-network
+
+  media-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: media-worker
+    working_dir: /usr/src/platform
+    command: celery -A connect beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    volumes:
+      - ./:/usr/src/platform
+    environment:
+      - PYTHONUNBUFFERED=True
+      - USE_S3=${USE_S3:-FALSE}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_STORAGE_BUCKET_NAME=${AWS_STORAGE_BUCKET_NAME:-}
+    env_file:
+      - .env
+    depends_on:
+      - connect-database
       - redis
     networks:
       - connect-network

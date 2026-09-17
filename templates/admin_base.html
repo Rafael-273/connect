@@ -36,20 +36,11 @@
 
 <body class="{% block body_class %}flex flex-col min-h-screen background-page{% endblock %}" style="background-color: #f7f1ef;">
 
-<div id="admin-menu-container">
-    {% include 'parciais/menu.html' %}
-</div>
-
 {% block content %}
 
 {% endblock %}
 
 <script>
-    if (window.location.pathname.includes('/admin-login')) {
-        var menu = document.getElementById('admin-menu-container');
-        if (menu) menu.style.display = 'none';
-    }
-    
     // Função global para controlar submenus
     function toggleSubmenu(submenuId) {
         const submenu = document.getElementById(submenuId);
@@ -75,15 +66,6 @@
     }
     
     $(document).ready(function() {
-        $(window).scroll(function() {
-            const navbar = $('#navbar');
-            if ($(this).scrollTop() > 0) {
-                navbar.addClass('menu-scroll');
-            } else {
-                navbar.removeClass('menu-scroll');
-            }
-        });
-        
         // Mobile admin sidebar toggle
         $('#mobile-sidebar-toggle').on('click', function() {
             $('#mobile-admin-sidebar').removeClass('hidden').addClass('flex');

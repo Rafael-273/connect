@@ -1,0 +1,7 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+numpy==2.2.6
+torch==2.8.0+cpu
+# Para ARM64/Python 3.10, o índice oficial publica o pacote CPU do
+# torchaudio como 2.8.0 (sem o sufixo local +cpu).
+torchaudio==2.8.0
+pyannote.audio==4.0.7

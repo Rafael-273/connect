@@ -1,0 +1,91 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}{{ template.name }} - Mídia Externa{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+    .admin-card { background: white; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+    .status-badge { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+    .status-DRAFT { background: #fef3c7; color: #92400e; }
+    .status-PUBLISHED { background: #dcfce7; color: #166534; }
+    .status-ARCHIVED { background: #f3f4f6; color: #374151; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 main-content-wrapper">
+        <div class="p-4 sm:p-6 mt-24">
+            <div class="flex items-center justify-between gap-3 mb-5">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center shadow-sm">
+                        <ion-icon name="videocam-outline" class="text-xl text-white"></ion-icon>
+                    </div>
+                    <div class="min-w-0">
+                        <a href="{% url 'admin_external_media_templates' %}" class="text-xs text-gray-500 hover:underline">Mídia Externa</a>
+                        <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{{ template.name }}</h1>
+                    </div>
+                </div>
+                <div class="hidden sm:flex gap-2">
+                    {% if current_version %}
+                    <a href="{% url 'admin_external_media_version_edit' current_version.id %}" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Editar Template</a>
+                    {% else %}
+                    <a href="{% url 'admin_external_media_template_edit' template.id %}" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">Editar Template</a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
+                <div class="admin-card p-5 lg:col-span-2">
+                    <p class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">Descrição</p>
+                    <p class="text-gray-700">{{ template.description|default:'Sem descrição cadastrada.' }}</p>
+                </div>
+                <div class="admin-card p-5">
+                    <p class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-2">Uso</p>
+                    <p class="text-3xl font-black text-gray-900">{% if current_version %}{{ current_version.projects_count }}{% else %}0{% endif %}</p>
+                    <p class="text-sm text-gray-500 mt-1">projeto{{ current_version.projects_count|pluralize }} criado{{ current_version.projects_count|pluralize }} com este template</p>
+                </div>
+            </div>
+
+            <div class="sm:hidden mb-5">
+                {% if current_version %}
+                <a href="{% url 'admin_external_media_version_edit' current_version.id %}" class="block px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold text-center">Editar Template</a>
+                {% else %}
+                <a href="{% url 'admin_external_media_template_edit' template.id %}" class="block px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold text-center">Editar Template</a>
+                {% endif %}
+            </div>
+
+            <div class="admin-card overflow-hidden">
+                <div class="p-5 border-b border-gray-100">
+                    <h2 class="font-bold text-gray-900">Template atual</h2>
+                    <p class="text-sm text-gray-500">Essa configuração é usada pelos novos projetos dos membros.</p>
+                </div>
+                <div>
+                    {% if current_version %}
+                    <div class="p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="status-badge {% if template.is_active %}status-PUBLISHED{% else %}status-ARCHIVED{% endif %}">{% if template.is_active %}Ativo{% else %}Inativo{% endif %}</span>
+                                <span class="text-xs text-gray-500">{{ current_version.blocks_count }} bloco{{ current_version.blocks_count|pluralize }} · {{ current_version.plugins_count }} processamento{{ current_version.plugins_count|pluralize }} · {{ current_version.projects_count }} projeto{{ current_version.projects_count|pluralize }}</span>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">Preset: {{ current_version.preset.name }} · Idiomas: {{ current_version.output_languages|join:', ' }}</p>
+                        </div>
+                        <a href="{% url 'admin_external_media_version_edit' current_version.id %}" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold text-center">Editar Template</a>
+                    </div>
+                    {% else %}
+                    <div class="p-10 text-center text-gray-500">
+                        <p class="font-semibold text-gray-700">Este template ainda não pode ser configurado.</p>
+                        <p class="text-sm mt-1">Cadastre um preset de renderização ativo para liberar a configuração.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

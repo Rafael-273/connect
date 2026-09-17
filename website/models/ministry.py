@@ -4,6 +4,13 @@ from ._base import BaseModel
 
 class Ministry(BaseModel):
     name = models.CharField(max_length=100, unique=True)
+    code = models.SlugField(
+        max_length=100,
+        unique=True,
+        blank=True,
+        null=True,
+        help_text='Código estável usado por permissões internas (ex: midia_externa).',
+    )
     description = models.TextField(blank=True, null=True)
     color = models.CharField(
         max_length=7,

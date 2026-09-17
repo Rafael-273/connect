@@ -28,7 +28,8 @@ class Command(BaseCommand):
                 FollowUpTemplateStep.objects.create(
                     template=template_basico,
                     week=week,
-                    task=task
+                    title=f'Semana {week}',
+                    description=task,
                 )
             
             self.stdout.write(f'{len(etapas_basico)} etapas criadas para o template básico.')
@@ -60,7 +61,8 @@ class Command(BaseCommand):
                 FollowUpTemplateStep.objects.create(
                     template=template_intensivo,
                     week=week,
-                    task=task
+                    title=f'Semana {week}',
+                    description=task,
                 )
             
             self.stdout.write(f'{len(etapas_intensivo)} etapas criadas para o template intensivo.')
@@ -90,7 +92,8 @@ class Command(BaseCommand):
                 FollowUpTemplateStep.objects.create(
                     template=template_jovens,
                     week=week,
-                    task=task
+                    title=f'Semana {week}',
+                    description=task,
                 )
             
             self.stdout.write(f'{len(etapas_jovens)} etapas criadas para o template jovens.')

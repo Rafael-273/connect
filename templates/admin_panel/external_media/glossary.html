@@ -1,0 +1,248 @@
+{% extends 'admin_base.html' %}
+
+{% block title %}ConnectCut - Glossário{% endblock %}
+
+{% block head %}
+<style>
+    body { background-color: #f8f9fa !important; }
+    .admin-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+    .editor-tab { color: #6b7280; border-bottom: 2px solid transparent; padding: .65rem .9rem; font-size: .875rem; font-weight: 700; }
+    .editor-tab:hover { color: #111827; }
+    .editor-tab.active { color: var(--color-primary); border-color: var(--color-primary); }
+    .data-table thead th { background: #f8fafc; font-size: .7rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: #6b7280; border-bottom: 2px solid #f1f5f9; padding: 14px 24px; }
+    .data-table tbody tr { border-bottom: 1px solid #f8fafc; transition: background .15s, box-shadow .15s; }
+    .data-table tbody tr:hover { background: #fafbff; box-shadow: inset 3px 0 0 var(--color-primary); }
+    .data-table tbody td { padding: 14px 24px; vertical-align: middle; }
+    .data-table th:last-child, .data-table td:last-child { text-align: right; }
+    .data-table td.glossary-empty-state { text-align: center; }
+    .action-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; font-size: 1.1rem; transition: all .15s; }
+    .action-btn-delete { background: #fef2f2; color: #dc2626; border: 0; cursor: pointer; }
+    .action-btn-delete:hover { background: #fee2e2; }
+    .glossary-modal { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15,23,42,.55); }
+    .glossary-modal.active { display: flex; }
+    .glossary-modal-panel { width: min(560px, 100%); max-height: calc(100vh - 2rem); overflow-y: auto; border-radius: 16px; background: #fff; box-shadow: 0 24px 60px rgba(0,0,0,.24); }
+    .glossary-form p { margin-bottom: 1rem; }
+    .glossary-form label { display: block; margin-bottom: .4rem; font-size: .875rem; font-weight: 700; color: #374151; }
+    .glossary-form input, .glossary-form select { width: 100%; border: 1px solid #d1d5db; border-radius: .6rem; padding: .65rem .75rem; background: #fff; }
+    .glossary-form .errorlist { color: #b91c1c; font-size: .8rem; margin: .35rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+
+<div class="flex min-h-screen bg-gray-50">
+    {% include 'parciais/admin_sidebar.html' %}
+
+    <div class="flex-1 ml-0 md:ml-0 main-content-wrapper">
+        <div class="p-4 md:p-6 mt-24">
+        <header class="flex items-center justify-between gap-3 mb-4">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-11 h-11 rounded-xl bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-sm">
+                    <ion-icon name="cut-outline" class="text-xl text-white"></ion-icon>
+                </div>
+                <div class="min-w-0">
+                    <p class="text-sm text-gray-500">Mídia Externa</p>
+                    <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">ConnectCut</h1>
+                    <p class="text-sm text-gray-500 mt-0.5 truncate">Intelligent editing for ministry media.</p>
+                </div>
+            </div>
+            <button type="button" data-open-glossary-modal class="sm:hidden flex-shrink-0 w-10 h-10 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition flex items-center justify-center" title="Novo termo" aria-label="Novo termo">
+                <ion-icon name="add-outline" class="text-xl"></ion-icon>
+            </button>
+        </header>
+
+        <nav class="flex items-center gap-1 border-b border-gray-200 mb-6" aria-label="Seções de edição">
+            <a href="{% url 'admin_external_media_templates' %}" class="editor-tab">Templates</a>
+            <a href="{% url 'admin_external_media_glossary' %}" class="editor-tab active">Glossário</a>
+        </nav>
+
+        <div class="flex items-center gap-2 mb-6">
+            <div class="relative flex-1 min-w-0">
+                <input type="search" id="glossary-search" placeholder="Buscar termo ou tradução..." class="w-full pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm">
+            </div>
+            <button type="button" data-open-glossary-modal class="hidden sm:inline-flex flex-shrink-0 items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg hover:bg-opacity-90 transition text-sm font-semibold">
+                <ion-icon name="add-outline" class="text-lg"></ion-icon>
+                Novo termo
+            </button>
+        </div>
+
+        <section class="admin-card overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="data-table w-full text-left">
+                    <thead>
+                        <tr>
+                            <th>Termo original</th>
+                            <th>Tradução oficial</th>
+                            <th>Idiomas</th>
+                            <th><span class="sr-only">Ações</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for term in terms %}
+                        <tr data-glossary-row data-search="{{ term.source_text|lower }} {{ term.translated_text|lower }} {{ term.source_language|lower }} {{ term.target_language|lower }}">
+                            <td class="font-semibold text-gray-900">{{ term.source_text }}</td>
+                            <td class="text-gray-700">{{ term.translated_text }}</td>
+                            <td><span class="text-xs font-medium text-gray-500 uppercase">{{ term.source_language }} &rarr; {{ term.target_language }}</span></td>
+                            <td>
+                                <button type="button" class="action-btn text-blue-600 bg-blue-50 hover:bg-blue-100" title="Editar {{ term.source_text }}" aria-label="Editar {{ term.source_text }}"
+                                        data-edit-glossary
+                                        data-action="{% url 'admin_external_media_glossary_edit' term.pk %}"
+                                        data-source-language="{{ term.source_language }}"
+                                        data-target-language="{{ term.target_language }}"
+                                        data-source-text="{{ term.source_text }}"
+                                        data-translated-text="{{ term.translated_text }}">
+                                    <ion-icon name="create-outline"></ion-icon>
+                                </button>
+                                <button type="button" class="action-btn action-btn-delete" title="Remover {{ term.source_text }}" aria-label="Remover {{ term.source_text }}"
+                                        data-delete-glossary
+                                        data-action="{% url 'admin_external_media_glossary_delete' term.pk %}"
+                                        data-name="{{ term.source_text }}">
+                                    <ion-icon name="trash-outline"></ion-icon>
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr id="glossary-empty"><td colspan="4" class="glossary-empty-state px-6 py-12 text-gray-500">Nenhum termo cadastrado.</td></tr>
+                        {% endfor %}
+                        <tr id="glossary-no-results" class="hidden"><td colspan="4" class="glossary-empty-state px-6 py-12 text-gray-500">Nenhum termo encontrado.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        </div>
+    </div>
+</div>
+
+<div id="glossary-modal" class="glossary-modal" aria-hidden="true">
+    <section class="glossary-modal-panel" role="dialog" aria-modal="true" aria-labelledby="glossary-modal-title">
+        <header class="p-5 border-b border-gray-100 flex items-start justify-between gap-4">
+            <div>
+                <h2 id="glossary-modal-title" class="text-lg font-bold text-gray-900">{% if editing_term %}Editar termo do glossário{% else %}Novo termo do glossário{% endif %}</h2>
+                <p class="text-sm text-gray-500 mt-1">Defina a tradução oficial que será priorizada nas legendas.</p>
+            </div>
+            <button type="button" data-close-glossary-modal class="w-9 h-9 rounded-lg text-gray-500 hover:bg-gray-100 transition" aria-label="Fechar"><ion-icon name="close-outline" class="text-xl"></ion-icon></button>
+        </header>
+        <form id="glossary-form" method="post" class="glossary-form p-5"{% if editing_term %} action="{% url 'admin_external_media_glossary_edit' editing_term.pk %}"{% endif %}>
+            {% csrf_token %}
+            {{ form.as_p }}
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" data-close-glossary-modal class="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50">Cancelar</button>
+                <button id="glossary-submit" class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold hover:bg-opacity-90 transition">{% if editing_term %}Salvar alterações{% else %}Adicionar termo{% endif %}</button>
+            </div>
+        </form>
+    </section>
+</div>
+
+<div id="glossary-delete-modal" class="glossary-modal" aria-hidden="true">
+    <section class="glossary-modal-panel p-6" role="dialog" aria-modal="true" aria-labelledby="glossary-delete-title">
+        <div class="flex items-center gap-3 mb-4">
+            <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
+                <ion-icon name="trash-outline" class="text-xl text-red-600"></ion-icon>
+            </div>
+            <div>
+                <h2 id="glossary-delete-title" class="text-base font-bold text-gray-900">Excluir termo</h2>
+                <p class="text-sm text-gray-500">Esta ação não pode ser desfeita.</p>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-5">Tem certeza que deseja excluir <strong id="glossary-delete-name" class="text-gray-900"></strong> do glossário?</p>
+        <div class="flex justify-end gap-2">
+            <button type="button" data-close-glossary-delete class="px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition">Cancelar</button>
+            <button type="button" id="glossary-delete-confirm" class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition">
+                <ion-icon name="trash-outline"></ion-icon> Excluir
+            </button>
+        </div>
+        <form id="glossary-delete-form" method="post" class="hidden">{% csrf_token %}</form>
+    </section>
+</div>
+
+<script>
+(() => {
+    const modal = document.getElementById('glossary-modal');
+    const form = document.getElementById('glossary-form');
+    const title = document.getElementById('glossary-modal-title');
+    const submit = document.getElementById('glossary-submit');
+    const createAction = "{% url 'admin_external_media_glossary' %}";
+    const openModal = () => { modal.classList.add('active'); modal.setAttribute('aria-hidden', 'false'); };
+    const closeModal = () => { modal.classList.remove('active'); modal.setAttribute('aria-hidden', 'true'); };
+    const openCreateModal = () => {
+        form.reset();
+        form.action = createAction;
+        title.textContent = 'Novo termo do glossário';
+        submit.textContent = 'Adicionar termo';
+        openModal();
+    };
+    let startedOnBackdrop = false;
+
+    document.querySelectorAll('[data-open-glossary-modal]').forEach((button) => button.addEventListener('click', openCreateModal));
+    document.querySelectorAll('[data-edit-glossary]').forEach((button) => button.addEventListener('click', () => {
+        form.action = button.dataset.action;
+        form.querySelector('#id_source_language').value = button.dataset.sourceLanguage;
+        form.querySelector('#id_target_language').value = button.dataset.targetLanguage;
+        form.querySelector('#id_source_text').value = button.dataset.sourceText;
+        form.querySelector('#id_translated_text').value = button.dataset.translatedText;
+        title.textContent = 'Editar termo do glossário';
+        submit.textContent = 'Salvar alterações';
+        openModal();
+    }));
+    document.querySelectorAll('[data-close-glossary-modal]').forEach((button) => button.addEventListener('click', closeModal));
+    modal.addEventListener('pointerdown', (event) => { startedOnBackdrop = event.target === modal; });
+    modal.addEventListener('click', (event) => {
+        if (startedOnBackdrop && event.target === modal) closeModal();
+        startedOnBackdrop = false;
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (deleteModal?.classList.contains('active')) closeDeleteModal();
+        else if (modal.classList.contains('active')) closeModal();
+    });
+
+    const search = document.getElementById('glossary-search');
+    const rows = [...document.querySelectorAll('[data-glossary-row]')];
+    const noResults = document.getElementById('glossary-no-results');
+    search.addEventListener('input', () => {
+        const query = search.value.trim().toLowerCase();
+        let visible = 0;
+        rows.forEach((row) => {
+            const matches = row.dataset.search.includes(query);
+            row.classList.toggle('hidden', !matches);
+            if (matches) visible += 1;
+        });
+        noResults.classList.toggle('hidden', visible > 0 || !query);
+    });
+
+    const deleteModal = document.getElementById('glossary-delete-modal');
+    const deleteName = document.getElementById('glossary-delete-name');
+    const deleteConfirm = document.getElementById('glossary-delete-confirm');
+    const deleteForm = document.getElementById('glossary-delete-form');
+    let deleteAction = null;
+    let deleteStartedOnBackdrop = false;
+    const closeDeleteModal = () => {
+        deleteModal.classList.remove('active');
+        deleteModal.setAttribute('aria-hidden', 'true');
+        deleteAction = null;
+    };
+
+    document.querySelectorAll('[data-delete-glossary]').forEach((button) => button.addEventListener('click', () => {
+        deleteAction = button.dataset.action;
+        deleteName.textContent = button.dataset.name;
+        deleteModal.classList.add('active');
+        deleteModal.setAttribute('aria-hidden', 'false');
+    }));
+    document.querySelectorAll('[data-close-glossary-delete]').forEach((button) => button.addEventListener('click', closeDeleteModal));
+    deleteModal.addEventListener('pointerdown', (event) => { deleteStartedOnBackdrop = event.target === deleteModal; });
+    deleteModal.addEventListener('click', (event) => {
+        if (deleteStartedOnBackdrop && event.target === deleteModal) closeDeleteModal();
+        deleteStartedOnBackdrop = false;
+    });
+    deleteConfirm.addEventListener('click', () => {
+        if (!deleteAction) return;
+        deleteConfirm.disabled = true;
+        deleteConfirm.innerHTML = '<ion-icon name="hourglass-outline"></ion-icon> Excluindo...';
+        deleteForm.action = deleteAction;
+        deleteForm.submit();
+    });
+    {% if form.errors %}openModal();{% endif %}
+})();
+</script>
+{% endblock %}

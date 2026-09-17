@@ -1,0 +1,190 @@
+{% extends 'member/external_media/base.html' %}
+
+{% block head %}
+{{ block.super }}
+<style>
+    .subtitle-editor-shell { max-width: 1080px; margin: 0 auto; }
+    .subtitle-editor-card { border: 1px solid #e7e9ee; border-radius: 1.25rem; background: #fff; box-shadow: 0 16px 42px rgba(15, 23, 42, .06); overflow: hidden; }
+    .subtitle-editor-video { position: relative; background: #050505; border-radius: 1rem; overflow: hidden; }
+    .subtitle-editor-video video { display: block; width: 100%; max-height: min(62vh, 670px); background: #050505; }
+    .subtitle-editor-caption { position: absolute; left: 7%; right: 7%; bottom: 13%; z-index: 2; pointer-events: none; text-align: center; color: #fff; font-size: clamp(1rem, 2.2vw, 2rem); font-weight: 700; line-height: 1.16; text-shadow: 0 2px 5px rgba(0, 0, 0, .95), 0 0 2px rgba(0, 0, 0, .95); }
+    .subtitle-editor-caption.is-empty { display: none; }
+    .subtitle-editor-tabs { display: flex; gap: .5rem; border-bottom: 1px solid #e7e9ee; padding: 0 1.25rem; }
+    .subtitle-editor-tab { border: 0; border-bottom: 2px solid transparent; background: transparent; color: #718096; padding: 1rem .4rem .8rem; margin-right: 1rem; font-weight: 700; }
+    .subtitle-editor-tab.is-active { color: #c90905; border-bottom-color: #c90905; }
+    .subtitle-cue-list { max-height: 48vh; overflow-y: auto; scroll-behavior: smooth; }
+    .subtitle-cue-group { display: none; }
+    .subtitle-cue-group.is-active { display: block; }
+    .subtitle-cue { border-left: 3px solid transparent; border-bottom: 1px solid #eef0f3; padding: 1rem 1.25rem; cursor: pointer; transition: background-color .18s ease, border-color .18s ease; }
+    .subtitle-cue:hover { background: #fffafa; }
+    .subtitle-cue.is-active { background: #fff5f5; border-left-color: #d90805; }
+    .subtitle-cue-time { color: #8b98aa; font-size: .78rem; font-weight: 700; letter-spacing: .03em; }
+    .subtitle-cue textarea { width: 100%; min-height: 70px; margin-top: .45rem; resize: vertical; border: 1px solid transparent; border-radius: .7rem; padding: .55rem .65rem; background: transparent; color: #14213b; line-height: 1.45; }
+    .subtitle-cue textarea:focus { outline: none; border-color: #e76b68; background: #fff; box-shadow: 0 0 0 3px rgba(201, 9, 5, .08); }
+    .subtitle-cue.is-changed .subtitle-cue-time::after { content: 'Alterado'; display: inline-block; margin-left: .5rem; color: #c90905; font-size: .7rem; }
+    .subtitle-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.25rem; border-top: 1px solid #e7e9ee; background: #fff; }
+    .subtitle-editor-status { color: #78859a; font-size: .84rem; }
+    @media (max-width: 640px) {
+        .subtitle-editor-video { border-radius: .75rem; }
+        .subtitle-editor-caption { bottom: 18%; font-size: clamp(.9rem, 4.5vw, 1.3rem); }
+        .subtitle-editor-footer { align-items: stretch; flex-direction: column; }
+        .subtitle-editor-footer .media-btn { width: 100%; justify-content: center; }
+    }
+</style>
+{% endblock %}
+
+{% block media_content %}
+<div class="subtitle-editor-shell">
+    <div class="mb-5">
+        <a href="{% url 'external_media_detail' job.public_id %}" class="text-sm text-gray-500 hover:text-red-700">&larr; Voltar ao processamento</a>
+        <h1 class="text-3xl font-black mt-2">Editar legendas</h1>
+        <p class="text-gray-500 mt-1">Acompanhe o vídeo, ajuste os textos e salve ao terminar.</p>
+    </div>
+
+    <form method="post" id="subtitle-editor-form">
+        {% csrf_token %}
+        <section class="subtitle-editor-card">
+            <div class="p-2 sm:p-3">
+                <div class="subtitle-editor-video">
+                    <video id="subtitle-editor-video" controls controlsList="nofullscreen" playsinline preload="metadata" src="{% url 'external_media_original' job.public_id %}?preview=1"></video>
+                    <div id="subtitle-editor-caption" class="subtitle-editor-caption is-empty" aria-live="polite"></div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between gap-3 px-4 pb-3 text-sm">
+                <div>
+                    <strong class="text-gray-800">Assista e toque no texto para corrigir</strong>
+                    <p class="text-gray-400 mt-1">A posição de cada legenda acompanha o vídeo.</p>
+                </div>
+                <span id="subtitle-editor-state" class="text-emerald-700 text-xs">Salvo</span>
+            </div>
+
+            <nav class="subtitle-editor-tabs" aria-label="Idiomas das legendas">
+                {% for track in tracks %}
+                <button type="button" class="subtitle-editor-tab{% if forloop.first %} is-active{% endif %}" data-language-tab="{{ track.language }}">{{ track.get_language_display }}</button>
+                {% endfor %}
+            </nav>
+
+            <div id="subtitle-cue-list" class="subtitle-cue-list">
+                {% for track in tracks %}
+                <div class="subtitle-cue-group{% if forloop.first %} is-active{% endif %}" data-language-group="{{ track.language }}">
+                    {% for cue in track.cues.all %}
+                    <article class="subtitle-cue" data-cue data-language="{{ track.language }}" data-start="{{ cue.start_ms }}" data-end="{{ cue.end_ms }}" data-cue-id="{{ cue.pk }}">
+                        <div class="subtitle-cue-time">{{ cue.start_ms }} - {{ cue.end_ms }}</div>
+                        <textarea name="cue_{{ cue.pk }}" data-cue-input data-original-value="{{ cue.text }}" maxlength="1000" required>{{ cue.text }}</textarea>
+                    </article>
+                    {% empty %}
+                    <p class="p-6 text-center text-gray-400">Nenhuma legenda disponível neste idioma.</p>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <footer class="subtitle-editor-footer">
+                <span id="subtitle-editor-change-count" class="subtitle-editor-status">Nenhuma alteração pendente</span>
+                <button class="media-btn media-primary" type="submit"><i class="fas fa-save"></i> Salvar alterações</button>
+            </footer>
+        </section>
+    </form>
+</div>
+
+<script>
+(() => {
+    const video = document.getElementById('subtitle-editor-video');
+    const caption = document.getElementById('subtitle-editor-caption');
+    const cueList = document.getElementById('subtitle-cue-list');
+    const state = document.getElementById('subtitle-editor-state');
+    const changeCount = document.getElementById('subtitle-editor-change-count');
+    const tabs = Array.from(document.querySelectorAll('[data-language-tab]'));
+    const groups = Array.from(document.querySelectorAll('[data-language-group]'));
+    const cues = Array.from(document.querySelectorAll('[data-cue]'));
+    const inputs = Array.from(document.querySelectorAll('[data-cue-input]'));
+    let language = tabs[0] ? tabs[0].dataset.languageTab : '';
+    let activeCue = null;
+
+    const formatTime = (milliseconds) => {
+        const seconds = Math.max(0, Math.floor(Number(milliseconds) / 1000));
+        const minutes = Math.floor(seconds / 60);
+        return `${String(minutes).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+    };
+
+    cues.forEach((cue) => {
+        const time = cue.querySelector('.subtitle-cue-time');
+        if (time) time.textContent = `${formatTime(cue.dataset.start)} - ${formatTime(cue.dataset.end)}`;
+    });
+
+    const visibleCues = () => cues.filter((cue) => cue.dataset.language === language);
+
+    const centerCue = (cue) => {
+        if (!cue || !cueList) return;
+        const listBox = cueList.getBoundingClientRect();
+        const cueBox = cue.getBoundingClientRect();
+        const target = cueList.scrollTop + cueBox.top - listBox.top - ((cueList.clientHeight - cueBox.height) / 2);
+        cueList.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+    };
+
+    const displayCue = (cue, shouldCenter = false) => {
+        if (activeCue === cue) return;
+        if (activeCue) activeCue.classList.remove('is-active');
+        activeCue = cue;
+        const input = cue ? cue.querySelector('[data-cue-input]') : null;
+        caption.textContent = input ? input.value.trim() : '';
+        caption.classList.toggle('is-empty', !caption.textContent);
+        if (cue) {
+            cue.classList.add('is-active');
+            if (shouldCenter) centerCue(cue);
+        }
+    };
+
+    const syncToVideo = () => {
+        const current = Math.round(video.currentTime * 1000);
+        const cue = visibleCues().find((item) => current >= Number(item.dataset.start) && current < Number(item.dataset.end));
+        displayCue(cue || null, Boolean(cue && cue !== activeCue));
+    };
+
+    const updateChanges = () => {
+        const changed = inputs.filter((input) => input.value !== input.dataset.originalValue);
+        inputs.forEach((input) => input.closest('[data-cue]').classList.toggle('is-changed', input.value !== input.dataset.originalValue));
+        if (changed.length) {
+            state.textContent = 'Alterações pendentes';
+            state.className = 'text-red-700 text-xs';
+            changeCount.textContent = `${changed.length} alteração${changed.length === 1 ? '' : 'ões'} pendente${changed.length === 1 ? '' : 's'}`;
+        } else {
+            state.textContent = 'Salvo';
+            state.className = 'text-emerald-700 text-xs';
+            changeCount.textContent = 'Nenhuma alteração pendente';
+        }
+    };
+
+    tabs.forEach((tab) => tab.addEventListener('click', () => {
+        language = tab.dataset.languageTab;
+        tabs.forEach((item) => item.classList.toggle('is-active', item === tab));
+        groups.forEach((group) => group.classList.toggle('is-active', group.dataset.languageGroup === language));
+        activeCue = null;
+        cueList.scrollTop = 0;
+        syncToVideo();
+    }));
+
+    cueList.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target || target.closest('textarea')) return;
+        const cue = target.closest('[data-cue]');
+        if (!cue) return;
+        video.currentTime = Number(cue.dataset.start) / 1000;
+        displayCue(cue, true);
+        video.play().catch(() => {});
+    });
+
+    inputs.forEach((input) => input.addEventListener('input', () => {
+        if (activeCue && activeCue.contains(input)) {
+            caption.textContent = input.value.trim();
+            caption.classList.toggle('is-empty', !caption.textContent);
+        }
+        updateChanges();
+    }));
+
+    video.addEventListener('timeupdate', syncToVideo);
+    video.addEventListener('loadedmetadata', syncToVideo);
+    updateChanges();
+})();
+</script>
+{% endblock %}
