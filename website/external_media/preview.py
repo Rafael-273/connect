@@ -15,6 +15,7 @@ from ..models.external_media import (
     PreviewSession,
     ProxyProfile,
     ProjectBlockMedia,
+    ProjectBrollAsset,
     ProjectSourceProxy,
     SubtitleCue,
     TimelineMutation,
@@ -24,6 +25,7 @@ from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceMan
 from .exceptions import ExternalMediaError
 from .services import StorageService, VideoAssemblyService
 from .overlays import OverlayTimelineService
+from .broll import BrollTimelineService
 from .workspace import JobWorkspace
 
 
@@ -142,6 +144,8 @@ class PreviewCapabilityRegistry:
             available.add(cls.TRANSFORMS)
         if MediaTemplatePlugin.Code.MUSIC in plugin_codes:
             available.add(cls.AUDIO_AUTOMATION)
+        if MediaTemplatePlugin.Code.BROLL in plugin_codes or project.broll_assets.exists():
+            available.add(cls.BROLL)
         if project.template_version.audio_noise_cleanup_enabled:
             available.add(cls.AUDIO_NOISE_CLEANUP)
         if MediaTemplatePlugin.Code.LUT in plugin_codes:
@@ -149,10 +153,12 @@ class PreviewCapabilityRegistry:
         available.update(declared)
         if project.template_version.blocks.exclude(overlay_definitions=[]).exists() or project.overlays.exists():
             available.add(cls.GRAPHICS)
-        implemented_editable = {cls.CUTS, cls.SUBTITLES, cls.TRANSFORMS, cls.GRAPHICS}
+        implemented_editable = {cls.CUTS, cls.SUBTITLES, cls.TRANSFORMS, cls.GRAPHICS, cls.BROLL}
         editable = [item for item in configured if item in available and item in implemented_editable]
         if cls.GRAPHICS in available and cls.GRAPHICS not in editable:
             editable.append(cls.GRAPHICS)
+        if cls.BROLL in available and cls.BROLL not in editable:
+            editable.append(cls.BROLL)
         return {
             'available': sorted(available),
             'editable': editable,
@@ -170,7 +176,7 @@ class PreviewCompositionService:
         'CAMERA_SWITCHES': 'NOT_AVAILABLE',
         'LAYOUTS': 'NOT_AVAILABLE',
         'GRAPHICS': 'APPROXIMATE',
-        'BROLL': 'NOT_AVAILABLE',
+        'BROLL': 'APPROXIMATE',
         'AUDIO_AUTOMATION': 'APPROXIMATE',
         'AUDIO_NOISE_CLEANUP': 'APPROXIMATE',
         'COLOR': 'APPROXIMATE',
@@ -195,7 +201,10 @@ class PreviewCompositionService:
         }
 
     @classmethod
-    def compose(cls, project, source_manifest, decisions, revision, overlays_override=None):
+    def compose(
+        cls, project, source_manifest, decisions, revision,
+        overlays_override=None, brolls_override=None,
+    ):
         proxies = {
             item.source_id: item
             for item in project.source_proxies.filter(status=ProjectSourceProxy.Status.READY).select_related('profile')
@@ -291,6 +300,12 @@ class PreviewCompositionService:
             if overlays_override is not None
             else OverlayTimelineService.compose(project, clips, timeline_cursor)
         )
+        composed_brolls, broll_assets = BrollTimelineService.compose(
+            project, clips, timeline_cursor,
+            time_mapper=lambda value: cls._source_to_timeline(value, cuts),
+        )
+        brolls = deepcopy(brolls_override) if brolls_override is not None else composed_brolls
+        assets.extend(broll_assets)
         thresholds = project.template_version.preview_confidence_thresholds or {}
         flag_below = float(thresholds.get('flag_below') or 0.72)
         review_items = [
@@ -354,8 +369,11 @@ class PreviewCompositionService:
             'clips': clips,
             'video_tracks': [
                 {'id': 'V1', 'role': 'main', 'clips': clips},
-                {'id': 'V2', 'role': 'overlay', 'clips': overlays},
+                {'id': 'V2', 'role': 'broll', 'clips': brolls},
+                {'id': 'V3', 'role': 'overlay', 'clips': overlays},
             ],
+            'broll_tracks': [{'id': 'BROLL', 'role': 'broll', 'clips': brolls}],
+            'brolls': brolls,
             'overlay_tracks': [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': overlays}],
             'overlays': overlays,
             'captions': captions,
@@ -387,6 +405,17 @@ class PreviewCompositionService:
         if cursor < end:
             kept.append((cursor, end))
         return [(left, right) for left, right in kept if right > left]
+
+    @staticmethod
+    def _source_to_timeline(value, cuts):
+        """Map assembled-master time into the edited timeline after removals."""
+        value = max(0, int(value or 0))
+        removed = 0
+        for start, end in cuts:
+            if value <= start:
+                break
+            removed += max(0, min(value, end) - start)
+        return max(0, value - removed)
 
 
 class TimelineRevisionService:
@@ -591,6 +620,97 @@ class TimelineRevisionService:
         return revision
 
     @classmethod
+    @transaction.atomic
+    def mutate_broll(cls, project, member, broll_id, payload, *, delete=False, restore=False):
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        brolls = deepcopy(current.timeline.get('brolls') or [])
+        target = next((item for item in brolls if item.get('id') == broll_id), None)
+        if not target:
+            raise ValueError('B-roll não encontrado nesta timeline.')
+        previous = deepcopy(target)
+        if delete:
+            brolls.remove(target)
+            reason, operation = 'B-roll removido', 'DELETE_BROLL'
+        elif restore:
+            automatic = deepcopy(target.get('auto') or {})
+            if not automatic:
+                raise ValueError('Este B-roll não possui uma decisão automática para restaurar.')
+            automatic['auto'] = deepcopy(target.get('auto'))
+            target.clear()
+            target.update(automatic)
+            reason, operation = 'B-roll restaurado', 'RESTORE_BROLL'
+        else:
+            duration = int(current.timeline.get('sequence', {}).get('duration_ms') or 1)
+            if 'start_ms' in payload:
+                target['start_ms'] = max(0, min(duration - 1, int(payload['start_ms'])))
+            if 'end_ms' in payload:
+                target['end_ms'] = min(duration, max(target['start_ms'] + 1, int(payload['end_ms'])))
+            if 'source_in_ms' in payload:
+                target['source_in_ms'] = max(0, int(payload['source_in_ms']))
+            if 'source_out_ms' in payload:
+                target['source_out_ms'] = max(target.get('source_in_ms', 0) + 1, int(payload['source_out_ms']))
+            if 'display_mode' in payload:
+                mode = str(payload['display_mode']).upper()
+                if mode not in {'FULLSCREEN', 'OVERLAY'}:
+                    raise ValueError('Modo de exibição inválido.')
+                target['display_mode'] = mode
+            if 'asset_id' in payload:
+                asset = ProjectBrollAsset.objects.filter(project=locked, public_id=payload['asset_id'], is_enabled=True).first()
+                if not asset:
+                    raise ValueError('Asset de substituição não encontrado.')
+                target['asset_id'] = str(asset.public_id)
+                target['media_type'] = asset.media_type
+            for key in ('transform', 'motion', 'entry', 'exit', 'fit', 'crop_mode'):
+                if key in payload:
+                    target[key] = deepcopy(payload[key])
+            target['source'] = 'USER'
+            reason, operation = 'B-roll ajustado', 'UPDATE_BROLL'
+        revision = cls._create(
+            locked, current.source_manifest, current.edit_decision_set, reason, member, current,
+            overlays=deepcopy(current.timeline.get('overlays') or []), brolls=brolls,
+        )
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, operation, {
+            'broll_id': broll_id, 'broll': deepcopy(target) if not delete else None,
+        }, {'broll_id': broll_id, 'broll': previous}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
+    def add_broll(cls, project, member, asset, start_ms=0):
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        brolls = deepcopy(current.timeline.get('brolls') or [])
+        duration = int(current.timeline.get('sequence', {}).get('duration_ms') or 1)
+        start = max(0, min(duration - 1, int(start_ms or 0)))
+        end = min(duration, start + min(6000, max(1000, int(asset.duration_ms or 5000))))
+        description = (asset.description or asset.original_filename).lower()
+        display_mode = 'OVERLAY' if any(word in description for word in ('qr', 'logo', 'card')) else 'FULLSCREEN'
+        item = {
+            'id': f'broll-{asset.public_id}', 'type': 'BROLL', 'asset_id': str(asset.public_id),
+            'media_type': asset.media_type, 'start_ms': start, 'end_ms': max(start + 1, end),
+            'source_in_ms': int(asset.trim_start_ms or 0),
+            'source_out_ms': int(asset.trim_end_ms or (asset.trim_start_ms or 0) + max(1, end - start)),
+            'display_mode': display_mode, 'fit': 'COVER', 'crop_mode': 'CENTER',
+            'transform': {'x': .82 if display_mode == 'OVERLAY' else .5, 'y': .78 if display_mode == 'OVERLAY' else .5, 'scale': .28 if display_mode == 'OVERLAY' else 1},
+            'motion': {'type': 'ZOOM_IN' if asset.media_type == 'IMAGE' else 'NONE', 'from_scale': 1, 'to_scale': 1.06, 'easing': 'EASE_IN_OUT'},
+            'entry': {'type': 'FADE', 'duration_ms': 300, 'easing': 'ease-out'},
+            'exit': {'type': 'FADE', 'duration_ms': 250, 'easing': 'ease-in'},
+            'source': 'USER', 'confidence': 1, 'enabled': True,
+        }
+        item['auto'] = deepcopy(item)
+        brolls.append(item)
+        revision = cls._create(
+            locked, current.source_manifest, current.edit_decision_set,
+            'B-roll adicionado', member, current,
+            overlays=deepcopy(current.timeline.get('overlays') or []), brolls=brolls,
+        )
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'CREATE_BROLL', {'broll_id': item['id'], 'broll': item}, {'broll_id': item['id']}, member)
+        return revision
+
+    @classmethod
     def session(cls, project, member, revision=None):
         session, _ = PreviewSession.objects.get_or_create(project=project, member=member)
         if revision and session.current_revision_id != revision.pk:
@@ -652,14 +772,19 @@ class TimelineRevisionService:
         return revision
 
     @classmethod
-    def _create(cls, project, manifest, decisions, reason, member, parent=None, overlays=None):
+    def _create(cls, project, manifest, decisions, reason, member, parent=None, overlays=None, brolls=None):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
         # kind of edit creates a child revision, otherwise template overlays
         # would silently return and manual overlays would disappear.
         if overlays is None and parent:
             overlays = deepcopy(parent.timeline.get('overlays') or [])
-        timeline = PreviewCompositionService.compose(project, manifest, decisions, number, overlays_override=overlays)
+        if brolls is None and parent:
+            brolls = deepcopy(parent.timeline.get('brolls') or [])
+        timeline = PreviewCompositionService.compose(
+            project, manifest, decisions, number,
+            overlays_override=overlays, brolls_override=brolls,
+        )
         revision = TimelineRevision.objects.create(
             project=project, revision=number, parent=parent, timeline=timeline,
             source_manifest=manifest, edit_decision_set=decisions, reason=reason, created_by=member,

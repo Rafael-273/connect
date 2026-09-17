@@ -82,6 +82,15 @@ def external_media_overlay_asset_path(instance, filename):
     return f'external_media/projects/{instance.project.public_id}/overlays/{instance.overlay_id}{suffix}'
 
 
+def external_media_broll_asset_path(instance, filename):
+    suffix = Path(filename).suffix.lower()
+    return f'external_media/projects/{instance.project.public_id}/broll/{instance.public_id}{suffix}'
+
+
+def external_media_broll_preview_path(instance, filename):
+    return f'external_media/projects/{instance.project.public_id}/broll/previews/{instance.public_id}.mp4'
+
+
 def external_media_source_proxy_path(instance, filename):
     return (
         f'external_media/projects/{instance.project.public_id}/preview/'
@@ -1012,12 +1021,14 @@ class MediaTemplatePlugin(BaseModel):
         SILENCE_REMOVAL = 'silence_removal', 'Corte de silêncio'
         FILLER_REMOVAL = 'filler_removal', 'Remover vícios de fala'
         AUTO_TRACKING = 'auto_tracking', 'Auto Reframe inteligente'
+        OFF_CONTEXT_DETECTION = 'off_context_detection', 'Detectar trechos fora de contexto'
         SUBTITLE_PT = 'subtitle_pt', 'Legenda PT'
         TRANSLATION_EN = 'translation_en', 'Tradução EN'
         LUT = 'lut', 'Aplicar LUT'
         INTRO = 'intro', 'Intro'
         OUTRO = 'outro', 'Tela final'
         MUSIC = 'music', 'Música'
+        BROLL = 'broll', 'B-roll (vídeos e imagens)'
 
     version = models.ForeignKey(MediaTemplateVersion, on_delete=models.CASCADE, related_name='plugins')
     code = models.CharField(max_length=32, choices=Code.choices)
@@ -1195,6 +1206,68 @@ class ProjectBlockMedia(BaseModel):
 
     def __str__(self):
         return f'{self.project}: {(self.block or self.custom_block).name} #{self.position}'
+
+
+class ProjectBrollAsset(BaseModel):
+    """Reusable source media. Editorial placement lives in InternalTimeline."""
+
+    class MediaType(models.TextChoices):
+        VIDEO = 'VIDEO', 'Vídeo'
+        IMAGE = 'IMAGE', 'Imagem'
+
+    class PreviewStatus(models.TextChoices):
+        PENDING = 'PENDING', 'Aguardando preview'
+        READY = 'READY', 'Preview pronto'
+        ERROR = 'ERROR', 'Erro no preview'
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='broll_assets')
+    block = models.ForeignKey(
+        MediaTemplateBlock, on_delete=models.SET_NULL, related_name='project_broll_assets',
+        null=True, blank=True,
+    )
+    custom_block = models.ForeignKey(
+        ProjectCustomBlock, on_delete=models.CASCADE, related_name='broll_assets',
+        null=True, blank=True,
+    )
+    media_type = models.CharField(max_length=12, choices=MediaType.choices)
+    file = models.FileField(
+        upload_to=external_media_broll_asset_path, storage=get_external_media_storage, max_length=500,
+    )
+    original_filename = models.CharField(max_length=255)
+    description = models.CharField(max_length=500, blank=True)
+    duration_ms = models.PositiveBigIntegerField(blank=True, null=True)
+    file_size = models.PositiveBigIntegerField(default=0)
+    preview_file = models.FileField(
+        upload_to=external_media_broll_preview_path, storage=get_external_media_storage,
+        blank=True, max_length=500,
+    )
+    preview_status = models.CharField(
+        max_length=16, choices=PreviewStatus.choices, default=PreviewStatus.PENDING,
+    )
+    preview_error = models.CharField(max_length=255, blank=True)
+    trim_start_ms = models.PositiveBigIntegerField(default=0)
+    trim_end_ms = models.PositiveBigIntegerField(blank=True, null=True)
+    position = models.PositiveSmallIntegerField(default=1)
+    defaults = models.JSONField(default=dict, blank=True)
+    is_enabled = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['block__order', 'custom_block__position', 'position', 'pk']
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(block__isnull=False, custom_block__isnull=True)
+                    | models.Q(block__isnull=True, custom_block__isnull=False)
+                ),
+                name='broll_asset_exactly_one_block',
+            ),
+        ]
+        verbose_name = 'Asset de B-roll'
+        verbose_name_plural = 'Assets de B-roll'
+
+    def __str__(self):
+        return f'{self.project}: {self.original_filename}'
 
 
 class ProjectOverlay(BaseModel):

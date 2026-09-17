@@ -50,12 +50,14 @@ from .audio_noise import (
 from .audio_validation import AudioValidationService
 from .auto_reframe import AUTO_REFRAME_PLAN_VERSION, AutoReframePlan, AutoReframeService
 from .background_voice import BackgroundVoiceRemovalService
+from .broll import BrollRenderService, BrollTimelineService
 from .canonical import (
     EditDecisionSetBuilder,
     EffectiveCapabilities,
     ProjectProcessingState,
     SourceManifestBuilder,
 )
+from .content_review import OffContextAnalyzer
 from .dialogue_processing import DialogueProcessor, DialogueSettings
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
@@ -1421,6 +1423,7 @@ class ProjectService:
         'upload',
         'assembly',
         MediaTemplatePlugin.Code.AUTO_TRACKING,
+        MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
         MediaTemplatePlugin.Code.SILENCE_REMOVAL,
         MediaTemplatePlugin.Code.FILLER_REMOVAL,
         'dialogue_processing',
@@ -1429,6 +1432,7 @@ class ProjectService:
         MediaTemplatePlugin.Code.TRANSLATION_EN,
         MediaTemplatePlugin.Code.LUT,
         MediaTemplatePlugin.Code.MUSIC,
+        MediaTemplatePlugin.Code.BROLL,
         'audio_mixing',
         'audio_mastering',
         'render',
@@ -1440,12 +1444,14 @@ class ProjectService:
         'silence_removal': 'Cortando silêncio',
         'filler_removal': 'Removendo vícios de fala',
         'auto_tracking': 'Aplicando Auto Reframe',
+        'off_context_detection': 'Detectando trechos fora de contexto',
         'lut': 'Aplicando LUT',
         'subtitle_pt': 'Gerando legenda PT',
         'translation_en': 'Traduzindo para inglês',
         'intro': 'Aplicando intro',
         'outro': 'Aplicando tela final',
         'music': 'Aplicando música',
+        'broll': 'Posicionando B-rolls',
         'dialogue_processing': 'Tratando diálogo',
         'audio_noise_cleanup': 'Analisando ruído',
         'audio_mixing': 'Mixando áudio',
@@ -1492,6 +1498,10 @@ class ProjectService:
                 )
             except ValueError as exc:
                 errors.append(f'{overlay.block.name if overlay.block else "Overlay"}: {exc}')
+        for asset in project.broll_assets.filter(is_enabled=True):
+            if not ProjectService.file_exists(asset.file):
+                owner = asset.block or asset.custom_block
+                errors.append(f'{owner.name if owner else "B-roll"}: o asset {asset.original_filename} não está disponível.')
         version = project.template_version
         track = getattr(version, 'background_music', None)
         if track and track.audio_file and not ProjectService.file_exists(track.audio_file):
@@ -2191,6 +2201,11 @@ class ExternalMediaProjectPipeline:
                         media_input.get_ffmpeg_input(),
                         workdir=workspace.path,
                     )
+            # The AI only proposes editorial placement. The resulting structured
+            # decisions are frozen into the initial InternalTimeline revision.
+            BrollTimelineService.ensure_auto_decisions(project)
+            if MediaTemplatePlugin.Code.BROLL in plugin_codes:
+                self._step(project, MediaTemplatePlugin.Code.BROLL, ProjectPipelineStep.Status.FINISHED)
             if not project.template_version.interactive_preview_enabled:
                 self.render(project_id)
                 return
@@ -2527,6 +2542,23 @@ class ExternalMediaProjectPipeline:
                 final_path = self._finalize_audio(project, job, workdir, final_path, music_path, combined_plan)
         expected_duration_ms = max(1, original_duration_ms - combined_plan.saved_ms)
         revision = project.approved_timeline_revision or project.current_timeline_revision
+        brolls = list((revision.timeline if revision else {}).get('brolls') or [])
+        if brolls:
+            self._update(project, ExternalMediaProject.Status.PROCESSING, 88, 'Aplicando B-rolls')
+            broll_output = workdir / 'project_master_broll.mp4'
+            metadata = RenderService(self.assembly.runner).probe_video(final_path)
+            canvas_width = version.preset.width or metadata.width or 1920
+            canvas_height = version.preset.height or metadata.height or 1080
+            with timed_step('render_timeline_broll', count=len(brolls)):
+                with self.storage.staged_processing_input(
+                    final_path, f'project-{project.public_id}-broll',
+                ) as processing_input:
+                    final_path = BrollRenderService(
+                        self.assembly.runner, self.storage,
+                    ).apply(
+                        project, processing_input, broll_output, brolls,
+                        canvas_width, canvas_height,
+                    )
         overlays = list((revision.timeline if revision else {}).get('overlays') or [])
         if not revision:
             from .overlays import OverlayTimelineService
@@ -2930,6 +2962,7 @@ class ExternalMediaPipeline:
         self.renderer = RenderService(subtitle_service=self.subtitles)
         self.speech_analyzer = SpeechEditAnalyzer()
         self.speech_editor = SpeechEditService(self.audio.runner)
+        self.off_context_analyzer = OffContextAnalyzer()
         self.quality = MediaQualityService(self.audio.runner)
 
     def prepare_subtitle_tracks(self, job_id):
@@ -2956,6 +2989,10 @@ class ExternalMediaPipeline:
                     self._transcription_language(job),
                     preserve_disfluencies=preserve_disfluencies,
                 )
+                # Off-context detection reasons about the raw, un-edited transcript
+                # (same timeline as the freshly assembled master) so its suggested
+                # cuts line up with `remove_segment` operations at final render.
+                self._apply_off_context_detection(job, video_path, detailed)
                 self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 36, 'Ajustando o áudio do vídeo')
                 video_path, detailed = self._apply_background_voice_removal(job, video_path, workdir, detailed)
                 detailed = self._apply_speech_edit(job, video_path, workdir, detailed)
@@ -3146,6 +3183,48 @@ class ExternalMediaPipeline:
         if default_settings.get('language_mode') == 'bilingual_source':
             return None
         return job.original_language
+
+    def _apply_off_context_detection(self, job, video_path, detailed):
+        """Flags transcript spans the member should consider cutting (never destructive).
+
+        Unlike silence/filler removal, this never edits audio or timestamps on its
+        own: the resulting cuts are stored disabled and only take effect once a
+        member enables them in the interactive review screen.
+        """
+        project = getattr(job, 'project', None)
+        if not project:
+            return
+        code = MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION
+        plugin = next(
+            (
+                item for item in TemplateService.enabled_plugins(project)
+                if item.code == code
+            ),
+            None,
+        )
+        if not plugin or not detailed:
+            return
+        ExternalMediaProjectPipeline._step(project, code, ProjectPipelineStep.Status.RUNNING)
+        try:
+            duration_ms = self.speech_editor.duration_ms(video_path)
+            plan = self.off_context_analyzer.analyze(
+                detailed, duration_ms, configuration=plugin.configuration or {},
+            )
+        except AIServiceError as exc:
+            # This is a helpful suggestion, not a required edit. A flaky AI call
+            # must never fail the whole project.
+            logger.warning('Detecção de trechos fora de contexto indisponível: %s', exc)
+            ExternalMediaProjectPipeline._step(
+                project, code, ProjectPipelineStep.Status.FINISHED, 'IA indisponível; etapa ignorada.',
+            )
+            return
+        configuration = project.configuration or {}
+        project.configuration = {**configuration, 'off_context_plan': plan.as_dict()}
+        project.save(update_fields=['configuration', 'update_at'])
+        ExternalMediaProjectPipeline._persist_canonical_state(project, project.render_job_id)
+        count = len(plan.cuts)
+        message = f'{count} trecho(s) sinalizado(s) para revisão.' if count else 'Nenhum trecho sinalizado.'
+        ExternalMediaProjectPipeline._step(project, code, ProjectPipelineStep.Status.FINISHED, message)
 
     def _apply_background_voice_removal(self, job, video_path, workdir, detailed):
         """Remove off-camera interviewer turns only from opted-in blocks."""

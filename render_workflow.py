@@ -19,6 +19,7 @@ from website.external_media.tasks import (
     _project_execution_lock,
     analyze_video_mastering,
     create_project_preview,
+    create_project_broll_preview,
     create_subtitle_review_preview,
     export_premiere_project,
     master_video,
@@ -71,6 +72,7 @@ def _process_video_work(operation: str, primary_id: int, secondary_id: int | Non
     # the queue, compute and scale-to-zero behaviour.
     tasks = {
         'project-preview': (create_project_preview, [primary_id]),
+        'broll-preview': (create_project_broll_preview, [primary_id]),
         'review-preview': (create_subtitle_review_preview, [primary_id]),
         'review-render': (render_reviewed_subtitles, [primary_id, secondary_id]),
         'legacy-prepare': (prepare_external_media, [primary_id]),

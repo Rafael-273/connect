@@ -266,17 +266,32 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
         )
 
         if template_form.is_valid() and form.is_valid() and block_formset.is_valid():
-            with transaction.atomic():
-                saved_template = template_form.save()
-                saved_version = form.save(commit=False)
-                saved_version.template = saved_template
-                saved_version.version = version.version or 1
-                saved_version.status = MediaTemplateVersion.Status.PUBLISHED
-                saved_version.published_at = saved_version.published_at or timezone.now()
-                saved_version.save()
-                block_formset.instance = saved_version
-                block_formset.save()
-                form.sync_advanced_plugins(saved_version)
+            try:
+                with transaction.atomic():
+                    saved_template = template_form.save()
+                    saved_version = form.save(commit=False)
+                    saved_version.template = saved_template
+                    saved_version.version = version.version or 1
+                    saved_version.status = MediaTemplateVersion.Status.PUBLISHED
+                    saved_version.published_at = saved_version.published_at or timezone.now()
+                    saved_version.save()
+                    block_formset.instance = saved_version
+                    block_formset.save()
+                    form.sync_advanced_plugins(saved_version)
+            except ProtectedError:
+                # The formset's own validation already blocks deleting a block that is
+                # in use; this is only a safety net for a race (e.g. media uploaded to
+                # the block between the page load and this submit).
+                messages.error(
+                    request,
+                    'Um dos blocos não pôde ser removido porque já existem vídeos de projetos '
+                    'vinculados a ele. Recarregue a página e tente novamente.',
+                )
+                return render(
+                    request,
+                    self.template_name,
+                    self._context(template, version, form, block_formset, template_form, is_create=is_create),
+                )
             action = 'criado' if is_create else 'atualizado'
             messages.success(request, f'Template "{saved_template.name}" {action}.')
             return redirect('admin_external_media_template_detail', template_id=saved_template.id)

@@ -372,6 +372,11 @@
                                     Tenta limpar vícios de fala como “é…”, “ahn…” e repetições desnecessárias.
                                     {% elif choice.data.value == 'auto_tracking' %}
                                     Ajusta o quadro automaticamente. Você pode acompanhar pessoas ou usar um zoom estável para podcasts.
+                                    {% elif choice.data.value == 'off_context_detection' %}
+                                    Usa IA para apontar erros de fala e comentários de bastidor como sugestão de corte.
+                                    O membro decide na revisão interativa; nada é cortado automaticamente.
+                                    {% elif choice.data.value == 'broll' %}
+                                    Permite fotos, vídeos e PNGs/QR Codes por bloco. A IA sugere o momento e o usuário confirma no Preview.
                                     {% endif %}
                                 </p>
                             </div>
@@ -386,6 +391,12 @@
                             Rosto mantém o locutor em destaque; Corpo abre mais o quadro para preservar gestos e movimento.
                         </p>
                         {% if form.auto_reframe_priority.errors %}<p class="text-xs text-red-600 mt-2">{{ form.auto_reframe_priority.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div id="broll-settings" class="mt-4 inline-card bg-white">
+                        <label class="form-label">{{ form.broll_config_raw.label }}</label>
+                        {{ form.broll_config_raw }}
+                        <p class="text-xs text-gray-500 mt-2">{{ form.broll_config_raw.help_text }}</p>
+                        {% if form.broll_config_raw.errors %}<p class="text-xs text-red-600 mt-2">{{ form.broll_config_raw.errors.0 }}</p>{% endif %}
                     </div>
                     <div id="speech-edit-settings" class="mt-4 inline-card bg-white">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -456,6 +467,9 @@
                                 <button type="button" class="block-remove-btn" data-remove-block><ion-icon name="trash-outline"></ion-icon> Remover</button>
                                 {% endif %}
                             </div>
+                            {% if block_form.non_field_errors %}
+                            <div class="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ block_form.non_field_errors.0 }}</div>
+                            {% endif %}
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div class="md:col-span-2"><label class="form-label">{{ block_form.name.label }}</label>{{ block_form.name }}{% if block_form.name.errors %}<p class="text-xs text-red-600 mt-1">{{ block_form.name.errors.0 }}</p>{% endif %}</div>
                                 <div><label class="form-label">{{ block_form.default_video.label }}</label>{{ block_form.default_video }}</div>

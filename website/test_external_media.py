@@ -47,6 +47,7 @@ from website.external_media.audio_noise import (
 )
 from website.external_media.auto_reframe import AutoReframePlan, AutoReframeService, ReframeKeyframe, limit_keyframes_for_ffmpeg
 from website.external_media.background_voice import BackgroundVoiceRemovalService, QuietUtterance
+from website.external_media.broll import BrollRenderService, BrollTimelineService
 from website.external_media.quality_control import MediaQualityService
 from website.external_media.speaker_diarization import SpeakerTurn
 from website.external_media.dialogue_processing import (
@@ -64,7 +65,13 @@ from website.external_media.premiere_export import (
     json_compatible,
 )
 from website.external_media.timeline import InternalTimelineBuilder, KeyframeSimplifier, TimelineSource
-from website.external_media.canonical import EditDecisionSetBuilder, SourceManifestBuilder, normalize_edit_ranges
+from website.external_media.canonical import (
+    EditDecisionSetBuilder,
+    ProjectProcessingState,
+    SourceManifestBuilder,
+    normalize_edit_ranges,
+)
+from website.external_media.content_review import OffContextAnalyzer, build_utterances
 from website.external_media.preview import PreviewCompositionService, TimelineRevisionService
 from website.external_media.tasks import (
     _execution_is_current,
@@ -120,6 +127,7 @@ from website.models.external_media import (
 )
 from website.models import Member, Ministry, MinistryMembership, User
 from website.models.external_media import external_media_project_upload_path
+from website.ai.exceptions import AIServiceError
 
 
 class ExternalMediaFixtureMixin:
@@ -1112,6 +1120,28 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
 
         self.assertEqual([(item['source_in_ms'], item['source_out_ms']) for item in cuts], [(100, 200), (350, 450)])
 
+    def test_decision_snapshot_marks_off_context_cuts_disabled_by_default(self):
+        project = self.make_project()
+        project.configuration = {
+            'off_context_plan': {
+                'duration_ms': 1000,
+                'cuts': [
+                    {'start_ms': 100, 'end_ms': 200, 'kind': 'off_context', 'label': 'Possível erro de fala: teste'},
+                ],
+            },
+        }
+        snapshot = EditDecisionSetBuilder.build(project, SourceManifestBuilder.build(project))
+        off_context_ops = [item for item in snapshot['operations'] if item['producer'] == 'off_context_detection']
+
+        self.assertEqual(len(off_context_ops), 1)
+        operation = off_context_ops[0]
+        self.assertEqual(operation['type'], 'remove_segment')
+        self.assertEqual((operation['source_in_ms'], operation['source_out_ms']), (100, 200))
+        # A suggestion must never cut anything until a member explicitly approves it.
+        self.assertFalse(operation['enabled'])
+        self.assertIsNone(operation['confidence'])
+        self.assertIn('Possível erro de fala', operation['reason'])
+
     def test_preview_revision_restores_an_automatic_cut_without_reanalysis(self):
         project = self.make_project()
         media = ProjectBlockMedia.objects.create(
@@ -1670,7 +1700,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertNotContains(response, 'Histórico de processamentos')
         self.assertNotContains(response, 'Edição inteligente de fala')
 
-    def test_processing_project_cannot_be_deleted(self):
+    def test_processing_project_can_be_deleted(self):
         project = self.make_project()
         project.status = ExternalMediaProject.Status.PROCESSING
         project.save(update_fields=['status', 'update_at'])
@@ -1678,7 +1708,18 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         response = self.client.post(reverse('external_media_project_delete', args=[project.public_id]))
 
         self.assertRedirects(response, reverse('external_media_dashboard'))
-        self.assertTrue(ExternalMediaProject.objects.filter(pk=project.pk).exists())
+        self.assertFalse(ExternalMediaProject.all_objects.filter(pk=project.pk).exists())
+
+    def test_error_project_can_be_deleted(self):
+        project = self.make_project()
+        project.status = ExternalMediaProject.Status.ERROR
+        project.error_message = 'Falha simulada'
+        project.save(update_fields=['status', 'error_message', 'update_at'])
+
+        response = self.client.post(reverse('external_media_project_delete', args=[project.public_id]))
+
+        self.assertRedirects(response, reverse('external_media_dashboard'))
+        self.assertFalse(ExternalMediaProject.all_objects.filter(pk=project.pk).exists())
 
     @patch('website.views.external_media.export_premiere_project.delay')
     def test_finished_project_can_queue_editable_premiere_export(self, delay):
@@ -1883,6 +1924,96 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertIn('speech_edit_plan', project.configuration)
         self.assertEqual(project.configuration['speech_edit_preview']['filler_count'], 1)
         self.assertEqual(remapped[0].start_ms, 600)
+
+    def test_off_context_detection_skips_when_plugin_disabled(self):
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.save(update_fields=['render_job', 'update_at'])
+        pipeline = ExternalMediaPipeline()
+        pipeline.off_context_analyzer = Mock()
+
+        pipeline._apply_off_context_detection(
+            job, Path('/tmp/video.mp4'), [TranscriptionSegment(0, 300, 'Amém', 'word')],
+        )
+
+        pipeline.off_context_analyzer.analyze.assert_not_called()
+        project.refresh_from_db()
+        self.assertNotIn('off_context_plan', project.configuration)
+
+    def test_off_context_detection_stores_disabled_suggestions_for_review(self):
+        MediaTemplatePlugin.objects.create(
+            version=self.version, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION, order=4,
+        )
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.save(update_fields=['render_job', 'update_at'])
+        ProjectPipelineStep.objects.create(
+            project=project, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
+            label='Detectando trechos fora de contexto', order=1,
+        )
+        pipeline = ExternalMediaPipeline()
+        pipeline.speech_editor = Mock()
+        pipeline.speech_editor.duration_ms.return_value = 5000
+        pipeline.off_context_analyzer = Mock()
+        pipeline.off_context_analyzer.analyze.return_value = SpeechEditPlan(
+            (SpeechCut(1000, 2000, 'off_context', 'Possível erro de fala: teste'),), 5000,
+        )
+        detailed = [
+            TranscriptionSegment(0, 300, 'Amém', 'word'),
+            TranscriptionSegment(1000, 1300, 'De novo', 'word'),
+        ]
+
+        pipeline._apply_off_context_detection(job, Path('/tmp/video.mp4'), detailed)
+
+        project.refresh_from_db()
+        stored_cuts = project.configuration['off_context_plan']['cuts']
+        self.assertEqual(stored_cuts[0]['start_ms'], 1000)
+        self.assertEqual(stored_cuts[0]['end_ms'], 2000)
+        step = ProjectPipelineStep.objects.get(
+            project=project, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
+        )
+        self.assertEqual(step.status, ProjectPipelineStep.Status.FINISHED)
+        self.assertIn('1 trecho', step.message)
+        # The suggestion must not have been folded into a real, enabled cut yet.
+        decisions = EditDecisionSetBuilder.build(project)
+        off_context_ops = [
+            item for item in decisions['operations'] if item['producer'] == 'off_context_detection'
+        ]
+        self.assertEqual(len(off_context_ops), 1)
+        self.assertFalse(off_context_ops[0]['enabled'])
+
+    def test_off_context_detection_survives_a_failed_ai_call(self):
+        MediaTemplatePlugin.objects.create(
+            version=self.version, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION, order=4,
+        )
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.save(update_fields=['render_job', 'update_at'])
+        ProjectPipelineStep.objects.create(
+            project=project, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
+            label='Detectando trechos fora de contexto', order=1,
+        )
+        pipeline = ExternalMediaPipeline()
+        pipeline.speech_editor = Mock()
+        pipeline.speech_editor.duration_ms.return_value = 5000
+        pipeline.off_context_analyzer = Mock()
+        pipeline.off_context_analyzer.analyze.side_effect = AIServiceError('indisponível')
+        detailed = [
+            TranscriptionSegment(0, 300, 'Amém', 'word'),
+            TranscriptionSegment(1000, 1300, 'De novo', 'word'),
+        ]
+
+        pipeline._apply_off_context_detection(job, Path('/tmp/video.mp4'), detailed)
+
+        project.refresh_from_db()
+        self.assertNotIn('off_context_plan', project.configuration)
+        step = ProjectPipelineStep.objects.get(
+            project=project, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
+        )
+        self.assertEqual(step.status, ProjectPipelineStep.Status.FINISHED)
 
     def test_speech_edit_remaps_block_ranges_to_the_edited_timeline(self):
         MediaTemplatePlugin.objects.create(
@@ -2383,6 +2514,73 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         )
         self.assertEqual(self.version.blocks.count(), 1)
 
+    def test_admin_panel_cannot_delete_a_block_already_used_by_a_project(self):
+        block = MediaTemplateBlock.objects.create(
+            version=self.version, key='video', name='Vídeo', order=1,
+            is_required=True, min_occurrences=1, max_occurrences=1,
+        )
+        project = ExternalMediaProject.objects.create(
+            name='Anúncio de outubro', template_version=self.version, created_by=self.member,
+        )
+        ProjectBlockMedia.objects.create(
+            project=project, block=block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'),
+        )
+
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                **{
+                    'blocks-TOTAL_FORMS': '1',
+                    'blocks-INITIAL_FORMS': '1',
+                    'blocks-0-id': str(block.pk),
+                    'blocks-0-key': block.key,
+                    'blocks-0-name': block.name,
+                    'blocks-0-order': str(block.order),
+                    'blocks-0-is_required': 'on',
+                    'blocks-0-min_occurrences': '1',
+                    'blocks-0-max_occurrences': '1',
+                    'blocks-0-DELETE': 'on',
+                },
+            ),
+        )
+
+        # A ProtectedError must never surface as a 500: the formset validation
+        # rejects the deletion up front and the page re-renders with a hint.
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Anúncio de outubro')
+        self.assertTrue(MediaTemplateBlock.objects.filter(pk=block.pk).exists())
+
+    def test_admin_panel_can_still_delete_a_block_never_used_by_a_project(self):
+        block = MediaTemplateBlock.objects.create(
+            version=self.version, key='video', name='Vídeo', order=1,
+            is_required=True, min_occurrences=1, max_occurrences=1,
+        )
+
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                **{
+                    'blocks-TOTAL_FORMS': '1',
+                    'blocks-INITIAL_FORMS': '1',
+                    'blocks-0-id': str(block.pk),
+                    'blocks-0-key': block.key,
+                    'blocks-0-name': block.name,
+                    'blocks-0-order': str(block.order),
+                    'blocks-0-is_required': 'on',
+                    'blocks-0-min_occurrences': '1',
+                    'blocks-0-max_occurrences': '1',
+                    'blocks-0-DELETE': 'on',
+                },
+            ),
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('admin_external_media_template_detail', args=[self.template.pk]),
+        )
+        self.assertFalse(MediaTemplateBlock.objects.filter(pk=block.pk).exists())
+
     def test_admin_panel_uses_checkboxes_for_advanced_plugins(self):
         response = self.client.post(
             reverse('admin_external_media_version_edit', args=[self.version.pk]),
@@ -2409,6 +2607,20 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         fillers = self.version.plugins.get(code=MediaTemplatePlugin.Code.FILLER_REMOVAL)
         self.assertEqual(silence.configuration['profile'], 'conservative')
         self.assertEqual(fillers.configuration['filler_words'], ['eh', 'hum', 'tipo'])
+
+    def test_admin_panel_can_enable_off_context_detection(self):
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                advanced_plugins=[MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION],
+            ),
+        )
+        self.assertRedirects(
+            response,
+            reverse('admin_external_media_template_detail', args=[self.template.pk]),
+        )
+        plugin = self.version.plugins.get(code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION)
+        self.assertTrue(plugin.is_enabled)
 
     def test_admin_panel_saves_auto_reframe_priority(self):
         response = self.client.post(
@@ -2538,6 +2750,90 @@ class TranscriptionGroupingTests(SimpleTestCase):
     def test_block_boundaries_ms_returns_empty_without_project(self):
         job = SimpleNamespace(project=None)
         self.assertEqual(ExternalMediaPipeline._block_boundaries_ms(job), [])
+
+
+class OffContextDetectionTests(SimpleTestCase):
+    def test_build_utterances_splits_on_long_pauses(self):
+        words = [
+            TranscriptionSegment(0, 300, 'Bom', 'word'),
+            TranscriptionSegment(320, 600, 'dia', 'word'),
+            TranscriptionSegment(2000, 2300, 'Vamos', 'word'),
+            TranscriptionSegment(2320, 2600, 'começar', 'word'),
+        ]
+        utterances = build_utterances(words)
+        self.assertEqual([item.text for item in utterances], ['Bom dia', 'Vamos começar'])
+        self.assertEqual([item.id for item in utterances], [1, 2])
+        self.assertEqual(utterances[1].start_ms, 2000)
+
+    def test_build_utterances_caps_long_runs_without_pauses(self):
+        words = [
+            TranscriptionSegment(index * 200, index * 200 + 150, f'palavra{index}', 'word')
+            for index in range(35)
+        ]
+        utterances = build_utterances(words)
+        self.assertGreater(len(utterances), 1)
+        self.assertTrue(all(len(item.text.split()) <= 28 for item in utterances))
+
+    def test_analyze_skips_ai_call_with_too_few_utterances(self):
+        ai = Mock()
+        words = [TranscriptionSegment(0, 300, 'Amém', 'word')]
+        plan = OffContextAnalyzer(ai_service=ai).analyze(words, 5000)
+        self.assertEqual(plan.cuts, ())
+        ai.generate_text.assert_not_called()
+
+    def test_analyze_maps_ai_response_to_cut_boundaries(self):
+        words = [
+            TranscriptionSegment(0, 400, 'Deixa', 'word'),
+            TranscriptionSegment(420, 800, 'eu', 'word'),
+            TranscriptionSegment(820, 1200, 'recomeçar.', 'word'),
+            TranscriptionSegment(1900, 2300, 'Hoje', 'word'),
+            TranscriptionSegment(2320, 2700, 'vamos', 'word'),
+            TranscriptionSegment(2720, 3200, 'falar.', 'word'),
+        ]
+        ai = Mock()
+        ai.generate_text.return_value = json.dumps({
+            'cuts': [{'start_id': 1, 'end_id': 1, 'category': 'speech_error', 'reason': 'Pediu para recomeçar'}],
+        })
+        plan = OffContextAnalyzer(ai_service=ai).analyze(words, 4000)
+
+        self.assertEqual(len(plan.cuts), 1)
+        cut = plan.cuts[0]
+        self.assertEqual(cut.kind, 'off_context')
+        self.assertEqual((cut.start_ms, cut.end_ms), (0, 1200))
+        self.assertIn('Pediu para recomeçar', cut.label)
+
+    def test_analyze_ignores_invalid_json_response(self):
+        words = [
+            TranscriptionSegment(0, 400, 'Um', 'word'),
+            TranscriptionSegment(420, 800, 'dois', 'word'),
+            TranscriptionSegment(1900, 2300, 'três', 'word'),
+        ]
+        ai = Mock()
+        ai.generate_text.return_value = 'not json at all'
+        plan = OffContextAnalyzer(ai_service=ai).analyze(words, 3000)
+        self.assertEqual(plan.cuts, ())
+
+    def test_analyze_ignores_cuts_with_unknown_ids(self):
+        words = [
+            TranscriptionSegment(0, 400, 'Um', 'word'),
+            TranscriptionSegment(420, 800, 'dois', 'word'),
+            TranscriptionSegment(1900, 2300, 'três', 'word'),
+        ]
+        ai = Mock()
+        ai.generate_text.return_value = json.dumps({'cuts': [{'start_id': 99, 'end_id': 100, 'reason': 'x'}]})
+        plan = OffContextAnalyzer(ai_service=ai).analyze(words, 3000)
+        self.assertEqual(plan.cuts, ())
+
+    def test_analyze_survives_an_ai_service_error(self):
+        words = [
+            TranscriptionSegment(0, 400, 'Um', 'word'),
+            TranscriptionSegment(420, 800, 'dois', 'word'),
+            TranscriptionSegment(1900, 2300, 'três', 'word'),
+        ]
+        ai = Mock()
+        ai.generate_text.side_effect = AIServiceError('indisponível')
+        plan = OffContextAnalyzer(ai_service=ai).analyze(words, 3000)
+        self.assertEqual(plan.cuts, ())
 
 
 class ProtectedFileResponseRangeTests(SimpleTestCase):
@@ -4177,6 +4473,55 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertGreater(plan.keyframes[0].x, 0)
         self.assertGreater(plan.keyframes[0].y, 0)
 
+    def test_static_reframe_centers_on_anchor_when_subject_is_off_center(self):
+        # A subject sitting well to the left should pull the fixed crop toward
+        # them instead of leaving it centered on the raw frame's geometry.
+        plan = AutoReframeService(priority='static')._static_center_plan(
+            1920, 1080, 1920, 1080, anchor=(400, 540),
+        )
+
+        centered_x = (1920 - plan.crop_width) / 2.0
+        self.assertLess(plan.keyframes[0].x, centered_x)
+
+    def test_static_reframe_anchor_stays_within_crop_bounds(self):
+        # An anchor near the very edge must not push the crop out of the frame.
+        plan = AutoReframeService(priority='static')._static_center_plan(
+            1920, 1080, 1920, 1080, anchor=(10, 10),
+        )
+
+        self.assertGreaterEqual(plan.keyframes[0].x, 0)
+        self.assertGreaterEqual(plan.keyframes[0].y, 0)
+
+    def test_auto_reframe_static_anchor_uses_opening_seconds_median(self):
+        service = AutoReframeService(priority='static', interval_frames=1)
+        capture = Mock()
+        capture.read.side_effect = [
+            (True, object()), (True, object()), (True, object()),
+            (True, object()), (True, object()), (False, None),
+        ]
+        detections = [
+            ((100, 100, 300, 300), 1),
+            ((110, 105, 310, 305), 1),
+            ((900, 100, 1100, 300), 1),  # transient outlier, e.g. a hand entering frame
+            ((105, 100, 305, 300), 1),
+            ((108, 102, 308, 302), 1),
+        ]
+        with patch.object(AutoReframeService, '_detect_people', side_effect=detections):
+            anchor = service._detect_initial_anchor(capture, [], Mock(), Mock(), fps=30.0)
+
+        self.assertIsNotNone(anchor)
+        # The median should reflect the cluster around (100-110, 100-105), not the outlier.
+        self.assertLess(anchor[0], 300)
+
+    def test_auto_reframe_static_anchor_is_none_without_detections(self):
+        service = AutoReframeService(priority='static', interval_frames=1)
+        capture = Mock()
+        capture.read.side_effect = [(True, object()), (True, object()), (False, None)]
+        with patch.object(AutoReframeService, '_detect_people', return_value=None):
+            anchor = service._detect_initial_anchor(capture, [], Mock(), Mock(), fps=30.0)
+
+        self.assertIsNone(anchor)
+
     def test_normalize_edit_ranges_merges_overlaps_and_respects_protection(self):
         ranges = [
             {'start_ms': 100, 'end_ms': 400, 'kind': 'silence'},
@@ -4592,3 +4937,130 @@ class AudioNoiseCleanupUnitTests(SimpleTestCase):
         merged = AudioNoiseAnalysisService._merge_events(events, 5000)
         self.assertEqual(len(merged), 1)
         self.assertEqual(merged[0].end_ms, 2600)
+
+
+class BrollUnitTests(SimpleTestCase):
+    def test_automatic_time_is_remapped_after_earlier_cuts(self):
+        cuts = [(2000, 3000), (7000, 7500)]
+        self.assertEqual(PreviewCompositionService._source_to_timeline(1500, cuts), 1500)
+        self.assertEqual(PreviewCompositionService._source_to_timeline(5000, cuts), 4000)
+        self.assertEqual(PreviewCompositionService._source_to_timeline(8000, cuts), 6500)
+
+    def test_fallback_uses_semantic_cue_and_qr_as_overlay(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='IMAGE', description='QR inscrição conferência',
+            original_filename='inscricao.png', duration_ms=4000,
+            defaults={}, custom_block_id=None,
+            block=SimpleNamespace(key='cta'),
+        )
+        decision = BrollTimelineService._fallback_decision(
+            asset, {'cta': (10000, 30000)}, [
+                {'start_ms': 11000, 'end_ms': 13000, 'text': 'Bem-vindos ao evento'},
+                {'start_ms': 21000, 'end_ms': 23000, 'text': 'Faça sua inscrição na conferência'},
+            ], {**BrollTimelineService.DEFAULTS}, 0,
+        )
+        self.assertEqual(decision['display_mode'], 'OVERLAY')
+        self.assertEqual(decision['start_ms'], 21000)
+        self.assertLessEqual(decision['end_ms'], 30000)
+        self.assertEqual(decision['type'], 'BROLL')
+
+    def test_renderer_builds_approved_image_overlay_command(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='IMAGE', file=SimpleNamespace(path='/tmp/qr.png'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        project = SimpleNamespace(broll_assets=Assets())
+        decision = {
+            'asset_id': str(asset.public_id), 'enabled': True,
+            'media_type': 'IMAGE', 'start_ms': 1000, 'end_ms': 5000,
+            'source_in_ms': 0, 'display_mode': 'OVERLAY',
+            'transform': {'x': .8, 'y': .75, 'scale': .25},
+            'motion': {'type': 'NONE'},
+            'entry': {'type': 'SLIDE', 'duration_ms': 300},
+            'exit': {'type': 'FADE', 'duration_ms': 250},
+        }
+        output = Path('/tmp/broll-output.mp4')
+        result = BrollRenderService(runner=runner).apply(
+            project, Path('/tmp/master.mp4'), output, [decision], 1080, 1920,
+        )
+        self.assertEqual(result, output)
+        command = runner.run.call_args.args[0]
+        self.assertIn('-filter_complex', command)
+        filters = command[command.index('-filter_complex') + 1]
+        self.assertIn('overlay=', filters)
+        self.assertIn('if(lt(t,1.3)', filters)
+        self.assertIn('fade=t=out', filters)
+        self.assertIn('0:a?', command)
+
+    def test_renderer_composites_image_on_real_ffmpeg_canvas(self):
+        runner = FFmpegRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            image = workdir / 'broll.ppm'
+            output = workdir / 'output.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x180:d=1',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-shortest',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            image.write_bytes(b'P6\n2 2\n255\n' + bytes([255, 0, 0] * 4))
+            asset = SimpleNamespace(
+                public_id='00000000-0000-0000-0000-000000000010',
+                media_type='IMAGE', file=SimpleNamespace(path=str(image)),
+            )
+
+            class Assets:
+                @staticmethod
+                def filter(**kwargs):
+                    return [asset]
+
+            result = BrollRenderService(runner=runner).apply(
+                SimpleNamespace(broll_assets=Assets()), source, output, [{
+                    'asset_id': str(asset.public_id), 'enabled': True,
+                    'start_ms': 100, 'end_ms': 900, 'source_in_ms': 0,
+                    'display_mode': 'FULLSCREEN',
+                    'transform': {'x': .2, 'y': .8, 'scale': 1},
+                    'motion': {'type': 'NONE'},
+                    'entry': {'type': 'SCALE', 'duration_ms': 100},
+                    'exit': {'type': 'SCALE', 'duration_ms': 100},
+                }], 320, 180,
+            )
+            metadata = RenderService(runner).probe_video(result)
+        self.assertEqual((metadata.width, metadata.height), (320, 180))
+
+    def test_fullscreen_cover_targets_horizontal_vertical_and_ultrawide_presets(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='VIDEO', file=SimpleNamespace(path='/tmp/broll.mp4'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        for width, height in ((1920, 1080), (1080, 1920), (3840, 1200)):
+            with self.subTest(width=width, height=height):
+                runner = Mock()
+                BrollRenderService(runner=runner).apply(
+                    SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+                    Path('/tmp/output.mp4'), [{
+                        'asset_id': str(asset.public_id), 'enabled': True,
+                        'start_ms': 0, 'end_ms': 1000, 'display_mode': 'FULLSCREEN',
+                        'transform': {'x': .25, 'y': .75}, 'entry': {}, 'exit': {},
+                    }], width, height,
+                )
+                command = runner.run.call_args.args[0]
+                filters = command[command.index('-filter_complex') + 1]
+                self.assertIn(f'scale={width}:{height}:force_original_aspect_ratio=increase', filters)
+                self.assertIn(f'crop={width}:{height}', filters)
+                self.assertNotIn('pad=', filters)

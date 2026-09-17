@@ -16,6 +16,7 @@ from ..models.external_media import (
     MediaTemplatePlugin,
     MediaTemplateVersion,
     OverlayPreset,
+    ProjectBlockMedia,
     ProxyProfile,
     RenderPreset,
     SpeechFillerTerm,
@@ -30,11 +31,15 @@ ADVANCED_PLUGIN_CODES = {
     MediaTemplatePlugin.Code.SILENCE_REMOVAL,
     MediaTemplatePlugin.Code.FILLER_REMOVAL,
     MediaTemplatePlugin.Code.AUTO_TRACKING,
+    MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
+    MediaTemplatePlugin.Code.BROLL,
 }
 ADVANCED_PLUGIN_CHOICES = [
     (MediaTemplatePlugin.Code.SILENCE_REMOVAL, 'Corte de silêncio'),
     (MediaTemplatePlugin.Code.FILLER_REMOVAL, 'Remover vícios de fala'),
     (MediaTemplatePlugin.Code.AUTO_TRACKING, 'Auto Reframe inteligente'),
+    (MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION, 'Detectar trechos fora de contexto (IA)'),
+    (MediaTemplatePlugin.Code.BROLL, 'B-roll automático (vídeos e imagens)'),
 ]
 RENDER_PRESET_VIDEO_CODEC_CHOICES = [
     ('libx264', 'H.264 (libx264) — compatível com telão, YouTube e redes sociais'),
@@ -176,6 +181,17 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         help_text=(
             'Opcional. Exemplo: '
             '{"global_mode": "LIGHT", "detect_transient_noise": true, "transient_action": "REVIEW"}'
+        ),
+    )
+    broll_config_raw = forms.CharField(
+        label='Configuração do B-roll (JSON)',
+        required=False,
+        widget=forms.Textarea(attrs={'rows': 7}),
+        help_text=(
+            'Controla os assets visuais do Template. Exemplo: '
+            '{"enabled": true, "allow_video": true, "allow_image": true, '
+            '"allow_overlay": true, "auto_placement": true, "smart_crop": false, '
+            '"image_motion": "AUTO", "default_transition": "FADE"}'
         ),
     )
     LANGUAGE_MODE_SINGLE = 'single'
@@ -361,6 +377,12 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                         'auto_reframe_priority',
                         (auto_reframe.configuration or {}).get('priority', 'face'),
                     )
+                broll_plugin = instance.plugins.filter(code=MediaTemplatePlugin.Code.BROLL).first()
+                if broll_plugin:
+                    initial.setdefault(
+                        'broll_config_raw',
+                        json.dumps(broll_plugin.configuration or {}, indent=2, ensure_ascii=False),
+                    )
                 speech_plugin = instance.plugins.filter(
                     code__in=[
                         MediaTemplatePlugin.Code.SILENCE_REMOVAL,
@@ -474,6 +496,20 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             raise forms.ValidationError('Use um objeto JSON, por exemplo {"global_mode": "LIGHT"}.')
         return value
 
+    def clean_broll_config_raw(self):
+        value = self._parse_json(
+            self.cleaned_data.get('broll_config_raw'), {}, 'Configuração do B-roll',
+        )
+        if not isinstance(value, dict):
+            raise forms.ValidationError('Use um objeto JSON para configurar o B-roll.')
+        valid_motion = {'AUTO', 'NONE', 'ZOOM_IN', 'ZOOM_OUT', 'PAN_LEFT', 'PAN_RIGHT'}
+        valid_transition = {'NONE', 'FADE', 'SLIDE', 'SCALE'}
+        if str(value.get('image_motion', 'AUTO')).upper() not in valid_motion:
+            raise forms.ValidationError('image_motion possui um valor inválido.')
+        if str(value.get('default_transition', 'FADE')).upper() not in valid_transition:
+            raise forms.ValidationError('default_transition possui um valor inválido.')
+        return value
+
     @staticmethod
     def _parse_json(raw, default, label):
         if not raw:
@@ -567,6 +603,11 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                     # Podcasts often benefit from a stable, modest crop without
                     # shifting the frame as speakers move.
                     'static_zoom': 1.06 if is_static_frame else 1.0,
+                }
+            elif code == MediaTemplatePlugin.Code.BROLL and 'broll_config_raw' in self.data:
+                configuration = {
+                    **configuration,
+                    **(self.cleaned_data.get('broll_config_raw') or {}),
                 }
             elif code in {
                 MediaTemplatePlugin.Code.SILENCE_REMOVAL,
@@ -675,9 +716,40 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
             return False
         return super().has_changed()
 
+    @staticmethod
+    def _block_usage_summary(instance, limit=3):
+        """Human-readable summary of the projects that already used this block.
+
+        Includes soft-deleted ``ProjectBlockMedia`` rows: their database row still
+        exists and still satisfies the ``PROTECT`` foreign key, so they would block
+        the block's deletion just the same.
+        """
+        names = list(
+            ProjectBlockMedia.all_objects.filter(block=instance)
+            .order_by('project__name')
+            .values_list('project__name', flat=True)
+            .distinct()
+        )
+        if not names:
+            return ''
+        noun = 'projeto' if len(names) == 1 else 'projetos'
+        examples = ', '.join(names[:limit])
+        if len(names) > limit:
+            examples += ', …'
+        return f'{len(names)} {noun} ({examples})'
+
     def clean(self):
         cleaned_data = super().clean()
         if cleaned_data.get('DELETE'):
+            if self.instance.pk:
+                usage = self._block_usage_summary(self.instance)
+                if usage:
+                    self.add_error(
+                        None,
+                        f'Não é possível remover o bloco "{self.instance.name}" porque ele já foi usado em '
+                        f'{usage}. Para preservar o histórico desses projetos, edite o bloco em vez de excluí-lo.',
+                    )
+                    cleaned_data['DELETE'] = False
             return cleaned_data
         name = (cleaned_data.get('name') or '').strip()
         if not name:

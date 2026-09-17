@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from PIL import Image, UnidentifiedImageError
 from django import forms
 from django.conf import settings
 from django.db.models import OuterRef, Subquery
@@ -11,6 +12,7 @@ from ..models.external_media import (
     MasteringProfile,
     MediaTemplateVersion,
     ProjectBlockMedia,
+    ProjectBrollAsset,
     ProjectCustomBlock,
     RenderPreset,
     SubtitleStyle,
@@ -19,6 +21,7 @@ from ..models.external_media import (
 
 
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.webm', '.avi', '.m4v'}
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
 
 
 def validate_video_upload(video):
@@ -151,6 +154,43 @@ class ProjectBlockMediaForm(forms.ModelForm):
         if value in (None, ''):
             return None
         return max(0, round(float(value) * 1000))
+
+
+class ProjectBrollAssetForm(forms.ModelForm):
+    duration_seconds = forms.DecimalField(
+        required=False, min_value=.1, max_value=3600, decimal_places=2,
+        label='Duração sugerida (segundos)',
+    )
+
+    class Meta:
+        model = ProjectBrollAsset
+        fields = ['file', 'description']
+        labels = {'file': 'Foto, PNG/QR Code ou vídeo', 'description': 'Descrição para a IA'}
+        widgets = {
+            'file': forms.ClearableFileInput(attrs={
+                'accept': '.mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp',
+            }),
+            'description': forms.TextInput(attrs={
+                'maxlength': 500,
+                'placeholder': 'Ex.: QR Code para inscrição da conferência',
+            }),
+        }
+
+    def clean_file(self):
+        upload = self.cleaned_data['file']
+        suffix = Path(upload.name).suffix.lower()
+        if suffix in VIDEO_EXTENSIONS:
+            return validate_video_upload(upload)
+        if suffix not in IMAGE_EXTENSIONS:
+            raise forms.ValidationError('Envie MP4, MOV, MKV, WEBM, AVI, M4V, PNG, JPG ou WEBP.')
+        if upload.size > 20 * 1024 * 1024:
+            raise forms.ValidationError('A imagem deve ter no máximo 20 MB.')
+        try:
+            Image.open(upload).verify()
+            upload.seek(0)
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise forms.ValidationError('A imagem enviada está corrompida ou não é suportada.') from exc
+        return upload
 
 
 class ProjectCustomBlockForm(forms.ModelForm):

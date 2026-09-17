@@ -24,6 +24,7 @@ from safedelete.models import HARD_DELETE
 
 from ..external_media.tasks import (
     analyze_video_mastering,
+    create_project_broll_preview,
     create_project_preview,
     export_premiere_project,
     master_video,
@@ -39,7 +40,9 @@ from ..forms.external_media import (
     ExternalMediaProjectSettingsForm,
     GlossaryTermForm,
     ProjectBlockMediaForm,
+    ProjectBrollAssetForm,
     ProjectCustomBlockForm,
+    IMAGE_EXTENSIONS,
     VIDEO_EXTENSIONS,
     VideoMasteringProfileForm,
     VideoMasteringUploadForm,
@@ -53,6 +56,7 @@ from ..models.external_media import (
     MediaTemplateBlock,
     ProjectPipelineStep,
     ProjectBlockMedia,
+    ProjectBrollAsset,
     ProjectCustomBlock,
     ProjectSourceProxy,
     ProjectOverlay,
@@ -61,6 +65,7 @@ from ..models.external_media import (
     SubtitleReviewSession,
     SubtitleTrack,
     VideoMasteringJob,
+    external_media_broll_asset_path,
     external_media_project_upload_path,
     get_external_media_storage,
 )
@@ -70,6 +75,7 @@ from tempfile import TemporaryDirectory
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
 from ..external_media.preview import PreviewCompositionService, TimelineRevisionService
 from ..external_media.overlays import OverlayAssetRenderer, OverlayTimelineService
+from ..external_media.broll import BrollTimelineService
 from ..external_media.render_workflow import enqueue_project as enqueue_render_project, enqueue_video_work
 from ..external_media.services import StorageService
 from ..external_media.subtitle_reviews import SubtitleReviewService
@@ -417,7 +423,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 'template_version__subtitle_style', 'render_job',
             ).prefetch_related(
                 'template_version__blocks', 'template_version__plugins',
-                'block_media', 'custom_blocks', 'pipeline_steps', 'render_job__assets',
+                'block_media', 'broll_assets', 'custom_blocks', 'pipeline_steps', 'render_job__assets',
                 'processing_history__assets', 'subtitle_review_sessions',
             ),
             public_id=public_id,
@@ -452,12 +458,16 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 None,
             )
         media_by_block = {}
+        broll_by_block = {}
         missing_media_by_block = {}
         for item in project.block_media.all():
             if ProjectService.file_exists(item.file):
                 media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
             else:
                 missing_media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
+        for asset in project.broll_assets.filter(is_enabled=True):
+            key = ('custom', asset.custom_block_id) if asset.custom_block_id else ('template', asset.block_id)
+            broll_by_block.setdefault(key, []).append(asset)
         blocks = [
             {
                 'definition': block,
@@ -467,6 +477,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 'has_missing_default_video': bool(block.default_video and block.default_video.name),
                 'is_custom': False,
                 'overlays': overlays_by_block.get(block.pk, []),
+                'brolls': broll_by_block.get(('template', block.pk), []),
             }
             for block in project.template_version.blocks.all()
         ]
@@ -478,7 +489,17 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             'has_missing_default_video': False,
             'is_custom': True,
             'overlays': [],
+            'brolls': broll_by_block.get(('custom', block.pk), []),
         } for block in project.custom_blocks.all())
+        for block_data in blocks:
+            block_data['primary_media'] = [
+                media for media in block_data['media']
+                if media.camera_role == ProjectBlockMedia.CameraRole.PRIMARY
+            ]
+            block_data['extra_media'] = [
+                media for media in block_data['media']
+                if media.camera_role == ProjectBlockMedia.CameraRole.SECONDARY
+            ]
         block_by_key = {
             f"{'c' if item['is_custom'] else 't'}-{item['definition'].pk}": item
             for item in blocks
@@ -502,6 +523,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             can_retry_render=self._can_retry_project_render(project),
             restore_processed_result=restore_job,
             use_s3=settings.USE_S3,
+            broll_config=BrollTimelineService.configuration(project),
             project_exports=project.exports.order_by('-created_at')[:10],
             processing_history=project.processing_history.select_related('preset').prefetch_related('assets'),
             pending_subtitle_reviews=project.subtitle_review_sessions.filter(
@@ -621,13 +643,6 @@ class ExternalMediaProjectRestoreProcessedResultView(ExternalMediaRequiredMixin,
 
 
 class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
-    terminal_statuses = {
-        ExternalMediaProject.Status.DRAFT,
-        ExternalMediaProject.Status.FINISHED,
-        ExternalMediaProject.Status.ERROR,
-        ExternalMediaProject.Status.CANCELLED,
-    }
-
     def post(self, request, public_id):
         project = get_object_or_404(
             ExternalMediaProject.objects.select_related('render_job').prefetch_related(
@@ -635,9 +650,6 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
             ),
             public_id=public_id,
         )
-        if project.status not in self.terminal_statuses:
-            messages.warning(request, 'Aguarde o processamento terminar antes de excluir o projeto.')
-            return redirect('external_media_dashboard')
 
         files = []
 
@@ -648,6 +660,9 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
         for item in project.block_media.all():
             remember(item.file)
             remember(item.thumbnail)
+        for asset in project.broll_assets.all():
+            remember(asset.file)
+            remember(asset.preview_file)
         for export in project.exports.all():
             remember(export.archive)
             remember(export.timeline_json)
@@ -1076,6 +1091,111 @@ class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixi
         })
 
 
+class ExternalMediaProjectBrollUploadPresignView(ExternalMediaRequiredMixin, View):
+    """Allocate and sign a B-roll upload so the browser sends bytes straight to S3."""
+
+    def post(self, request, public_id, block_id, custom=False):
+        if not settings.USE_S3:
+            return JsonResponse({'detail': 'Upload direto ao S3 requer USE_S3=TRUE.'}, status=400)
+        project = get_object_or_404(
+            ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT,
+        )
+        block = None if custom else get_object_or_404(
+            MediaTemplateBlock, pk=block_id, version=project.template_version,
+        )
+        custom_block = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project) if custom else None
+        try:
+            data = json.loads(request.body)
+            filename = str(data.get('filename') or '').strip()
+            file_size = int(data.get('size') or 0)
+        except (TypeError, ValueError):
+            return JsonResponse({'detail': 'Dados do arquivo inválidos.'}, status=400)
+        suffix = Path(filename).suffix.lower()
+        if suffix in VIDEO_EXTENSIONS:
+            media_type = ProjectBrollAsset.MediaType.VIDEO
+            limit = settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024
+        elif suffix in IMAGE_EXTENSIONS:
+            media_type = ProjectBrollAsset.MediaType.IMAGE
+            limit = 20 * 1024 * 1024
+        else:
+            return JsonResponse({'detail': 'Envie MP4, MOV, MKV, WEBM, AVI, M4V, PNG, JPG ou WEBP.'}, status=400)
+        if file_size <= 0 or file_size > limit:
+            return JsonResponse({'detail': f'O arquivo excede o limite de {limit // (1024 * 1024)} MB.'}, status=400)
+        config = BrollTimelineService.configuration(project)
+        if not config.get('enabled') or media_type == ProjectBrollAsset.MediaType.VIDEO and not config.get('allow_video', True) or media_type == ProjectBrollAsset.MediaType.IMAGE and not config.get('allow_image', True):
+            return JsonResponse({'detail': 'Este Template não permite este tipo de B-roll.'}, status=400)
+        duration_value = data.get('duration_seconds')
+        try:
+            duration_ms = round(float(duration_value) * 1000) if duration_value not in (None, '') else None
+        except (TypeError, ValueError):
+            return JsonResponse({'detail': 'A duração sugerida é inválida.'}, status=400)
+        if duration_ms is not None and not 100 <= duration_ms <= 3_600_000:
+            return JsonResponse({'detail': 'A duração sugerida deve ficar entre 0,1 e 3600 segundos.'}, status=400)
+        asset_public_id = uuid.uuid4()
+        owner_filter = {'custom_block': custom_block} if custom else {'block': block}
+        position = (project.broll_assets.filter(**owner_filter).aggregate(value=Max('position'))['value'] or 0) + 1
+        storage_key = external_media_broll_asset_path(
+            SimpleNamespace(project=project, public_id=asset_public_id), filename,
+        )
+        try:
+            upload_url = _generate_presigned_put(storage_key, str(data.get('content_type') or 'application/octet-stream'))
+        except Exception:
+            return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
+        allocation = {
+            'project_id': str(project.public_id), 'block_id': block.pk if block else None,
+            'custom_block_id': custom_block.pk if custom_block else None,
+            'public_id': str(asset_public_id), 'storage_key': storage_key,
+            'filename': filename, 'size': file_size, 'media_type': media_type,
+            'description': str(data.get('description') or '').strip()[:500],
+            'duration_ms': duration_ms, 'position': position,
+        }
+        return JsonResponse({
+            'upload_url': upload_url,
+            'complete_url': reverse('external_media_project_broll_upload_complete', args=[project.public_id]),
+            'allocation': allocation, 'allocation_sig': _sign_upload_allocation(allocation),
+        })
+
+
+class ExternalMediaProjectBrollUploadCompleteView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(
+            ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT,
+        )
+        try:
+            data = json.loads(request.body)
+            allocation, signature = data['allocation'], data['allocation_sig']
+        except (TypeError, ValueError, KeyError):
+            return JsonResponse({'detail': 'Dados de confirmação inválidos.'}, status=400)
+        if not _verify_upload_allocation(allocation, signature) or str(allocation.get('project_id')) != str(project.public_id):
+            return JsonResponse({'detail': 'Assinatura de upload inválida.'}, status=400)
+        block_id, custom_block_id = allocation.get('block_id'), allocation.get('custom_block_id')
+        block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version) if block_id else None
+        custom_block = get_object_or_404(ProjectCustomBlock, pk=custom_block_id, project=project) if custom_block_id else None
+        if bool(block) == bool(custom_block):
+            return JsonResponse({'detail': 'Bloco de B-roll inválido.'}, status=400)
+        try:
+            asset = ProjectBrollAsset.objects.create(
+                public_id=uuid.UUID(str(allocation['public_id'])), project=project,
+                block=block, custom_block=custom_block, file=allocation['storage_key'],
+                original_filename=allocation['filename'], file_size=int(allocation['size']),
+                media_type=allocation['media_type'], description=allocation.get('description', ''),
+                duration_ms=allocation.get('duration_ms'), position=int(allocation['position']),
+                preview_status=(ProjectBrollAsset.PreviewStatus.PENDING if allocation['media_type'] == ProjectBrollAsset.MediaType.VIDEO else ProjectBrollAsset.PreviewStatus.READY),
+            )
+        except (ValueError, IntegrityError):
+            return JsonResponse({'detail': 'Não foi possível registrar este B-roll. Tente novamente.'}, status=409)
+        ExternalMediaProjectBrollUploadView._enqueue_preview(asset)
+        asset.refresh_from_db(fields=['preview_status', 'preview_error'])
+        return JsonResponse({
+            'id': str(asset.public_id),
+            'name': asset.original_filename,
+            'media_type': asset.media_type,
+            'description': asset.description,
+            'preview_status': asset.preview_status,
+            'status_url': reverse('external_media_project_broll_status', args=[project.public_id, asset.public_id]),
+        })
+
+
 class ExternalMediaProjectUploadCompleteView(ExternalMediaRequiredMixin, View):
     """Create the ProjectBlockMedia record after the browser successfully PUT the file to S3."""
 
@@ -1145,6 +1265,163 @@ class ExternalMediaProjectMediaDeleteView(ExternalMediaRequiredMixin, View):
         item.delete()
         messages.success(request, 'Vídeo removido do bloco.')
         return redirect('external_media_project_detail', public_id=public_id)
+
+
+class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
+    @staticmethod
+    def _error_response(request, project, detail, status=400):
+        """Keep asynchronous uploads on the page instead of following a redirect."""
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'detail': detail}, status=status)
+        messages.error(request, detail)
+        return redirect('external_media_project_detail', public_id=project.public_id)
+
+    @staticmethod
+    def _enqueue_preview(asset):
+        if asset.media_type != ProjectBrollAsset.MediaType.VIDEO:
+            return None
+        try:
+            if settings.RENDER_WORKFLOW_ENABLED:
+                task_id = enqueue_video_work('broll-preview', asset.pk)
+                ProjectBrollAsset.objects.filter(pk=asset.pk).update(preview_error='')
+                return task_id
+            return create_project_broll_preview.delay(asset.pk).id
+        except Exception:
+            ProjectBrollAsset.objects.filter(pk=asset.pk).update(
+                preview_status=ProjectBrollAsset.PreviewStatus.ERROR,
+                preview_error=(
+                    'Não foi possível iniciar a prévia no worker de vídeo do Render.'
+                    if settings.RENDER_WORKFLOW_ENABLED else
+                    'Não foi possível iniciar a prévia no worker Celery.'
+                ),
+            )
+            return None
+
+    def post(self, request, public_id, block_id, custom=False):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        if project.status != ExternalMediaProject.Status.DRAFT:
+            return self._error_response(
+                request, project, 'Adicione novos B-rolls processados diretamente no Preview.', status=409,
+            )
+        block = None
+        custom_block = None
+        if custom:
+            custom_block = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project)
+        else:
+            block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version)
+        form = ProjectBrollAssetForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return self._error_response(request, project, 'Não foi possível adicionar o B-roll: ' + ' '.join(
+                error for errors in form.errors.values() for error in errors
+            ))
+        upload = form.cleaned_data['file']
+        suffix = Path(upload.name).suffix.lower()
+        media_type = (
+            ProjectBrollAsset.MediaType.VIDEO if suffix in VIDEO_EXTENSIONS
+            else ProjectBrollAsset.MediaType.IMAGE
+        )
+        config = BrollTimelineService.configuration(project)
+        if not config.get('enabled'):
+            return self._error_response(request, project, 'O Template não habilitou B-rolls.')
+        if media_type == 'VIDEO' and not config.get('allow_video', True):
+            return self._error_response(request, project, 'Este Template não permite B-roll de vídeo.')
+        if media_type == 'IMAGE' and not config.get('allow_image', True):
+            return self._error_response(request, project, 'Este Template não permite B-roll de imagem.')
+        item = form.save(commit=False)
+        item.project = project
+        item.block = block
+        item.custom_block = custom_block
+        item.media_type = media_type
+        item.original_filename = upload.name
+        item.file_size = upload.size
+        duration = form.cleaned_data.get('duration_seconds')
+        item.duration_ms = round(float(duration) * 1000) if duration is not None else None
+        item.preview_status = (
+            ProjectBrollAsset.PreviewStatus.PENDING
+            if media_type == ProjectBrollAsset.MediaType.VIDEO
+            else ProjectBrollAsset.PreviewStatus.READY
+        )
+        owner_filter = {'custom_block': custom_block} if custom_block else {'block': block}
+        item.position = (project.broll_assets.filter(**owner_filter).aggregate(value=Max('position'))['value'] or 0) + 1
+        item.save()
+        self._enqueue_preview(item)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            item.refresh_from_db(fields=['preview_status', 'preview_error'])
+            return JsonResponse({
+                'id': str(item.public_id),
+                'name': item.original_filename,
+                'media_type': item.media_type,
+                'description': item.description,
+                'preview_status': item.preview_status,
+                'status_url': reverse('external_media_project_broll_status', args=[project.public_id, item.public_id]),
+            })
+        messages.success(request, 'B-roll adicionado. A IA escolherá o melhor momento dentro deste bloco.')
+        return redirect('external_media_project_detail', public_id=public_id)
+
+
+class ExternalMediaProjectBrollDeleteView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, asset_id):
+        asset = get_object_or_404(
+            ProjectBrollAsset, project__public_id=public_id, public_id=asset_id,
+            project__status=ExternalMediaProject.Status.DRAFT,
+        )
+        asset.file.delete(save=False)
+        asset.preview_file.delete(save=False)
+        asset.delete()
+        messages.success(request, 'B-roll removido.')
+        return redirect('external_media_project_detail', public_id=public_id)
+
+
+class ExternalMediaProjectBrollPreviewView(ExternalMediaRequiredMixin, View):
+    def get(self, request, public_id, asset_id):
+        asset = get_object_or_404(ProjectBrollAsset, project__public_id=public_id, public_id=asset_id)
+        selected = asset.preview_file if asset.preview_status == ProjectBrollAsset.PreviewStatus.READY and asset.preview_file else asset.file
+        if not ProjectService.file_exists(selected):
+            raise Http404('O preview deste B-roll não está disponível.')
+        request.GET = request.GET.copy()
+        request.GET['preview'] = '1'
+        return protected_file_response(request, selected)
+
+
+class ExternalMediaProjectBrollStatusView(ExternalMediaRequiredMixin, View):
+    def get(self, request, public_id, asset_id):
+        asset = get_object_or_404(ProjectBrollAsset, project__public_id=public_id, public_id=asset_id)
+        return JsonResponse({
+            'status': asset.preview_status,
+            'error': asset.preview_error,
+        })
+
+
+class ExternalMediaProjectBrollTrimView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, asset_id):
+        asset = get_object_or_404(
+            ProjectBrollAsset, project__public_id=public_id, public_id=asset_id,
+            project__status=ExternalMediaProject.Status.DRAFT,
+            media_type=ProjectBrollAsset.MediaType.VIDEO,
+        )
+        if asset.preview_status != ProjectBrollAsset.PreviewStatus.READY:
+            return JsonResponse({'detail': 'Aguarde o preview do B-roll ficar pronto antes de cortar.'}, status=409)
+        try:
+            start = float(request.POST.get('trim_start_seconds') or 0)
+            end_value = request.POST.get('trim_end_seconds')
+            end = float(end_value) if end_value else None
+        except (TypeError, ValueError):
+            return JsonResponse({'detail': 'Informe tempos de corte válidos.'}, status=400)
+        raw_ranges = request.POST.get('trim_ranges')
+        if raw_ranges:
+            try:
+                ranges = json.loads(raw_ranges)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return JsonResponse({'detail': 'O trecho selecionado não é válido.'}, status=400)
+            if not isinstance(ranges, list) or len(ranges) != 1 or not isinstance(ranges[0], dict):
+                return JsonResponse({'detail': 'B-roll aceita um único trecho contínuo.'}, status=400)
+            start, end = float(ranges[0].get('start_seconds', -1)), float(ranges[0].get('end_seconds', -1))
+        if start < 0 or end is not None and end <= start:
+            return JsonResponse({'detail': 'O fim do corte precisa ser maior que o início.'}, status=400)
+        asset.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(start) or 0
+        asset.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(end)
+        asset.save(update_fields=['trim_start_ms', 'trim_end_ms', 'update_at'])
+        return JsonResponse({'ok': True})
 
 
 class ExternalMediaProjectMediaPreviewView(ExternalMediaRequiredMixin, View):
@@ -1704,6 +1981,80 @@ class ExternalMediaProjectPreviewOverlayAssetView(ExternalMediaRequiredMixin, Vi
             output = Path(temp) / 'overlay.png'
             OverlayAssetRenderer().render(overlay, width, height, output)
             return HttpResponse(output.read_bytes(), content_type='image/png')
+
+
+class ExternalMediaProjectPreviewBrollView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, broll_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        try:
+            revision = TimelineRevisionService.mutate_broll(
+                project, self.member, broll_id, payload,
+                delete=bool(payload.get('delete')), restore=bool(payload.get('restore')),
+            )
+        except (ValueError, TypeError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision)
+
+
+class ExternalMediaProjectPreviewBrollAssetView(ExternalMediaRequiredMixin, View):
+    def get(self, request, public_id, asset_id):
+        asset = get_object_or_404(ProjectBrollAsset, project__public_id=public_id, public_id=asset_id)
+        selected = asset.preview_file if asset.media_type == ProjectBrollAsset.MediaType.VIDEO and asset.preview_status == ProjectBrollAsset.PreviewStatus.READY and asset.preview_file else asset.file
+        if not ProjectService.file_exists(selected):
+            raise Http404('O asset de B-roll não está mais disponível.')
+        return protected_file_response(request, selected)
+
+
+class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        config = BrollTimelineService.configuration(project)
+        if not config.get('enabled'):
+            return JsonResponse({'error': 'O Template não habilitou B-rolls.'}, status=400)
+        form = ProjectBrollAssetForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return JsonResponse({'error': ' '.join(error for errors in form.errors.values() for error in errors)}, status=400)
+        block_ref = str(request.POST.get('block') or '')
+        if block_ref.startswith('custom-'):
+            custom_block = get_object_or_404(ProjectCustomBlock, project=project, pk=block_ref.removeprefix('custom-'))
+            block = None
+        else:
+            block = get_object_or_404(MediaTemplateBlock, version=project.template_version, pk=block_ref)
+            custom_block = None
+        upload = form.cleaned_data['file']
+        media_type = (
+            ProjectBrollAsset.MediaType.VIDEO
+            if Path(upload.name).suffix.lower() in VIDEO_EXTENSIONS
+            else ProjectBrollAsset.MediaType.IMAGE
+        )
+        if media_type == ProjectBrollAsset.MediaType.VIDEO and not config.get('allow_video', True):
+            return JsonResponse({'error': 'Este Template não permite B-roll de vídeo.'}, status=400)
+        if media_type == ProjectBrollAsset.MediaType.IMAGE and not config.get('allow_image', True):
+            return JsonResponse({'error': 'Este Template não permite B-roll de imagem.'}, status=400)
+        asset = form.save(commit=False)
+        asset.project, asset.block, asset.custom_block = project, block, custom_block
+        asset.media_type = media_type
+        asset.original_filename, asset.file_size = upload.name, upload.size
+        duration = form.cleaned_data.get('duration_seconds')
+        asset.duration_ms = round(float(duration) * 1000) if duration is not None else None
+        asset.preview_status = (
+            ProjectBrollAsset.PreviewStatus.PENDING
+            if media_type == ProjectBrollAsset.MediaType.VIDEO
+            else ProjectBrollAsset.PreviewStatus.READY
+        )
+        asset.position = project.broll_assets.count() + 1
+        asset.save()
+        ExternalMediaProjectBrollUploadView._enqueue_preview(asset)
+        try:
+            revision = TimelineRevisionService.add_broll(
+                project, self.member, asset, request.POST.get('start_ms') or 0,
+            )
+        except Exception:
+            asset.file.delete(save=False)
+            asset.delete()
+            raise
+        return preview_revision_response(project, self.member, revision)
 
 
 class ExternalMediaProjectPreviewSessionView(ExternalMediaRequiredMixin, View):

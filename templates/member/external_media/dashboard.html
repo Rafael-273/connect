@@ -421,7 +421,7 @@
                                 <i class="fas fa-clone"></i>
                             </button>
                         </form>
-                        <button type="button" class="media-project-action is-danger" data-delete-project data-project-name="{{ project.name }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}" title="{% if project.status == 'PENDING' or project.status == 'ASSEMBLING' or project.status == 'PROCESSING' or project.status == 'AWAITING_REVIEW' %}Aguarde o processamento terminar{% else %}Excluir projeto{% endif %}" aria-label="Excluir projeto {{ project.name }}" {% if project.status == 'PENDING' or project.status == 'ASSEMBLING' or project.status == 'PROCESSING' or project.status == 'AWAITING_REVIEW' %}disabled{% endif %}>
+                        <button type="button" class="media-project-action is-danger" data-delete-project data-project-name="{{ project.name }}" data-project-status="{{ project.status }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}" title="Excluir projeto" aria-label="Excluir projeto {{ project.name }}">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -538,6 +538,9 @@
                 Você está prestes a excluir <strong id="delete-project-name" class="text-gray-900"></strong>.
                 Os vídeos, legendas e exportações vinculados serão removidos permanentemente.
             </p>
+            <p id="delete-project-processing-note" class="hidden text-sm text-amber-800 leading-relaxed mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                Este projeto ainda está em processamento ou revisão. A exclusão interrompe o trabalho em andamento.
+            </p>
             <form id="delete-project-form" method="post">
                 {% csrf_token %}
                 <div class="media-confirm-actions">
@@ -573,12 +576,15 @@
         const modal = document.getElementById('delete-project-modal');
         const form = document.getElementById('delete-project-form');
         const name = document.getElementById('delete-project-name');
+        const processingNote = document.getElementById('delete-project-processing-note');
+        const activeStatuses = new Set(['PENDING', 'ASSEMBLING', 'PROCESSING', 'AWAITING_REVIEW']);
         let trigger = null;
 
         function closeModal() {
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             form.removeAttribute('action');
+            processingNote.classList.add('hidden');
             trigger?.focus();
         }
 
@@ -587,6 +593,7 @@
                 trigger = button;
                 name.textContent = `“${button.dataset.projectName}”`;
                 form.action = button.dataset.deleteUrl;
+                processingNote.classList.toggle('hidden', !activeStatuses.has(button.dataset.projectStatus || ''));
                 modal.classList.add('is-open');
                 modal.setAttribute('aria-hidden', 'false');
                 modal.querySelector('.media-confirm-delete').focus();

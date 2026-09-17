@@ -38,6 +38,7 @@ from .external_media import (
     MediaTemplateVersion,
     OverlayPreset,
     ProjectBlockMedia,
+    ProjectBrollAsset,
     ProjectOverlay,
     ProjectSourceProxy,
     ProjectPipelineStep,

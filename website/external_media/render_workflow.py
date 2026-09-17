@@ -19,7 +19,7 @@ def enabled():
 
 
 VIDEO_OPERATIONS = {
-    'project-run', 'project-render', 'project-preview', 'review-preview',
+    'project-run', 'project-render', 'project-preview', 'broll-preview', 'review-preview',
     'review-render', 'legacy-prepare', 'legacy-render', 'mastering-analyze',
     'mastering-render', 'premiere-export',
 }

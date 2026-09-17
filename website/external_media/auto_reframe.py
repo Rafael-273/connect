@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-AUTO_REFRAME_PLAN_VERSION = 10
+AUTO_REFRAME_PLAN_VERSION = 11
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -163,6 +163,10 @@ class AutoReframeService:
         # sem "colar" no rosto/gestos como o fast-start agressivo anterior.
         self.horizontal_fast_start_seconds = 1.2
         self.vertical_lock = (self.priority == 'face') if vertical_lock is None else bool(vertical_lock)
+        # "Melhorar enquadramento" (static) anchors its one fixed crop on the
+        # subject found in these opening seconds, giving the intro/adjustment
+        # moment a little room without scanning the whole clip.
+        self.initial_anchor_seconds = 3.0
 
     def analyze(self, video_path: Path, output_width: int, output_height: int):
         input_label = getattr(video_path, 'storage_name', '') or (
@@ -187,13 +191,16 @@ class AutoReframeService:
             crop_width, crop_height = self.cover_crop_size(
                 source_width, source_height, output_width, output_height,
             )
-            if self.priority == 'static':
-                return self._static_center_plan(
-                    crop_width, crop_height, source_width, source_height,
-                )
             face_detectors = self._face_detectors(cv2)
             body_detector = cv2.HOGDescriptor()
             body_detector.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+            if self.priority == 'static':
+                anchor = self._detect_initial_anchor(
+                    capture, face_detectors, body_detector, cv2, fps,
+                )
+                return self._static_center_plan(
+                    crop_width, crop_height, source_width, source_height, anchor,
+                )
             observations = []
             frame_index = 0
             last_box = None
@@ -283,18 +290,60 @@ class AutoReframeService:
         return AutoReframeService._even(crop_width), AutoReframeService._even(crop_height)
 
     @classmethod
-    def _static_center_plan(cls, cover_width, cover_height, source_width, source_height):
-        """Apply a stable six-percent podcast crop without person tracking."""
+    def _static_center_plan(cls, cover_width, cover_height, source_width, source_height, anchor=None):
+        """Apply a stable six-percent podcast crop without person tracking.
+
+        `anchor`, when available, comes from the opening seconds of the clip
+        (see `_detect_initial_anchor`) and centers the fixed crop on the
+        subject instead of the raw frame's geometric center. This still never
+        follows movement through the rest of the clip — it only picks a
+        smarter, one-time position for the same subtle zoom.
+        """
         zoom = 1.06
         crop_width = cls._even(min(source_width, cover_width / zoom))
         crop_height = cls._even(min(source_height, cover_height / zoom))
-        x = max(0.0, (source_width - crop_width) / 2.0)
-        y = max(0.0, (source_height - crop_height) / 2.0)
+        max_x = max(0.0, source_width - crop_width)
+        max_y = max(0.0, source_height - crop_height)
+        if anchor is not None:
+            anchor_x, anchor_y = anchor
+            x = min(max_x, max(0.0, anchor_x - crop_width / 2.0))
+            y = min(max_y, max(0.0, anchor_y - crop_height / 2.0))
+        else:
+            x = max_x / 2.0
+            y = max_y / 2.0
         return AutoReframePlan(
             crop_width,
             crop_height,
             (ReframeKeyframe(0.0, x, y),),
         )
+
+    def _detect_initial_anchor(self, capture, face_detectors, body_detector, cv2, fps):
+        """Samples the opening seconds to find a natural center for the static crop.
+
+        "Melhorar enquadramento" never tracks movement, but blindly centering
+        the subtle zoom on the raw frame's geometry misses a subject who sits
+        off-center (e.g. a single guest on one side of a two-chair podcast
+        set). Scanning only the first few seconds is enough to anchor the
+        fixed crop without paying for a full-video scan like the other modes.
+        """
+        max_frames = max(1, round(self.initial_anchor_seconds * fps))
+        anchors = []
+        frame_index = 0
+        while frame_index < max_frames:
+            ok, frame = capture.read()
+            if not ok:
+                break
+            if frame_index % self.interval_frames == 0:
+                detection = self._detect_people(frame, face_detectors, body_detector, cv2)
+                if detection is not None:
+                    left, top, right, bottom = detection[0]
+                    anchors.append(((left + right) / 2.0, (top + bottom) / 2.0))
+            frame_index += 1
+        if not anchors:
+            return None
+        median_x = sorted(point[0] for point in anchors)[len(anchors) // 2]
+        median_y = sorted(point[1] for point in anchors)[len(anchors) // 2]
+        return median_x, median_y
 
     def _detect_people(self, frame, face_detectors, body_detector, cv2):
         original_height, original_width = frame.shape[:2]

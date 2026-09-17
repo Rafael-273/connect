@@ -93,6 +93,12 @@ class ProjectProcessingState:
     def set_background_voice_plan(self, value):
         self.data['background_voice_plan'] = value
 
+    def get_off_context_plan(self):
+        return self.data.get('off_context_plan')
+
+    def set_off_context_plan(self, value):
+        self.data['off_context_plan'] = value
+
     def get_noise_analysis_plan(self):
         return self.data.get('noise_analysis_plan')
 
@@ -333,7 +339,7 @@ class EditDecisionSetBuilder:
 
         background = SpeechEditPlan.from_dict(state.get_background_voice_plan())
 
-        def add_plan(payload, producer, map_to_original=False):
+        def add_plan(payload, producer, map_to_original=False, default_enabled=True):
             for cut in (payload or {}).get('cuts', []):
                 start, end = _int(cut.get('start_ms')), _int(cut.get('end_ms'))
                 if map_to_original and background.cuts:
@@ -344,11 +350,15 @@ class EditDecisionSetBuilder:
                     'source_out_ms': end, 'origin': 'AUTO',
                     'producer': producer, 'producer_version': 'legacy',
                     'reason': cut.get('label') or cut.get('kind'), 'confidence': None,
+                    'enabled': default_enabled,
                     'metadata': {'kind': cut.get('kind', 'silence'), 'coordinate_space': 'project_timeline'},
                 })
 
         add_plan(state.get_background_voice_plan(), 'background_voice')
         add_plan(state.get_speech_edit_plan(), 'speech_edit', map_to_original=True)
+        # AI-suggested cuts start disabled: they are a suggestion the member must
+        # confirm in the review screen, not an automatic edit.
+        add_plan(state.get_off_context_plan(), 'off_context_detection', default_enabled=False)
         for item in configuration.get('protected_block_ranges') or []:
             operations.append({
                 'id': f'protected-{len(operations) + 1}', 'type': 'protected_range',
