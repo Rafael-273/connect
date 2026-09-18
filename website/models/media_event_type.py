@@ -112,3 +112,56 @@ class MediaPlanningTemplateItem(BaseModel):
 
     def __str__(self):
         return self.title
+
+
+    @property
+    def due_label(self):
+        from website.services.media_planning import relative_days_label
+        return relative_days_label(self.due_offset_days)
+
+    @property
+    def publication_label(self):
+        from website.services.media_planning import relative_days_label
+        return relative_days_label(self.publication_offset_days)
+
+    @property
+    def start_label(self):
+        from website.services.media_planning import relative_days_label
+        return relative_days_label(self.lead_offset_days)
+
+    @property
+    def has_steps(self):
+        return self.steps.exists()
+
+
+class MediaPlanningTemplateItemStep(BaseModel):
+    """Etapa sugerida (papel + prazo relativo) dentro de uma demanda padrão."""
+
+    template_item = models.ForeignKey(
+        MediaPlanningTemplateItem,
+        on_delete=models.CASCADE,
+        related_name='steps',
+        verbose_name='Demanda padrão',
+    )
+    title = models.CharField(max_length=200, verbose_name='Papel')
+    due_offset_days = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Prazo (dias em relação ao evento)',
+    )
+    description = models.TextField(blank=True, verbose_name='Observações')
+    sort_order = models.PositiveSmallIntegerField(default=0, verbose_name='Ordem')
+
+    class Meta:
+        db_table = 'website_media_planning_template_item_step'
+        ordering = ['sort_order', 'pk']
+        verbose_name = 'Etapa de demanda padrão'
+        verbose_name_plural = 'Etapas de demanda padrão'
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def due_label(self):
+        from website.services.media_planning import relative_days_label
+        return relative_days_label(self.due_offset_days)

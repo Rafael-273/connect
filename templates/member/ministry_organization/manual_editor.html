@@ -1,0 +1,18 @@
+<div data-manual-editor data-preview-url="{% url 'ministry_manual_preview' ministry.pk %}">
+    <div class="manual-toolbar" role="group" aria-label="Formatação do manual">
+        <button type="button" data-format="heading"><i class="fas fa-heading text-xs mr-1"></i>H2</button>
+        <button type="button" data-format="subheading"><i class="fas fa-heading text-xs mr-1" style="font-size:.65rem;"></i>H3</button>
+        <button type="button" data-format="bold"><strong>N</strong></button>
+        <button type="button" data-format="italic"><em>I</em></button>
+        <button type="button" data-format="list"><i class="fas fa-list-ul text-xs"></i></button>
+        <button type="button" data-format="link"><i class="fas fa-link text-xs"></i></button>
+        <button type="button" data-format="quote"><i class="fas fa-quote-left text-xs"></i></button>
+        <button type="button" data-manual-preview aria-expanded="false">
+            <i class="fas fa-eye text-xs mr-1"></i>Pré-visualizar
+        </button>
+    </div>
+    {{ field }}
+    <p class="text-xs text-gray-400 mt-1.5">Selecione um trecho e use os botões para formatar. Suporta Markdown.</p>
+    <p data-manual-status class="text-sm text-gray-600 mt-2" role="status" aria-live="polite"></p>
+    <div data-manual-result class="manual-content bg-gray-50 rounded-xl p-4 mt-3 border border-gray-100" hidden></div>
+</div>

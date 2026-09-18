@@ -1,4 +1,5 @@
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 
 from ._base import BaseModel
 
@@ -49,9 +50,14 @@ SUBSCRIPTION_TYPE_CHOICES = [
 
 
 class MediaSubTeam(BaseModel):
-    """Subequipe dentro do Ministério de Mídia Externa."""
+    """Subequipe de qualquer ministério; nome técnico preservado por compatibilidade."""
 
-    name = models.CharField(max_length=100, unique=True, verbose_name='Nome')
+    ministry = models.ForeignKey(
+        'Ministry', on_delete=models.CASCADE, related_name='sub_teams',
+        verbose_name='Ministério',
+    )
+
+    name = models.CharField(max_length=100, verbose_name='Nome')
     description = models.TextField(blank=True, verbose_name='Descrição')
     leader = models.ForeignKey(
         'Member',
@@ -67,11 +73,30 @@ class MediaSubTeam(BaseModel):
 
     class Meta:
         ordering = ['name']
-        verbose_name = 'Subequipe de Mídia'
-        verbose_name_plural = 'Subequipes de Mídia'
+        verbose_name = 'Subequipe do Ministério'
+        verbose_name_plural = 'Subequipes dos Ministérios'
+        unique_together = [('ministry', 'name')]
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        super().clean()
+        if self.pk:
+            previous = type(self).all_objects.filter(pk=self.pk).values_list('ministry_id', flat=True).first()
+            if previous != self.ministry_id:
+                raise ValidationError({'ministry': 'O ministério de uma equipe existente não pode ser alterado.'})
+        if self.leader_id and self.ministry_id:
+            from .ministry_membership import MinistryMembership
+            if not MinistryMembership.objects.filter(
+                ministry_id=self.ministry_id, member_id=self.leader_id, is_active=True,
+                member__is_active=True,
+            ).exists():
+                raise ValidationError({'leader': 'O líder deve pertencer ao ministério.'})
+
+    def save(self, *args, **kwargs):
+        self.clean()
+        return super().save(*args, **kwargs)
 
 
 class MediaRole(BaseModel):
@@ -131,6 +156,26 @@ class MediaSubTeamMembership(BaseModel):
 
     def __str__(self):
         return f'{self.member.name} — {self.sub_team.name}'
+
+    def clean(self):
+        super().clean()
+        if self.is_active and not self.deleted and self.sub_team_id and self.member_id:
+            from .ministry_membership import MinistryMembership
+            if not MinistryMembership.objects.filter(
+                ministry_id=self.sub_team.ministry_id, member_id=self.member_id,
+                is_active=True, member__is_active=True,
+            ).exists():
+                raise ValidationError({'member': 'O membro deve estar ativo neste ministério.'})
+
+    def save(self, *args, **kwargs):
+        from .ministry_membership import MinistryMembership
+        with transaction.atomic():
+            if self.sub_team_id and self.member_id:
+                MinistryMembership.objects.select_for_update().filter(
+                    ministry_id=self.sub_team.ministry_id, member_id=self.member_id,
+                ).first()
+            self.clean()
+            return super().save(*args, **kwargs)
 
 
 class MediaLeadershipItem(BaseModel):

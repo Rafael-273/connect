@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -90,7 +91,11 @@ class MediaApplyTemplateView(MediaLeaderRequiredMixin, View):
             except MediaMonthPlan.DoesNotExist:
                 pass
 
-        created = apply_template_to_event(event, items, month_plan=month_plan)
+        try:
+            created = apply_template_to_event(event, items, month_plan=month_plan)
+        except ValidationError as exc:
+            messages.error(request, 'Revise a equipe e a função no template: ' + ' '.join(exc.messages))
+            return redirect('media_apply_template', event_pk=event.pk)
         messages.success(
             request,
             f'{len(created)} demanda(s) criada(s) a partir do template. Você pode editá-las livremente.',

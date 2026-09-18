@@ -6,9 +6,9 @@
             <div class="flex items-start gap-3 min-w-0 flex-1">
                 <div class="demands-modal-icon"><i id="demand-modal-type-icon" class="fas fa-clipboard-list"></i></div>
                 <div class="min-w-0">
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Nova demanda</p>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-red-600">Nova demanda</p>
                     <h2 id="demands-modal-demand-title" class="text-lg font-black text-gray-900 leading-tight">O que precisamos fazer?</h2>
-                    <p id="demand-modal-subtitle" class="text-xs text-gray-500 mt-0.5">Produção de conteúdo ou tarefa organizacional</p>
+                    <p id="demand-modal-subtitle" class="text-xs text-gray-500 mt-0.5">{% if demand_event_title %}Demanda vinculada a {{ demand_event_title }}{% else %}Produção de conteúdo ou tarefa organizacional{% endif %}</p>
                 </div>
             </div>
             <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
@@ -18,6 +18,7 @@
 
         <form method="post" action="{% url 'media_demand_quick_create' %}" class="demands-modal-body">
             {% csrf_token %}
+            <input type="hidden" name="demand-event" id="demand-modal-event-id" value="{{ demand_event_id|default:'' }}">
             <input type="hidden" name="kind" value="{{ filter_kind|default:'all' }}">
             {% if filter_q %}<input type="hidden" name="q" value="{{ filter_q }}">{% endif %}
             {% if filter_responsible %}<input type="hidden" name="responsible" value="{{ filter_responsible }}">{% endif %}
@@ -27,8 +28,10 @@
             {% if filter_period_to %}<input type="hidden" name="period_to" value="{{ filter_period_to }}">{% endif %}
 
             <div class="modal-section">
+                {{ demand_form.non_field_errors }}
                 <label class="modal-field-label" for="id_demand-title">Título</label>
                 {{ demand_form.title }}
+                {{ demand_form.title.errors }}
             </div>
 
             <div class="modal-section">
@@ -47,8 +50,12 @@
 
             <div class="modal-section">
                 <p class="modal-section-title">Equipe e prazos</p>
+                <p class="text-xs text-gray-500 mb-2">Informe os dias de cada etapa em relação ao evento (ex.: 7 dias antes).</p>
                 <p class="text-xs text-gray-500 mb-3">Defina quem faz cada parte e quando — ex: Filmmaker, Editor, Publicador.</p>
-                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='demand' assignments=demand_assignments blank_assignment=blank_assignment %}
+                <label class="modal-field-label" for="id_demand-sub_team">Equipe responsável (opcional)</label>
+                {{ demand_form.sub_team }}{{ demand_form.sub_team.errors }}
+                <p class="team-assignment-help text-xs text-gray-500 my-2" role="status"></p>
+                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='demand'  assignments=demand_assignments blank_assignment=blank_assignment %}
             </div>
 
             <div class="demands-modal-footer">
@@ -69,9 +76,9 @@
             <div class="flex items-start gap-3 min-w-0 flex-1">
                 <div class="demands-modal-icon"><i class="fas fa-calendar-plus"></i></div>
                 <div class="min-w-0">
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-purple-600">Novo evento</p>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-red-600">Novo evento</p>
                     <h2 id="demands-modal-event-title" class="text-lg font-black text-gray-900 leading-tight">Qual evento vamos produzir?</h2>
-                    <p class="text-xs text-gray-500 mt-0.5">Data, local e template de mídia</p>
+                    <p class="text-xs text-gray-500 mt-0.5">Datas e tipo de evento</p>
                 </div>
             </div>
             <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
@@ -95,38 +102,17 @@
             </div>
 
             <div class="modal-section">
-                <p class="modal-section-title">Quando e onde</p>
-                <div class="grid grid-cols-2 gap-3 mb-3">
-                    <div>
-                        <label class="modal-field-label" for="id_event-event_date">Data</label>
-                        {{ event_form.event_date }}
-                    </div>
-                    <div>
-                        <label class="modal-field-label" for="id_event-event_time">Horário</label>
-                        {{ event_form.event_time }}
-                    </div>
-                </div>
-                <div>
-                    <label class="modal-field-label" for="id_event-location">Local</label>
-                    {{ event_form.location }}
-                </div>
+                <label class="modal-field-label" for="id_event-event_type">Tipo de evento</label>
+                {% include 'member/media_planning/partials/demands_event_type_select.html' with prefix='event' event_types=event_types selected_value=event_form.event_type.value %}
             </div>
 
             <div class="modal-section">
-                <p class="modal-section-title">Template de mídia</p>
-                <p class="text-xs text-gray-500 mb-3">O template sugere os conteúdos automaticamente com base no tipo de evento.</p>
-                <label class="modal-field-label" for="id_event-event_type">Tipo de evento</label>
-                {% include 'member/media_planning/partials/demands_event_type_select.html' with prefix='event' event_types=event_types selected_value=event_form.event_type.value %}
-                {% if is_media_leader %}
-                <a href="{% url 'media_event_type_list' %}" class="demands-event-type-add">
-                    <i class="fas fa-list"></i> Ver tipos de eventos
-                </a>
-                <p class="text-xs text-gray-400 mt-2">Defina as demandas fixas que serão sugeridas sempre que este tipo de evento for usado.</p>
-                {% endif %}
-                <label class="demands-modal-check-card" for="id_event-apply_template">
-                    {{ event_form.apply_template }}
-                    <span class="text-sm text-gray-700 leading-snug">{{ event_form.apply_template.label }}</span>
-                </label>
+                <p class="modal-section-title">Datas do evento</p>
+                {% include 'member/media_planning/partials/demands_event_dates_section.html' with prefix='event' extra_event_dates=extra_event_dates %}
+                <div class="mt-3">
+                    <label class="modal-field-label" for="id_event-description">Descrição <span class="font-normal text-gray-400">(opcional)</span></label>
+                    {{ event_form.description }}
+                </div>
             </div>
 
             <div class="demands-modal-footer">

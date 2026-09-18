@@ -1,0 +1,537 @@
+{% extends 'member/ministry_organization/base.html' %}
+
+{% block org_header %}
+{% url 'media_organization' as org_url %}
+{% if can_manage %}
+{% include 'parciais/org_media_header.html' with back_url=org_url title='Equipes' subtitle='Subequipes e membros' action_partial='member/ministry_organization/partials/team_header_action.html' %}
+{% else %}
+{% include 'parciais/org_media_header.html' with back_url=org_url title='Equipes' subtitle='Subequipes e membros' %}
+{% endif %}
+{% endblock %}
+
+{% block org_tabs %}{% endblock %}
+
+{% block head %}
+{{ block.super }}
+<style>
+    .teams-accordion {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+
+    .team-panel {
+        background: #fff;
+        border: 1px solid rgba(201, 9, 5, 0.12);
+        border-radius: 1rem;
+        overflow: hidden;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .team-panel.is-open {
+        border-color: rgba(201, 9, 5, 0.22);
+        box-shadow: 0 4px 18px rgba(17, 24, 39, 0.06);
+    }
+
+    .team-panel-top {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.875rem 1rem;
+    }
+
+    .team-panel-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex: 1;
+        min-width: 0;
+        padding: 0;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .team-panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .team-panel-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 0.5rem;
+        background: rgba(201, 9, 5, 0.06);
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-decoration: none;
+        font-size: 0.75rem;
+        color: #C90905;
+        transition: background 0.15s ease;
+    }
+
+    .team-panel-action:hover {
+        background: rgba(201, 9, 5, 0.12);
+    }
+
+    .team-panel-chevron-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        padding: 0;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .team-panel-icon {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        background: rgba(201, 9, 5, 0.08);
+        color: #C90905;
+    }
+
+    .team-panel-meta {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .team-panel-name {
+        font-size: 0.9375rem;
+        font-weight: 800;
+        color: #111827;
+        line-height: 1.25;
+    }
+
+    .team-panel-sub {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: #6B7280;
+        margin-top: 0.125rem;
+    }
+
+    .team-panel-chevron {
+        color: #9CA3AF;
+        font-size: 0.75rem;
+        transition: transform 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .team-panel.is-open .team-panel-chevron {
+        transform: rotate(180deg);
+        color: #C90905;
+    }
+
+    .team-panel-body {
+        display: none;
+        border-top: 1px solid #f3f4f6;
+        padding: 0.75rem 1rem 1rem;
+        background: linear-gradient(180deg, #fffafa 0%, #fff 100%);
+    }
+
+    .team-panel.is-open .team-panel-body {
+        display: block;
+    }
+
+    .team-member-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .team-member-row {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.5rem 0.625rem;
+        border-radius: 0.75rem;
+        background: #fff;
+        border: 1px solid #f3f4f6;
+    }
+
+    .team-member-avatar {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 0.75rem;
+        font-weight: 800;
+        color: #fff;
+        background: linear-gradient(135deg, #C90905, #8C0910);
+    }
+
+    .team-member-info {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .team-member-name {
+        font-size: 0.8125rem;
+        font-weight: 700;
+        color: #111827;
+        line-height: 1.25;
+    }
+
+    .team-member-roles {
+        font-size: 0.6875rem;
+        color: #6B7280;
+        margin-top: 0.0625rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .team-panel-empty {
+        text-align: center;
+        padding: 1.25rem 0.75rem;
+        font-size: 0.8125rem;
+        color: #9CA3AF;
+    }
+
+    /* Modal nova equipe — mesmo padrão do hub de demandas */
+    .modal-field-label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #374151;
+        margin-bottom: 0.375rem;
+    }
+    .modal-section { margin-bottom: 1rem; }
+
+    .org-team-modal.demands-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 300;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+    .org-team-modal.demands-modal.active {
+        pointer-events: auto;
+        opacity: 1;
+    }
+    .org-team-modal .demands-modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(17, 24, 39, 0.45);
+        backdrop-filter: blur(2px);
+    }
+    .org-team-modal .demands-modal-card {
+        position: relative;
+        z-index: 1;
+        width: 100%;
+        max-width: 28rem;
+        max-height: 90vh;
+        overflow: hidden;
+        background: #fff;
+        border-radius: 1.25rem 1.25rem 0 0;
+        border: 1px solid #e5e7eb;
+        border-bottom: none;
+        display: flex;
+        flex-direction: column;
+        transform: translateY(100%);
+        transition: transform 0.28s cubic-bezier(0.34, 1.2, 0.64, 1);
+    }
+    .org-team-modal.demands-modal.active .demands-modal-card {
+        transform: translateY(0);
+    }
+    .org-team-modal .demands-modal-card::before {
+        content: '';
+        display: block;
+        width: 2.5rem;
+        height: 0.25rem;
+        background: #E5E7EB;
+        border-radius: 9999px;
+        margin: 0.75rem auto 0;
+        flex-shrink: 0;
+    }
+    .org-team-modal .demands-modal-header-accent {
+        background: rgba(201, 9, 5, 0.04);
+        border-bottom: 1px solid #f3f4f6;
+        padding: 1rem 1.25rem 0.875rem;
+    }
+    .org-team-modal .demands-modal-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75rem;
+        flex-shrink: 0;
+    }
+    .org-team-modal .demands-modal-header-main {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        min-width: 0;
+        flex: 1;
+    }
+    .org-team-modal .demands-modal-icon {
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 0.875rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #C90905;
+        color: #fff;
+        font-size: 1.125rem;
+        flex-shrink: 0;
+    }
+    .org-team-modal .demands-modal-eyebrow {
+        font-size: 0.625rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #C90905;
+        margin: 0 0 0.125rem;
+    }
+    .org-team-modal .demands-modal-title {
+        font-size: 1.125rem;
+        font-weight: 900;
+        color: #111827;
+        line-height: 1.25;
+        margin: 0;
+    }
+    .org-team-modal .demands-modal-subtitle {
+        font-size: 0.75rem;
+        color: #6B7280;
+        margin: 0.25rem 0 0;
+    }
+    .org-team-modal .demands-modal-close {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9CA3AF;
+        background: #F3F4F6;
+        border: none;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .org-team-modal .demands-modal-close:hover {
+        background: #E5E7EB;
+        color: #374151;
+    }
+    .org-team-modal .demands-modal-body {
+        padding: 1rem 1.25rem 1.25rem;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .org-team-modal .demands-modal-footer {
+        display: flex;
+        gap: 0.5rem;
+        padding-top: 1rem;
+        position: sticky;
+        bottom: 0;
+        background: #fff;
+    }
+    .org-team-modal .demands-modal-footer .org-btn-primary,
+    .org-team-modal .demands-modal-footer .org-btn-secondary {
+        flex: 1;
+        justify-content: center;
+    }
+    .org-team-modal input:not([type=checkbox]),
+    .org-team-modal select,
+    .org-team-modal textarea {
+        width: 100%;
+        min-width: 0;
+        padding: 0.625rem 0.875rem;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 0.75rem;
+        background: #fff;
+        font-size: 0.875rem;
+        color: #111827;
+    }
+    .org-team-modal input:not([type=checkbox]):focus,
+    .org-team-modal select:focus,
+    .org-team-modal textarea:focus {
+        outline: none;
+        border-color: #C90905;
+        box-shadow: 0 0 0 3px rgba(201, 9, 5, 0.1);
+    }
+    .org-team-modal select[multiple] {
+        min-height: 6.5rem;
+    }
+    @media (min-width: 640px) {
+        .org-team-modal.demands-modal {
+            align-items: center;
+            padding: 1rem;
+        }
+        .org-team-modal .demands-modal-card {
+            border-radius: 1.25rem;
+            max-height: 85vh;
+            border: 1px solid #e5e7eb;
+            transform: translateY(1rem) scale(0.96);
+        }
+        .org-team-modal.demands-modal.active .demands-modal-card {
+            transform: translateY(0) scale(1);
+        }
+        .org-team-modal .demands-modal-card::before {
+            display: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block organization_content %}
+
+{% if teams %}
+<div class="teams-accordion" id="teams-accordion">
+    {% for team in teams %}
+    <article class="team-panel{% if forloop.first %} is-open{% endif %}" data-team-panel>
+        <div class="team-panel-top">
+            <button type="button" class="team-panel-toggle" aria-expanded="{% if forloop.first %}true{% else %}false{% endif %}">
+                <span class="team-panel-icon"><i class="fas fa-users text-sm"></i></span>
+                <span class="team-panel-meta">
+                    <span class="team-panel-name">{{ team.name }}</span>
+                    <span class="team-panel-sub">
+                        {{ team.member_count }} membro{{ team.member_count|pluralize }}
+                        {% if team.leader %} · Líder: {{ team.leader.name }}{% endif %}
+                        {% if not team.is_active %} · Inativa{% endif %}
+                    </span>
+                </span>
+            </button>
+            <div class="team-panel-actions">
+                <a href="{% url 'ministry_team_detail' ministry.pk team.pk %}" class="team-panel-action" aria-label="Ver detalhes da equipe" title="Ver detalhes">
+                    <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                </a>
+                {% if can_manage %}
+                <button type="button" class="team-panel-action" data-open-team-modal="org-modal-add-member-{{ team.pk }}" aria-label="Adicionar membro" title="Adicionar membro">
+                    <i class="fas fa-user-plus" aria-hidden="true"></i>
+                </button>
+                {% endif %}
+                <button type="button" class="team-panel-chevron-btn team-panel-toggle" aria-label="Expandir equipe">
+                    <i class="fas fa-chevron-down team-panel-chevron" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+        <div class="team-panel-body">
+            {% if team.memberships.all %}
+            <div class="team-member-list">
+                {% for membership in team.memberships.all %}
+                <div class="team-member-row">
+                    <span class="team-member-avatar">{{ membership.member.name|slice:":1"|upper }}</span>
+                    <div class="team-member-info">
+                        <p class="team-member-name">{{ membership.member.name }}</p>
+                        <p class="team-member-roles">
+                            {% with roles=membership.roles.all %}
+                            {% if roles %}
+                                {% for role in roles %}{{ role.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                            {% else %}
+                                Membro da equipe
+                            {% endif %}
+                            {% endwith %}
+                        </p>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="team-panel-empty">Nenhum membro nesta equipe ainda.</div>
+            {% endif %}
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-14 bg-white rounded-xl border border-gray-100">
+    <div class="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-3 org-icon-box">
+        <i class="fas fa-users text-xl"></i>
+    </div>
+    <h3 class="font-black text-gray-900">Nenhuma equipe ainda</h3>
+    <p class="text-sm text-gray-500 mt-1 max-w-xs mx-auto">O ministério pode funcionar normalmente sem equipes.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block org_modals %}
+{% include 'member/ministry_organization/team_create_modal.html' %}
+{% for team in teams %}
+{% include 'member/ministry_organization/team_add_member_modal.html' with member_form=team.member_form %}
+{% endfor %}
+<script>
+(function () {
+    document.querySelectorAll('[data-team-panel]').forEach(function (panel) {
+        panel.querySelectorAll('.team-panel-toggle').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var open = panel.classList.toggle('is-open');
+                panel.querySelectorAll('.team-panel-toggle[aria-expanded]').forEach(function (toggle) {
+                    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+            });
+        });
+    });
+
+    function openTeamModal(id) {
+        document.querySelectorAll('.org-team-modal.active').forEach(function (modal) {
+            modal.classList.remove('active');
+        });
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeTeamModal(el) {
+        if (!el) return;
+        el.classList.remove('active');
+        if (!document.querySelector('.org-team-modal.active')) {
+            document.body.style.overflow = '';
+            var url = new URL(window.location.href);
+            if (url.searchParams.has('create')) url.searchParams.delete('create');
+            if (url.searchParams.has('add_member')) url.searchParams.delete('add_member');
+            history.replaceState({}, '', url.toString());
+        }
+    }
+
+    document.addEventListener('click', function (e) {
+        var trigger = e.target.closest('[data-open-team-modal]');
+        if (trigger) {
+            e.preventDefault();
+            openTeamModal(trigger.getAttribute('data-open-team-modal'));
+            return;
+        }
+        var closeTarget = e.target.closest('[data-team-modal-close]');
+        if (closeTarget) {
+            e.preventDefault();
+            closeTeamModal(closeTarget.closest('.org-team-modal'));
+        }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        var active = document.querySelectorAll('.org-team-modal.active');
+        if (!active.length) return;
+        closeTeamModal(active[active.length - 1]);
+    });
+
+    {% if create_mode %}
+    openTeamModal('org-modal-team-create');
+    {% endif %}
+})();
+</script>
+{% endblock %}

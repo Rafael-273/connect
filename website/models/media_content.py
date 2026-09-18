@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 
 from ._base import BaseModel
 
@@ -74,6 +74,15 @@ class MediaContent(BaseModel):
         blank=True,
         verbose_name='Prazo de Entrega',
     )
+    start_date = models.DateTimeField(null=True, blank=True, verbose_name='Início previsto')
+    # Frozen rules: future template edits never rewrite an existing demand.
+    start_offset_days = models.IntegerField(null=True, blank=True, editable=False)
+    due_offset_days = models.IntegerField(null=True, blank=True, editable=False)
+    publication_offset_days = models.IntegerField(null=True, blank=True, editable=False)
+    start_date_auto = models.BooleanField(default=False, editable=False)
+    due_date_auto = models.BooleanField(default=False, editable=False)
+    publication_date_auto = models.BooleanField(default=False, editable=False)
+
     responsible = models.ForeignKey(
         'User',
         on_delete=models.SET_NULL,
@@ -151,3 +160,44 @@ class MediaContent(BaseModel):
 
     def __str__(self):
         return f"{self.title} ({self.get_content_type_display()})"
+
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        from website.services.demand_assignments import validate_ministry_assignees
+        try:
+            user_ids = [self.responsible_id]
+            if hasattr(self, '_replacement_assignee_ids'):
+                user_ids += self._replacement_assignee_ids
+            elif self.pk:
+                user_ids += list(self.tasks.values_list('assigned_to_id', flat=True))
+            validate_ministry_assignees(user_ids)
+        except ValidationError as exc:
+            raise ValidationError({'responsible': exc.messages})
+        if self.assigned_role_id and self.assigned_role.sub_team_id:
+            if self.assigned_role.sub_team_id != self.sub_team_id:
+                raise ValidationError({'assigned_role': 'A função deve pertencer à equipe selecionada.'})
+
+    @transaction.atomic
+    def save(self, *args, **kwargs):
+        # Existing assignments survive departures; validate new or changed assignment data.
+        old = type(self).all_objects.filter(pk=self.pk).values('sub_team_id', 'responsible_id', 'assigned_role_id').first() if self.pk else None
+        if old is None or any(old[name] != getattr(self, name) for name in old):
+            self.clean()
+        fields = kwargs.get('update_fields')
+        if self.pk:
+            previous = type(self).all_objects.select_for_update().get(pk=self.pk)
+            for date_field in ('start_date', 'due_date', 'publication_date'):
+                flag = date_field + '_auto'
+                date_changed = fields is None or date_field in fields
+                event_changed = (fields is None or 'event' in fields or 'event_id' in fields) and self.event_id != previous.event_id
+                value = self._meta.get_field(date_field).to_python(getattr(self, date_field))
+                if event_changed or (date_changed and value != getattr(previous, date_field)):
+                    setattr(self, flag, False)
+                else:
+                    setattr(self, flag, getattr(previous, flag))
+                if fields is not None:
+                    fields = set(fields) | {flag}
+            if fields is not None:
+                kwargs['update_fields'] = fields
+        return super().save(*args, **kwargs)

@@ -16,11 +16,14 @@ from ...services.demands_hub import (
     build_free_detail,
     build_sidebar_items,
     content_hub_url,
+    content_status_label,
+    extra_demand_type_options_for,
     get_demand_type_roles_map,
     get_filter_context,
     get_responsible_picker_options,
     hub_redirect_url,
     parse_selected,
+    sync_content_status_from_tasks,
 )
 from ...services.media_planning import get_available_template_items, get_template_for_event
 from ...forms.media_planning import (
@@ -78,22 +81,44 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
         event_form = MediaEventQuickForm(prefix='event')
         event_types = list(event_form.fields['event_type'].queryset)
         edit_form = MediaDemandQuickForm(prefix='edit')
-        edit_assignments = [{'id': '', 'role': '', 'user_id': '', 'due_date': ''}]
+        edit_assignments = [{'id': '', 'role': '', 'user_id': '', 'due_days': '', 'due_relation': 'before'}]
         if detail_type == 'free' and detail:
             edit_form = MediaDemandQuickForm(instance=detail['content'], prefix='edit')
             edit_assignments = build_assignment_rows(detail['content'])
 
+        failed_form = getattr(request, 'failed_demand_form', None)
+        failed_assignments = getattr(request, 'failed_demand_assignments', [])
+        if failed_form is not None:
+            if failed_form.prefix == 'edit':
+                edit_form = failed_form
+                edit_assignments = failed_assignments
+            else:
+                demand_form = failed_form
+        demand_event_id = ''
+        demand_event_title = ''
+        if create_mode == 'demand' and kind == 'event' and pk:
+            from ...models.event import Event
+            demand_event_id = str(pk)
+            event_obj = Event.objects.filter(pk=pk).only('title').first()
+            if event_obj:
+                demand_event_title = event_obj.title
+
+        from website.services.media_planning import template_preview_data
         ctx = {
             **self._nav_context(),
+            'template_previews': template_preview_data(),
             **filters,
             'create_mode': create_mode,
+            'demand_event_id': demand_event_id,
+            'demand_event_title': demand_event_title,
             'demand_form': demand_form,
             'event_form': event_form,
             'event_types': event_types,
+            'extra_event_dates': [],
             'edit_form': edit_form,
             'edit_assignments': edit_assignments,
-            'demand_assignments': [{'id': '', 'role': '', 'user_id': '', 'due_date': '', 'description': '', 'is_custom_role': False}],
-            'blank_assignment': {'id': '', 'role': '', 'user_id': '', 'due_date': '', 'description': '', 'is_custom_role': False},
+            'demand_assignments': failed_assignments if failed_form is not None and failed_form.prefix == 'demand' else [{'id': '', 'role': '', 'user_id': '', 'due_days': '', 'due_relation': 'before', 'description': '', 'is_custom_role': False}],
+            'blank_assignment': {'id': '', 'role': '', 'user_id': '', 'due_days': '', 'due_relation': 'before', 'description': '', 'is_custom_role': False},
             'demand_type_roles': get_demand_type_roles_map(),
             'assignment_role_presets': ASSIGNMENT_ROLE_PRESETS,
             'edit_mode': request.GET.get('edit', '') == '1',
@@ -101,6 +126,10 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             'demand_quick_types': DEMAND_QUICK_TYPES,
             'demand_types_technical': DEMAND_TYPES_TECHNICAL,
             'demand_types_organizational': DEMAND_TYPES_ORGANIZATIONAL,
+            'extra_demand_type_options': extra_demand_type_options_for(
+                getattr(edit_form.instance, 'content_type', None),
+                getattr(demand_form.instance, 'content_type', None),
+            ),
             'responsible_options': get_responsible_picker_options(),
             'sidebar_months': sidebar_months,
             'selected': selected,
@@ -278,7 +307,7 @@ class MediaContentDeleteView(MediaLeaderRequiredMixin, View):
 class MediaTaskCreateView(MediaLeaderRequiredMixin, View):
     def post(self, request, pk):
         content = get_object_or_404(MediaContent, pk=pk)
-        form = MediaTaskForm(request.POST)
+        form = MediaTaskForm(request.POST, content=content)
         if form.is_valid():
             task = form.save(commit=False)
             task.content = content
@@ -299,10 +328,13 @@ class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
         if new_status in valid_statuses:
             task.status = new_status
             task.save(update_fields=['status', 'update_at'])
+            content_status = sync_content_status_from_tasks(task.content)
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({
                     'status': new_status,
                     'label': task.get_status_display(),
+                    'content_status': content_status,
+                    'content_label': content_status_label(content_status),
                 })
             messages.success(
                 request,

@@ -1,21 +1,16 @@
 from django import forms
-
+from django.db import transaction
 from website.models.event import Event
 from website.models.media_event_type import MediaEventType, MediaPlanningTemplate, MediaPlanningTemplateItem
 from website.models.media_organization import (
-    LEADERSHIP_CATEGORY_CHOICES,
-    LEADERSHIP_PRIORITY_CHOICES,
-    LEADERSHIP_STATUS_CHOICES,
-    RESOURCE_CATEGORY_CHOICES,
-    SUBSCRIPTION_TYPE_CHOICES,
     MediaLeadershipItem,
     MediaResource,
-    MediaResourceCredential,
     MediaRole,
     MediaSubTeam,
     MediaSubTeamMembership,
 )
 from website.models.member import Member
+from website.services.ministry_organization import media_ministry, media_teams, ministry_members, scoped_roles
 
 _INPUT = 'form-input'
 _SELECT = 'form-input'
@@ -80,6 +75,37 @@ class MediaTemplateUnifiedForm(forms.Form):
             raise forms.ValidationError('Já existe um template com este nome.')
         return name
 
+    def _restore_deleted_event_type(self, data):
+        archived = MediaEventType.deleted_objects.filter(name__iexact=data['name']).first()
+        if not archived:
+            return None
+        archived.undelete()
+        archived.description = data.get('description', '')
+        archived.is_active = data.get('is_active', True)
+        archived.sort_order = data.get('sort_order') or 0
+        archived.save()
+        return archived
+
+    def _template_for_event_type(self, et, data):
+        tpl = MediaPlanningTemplate.deleted_objects.filter(event_type=et).first()
+        if tpl:
+            tpl.undelete()
+        else:
+            tpl, _ = MediaPlanningTemplate.objects.get_or_create(
+                event_type=et,
+                defaults={
+                    'name': et.name,
+                    'description': et.description,
+                    'is_active': et.is_active,
+                },
+            )
+        tpl.name = et.name
+        tpl.description = data.get('description', '')
+        tpl.is_active = data.get('is_active', True)
+        tpl.save()
+        return tpl
+
+    @transaction.atomic
     def save(self):
         data = self.cleaned_data
         if self.event_type:
@@ -89,32 +115,17 @@ class MediaTemplateUnifiedForm(forms.Form):
             et.is_active = data.get('is_active', True)
             et.sort_order = data.get('sort_order') or 0
             et.save()
-            tpl, _ = MediaPlanningTemplate.objects.get_or_create(
-                event_type=et,
-                defaults={
-                    'name': et.name,
-                    'description': et.description,
-                    'is_active': et.is_active,
-                },
-            )
-            tpl.name = et.name
-            tpl.description = data.get('description', '')
-            tpl.is_active = data.get('is_active', True)
-            tpl.save()
-            return tpl
+            return self._template_for_event_type(et, data)
 
-        et = MediaEventType.objects.create(
-            name=data['name'],
-            description=data.get('description', ''),
-            is_active=data.get('is_active', True),
-            sort_order=data.get('sort_order') or 0,
-        )
-        return MediaPlanningTemplate.objects.create(
-            event_type=et,
-            name=et.name,
-            description=et.description,
-            is_active=et.is_active,
-        )
+        et = self._restore_deleted_event_type(data)
+        if et is None:
+            et = MediaEventType.objects.create(
+                name=data['name'],
+                description=data.get('description', ''),
+                is_active=data.get('is_active', True),
+                sort_order=data.get('sort_order') or 0,
+            )
+        return self._template_for_event_type(et, data)
 
 
 class MediaPlanningTemplateForm(forms.ModelForm):
@@ -138,39 +149,93 @@ class MediaPlanningTemplateForm(forms.ModelForm):
         ).exclude(pk__in=used_types).order_by('sort_order', 'name')
 
 
+_MEDIA_INPUT = 'media-field-input'
+_MEDIA_SELECT = 'media-field-select'
+
+
 class MediaPlanningTemplateItemForm(forms.ModelForm):
+    """Formulário de demanda padrão — mesmo padrão do hub de demandas."""
+
     class Meta:
         model = MediaPlanningTemplateItem
-        fields = [
-            'title', 'content_type', 'description', 'default_sub_team', 'default_role',
-            'requires_recording', 'requires_editing', 'lead_offset_days',
-            'due_offset_days', 'publication_offset_days', 'publication_channel',
-            'notes', 'sort_order',
-        ]
+        fields = ['title', 'content_type', 'description', 'default_sub_team', 'sort_order']
         widgets = {
-            'title': forms.TextInput(attrs={'class': _INPUT}),
-            'content_type': forms.Select(attrs={'class': _SELECT}),
-            'description': forms.Textarea(attrs={'class': _TEXTAREA, 'rows': 2}),
-            'default_sub_team': forms.Select(attrs={'class': _SELECT}),
-            'default_role': forms.Select(attrs={'class': _SELECT}),
-            'requires_recording': forms.CheckboxInput(attrs={'class': 'rounded'}),
-            'requires_editing': forms.CheckboxInput(attrs={'class': 'rounded'}),
-            'lead_offset_days': forms.NumberInput(attrs={'class': _INPUT, 'placeholder': 'Ex: -21'}),
-            'due_offset_days': forms.NumberInput(attrs={'class': _INPUT, 'placeholder': 'Ex: 3'}),
-            'publication_offset_days': forms.NumberInput(attrs={'class': _INPUT, 'placeholder': 'Ex: -14'}),
-            'publication_channel': forms.Select(attrs={'class': _SELECT}),
-            'notes': forms.Textarea(attrs={'class': _TEXTAREA, 'rows': 2}),
-            'sort_order': forms.NumberInput(attrs={'class': _INPUT}),
+            'title': forms.TextInput(attrs={
+                'class': _MEDIA_INPUT,
+                'placeholder': 'Ex: Arte principal do culto',
+            }),
+            'content_type': forms.Select(attrs={'class': _MEDIA_SELECT}),
+            'description': forms.Textarea(attrs={
+                'class': _MEDIA_INPUT,
+                'rows': 3,
+                'placeholder': 'Detalhes, referências ou contexto da demanda',
+            }),
+            'default_sub_team': forms.Select(attrs={'class': _MEDIA_SELECT, 'data-demand-team': 'true'}),
+            'sort_order': forms.HiddenInput(),
         }
 
     def __init__(self, *args, **kwargs):
+        from website.services.demands_hub import (
+            DEMAND_TYPES_ORGANIZATIONAL,
+            DEMAND_TYPES_TECHNICAL,
+        )
         super().__init__(*args, **kwargs)
-        self.fields['default_sub_team'].queryset = MediaSubTeam.objects.filter(
-            is_active=True
-        ).order_by('name')
-        self.fields['default_sub_team'].empty_label = '— Nenhuma —'
-        self.fields['default_role'].queryset = MediaRole.objects.order_by('name')
-        self.fields['default_role'].empty_label = '— Nenhuma —'
+        if self.is_bound and not hasattr(self.data, 'getlist'):
+            from django.http import QueryDict
+            data = QueryDict('', mutable=True)
+            for key, value in self.data.items():
+                values = value if isinstance(value, (list, tuple)) else [value]
+                data.setlist(key, [str(item) if item is not None else '' for item in values])
+            self.data = data
+        technical_choices = [(t['value'], t['label']) for t in DEMAND_TYPES_TECHNICAL]
+        organizational_choices = [(t['value'], t['label']) for t in DEMAND_TYPES_ORGANIZATIONAL]
+        quick_values = {value for value, _ in technical_choices + organizational_choices}
+        if self.instance and self.instance.pk:
+            current = self.instance.content_type
+            if current and current not in quick_values:
+                label = self.instance.get_content_type_display()
+                technical_choices.append((current, f'{label} (formato anterior)'))
+        self.fields['content_type'].choices = [
+            ('', 'Selecione o tipo'),
+            ('Produção de conteúdo', technical_choices),
+            ('Organização e alinhamento', organizational_choices),
+        ]
+        self.fields['content_type'].widget.attrs['id'] = (
+            f'id_{self.prefix}-content_type' if self.prefix else 'id_content_type'
+        )
+        self.fields['description'].required = False
+        self.fields['default_sub_team'].queryset = media_teams().filter(is_active=True).order_by('name')
+        self.fields['default_sub_team'].empty_label = '— Sem equipe —'
+        self.fields['default_sub_team'].label = 'Equipe responsável (opcional)'
+
+    def clean(self):
+        data = super().clean()
+        prefix = self.prefix or 'template'
+        for field in ('assignment_user', 'assignment_id'):
+            if any(
+                value and (not value.isascii() or not value.isdigit() or len(value) > 18)
+                for value in self.data.getlist(f'{prefix}-{field}')
+            ):
+                self.add_error(None, 'Há uma atribuição inválida.')
+        due_days = self.data.getlist(f'{prefix}-assignment_due_days')
+        due_relations = self.data.getlist(f'{prefix}-assignment_due_relation')
+        for i, days_raw in enumerate(due_days):
+            relation = due_relations[i] if i < len(due_relations) else 'before'
+            if relation == 'on':
+                continue
+            if days_raw in (None, ''):
+                continue
+            try:
+                days = int(days_raw)
+            except (TypeError, ValueError):
+                self.add_error(None, 'Informe uma quantidade válida de dias para cada etapa.')
+                break
+            if days < 0:
+                self.add_error(None, 'A quantidade de dias deve ser zero ou maior.')
+                break
+        if any(len(value) > 200 for value in self.data.getlist(f'{prefix}-assignment_role')):
+            self.add_error(None, 'O papel de uma etapa deve ter até 200 caracteres.')
+        return data
 
 
 class EventTypeAssignForm(forms.ModelForm):
@@ -203,10 +268,20 @@ class MediaSubTeamForm(forms.ModelForm):
             'is_active': forms.CheckboxInput(attrs={'class': 'rounded'}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, ministry=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['leader'].queryset = _media_members_qs()
+        self.instance.ministry = ministry or media_ministry()
+        self.fields['leader'].queryset = ministry_members(self.instance.ministry)
         self.fields['leader'].empty_label = '— Selecionar —'
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        existing = MediaSubTeam.all_objects.filter(ministry=self.instance.ministry, name=name)
+        if self.instance.pk:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise forms.ValidationError('Já existe uma equipe com este nome neste ministério.')
+        return name
 
 
 class MediaRoleForm(forms.ModelForm):
@@ -221,7 +296,7 @@ class MediaRoleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['sub_team'].queryset = MediaSubTeam.objects.filter(is_active=True).order_by('name')
+        self.fields['sub_team'].queryset = media_teams().filter(is_active=True).order_by('name')
         self.fields['sub_team'].empty_label = '— Geral —'
 
 
@@ -239,8 +314,13 @@ class MediaSubTeamMembershipForm(forms.ModelForm):
     def __init__(self, *args, sub_team=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.sub_team = sub_team
-        self.fields['member'].queryset = _media_members_qs()
-        roles_qs = MediaRole.objects.all()
+        self.instance.sub_team = sub_team
+        if self.instance.pk:
+            self.fields['member'].disabled = True
+        elif not self.is_bound:
+            self.initial.setdefault('is_active', True)
+        self.fields['member'].queryset = ministry_members(sub_team.ministry) if sub_team else Member.objects.none()
+        roles_qs = scoped_roles(sub_team.ministry) if sub_team else MediaRole.objects.none()
         if sub_team:
             roles_qs = roles_qs.filter(sub_team__isnull=True) | roles_qs.filter(sub_team=sub_team)
         self.fields['roles'].queryset = roles_qs.order_by('name')
@@ -314,9 +394,4 @@ class MediaResourceCredentialForm(forms.Form):
 
 
 def _media_members_qs():
-    from website.models.ministry_membership import MinistryMembership
-    member_ids = MinistryMembership.objects.filter(
-        ministry__name__iexact='Mídia Externa',
-        is_active=True,
-    ).values_list('member_id', flat=True)
-    return Member.objects.filter(pk__in=member_ids).order_by('name')
+    return ministry_members(media_ministry())

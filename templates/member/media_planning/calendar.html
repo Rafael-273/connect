@@ -1,10 +1,10 @@
 {% extends "member_base.html" %}
 {% load static %}
 
-{% block title %}Calendário de Mídia{% endblock %}
+{% block title %}Cronograma de Mídia{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/main.min.css">
+<link rel="stylesheet" href="{% static 'ministry_organization.css' %}">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
 <style>
     :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
@@ -18,38 +18,62 @@
 {% endblock %}
 
 {% block content %}
-<div class="min-h-screen pb-28">
+<div class="min-h-screen pb-28" style="background: #f9fafb;">
 
     <!-- Header -->
-    <div class="px-4 pt-6 pb-2">
-        <div class="flex items-center justify-between">
+    <div class="px-4 pt-5 pb-2">
+        <div class="flex items-center justify-between gap-3 mb-1">
             <div>
-                <h1 class="text-xl font-bold text-gray-900">Calendário</h1>
-                <p class="text-sm text-gray-500">Planejamento de Mídia</p>
+                <h1 class="text-xl font-black text-gray-900">Cronograma</h1>
+                <p class="text-sm text-gray-500">Publicações e prazos da equipe</p>
             </div>
-            <a href="{% url 'media_dashboard' %}" class="text-gray-400 hover:text-gray-600 text-sm">
-                <i class="fas fa-arrow-left"></i>
-            </a>
         </div>
     </div>
-    {% include 'parciais/media_subnav.html' with section='planning' %}
+    {% include 'parciais/media_subnav.html' with section='calendar' %}
 
+    <div class="px-4 mb-4">
+        <details class="ministry-organization bg-white border border-gray-100 rounded-xl overflow-hidden" {% if request.GET %}open{% endif %}>
+            <summary class="flex items-center gap-2 px-4 py-3 cursor-pointer text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
+                <i class="fas fa-filter text-purple-500 text-xs"></i>
+                Filtrar cronograma
+            </summary>
+            <div class="border-t border-gray-100 px-4 pt-4 pb-4">
+                <form method="get" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {{ form.non_field_errors }}
+                    {% for field in form %}
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {{ field.errors }}
+                    </div>
+                    {% endfor %}
+                    <div class="flex gap-2 items-end">
+                        <button class="px-4 py-2 text-white rounded-xl text-sm font-bold" style="background:#8B5CF6;">Filtrar</button>
+                        <a href="{% url 'media_calendar' %}" class="px-4 py-2 text-purple-700 text-sm font-semibold rounded-xl border border-purple-100 bg-purple-50">Limpar</a>
+                    </div>
+                </form>
+            </div>
+        </details>
+    </div>
     <!-- Legend -->
-    <div class="px-4 mb-4 flex flex-wrap gap-3">
-        <div class="flex items-center gap-1.5 text-xs text-gray-600">
-            <span class="legend-dot" style="background:#3B82F6;"></span> Eventos da Igreja
+    <div class="px-4 mb-3 flex flex-wrap gap-3">
+        <div class="flex items-center gap-1.5 text-xs text-gray-500">
+            <span class="legend-dot" style="background:#3B82F6;"></span> Eventos
         </div>
-        <div class="flex items-center gap-1.5 text-xs text-gray-600">
-            <span class="legend-dot" style="background:#10B981;"></span> Publicações de Mídia
+        <div class="flex items-center gap-1.5 text-xs text-gray-500">
+            <span class="legend-dot" style="background:#10B981;"></span> Publicações
         </div>
-        <div class="flex items-center gap-1.5 text-xs text-gray-600">
-            <span class="legend-dot" style="background:#F59E0B;"></span> Prazo de Tarefas
+        <div class="flex items-center gap-1.5 text-xs text-gray-500">
+            <span class="legend-dot" style="background:#DC2626;"></span> Prazos
+        </div>
+        <div class="flex items-center gap-1.5 text-xs text-gray-500">
+            <span class="legend-dot" style="background:#64748B;"></span> Início previsto
         </div>
     </div>
 
     <!-- Calendar Container -->
     <div class="px-4">
-        <div id="calendar" class="bg-white rounded-xl border border-gray-200 p-3"></div>
+        <div id="calendar" class="bg-white rounded-xl border border-gray-100 p-3"></div>
     </div>
 
 </div>
@@ -58,7 +82,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     const calendarEl = document.getElementById('calendar');
     const calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        initialView: 'listWeek',
         locale: 'pt-br',
         headerToolbar: {
             left: 'prev,next',
@@ -67,11 +91,12 @@ document.addEventListener('DOMContentLoaded', function() {
         },
         buttonText: {
             month: 'Mês',
-            list: 'Lista'
+            list: 'Semana'
         },
         events: {
             url: '{% url "media_calendar_events" %}',
             method: 'GET',
+            extraParams: Object.fromEntries(new URLSearchParams(window.location.search)),
             failure: function() {
                 alert('Erro ao carregar eventos do calendário.');
             }
@@ -93,5 +118,5 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 
-{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
 {% endblock %}

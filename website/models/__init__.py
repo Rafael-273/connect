@@ -21,7 +21,12 @@ from .media_task import MediaTask
 from .media_comment import MediaComment
 from .media_attachment import MediaAttachment
 from .media_month_plan import MediaContentCategory, MediaMonthPlan
-from .media_event_type import MediaEventType, MediaPlanningTemplate, MediaPlanningTemplateItem
+from .media_event_type import (
+    MediaEventType,
+    MediaPlanningTemplate,
+    MediaPlanningTemplateItem,
+    MediaPlanningTemplateItemStep,
+)
 from .media_organization import (
     MediaSubTeam,
     MediaRole,
@@ -67,3 +72,4 @@ from .external_media import (
     TimelineRevision,
     VideoMasteringJob,
 )
+from .ministry_manual import MinistryManual

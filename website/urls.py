@@ -1,3 +1,5 @@
+from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventUpdateView
+from .views import ministry_organization as ministry_org
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from django.conf import settings
@@ -270,6 +272,21 @@ from .views.subtitle_review import (
 )
 
 urlpatterns = [
+    path('ministries/', ministry_org.MinistryOrganizationIndex.as_view(), name='ministry_organization_index'),
+    path('ministries/<int:ministry_id>/teams/', ministry_org.MinistryTeamList.as_view(), name='ministry_team_list'),
+    path('ministries/<int:ministry_id>/teams/new/', ministry_org.MinistryTeamEdit.as_view(), name='ministry_team_create'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/', ministry_org.MinistryTeamDetail.as_view(), name='ministry_team_detail'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/edit/', ministry_org.MinistryTeamEdit.as_view(), name='ministry_team_edit'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/members/add/', ministry_org.MinistryTeamMemberEdit.as_view(), name='ministry_team_member_add'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/members/<int:membership_id>/edit/', ministry_org.MinistryTeamMemberEdit.as_view(), name='ministry_team_member_edit'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/members/<int:membership_id>/remove/', ministry_org.MinistryTeamMemberRemove.as_view(), name='ministry_team_member_remove'),
+    path('ministries/<int:ministry_id>/manuals/', ministry_org.MinistryManualList.as_view(), name='ministry_manual_list'),
+    path('ministries/<int:ministry_id>/manuals/preview/', ministry_org.MinistryManualPreview.as_view(), name='ministry_manual_preview'),
+    path('ministries/<int:ministry_id>/manuals/new/', ministry_org.MinistryManualEdit.as_view(), name='ministry_manual_create'),
+    path('ministries/<int:ministry_id>/manuals/<int:pk>/', ministry_org.MinistryManualDetail.as_view(), name='ministry_manual_detail'),
+    path('ministries/<int:ministry_id>/manuals/<int:pk>/edit/', ministry_org.MinistryManualEdit.as_view(), name='ministry_manual_edit'),
+    path('ministries/<int:ministry_id>/manuals/<int:pk>/archive/', ministry_org.MinistryManualArchive.as_view(), name='ministry_manual_archive'),
+
     path('', HomeView.as_view(), name='home'),
     path('testemunhos/', TestimonyListView.as_view(), name='testemunhos'),
     path('contato/', ContactView.as_view(), name='contato'),
@@ -659,6 +676,9 @@ urlpatterns = [
     path('media/planos/<int:year>/<int:month>/evento/<int:event_pk>/conteudos/', MediaPlanMacroEventView.as_view(), name='media_plan_macro_event'),
     path('media/planos/<int:year>/<int:month>/categoria/<int:category_pk>/conteudos/', MediaPlanMacroCategoryView.as_view(), name='media_plan_macro_category'),
     # Standalone content browse (outside plans)
+    path('media/events/', MediaEventsView.as_view(), name='media_events'),
+    path('media/demands/', MediaDemandsView.as_view(), name='media_demands'),
+    path('media/events/<int:pk>/edit/', MediaEventUpdateView.as_view(), name='media_event_update'),
     path('media/events/<int:event_pk>/', MediaEventContentsView.as_view(), name='media_event_contents'),
     path('media/category/<str:content_type>/', MediaCategoryContentsView.as_view(), name='media_category_contents'),
     # Content CRUD

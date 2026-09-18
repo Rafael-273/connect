@@ -89,6 +89,10 @@
                 </a>
             </div>
 
+            <div class="flex gap-3 mb-6">
+                <a href="{% url 'ministry_team_list' ministry.pk %}" class="px-4 py-2 bg-white border rounded-xl">Equipes</a>
+                <a href="{% url 'ministry_manual_list' ministry.pk %}" class="px-4 py-2 bg-white border rounded-xl">Manuais</a>
+            </div>
             <!-- Stats -->
             <div class="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
                 <div class="admin-card p-4">
@@ -371,7 +375,12 @@
 
     document.getElementById('deleteModalConfirm').addEventListener('click', function () {
         if (!_removeUrl) return;
-        window.location.href = _removeUrl;
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = _removeUrl;
+        const csrf = document.createElement('input');
+        csrf.type = 'hidden'; csrf.name = 'csrfmiddlewaretoken'; csrf.value = '{{ csrf_token }}';
+        form.appendChild(csrf); document.body.appendChild(form); form.submit();
     });
 
     document.getElementById('deleteModal').addEventListener('click', function (e) {

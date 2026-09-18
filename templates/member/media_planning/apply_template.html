@@ -1,46 +1,86 @@
 {% extends "member_base.html" %}
-{% block title %}Aplicar Template{% endblock %}
+{% block title %}Aplicar Template · {{ event.title }}{% endblock %}
 {% block content %}
-<div class="min-h-screen pb-28 bg-gray-50 px-4 pt-6">
-    <a href="{% url 'media_event_contents' event.pk %}" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> {{ event.title }}</a>
+{% include 'parciais/messages.html' %}
+<div class="min-h-screen pb-28" style="background:#f9fafb;">
+    <div class="px-4 pt-5 pb-2">
+        <a href="{% url 'media_event_contents' event.pk %}"
+           class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-purple-700 mb-3 transition-colors">
+            <i class="fas fa-arrow-left text-xs"></i> {{ event.title }}
+        </a>
+        <h1 class="text-xl font-black text-gray-900">Aplicar template</h1>
+        <p class="text-sm text-gray-500 mt-0.5">
+            <strong>{{ template.name }}</strong> · {{ event.event_type.name }}
+        </p>
+    </div>
     {% include 'parciais/media_subnav.html' with section='planning' %}
-    <h1 class="text-xl font-bold">Aplicar template</h1>
-    <p class="text-sm text-gray-500 mb-4">Template: <strong>{{ template.name }}</strong> ({{ event.event_type.name }})</p>
-    <p class="text-xs text-gray-400 mb-4">Selecione as demandas sugeridas. Elas serão criadas como conteúdos editáveis — o template não altera planejamentos existentes.</p>
 
-    {% if available_items %}
-    <form method="post" class="space-y-3">
-        {% csrf_token %}
-        <div class="bg-white rounded-xl border divide-y">
-            <label class="flex items-center gap-3 p-4 cursor-pointer">
-                <input type="checkbox" id="select-all" class="rounded" checked>
-                <span class="font-semibold text-sm">Selecionar todos</span>
-            </label>
-            {% for item in available_items %}
-            <label class="flex items-start gap-3 p-4 cursor-pointer">
-                <input type="checkbox" name="item_ids" value="{{ item.pk }}" class="item-check rounded mt-1" checked>
-                <div>
-                    <div class="font-semibold text-sm">{{ item.title }}</div>
-                    <div class="text-xs text-gray-400">{{ item.get_content_type_display }}
-                        {% if item.default_sub_team %} · {{ item.default_sub_team.name }}{% endif %}
-                        {% if item.publication_offset_days %} · Pub {{ item.publication_offset_days }}d{% endif %}
-                        {% if item.due_offset_days %} · Prazo {{ item.due_offset_days }}d{% endif %}
-                    </div>
-                    {% if item.description %}<p class="text-xs text-gray-500 mt-1">{{ item.description|truncatechars:100 }}</p>{% endif %}
-                </div>
-            </label>
-            {% endfor %}
+    <div class="px-4 max-w-2xl mx-auto space-y-4">
+        <div class="bg-purple-50 border border-purple-100 rounded-xl px-4 py-3 text-sm text-purple-700">
+            <i class="fas fa-info-circle mr-1.5"></i>
+            Selecione as demandas sugeridas. Elas serão criadas como conteúdos editáveis —
+            o template não altera planejamentos existentes.
         </div>
-        <button type="submit" class="w-full py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">Criar demandas selecionadas</button>
-    </form>
-    <script>
-    document.getElementById('select-all').addEventListener('change', function() {
-        document.querySelectorAll('.item-check').forEach(cb => cb.checked = this.checked);
-    });
-    </script>
-    {% else %}
-    <p class="text-center text-gray-400 py-8">Todos os itens do template já foram aplicados a este evento.</p>
-    {% endif %}
+
+        {% if available_items %}
+        <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <div class="bg-white rounded-xl border border-gray-100 divide-y divide-gray-50">
+                <label class="flex items-center gap-3 p-4 cursor-pointer">
+                    <input type="checkbox" id="select-all" class="rounded accent-purple-600" checked>
+                    <span class="font-bold text-sm text-gray-900">Selecionar todos</span>
+                </label>
+                {% for item in available_items %}
+                <label class="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <input type="checkbox" name="item_ids" value="{{ item.pk }}"
+                           class="item-check rounded mt-1 accent-purple-600" checked>
+                    <div class="min-w-0">
+                        <div class="font-semibold text-sm text-gray-900">{{ item.title }}</div>
+                        <div class="text-xs text-gray-400 mt-0.5">
+                            {{ item.get_content_type_display }}
+                            {% if item.default_sub_team %} · {{ item.default_sub_team.name }}{% endif %}
+                            {% if item.publication_offset_days %} · Pub {{ item.publication_offset_days }}d{% endif %}
+                            {% if item.due_offset_days %} · Prazo {{ item.due_offset_days }}d{% endif %}
+                        </div>
+                        {% if item.description %}
+                        <p class="text-xs text-gray-500 mt-1">{{ item.description|truncatechars:100 }}</p>
+                        {% endif %}
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="flex items-center gap-3">
+                <button type="submit"
+                        class="flex-1 py-3 text-white rounded-xl font-bold text-sm transition-all hover:-translate-y-0.5"
+                        style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                    <i class="fas fa-magic mr-1.5"></i>Criar demandas selecionadas
+                </button>
+                <a href="{% url 'media_event_contents' event.pk %}"
+                   class="px-4 py-3 text-sm text-gray-500 font-medium hover:text-gray-700">Cancelar</a>
+            </div>
+        </form>
+        <script>
+        document.getElementById('select-all').addEventListener('change', function() {
+            document.querySelectorAll('.item-check').forEach(cb => cb.checked = this.checked);
+        });
+        </script>
+        {% else %}
+        <div class="bg-white rounded-xl border border-gray-100 py-16 flex flex-col items-center text-center px-6">
+            <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style="background:rgba(139,92,246,.1);">
+                <i class="fas fa-check-circle text-2xl" style="color:#8B5CF6;"></i>
+            </div>
+            <h3 class="font-black text-gray-900 text-lg">Tudo aplicado</h3>
+            <p class="text-sm text-gray-500 mt-2 max-w-xs">
+                Todos os itens do template já foram aplicados a este evento.
+            </p>
+            <a href="{% url 'media_content_list' %}?selected=event-{{ event.pk }}"
+               class="mt-6 inline-flex items-center gap-2 px-5 py-2.5 text-white rounded-xl font-bold text-sm"
+               style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                Ver demandas do evento
+            </a>
+        </div>
+        {% endif %}
+    </div>
 </div>
-{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
 {% endblock %}

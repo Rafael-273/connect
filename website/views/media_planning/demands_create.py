@@ -1,20 +1,40 @@
 import datetime
 
+from django.core.exceptions import ValidationError
+from django.db import transaction
+
 from django.contrib import messages
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views import View
 
 from ...forms.media_planning import MediaDemandQuickForm, MediaEventQuickForm, MediaEventTypeQuickForm
-from ...models.event import Event
+from django.utils.dateparse import parse_date, parse_time
+
+from ...models.event import Event, EventDate
 from ...models.media_content import MediaContent
 from ...models.media_event_type import MediaEventType, MediaPlanningTemplate
 from ...models.media_month_plan import MediaMonthPlan
 from ...services.demands_hub import hub_redirect_url, parse_demand_assignments, sync_content_assignments
 from ...services.media_planning import apply_template_to_event, get_template_for_event
-from .mixins import MediaLeaderRequiredMixin
+from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
 from .month_plan import DEFAULT_EVENT_BANNER
+
+
+def _parse_extra_event_dates(post_data, prefix='event'):
+    rows = []
+    dates = post_data.getlist(f'{prefix}-extra_event_date')
+    times = post_data.getlist(f'{prefix}-extra_event_time')
+    for raw_date, raw_time in zip(dates, times):
+        if not raw_date:
+            continue
+        parsed_date = parse_date(raw_date) if isinstance(raw_date, str) else raw_date
+        if not parsed_date:
+            continue
+        parsed_time = parse_time(raw_time) if raw_time else None
+        rows.append({'event_date': parsed_date, 'event_time': parsed_time})
+    return rows
 
 
 def _date_to_datetime(value):
@@ -24,48 +44,99 @@ def _date_to_datetime(value):
     return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
 
 
-class MediaDemandQuickCreateView(MediaLeaderRequiredMixin, View):
+def _invalid_demand_response(view, request, form, assignments):
+    from .content import MediaContentListView
+    request.failed_demand_form = form
+    from website.services.demands_hub import ASSIGNMENT_ROLE_PRESETS, decompress_assignment_offset
+    failed_rows = []
+    for row in assignments:
+        offset_parts = decompress_assignment_offset(row.get('due_offset_days'))
+        failed_rows.append({
+            **row,
+            'id': row.get('task_id', ''),
+            'due_days': offset_parts['due_days'],
+            'due_relation': offset_parts['due_relation'],
+            'is_custom_role': row.get('role') not in ASSIGNMENT_ROLE_PRESETS,
+        })
+    request.failed_demand_assignments = failed_rows
+    request.GET = request.GET.copy()
+    if form.prefix == 'edit':
+        request.GET['edit'] = '1'
+        request.GET['selected'] = (
+            f'event-{form.instance.event_id}' if form.instance.event_id else f'free-{form.instance.pk}'
+        )
+    else:
+        request.GET['create'] = 'demand'
+        event_id = request.POST.get('demand-event', '').strip()
+        if event_id.isdigit():
+            request.GET['selected'] = f'event-{event_id}'
+    hub = MediaContentListView()
+    hub.setup(request)
+    hub.member = view.member
+    hub.media_membership = view.media_membership
+    response = hub.get(request)
+    response.status_code = 400
+    return response
+
+
+class MediaDemandQuickCreateView(MediaMemberRequiredMixin, View):
     """Cria demanda/conteúdo a partir do hub."""
 
     def post(self, request):
         form = MediaDemandQuickForm(request.POST, prefix='demand')
-        if not form.is_valid():
-            messages.error(request, 'Verifique os campos da demanda.')
-            return redirect(hub_redirect_url(request, create='demand'))
-
-        content = form.save(commit=False)
-        content.status = 'pending'
-        content.priority = 'medium'
-        content.event = None
-        content.responsible = None
-        content.due_date = None
-        content.publication_date = None
-        content.save()
-
         assignments = parse_demand_assignments(request.POST, prefix='demand')
-        sync_content_assignments(content, assignments)
+        if not form.is_valid():
+            return _invalid_demand_response(self, request, form, assignments)
+        event = None
+        event_id = request.POST.get('demand-event', '').strip()
+        if event_id:
+            if not event_id.isdigit():
+                form.add_error(None, 'Evento inválido.')
+                return _invalid_demand_response(self, request, form, assignments)
+            event = Event.objects.filter(pk=int(event_id)).first()
+            if not event:
+                form.add_error(None, 'Evento não encontrado.')
+                return _invalid_demand_response(self, request, form, assignments)
+
+        try:
+            with transaction.atomic():
+                content = form.save(commit=False)
+                content.status = 'pending'
+                content.priority = 'medium'
+                content.event = event
+                content.responsible = None
+                content.due_date = None
+                content.publication_date = None
+                content.save()
+                sync_content_assignments(content, assignments)
+        except ValidationError as exc:
+            form.instance.pk = None
+            form.add_error(None, ' '.join(exc.messages))
+            return _invalid_demand_response(self, request, form, assignments)
 
         messages.success(request, f'Demanda "{content.title}" criada!')
+        if content.event_id:
+            return redirect(hub_redirect_url(request, selected=f'event-{content.event_id}'))
         return redirect(hub_redirect_url(request, selected=f'free-{content.pk}'))
 
 
-class MediaDemandQuickUpdateView(MediaLeaderRequiredMixin, View):
+class MediaDemandQuickUpdateView(MediaMemberRequiredMixin, View):
     """Atualiza demanda/conteúdo a partir do modal do hub."""
 
     def post(self, request, pk):
         content = get_object_or_404(MediaContent, pk=pk)
         form = MediaDemandQuickForm(request.POST, instance=content, prefix='edit')
-        if not form.is_valid():
-            messages.error(request, 'Verifique os campos da demanda.')
-            if content.event_id:
-                return redirect(hub_redirect_url(request, selected=f'event-{content.event_id}', edit='1'))
-            return redirect(hub_redirect_url(request, selected=f'free-{pk}', edit='1'))
-
-        content = form.save(commit=False)
-        content.save()
-
         assignments = parse_demand_assignments(request.POST, prefix='edit')
-        sync_content_assignments(content, assignments)
+        if not form.is_valid():
+            return _invalid_demand_response(self, request, form, assignments)
+        try:
+            with transaction.atomic():
+                content = form.save(commit=False)
+                content.save()
+                sync_content_assignments(content, assignments)
+        except ValidationError as exc:
+            form.add_error(None, ' '.join(exc.messages))
+            return _invalid_demand_response(self, request, form, assignments)
 
         messages.success(request, f'Demanda "{content.title}" atualizada!')
         if content.event_id:
@@ -73,44 +144,70 @@ class MediaDemandQuickUpdateView(MediaLeaderRequiredMixin, View):
         return redirect(hub_redirect_url(request, selected=f'free-{content.pk}'))
 
 
-class MediaEventQuickCreateView(MediaLeaderRequiredMixin, View):
+class MediaEventQuickCreateView(MediaMemberRequiredMixin, View):
     """Cria evento a partir do hub, com template opcional."""
+
+    def invalid_response(self, request, form):
+        from website.services.media_planning import template_preview_data
+        return render(request, 'member/media_planning/event_form.html', {
+            **self._nav_context(), 'form': form, 'template_previews': template_preview_data(),
+        }, status=400)
+
+    def get(self, request):
+        from website.services.media_planning import template_preview_data
+        return render(request, 'member/media_planning/event_form.html', {
+            **self._nav_context(), 'form': MediaEventQuickForm(prefix='event'),
+            'template_previews': template_preview_data(),
+        })
 
     def post(self, request):
         form = MediaEventQuickForm(request.POST, prefix='event')
         if not form.is_valid():
-            messages.error(request, 'Verifique os campos do evento.')
-            return redirect(hub_redirect_url(request, create='event'))
+            return self.invalid_response(request, form)
 
         data = form.cleaned_data
         event_date = data['event_date']
+        extra_dates = _parse_extra_event_dates(request.POST, prefix='event')
+        all_dates = [event_date, *[row['event_date'] for row in extra_dates]]
+        span_start = min(all_dates)
+        span_end = max(all_dates)
         event = Event(
             title=data['title'],
-            description=data['title'],
+            description=data.get('description') or '',
             event_date=event_date,
             event_time=data.get('event_time'),
-            location=data.get('location') or '',
-            display_start=event_date,
-            display_end=event_date,
+            end_date=span_end if len(all_dates) > 1 else data.get('end_date'),
+            end_time=data.get('end_time'),
+            location='',
+            display_start=span_start,
+            display_end=span_end,
             event_type=data.get('event_type'),
             banner=DEFAULT_EVENT_BANNER,
         )
-        event.save()
+        try:
+            with transaction.atomic():
+                event.save()
+                EventDate.objects.bulk_create([
+                    EventDate(event=event, event_date=row['event_date'], event_time=row['event_time'])
+                    for row in extra_dates
+                ])
 
-        plan, _ = MediaMonthPlan.objects.get_or_create(
-            year=event_date.year,
-            month=event_date.month,
-        )
-        plan.events.add(event)
+                plan, _ = MediaMonthPlan.objects.get_or_create(
+                    year=event_date.year,
+                    month=event_date.month,
+                )
+                plan.events.add(event)
 
-        template_count = 0
-        if data.get('apply_template') and event.event_type_id:
-            template = get_template_for_event(event)
-            if template:
-                items = list(template.items.select_related('default_sub_team', 'default_role'))
-                if items:
-                    apply_template_to_event(event, items, month_plan=plan)
-                    template_count = len(items)
+                template_count = 0
+                if event.event_type_id:
+                    template = get_template_for_event(event)
+                    if template:
+                        items = list(template.items.select_related('default_sub_team', 'default_role').prefetch_related('steps'))
+                        if items:
+                            template_count = len(apply_template_to_event(event, items, month_plan=plan))
+        except ValidationError as exc:
+            form.add_error(None, ' '.join(exc.messages))
+            return self.invalid_response(request, form)
 
         if template_count:
             messages.success(

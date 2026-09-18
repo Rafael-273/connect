@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 from ._base import BaseModel
@@ -11,6 +11,9 @@ class Event(BaseModel):
 
     event_date = models.DateField()
     event_time = models.TimeField(null=True, blank=True)
+
+    end_date = models.DateField(null=True, blank=True, verbose_name='Data de término')
+    end_time = models.TimeField(null=True, blank=True, verbose_name='Horário de término')
 
     display_start = models.DateField()
     display_end = models.DateField()
@@ -72,7 +75,10 @@ class Event(BaseModel):
         today = timezone.now().date()
         return self.display_start <= today <= self.display_end
     
+    @transaction.atomic
     def save(self, *args, **kwargs):
+        previous = type(self).all_objects.select_for_update().filter(pk=self.pk).values('event_date').first() if self.pk else None
+        self.event_date = self._meta.get_field('event_date').to_python(self.event_date)
         if not self.slug:
             truncated_name = self.title[:50]
             base_slug = slugify(truncated_name)
@@ -85,6 +91,10 @@ class Event(BaseModel):
             self.slug = slug[:50]
 
         super().save(*args, **kwargs)
+        fields = kwargs.get('update_fields')
+        if previous and previous['event_date'] != self.event_date and (fields is None or 'event_date' in fields):
+            from website.services.media_planning import recalculate_event_dates
+            recalculate_event_dates(self)
     
     def get_weekday_name(self):
         """Retorna o nome do dia da semana para eventos recorrentes"""

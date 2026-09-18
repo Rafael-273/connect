@@ -1,0 +1,4 @@
+{% load static %}
+{{ template_previews|json_script:'media-template-previews' }}
+<div id="media-template-preview" class="rounded-lg bg-purple-50 p-3 text-sm" role="status" aria-live="polite"></div>
+<script src="{% static 'media_template_preview.js' %}" defer></script>

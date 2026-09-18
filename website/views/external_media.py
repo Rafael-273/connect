@@ -207,9 +207,19 @@ def protected_file_response(request, field_file, force_stream=False):
 
 class ExternalMediaContextMixin:
     def media_context(self, **kwargs):
+        from website.models.ministry_membership import MinistryMembership
+        is_media_leader = MinistryMembership.objects.filter(
+            member=self.member,
+            ministry__code='midia_externa',
+            ministry__is_active=True,
+            is_active=True,
+            role='leader',
+        ).exists()
         return {
             'member': self.member,
             'is_external_media_member': True,
+            'is_media_leader': is_media_leader,
+            'is_media_member': is_media_leader,
             'can_consolidate': self.member.is_available_to_consolidate,
             'is_ministration_member': False,
             'external_media_max_upload_mb': settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB,

@@ -1,23 +1,26 @@
 {% extends "member_base.html" %}
-{% block title %}Equipes de Mídia{% endblock %}
+{% load static %}
+{% block title %}Equipes · Organização da Mídia{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'org_media.css' %}">{% endblock %}
 {% block content %}
-<div class="min-h-screen pb-28 bg-gray-50">
-    <div class="px-4 pt-6 pb-2 bg-white border-b">
-        <a href="{% url 'media_organization' %}" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Organização</a>
-        <h1 class="text-xl font-bold">Subequipes</h1>
-    </div>
-    {% include 'parciais/media_subnav.html' with section='organization' %}
-    <div class="px-4 pt-4 space-y-2">
+<div class="org-media min-h-screen pb-28 bg-gray-50">
+    {% url 'media_organization' as org_url %}
+    {% include 'parciais/org_media_header.html' with back_url=org_url title='Equipes' subtitle='Subequipes e membros' %}
+    <div class="px-4 sm:px-6 pt-4 space-y-2 w-full">
         {% for team in sub_teams %}
-        <a href="{% url 'media_subteam_detail' team.pk %}" class="bg-white rounded-xl border p-4 block">
-            <div class="font-bold">{{ team.name }}</div>
-            <div class="text-xs text-gray-400">{{ team.memberships.count }} membro{{ team.memberships.count|pluralize:"s" }}{% if team.leader %} · Líder: {{ team.leader.name }}{% endif %}</div>
+        <a href="{% url 'media_subteam_detail' team.pk %}" class="org-card block p-4">
+            <div class="font-bold text-gray-900">{{ team.name }}</div>
+            <div class="text-xs text-gray-500 mt-0.5">{{ team.memberships.count }} membro{{ team.memberships.count|pluralize:"s" }}{% if team.leader %} · Líder: {{ team.leader.name }}{% endif %}</div>
         </a>
-        {% empty %}<p class="text-center text-gray-400 py-12">Nenhuma equipe.</p>{% endfor %}
+        {% empty %}
+        <div class="text-center py-14">
+            <p class="text-gray-500">Nenhuma equipe cadastrada.</p>
+        </div>
+        {% endfor %}
         {% if is_media_leader %}
-        <a href="{% url 'media_subteam_create' %}" class="block text-center py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">+ Nova equipe</a>
+        <a href="{% url 'media_subteam_create' %}" class="org-btn-primary block text-center mt-2">+ Nova equipe</a>
         {% endif %}
     </div>
 </div>
-{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
 {% endblock %}

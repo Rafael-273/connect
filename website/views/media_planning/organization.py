@@ -8,19 +8,17 @@ from ...forms.media_organization import (
     MediaResourceCredentialForm,
     MediaResourceForm,
     MediaRoleForm,
-    MediaSubTeamForm,
-    MediaSubTeamMembershipForm,
 )
 from ...models.media_organization import (
     MediaCredentialAccessLog,
     MediaLeadershipItem,
     MediaResource,
     MediaResourceCredential,
-    MediaRole,
-    MediaSubTeam,
     MediaSubTeamMembership,
 )
 from ...utils.media_vault import decrypt_secret, encrypt_secret
+from website.services.ministry_organization import media_teams, scoped_roles
+from website.views import ministry_organization as ministry_org
 from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
 
 
@@ -28,7 +26,7 @@ class MediaOrganizationDashboardView(MediaMemberRequiredMixin, View):
     template_name = 'member/media_planning/organization_dashboard.html'
 
     def get(self, request):
-        sub_teams = MediaSubTeam.objects.filter(is_active=True).prefetch_related('memberships')
+        sub_teams = media_teams().filter(is_active=True).select_related('leader')
         leadership_open = MediaLeadershipItem.objects.filter(
             status__in=['open', 'in_progress']
         ).select_related('responsible')[:8]
@@ -36,6 +34,7 @@ class MediaOrganizationDashboardView(MediaMemberRequiredMixin, View):
         ctx = {
             **self._nav_context(),
             'sub_teams': sub_teams,
+            'ministry': self.media_membership.ministry,
             'leadership_open': leadership_open,
             'resources': resources,
             'sub_team_count': sub_teams.count(),
@@ -49,143 +48,71 @@ class MediaOrganizationDashboardView(MediaMemberRequiredMixin, View):
 
 # ─── Subequipes ───────────────────────────────────────────────────────────────
 
-class MediaSubTeamListView(MediaMemberRequiredMixin, View):
-    template_name = 'member/media_planning/subteam_list.html'
+class MediaOrganizationBridge(MediaMemberRequiredMixin, View):
+    """Keep bookmarked media URLs using the same generic organization views."""
+    target_view = None
+    target_url = None
+    membership_route = False
 
-    def get(self, request):
-        teams = MediaSubTeam.objects.prefetch_related(
-            'memberships__member', 'memberships__roles'
-        ).order_by('name')
-        ctx = {**self._nav_context(), 'sub_teams': teams}
-        return render(request, self.template_name, ctx)
+    def route_kwargs(self, pk=None):
+        kwargs = {'ministry_id': self.media_membership.ministry_id}
+        if pk is not None:
+            if self.membership_route:
+                membership = get_object_or_404(
+                    MediaSubTeamMembership.objects.select_related('sub_team'),
+                    pk=pk, sub_team__ministry_id=kwargs['ministry_id'],
+                )
+                kwargs.update(pk=membership.sub_team_id, membership_id=membership.pk)
+            else:
+                get_object_or_404(media_teams(), pk=pk)
+                kwargs['pk'] = pk
+        return kwargs
 
+    def get(self, request, pk=None):
+        return redirect(self.target_url, **self.route_kwargs(pk))
 
-class MediaSubTeamCreateView(MediaLeaderRequiredMixin, View):
-    template_name = 'member/media_planning/subteam_form.html'
-
-    def get(self, request):
-        ctx = {**self._nav_context(), 'form': MediaSubTeamForm(), 'action': 'create'}
-        return render(request, self.template_name, ctx)
-
-    def post(self, request):
-        form = MediaSubTeamForm(request.POST)
-        if form.is_valid():
-            team = form.save()
-            messages.success(request, f'Equipe "{team.name}" criada!')
-            return redirect('media_subteam_detail', pk=team.pk)
-        ctx = {**self._nav_context(), 'form': form, 'action': 'create'}
-        return render(request, self.template_name, ctx)
-
-
-class MediaSubTeamDetailView(MediaMemberRequiredMixin, View):
-    template_name = 'member/media_planning/subteam_detail.html'
-
-    def get(self, request, pk):
-        team = get_object_or_404(
-            MediaSubTeam.objects.select_related('leader'),
-            pk=pk,
-        )
-        memberships = team.memberships.filter(is_active=True).select_related(
-            'member'
-        ).prefetch_related('roles')
-        ctx = {
-            **self._nav_context(),
-            'sub_team': team,
-            'memberships': memberships,
-            'member_form': MediaSubTeamMembershipForm(sub_team=team),
-        }
-        return render(request, self.template_name, ctx)
+    def post(self, request, pk=None):
+        return self.target_view.as_view()(request, **self.route_kwargs(pk))
 
 
-class MediaSubTeamUpdateView(MediaLeaderRequiredMixin, View):
-    template_name = 'member/media_planning/subteam_form.html'
-
-    def get(self, request, pk):
-        team = get_object_or_404(MediaSubTeam, pk=pk)
-        ctx = {
-            **self._nav_context(),
-            'form': MediaSubTeamForm(instance=team),
-            'sub_team': team,
-            'action': 'edit',
-        }
-        return render(request, self.template_name, ctx)
-
-    def post(self, request, pk):
-        team = get_object_or_404(MediaSubTeam, pk=pk)
-        form = MediaSubTeamForm(request.POST, instance=team)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f'Equipe "{team.name}" atualizada!')
-            return redirect('media_subteam_detail', pk=team.pk)
-        ctx = {
-            **self._nav_context(),
-            'form': form,
-            'sub_team': team,
-            'action': 'edit',
-        }
-        return render(request, self.template_name, ctx)
+class MediaSubTeamListView(MediaOrganizationBridge):
+    target_view = ministry_org.MinistryTeamList
+    target_url = 'ministry_team_list'
 
 
-class MediaSubTeamMemberAddView(MediaLeaderRequiredMixin, View):
-    def post(self, request, pk):
-        team = get_object_or_404(MediaSubTeam, pk=pk)
-        form = MediaSubTeamMembershipForm(request.POST, sub_team=team)
-        if form.is_valid():
-            membership = form.save(commit=False)
-            membership.sub_team = team
-            membership.save()
-            form.save_m2m()
-            messages.success(request, f'{membership.member.name} adicionado à equipe!')
-        else:
-            messages.error(request, 'Erro ao adicionar membro. Verifique os campos.')
-        return redirect('media_subteam_detail', pk=pk)
+class MediaSubTeamCreateView(MediaOrganizationBridge):
+    target_view = ministry_org.MinistryTeamEdit
+    target_url = 'ministry_team_create'
 
 
-class MediaSubTeamMemberUpdateView(MediaLeaderRequiredMixin, View):
-    template_name = 'member/media_planning/subteam_member_form.html'
-
-    def get(self, request, pk):
-        membership = get_object_or_404(
-            MediaSubTeamMembership.objects.select_related('sub_team', 'member'),
-            pk=pk,
-        )
-        ctx = {
-            **self._nav_context(),
-            'membership': membership,
-            'sub_team': membership.sub_team,
-            'form': MediaSubTeamMembershipForm(instance=membership, sub_team=membership.sub_team),
-        }
-        return render(request, self.template_name, ctx)
-
-    def post(self, request, pk):
-        membership = get_object_or_404(
-            MediaSubTeamMembership.objects.select_related('sub_team'),
-            pk=pk,
-        )
-        form = MediaSubTeamMembershipForm(
-            request.POST, instance=membership, sub_team=membership.sub_team
-        )
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Participação atualizada!')
-            return redirect('media_subteam_detail', pk=membership.sub_team_id)
-        ctx = {
-            **self._nav_context(),
-            'membership': membership,
-            'sub_team': membership.sub_team,
-            'form': form,
-        }
-        return render(request, self.template_name, ctx)
+class MediaSubTeamDetailView(MediaOrganizationBridge):
+    target_view = ministry_org.MinistryTeamDetail
+    target_url = 'ministry_team_detail'
 
 
-class MediaSubTeamMemberRemoveView(MediaLeaderRequiredMixin, View):
-    def post(self, request, pk):
-        membership = get_object_or_404(MediaSubTeamMembership, pk=pk)
-        team_pk = membership.sub_team_id
-        name = membership.member.name
-        membership.delete()
-        messages.success(request, f'{name} removido da equipe.')
-        return redirect('media_subteam_detail', pk=team_pk)
+class MediaSubTeamUpdateView(MediaOrganizationBridge):
+    target_view = ministry_org.MinistryTeamEdit
+    target_url = 'ministry_team_edit'
+
+
+class MediaSubTeamMemberAddView(MediaOrganizationBridge):
+    target_view = ministry_org.MinistryTeamMemberEdit
+    target_url = 'ministry_team_member_add'
+
+
+class MediaSubTeamMemberUpdateView(MediaOrganizationBridge):
+    target_view = ministry_org.MinistryTeamMemberEdit
+    target_url = 'ministry_team_member_edit'
+    membership_route = True
+
+
+class MediaSubTeamMemberRemoveView(MediaOrganizationBridge):
+    target_view = ministry_org.MinistryTeamMemberRemove
+    target_url = 'ministry_team_member_remove'
+    membership_route = True
+
+    def get(self, request, pk=None):
+        return self.http_method_not_allowed(request)
 
 
 # ─── Funções ──────────────────────────────────────────────────────────────────
@@ -194,7 +121,7 @@ class MediaRoleListView(MediaMemberRequiredMixin, View):
     template_name = 'member/media_planning/role_list.html'
 
     def get(self, request):
-        roles = MediaRole.objects.select_related('sub_team').order_by('name')
+        roles = scoped_roles(self.media_membership.ministry).select_related('sub_team').order_by('name')
         ctx = {**self._nav_context(), 'roles': roles}
         return render(request, self.template_name, ctx)
 

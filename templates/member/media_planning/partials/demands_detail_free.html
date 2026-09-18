@@ -1,4 +1,5 @@
 {% with content=detail.content %}
+{% if content.assignment_warning %}<p class="text-sm text-amber-800 bg-amber-50 rounded-xl p-3" role="alert">{{ content.assignment_warning }}</p>{% endif %}
 {% load pt_date %}
 <div class="h-full overflow-y-auto">
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 lg:px-6 lg:py-4">
@@ -21,15 +22,23 @@
                 </div>
             </div>
 
-            {% if is_media_leader %}
             <div class="demands-kebab-wrap relative flex-shrink-0">
                 <button type="button" class="demands-kebab-btn" aria-label="Ações" aria-haspopup="true" aria-expanded="false">
                     <i class="fas fa-ellipsis-v"></i>
                 </button>
                 <div class="demands-kebab-menu" hidden>
-                    <button type="button" class="demands-kebab-item" data-open-modal="demands-modal-edit">
+                    <a class="demands-kebab-item" href="{% url 'media_content_update' content.pk %}">Prazos e detalhes</a>
+                    <button type="button" class="demands-kebab-item"
+                            data-open-edit-modal
+                            data-pk="{{ content.pk }}"
+                            data-title="{{ content.title }}"
+                            data-sub-team="{{ content.sub_team_id|default:'' }}"
+                            data-content-type="{{ content.content_type }}"
+                            data-description="{{ content.description|default:'' }}"
+                            data-assignments='{{ content.assignments_json|default:"[]" }}'>
                         <i class="fas fa-edit"></i> Editar
                     </button>
+                    {% if is_media_leader %}
                     <form method="post" action="{% url 'media_content_delete' content.pk %}" class="demand-delete-form">
                         {% csrf_token %}
                         <input type="hidden" name="next" value="{{ hub_url }}">
@@ -40,9 +49,9 @@
                             <i class="fas fa-trash-alt"></i> Excluir
                         </button>
                     </form>
+                    {% endif %}
                 </div>
             </div>
-            {% endif %}
         </div>
     </div>
 

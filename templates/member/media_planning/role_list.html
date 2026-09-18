@@ -1,21 +1,24 @@
 {% extends "member_base.html" %}
-{% block title %}Funções{% endblock %}
+{% load static %}
+{% block title %}Funções · Organização da Mídia{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'org_media.css' %}">{% endblock %}
 {% block content %}
-<div class="min-h-screen pb-28 bg-gray-50 px-4 pt-6">
-    <a href="{% url 'media_organization' %}" class="text-xs font-semibold mb-4 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Organização</a>
-    {% include 'parciais/media_subnav.html' with section='organization' %}
-    <h1 class="text-xl font-bold mb-4">Funções</h1>
-    <div class="space-y-2 mb-4">
+<div class="org-media min-h-screen pb-28 bg-gray-50">
+    {% url 'media_organization' as org_url %}
+    {% include 'parciais/org_media_header.html' with back_url=org_url title='Funções' subtitle='Papéis operacionais da equipe' %}
+    <div class="px-4 sm:px-6 pt-4 space-y-2 w-full">
         {% for role in roles %}
-        <div class="bg-white rounded-xl border p-4">
-            <div class="font-semibold">{{ role.name }}</div>
-            {% if role.sub_team %}<div class="text-xs text-gray-400">{{ role.sub_team.name }}</div>{% endif %}
+        <div class="org-card p-4">
+            <div class="font-bold text-gray-900">{{ role.name }}</div>
+            {% if role.sub_team %}<div class="text-xs text-gray-500 mt-0.5">{{ role.sub_team.name }}</div>{% endif %}
         </div>
-        {% empty %}<p class="text-gray-400">Nenhuma função.</p>{% endfor %}
+        {% empty %}
+        <div class="text-center py-14"><p class="text-gray-500">Nenhuma função cadastrada.</p></div>
+        {% endfor %}
+        {% if is_media_leader %}
+        <a href="{% url 'media_role_create' %}" class="org-btn-primary block text-center mt-2">+ Nova função</a>
+        {% endif %}
     </div>
-    {% if is_media_leader %}
-    <a href="{% url 'media_role_create' %}" class="block text-center py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">+ Nova função</a>
-    {% endif %}
 </div>
-{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
 {% endblock %}

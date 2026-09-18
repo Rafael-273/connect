@@ -1,23 +1,64 @@
 {% extends "member_base.html" %}
-{% block title %}{% if action == 'edit' %}Editar{% else %}Novo{% endif %} Item{% endblock %}
+{% load static %}
+
+{% block title %}{% if action == 'edit' %}Editar{% else %}Nova{% endif %} demanda padrão{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'org_media.css' %}">
+<style>
+    :root { --media-color: #C90905; --media-rgb: 201, 9, 5; }
+</style>
+{% include 'member/media_planning/partials/demands_assignments_styles.html' %}
+{% endblock %}
+
 {% block content %}
-<div class="min-h-screen pb-28 bg-gray-50 px-4 pt-6">
-    <a href="{% url 'media_content_list' %}?tab=templates" class="text-xs font-semibold mb-2 inline-block" style="color:#8B5CF6;"><i class="fas fa-arrow-left"></i> Demandas e eventos</a>
-    {% include 'parciais/media_subnav.html' with section='demands' %}
-    <h1 class="text-xl font-bold mb-4">{% if action == 'edit' %}Editar item{% else %}Novo item do template{% endif %}</h1>
-    <form method="post" class="bg-white rounded-xl border p-4 space-y-4">
-        {% csrf_token %}
-        {% for field in form %}
-        <div><label class="block text-xs font-bold text-gray-600 mb-1">{{ field.label }}</label>{{ field }}{% if field.help_text %}<p class="text-xs text-gray-400 mt-0.5">{{ field.help_text }}</p>{% endif %}</div>
-        {% endfor %}
-        <button type="submit" class="w-full py-3 rounded-xl text-white font-bold" style="background:#8B5CF6;">Salvar</button>
-    </form>
-    {% if action == 'edit' and item %}
-    <form method="post" action="{% url 'media_template_item_delete' item.pk %}" class="mt-3" onsubmit="return confirm('Remover este item?');">
-        {% csrf_token %}
-        <button type="submit" class="w-full py-2 rounded-xl text-red-600 font-semibold text-sm border border-red-200">Excluir item</button>
-    </form>
-    {% endif %}
+<div class="org-media min-h-screen pb-28 bg-gray-50">
+    <div class="px-4 sm:px-6 pt-5 pb-2">
+        <a href="{% url 'media_template_detail' template.pk %}"
+           class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-700 mb-3 transition-colors">
+            <i class="fas fa-arrow-left text-xs"></i> Voltar ao tipo de evento
+        </a>
+        <h1 class="text-xl font-black text-gray-900">
+            {% if action == 'edit' %}Editar demanda padrão{% else %}Nova demanda padrão{% endif %}
+        </h1>
+        <p class="text-sm text-gray-500">Template: {{ template.event_type.name }}</p>
+    </div>
+
+    <div class="px-4 sm:px-6 max-w-2xl mx-auto pb-8">
+        <form method="post" class="bg-white border border-gray-100 rounded-xl p-5">
+            {% csrf_token %}
+            {% include 'member/media_planning/partials/template_demand_form_fields.html' with form=form prefix='template' %}
+            <div class="flex items-center gap-3 pt-2">
+                <button type="submit" class="org-btn-primary flex-1 justify-center">Salvar</button>
+                <a href="{% url 'media_template_detail' template.pk %}" class="org-btn-secondary flex-1 justify-center">Cancelar</a>
+            </div>
+        </form>
+        {% if action == 'edit' and item %}
+        <form method="post" action="{% url 'media_template_item_delete' item.pk %}"
+              class="mt-3" onsubmit="return confirm('Remover este item?');">
+            {% csrf_token %}
+            <button type="submit"
+                    class="w-full py-2.5 rounded-xl text-red-600 font-semibold text-sm border border-red-200 bg-red-50 hover:bg-red-100 transition-colors">
+                <i class="fas fa-trash text-xs mr-1.5"></i>Excluir demanda padrão
+            </button>
+        </form>
+        {% endif %}
+    </div>
 </div>
-{% include 'parciais/member_bottom_nav.html' with nav_active='media' %}
+<script src="{% static 'media_demand_assignments.js' %}"></script>
+<script src="{% static 'media_team_assignments.js' %}"></script>
+<script>
+(function () {
+    MediaDemandAssignments.init();
+    MediaDemandAssignments.bindTypeSelect(
+        document.getElementById('id_template-content_type'),
+        'template-type-hint',
+        null,
+        document.querySelector('.demand-assignments[data-prefix="template"]'),
+        null,
+        'clipboard-list'
+    );
+}());
+</script>
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
 {% endblock %}

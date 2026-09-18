@@ -39,3 +39,5 @@ watchdog==6.0.0
 numpy==1.26.4
 opencv-python-headless==4.10.0.84
 render_sdk==0.7.0
+bleach==6.2.0
+Markdown==3.7
