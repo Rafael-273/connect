@@ -1513,29 +1513,34 @@ class ExternalMediaProjectMediaReorderView(ExternalMediaRequiredMixin, View):
             if len(media_ids) != len(items) or len(set(media_ids)) != len(media_ids):
                 return JsonResponse({'detail': 'A ordem precisa conter todos os vídeos do bloco uma única vez.'}, status=400)
 
-            n = len(items)
+            # Ponto de partida seguro: acima de qualquer posição existente no bloco
+            # (ativos + soft-deletados), bem dentro do limite SMALLINT (32767).
+            max_pos = (
+                ProjectBlockMedia.all_objects
+                .filter(project=project, block=block)
+                .aggregate(m=Max('position'))['m'] or 0
+            )
 
-            # Registros soft-deletados ocupam posições na tabela e participam da
-            # constraint única (project, block, position, camera_order), mesmo que
-            # não sejam visíveis. Movemos para posições logo acima de n para que
-            # fiquem fora do intervalo 1..n sem arriscar overflow do SMALLINT (max 32767).
+            # Soft-deletados ainda participam da constraint única
+            # (project, block, position, camera_order). Movemos para além de
+            # max_pos para liberar o espaço de posições antes do update em duas fases.
             deleted_items = list(
                 ProjectBlockMedia.deleted_objects.select_for_update().filter(
                     project=project, block=block,
                 )
             )
+            del_count = len(deleted_items)
             if deleted_items:
                 for offset, d_item in enumerate(deleted_items, start=1):
-                    d_item.position = n + offset
+                    d_item.position = max_pos + offset
                 ProjectBlockMedia.all_objects.bulk_update(deleted_items, ['position'])
 
-            # A restrição é verificada imediatamente pelo PostgreSQL após cada
-            # UPDATE. Usamos posições temporárias (10000+) para permitir trocas
-            # como 1↔2 sem colisão, antes de aplicar a ordem final.
+            # Phase 1: posições temporárias para os itens ativos (acima dos deletados).
             for offset, item in enumerate(items, start=1):
-                item.position = 10000 + offset
+                item.position = max_pos + del_count + offset
             ProjectBlockMedia.objects.bulk_update(items, ['position'])
 
+            # Phase 2: posições finais 1..N.
             by_id = {item.pk: item for item in items}
             for position, media_id in enumerate(media_ids, start=1):
                 by_id[media_id].position = position
@@ -1563,23 +1568,27 @@ class ExternalMediaProjectCustomBlockMediaReorderView(ExternalMediaRequiredMixin
             if len(media_ids) != len(items) or len(set(media_ids)) != len(media_ids):
                 return JsonResponse({'detail': 'A ordem precisa conter todos os vídeos do bloco uma única vez.'}, status=400)
 
-            n = len(items)
+            max_pos = (
+                ProjectBlockMedia.all_objects
+                .filter(project=project, custom_block=block)
+                .aggregate(m=Max('position'))['m'] or 0
+            )
 
-            # Para blocos customizados, a constraint única inclui `block` que é NULL,
-            # então o PostgreSQL não a aplica. Mesmo assim, movemos soft-deletados
-            # para garantir consistência e evitar posições duplicadas na exibição.
+            # Para blocos customizados a constraint não aplica (block=NULL),
+            # mas movemos soft-deletados para evitar duplicatas na exibição.
             deleted_items = list(
                 ProjectBlockMedia.deleted_objects.select_for_update().filter(
                     project=project, custom_block=block,
                 )
             )
+            del_count = len(deleted_items)
             if deleted_items:
                 for offset, d_item in enumerate(deleted_items, start=1):
-                    d_item.position = n + offset
+                    d_item.position = max_pos + offset
                 ProjectBlockMedia.all_objects.bulk_update(deleted_items, ['position'])
 
             for offset, item in enumerate(items, start=1):
-                item.position = 10000 + offset
+                item.position = max_pos + del_count + offset
             ProjectBlockMedia.objects.bulk_update(items, ['position'])
 
             by_id = {item.pk: item for item in items}
