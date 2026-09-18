@@ -8,6 +8,9 @@
 {% endblock %}
 
 {% block media_header_actions %}
+<button type="button" class="media-btn media-muted" id="btn-back-to-blocks" title="Voltar à tela de blocos para editar os vídeos enviados"><i class="fas fa-arrow-left"></i><span class="hidden sm:inline">Voltar aos blocos</span></button>
+<button type="button" class="media-btn media-muted" id="btn-reprocess" title="Reprocessar o projeto do zero"><i class="fas fa-rotate"></i><span class="hidden sm:inline">Reprocessar</span></button>
+<span class="hidden sm:inline text-gray-200 select-none">|</span>
 <button type="button" class="media-btn media-muted disabled:opacity-40" data-history="undo" {% if not session.undo_stack %}disabled{% endif %} title="Desfaz a última alteração feita na edição"><i class="fas fa-rotate-left"></i><span class="hidden sm:inline">Desfazer</span></button>
 <button type="button" class="media-btn media-muted disabled:opacity-40" data-history="redo" {% if not session.redo_stack %}disabled{% endif %} title="Refaz a última alteração desfeita"><i class="fas fa-rotate-right"></i><span class="hidden sm:inline">Refazer</span></button>
 <a class="media-btn media-muted" href="{% url 'external_media_project_subtitle_reviews' project.public_id %}"><i class="fas fa-paper-plane"></i><span class="hidden sm:inline">Enviar para aprovação de legendas</span></a>
@@ -45,6 +48,32 @@
             <div class="p-4 border-b flex items-center justify-between gap-3"><div><h2 class="font-black">Pontos da edição</h2><p class="text-xs text-gray-500 mt-1">Ajustes, legendas e elementos visuais.</p></div><div class="flex items-center gap-2"><button type="button" class="media-btn media-muted !py-2 !px-3 text-xs" id="add-broll"><i class="fas fa-photo-film"></i>B-roll</button><button type="button" class="media-btn media-primary !py-2 !px-3 text-xs hidden" id="apply-all-noise"><i class="fas fa-wave-square"></i>Aplicar todos os ruídos</button><button type="button" class="media-btn media-muted !py-2 !px-3 text-xs" id="add-overlay"><i class="fas fa-plus"></i>Elemento</button><span class="preview-pill" id="revision-label">r{{ revision.revision }}</span></div></div>
             <div class="preview-list p-3 space-y-2" id="review-list"></div>
         </details>
+    </div>
+</div>
+
+<div class="preview-modal" id="back-to-blocks-modal" role="dialog" aria-modal="true" aria-labelledby="back-to-blocks-title">
+    <div class="preview-modal__card">
+        <span class="w-11 h-11 rounded-xl grid place-items-center text-white" style="background:#344054"><i class="fas fa-arrow-left"></i></span>
+        <h2 class="text-xl font-black mt-4" id="back-to-blocks-title">Voltar aos blocos?</h2>
+        <p class="text-sm text-gray-500 mt-2">O projeto voltará para o modo de edição de vídeos. Você poderá adicionar, remover e reordenar os arquivos antes de gerar uma nova versão.</p>
+        <form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}" class="flex justify-end gap-2 mt-6">
+            {% csrf_token %}
+            <button type="button" class="media-btn media-muted" id="cancel-back-to-blocks">Cancelar</button>
+            <button type="submit" class="media-btn media-secondary"><i class="fas fa-arrow-left"></i>Voltar aos blocos</button>
+        </form>
+    </div>
+</div>
+
+<div class="preview-modal" id="reprocess-modal" role="dialog" aria-modal="true" aria-labelledby="reprocess-title">
+    <div class="preview-modal__card">
+        <span class="w-11 h-11 rounded-xl grid place-items-center text-white" style="background:#C90905"><i class="fas fa-rotate"></i></span>
+        <h2 class="text-xl font-black mt-4" id="reprocess-title">Reprocessar projeto?</h2>
+        <p class="text-sm text-gray-500 mt-2">O projeto será reprocessado do início com os vídeos já enviados. A edição atual será perdida e uma nova versão será gerada.</p>
+        <form method="post" action="{% url 'external_media_project_run' project.public_id %}" class="flex justify-end gap-2 mt-6">
+            {% csrf_token %}
+            <button type="button" class="media-btn media-muted" id="cancel-reprocess">Cancelar</button>
+            <button type="submit" class="media-btn media-primary"><i class="fas fa-rotate"></i>Reprocessar</button>
+        </form>
     </div>
 </div>
 
@@ -215,6 +244,14 @@
     document.getElementById('apply-all-noise').onclick=applyAllNoise;document.getElementById('add-overlay').onclick=async()=>{const choices=overlayPresets.map(item=>item.code).join(', ');const presetCode=(prompt(`Preset (opcional): ${choices}`,overlayPresets[0]?.code||'')||'').trim();const preset=overlayPresets.find(item=>item.code===presetCode);const type=(preset?.overlay_type||prompt('Tipo: TEXT, QR_CODE ou QR_CODE_CARD','TEXT')||'').trim().toUpperCase();if(!['TEXT','QR_CODE','QR_CODE_CARD'].includes(type))return;const value=prompt(type==='TEXT'?'Texto':'URL ou conteúdo do QR Code','');if(!value)return;const content=type==='TEXT'?{text:value}:{payload:value,cta:type==='QR_CODE_CARD'?'Acesse agora':''};const start=Math.round(globalMs);const data=await api('{% url "external_media_project_preview_overlay_create" project.public_id %}',{type,preset:presetCode||null,content,start_ms:start,end_ms:Math.min(timeline.sequence.duration_ms,start+5000),position:preset?.position||{x:.5,y:.82,width:type==='TEXT'?.45:.2},style:preset?.style||{},animation:preset?.animation||{type:'FADE',duration:.35,easing:'ease-out'}});applyTimeline(data)};
     document.getElementById('add-broll').onclick=()=>{const clip=clipAt(globalMs);if(!clip?.block?.id){alert('Posicione o cursor dentro de um bloco antes de adicionar o B-roll.');return}const input=document.createElement('input');input.type='file';input.accept='.mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp';input.onchange=async()=>{const file=input.files?.[0];if(!file)return;const description=prompt('Descreva este asset para a IA (opcional):',file.name)??'';const seconds=prompt('Duração inicial em segundos:','5')||'5';const data=new FormData();data.append('file',file);data.append('description',description);data.append('duration_seconds',seconds);data.append('start_ms',String(Math.round(globalMs)));data.append('block',String(clip.block.key?.startsWith('custom-')?clip.block.key:clip.block.id));try{const response=await fetch('{% url "external_media_project_preview_broll_create" project.public_id %}',{method:'POST',body:data,credentials:'same-origin',headers:{'X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'}});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Não foi possível adicionar o B-roll.');applyTimeline(payload)}catch(error){alert(error.message)}};input.click()};
     const modal=document.getElementById('approve-modal');document.getElementById('approve-preview').onclick=()=>modal.classList.add('is-open');document.getElementById('cancel-approve').onclick=()=>modal.classList.remove('is-open');document.getElementById('confirm-approve').onclick=async event=>{event.currentTarget.disabled=true;event.currentTarget.textContent='Enviando…';try{const data=await api('{% url "external_media_project_preview_approve" project.public_id %}');location.href=data.redirect_url}catch(error){event.currentTarget.disabled=false;event.currentTarget.textContent='Aprovar e renderizar';alert(error.message)}};
+    const backModal=document.getElementById('back-to-blocks-modal');
+    document.getElementById('btn-back-to-blocks').onclick=()=>backModal.classList.add('is-open');
+    document.getElementById('cancel-back-to-blocks').onclick=()=>backModal.classList.remove('is-open');
+    backModal.addEventListener('click',event=>{if(event.target===backModal)backModal.classList.remove('is-open')});
+    const reprocessModal=document.getElementById('reprocess-modal');
+    document.getElementById('btn-reprocess').onclick=()=>reprocessModal.classList.add('is-open');
+    document.getElementById('cancel-reprocess').onclick=()=>reprocessModal.classList.remove('is-open');
+    reprocessModal.addEventListener('click',event=>{if(event.target===reprocessModal)reprocessModal.classList.remove('is-open')});
     configureMusic();renderList();seek(globalMs);updateEditControls();
 })();
 </script>
