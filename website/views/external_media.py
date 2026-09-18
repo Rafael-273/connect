@@ -1526,6 +1526,40 @@ class ExternalMediaProjectMediaReorderView(ExternalMediaRequiredMixin, View):
         return JsonResponse({'ok': True})
 
 
+class ExternalMediaProjectCustomBlockMediaReorderView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, block_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        if project.status != ExternalMediaProject.Status.DRAFT:
+            return JsonResponse({'detail': 'Os vídeos só podem ser ordenados durante a edição.'}, status=409)
+        block = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project)
+        raw_ids = request.POST.getlist('media_ids[]') or request.POST.getlist('media_ids')
+        try:
+            media_ids = [int(value) for value in raw_ids]
+        except (TypeError, ValueError):
+            return JsonResponse({'detail': 'Ordem de vídeos inválida.'}, status=400)
+        with transaction.atomic():
+            items = list(
+                ProjectBlockMedia.objects.select_for_update().filter(
+                    project=project, custom_block=block, pk__in=media_ids,
+                )
+            )
+            if len(media_ids) != len(items) or len(set(media_ids)) != len(media_ids):
+                return JsonResponse({'detail': 'A ordem precisa conter todos os vídeos do bloco uma única vez.'}, status=400)
+
+            # A restrição (projeto, bloco, posição) é imediata no PostgreSQL.
+            # Primeiro liberamos as posições atuais com valores temporários para
+            # permitir trocas como 1 <-> 2 sem uma colisão de unicidade.
+            for offset, item in enumerate(items, start=1):
+                item.position = 30000 + offset
+            ProjectBlockMedia.objects.bulk_update(items, ['position'])
+
+            by_id = {item.pk: item for item in items}
+            for position, media_id in enumerate(media_ids, start=1):
+                by_id[media_id].position = position
+            ProjectBlockMedia.objects.bulk_update(items, ['position'])
+        return JsonResponse({'ok': True})
+
+
 class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         with transaction.atomic():

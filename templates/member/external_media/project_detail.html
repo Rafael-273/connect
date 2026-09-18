@@ -108,7 +108,7 @@
         {% if item.primary_media %}
         <section class="order-1 mb-4 overflow-hidden rounded-xl border border-red-100 bg-red-50/30">
             <div class="flex items-center justify-between border-b border-red-100 bg-red-50/70 px-3 py-2"><div class="flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-xs text-white"><i class="fas fa-video"></i></span><div><strong class="block text-sm text-gray-900">Vídeo do bloco</strong><span class="block text-xs text-gray-500">Câmera principal da cena</span></div></div><span class="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700">Principal</span></div>
-            <div class="space-y-2 p-2" data-media-sortable data-reorder-url="{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}">
+            <div class="space-y-2 p-2" data-media-sortable data-reorder-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_media_reorder' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}{% endif %}">
         {% for media in item.primary_media %}
         <div class="flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm media-sort-item" draggable="{% if media.preview_status == 'READY' %}true{% else %}false{% endif %}" data-media-id="{{ media.pk }}">
             <div class="flex items-center min-w-0 gap-3">
@@ -220,7 +220,7 @@
         {% if item.definition.max_occurrences == 0 or item.media|length < item.definition.max_occurrences %}
         <section class="order-2 mt-4 rounded-xl border border-red-100 bg-red-50/30 p-3"><div class="mb-3 flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-xs text-white"><i class="fas fa-upload"></i></span><div><strong class="block text-sm text-gray-900">Enviar vídeo do bloco</strong><span class="block text-xs text-gray-500">Vídeo principal que será usado nesta cena</span></div></div>
         <div class="hidden space-y-2 mb-3" data-upload-results></div>
-        <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload' project.public_id item.definition.pk %}{% endif %}" class="media-form media-upload-form space-y-3" {% if not item.is_custom %}data-reorder-url="{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}"{% endif %}{% if use_s3 %} data-presign-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload_presign' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload_presign' project.public_id item.definition.pk %}{% endif %}"{% endif %}>
+        <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload' project.public_id item.definition.pk %}{% endif %}" class="media-form media-upload-form space-y-3" data-reorder-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_media_reorder' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}{% endif %}"{% if use_s3 %} data-presign-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload_presign' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload_presign' project.public_id item.definition.pk %}{% endif %}"{% endif %}>
             {% csrf_token %}
             <div class="flex flex-col sm:flex-row gap-3">
                 <input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="flex-1" data-trim-file>
@@ -1345,10 +1345,17 @@
         const list = closestFromEvent(event, '[data-custom-block-list]');
         if (!draggedCustomBlock || !list) return;
         event.preventDefault();
+        const block = draggedCustomBlock;
+        block.classList.remove('opacity-50');
+        draggedCustomBlock = null;
         const data = new FormData();
-        list.querySelectorAll('[data-project-block-id]').forEach((block) => data.append('item_ids[]', block.dataset.projectBlockId));
-        await fetch(list.dataset.customBlockReorderUrl, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest'}});
-        draggedCustomBlock.classList.remove('opacity-50'); draggedCustomBlock = null;
+        list.querySelectorAll('[data-project-block-id]').forEach((b) => data.append('item_ids[]', b.dataset.projectBlockId));
+        try {
+            const response = await fetch(list.dataset.customBlockReorderUrl, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest'}});
+            if (!response.ok) throw new Error('Não foi possível salvar a nova ordem dos blocos.');
+        } catch (_) {
+            window.location.reload();
+        }
     });
     document.addEventListener('dragend', () => { draggedCustomBlock?.classList.remove('opacity-50'); draggedCustomBlock = null; });
 
