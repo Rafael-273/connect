@@ -1505,19 +1505,6 @@ class ExternalMediaProjectMediaReorderView(ExternalMediaRequiredMixin, View):
         except (TypeError, ValueError):
             return JsonResponse({'detail': 'Ordem de vídeos inválida.'}, status=400)
         with transaction.atomic():
-            # Registros soft-deletados ainda ocupam posições na tabela e participam
-            # da constraint única (project, block, position, camera_order). Movemos
-            # para posições altas antes do update em duas fases para evitar colisões.
-            deleted_items = list(
-                ProjectBlockMedia.deleted_objects.select_for_update().filter(
-                    project=project, block=block,
-                )
-            )
-            if deleted_items:
-                for offset, d_item in enumerate(deleted_items, start=1):
-                    d_item.position = 50000 + offset
-                ProjectBlockMedia.all_objects.bulk_update(deleted_items, ['position'])
-
             items = list(
                 ProjectBlockMedia.objects.select_for_update().filter(
                     project=project, block=block, pk__in=media_ids,
@@ -1526,11 +1513,27 @@ class ExternalMediaProjectMediaReorderView(ExternalMediaRequiredMixin, View):
             if len(media_ids) != len(items) or len(set(media_ids)) != len(media_ids):
                 return JsonResponse({'detail': 'A ordem precisa conter todos os vídeos do bloco uma única vez.'}, status=400)
 
-            # A restrição (projeto, bloco, posição) é imediata no PostgreSQL.
-            # Primeiro liberamos as posições atuais com valores temporários para
-            # permitir trocas como 1 <-> 2 sem uma colisão de unicidade.
+            n = len(items)
+
+            # Registros soft-deletados ocupam posições na tabela e participam da
+            # constraint única (project, block, position, camera_order), mesmo que
+            # não sejam visíveis. Movemos para posições logo acima de n para que
+            # fiquem fora do intervalo 1..n sem arriscar overflow do SMALLINT (max 32767).
+            deleted_items = list(
+                ProjectBlockMedia.deleted_objects.select_for_update().filter(
+                    project=project, block=block,
+                )
+            )
+            if deleted_items:
+                for offset, d_item in enumerate(deleted_items, start=1):
+                    d_item.position = n + offset
+                ProjectBlockMedia.all_objects.bulk_update(deleted_items, ['position'])
+
+            # A restrição é verificada imediatamente pelo PostgreSQL após cada
+            # UPDATE. Usamos posições temporárias (10000+) para permitir trocas
+            # como 1↔2 sem colisão, antes de aplicar a ordem final.
             for offset, item in enumerate(items, start=1):
-                item.position = 30000 + offset
+                item.position = 10000 + offset
             ProjectBlockMedia.objects.bulk_update(items, ['position'])
 
             by_id = {item.pk: item for item in items}
@@ -1552,18 +1555,6 @@ class ExternalMediaProjectCustomBlockMediaReorderView(ExternalMediaRequiredMixin
         except (TypeError, ValueError):
             return JsonResponse({'detail': 'Ordem de vídeos inválida.'}, status=400)
         with transaction.atomic():
-            # Garantia de consistência: mover soft-deletados para posições altas
-            # antes do update em duas fases, evitando colisões de posição.
-            deleted_items = list(
-                ProjectBlockMedia.deleted_objects.select_for_update().filter(
-                    project=project, custom_block=block,
-                )
-            )
-            if deleted_items:
-                for offset, d_item in enumerate(deleted_items, start=1):
-                    d_item.position = 50000 + offset
-                ProjectBlockMedia.all_objects.bulk_update(deleted_items, ['position'])
-
             items = list(
                 ProjectBlockMedia.objects.select_for_update().filter(
                     project=project, custom_block=block, pk__in=media_ids,
@@ -1572,11 +1563,23 @@ class ExternalMediaProjectCustomBlockMediaReorderView(ExternalMediaRequiredMixin
             if len(media_ids) != len(items) or len(set(media_ids)) != len(media_ids):
                 return JsonResponse({'detail': 'A ordem precisa conter todos os vídeos do bloco uma única vez.'}, status=400)
 
-            # A restrição (projeto, bloco, posição) é imediata no PostgreSQL.
-            # Primeiro liberamos as posições atuais com valores temporários para
-            # permitir trocas como 1 <-> 2 sem uma colisão de unicidade.
+            n = len(items)
+
+            # Para blocos customizados, a constraint única inclui `block` que é NULL,
+            # então o PostgreSQL não a aplica. Mesmo assim, movemos soft-deletados
+            # para garantir consistência e evitar posições duplicadas na exibição.
+            deleted_items = list(
+                ProjectBlockMedia.deleted_objects.select_for_update().filter(
+                    project=project, custom_block=block,
+                )
+            )
+            if deleted_items:
+                for offset, d_item in enumerate(deleted_items, start=1):
+                    d_item.position = n + offset
+                ProjectBlockMedia.all_objects.bulk_update(deleted_items, ['position'])
+
             for offset, item in enumerate(items, start=1):
-                item.position = 30000 + offset
+                item.position = 10000 + offset
             ProjectBlockMedia.objects.bulk_update(items, ['position'])
 
             by_id = {item.pk: item for item in items}
