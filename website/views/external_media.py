@@ -566,6 +566,7 @@ class ExternalMediaProjectResumeEditingView(ExternalMediaRequiredMixin, View):
 
     editable_statuses = {
         ExternalMediaProject.Status.FINISHED,
+        ExternalMediaProject.Status.AWAITING_REVIEW,
         ExternalMediaProject.Status.ERROR,
         ExternalMediaProject.Status.CANCELLED,
     }
