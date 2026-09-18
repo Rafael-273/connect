@@ -348,3 +348,85 @@ class MusicAdmin(admin.ModelAdmin):
         count = obj.chordsheets.count()
         return f"{count} cifra{'s' if count != 1 else ''}"
     chord_count.short_description = 'Cifras'
+
+
+# ─── Media Planning ───────────────────────────────────────────────────────────
+
+from .models.media_content import MediaContent
+from .models.media_task import MediaTask
+from .models.media_comment import MediaComment
+from .models.media_attachment import MediaAttachment
+
+
+@admin.register(MediaContent)
+class MediaContentAdmin(admin.ModelAdmin):
+    list_display = ('title', 'content_type', 'status', 'priority', 'responsible', 'publication_date', 'due_date')
+    list_filter = ('status', 'priority', 'content_type')
+    search_fields = ('title', 'description')
+    raw_id_fields = ('event', 'responsible')
+    date_hierarchy = 'publication_date'
+
+
+@admin.register(MediaTask)
+class MediaTaskAdmin(admin.ModelAdmin):
+    list_display = ('title', 'content', 'assigned_to', 'status', 'due_date')
+    list_filter = ('status',)
+    search_fields = ('title', 'description', 'content__title')
+
+
+@admin.register(MediaComment)
+class MediaCommentAdmin(admin.ModelAdmin):
+    list_display = ('author', 'content', 'task', 'created_at')
+    search_fields = ('text', 'author__email')
+
+
+@admin.register(MediaAttachment)
+class MediaAttachmentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'content', 'task', 'uploaded_by', 'created_at')
+    search_fields = ('name',)
+
+
+from .models.media_event_type import MediaEventType, MediaPlanningTemplate, MediaPlanningTemplateItem
+from .models.media_organization import (
+    MediaSubTeam, MediaRole, MediaSubTeamMembership,
+    MediaLeadershipItem, MediaResource, MediaResourceCredential,
+)
+
+
+@admin.register(MediaEventType)
+class MediaEventTypeAdmin(admin.ModelAdmin):
+    list_display = ('name', 'is_active', 'sort_order')
+    list_filter = ('is_active',)
+
+
+@admin.register(MediaPlanningTemplate)
+class MediaPlanningTemplateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'event_type', 'is_active')
+
+
+@admin.register(MediaPlanningTemplateItem)
+class MediaPlanningTemplateItemAdmin(admin.ModelAdmin):
+    list_display = ('title', 'template', 'content_type', 'sort_order')
+    list_filter = ('content_type',)
+
+
+@admin.register(MediaSubTeam)
+class MediaSubTeamAdmin(admin.ModelAdmin):
+    list_display = ('name', 'leader', 'is_active')
+
+
+@admin.register(MediaRole)
+class MediaRoleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'sub_team')
+
+
+@admin.register(MediaLeadershipItem)
+class MediaLeadershipItemAdmin(admin.ModelAdmin):
+    list_display = ('title', 'category', 'priority', 'status', 'responsible')
+    list_filter = ('category', 'priority', 'status')
+
+
+@admin.register(MediaResource)
+class MediaResourceAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'responsible', 'is_active', 'renewal_date')
+    list_filter = ('category', 'is_active')

@@ -1,0 +1,73 @@
+<div class="demand-assignment-row-wrap">
+    <div class="demand-assignment-card">
+        <input type="hidden" name="{{ prefix }}-assignment_id" value="{{ row.id|default:'' }}">
+        <div class="demand-col-action">
+            <button type="button" class="demand-remove-assignment" aria-label="Remover etapa" title="Remover etapa">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+        <div class="demand-assignment-row">
+            <span class="demand-step-badge" aria-hidden="true"></span>
+            <div class="demand-assignment-labels" aria-hidden="true" style="grid-template-columns: {% if hide_responsible %}repeat(2, minmax(0, 1fr)){% else %}repeat(3, minmax(0, 1fr)){% endif %};">
+                <span class="demand-field-label">Papel</span>
+                {% if not hide_responsible %}<span class="demand-field-label">Responsável</span>{% endif %}
+                <span class="demand-field-label">Prazo relativo</span>
+            </div>
+            <div class="demand-assignment-inputs">
+                <div class="demand-col-role assignment-role-wrap">
+                    <label class="demand-field-label demand-field-label-mobile">Papel</label>
+                    <select class="media-field-select assignment-role-select demand-step-control"
+                            data-role-name="{{ prefix }}-assignment_role"
+                            {% if not row.is_custom_role %}name="{{ prefix }}-assignment_role"{% endif %}>
+                        <option value="" {% if not row.role %}selected{% endif %}>Escolher papel</option>
+                        {% for r in assignment_role_presets %}
+                        <option value="{{ r }}" {% if row.role == r %}selected{% endif %}>{{ r }}</option>
+                        {% endfor %}
+                        <option value="__custom__" {% if row.is_custom_role %}selected{% endif %}>Outro…</option>
+                    </select>
+                    <input type="text"
+                           class="media-field-input assignment-role-custom demand-step-control{% if not row.is_custom_role %} hidden{% endif %}"
+                           placeholder="Nome do papel"
+                           value="{% if row.is_custom_role %}{{ row.role }}{% endif %}"
+                           {% if row.is_custom_role %}name="{{ prefix }}-assignment_role"{% else %}disabled{% endif %}>
+                </div>
+                {% if not hide_responsible %}
+                <div class="demand-col-user">
+                    <label class="demand-field-label demand-field-label-mobile">Responsável</label>
+                    <select name="{{ prefix }}-assignment_user" class="media-field-select demand-step-control">
+                        <option value="" {% if not row.user_id %}selected{% endif %}>Escolher membro</option>
+                        {% for u in responsible_options %}
+                        <option value="{{ u.pk }}" {% if row.user_id|stringformat:'s' == u.pk|stringformat:'s' %}selected{% endif %}>
+                            {{ u.member.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+                <div class="demand-col-due">
+                    <label class="demand-field-label demand-field-label-mobile">Prazo relativo</label>
+                    <div class="demand-due-offset">
+                        <input type="number" min="0" step="1"
+                               name="{{ prefix }}-assignment_due_days"
+                               value="{{ row.due_days|default:'' }}"
+                               class="media-field-input demand-step-control demand-due-days"
+                               placeholder="Dias"
+                               aria-label="Quantidade de dias">
+                        <select name="{{ prefix }}-assignment_due_relation"
+                                class="media-field-select demand-step-control demand-due-relation"
+                                aria-label="Em relação ao evento">
+                            <option value="before" {% if row.due_relation|default:'before' == 'before' %}selected{% endif %}>antes</option>
+                            <option value="on" {% if row.due_relation == 'on' %}selected{% endif %}>no dia</option>
+                            <option value="after" {% if row.due_relation == 'after' %}selected{% endif %}>depois</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="demand-assignment-desc">
+            <label class="demand-field-label">Observações</label>
+            <textarea name="{{ prefix }}-assignment_desc" rows="2" class="media-field-input"
+                      placeholder="Links, referências ou dependências (opcional)">{{ row.description|default:'' }}</textarea>
+        </div>
+    </div>
+</div>

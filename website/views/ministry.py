@@ -5,7 +5,6 @@ from django.views import View
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
 from django.db.models import Q, Count
-from safedelete.models import HARD_DELETE
 
 from ..models import Ministry, MinistryMembership, Member
 from .mixins import StaffRequiredMixin
@@ -187,6 +186,9 @@ class MinistryAddMembersPageView(LoginRequiredMixin, StaffRequiredMixin, View):
             member = Member.objects.filter(pk=mid, is_active=True).first()
             if not member:
                 continue
+            existing = MinistryMembership.all_objects.filter(ministry=ministry, member=member).first()
+            if existing and existing.deleted:
+                existing.undelete()
             _, created = MinistryMembership.objects.get_or_create(
                 ministry=ministry,
                 member=member,
@@ -269,18 +271,18 @@ class MinistryRemoveMemberView(LoginRequiredMixin, StaffRequiredMixin, View):
         ).first()
 
         if membership:
-            membership.delete(force_policy=HARD_DELETE)
+            membership.delete()
             removed = True
 
         if removed:
-            messages.success(request, f'{member.name} removido(a) do ministério {ministry.name}!')
+            messages.success(request, f'{member.name} removido(a) do ministério {ministry.name}. Participações nas equipes foram desativadas; revise as atribuições existentes.')
         else:
             messages.warning(request, f'{member.name} não faz parte do ministério {ministry.name}!')
 
         return redirect('ministry_members', pk=ministry_id)
 
     def get(self, request, ministry_id, member_id):
-        return self.post(request, ministry_id, member_id)
+        return self.http_method_not_allowed(request)
 
 
 class MinistryToggleRoleView(LoginRequiredMixin, StaffRequiredMixin, View):
@@ -337,6 +339,8 @@ class MinistryToggleStatusView(LoginRequiredMixin, StaffRequiredMixin, View):
         membership.is_active = not membership.is_active
         membership.save()
 
+        if not membership.is_active:
+            messages.warning(request, 'Participações nas equipes foram desativadas. Revise os responsáveis das demandas em andamento.')
         status_text = 'ativo' if membership.is_active else 'inativo'
         messages.success(request, f'{member.name} está agora {status_text} no ministério {ministry.name}.')
 

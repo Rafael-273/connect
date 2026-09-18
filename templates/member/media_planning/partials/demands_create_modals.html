@@ -1,0 +1,126 @@
+<!-- Modal: Nova demanda -->
+<div id="demands-modal-demand" class="demands-modal {% if create_mode == 'demand' %}active{% endif %}" role="dialog" aria-modal="true" aria-labelledby="demands-modal-demand-title">
+    <div class="demands-modal-backdrop" data-close-modal></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <div class="demands-modal-icon"><i id="demand-modal-type-icon" class="fas fa-clipboard-list"></i></div>
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-red-600">Nova demanda</p>
+                    <h2 id="demands-modal-demand-title" class="text-lg font-black text-gray-900 leading-tight">O que precisamos fazer?</h2>
+                    <p id="demand-modal-subtitle" class="text-xs text-gray-500 mt-0.5">{% if demand_event_title %}Demanda vinculada a {{ demand_event_title }}{% else %}Produção de conteúdo ou tarefa organizacional{% endif %}</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form method="post" action="{% url 'media_demand_quick_create' %}" class="demands-modal-body">
+            {% csrf_token %}
+            <input type="hidden" name="demand-event" id="demand-modal-event-id" value="{{ demand_event_id|default:'' }}">
+            <input type="hidden" name="kind" value="{{ filter_kind|default:'all' }}">
+            {% if filter_q %}<input type="hidden" name="q" value="{{ filter_q }}">{% endif %}
+            {% if filter_responsible %}<input type="hidden" name="responsible" value="{{ filter_responsible }}">{% endif %}
+            {% if filter_team %}<input type="hidden" name="team" value="{{ filter_team }}">{% endif %}
+            {% if filter_event_type %}<input type="hidden" name="event_type" value="{{ filter_event_type }}">{% endif %}
+            {% if filter_period_from %}<input type="hidden" name="period_from" value="{{ filter_period_from }}">{% endif %}
+            {% if filter_period_to %}<input type="hidden" name="period_to" value="{{ filter_period_to }}">{% endif %}
+
+            <div class="modal-section">
+                {{ demand_form.non_field_errors }}
+                <label class="modal-field-label" for="id_demand-title">Título</label>
+                {{ demand_form.title }}
+                {{ demand_form.title.errors }}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_demand-content_type">Tipo</label>
+                {% include 'member/media_planning/partials/demands_type_select.html' with prefix='demand' selected_value=demand_form.content_type.value hint_id='demand-type-hint' %}
+                <p id="demand-type-hint" class="text-xs text-gray-400 mt-1.5"></p>
+                {% if demand_form.content_type.errors %}
+                <p class="text-xs text-red-500 mt-1">{{ demand_form.content_type.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_demand-description">Descrição</label>
+                {{ demand_form.description }}
+            </div>
+
+            <div class="modal-section">
+                <p class="modal-section-title">Equipe e prazos</p>
+                <p class="text-xs text-gray-500 mb-2">Informe os dias de cada etapa em relação ao evento (ex.: 7 dias antes).</p>
+                <p class="text-xs text-gray-500 mb-3">Defina quem faz cada parte e quando — ex: Filmmaker, Editor, Publicador.</p>
+                <label class="modal-field-label" for="id_demand-sub_team">Equipe responsável (opcional)</label>
+                {{ demand_form.sub_team }}{{ demand_form.sub_team.errors }}
+                <p class="team-assignment-help text-xs text-gray-500 my-2" role="status"></p>
+                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='demand'  assignments=demand_assignments blank_assignment=blank_assignment %}
+            </div>
+
+            <div class="demands-modal-footer">
+                <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
+                <button type="submit" class="media-btn-primary sm flex-1 justify-center">
+                    <i class="fas fa-check"></i> Criar demanda
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Novo evento -->
+<div id="demands-modal-event" class="demands-modal {% if create_mode == 'event' %}active{% endif %}" role="dialog" aria-modal="true" aria-labelledby="demands-modal-event-title">
+    <div class="demands-modal-backdrop" data-close-modal></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <div class="demands-modal-icon"><i class="fas fa-calendar-plus"></i></div>
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-red-600">Novo evento</p>
+                    <h2 id="demands-modal-event-title" class="text-lg font-black text-gray-900 leading-tight">Qual evento vamos produzir?</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Datas e tipo de evento</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form method="post" action="{% url 'media_event_quick_create' %}" class="demands-modal-body">
+            {% csrf_token %}
+            <input type="hidden" name="kind" value="{{ filter_kind|default:'all' }}">
+            {% if filter_q %}<input type="hidden" name="q" value="{{ filter_q }}">{% endif %}
+            {% if filter_responsible %}<input type="hidden" name="responsible" value="{{ filter_responsible }}">{% endif %}
+            {% if filter_team %}<input type="hidden" name="team" value="{{ filter_team }}">{% endif %}
+            {% if filter_event_type %}<input type="hidden" name="event_type" value="{{ filter_event_type }}">{% endif %}
+            {% if filter_period_from %}<input type="hidden" name="period_from" value="{{ filter_period_from }}">{% endif %}
+            {% if filter_period_to %}<input type="hidden" name="period_to" value="{{ filter_period_to }}">{% endif %}
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_event-title">Título</label>
+                {{ event_form.title }}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="id_event-event_type">Tipo de evento</label>
+                {% include 'member/media_planning/partials/demands_event_type_select.html' with prefix='event' event_types=event_types selected_value=event_form.event_type.value %}
+            </div>
+
+            <div class="modal-section">
+                <p class="modal-section-title">Datas do evento</p>
+                {% include 'member/media_planning/partials/demands_event_dates_section.html' with prefix='event' extra_event_dates=extra_event_dates %}
+                <div class="mt-3">
+                    <label class="modal-field-label" for="id_event-description">Descrição <span class="font-normal text-gray-400">(opcional)</span></label>
+                    {{ event_form.description }}
+                </div>
+            </div>
+
+            <div class="demands-modal-footer">
+                <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
+                <button type="submit" class="media-btn-primary sm flex-1 justify-center">
+                    <i class="fas fa-check"></i> Criar evento
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

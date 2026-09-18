@@ -28,6 +28,7 @@ class WordOfKnowledgeListView(MemberRequiredMixin, MinistrationContextMixin, Vie
             'healings': healings,
             'can_consolidate': self.member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(self.member),
+            'is_media_member': self.get_media_status(self.member),
         }
 
 class WordOfKnowledgeCreateView(MemberRequiredMixin, View):

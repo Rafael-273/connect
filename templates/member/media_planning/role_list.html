@@ -1,0 +1,24 @@
+{% extends "member_base.html" %}
+{% load static %}
+{% block title %}Funções · Organização da Mídia{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'org_media.css' %}">{% endblock %}
+{% block content %}
+<div class="org-media min-h-screen pb-28 bg-gray-50">
+    {% url 'media_organization' as org_url %}
+    {% include 'parciais/org_media_header.html' with back_url=org_url title='Funções' subtitle='Papéis operacionais da equipe' %}
+    <div class="px-4 sm:px-6 pt-4 space-y-2 w-full">
+        {% for role in roles %}
+        <div class="org-card p-4">
+            <div class="font-bold text-gray-900">{{ role.name }}</div>
+            {% if role.sub_team %}<div class="text-xs text-gray-500 mt-0.5">{{ role.sub_team.name }}</div>{% endif %}
+        </div>
+        {% empty %}
+        <div class="text-center py-14"><p class="text-gray-500">Nenhuma função cadastrada.</p></div>
+        {% endfor %}
+        {% if is_media_leader %}
+        <a href="{% url 'media_role_create' %}" class="org-btn-primary block text-center mt-2">+ Nova função</a>
+        {% endif %}
+    </div>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+{% endblock %}

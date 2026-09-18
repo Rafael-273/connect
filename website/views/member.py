@@ -142,6 +142,7 @@ class MemberConsolidationListView(MemberRequiredMixin, MinistrationContextMixin,
             'followups': followups,
             'can_consolidate': member.is_available_to_consolidate,
             'is_ministration_member': self.get_ministration_status(member),
+            'is_media_member': self.get_media_status(member),
         }
 
 
@@ -167,6 +168,7 @@ class MemberConsolidationDetailView(MemberRequiredMixin, MinistrationContextMixi
             'can_submit_report': can_submit_report,
             'period_name': "Semana",
             'is_ministration_member': self.get_ministration_status(member),
+            'is_media_member': self.get_media_status(member),
         }
         return render(request, 'member/consolidation_detail.html', context)
 
@@ -215,6 +217,7 @@ class MemberConsolidationReportView(MemberRequiredMixin, MinistrationContextMixi
             'current_step': followup.current_step,
             'period_name': "Semana",
             'is_ministration_member': self.get_ministration_status(self.member),
+            'is_media_member': self.get_media_status(self.member),
         }
 
 

@@ -1,0 +1,32 @@
+{% extends "member_base.html" %}
+{% load static %}
+{% block title %}Organização da Mídia{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'org_media.css' %}">
+{% endblock %}
+{% block content %}
+<div class="org-media min-h-screen pb-28 bg-gray-50">
+    {% include 'parciais/messages.html' %}
+
+    {% url 'external_media_dashboard' as dashboard_url %}
+    {% include 'parciais/org_media_header.html' with back_url=dashboard_url title='Organização' accent='da Mídia' subtitle='Equipe, processos e recursos do ministério' %}
+
+    <main class="px-4 sm:px-6 py-4 space-y-2 w-full">
+
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pb-1">Estrutura da equipe</p>
+
+        {% url 'media_subteam_list' as media_subteam_list_url %}
+        {% include 'parciais/org_link_card.html' with url=media_subteam_list_url icon='users' title='Equipes' subtitle='Subequipes e membros' %}
+
+        {% url 'ministry_manual_list' ministry.pk as ministry_manual_list_url %}
+        {% include 'parciais/org_link_card.html' with url=ministry_manual_list_url icon='book' title='Manuais' subtitle='Guias e orientações' %}
+
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-4 pb-1">Operação</p>
+
+        {% url 'media_resource_list' as media_resource_list_url %}
+        {% include 'parciais/org_link_card.html' with url=media_resource_list_url icon='key' title='Recursos' subtitle='Acessos, credenciais e ferramentas' %}
+
+    </main>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+{% endblock %}

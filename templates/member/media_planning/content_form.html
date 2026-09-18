@@ -1,0 +1,175 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}{% if action == 'create' %}Novo Conteúdo{% else %}Editar Conteúdo{% endif %} · Mídia{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'ministry_organization.css' %}">
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+    .media-operations input:not([type=checkbox]),
+    .media-operations select,
+    .media-operations textarea {
+        width: 100%; min-width: 0; padding: .625rem .875rem;
+        border: 1.5px solid #e5e7eb; border-radius: .75rem;
+        background: white; font-size: .875rem; color: #111827;
+        transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    .media-operations input:not([type=checkbox]):focus,
+    .media-operations select:focus,
+    .media-operations textarea:focus {
+        outline: none; border-color: var(--media-color);
+        box-shadow: 0 0 0 3px rgba(var(--media-rgb), .1);
+    }
+    .media-operations .errorlist { color: #b91c1c; font-size: .875rem; margin-top: .25rem; }
+    .media-operations label { display: block; font-size: .875rem; font-weight: 600; margin-bottom: .3rem; color: #374151; }
+    .form-section {
+        background: white; border: 1px solid #f3f4f6; border-radius: .875rem;
+        padding: 1.25rem; space-y: 1rem;
+    }
+    .section-title {
+        font-size: .6875rem; font-weight: 700; letter-spacing: .06em;
+        text-transform: uppercase; color: #9CA3AF; margin-bottom: .875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% include 'parciais/messages.html' %}
+<div class="media-operations ministry-organization min-h-screen pb-28" style="background:#f9fafb;">
+
+    <!-- Header -->
+    <div class="px-4 pt-5 pb-2">
+        <a href="{% if content %}{% url 'media_content_list' %}?selected={% if content.event_id %}event-{{ content.event_id }}{% else %}free-{{ content.pk }}{% endif %}{% else %}{% url 'media_content_list' %}{% endif %}"
+           class="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-purple-700 mb-3 transition-colors">
+            <i class="fas fa-arrow-left text-xs"></i> Demandas
+        </a>
+        <h1 class="text-xl font-black text-gray-900">
+            {% if action == 'create' %}Novo Conteúdo{% else %}Editar Conteúdo{% endif %}
+        </h1>
+        <p class="text-sm text-gray-500">Planejamento de Mídia</p>
+    </div>
+    {% include 'parciais/media_subnav.html' with section='planning' %}
+
+    <form method="post" class="px-4 max-w-2xl mx-auto space-y-4">
+        {% csrf_token %}
+
+        <!-- Title & description -->
+        <div class="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Título *</label>
+                {{ form.title }}
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Descrição</label>
+                {{ form.description }}
+            </div>
+        </div>
+
+        <!-- Type, status, priority, responsible -->
+        <div class="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+            <p class="section-title">Classificação</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Tipo</label>
+                    {{ form.content_type }}
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
+                    {{ form.status }}
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Prioridade</label>
+                    {{ form.priority }}
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Responsável</label>
+                    {{ form.responsible }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Dates -->
+        <div class="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+            <p class="section-title">Datas e prazos</p>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Evento (opcional)</label>
+                {{ form.event }}
+            </div>
+            <p class="text-xs text-gray-400 -mt-2">Alterar uma data torna esse prazo manual: ele deixará de acompanhar mudanças na data do evento.</p>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                    Início previsto {% if content.start_date_auto %}(automático){% endif %}
+                </label>
+                {{ form.start_date }}
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Prazo de produção {% if content.due_date_auto %}(automático){% else %}(manual){% endif %}
+                    </label>
+                    {{ form.due_date }}
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+                        Data de publicação {% if content.publication_date_auto %}(automática){% endif %}
+                    </label>
+                    {{ form.publication_date }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Team & execution -->
+        <div class="bg-white border border-gray-100 rounded-xl p-5 space-y-4">
+            <p class="section-title">Equipe e execução</p>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Equipe responsável</label>
+                    {{ form.sub_team }}
+                    <p class="team-assignment-help text-xs text-gray-500 mt-1" role="status"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Função</label>
+                    {{ form.assigned_role }}
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Canal de publicação</label>
+                {{ form.publication_channel }}
+            </div>
+            <div class="flex flex-wrap gap-4">
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    {{ form.requires_recording }} Necessita gravação
+                </label>
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    {{ form.requires_editing }} Necessita edição
+                </label>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Observações</label>
+                {{ form.observations }}
+            </div>
+        </div>
+
+        {% if form.errors %}
+        <div class="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
+            {% for field in form %}{% for error in field.errors %}<p>{{ field.label }}: {{ error }}</p>{% endfor %}{% endfor %}
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="flex items-center gap-3 pb-4">
+            <button type="submit"
+                    class="px-5 py-2.5 text-white rounded-xl font-bold text-sm transition-all hover:-translate-y-0.5"
+                    style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                {% if action == 'create' %}Criar conteúdo{% else %}Salvar alterações{% endif %}
+            </button>
+            <a href="{% url 'media_content_list' %}" class="text-sm text-gray-500 hover:text-gray-700 font-medium">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+<script src="{% static 'media_team_assignments.js' %}"></script>
+{% endblock %}

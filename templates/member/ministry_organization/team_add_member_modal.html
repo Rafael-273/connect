@@ -1,0 +1,59 @@
+{% if can_manage and member_form %}
+<div id="org-modal-add-member-{{ team.pk }}"
+     class="demands-modal org-team-modal{% if add_member_team_id == team.pk or add_member_open %} active{% endif %}"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="org-modal-add-member-{{ team.pk }}-title">
+    <div class="demands-modal-backdrop" data-team-modal-close></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="demands-modal-header-main">
+                <div class="demands-modal-icon"><i class="fas fa-user-plus"></i></div>
+                <div style="min-width:0;">
+                    <p class="demands-modal-eyebrow">Adicionar membro</p>
+                    <h2 id="org-modal-add-member-{{ team.pk }}-title" class="demands-modal-title">{{ team.name }}</h2>
+                    <p class="demands-modal-subtitle">Selecione quem vai participar desta equipe</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-team-modal-close aria-label="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form method="post" action="{% url 'ministry_team_member_add' ministry.pk team.pk %}" class="demands-modal-body">
+            {% csrf_token %}
+            <input type="hidden" name="return_to" value="{{ return_to|default:'teams' }}">
+            <input type="hidden" name="{{ member_form.add_prefix }}is_active" value="on">
+
+            {% if member_form.non_field_errors %}
+            <div class="modal-section text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl px-3 py-2" role="alert">
+                {{ member_form.non_field_errors }}
+            </div>
+            {% endif %}
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="{{ member_form.member.id_for_label }}">Membro</label>
+                {{ member_form.member }}
+                {% if member_form.member.errors %}
+                <p class="text-xs text-red-500 mt-1">{{ member_form.member.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="{{ member_form.roles.id_for_label }}">Funções <span style="font-weight:500;color:#9CA3AF;">(opcional)</span></label>
+                {{ member_form.roles }}
+                {% if member_form.roles.errors %}
+                <p class="text-xs text-red-500 mt-1">{{ member_form.roles.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="demands-modal-footer">
+                <button type="button" class="org-btn-secondary" data-team-modal-close>Cancelar</button>
+                <button type="submit" class="org-btn-primary">
+                    <i class="fas fa-check text-xs"></i> Adicionar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}

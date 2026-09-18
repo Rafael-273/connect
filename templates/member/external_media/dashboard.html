@@ -316,6 +316,22 @@
 {% endblock %}
 
 {% block media_content %}
+{% if is_media_leader %}
+<div class="mb-5 grid grid-cols-1 sm:grid-cols-3 gap-2">
+    <a href="{% url 'media_dashboard' %}" class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-white hover:border-[#C90905]/30 transition-colors">
+        <span class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(201,9,5,.1);color:#C90905;"><i class="fas fa-calendar-alt"></i></span>
+        <span><strong class="block text-sm text-gray-900">Calendário</strong><span class="text-xs text-gray-500">Etapas e prazos</span></span>
+    </a>
+    <a href="{% url 'media_content_list' %}" class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-white hover:border-[#C90905]/30 transition-colors">
+        <span class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(201,9,5,.1);color:#C90905;"><i class="fas fa-clipboard-list"></i></span>
+        <span><strong class="block text-sm text-gray-900">Demandas</strong><span class="text-xs text-gray-500">Eventos e produções</span></span>
+    </a>
+    <a href="{% url 'media_organization' %}" class="flex items-center gap-3 p-3 rounded-xl border border-gray-200 bg-white hover:border-[#C90905]/30 transition-colors">
+        <span class="w-9 h-9 rounded-lg flex items-center justify-center" style="background:rgba(201,9,5,.1);color:#C90905;"><i class="fas fa-sitemap"></i></span>
+        <span><strong class="block text-sm text-gray-900">Organização</strong><span class="text-xs text-gray-500">Equipes e manuais</span></span>
+    </a>
+</div>
+{% endif %}
 <div class="media-filter-bar">
     <div class="flex items-center gap-2">
         <form method="get" id="media-filter-form" class="flex items-center gap-2 flex-1 min-w-0">

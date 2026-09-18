@@ -1,0 +1,26 @@
+{% extends 'member/ministry_organization/base.html' %}
+
+{% block org_header %}
+{% url back_url ministry.pk as back %}
+{% include 'parciais/org_media_header.html' with back_url=back title=title %}
+{% endblock %}
+
+{% block org_tabs %}{% endblock %}
+
+{% block organization_content %}
+
+<div class="max-w-2xl">
+    <form method="post" class="org-card p-5 sm:p-6 space-y-5">
+        {% csrf_token %}
+        {{ form.media }}
+        {% include 'member/ministry_organization/form_fields.html' %}
+        <div class="flex items-center gap-4 pt-2">
+            <button type="submit" class="org-btn-primary">
+                <i class="fas fa-save text-xs"></i> Salvar
+            </button>
+            <a href="{% url back_url ministry.pk %}" class="org-btn-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+{% endblock %}

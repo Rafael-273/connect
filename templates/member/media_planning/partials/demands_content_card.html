@@ -1,0 +1,58 @@
+{% if content.assignment_warning %}<p class="text-sm text-amber-800 bg-amber-50 rounded-xl p-3" role="alert">{{ content.assignment_warning }}</p>{% endif %}
+<div class="content-card overflow-hidden" id="demand-{{ content.pk }}">
+    <div class="flex items-center gap-2 p-4 {% if expanded %}pb-0{% endif %}">
+        <button type="button"
+                class="flex-1 min-w-0 text-left flex items-center gap-3 demands-content-toggle"
+                aria-expanded="{% if expanded %}true{% else %}false{% endif %}">
+            <span class="type-icon-box type-icon-box-sm flex-shrink-0">
+                <i class="fas fa-{{ content.type_meta.icon|default:'file' }}"></i>
+            </span>
+            <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-gray-900 text-sm leading-snug">{{ content.title }}</h4>
+                <p class="text-xs text-gray-500 mt-0.5 leading-snug">
+                    {{ content.get_content_type_display }}{% if content.sub_team %} · {{ content.sub_team }}{% endif %}
+                </p>
+            </div>
+            <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform demands-chevron flex-shrink-0 {% if expanded %}rotate-180{% endif %}"></i>
+        </button>
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 badge-{{ content.status }}" data-content-status-badge>{{ content.get_status_display }}</span>
+        <button type="button"
+                class="action-btn action-btn-edit"
+                title="Editar demanda"
+                aria-label="Editar demanda"
+                data-open-edit-modal
+                data-pk="{{ content.pk }}"
+                data-title="{{ content.title }}"
+                data-sub-team="{{ content.sub_team_id|default:'' }}"
+                data-content-type="{{ content.content_type }}"
+                data-description="{{ content.description|default:'' }}"
+                data-assignments='{{ content.assignments_json|default:"[]" }}'>
+            <i class="fas fa-pen"></i>
+        </button>
+    </div>
+
+    <div class="demands-content-body px-4 pb-4 pt-3 {% if not expanded %}hidden{% endif %} border-t border-gray-100 mx-4 mt-3">
+        {% if content.tasks.all %}
+        <div class="space-y-2">
+            {% for task in content.tasks.all %}
+            {% include 'member/media_planning/partials/demands_task_step.html' with task=task %}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-xs text-gray-500 space-y-1">
+            {% if content.responsible_name %}
+            <p><span class="font-semibold text-gray-600">Responsável</span> · {{ content.responsible_name }}</p>
+            {% endif %}
+            {% if content.due_date %}
+            <p><span class="font-semibold text-gray-600">Prazo</span> · {{ content.due_date|date:"d M Y" }}</p>
+            {% endif %}
+            {% if content.publication_date %}
+            <p><span class="font-semibold text-gray-600">Publicação</span> · {{ content.publication_date|date:"d M Y" }}</p>
+            {% endif %}
+            {% if not content.responsible_name and not content.due_date and not content.publication_date %}
+            <p class="text-gray-400">Nenhuma etapa definida ainda. Edite a demanda para atribuir responsáveis e prazos.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>

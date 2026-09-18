@@ -486,26 +486,43 @@
 
 
     <!-- Cards de Ministério -->
-    {% if is_boas_vindas_member or is_pastor or is_moderacao_member or member_schedules or can_music_member or is_external_media_member %}
+    {% if is_ministration_member or can_consolidate or is_boas_vindas_member or is_pastor or is_moderacao_member or member_schedules or can_music_member or is_house_of_peace_member or is_external_media_member %}
     <div id="ministry-cards-container" class="space-y-3">
 
         {% if is_external_media_member %}
         <div class="overflow-hidden rounded-xl sm:rounded-2xl border-2" data-ministry-card
             data-card-label="Mídia Externa" data-card-icon="share-nodes"
-            style="border-color:rgba(201,9,5,.25);background:#fff">
+            style="border-color:rgba(201,9,5,.25);background:linear-gradient(to bottom right,#ffffff,#fffafa,#ffffff);">
             <button type="button" class="accordion-header w-full flex items-center justify-between gap-4 p-4 sm:p-5" aria-expanded="false">
                 <div class="flex items-center gap-4">
                     <div class="accordion-icon-wrap w-12 h-12 rounded-xl flex items-center justify-center text-white" style="background:#C90905"><i class="fas fa-film"></i></div>
-                    <div class="text-left"><h3 class="text-xl font-black">Edição de Vídeos</h3><p class="text-sm text-gray-500">Transcreva, traduza e edite seus vídeos</p></div>
+                    <div class="text-left">
+                        <h3 class="text-xl font-black text-gray-900">Mídia <span style="color:#C90905;">Externa</span></h3>
+                        <p class="text-sm text-gray-500">Vídeos{% if is_media_leader %}, planejamento e organização{% else %} e produção{% endif %}</p>
+                    </div>
                 </div>
                 <i class="fas fa-chevron-down accordion-chevron text-gray-400"></i>
             </button>
             <div class="accordion-content">
-                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5">
+                <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5 flex flex-col gap-3">
+                    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Produção de vídeos</p>
                     <a href="{% url 'external_media_dashboard' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color:rgba(201,9,5,.3)">
-                        <div><h4 class="text-sm font-black text-gray-900 mb-1">Abrir editor de vídeo</h4><p class="text-xs text-gray-500">Gerencie transcrições, traduções e legendas</p></div>
-                        <i class="fas fa-arrow-right text-lg transition-transform group-hover:translate-x-1" style="color:#C90905"></i>
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background:rgba(201,9,5,.1);"><i class="fas fa-closed-captioning text-sm" style="color:#C90905;"></i></div>
+                            <div><h4 class="text-sm font-black text-gray-900">Editor de vídeo</h4><p class="text-xs text-gray-500">Transcrições, traduções e legendas</p></div>
+                        </div>
+                        <i class="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1" style="color:#C90905"></i>
                     </a>
+                    {% if is_media_leader %}
+                    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-2">Planejamento</p>
+                    {% url 'media_dashboard' as media_dashboard_url %}
+                    {% include 'parciais/media_link_card.html' with url=media_dashboard_url icon='tachometer-alt' title='Calendário' subtitle='Etapas e prazos das demandas' %}
+                    {% url 'media_content_list' as media_content_list_url %}
+                    {% include 'parciais/media_link_card.html' with url=media_content_list_url icon='clipboard-list' title='Demandas e eventos' subtitle='Produções, templates e eventos da igreja' %}
+                    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Organização</p>
+                    {% url 'media_organization' as media_organization_url %}
+                    {% include 'parciais/media_link_card.html' with url=media_organization_url icon='sitemap' title='Organização da mídia' subtitle='Equipes, manuais e recursos' %}
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -956,14 +973,14 @@
 {% include 'parciais/member_bottom_nav.html' with nav_active='home' %}
 
 <script>
-    // Ministry cards: flat (≤2) or tabs (≥3)
+    // Ministry cards: flat (1 card) or tabs (≥2)
     function initMinistryCards() {
         const container = document.getElementById('ministry-cards-container');
         if (!container) return;
         const cards = Array.from(container.querySelectorAll('[data-ministry-card]'));
         if (cards.length === 0) return;
 
-        if (cards.length <= 2) {
+        if (cards.length < 2) {
             // Flat mode: expand all, remove toggle interaction
             cards.forEach(card => {
                 const content = card.querySelector('.accordion-content');

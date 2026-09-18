@@ -1,0 +1,66 @@
+/* Ministry Organization — tema Filadélfia (vermelho) */
+
+:root {
+    --media-color: #C90905;
+    --media-rgb: 201, 9, 5;
+    --org-color: #C90905;
+    --org-rgb: 201, 9, 5;
+}
+
+.ministry-organization .form-input,
+.media-operations .form-input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border: 1.5px solid #e5e7eb;
+    border-radius: .75rem;
+    background-color: #fff;
+    padding: .65rem 1rem;
+    font-size: .875rem;
+    color: #111827;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.ministry-organization .form-input:focus,
+.media-operations .form-input:focus {
+    outline: none;
+    border-color: var(--media-color);
+    box-shadow: 0 0 0 3px rgba(var(--media-rgb), .1);
+}
+
+.ministry-organization select,
+.ministry-organization input[type="text"],
+.ministry-organization input[type="email"],
+.ministry-organization input[type="date"],
+.ministry-organization input[type="datetime-local"],
+.ministry-organization input[type="number"],
+.ministry-organization input[type="search"],
+.ministry-organization textarea {
+    border: 1.5px solid #e5e7eb;
+    border-radius: .75rem;
+    background: #fff;
+    padding: .65rem 1rem;
+    font-size: .875rem;
+    width: 100%;
+    transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.ministry-organization select:focus,
+.ministry-organization input[type="text"]:focus,
+.ministry-organization input[type="email"]:focus,
+.ministry-organization input[type="date"]:focus,
+.ministry-organization input[type="datetime-local"]:focus,
+.ministry-organization input[type="number"]:focus,
+.ministry-organization input[type="search"]:focus,
+.ministry-organization textarea:focus {
+    outline: none;
+    border-color: var(--media-color);
+    box-shadow: 0 0 0 3px rgba(var(--media-rgb), .1);
+}
+
+.ministry-organization .errorlist,
+.media-operations .errorlist {
+    color: #b91c1c;
+    font-size: .875rem;
+    margin-top: .25rem;
+}
