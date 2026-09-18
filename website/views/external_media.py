@@ -1505,6 +1505,19 @@ class ExternalMediaProjectMediaReorderView(ExternalMediaRequiredMixin, View):
         except (TypeError, ValueError):
             return JsonResponse({'detail': 'Ordem de vídeos inválida.'}, status=400)
         with transaction.atomic():
+            # Registros soft-deletados ainda ocupam posições na tabela e participam
+            # da constraint única (project, block, position, camera_order). Movemos
+            # para posições altas antes do update em duas fases para evitar colisões.
+            deleted_items = list(
+                ProjectBlockMedia.deleted_objects.select_for_update().filter(
+                    project=project, block=block,
+                )
+            )
+            if deleted_items:
+                for offset, d_item in enumerate(deleted_items, start=1):
+                    d_item.position = 50000 + offset
+                ProjectBlockMedia.all_objects.bulk_update(deleted_items, ['position'])
+
             items = list(
                 ProjectBlockMedia.objects.select_for_update().filter(
                     project=project, block=block, pk__in=media_ids,
@@ -1539,6 +1552,18 @@ class ExternalMediaProjectCustomBlockMediaReorderView(ExternalMediaRequiredMixin
         except (TypeError, ValueError):
             return JsonResponse({'detail': 'Ordem de vídeos inválida.'}, status=400)
         with transaction.atomic():
+            # Garantia de consistência: mover soft-deletados para posições altas
+            # antes do update em duas fases, evitando colisões de posição.
+            deleted_items = list(
+                ProjectBlockMedia.deleted_objects.select_for_update().filter(
+                    project=project, custom_block=block,
+                )
+            )
+            if deleted_items:
+                for offset, d_item in enumerate(deleted_items, start=1):
+                    d_item.position = 50000 + offset
+                ProjectBlockMedia.all_objects.bulk_update(deleted_items, ['position'])
+
             items = list(
                 ProjectBlockMedia.objects.select_for_update().filter(
                     project=project, custom_block=block, pk__in=media_ids,

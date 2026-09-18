@@ -1334,9 +1334,14 @@
         event.dataTransfer.setData('text/plain', block.dataset.projectBlockId);
     });
     document.addEventListener('dragover', (event) => {
-        const target = closestFromEvent(event, '[data-project-block-id]');
-        if (!draggedCustomBlock || !target || target === draggedCustomBlock) return;
+        if (!draggedCustomBlock) return;
+        // Chama preventDefault() sempre que o cursor estiver dentro do container
+        // para garantir que o evento 'drop' dispare em qualquer posição do container.
+        const list = closestFromEvent(event, '[data-custom-block-list]');
+        if (!list) return;
         event.preventDefault();
+        const target = closestFromEvent(event, '[data-project-block-id]');
+        if (!target || target === draggedCustomBlock) return;
         const before = event.clientY < target.getBoundingClientRect().top + target.offsetHeight / 2;
         target.parentElement.insertBefore(draggedCustomBlock, before ? target : target.nextSibling);
         updateProjectBlockNumbers(target.parentElement);
@@ -1378,9 +1383,14 @@
     });
     document.addEventListener('dragend', () => { dragged?.classList.remove('opacity-50'); dragged = null; });
     document.addEventListener('dragover', (event) => {
-        const item = closestFromEvent(event, '[data-media-sortable] [data-media-id]');
-        if (!dragged || !item || dragged === item) return;
+        if (!dragged) return;
+        // Chama preventDefault() sempre dentro do container para garantir que
+        // o 'drop' dispare mesmo que o cursor esteja fora de um item específico.
+        const container = closestFromEvent(event, '[data-media-sortable]');
+        if (!container) return;
         event.preventDefault();
+        const item = closestFromEvent(event, '[data-media-sortable] [data-media-id]');
+        if (!item || dragged === item) return;
         const before = event.clientY < item.getBoundingClientRect().top + item.offsetHeight / 2;
         item.parentElement.insertBefore(dragged, before ? item : item.nextSibling);
     });
