@@ -24,7 +24,13 @@ from .views.member_auth import (
     RedirectAfterLoginView,
 )
 from .views.member_schedule import MemberScheduleDetailView
-from .views.user_management import UserManagementView, ResetUserPasswordView, ChangePasswordView
+from .views.user_management import (
+    UserManagementView,
+    ResetUserPasswordView,
+    DeleteUserView,
+    UserEditView,
+    ChangePasswordView,
+)
 from .views.word_of_knowledge import (
     WordOfKnowledgeListView, WordOfKnowledgeCreateView, HealingCreateView,
     ServiceWordsView, MarkWordAsHealedView
@@ -478,6 +484,8 @@ urlpatterns = [
     # User Management URLs
     path('admin-panel/users/', UserManagementView.as_view(), name='admin_user_management'),
     path('admin-panel/users/<int:user_id>/reset-password/', ResetUserPasswordView.as_view(), name='admin_reset_user_password'),
+    path('admin-panel/users/<int:user_id>/delete/', DeleteUserView.as_view(), name='admin_delete_user'),
+    path('admin-panel/users/<int:user_id>/edit/', UserEditView.as_view(), name='admin_user_edit'),
     path('admin-panel/change-password/', ChangePasswordView.as_view(), name='admin_change_password'),
     
     # Follow-up URLs

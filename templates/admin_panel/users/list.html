@@ -85,7 +85,7 @@
                         <div class="flex justify-between items-start mb-2">
                             <div>
                                 <div class="font-medium text-gray-900">
-                                    {% if user.member %}{{ user.member.name }}{% else %}{{ user.first_name }} {{ user.last_name }}{% endif %}
+                                    {% if user.active_member %}{{ user.active_member.name }}{% else %}{{ user.first_name }} {{ user.last_name }}{% endif %}
                                 </div>
                                 <div class="text-sm text-gray-500">{{ user.email }}</div>
                             </div>
@@ -110,10 +110,19 @@
                                    onclick="return confirm('Tem certeza que deseja redefinir a senha deste usuário para a senha padrão \"123\"?')">
                                     <ion-icon name="key-outline"></ion-icon>
                                 </a>
-                                {% if user.member %}
-                                <a href="{% url 'admin_member_edit' user.member.id %}" class="action-btn action-btn-edit" title="Editar Membro">
+                                <a href="{% if user.active_member %}{% url 'admin_member_edit' user.active_member.id %}{% else %}{% url 'admin_user_edit' user.id %}{% endif %}"
+                                   class="action-btn action-btn-edit"
+                                   title="{% if user.active_member %}Editar Membro{% else %}Editar Usuário{% endif %}">
                                     <ion-icon name="create-outline"></ion-icon>
                                 </a>
+                                {% if user.id != request.user.id and not user.is_superuser %}
+                                <form method="POST" action="{% url 'admin_delete_user' user.id %}"
+                                      onsubmit="return confirm('Excluir permanentemente o usuário {{ user.email }}? Esta ação não pode ser desfeita.')">
+                                    {% csrf_token %}
+                                    <button type="submit" class="action-btn action-btn-delete" title="Excluir Usuário">
+                                        <ion-icon name="trash-outline"></ion-icon>
+                                    </button>
+                                </form>
                                 {% endif %}
                             </div>
                         </div>
@@ -138,9 +147,9 @@
                         <tbody>
                             {% for user in users %}
                             <tr>
-                                <td class="text-sm text-gray-900{% if user.member %} row-link{% endif %}"{% if user.member %} data-row-href="{% url 'admin_member_edit' user.member.id %}"{% endif %}>{{ user.email }}</td>
+                                <td class="text-sm text-gray-900 row-link" data-row-href="{% if user.active_member %}{% url 'admin_member_edit' user.active_member.id %}{% else %}{% url 'admin_user_edit' user.id %}{% endif %}">{{ user.email }}</td>
                                 <td class="text-sm text-gray-900">
-                                    {% if user.member %}{{ user.member.name }}{% else %}{{ user.first_name }} {{ user.last_name }}{% endif %}
+                                    {% if user.active_member %}{{ user.active_member.name }}{% else %}{{ user.first_name }} {{ user.last_name }}{% endif %}
                                 </td>
                                 <td>
                                     {% if user.user_type == 'admin' %}<span class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">Administrador</span>
@@ -164,10 +173,19 @@
                                            onclick="return confirm('Tem certeza que deseja redefinir a senha deste usuário para a senha padrão \"123\"?')">
                                             <ion-icon name="key-outline"></ion-icon>
                                         </a>
-                                        {% if user.member %}
-                                        <a href="{% url 'admin_member_edit' user.member.id %}" class="action-btn action-btn-edit" title="Editar Membro">
+                                        <a href="{% if user.active_member %}{% url 'admin_member_edit' user.active_member.id %}{% else %}{% url 'admin_user_edit' user.id %}{% endif %}"
+                                           class="action-btn action-btn-edit"
+                                           title="{% if user.active_member %}Editar Membro{% else %}Editar Usuário{% endif %}">
                                             <ion-icon name="create-outline"></ion-icon>
                                         </a>
+                                        {% if user.id != request.user.id and not user.is_superuser %}
+                                        <form method="POST" action="{% url 'admin_delete_user' user.id %}"
+                                              onsubmit="return confirm('Excluir permanentemente o usuário {{ user.email }}? Esta ação não pode ser desfeita.')">
+                                            {% csrf_token %}
+                                            <button type="submit" class="action-btn action-btn-delete" title="Excluir Usuário">
+                                                <ion-icon name="trash-outline"></ion-icon>
+                                            </button>
+                                        </form>
                                         {% endif %}
                                     </div>
                                 </td>
