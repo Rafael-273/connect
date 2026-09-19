@@ -1,0 +1,30 @@
+<div class="modal-section">
+    {{ form.non_field_errors }}
+    <label class="modal-field-label" for="{{ form.title.id_for_label }}">Título</label>
+    {{ form.title }}
+    {{ form.title.errors }}
+</div>
+
+<div class="modal-section">
+    <label class="modal-field-label" for="id_{{ prefix }}-content_type">Tipo</label>
+    {% include 'member/media_planning/partials/demands_type_select.html' with prefix=prefix selected_value=form.content_type.value hint_id=prefix|add:'-type-hint' %}
+    <p id="{{ prefix }}-type-hint" class="text-xs text-gray-400 mt-1.5"></p>
+    {% if form.content_type.errors %}
+    <p class="text-xs text-red-500 mt-1">{{ form.content_type.errors.0 }}</p>
+    {% endif %}
+</div>
+
+<div class="modal-section">
+    <label class="modal-field-label" for="{{ form.description.id_for_label }}">Descrição</label>
+    {{ form.description }}
+</div>
+
+<div class="modal-section">
+    <p class="modal-section-title">Equipe e prazos</p>
+    <p class="text-xs text-gray-500 mb-2">Informe os dias de cada etapa em relação ao evento (ex.: 7 dias antes).</p>
+    <p class="text-xs text-gray-500 mb-3">Defina quem faz cada parte e quando — ex: Designer, Revisor, Publicador.</p>
+    <label class="modal-field-label" for="{{ form.default_sub_team.id_for_label }}">Equipe responsável (opcional)</label>
+    {{ form.default_sub_team }}{{ form.default_sub_team.errors }}
+    <p class="team-assignment-help text-xs text-gray-500 my-2" role="status"></p>
+    {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix=prefix assignments=template_assignments blank_assignment=blank_assignment hide_responsible=True %}
+</div>

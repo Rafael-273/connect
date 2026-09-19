@@ -1,0 +1,14 @@
+<div class="demand-assignments{% if hide_responsible %} hide-responsible{% endif %}" data-prefix="{{ prefix }}">
+    <div class="demand-assignments-list">
+        {% for row in assignments %}
+        {% include 'member/media_planning/partials/demands_assignment_row.html' with prefix=prefix row=row hide_responsible=hide_responsible %}
+        {% endfor %}
+    </div>
+    <button type="button" class="demand-add-assignment">
+        <i class="fas fa-plus" aria-hidden="true"></i> Adicionar etapa
+    </button>
+</div>
+
+<template id="{{ prefix }}-assignment-row-template">
+    {% include 'member/media_planning/partials/demands_assignment_row.html' with prefix=prefix row=blank_assignment hide_responsible=hide_responsible %}
+</template>

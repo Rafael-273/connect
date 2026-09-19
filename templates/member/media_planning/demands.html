@@ -1,0 +1,127 @@
+{% extends 'member/media_planning/operations_base.html' %}
+{% block title %}Demandas · Mídia{% endblock %}
+
+{% block page_header %}
+<div class="px-4 pt-5 pb-2 max-w-4xl mx-auto">
+    <div class="flex items-center justify-between gap-3">
+        <div class="min-w-0">
+            <h1 class="text-xl font-black text-gray-900">Demandas</h1>
+            <p class="text-sm text-gray-500">Produções e conteúdos da equipe</p>
+        </div>
+        <a href="{% url 'media_content_list' %}?create=demand"
+           class="flex-shrink-0 inline-flex items-center gap-2 px-4 py-2.5 text-white rounded-xl font-bold text-sm transition-all hover:-translate-y-0.5"
+           style="background: linear-gradient(135deg, #8B5CF6, #7C3AED); box-shadow: 0 4px 14px rgba(139,92,246,.3);">
+            <i class="fas fa-plus"></i>
+            <span class="hidden sm:inline">Nova demanda</span>
+        </a>
+    </div>
+</div>
+<div class="pt-1">
+    {% include 'parciais/media_subnav.html' with section='demands' %}
+</div>
+{% endblock %}
+
+{% block operations %}
+<div class="max-w-4xl mx-auto px-4">
+
+    <!-- Filter panel -->
+    <details class="bg-white border border-gray-100 rounded-xl overflow-hidden mb-4" {% if request.GET %}open{% endif %}>
+        <summary class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer font-semibold text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            <span class="flex items-center gap-2">
+                <i class="fas fa-filter text-purple-500 text-xs"></i>
+                Buscar e filtrar
+            </span>
+            <i class="fas fa-chevron-down text-gray-400 text-xs"></i>
+        </summary>
+        <div class="border-t border-gray-100 px-4 pt-4 pb-4">
+            <form class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3" method="get">
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">{{ field.label }}</label>
+                    {{ field }}
+                    {{ field.errors }}
+                </div>
+                {% endfor %}
+                <div class="flex gap-2 items-end">
+                    <button type="submit"
+                            class="px-4 py-2 text-white rounded-xl text-sm font-bold"
+                            style="background: #8B5CF6;">Filtrar</button>
+                    <a href="{% url 'media_demands' %}"
+                       class="px-4 py-2 text-purple-700 text-sm font-semibold rounded-xl border border-purple-100 bg-purple-50">Limpar</a>
+                </div>
+            </form>
+        </div>
+    </details>
+
+    <!-- Count -->
+    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+        {{ page_obj.paginator.count }} demanda{{ page_obj.paginator.count|pluralize }} · eventos e avulsas
+    </p>
+
+    <!-- Demands list -->
+    <div class="space-y-2 mb-4">
+        {% for content in page_obj %}
+        <article class="bg-white rounded-xl border border-gray-100 p-4 transition-all hover:border-purple-200">
+            <div class="flex flex-wrap justify-between gap-2 mb-1">
+                <a href="{{ content.detail_url }}"
+                   class="font-bold text-gray-900 hover:text-purple-700 break-words text-sm leading-snug">
+                    {{ content.title }}
+                </a>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="w-2 h-2 rounded-full
+                        {% if content.status == 'published' %}bg-emerald-400
+                        {% elif content.status == 'approved' %}bg-green-400
+                        {% elif content.status == 'in_progress' %}bg-blue-400
+                        {% elif content.status == 'review' %}bg-amber-400
+                        {% elif content.status == 'scheduled' %}bg-purple-400
+                        {% else %}bg-gray-300{% endif %}"></span>
+                    <span class="text-xs font-semibold text-gray-500">{{ content.get_status_display }}</span>
+                    <span class="text-gray-300">·</span>
+                    <span class="text-xs font-semibold text-gray-500">{{ content.get_priority_display }}</span>
+                </div>
+            </div>
+            <p class="text-xs text-gray-400 mb-2">
+                {{ content.event|default:'Demanda avulsa' }}
+            </p>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                <span><i class="fas fa-users text-gray-300 mr-1"></i>{{ content.sub_team|default:'Sem equipe' }}</span>
+                <span><i class="fas fa-user text-gray-300 mr-1"></i>{{ content.responsible.member.name|default:content.responsible|default:'Sem responsável' }}</span>
+                <span>
+                    <i class="fas fa-clock text-gray-300 mr-1"></i>
+                    {{ content.due_date|date:'d/m/Y H:i'|default:'Sem prazo' }}
+                    {% if content.due_date %} · {% if content.due_date_auto %}Automático{% else %}Manual{% endif %}{% endif %}
+                </span>
+                {% if is_media_leader %}
+                <a href="{% url 'media_content_update' content.pk %}" class="font-semibold" style="color:#8B5CF6;">
+                    <i class="fas fa-pen text-xs mr-0.5"></i> Editar
+                </a>
+                {% endif %}
+            </div>
+        </article>
+        {% empty %}
+        <!-- Empty state -->
+        <div class="bg-white rounded-xl border border-gray-100 py-16 flex flex-col items-center text-center px-6">
+            <div class="w-16 h-16 rounded-2xl flex items-center justify-center mb-4" style="background: rgba(139,92,246,.1);">
+                <i class="fas fa-clipboard-list text-2xl" style="color: #8B5CF6;"></i>
+            </div>
+            <h3 class="font-black text-gray-900 text-lg">Nenhuma demanda encontrada</h3>
+            <p class="text-sm text-gray-500 mt-2 max-w-xs">
+                {% if request.GET %}Tente ajustar os filtros.{% else %}Crie demandas para organizar as produções da equipe.{% endif %}
+            </p>
+            {% if not request.GET %}
+            <a href="{% url 'media_content_list' %}?create=demand"
+               class="mt-6 inline-flex items-center gap-2 px-5 py-2.5 text-white rounded-xl font-bold text-sm"
+               style="background: linear-gradient(135deg, #8B5CF6, #7C3AED);">
+                <i class="fas fa-plus"></i> Nova demanda
+            </a>
+            {% else %}
+            <a href="{% url 'media_demands' %}" class="mt-4 text-sm font-semibold" style="color:#8B5CF6;">Limpar filtros</a>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% include 'member/media_planning/partials/operations_pagination.html' %}
+</div>
+{% endblock %}

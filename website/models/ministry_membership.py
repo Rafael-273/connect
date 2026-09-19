@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from ._base import BaseModel
 from .ministry import Ministry
 from .member import Member
@@ -43,3 +43,14 @@ class MinistryMembership(BaseModel):
 
     def __str__(self):
         return f"{self.member.name} - {self.ministry.name} ({self.get_role_display()})"
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            if self.pk:
+                type(self).all_objects.select_for_update().filter(pk=self.pk).first()
+            return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        with transaction.atomic():
+            type(self).all_objects.select_for_update().filter(pk=self.pk).first()
+            return super().delete(*args, **kwargs)

@@ -1,0 +1,47 @@
+{% extends 'member_base.html' %}
+{% load static %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'ministry_organization.css' %}">
+<style>
+    :root { --media-color: #8B5CF6; --media-rgb: 139,92,246; }
+
+    /* Form fields inside media-operations */
+    .media-operations input:not([type=checkbox]),
+    .media-operations select,
+    .media-operations textarea {
+        width: 100%; min-width: 0; padding: .625rem .875rem;
+        border: 1.5px solid #e5e7eb; border-radius: .75rem;
+        background: white; font-size: .875rem; color: #111827;
+        transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    .media-operations input:not([type=checkbox]):focus,
+    .media-operations select:focus,
+    .media-operations textarea:focus {
+        outline: none;
+        border-color: var(--media-color);
+        box-shadow: 0 0 0 3px rgba(var(--media-rgb), .1);
+    }
+    .media-operations .errorlist { color: #b91c1c; font-size: .875rem; margin-top: .25rem; }
+    .media-operations label {
+        display: block; font-size: .875rem; font-weight: 600;
+        margin-bottom: .3rem; color: #374151;
+    }
+    .media-operations details summary { cursor: pointer; }
+
+    /* Alert messages */
+    .media-alert-info {
+        background: rgba(var(--media-rgb), .06);
+        border: 1px solid rgba(var(--media-rgb), .2);
+        border-radius: .875rem; padding: .75rem 1rem;
+        font-size: .875rem; color: #5B21B6;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div class="media-operations ministry-organization min-h-screen pb-28" style="background: #f9fafb;">
+    {% include 'parciais/messages.html' %}
+    {% block page_header %}{% endblock %}
+    {% block operations %}{% endblock %}
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+{% endblock %}

@@ -1,0 +1,44 @@
+{% comment %}
+  Sub-navegação do módulo de mídia (tema Filadélfia).
+  Context: section = 'events' | 'demands' | 'calendar' | 'organization' | 'event_types' | 'planning'
+{% endcomment %}
+<div class="px-4 sm:px-6 pb-3 overflow-x-auto">
+    <div class="flex gap-1.5 min-w-max">
+        <a href="{% url 'media_events' %}"
+           class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-colors
+                  {% if section == 'events' %}text-white border-transparent{% else %}text-gray-500 bg-white border-gray-200 hover:border-red-200 hover:text-red-700{% endif %}"
+           {% if section == 'events' %}style="background:#C90905;"{% endif %}>
+            Eventos
+        </a>
+        <a href="{% url 'media_content_list' %}"
+           class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-colors
+                  {% if section == 'demands' or section == 'planning' %}text-white border-transparent{% else %}text-gray-500 bg-white border-gray-200 hover:border-red-200 hover:text-red-700{% endif %}"
+           {% if section == 'demands' or section == 'planning' %}style="background:#C90905;"{% endif %}>
+            Demandas
+        </a>
+        <a href="{% url 'media_calendar' %}"
+           class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-colors
+                  {% if section == 'calendar' %}text-white border-transparent{% else %}text-gray-500 bg-white border-gray-200 hover:border-red-200 hover:text-red-700{% endif %}"
+           {% if section == 'calendar' %}style="background:#C90905;"{% endif %}>
+            Cronograma
+        </a>
+        <a href="{% url 'media_organization' %}"
+           class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-colors
+                  {% if section == 'organization' %}text-white border-transparent{% else %}text-gray-500 bg-white border-gray-200 hover:border-red-200 hover:text-red-700{% endif %}"
+           {% if section == 'organization' %}style="background:#C90905;"{% endif %}>
+            Organização
+        </a>
+        <a href="{% url 'media_event_type_list' %}"
+           class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-colors
+                  {% if section == 'event_types' %}text-white border-transparent{% else %}text-gray-500 bg-white border-gray-200 hover:border-red-200 hover:text-red-700{% endif %}"
+           {% if section == 'event_types' %}style="background:#C90905;"{% endif %}>
+            Tipos de evento
+        </a>
+        <a href="{% url 'media_dashboard' %}"
+           class="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-colors
+                  {% if section == 'calendar' %}text-white border-transparent{% else %}text-gray-500 bg-white border-gray-200 hover:border-red-200 hover:text-red-700{% endif %}"
+           {% if section == 'calendar' %}style="background:#C90905;"{% endif %}>
+            Calendário
+        </a>
+    </div>
+</div>

@@ -1,0 +1,66 @@
+{% if can_manage and create_form %}
+<div id="org-modal-team-create"
+     class="demands-modal org-team-modal{% if create_mode %} active{% endif %}"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="org-modal-team-create-title">
+    <div class="demands-modal-backdrop" data-team-modal-close></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="demands-modal-header-main">
+                <div class="demands-modal-icon"><i class="fas fa-users"></i></div>
+                <div style="min-width:0;">
+                    <p class="demands-modal-eyebrow">Nova equipe</p>
+                    <h2 id="org-modal-team-create-title" class="demands-modal-title">Como se chama a equipe?</h2>
+                    <p class="demands-modal-subtitle">Organize membros por área de atuação</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-team-modal-close aria-label="Fechar">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <form method="post" action="{% url 'ministry_team_create' ministry.pk %}" class="demands-modal-body">
+            {% csrf_token %}
+            <input type="hidden" name="is_active" value="on">
+
+            {% if create_form.non_field_errors %}
+            <div class="modal-section text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl px-3 py-2" role="alert">
+                {{ create_form.non_field_errors }}
+            </div>
+            {% endif %}
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="{{ create_form.name.id_for_label }}">Nome da equipe</label>
+                {{ create_form.name }}
+                {% if create_form.name.errors %}
+                <p class="text-xs text-red-500 mt-1">{{ create_form.name.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="{{ create_form.description.id_for_label }}">Descrição <span style="font-weight:500;color:#9CA3AF;">(opcional)</span></label>
+                {{ create_form.description }}
+                {% if create_form.description.errors %}
+                <p class="text-xs text-red-500 mt-1">{{ create_form.description.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="modal-section">
+                <label class="modal-field-label" for="{{ create_form.leader.id_for_label }}">Líder <span style="font-weight:500;color:#9CA3AF;">(opcional)</span></label>
+                {{ create_form.leader }}
+                {% if create_form.leader.errors %}
+                <p class="text-xs text-red-500 mt-1">{{ create_form.leader.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="demands-modal-footer">
+                <button type="button" class="org-btn-secondary" data-team-modal-close>Cancelar</button>
+                <button type="submit" class="org-btn-primary">
+                    <i class="fas fa-check text-xs"></i> Criar equipe
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}

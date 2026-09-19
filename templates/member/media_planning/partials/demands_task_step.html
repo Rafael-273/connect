@@ -1,0 +1,70 @@
+{% load pt_date %}
+<div class="demand-task-step {% if task.status == 'completed' %}is-done{% endif %}" data-task-id="{{ task.pk }}">
+    <button type="button"
+            class="demand-task-check"
+            data-task-toggle="{{ task.pk }}"
+            data-status="{% if task.status == 'completed' %}completed{% else %}pending{% endif %}"
+            aria-label="{% if task.status == 'completed' %}Marcar como pendente{% else %}Marcar como concluída{% endif %}"
+            title="{% if task.status == 'completed' %}Marcar como pendente{% else %}Marcar como concluída{% endif %}">
+        <i class="fas fa-check"></i>
+    </button>
+    <div class="demand-task-body min-w-0 flex-1">
+        <div class="demand-task-header">
+            <p class="demand-task-role">{{ task.title }}</p>
+            <span class="demand-task-status task-status-{{ task.status }}">{{ task.get_status_display }}</span>
+        </div>
+
+        <div class="demand-task-meta">
+            {% if task.assigned_to %}
+            <span class="demand-task-assignee">
+                <span class="demand-task-avatar">
+                    {% if task.assigned_to.member.profile_picture %}
+                    <img src="{{ task.assigned_to.member.profile_picture.url }}" alt="">
+                    {% elif task.assigned_to.member %}
+                    {{ task.assigned_to.member.name|slice:":1"|upper }}
+                    {% else %}
+                    <i class="fas fa-user text-[9px]"></i>
+                    {% endif %}
+                </span>
+                <span class="demand-task-assignee-name">
+                    {% if task.assigned_to.member %}{{ task.assigned_to.member.name }}{% else %}{{ task.assigned_to.email }}{% endif %}
+                </span>
+            </span>
+            {% else %}
+            <span class="demand-task-unassigned">Sem responsável</span>
+            {% endif %}
+            {% if task.due_date %}
+            <span class="demand-task-date">
+                <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                <span>{{ task.due_date|pt_date_short }}</span>
+            </span>
+            {% endif %}
+        </div>
+
+        <div class="demand-task-desc{% if not task.description %} demand-task-desc--compact{% endif %}" data-task-desc-wrap="{{ task.pk }}">
+            {% if task.description %}
+            <div class="demand-task-desc-view" data-task-desc-view="{{ task.pk }}">
+                <p class="demand-task-desc-text">{{ task.description|urlize }}</p>
+                <button type="button" class="demand-task-desc-link" data-task-desc-edit="{{ task.pk }}">
+                    <i class="fas fa-pen" aria-hidden="true"></i>
+                    <span>Editar observação</span>
+                </button>
+            </div>
+            {% else %}
+            <button type="button" class="demand-task-desc-link" data-task-desc-add data-task-desc-edit="{{ task.pk }}">
+                <i class="fas fa-sticky-note" aria-hidden="true"></i>
+                <span>Adicionar observação ou link</span>
+            </button>
+            {% endif %}
+            <form class="demand-task-desc-form hidden" data-task-desc-form="{{ task.pk }}">
+                {% csrf_token %}
+                <textarea class="media-field-input demand-task-desc-input" rows="2"
+                          placeholder="Ex: link da gravação, referências, dependências…">{{ task.description }}</textarea>
+                <div class="demand-task-desc-form-actions">
+                    <button type="button" class="demand-task-desc-save" data-task-desc-save="{{ task.pk }}">Salvar</button>
+                    <button type="button" class="demand-task-desc-cancel" data-task-desc-cancel="{{ task.pk }}">Cancelar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

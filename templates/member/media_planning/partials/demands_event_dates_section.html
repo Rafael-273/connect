@@ -1,0 +1,60 @@
+<div class="event-dates-section" data-prefix="{{ prefix|default:'event' }}">
+    <p class="text-xs text-gray-500 mb-3">Informe uma ou mais datas — ex.: conferência de 3 dias.</p>
+    <div class="event-dates-list space-y-2">
+        <div class="event-date-row">
+            <div class="event-date-badge-wrap"><span class="event-date-badge" aria-hidden="true">1</span></div>
+            <div class="event-date-inputs">
+                <div class="event-date-col">
+                    <label class="modal-field-label" for="id_{{ prefix|default:'event' }}-event_date">Data</label>
+                    {{ event_form.event_date }}
+                </div>
+                <div class="event-date-col">
+                    <label class="modal-field-label" for="id_{{ prefix|default:'event' }}-event_time">Horário</label>
+                    {{ event_form.event_time }}
+                </div>
+            </div>
+        </div>
+        {% for row in extra_event_dates %}
+        <div class="event-date-row">
+            <div class="event-date-badge-wrap"><span class="event-date-badge" aria-hidden="true"></span></div>
+            <div class="event-date-inputs">
+                <div class="event-date-col">
+                    <label class="modal-field-label">Data</label>
+                    <input type="date" name="{{ prefix|default:'event' }}-extra_event_date" value="{{ row.date }}"
+                           class="media-field-input event-extra-date">
+                </div>
+                <div class="event-date-col">
+                    <label class="modal-field-label">Horário</label>
+                    <input type="time" name="{{ prefix|default:'event' }}-extra_event_time" value="{{ row.time }}"
+                           class="media-field-input event-extra-time">
+                </div>
+            </div>
+            <button type="button" class="event-remove-date" aria-label="Remover data" title="Remover data">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    <button type="button" class="event-add-date">
+        <i class="fas fa-plus" aria-hidden="true"></i> Adicionar outra data
+    </button>
+</div>
+
+<template id="{{ prefix|default:'event' }}-date-row-template">
+    <div class="event-date-row">
+        <div class="event-date-badge-wrap"><span class="event-date-badge" aria-hidden="true"></span></div>
+        <div class="event-date-inputs">
+            <div class="event-date-col">
+                <label class="modal-field-label">Data</label>
+                <input type="date" name="{{ prefix|default:'event' }}-extra_event_date" class="media-field-input event-extra-date">
+            </div>
+            <div class="event-date-col">
+                <label class="modal-field-label">Horário</label>
+                <input type="time" name="{{ prefix|default:'event' }}-extra_event_time" class="media-field-input event-extra-time">
+            </div>
+        </div>
+        <button type="button" class="event-remove-date" aria-label="Remover data" title="Remover data">
+            <i class="fas fa-trash-alt"></i>
+        </button>
+    </div>
+</template>

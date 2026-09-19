@@ -1,0 +1,39 @@
+{% extends 'member_base.html' %}
+{% load static %}
+{% block title %}Meus ministérios{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'org_media.css' %}">
+{% endblock %}
+{% block content %}
+<div class="org-media min-h-screen pb-28 bg-gray-50">
+    {% url 'member_dashboard' as dashboard_url %}
+    {% include 'parciais/org_media_header.html' with back_url=dashboard_url title='Ministérios' subtitle='Equipes e manuais dos seus ministérios' %}
+
+    <main class="px-4 sm:px-6 py-4 space-y-2 w-full">
+        {% for ministry in ministries %}
+        <a href="{% url 'ministry_team_list' ministry.pk %}" class="org-card flex items-center justify-between gap-4 p-4 block">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 org-icon-box">
+                    <i class="fas fa-church text-sm"></i>
+                </div>
+                <div class="min-w-0">
+                    <h2 class="font-bold text-gray-900 text-sm">{{ ministry.name }}</h2>
+                    {% if ministry.description %}
+                    <p class="text-xs text-gray-500 mt-0.5">{{ ministry.description|truncatewords:22 }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <i class="fas fa-chevron-right text-gray-300 text-xs flex-shrink-0"></i>
+        </a>
+        {% empty %}
+        <div class="org-card py-16 text-center px-6">
+            <div class="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-3 org-icon-box">
+                <i class="fas fa-church text-xl"></i>
+            </div>
+            <p class="text-gray-500 text-sm">Você ainda não participa de um ministério.</p>
+        </div>
+        {% endfor %}
+    </main>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+{% endblock %}

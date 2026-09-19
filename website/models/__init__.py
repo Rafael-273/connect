@@ -7,12 +7,6 @@ from .ministry_membership import MinistryMembership
 from .neighborhood import Neighborhood
 from .follow_up import FollowUp, FollowUpReport, FollowUpTemplate, FollowUpTemplateStep
 from .evangelism import Evangelized
-from .event import Event
-from .member import Member
-from .visitor import Visitor
-from .ministry import Ministry
-from .neighborhood import Neighborhood
-from .follow_up import FollowUp
 from .word_of_knowledge import WordOfKnowledge, Healing
 from .schedule import Team, MonthlySchedule, ScheduleDay, ScaleDivision, DivisionMember
 from .music import Music, ChordSheet
@@ -22,6 +16,26 @@ from .canteen import CanteenDebtor
 from .course_attendance import AttendanceCourse, CourseParticipant, CourseLesson, CourseAttendance
 from .roteiro import Roteiro, AnuncioRoteiro, AnuncioRoteiroData
 from .house_of_peace import HouseOfPeace, HouseOfPeaceAssignment
+from .media_content import MediaContent
+from .media_task import MediaTask
+from .media_comment import MediaComment
+from .media_attachment import MediaAttachment
+from .media_month_plan import MediaContentCategory, MediaMonthPlan
+from .media_event_type import (
+    MediaEventType,
+    MediaPlanningTemplate,
+    MediaPlanningTemplateItem,
+    MediaPlanningTemplateItemStep,
+)
+from .media_organization import (
+    MediaSubTeam,
+    MediaRole,
+    MediaSubTeamMembership,
+    MediaLeadershipItem,
+    MediaResource,
+    MediaResourceCredential,
+    MediaCredentialAccessLog,
+)
 from .prosperar import ProsperarCompany
 from .external_media import (
     BackgroundMusicTrack,
@@ -58,3 +72,4 @@ from .external_media import (
     TimelineRevision,
     VideoMasteringJob,
 )
+from .ministry_manual import MinistryManual

@@ -1,5 +1,6 @@
 from .evangelism import EvangelizedForm
 from .follow_up import FollowUpForm, FollowUpReportForm
+from .media_planning import MediaContentForm, MediaTaskForm, MediaCommentForm, MediaAttachmentForm
 from .member import MemberForm
 from .ministry import MinistryForm
 from .neighborhood import NeighborhoodForm
@@ -12,6 +13,10 @@ __all__ = [
     'EvangelizedForm',
     'FollowUpForm',
     'FollowUpReportForm',
+    'MediaContentForm',
+    'MediaTaskForm',
+    'MediaCommentForm',
+    'MediaAttachmentForm',
     'MemberForm',
     'MinistryForm',
     'NeighborhoodForm',

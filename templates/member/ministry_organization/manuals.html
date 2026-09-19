@@ -1,0 +1,46 @@
+{% extends 'member/ministry_organization/base.html' %}
+
+{% block org_header %}
+{% url 'media_organization' as org_url %}
+{% include 'parciais/org_media_header.html' with back_url=org_url title='Manuais' subtitle='Guias e orientações' %}
+{% endblock %}
+
+{% block organization_content %}
+
+<div class="flex items-center justify-end gap-4">
+    {% if can_manage %}
+    <a href="{% url 'ministry_manual_create' ministry.pk %}" class="org-btn-primary">
+        <i class="fas fa-plus text-xs"></i>
+        <span class="hidden sm:inline">Novo manual</span>
+    </a>
+    {% endif %}
+</div>
+
+<form method="get" class="org-card p-4 space-y-3">
+    <div class="flex-1">
+        <input id="manual-search" name="q" value="{{ query }}"
+               class="form-input" placeholder="Buscar manual por título ou resumo...">
+    </div>
+    {% if teams %}
+    <div class="flex flex-wrap gap-2">
+        <a href="?q={{ query|urlencode }}"
+           class="org-tab text-xs py-1.5 px-3 {% if not selected_team %}active{% endif %}">
+            Todos
+        </a>
+        {% for team in teams %}
+        <a href="?q={{ query|urlencode }}&team={{ team.pk }}"
+           class="org-tab text-xs py-1.5 px-3 {% if selected_team == team.pk|stringformat:'s' %}active{% endif %}">
+            {{ team.name }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="flex gap-2">
+        <button type="submit" class="org-btn-primary">Buscar</button>
+        <a href="{% url 'ministry_manual_list' ministry.pk %}" class="org-btn-secondary">Limpar</a>
+    </div>
+</form>
+
+{% include 'member/ministry_organization/manual_cards.html' %}
+
+{% endblock %}

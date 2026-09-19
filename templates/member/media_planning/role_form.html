@@ -1,0 +1,16 @@
+{% extends "member_base.html" %}
+{% load static %}
+{% block title %}Nova Função{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'org_media.css' %}">{% endblock %}
+{% block content %}
+<div class="org-media min-h-screen pb-28 bg-gray-50">
+    {% url 'media_role_list' as list_url %}
+    {% include 'parciais/org_media_header.html' with back_url=list_url title='Nova função' %}
+    <form method="post" class="org-card mx-4 sm:mx-6 mt-4 p-4 space-y-4 max-w-2xl">
+        {% csrf_token %}
+        {% for field in form %}<div><label class="block text-xs font-bold text-gray-600 mb-1">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+        <button type="submit" class="org-btn-primary w-full">Salvar</button>
+    </form>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+{% endblock %}

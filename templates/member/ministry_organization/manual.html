@@ -1,0 +1,43 @@
+{% extends 'member/ministry_organization/base.html' %}
+{% load static %}
+{% block head %}{{ block.super }}<link rel="stylesheet" href="{% static 'ministry_manual.css' %}">{% endblock %}
+
+{% block org_header %}
+{% url 'ministry_manual_list' ministry.pk as manuals_url %}
+{% include 'parciais/org_media_header.html' with back_url=manuals_url title=manual.title subtitle=manual.sub_team.name|default:'Todo o ministério' %}
+{% endblock %}
+
+{% block org_tabs %}{% endblock %}
+
+{% block organization_content %}
+
+<div class="flex items-start justify-end gap-2 mb-4">
+    {% if can_manage %}
+    <a href="{% url 'ministry_manual_edit' ministry.pk manual.pk %}" class="org-btn-secondary">
+        <i class="fas fa-pen text-xs"></i> Editar
+    </a>
+    {% if manual.is_active %}
+    <form method="post" action="{% url 'ministry_manual_archive' ministry.pk manual.pk %}"
+          onsubmit="return confirm('Arquivar este manual? Ele ficará visível apenas para quem administra o ministério.');">
+        {% csrf_token %}
+        <button class="org-btn-secondary" type="submit">Arquivar</button>
+    </form>
+    {% else %}
+    <span class="text-xs text-amber-600 font-semibold px-3 py-2">Arquivado</span>
+    {% endif %}
+    {% endif %}
+</div>
+
+{% if manual.summary %}
+<p class="text-gray-600 text-sm leading-relaxed -mt-2 mb-4">{{ manual.summary }}</p>
+{% endif %}
+<p class="text-xs text-gray-400 mb-6">
+    <i class="fas fa-clock mr-1"></i>
+    Atualizado em {{ manual.update_at|date:'d/m/Y H:i' }}
+</p>
+
+<article class="max-w-2xl">
+    <div class="manual-content">{{ manual.safe_content|safe }}</div>
+</article>
+
+{% endblock %}

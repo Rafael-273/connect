@@ -123,7 +123,21 @@ class MinistrationContextMixin:
             is_active=True,
         ).exists()
 
+    def get_media_status(self, member):
+        return MinistryMembership.objects.filter(
+            member=member,
+            ministry__name__iexact='Mídia Externa',
+            is_active=True,
+        ).exists()
 
+    def get_media_leader_status(self, member):
+        return MinistryMembership.objects.filter(
+            member=member,
+            ministry__code='midia_externa',
+            ministry__is_active=True,
+            is_active=True,
+            role='leader',
+        ).exists()
 class ExternalMediaRequiredMixin(MemberRequiredMixin):
     """Restrict the media workspace to its ministry (and superusers)."""
 
