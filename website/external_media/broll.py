@@ -61,6 +61,52 @@ class BrollTimelineService:
         return [deepcopy(existing[str(asset.public_id)]) for asset in assets if str(asset.public_id) in existing]
 
     @classmethod
+    def purge_asset_references(cls, project, asset, member=None):
+        """Defensive cleanup for when a B-roll asset is removed directly from
+        the block media manager instead of through the interactive review's
+        own remove-broll action.
+
+        Rendering already tolerates a decision that points at a missing
+        asset (it is skipped, see ``compose``/``BrollRenderService.apply``),
+        but leaving the stale reference around means the project keeps
+        "remembering" media that no longer exists on disk. Purge it from the
+        flat decision list and, when there is an interactive timeline
+        revision, drop the clip from it too so a stale ``asset_id`` never
+        has to rely on the render-time fallback.
+        """
+        asset_id = str(asset.public_id)
+
+        decisions = (project.configuration or {}).get('broll_decisions') or []
+        remaining = [item for item in decisions if str(item.get('asset_id')) != asset_id]
+        if len(remaining) != len(decisions):
+            project.configuration = {**(project.configuration or {}), 'broll_decisions': remaining}
+            project.save(update_fields=['configuration', 'update_at'])
+
+        if not member:
+            return
+        revision = project.current_timeline_revision
+        if not revision:
+            return
+        stale_ids = [
+            item.get('id') for item in (revision.timeline.get('brolls') or [])
+            if str(item.get('asset_id')) == asset_id
+        ]
+        if not stale_ids:
+            return
+        # Imported lazily: preview.py imports BrollTimelineService, so a
+        # module-level import here would create a circular import.
+        from .preview import TimelineRevisionService
+
+        for broll_id in stale_ids:
+            try:
+                TimelineRevisionService.mutate_broll(project, member, broll_id, {}, delete=True)
+            except ValueError:
+                logger.warning(
+                    'broll_purge_stale_reference_failed project=%s asset_id=%s broll_id=%s',
+                    project.public_id, asset_id, broll_id,
+                )
+
+    @classmethod
     def compose(cls, project, clips, duration_ms, time_mapper=None):
         config = cls.configuration(project)
         if not config.get('enabled'):
@@ -75,6 +121,10 @@ class BrollTimelineService:
         for decision in decisions:
             asset = assets.get(str(decision.get('asset_id')))
             if not asset:
+                logger.warning(
+                    'broll_decision_skipped_missing_asset project=%s asset_id=%s',
+                    project.public_id, decision.get('asset_id'),
+                )
                 continue
             block_key = cls._asset_block_key(asset)
             block_start, block_end = block_ranges.get(block_key, (0, duration_ms))
@@ -263,6 +313,10 @@ class BrollRenderService:
         for item in decisions:
             asset = assets.get(str(item.get('asset_id')))
             if not asset:
+                logger.warning(
+                    'broll_render_skipped_missing_asset project=%s asset_id=%s',
+                    project.public_id, item.get('asset_id'),
+                )
                 continue
             source = self.storage.ffmpeg_input(asset.file) if self.storage else asset.file.path
             if asset.media_type == ProjectBrollAsset.MediaType.IMAGE:
@@ -347,5 +401,5 @@ class BrollRenderService:
         if settings.EXTERNAL_MEDIA_RENDER_PRESET:
             command.extend(['-preset', settings.EXTERNAL_MEDIA_RENDER_PRESET])
         command.extend(['-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-shortest', str(output_path)])
-        self.runner.run(command)
+        self.runner.run(command, timeout=settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT)
         return output_path

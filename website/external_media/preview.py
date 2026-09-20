@@ -225,6 +225,11 @@ class PreviewCompositionService:
         }
         assets, clips, markers = [], [], []
         source_cursor = timeline_cursor = 0
+        # Ranges kept in the pre-cut "project_timeline" coordinate space (the
+        # same clock used by remove_segment/audio_noise_reduction decisions),
+        # so those decisions can later be traced back to the source that
+        # produced them even though they are recorded against 'project-master'.
+        master_source_ranges = []
         for source in source_manifest.get('sources') or []:
             if not (source.get('metadata') or {}).get('render_enabled', True):
                 continue
@@ -240,6 +245,7 @@ class PreviewCompositionService:
             source_out = min(raw_duration, int(trim.get('end_ms') or raw_duration))
             effective_duration = max(1, source_out - source_in)
             global_start, global_end = source_cursor, source_cursor + effective_duration
+            master_source_ranges.append((global_start, global_end, source['id']))
             kept = cls._subtract(global_start, global_end, cuts)
             asset = {
                 'id': source['id'],
@@ -279,6 +285,22 @@ class PreviewCompositionService:
                 'name': source.get('block_name') or source.get('filename') or source['id'],
             })
             source_cursor = global_end
+
+        # The review UI lets the member click a specific take on the timeline
+        # and see only the decisions that belong to it. remove_segment/
+        # audio_noise_reduction operations are recorded against the virtual
+        # 'project-master' timeline, so resolve which real source produced
+        # each one from its position in that same coordinate space.
+        for item in operations:
+            if item.get('type') not in {'remove_segment', 'audio_noise_reduction'}:
+                continue
+            if item.get('source_id') != 'project-master':
+                continue
+            position = int(item.get('source_in_ms') or 0)
+            for range_start, range_end, range_source_id in master_source_ranges:
+                if range_start <= position < range_end:
+                    item['related_source_id'] = range_source_id
+                    break
 
         captions = []
         if project.render_job_id:

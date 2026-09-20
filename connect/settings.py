@@ -212,6 +212,14 @@ EXTERNAL_MEDIA_OFF_CONTEXT_MODEL = os.getenv('EXTERNAL_MEDIA_OFF_CONTEXT_MODEL',
 EXTERNAL_MEDIA_BROLL_MODEL = os.getenv('EXTERNAL_MEDIA_BROLL_MODEL', EXTERNAL_MEDIA_OFF_CONTEXT_MODEL)
 EXTERNAL_MEDIA_OFF_CONTEXT_BATCH_SIZE = int(os.getenv('EXTERNAL_MEDIA_OFF_CONTEXT_BATCH_SIZE', 90))
 EXTERNAL_MEDIA_FFMPEG_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_FFMPEG_TIMEOUT', 21600))
+# B-roll compositing overlays clips onto an already-finalized master using
+# ``-stream_loop -1`` for video assets, which loops the source indefinitely
+# and relies entirely on the ``trim`` filter to signal EOF. A malformed or
+# unusual source file can make ffmpeg stall on that input forever. This step
+# never needs anywhere close to the full pipeline timeout above (it is bounded
+# by the master's own duration), so give it its own, much tighter ceiling to
+# fail fast with a clear error instead of silently burning the whole task.
+EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT', 2700))
 EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfast')
 EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')
@@ -346,3 +354,52 @@ if USE_S3:
     print(f"✅ MEDIA FILES WILL BE STORED AT: {MEDIA_URL}")
 else:
     print("⚠️ USANDO ARMAZENAMENTO LOCAL PARA MÍDIA. Configure USE_S3=TRUE para usar Amazon S3.")
+
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+# Without an explicit LOGGING dict, Django's default config only wires a
+# console handler for its own ``django``/``django.server`` loggers. Every
+# ``logging.getLogger(__name__)`` call elsewhere in the codebase (pipeline
+# step timing, ffmpeg I/O metrics, error tracebacks in the media render
+# pipeline, etc.) inherits the root logger's default WARNING level with no
+# handler attached, so INFO-level diagnostics are silently discarded before
+# they ever reach stdout. On the Render Workflow this made a stuck ffmpeg
+# step in the media render pipeline produce no useful logs at all before the
+# 6-hour task timeout killed it. This wires a console handler at INFO level
+# so pipeline progress and ffmpeg diagnostics are actually visible.
+LOG_LEVEL = os.getenv('DJANGO_LOG_LEVEL', 'INFO')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '%(asctime)s %(levelname)s %(name)s: %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': os.getenv('DJANGO_FRAMEWORK_LOG_LEVEL', 'WARNING'),
+            'propagate': False,
+        },
+        # Reduce noise from third-party libraries at INFO level while keeping
+        # our own ``website.*`` loggers (used throughout the media pipeline)
+        # at LOG_LEVEL via the root logger above.
+        'botocore': {'level': 'WARNING'},
+        'urllib3': {'level': 'WARNING'},
+        'PIL': {'level': 'WARNING'},
+    },
+}

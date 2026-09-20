@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -1141,6 +1142,43 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertFalse(operation['enabled'])
         self.assertIsNone(operation['confidence'])
         self.assertIn('Possível erro de fala', operation['reason'])
+
+    def test_preview_compose_resolves_which_take_a_master_timeline_cut_belongs_to(self):
+        # remove_segment/audio_noise_reduction decisions are recorded against the
+        # virtual 'project-master' timeline. The review screen needs to trace
+        # each one back to the actual take so clicking it on the timeline only
+        # shows the adjustments that belong to that take.
+        project = self.make_project()
+        second_block = MediaTemplateBlock.objects.create(
+            version=self.version, key='segundo', name='Segundo', order=2,
+            is_required=True, min_occurrences=1, max_occurrences=1,
+        )
+        first_media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='first.mov',
+            file=SimpleUploadedFile('first.mov', b'first'), duration_ms=5000,
+        )
+        second_media = ProjectBlockMedia.objects.create(
+            project=project, block=second_block, position=1, original_filename='second.mov',
+            file=SimpleUploadedFile('second.mov', b'second'), duration_ms=5000,
+        )
+        # Positioned at 6000-6500ms in the pre-cut master clock, i.e. inside the
+        # second take's 5000-10000ms span.
+        project.configuration = {
+            'speech_edit_plan': {'duration_ms': 10000, 'cuts': [{'start_ms': 6000, 'end_ms': 6500, 'kind': 'silence'}]},
+            'noise_reduction_decisions': [{
+                'start_ms': 500, 'end_ms': 900, 'kind': 'background_noise', 'confidence': 0.4,
+            }],
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+
+        revision = TimelineRevisionService.ensure_initial(project, self.member)
+        operations = revision.timeline['decisions']
+        cut = next(item for item in operations if item['type'] == 'remove_segment')
+        noise = next(item for item in operations if item['type'] == 'audio_noise_reduction')
+
+        self.assertEqual(cut['source_id'], 'project-master')
+        self.assertEqual(cut['related_source_id'], f'project-media-{second_media.pk}')
+        self.assertEqual(noise['related_source_id'], f'project-media-{first_media.pk}')
 
     def test_preview_revision_restores_an_automatic_cut_without_reanalysis(self):
         project = self.make_project()
@@ -5064,3 +5102,92 @@ class BrollUnitTests(SimpleTestCase):
                 self.assertIn(f'scale={width}:{height}:force_original_aspect_ratio=increase', filters)
                 self.assertIn(f'crop={width}:{height}', filters)
                 self.assertNotIn('pad=', filters)
+
+    def test_apply_uses_dedicated_timeout_not_full_pipeline_timeout(self):
+        """B-roll compositing uses ``-stream_loop -1`` for video assets, which
+        loops the source indefinitely and relies on the ``trim`` filter to
+        signal EOF. A malformed source can stall that input forever, so this
+        step must never inherit the full 6-hour pipeline timeout."""
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='VIDEO', file=SimpleNamespace(path='/tmp/broll.mp4'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), [{
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': 0, 'end_ms': 1000, 'display_mode': 'FULLSCREEN',
+                'transform': {'x': .5, 'y': .5}, 'entry': {}, 'exit': {},
+            }], 1920, 1080,
+        )
+        self.assertEqual(
+            runner.run.call_args.kwargs.get('timeout'),
+            settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT,
+        )
+        self.assertLess(settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT, settings.EXTERNAL_MEDIA_FFMPEG_TIMEOUT)
+
+    def test_apply_skips_and_logs_decision_with_missing_asset(self):
+        """An asset removed after its decision was baked into a frozen
+        timeline revision must be skipped rather than crash or hang."""
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return []  # Simulates a soft-deleted / missing asset.
+
+        runner = Mock()
+        project = SimpleNamespace(public_id='proj-1', broll_assets=Assets())
+        with self.assertLogs('website.external_media.broll', level='WARNING') as logs:
+            result = BrollRenderService(runner=runner).apply(
+                project, Path('/tmp/master.mp4'), Path('/tmp/output.mp4'),
+                [{'asset_id': 'ghost-asset', 'enabled': True, 'start_ms': 0, 'end_ms': 1000}],
+                1920, 1080,
+            )
+        self.assertEqual(result, Path('/tmp/master.mp4'))
+        runner.run.assert_not_called()
+        self.assertTrue(any('ghost-asset' in message for message in logs.output))
+
+    def test_purge_asset_references_removes_stale_decision_from_configuration(self):
+        """Removing a B-roll asset directly (not through the interactive
+        review's own remove-broll action) must not leave a stale reference
+        in ``project.configuration['broll_decisions']``."""
+        asset = SimpleNamespace(public_id='00000000-0000-0000-0000-0000000000aa')
+        saved_fields = {}
+
+        class Project:
+            configuration = {
+                'broll_decisions': [
+                    {'asset_id': str(asset.public_id), 'start_ms': 0, 'end_ms': 1000},
+                    {'asset_id': 'still-here', 'start_ms': 2000, 'end_ms': 3000},
+                ],
+            }
+            current_timeline_revision = None
+
+            def save(self, update_fields=()):
+                saved_fields['update_fields'] = update_fields
+
+        project = Project()
+        BrollTimelineService.purge_asset_references(project, asset)
+
+        remaining_ids = [item['asset_id'] for item in project.configuration['broll_decisions']]
+        self.assertEqual(remaining_ids, ['still-here'])
+        self.assertIn('configuration', saved_fields['update_fields'])
+
+    def test_purge_asset_references_is_noop_when_asset_not_referenced(self):
+        asset = SimpleNamespace(public_id='not-referenced')
+
+        class Project:
+            configuration = {'broll_decisions': [{'asset_id': 'still-here'}]}
+            current_timeline_revision = None
+
+            def save(self, update_fields=()):
+                raise AssertionError('save() should not be called when nothing changed')
+
+        # Should not raise despite save() asserting it is never called.
+        BrollTimelineService.purge_asset_references(Project(), asset)

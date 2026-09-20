@@ -1376,9 +1376,15 @@ class ExternalMediaProjectBrollDeleteView(ExternalMediaRequiredMixin, View):
             ProjectBrollAsset, project__public_id=public_id, public_id=asset_id,
             project__status=ExternalMediaProject.Status.DRAFT,
         )
+        project = asset.project
         asset.file.delete(save=False)
         asset.preview_file.delete(save=False)
         asset.delete()
+        # Defensive: an asset removed here (rather than through the review's
+        # own remove-broll action) can leave a stale decision baked into the
+        # timeline revision. Purge it so a future render never has to rely on
+        # the render-time "skip missing asset" fallback.
+        BrollTimelineService.purge_asset_references(project, asset, member=self.member)
         messages.success(request, 'B-roll removido.')
         return redirect('external_media_project_detail', public_id=public_id)
 

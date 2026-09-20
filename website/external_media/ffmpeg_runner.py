@@ -21,15 +21,22 @@ class FFmpegRunner:
         """Keep remote-input metadata while preserving legacy local command strings."""
         return value if isinstance(value, RemoteMediaSource) else str(value)
 
-    def run(self, command: list[str]) -> str:
-        return self.run_capture(command).stdout
+    def run(self, command: list[str], *, timeout: int | None = None) -> str:
+        return self.run_capture(command, timeout=timeout).stdout
 
-    def run_capture(self, command: list[str]) -> subprocess.CompletedProcess:
+    def run_capture(self, command: list[str], *, timeout: int | None = None) -> subprocess.CompletedProcess:
         """Runs ffmpeg/ffprobe and returns the full completed process (stdout + stderr).
 
         Analysis-only filters (loudnorm, volumedetect, ebur128, ...) print their
         measurements to stderr even on success, so callers that need those values
         should use this instead of `run`.
+
+        ``timeout`` overrides the default ``EXTERNAL_MEDIA_FFMPEG_TIMEOUT``
+        (which matches the Render Workflow's own 6-hour ceiling and is meant
+        for the heavy transcode/extraction steps). Compositing passes that
+        loop an input indefinitely (``-stream_loop -1``) should pass a much
+        tighter timeout so a malformed source fails fast with a clear error
+        instead of silently consuming the whole task budget.
         """
         started = time.perf_counter()
         remote_inputs = [
@@ -42,7 +49,7 @@ class FFmpegRunner:
                 check=True,
                 capture_output=True,
                 text=True,
-                timeout=settings.EXTERNAL_MEDIA_FFMPEG_TIMEOUT,
+                timeout=timeout if timeout is not None else settings.EXTERNAL_MEDIA_FFMPEG_TIMEOUT,
             )
             self._log_io_metrics(command, remote_inputs, started)
             return result

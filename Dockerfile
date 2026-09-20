@@ -3,6 +3,14 @@
 # instalável também em imagens ARM64.
 FROM python:3.10-slim-bookworm AS base
 
+# Unbuffered stdout/stderr is required so log lines reach the platform's log
+# collector as they happen. Without this, Python block-buffers stdout when it
+# isn't attached to a TTY (e.g. inside a container), so `logger.info(...)` /
+# `print(...)` calls can sit in memory for hours and never appear in the
+# Render Workflow log viewer if the process gets killed by a timeout before
+# the buffer flushes.
+ENV PYTHONUNBUFFERED=1
+
 EXPOSE 8000
 WORKDIR /usr/src/platform
 
