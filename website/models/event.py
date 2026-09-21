@@ -155,9 +155,11 @@ class MediaEventOrganization(BaseModel):
 
     STATUS_PENDING = 'pending'
     STATUS_ORGANIZED = 'organized'
+    STATUS_REMOVED = 'removed'
     STATUS_CHOICES = [
         (STATUS_PENDING, 'Pendente de organização'),
         (STATUS_ORGANIZED, 'Organizado'),
+        (STATUS_REMOVED, 'Removido da mídia'),
     ]
 
     event = models.OneToOneField(Event, on_delete=models.CASCADE, related_name='media_organization')

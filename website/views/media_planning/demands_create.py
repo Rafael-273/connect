@@ -95,7 +95,8 @@ class MediaDemandQuickCreateView(MediaMemberRequiredMixin, View):
             if not event_id.isdigit():
                 form.add_error(None, 'Evento inválido.')
                 return _invalid_demand_response(self, request, form, assignments)
-            event = Event.objects.filter(pk=int(event_id), is_recurring=False).first()
+            from website.services.event_media_integration import media_eligible_events
+            event = media_eligible_events().filter(pk=int(event_id)).first()
             if not event:
                 form.add_error(None, 'Evento não encontrado.')
                 return _invalid_demand_response(self, request, form, assignments)

@@ -539,6 +539,19 @@ class MediaOperationsTests(TestCase):
         self.assertFalse(self.event.month_plans.exists())
         self.event.refresh_from_db()
         self.assertFalse(self.event.is_media_organized)
+        from website.services.event_media_integration import media_eligible_events
+        self.assertFalse(media_eligible_events().filter(pk=self.event.pk).exists())
+
+    def test_removing_media_created_event_deletes_the_central_event(self):
+        response = self.client.post(reverse('media_event_quick_create'), {
+            'event-title': 'Evento só da mídia',
+            'event-event_date': '2026-12-28',
+        })
+        self.assertEqual(response.status_code, 302)
+        event = Event.objects.get(title='Evento só da mídia')
+        response = self.client.post(reverse('media_event_remove_from_media', args=[event.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(Event.objects.filter(pk=event.pk).exists())
 
     def test_event_can_be_edited_from_the_demands_hub_modal(self):
         response = self.client.get(reverse('media_content_list'), {'selected': f'event-{self.event.pk}'})

@@ -7,11 +7,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_date, parse_time
 from django.urls import reverse
 from django.views import View
-from safedelete.models import HARD_DELETE
 from website.forms.media_operations import DemandFiltersForm, EventFiltersForm
 from website.forms.media_planning import MediaEventQuickForm
 from website.models import Event, EventDate
 from website.models.event import MediaEventOrganization
+from website.services.event_media_integration import media_eligible_events
 from website.services.demands_hub import DONE_STATUSES, content_hub_url
 from website.services.media_operations import filtered_demands
 from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
@@ -20,7 +20,7 @@ from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
 class MediaEventsView(MediaMemberRequiredMixin, View):
     def get(self, request):
         form = EventFiltersForm(request.GET)
-        events = Event.objects.filter(is_recurring=False).select_related('event_type', 'media_organization').annotate(
+        events = media_eligible_events().select_related('event_type', 'media_organization').annotate(
             demand_count=Count('media_contents', filter=Q(media_contents__deleted__isnull=True)),
             done_count=Count('media_contents', filter=Q(media_contents__deleted__isnull=True, media_contents__status__in=DONE_STATUSES)),
         ).order_by('event_date', 'event_time', 'pk')
@@ -136,12 +136,17 @@ class MediaEventRemoveFromMediaView(MediaLeaderRequiredMixin, View):
 
     def post(self, request, pk):
         event = get_object_or_404(Event, pk=pk, is_recurring=False)
+        organization = getattr(event, 'media_organization', None)
         with transaction.atomic():
-            event.media_contents.all().delete()
-            event.month_plans.clear()
-            MediaEventOrganization.objects.filter(event=event).delete(force_policy=HARD_DELETE)
-        messages.success(
-            request,
-            f'O evento "{event.title}" foi removido da organização da Mídia. O cadastro institucional foi preservado.',
-        )
+            if organization and organization.created_from_media and event.institutional_status == Event.INSTITUTIONAL_STATUS_PENDING:
+                event.delete()
+                message = f'O evento "{event.title}" e suas demandas foram excluídos.'
+            else:
+                event.media_contents.all().delete()
+                event.month_plans.clear()
+                if organization:
+                    organization.status = MediaEventOrganization.STATUS_REMOVED
+                    organization.save(update_fields=['status', 'update_at'])
+                message = f'O evento "{event.title}" foi removido da organização da Mídia. O cadastro institucional foi preservado.'
+        messages.success(request, message)
         return redirect('media_content_list')

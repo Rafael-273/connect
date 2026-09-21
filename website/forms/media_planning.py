@@ -61,7 +61,8 @@ class MediaContentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['event'].queryset = Event.objects.filter(is_recurring=False).order_by('-event_date')
+        from website.services.event_media_integration import media_eligible_events
+        self.fields['event'].queryset = media_eligible_events().order_by('-event_date')
         self.fields['event'].empty_label = '— Sem evento vinculado —'
         from website.services.demands_hub import get_responsible_picker_options
         self.fields['responsible'].queryset = get_responsible_picker_options()

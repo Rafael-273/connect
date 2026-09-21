@@ -8,7 +8,14 @@ from website.models.event import Event, MediaEventOrganization
 
 def media_eligible_events():
     """Recurring events are institutional only and never enter media workflows."""
-    return Event.objects.filter(is_recurring=False)
+    return Event.objects.filter(is_recurring=False).exclude(
+        media_organization__status=MediaEventOrganization.STATUS_REMOVED,
+    ).exclude(
+        # Compatibility for media-created events removed before the operational
+        # removal state existed: they are pending institutionally with no link.
+        institutional_status=Event.INSTITUTIONAL_STATUS_PENDING,
+        media_organization__isnull=True,
+    )
 
 
 def require_media_eligible(event):
