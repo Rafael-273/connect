@@ -540,7 +540,7 @@ def build_sidebar_items(request):
 
     today = timezone.now().date()
 
-    events_qs = Event.objects.select_related('event_type').annotate(
+    events_qs = Event.objects.filter(is_recurring=False).select_related('event_type').annotate(
         content_count=Count('media_contents', filter=Q(media_contents__deleted__isnull=True), distinct=True),
         done_count=Count('media_contents', filter=Q(media_contents__status__in=DONE_STATUSES, media_contents__deleted__isnull=True), distinct=True),
     )
@@ -644,7 +644,7 @@ def _person_name(user):
 
 
 def build_event_detail(event_pk):
-    event = Event.objects.select_related('event_type').get(pk=event_pk)
+    event = Event.objects.select_related('event_type').get(pk=event_pk, is_recurring=False)
     contents = list(
         MediaContent.objects.filter(event=event)
         .select_related('responsible__member', 'sub_team__ministry', 'assigned_role')

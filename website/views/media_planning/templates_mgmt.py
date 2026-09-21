@@ -155,7 +155,7 @@ class MediaTemplateCreateView(MediaLeaderRequiredMixin, View):
         if form.is_valid():
             tpl = form.save()
             messages.success(request, f'Template "{tpl.name}" criado!')
-            return redirect('media_template_detail', pk=tpl.pk)
+            return redirect('media_event_type_list')
         return render(request, 'member/media_planning/event_type_list.html', {
             **self._nav_context(),
             **event_type_list_context(request, create_form=form),

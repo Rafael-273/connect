@@ -61,7 +61,7 @@ class MediaContentForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['event'].queryset = Event.objects.order_by('-event_date')
+        self.fields['event'].queryset = Event.objects.filter(is_recurring=False).order_by('-event_date')
         self.fields['event'].empty_label = '— Sem evento vinculado —'
         from website.services.demands_hub import get_responsible_picker_options
         self.fields['responsible'].queryset = get_responsible_picker_options()
@@ -325,4 +325,3 @@ class MediaEventTypeQuickForm(forms.Form):
         if MediaEventType.objects.filter(name__iexact=name).exists():
             raise forms.ValidationError('Já existe um tipo com este nome.')
         return name
-

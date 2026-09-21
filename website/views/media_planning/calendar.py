@@ -111,7 +111,7 @@ class MediaCalendarEventsAPIView(MediaMemberRequiredMixin, View):
             return JsonResponse(build_task_calendar_rows(contents, start, end), safe=False)
 
         rows = []
-        event_qs = Event.objects.filter(event_date__lt=end).filter(Q(end_date__gte=start) | Q(end_date__isnull=True, event_date__gte=start))
+        event_qs = Event.objects.filter(is_recurring=False, event_date__lt=end).filter(Q(end_date__gte=start) | Q(end_date__isnull=True, event_date__gte=start))
         # Once demand filters are used, event markers follow the same matching demands.
         if any(form.cleaned_data.values()):
             event_qs = event_qs.filter(pk__in=contents.values('event_id'))

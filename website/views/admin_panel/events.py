@@ -12,6 +12,7 @@ from django.views import View
 
 from ..mixins import ModulePermissionMixin
 from ...models.event import Event, EventDate
+from ...services.event_media_integration import mark_institutional_published
 
 
 class EventsListView(LoginRequiredMixin, ModulePermissionMixin, View):
@@ -47,6 +48,9 @@ class EventsListView(LoginRequiredMixin, ModulePermissionMixin, View):
             'events': events,
             'search': search,
             'status_filter': status_filter,
+            'pending_media_count': Event.objects.filter(is_recurring=False).exclude(
+                media_organization__status='organized',
+            ).count(),
         }
 
     def get(self, request):
@@ -73,6 +77,8 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
                 data['slug'] or slugify(data['title']), event_id
             )
             event = self._save_event(event, data, request.FILES)
+            # Saving from the institutional area completes only this lifecycle.
+            mark_institutional_published(event)
             messages.success(request, f'Evento {"atualizado" if event_id else "criado"} com sucesso!')
             return redirect('admin_events_list')
         except Exception as e:

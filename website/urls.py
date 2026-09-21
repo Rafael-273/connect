@@ -1,4 +1,4 @@
-from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventUpdateView
+from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventRemoveFromMediaView, MediaEventUpdateView
 from .views import ministry_organization as ministry_org
 from django.urls import path
 from django.contrib.auth import views as auth_views
@@ -21,6 +21,7 @@ from .views.media_planning import (
     MediaDemandQuickCreateView,
     MediaDemandQuickUpdateView,
     MediaEventQuickCreateView,
+    MediaEventSuggestionsView,
     MediaEventTypeQuickCreateView,
     MediaContentCreateView,
     MediaContentUpdateView,
@@ -687,8 +688,10 @@ urlpatterns = [
     path('media/planos/<int:year>/<int:month>/categoria/<int:category_pk>/conteudos/', MediaPlanMacroCategoryView.as_view(), name='media_plan_macro_category'),
     # Standalone content browse (outside plans)
     path('media/events/', MediaEventsView.as_view(), name='media_events'),
+    path('media/events/sugestoes/', MediaEventSuggestionsView.as_view(), name='media_event_suggestions'),
     path('media/demands/', MediaDemandsView.as_view(), name='media_demands'),
     path('media/events/<int:pk>/edit/', MediaEventUpdateView.as_view(), name='media_event_update'),
+    path('media/events/<int:pk>/remover-da-midia/', MediaEventRemoveFromMediaView.as_view(), name='media_event_remove_from_media'),
     path('media/events/<int:event_pk>/', MediaEventContentsView.as_view(), name='media_event_contents'),
     path('media/category/<str:content_type>/', MediaCategoryContentsView.as_view(), name='media_category_contents'),
     # Content CRUD

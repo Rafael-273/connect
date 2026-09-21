@@ -16,6 +16,11 @@ from website.services.demands_hub import (
     sync_template_item_assignments,
 )
 from website.forms.media_organization import MediaPlanningTemplateItemForm
+from website.services.event_media_integration import (
+    mark_institutional_published,
+    mark_media_organized,
+    require_media_eligible,
+)
 
 
 class MediaOperationsTests(TestCase):
@@ -234,6 +239,15 @@ class MediaOperationsTests(TestCase):
         recreated = MediaEventType.objects.get(name='Conferência de operações')
         self.assertNotEqual(recreated.pk, pk)
         self.assertEqual(recreated.description, 'Nova descrição')
+
+    def test_creating_event_type_returns_to_event_type_list(self):
+        response = self.client.post(reverse('media_template_create'), {
+            'name': 'Novo tipo',
+            'description': 'Descrição',
+            'is_active': 'on',
+            'sort_order': '0',
+        })
+        self.assertRedirects(response, reverse('media_event_type_list'))
 
     def test_create_event_applies_template_automatically(self):
         response = self.client.post(reverse('media_event_quick_create'), {
@@ -462,6 +476,83 @@ class MediaOperationsTests(TestCase):
         rows = self.client.get(reverse('media_calendar_events'), {'start': '2026-10-19', 'end': '2026-10-26'}).json()
         event = next(row for row in rows if row['id'] == f'event-{self.event.pk}')
         self.assertEqual(event['end'], '2026-10-21')
+
+    def test_recurring_event_is_excluded_and_rejected_by_media_services(self):
+        recurring = Event.objects.create(
+            title='Culto semanal', description='Recorrente', is_recurring=True,
+            event_date=datetime.date(2026, 10, 18), display_start=datetime.date(2026, 10, 1),
+            display_end=datetime.date(2026, 12, 31), event_type=self.kind,
+        )
+        self.assertNotContains(self.client.get(reverse('media_events')), 'Culto semanal')
+        with self.assertRaises(ValidationError):
+            require_media_eligible(recurring)
+        with self.assertRaises(ValidationError):
+            apply_template_to_event(recurring, [self.item])
+
+    def test_institutional_and_media_statuses_are_independent(self):
+        self.assertEqual(self.event.institutional_status, Event.INSTITUTIONAL_STATUS_PUBLISHED)
+        self.assertFalse(self.event.is_media_organized)
+        mark_media_organized(self.event)
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.is_media_organized)
+        self.assertEqual(self.event.institutional_status, Event.INSTITUTIONAL_STATUS_PUBLISHED)
+
+        media_event = Event.objects.create(
+            title='Evento da mídia', description='Pendente institucional',
+            event_date=datetime.date(2026, 12, 1), display_start=datetime.date(2026, 12, 1),
+            display_end=datetime.date(2026, 12, 1),
+            institutional_status=Event.INSTITUTIONAL_STATUS_PENDING,
+        )
+        mark_media_organized(media_event)
+        mark_institutional_published(media_event)
+        media_event.refresh_from_db()
+        self.assertEqual(media_event.institutional_status, Event.INSTITUTIONAL_STATUS_PUBLISHED)
+        self.assertTrue(media_event.is_media_organized)
+
+    def test_media_creation_starts_pending_institutional_publication(self):
+        response = self.client.post(reverse('media_event_quick_create'), {
+            'event-title': 'Evento operacional',
+            'event-event_date': '2026-12-28',
+        })
+        self.assertEqual(response.status_code, 302)
+        event = Event.objects.get(title='Evento operacional')
+        self.assertEqual(event.institutional_status, Event.INSTITUTIONAL_STATUS_PENDING)
+        self.assertEqual(event.media_organization.status, 'pending')
+
+    def test_event_suggestions_exclude_recurring_events(self):
+        Event.objects.create(
+            title='Encontro recorrente', description='Recorrente', is_recurring=True,
+            event_date=datetime.date(2026, 11, 2), display_start=datetime.date(2026, 11, 1),
+            display_end=datetime.date(2026, 12, 1),
+        )
+        response = self.client.get(reverse('media_event_suggestions'), {'q': 'Conferência'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row['id'] for row in response.json()['results']], [self.event.pk])
+
+    def test_removing_event_from_media_preserves_central_event(self):
+        content = self.generate()
+        mark_media_organized(self.event)
+        response = self.client.post(reverse('media_event_remove_from_media', args=[self.event.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
+        self.assertFalse(MediaContent.objects.filter(pk=content.pk).exists())
+        self.assertFalse(self.event.month_plans.exists())
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.is_media_organized)
+
+    def test_event_can_be_edited_from_the_demands_hub_modal(self):
+        response = self.client.get(reverse('media_content_list'), {'selected': f'event-{self.event.pk}'})
+        self.assertContains(response, 'demands-modal-event-edit')
+        response = self.client.post(reverse('media_event_update', args=[self.event.pk]), {
+            'event-edit-title': 'Conferência atualizada',
+            'event-edit-event_date': '2026-11-20',
+            'event-edit-event_time': '19:30',
+            'event-edit-location': 'Templo principal',
+        })
+        self.assertRedirects(response, f"{reverse('media_content_list')}?selected=event-{self.event.pk}")
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.title, 'Conferência atualizada')
+        self.assertEqual(self.event.event_date, datetime.date(2026, 11, 20))
 
 
 class MediaOperationsMigrationTests(TransactionTestCase):

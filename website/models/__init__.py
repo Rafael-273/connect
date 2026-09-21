@@ -1,5 +1,5 @@
 from .user import User
-from .event import Event
+from .event import Event, EventDate, MediaEventOrganization
 from .member import Member
 from .visitor import Visitor
 from .ministry import Ministry

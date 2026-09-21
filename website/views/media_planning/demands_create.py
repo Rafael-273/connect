@@ -6,6 +6,7 @@ from django.db import transaction
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views import View
 
@@ -16,6 +17,7 @@ from ...models.event import Event, EventDate
 from ...models.media_content import MediaContent
 from ...models.media_event_type import MediaEventType, MediaPlanningTemplate
 from ...models.media_month_plan import MediaMonthPlan
+from ...services.event_media_integration import start_media_organization
 from ...services.demands_hub import hub_redirect_url, parse_demand_assignments, sync_content_assignments
 from ...services.media_planning import apply_template_to_event, get_template_for_event
 from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
@@ -93,7 +95,7 @@ class MediaDemandQuickCreateView(MediaMemberRequiredMixin, View):
             if not event_id.isdigit():
                 form.add_error(None, 'Evento inválido.')
                 return _invalid_demand_response(self, request, form, assignments)
-            event = Event.objects.filter(pk=int(event_id)).first()
+            event = Event.objects.filter(pk=int(event_id), is_recurring=False).first()
             if not event:
                 form.add_error(None, 'Evento não encontrado.')
                 return _invalid_demand_response(self, request, form, assignments)
@@ -183,10 +185,12 @@ class MediaEventQuickCreateView(MediaMemberRequiredMixin, View):
             display_end=span_end,
             event_type=data.get('event_type'),
             banner=DEFAULT_EVENT_BANNER,
+            institutional_status=Event.INSTITUTIONAL_STATUS_PENDING,
         )
         try:
             with transaction.atomic():
                 event.save()
+                start_media_organization(event, created_from_media=True)
                 EventDate.objects.bulk_create([
                     EventDate(event=event, event_date=row['event_date'], event_time=row['event_time'])
                     for row in extra_dates
@@ -218,6 +222,25 @@ class MediaEventQuickCreateView(MediaMemberRequiredMixin, View):
             messages.success(request, f'Evento "{event.title}" criado!')
 
         return redirect(hub_redirect_url(request, selected=f'event-{event.pk}'))
+
+
+class MediaEventSuggestionsView(MediaMemberRequiredMixin, View):
+    """Explicitly offers existing central events; it never links one automatically."""
+
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        if len(query) < 2:
+            return JsonResponse({'results': []})
+        events = Event.objects.filter(
+            is_recurring=False,
+            title__icontains=query,
+        ).order_by('event_date', 'pk')[:5]
+        return JsonResponse({'results': [{
+            'id': event.pk,
+            'title': event.title,
+            'date': event.event_date.strftime('%d/%m/%Y'),
+            'url': f"{reverse('media_content_list')}?selected=event-{event.pk}",
+        } for event in events]})
 
 
 class MediaEventTypeQuickCreateView(MediaLeaderRequiredMixin, View):

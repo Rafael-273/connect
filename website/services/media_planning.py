@@ -31,6 +31,8 @@ def apply_template_to_event(event, template_items, month_plan=None):
     """
     from website.models.event import Event
     event = Event.objects.select_for_update().get(pk=event.pk)
+    from website.services.event_media_integration import require_media_eligible
+    require_media_eligible(event)
     template = get_template_for_event(event)
     if template is None:
         raise ValidationError('Este evento não possui um template ativo.')

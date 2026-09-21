@@ -787,6 +787,9 @@
 
     {% include 'member/media_planning/partials/demands_create_modals.html' %}
     {% include 'member/media_planning/partials/demands_edit_modal.html' %}
+    {% if detail_type == 'event' and is_media_leader %}
+    {% include 'member/media_planning/partials/demands_event_edit_modal.html' %}
+    {% endif %}
 </div>
 
 <script>
@@ -989,7 +992,15 @@
         });
     });
     document.querySelectorAll('.demands-kebab-menu').forEach(function (menu) {
-        menu.addEventListener('click', function (e) { e.stopPropagation(); });
+        menu.addEventListener('click', function (e) {
+            var trigger = e.target.closest('[data-open-modal]');
+            if (trigger) {
+                e.preventDefault();
+                menu.setAttribute('hidden', '');
+                openModal(trigger.getAttribute('data-open-modal'));
+            }
+            e.stopPropagation();
+        });
     });
 
     function initDemandDeleteConfirm() {
@@ -1031,6 +1042,38 @@
         });
     }
     initDemandDeleteConfirm();
+
+    function initMediaEventDeleteConfirm() {
+        document.querySelectorAll('[data-confirm-remove-media-event]').forEach(function (button) {
+            if (button.dataset.bound) return;
+            button.dataset.bound = '1';
+            button.addEventListener('click', function () {
+                if (typeof Swal === 'undefined') return;
+                var form = document.getElementById(button.getAttribute('data-remove-form'));
+                var name = button.getAttribute('data-event-name') || 'este evento';
+                var safeName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                Swal.fire({
+                    title: 'Remover da Mídia?',
+                    html: 'As demandas e os vínculos de planejamento de <strong>' + safeName + '</strong> serão removidos.<br><span style="color:#6B7280;font-size:.875rem;">O evento institucional continuará preservado.</span>',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> Sim, remover',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#DC2626',
+                    cancelButtonColor: '#6B7280',
+                    reverseButtons: true,
+                    customClass: {
+                        popup: 'rounded-2xl',
+                        confirmButton: 'rounded-xl px-5 py-2.5 font-bold',
+                        cancelButton: 'rounded-xl px-5 py-2.5 font-bold',
+                    },
+                }).then(function (result) {
+                    if (result.isConfirmed && form) form.submit();
+                });
+            });
+        });
+    }
+    initMediaEventDeleteConfirm();
 
     function applyTypeSelectLabels(select, hintId, subtitleId, iconEl, fallbackIcon) {
         if (!select) return;

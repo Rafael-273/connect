@@ -73,6 +73,7 @@ class MediaMonthPlanWizardView(MediaMemberRequiredMixin, View):
     def _build_ctx(self, request, plan, step):
         # Step 1 context: events of this month + all categories
         events_this_month = Event.objects.filter(
+            is_recurring=False,
             event_date__year=plan.year,
             event_date__month=plan.month,
         ).order_by('event_date')
@@ -138,6 +139,9 @@ class MediaPlanToggleEventView(MediaLeaderRequiredMixin, View):
         plan = get_object_or_404(MediaMonthPlan, year=year, month=month)
         event_pk = request.POST.get('event_pk')
         event = get_object_or_404(Event, pk=event_pk)
+        if event.is_recurring:
+            messages.error(request, 'Eventos recorrentes não podem entrar no planejamento de Mídia.')
+            return redirect('media_plan_step', year=year, month=month, step=1)
         if plan.events.filter(pk=event.pk).exists():
             plan.events.remove(event)
         else:
@@ -226,12 +230,15 @@ class MediaPlanCreateEventView(MediaLeaderRequiredMixin, View):
             location=location,
             display_start=event_date,
             display_end=event_date,
+            institutional_status=Event.INSTITUTIONAL_STATUS_PENDING,
         )
         if 'banner' in request.FILES:
             event.banner = request.FILES['banner']
         else:
             event.banner = DEFAULT_EVENT_BANNER
         event.save()
+        from ...services.event_media_integration import start_media_organization
+        start_media_organization(event, created_from_media=True)
 
         plan.events.add(event)
         messages.success(request, f'Evento "{event.title}" criado!')
@@ -245,6 +252,9 @@ class MediaPlanMacroEventView(MediaMemberRequiredMixin, View):
     def get(self, request, year, month, event_pk):
         plan = get_object_or_404(MediaMonthPlan, year=year, month=month)
         event = get_object_or_404(Event, pk=event_pk)
+        if event.is_recurring:
+            messages.error(request, 'Eventos recorrentes não possuem detalhes operacionais de Mídia.')
+            return redirect('media_plan_step', year=year, month=month, step=1)
         if not plan.events.filter(pk=event.pk).exists():
             messages.error(request, 'Este evento não faz parte deste planejamento.')
             return redirect('media_plan_step', year=year, month=month, step=2)

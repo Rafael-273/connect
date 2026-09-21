@@ -12,7 +12,7 @@ from .month_plan import (
 )
 from .event_contents import MediaEventContentsView
 from .category_contents import MediaCategoryContentsView
-from .demands_create import MediaDemandQuickCreateView, MediaDemandQuickUpdateView, MediaEventQuickCreateView, MediaEventTypeQuickCreateView
+from .demands_create import MediaDemandQuickCreateView, MediaDemandQuickUpdateView, MediaEventQuickCreateView, MediaEventSuggestionsView, MediaEventTypeQuickCreateView
 from .content import (
     MediaContentListView,
     MediaDemandsPanelView,
@@ -78,6 +78,7 @@ __all__ = [
     'MediaDemandQuickCreateView',
     'MediaDemandQuickUpdateView',
     'MediaEventQuickCreateView',
+    'MediaEventSuggestionsView',
     'MediaEventTypeQuickCreateView',
     'MediaContentCreateView',
     'MediaContentUpdateView',

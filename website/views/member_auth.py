@@ -14,6 +14,7 @@ from ..models.ministry_membership import MinistryMembership
 from ..models.schedule import MonthlySchedule
 from .mixins import MemberRequiredMixin, ApproverRequiredMixin, MinistrationContextMixin
 from .prosperar import get_user_landing_route
+from ..services.ministry_organization import media_ministry
 
 
 def get_member_login_landing_route(user):
@@ -80,6 +81,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
     def _build_base_context(self, member):
         flags = self._get_ministry_flags(member)
         member_schedules = self._get_current_schedules(member)
+        media = media_ministry() if flags['is_media_leader'] else None
 
         return {
             'member': member,
@@ -88,6 +90,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'is_ministration_member': flags['is_ministration'],
             'is_media_member': flags['is_media_leader'],
             'is_media_leader': flags['is_media_leader'],
+            'media_ministry_id': media.pk if media else None,
             'is_boas_vindas_member': flags['is_boas_vindas'],
             'is_pastor': member.church_role == 'pastor',
             'is_moderacao_member': flags['is_moderacao'],

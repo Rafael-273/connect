@@ -121,6 +121,12 @@
             </div>
 
             <!-- Search + Filters + New -->
+            {% if pending_media_count %}
+            <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-center gap-2">
+                <ion-icon name="layers-outline" class="text-lg text-amber-600"></ion-icon>
+                <span><strong>{{ pending_media_count }}</strong> evento{{ pending_media_count|pluralize }} não recorrente{{ pending_media_count|pluralize }} aguardando organização da Mídia.</span>
+            </div>
+            {% endif %}
             <div class="flex items-center gap-2 mb-6">
                 <form method="GET" id="filter-form" class="flex items-center gap-2 flex-1 min-w-0">
                     <input type="hidden" name="status" id="hidden-status" value="{{ status_filter }}">

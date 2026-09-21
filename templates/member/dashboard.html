@@ -515,13 +515,25 @@
                     </a>
                     {% if is_media_leader %}
                     <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-2">Planejamento</p>
-                    {% url 'media_dashboard' as media_dashboard_url %}
-                    {% include 'parciais/media_link_card.html' with url=media_dashboard_url icon='tachometer-alt' title='Calendário' subtitle='Etapas e prazos das demandas' %}
                     {% url 'media_content_list' as media_content_list_url %}
                     {% include 'parciais/media_link_card.html' with url=media_content_list_url icon='clipboard-list' title='Demandas e eventos' subtitle='Produções, templates e eventos da igreja' %}
                     <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Organização</p>
-                    {% url 'media_organization' as media_organization_url %}
-                    {% include 'parciais/media_link_card.html' with url=media_organization_url icon='sitemap' title='Organização da mídia' subtitle='Equipes, manuais e recursos' %}
+                    {% url 'media_subteam_list' as media_subteam_list_url %}
+                    {% include 'parciais/media_link_card.html' with url=media_subteam_list_url icon='users' title='Equipes' subtitle='Times e integrantes da mídia' %}
+                    {% if media_ministry_id %}
+                    {% url 'ministry_manual_list' media_ministry_id as ministry_manual_list_url %}
+                    {% include 'parciais/media_link_card.html' with url=ministry_manual_list_url icon='book' title='Manuais' subtitle='Guias e orientações da mídia' %}
+                    {% endif %}
+                    {% url 'media_resource_list' as media_resource_list_url %}
+                    {% include 'parciais/media_link_card.html' with url=media_resource_list_url icon='key' title='Recursos' subtitle='Acessos, credenciais e ferramentas' %}
+                    <div class="flex items-center justify-between bg-gray-50 rounded-xl p-4 border-2 border-gray-200 opacity-70" aria-disabled="true">
+                        <div class="flex items-center gap-3 min-w-0"><div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-200 text-gray-500"><i class="fas fa-folder-open text-sm"></i></div><div><h4 class="text-sm font-bold text-gray-700">Secretaria</h4><p class="text-xs text-gray-500">Em breve</p></div></div>
+                        <span class="text-xs font-bold text-gray-400">Em breve</span>
+                    </div>
+                    <div class="flex items-center justify-between bg-gray-50 rounded-xl p-4 border-2 border-gray-200 opacity-70" aria-disabled="true">
+                        <div class="flex items-center gap-3 min-w-0"><div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-200 text-gray-500"><i class="fas fa-heart-pulse text-sm"></i></div><div><h4 class="text-sm font-bold text-gray-700">Cuidados da equipe</h4><p class="text-xs text-gray-500">Em breve</p></div></div>
+                        <span class="text-xs font-bold text-gray-400">Em breve</span>
+                    </div>
                     {% endif %}
                 </div>
             </div>

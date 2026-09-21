@@ -1,0 +1,52 @@
+<div id="demands-modal-event-edit" class="demands-modal" role="dialog" aria-modal="true" aria-labelledby="demands-modal-event-edit-title">
+    <div class="demands-modal-backdrop" data-close-modal></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <div class="demands-modal-icon"><i class="fas fa-calendar-alt"></i></div>
+                <div class="min-w-0">
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-red-600">Editar evento</p>
+                    <h2 id="demands-modal-event-edit-title" class="text-lg font-black text-gray-900 leading-tight">{{ detail.event.title }}</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">As alterações atualizam este mesmo evento.</p>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar"><i class="fas fa-times"></i></button>
+        </div>
+
+        <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="demands-modal-body">
+            {% csrf_token %}
+            <div class="modal-section">
+                <label class="modal-field-label" for="{{ event_edit_form.title.id_for_label }}">Título</label>
+                {{ event_edit_form.title }}{{ event_edit_form.title.errors }}
+            </div>
+            <div class="grid sm:grid-cols-2 gap-3">
+                <div class="modal-section">
+                    <label class="modal-field-label" for="{{ event_edit_form.event_date.id_for_label }}">Data de início</label>
+                    {{ event_edit_form.event_date }}{{ event_edit_form.event_date.errors }}
+                </div>
+                <div class="modal-section">
+                    <label class="modal-field-label" for="{{ event_edit_form.event_time.id_for_label }}">Horário</label>
+                    {{ event_edit_form.event_time }}{{ event_edit_form.event_time.errors }}
+                </div>
+            </div>
+            <div class="modal-section">
+                <label class="modal-field-label" for="{{ event_edit_form.location.id_for_label }}">Local</label>
+                {{ event_edit_form.location }}{{ event_edit_form.location.errors }}
+            </div>
+            <details class="modal-section">
+                <summary class="text-xs font-bold uppercase tracking-wider text-gray-500 cursor-pointer">Descrição e término</summary>
+                <div class="mt-3 space-y-3">
+                    <div>{{ event_edit_form.description }}</div>
+                    <div class="grid sm:grid-cols-2 gap-3">
+                        <div><label class="modal-field-label">Data de término</label>{{ event_edit_form.end_date }}</div>
+                        <div><label class="modal-field-label">Horário de término</label>{{ event_edit_form.end_time }}</div>
+                    </div>
+                </div>
+            </details>
+            <div class="demands-modal-footer">
+                <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
+                <button type="submit" class="media-btn-primary sm flex-1 justify-center"><i class="fas fa-check"></i> Salvar alterações</button>
+            </div>
+        </form>
+    </div>
+</div>

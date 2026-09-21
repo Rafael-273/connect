@@ -11,6 +11,7 @@ from ...services.media_planning import (
     get_available_template_items,
     get_template_for_event,
 )
+from ...services.event_media_integration import mark_media_organized, require_media_eligible
 from .mixins import MediaLeaderRequiredMixin
 
 
@@ -19,6 +20,11 @@ class MediaEventSetTypeView(MediaLeaderRequiredMixin, View):
 
     def get(self, request, event_pk):
         event = get_object_or_404(Event, pk=event_pk)
+        try:
+            require_media_eligible(event)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0])
+            return redirect('media_content_list')
         ctx = {
             **self._nav_context(),
             'event': event,
@@ -28,9 +34,15 @@ class MediaEventSetTypeView(MediaLeaderRequiredMixin, View):
 
     def post(self, request, event_pk):
         event = get_object_or_404(Event, pk=event_pk)
+        try:
+            require_media_eligible(event)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0])
+            return redirect('media_content_list')
         form = EventTypeAssignForm(request.POST, instance=event)
         if form.is_valid():
             form.save()
+            mark_media_organized(event)
             messages.success(request, 'Tipo do evento atualizado!')
             return redirect('media_event_contents', event_pk=event.pk)
         ctx = {**self._nav_context(), 'event': event, 'form': form}
@@ -42,6 +54,11 @@ class MediaApplyTemplateView(MediaLeaderRequiredMixin, View):
 
     def get(self, request, event_pk):
         event = get_object_or_404(Event.objects.select_related('event_type'), pk=event_pk)
+        try:
+            require_media_eligible(event)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0])
+            return redirect('media_content_list')
         template = get_template_for_event(event)
         available_items = get_available_template_items(event)
 
@@ -66,6 +83,11 @@ class MediaApplyTemplateView(MediaLeaderRequiredMixin, View):
 
     def post(self, request, event_pk):
         event = get_object_or_404(Event.objects.select_related('event_type'), pk=event_pk)
+        try:
+            require_media_eligible(event)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0])
+            return redirect('media_content_list')
         template = get_template_for_event(event)
         if not template:
             messages.error(request, 'Template não encontrado.')

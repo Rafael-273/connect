@@ -24,13 +24,34 @@
                 <p class="text-sm font-semibold text-gray-700 mt-2">{{ detail.total }} conteúdo{{ detail.total|pluralize }} planejado{{ detail.total|pluralize }}</p>
             </div>
             {% if is_media_leader %}
-            <button type="button"
-                    class="media-btn-primary sm flex-shrink-0 self-start"
-                    data-open-modal="demands-modal-demand"
-                    data-demand-event="{{ detail.event.pk }}"
+            <div class="flex items-center gap-2 flex-shrink-0 self-start">
+                <button type="button"
+                        class="media-btn-primary sm"
+                        data-open-modal="demands-modal-demand"
+                        data-demand-event="{{ detail.event.pk }}"
                     data-demand-event-title="{{ detail.event.title }}">
-                <i class="fas fa-plus"></i> Criar nova demanda
-            </button>
+                    <i class="fas fa-plus"></i> Criar nova demanda
+                </button>
+                <div class="demands-kebab-wrap relative">
+                    <button type="button" class="demands-kebab-btn" aria-label="Ações do evento" aria-haspopup="true" aria-expanded="false">
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <div class="demands-kebab-menu" hidden>
+                        <button type="button" class="demands-kebab-item" data-open-modal="demands-modal-event-edit">
+                            <i class="fas fa-pen"></i> Editar evento
+                        </button>
+                        <form id="remove-media-event-{{ detail.event.pk }}" method="post"
+                              action="{% url 'media_event_remove_from_media' detail.event.pk %}">
+                            {% csrf_token %}
+                            <button type="button" class="demands-kebab-item demands-kebab-item-danger"
+                                    data-confirm-remove-media-event data-event-name="{{ detail.event.title|escapejs }}"
+                                    data-remove-form="remove-media-event-{{ detail.event.pk }}">
+                                <i class="fas fa-trash-alt"></i> Excluir
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
             {% endif %}
         </div>
 

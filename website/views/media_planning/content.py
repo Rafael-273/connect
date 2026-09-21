@@ -59,6 +59,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
         detail_type = None
         event_template = None
         available_template_count = 0
+        event_edit_form = None
 
         if not create_mode and kind == 'event' and pk:
             try:
@@ -66,6 +67,14 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 detail_type = 'event'
                 event_template = get_template_for_event(detail['event'])
                 available_template_count = get_available_template_items(detail['event']).count()
+                event = detail['event']
+                event_edit_form = MediaEventQuickForm(
+                    prefix='event-edit',
+                    initial={field: getattr(event, field) for field in (
+                        'title', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
+                    )},
+                )
+                del event_edit_form.fields['event_type']
             except Exception:
                 selected = ''
                 detail = None
@@ -99,7 +108,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
         if create_mode == 'demand' and kind == 'event' and pk:
             from ...models.event import Event
             demand_event_id = str(pk)
-            event_obj = Event.objects.filter(pk=pk).only('title').first()
+            event_obj = Event.objects.filter(pk=pk, is_recurring=False).only('title').first()
             if event_obj:
                 demand_event_title = event_obj.title
 
@@ -137,6 +146,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             'detail_type': detail_type,
             'event_template': event_template,
             'available_template_count': available_template_count,
+            'event_edit_form': event_edit_form,
             'filter_kind': request.GET.get('kind', 'all'),
             'filter_q': request.GET.get('q', ''),
             'filter_responsible': request.GET.get('responsible', ''),

@@ -5,6 +5,13 @@ from ._base import BaseModel
 
 
 class Event(BaseModel):
+    INSTITUTIONAL_STATUS_PENDING = 'pending'
+    INSTITUTIONAL_STATUS_PUBLISHED = 'published'
+    INSTITUTIONAL_STATUS_CHOICES = [
+        (INSTITUTIONAL_STATUS_PENDING, 'Pendente de publicação institucional'),
+        (INSTITUTIONAL_STATUS_PUBLISHED, 'Publicado institucionalmente'),
+    ]
+
     title = models.CharField(max_length=255)
     description = models.TextField()
     banner = models.ImageField(upload_to='event_banners/')
@@ -60,6 +67,14 @@ class Event(BaseModel):
         related_name='events',
         verbose_name='Tipo de evento (Mídia)',
     )
+    # Publication and media planning have independent lifecycles.
+    institutional_status = models.CharField(
+        max_length=16,
+        choices=INSTITUTIONAL_STATUS_CHOICES,
+        default=INSTITUTIONAL_STATUS_PUBLISHED,
+        verbose_name='Status institucional',
+    )
+    institutional_published_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.title
@@ -129,6 +144,33 @@ class Event(BaseModel):
             return self.get_weekday_name()
         else:
             return self.event_date.strftime("%d/%m/%Y") if self.event_date else ""
+
+    @property
+    def is_media_organized(self):
+        return getattr(getattr(self, 'media_organization', None), 'status', None) == MediaEventOrganization.STATUS_ORGANIZED
+
+
+class MediaEventOrganization(BaseModel):
+    """Operational media state for a non-recurring central Event."""
+
+    STATUS_PENDING = 'pending'
+    STATUS_ORGANIZED = 'organized'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pendente de organização'),
+        (STATUS_ORGANIZED, 'Organizado'),
+    ]
+
+    event = models.OneToOneField(Event, on_delete=models.CASCADE, related_name='media_organization')
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_from_media = models.BooleanField(default=False)
+    organized_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Organização de mídia do evento'
+        verbose_name_plural = 'Organizações de mídia dos eventos'
+
+    def __str__(self):
+        return f'Mídia: {self.event.title}'
 
 
 class EventDate(BaseModel):

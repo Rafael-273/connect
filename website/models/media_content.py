@@ -165,6 +165,8 @@ class MediaContent(BaseModel):
         super().clean()
         from django.core.exceptions import ValidationError
         from website.services.demand_assignments import validate_ministry_assignees
+        if self.event_id and self.event.is_recurring:
+            raise ValidationError({'event': 'Eventos recorrentes não podem receber demandas de Mídia.'})
         try:
             user_ids = [self.responsible_id]
             if hasattr(self, '_replacement_assignee_ids'):

@@ -22,6 +22,10 @@
         {% csrf_token %}
         {{ form.non_field_errors }}
 
+        {% if not event %}
+        <div id="event-suggestions" class="hidden rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-sm"></div>
+        {% endif %}
+
         {% if event %}
         <div class="media-alert-info">
             <i class="fas fa-info-circle mr-1.5"></i>
@@ -75,4 +79,26 @@
         </div>
     </form>
 </div>
+{% if not event %}
+<script>
+(() => {
+    const input = document.getElementById('id_event-title');
+    const target = document.getElementById('event-suggestions');
+    if (!input || !target) return;
+    let timer;
+    input.addEventListener('input', () => {
+        clearTimeout(timer);
+        const query = input.value.trim();
+        if (query.length < 2) { target.classList.add('hidden'); return; }
+        timer = setTimeout(async () => {
+            const response = await fetch(`{% url 'media_event_suggestions' %}?q=${encodeURIComponent(query)}`);
+            const {results} = await response.json();
+            if (!results.length) { target.classList.add('hidden'); return; }
+            target.innerHTML = `<p class="font-semibold text-violet-900 mb-1">Eventos existentes</p>${results.map(event => `<a class="block py-1 text-violet-800 hover:underline" href="${event.url}">${event.title} <span class="text-violet-500">(${event.date})</span></a>`).join('')}<p class="mt-1 text-xs text-violet-600">Escolha um evento para organizá-lo; continue o formulário para criar um novo.</p>`;
+            target.classList.remove('hidden');
+        }, 220);
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}
