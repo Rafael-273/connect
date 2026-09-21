@@ -128,7 +128,11 @@ class MediaDemandQuickUpdateView(MediaMemberRequiredMixin, View):
     def post(self, request, pk):
         content = get_object_or_404(MediaContent, pk=pk)
         form = MediaDemandQuickForm(request.POST, instance=content, prefix='edit')
-        assignments = parse_demand_assignments(request.POST, prefix='edit')
+        assignments = parse_demand_assignments(
+            request.POST,
+            prefix='edit',
+            absolute_dates=bool(content.event_id),
+        )
         if not form.is_valid():
             return _invalid_demand_response(self, request, form, assignments)
         try:

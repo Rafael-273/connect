@@ -11,7 +11,7 @@
             <div class="demand-assignment-labels" aria-hidden="true" style="grid-template-columns: {% if hide_responsible %}repeat(2, minmax(0, 1fr)){% else %}repeat(3, minmax(0, 1fr)){% endif %};">
                 <span class="demand-field-label">Papel</span>
                 {% if not hide_responsible %}<span class="demand-field-label">Responsável</span>{% endif %}
-                <span class="demand-field-label">Prazo relativo</span>
+                <span class="demand-field-label">{% if use_absolute_dates %}Prazo{% else %}Prazo relativo{% endif %}</span>
             </div>
             <div class="demand-assignment-inputs">
                 <div class="demand-col-role assignment-role-wrap">
@@ -45,7 +45,13 @@
                 </div>
                 {% endif %}
                 <div class="demand-col-due">
-                    <label class="demand-field-label demand-field-label-mobile">Prazo relativo</label>
+                    <label class="demand-field-label demand-field-label-mobile">{% if use_absolute_dates %}Prazo{% else %}Prazo relativo{% endif %}</label>
+                    {% if use_absolute_dates %}
+                    <input type="date" name="{{ prefix }}-assignment_due_date"
+                           value="{{ row.due_date|default:'' }}"
+                           class="media-field-input demand-step-control demand-due-date"
+                           aria-label="Prazo da etapa">
+                    {% else %}
                     <div class="demand-due-offset">
                         <input type="number" min="0" step="1"
                                name="{{ prefix }}-assignment_due_days"
@@ -61,6 +67,7 @@
                             <option value="after" {% if row.due_relation == 'after' %}selected{% endif %}>depois</option>
                         </select>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

@@ -570,6 +570,29 @@ class MediaOperationsTests(TestCase):
             datetime.date(2026, 10, 16), datetime.date(2026, 10, 17),
         ])
 
+    def test_event_demand_edit_uses_absolute_task_dates(self):
+        content = self.generate()
+        sync_content_assignments(content, [{'role': 'Designer', 'due_offset_days': -30}])
+        task = content.tasks.get()
+        response = self.client.get(reverse('media_content_list'), {'selected': f'event-{self.event.pk}', 'edit': '1'})
+        self.assertContains(response, 'name="edit-assignment_due_date"')
+        response = self.client.post(reverse('media_demand_quick_update', args=[content.pk]), {
+            'edit-title': content.title,
+            'edit-content_type': content.content_type,
+            'edit-assignment_id': [str(task.pk)],
+            'edit-assignment_role': ['Designer'],
+            'edit-assignment_user': [''],
+            'edit-assignment_due_date': ['2026-09-25'],
+            'edit-assignment_desc': ['Data confirmada'],
+        })
+        self.assertEqual(response.status_code, 302)
+        task.refresh_from_db()
+        self.assertIsNone(task.due_offset_days)
+        self.assertEqual(task.due_date.date(), datetime.date(2026, 9, 25))
+        self.move()
+        task.refresh_from_db()
+        self.assertEqual(task.due_date.date(), datetime.date(2026, 9, 25))
+
 
 class MediaOperationsMigrationTests(TransactionTestCase):
     def test_existing_dates_and_links_remain_manual(self):

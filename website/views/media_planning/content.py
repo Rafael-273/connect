@@ -131,6 +131,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             'demand_type_roles': get_demand_type_roles_map(),
             'assignment_role_presets': ASSIGNMENT_ROLE_PRESETS,
             'edit_mode': request.GET.get('edit', '') == '1',
+            'edit_for_event': detail_type == 'event',
             'hub_url': hub_redirect_url(request),
             'demand_quick_types': DEMAND_QUICK_TYPES,
             'demand_types_technical': DEMAND_TYPES_TECHNICAL,

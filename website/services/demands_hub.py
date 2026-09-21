@@ -244,12 +244,13 @@ def _parse_assignment_date(value):
     return value
 
 
-def parse_demand_assignments(post_data, prefix='demand'):
+def parse_demand_assignments(post_data, prefix='demand', absolute_dates=False):
     """Extrai etapas (papel + responsável + prazo) do POST."""
     roles = post_data.getlist(f'{prefix}-assignment_role')
     users = post_data.getlist(f'{prefix}-assignment_user')
     due_days = post_data.getlist(f'{prefix}-assignment_due_days')
     due_relations = post_data.getlist(f'{prefix}-assignment_due_relation')
+    due_dates = post_data.getlist(f'{prefix}-assignment_due_date')
     descs = post_data.getlist(f'{prefix}-assignment_desc')
     ids = post_data.getlist(f'{prefix}-assignment_id')
     assignments = []
@@ -258,18 +259,22 @@ def parse_demand_assignments(post_data, prefix='demand'):
         user = users[i].strip() if i < len(users) and users[i] else ''
         days_raw = due_days[i].strip() if i < len(due_days) and due_days[i] is not None else ''
         relation = due_relations[i].strip() if i < len(due_relations) and due_relations[i] else 'before'
-        offset = compress_assignment_offset(days_raw, relation)
+        offset = None if absolute_dates else compress_assignment_offset(days_raw, relation)
+        due_date = _parse_assignment_date(due_dates[i]) if absolute_dates and i < len(due_dates) else None
         desc = descs[i].strip() if i < len(descs) and descs[i] else ''
         task_id = ids[i].strip() if i < len(ids) and ids[i] else ''
-        if not role and not user and offset is None and not desc:
+        if not role and not user and offset is None and due_date is None and not desc:
             continue
-        assignments.append({
+        assignment = {
             'role': role or 'Etapa',
             'user_id': int(user) if user.isascii() and user.isdigit() and len(user) <= 18 else None,
             'due_offset_days': offset,
             'description': desc,
             'task_id': int(task_id) if task_id.isascii() and task_id.isdigit() and len(task_id) <= 18 else None,
-        })
+        }
+        if absolute_dates:
+            assignment['due_date'] = due_date
+        assignments.append(assignment)
     return assignments
 
 
@@ -325,7 +330,7 @@ def sync_content_assignments(content, assignments):
 
     for order, data in enumerate(assignments):
         offset = data.get('due_offset_days')
-        due_dt = _task_due_datetime(content, offset)
+        due_dt = data.get('due_date') if 'due_date' in data else _task_due_datetime(content, offset)
         task_id = data.get('task_id')
         if task_id:
             task = MediaTask.objects.filter(pk=task_id, content=content).first()
@@ -432,6 +437,7 @@ def build_assignment_rows(content):
                 'user_id': t.assigned_to_id or '',
                 'due_days': offset_parts['due_days'],
                 'due_relation': offset_parts['due_relation'],
+                'due_date': t.due_date.date().isoformat() if t.due_date else '',
                 'description': t.description or '',
                 'is_custom_role': t.title not in ASSIGNMENT_ROLE_PRESETS,
             })

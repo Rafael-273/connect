@@ -1155,9 +1155,10 @@
             var user = wrap.querySelector('[name$="-assignment_user"]');
             var dueDays = wrap.querySelector('[name$="-assignment_due_days"]');
             var dueRel = wrap.querySelector('[name$="-assignment_due_relation"]');
+            var dueDate = wrap.querySelector('[name$="-assignment_due_date"]');
             var desc = wrap.querySelector('[name$="-assignment_desc"]');
             if (idInput && idInput.value) return false;
-            var hasDue = (dueDays && dueDays.value) || (dueRel && dueRel.value && dueRel.value !== 'before');
+            var hasDue = (dueDays && dueDays.value) || (dueRel && dueRel.value && dueRel.value !== 'before') || (dueDate && dueDate.value);
             if ((user && user.value) || hasDue || (desc && desc.value.trim())) return false;
         }
         return true;
@@ -1219,6 +1220,7 @@
             var userSelect = wrap.querySelector('[name$="-assignment_user"]');
             var dueDaysInput = wrap.querySelector('[name$="-assignment_due_days"]');
             var dueRelInput = wrap.querySelector('[name$="-assignment_due_relation"]');
+            var dueDateInput = wrap.querySelector('[name$="-assignment_due_date"]');
             var descInput = wrap.querySelector('[name$="-assignment_desc"]');
             if (idInput) idInput.value = row.id || '';
             if (roleSelect) {
@@ -1234,6 +1236,7 @@
             if (userSelect) userSelect.value = row.user_id ? String(row.user_id) : '';
             if (dueDaysInput) dueDaysInput.value = row.due_days || '';
             if (dueRelInput) dueRelInput.value = row.due_relation || 'before';
+            if (dueDateInput) dueDateInput.value = row.due_date || '';
             if (descInput) descInput.value = row.description || '';
             list.appendChild(node);
         });
@@ -1284,8 +1287,10 @@
                     wrap.querySelector('[name$="-assignment_user"]').value = '';
                     var dueDaysClear = wrap.querySelector('[name$="-assignment_due_days"]');
                     var dueRelClear = wrap.querySelector('[name$="-assignment_due_relation"]');
+                    var dueDateClear = wrap.querySelector('[name$="-assignment_due_date"]');
                     if (dueDaysClear) dueDaysClear.value = '';
                     if (dueRelClear) dueRelClear.value = 'before';
+                    if (dueDateClear) dueDateClear.value = '';
                     var desc = wrap.querySelector('[name$="-assignment_desc"]');
                     if (desc) desc.value = '';
                     syncRoleField(wrap.querySelector('.demand-assignment-row') || wrap);
