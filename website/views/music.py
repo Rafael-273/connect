@@ -8,7 +8,7 @@ from django.views import View
 from django.views.generic import UpdateView
 from django.contrib import messages
 from django.db.models import Q
-from .mixins import MinistrationContextMixin
+from .mixins import MinistrationContextMixin, WorshipMemberRequiredMixin
 from website.forms.music import MusicForm, ChordSheetFormSet, ChordSheetFormSetEdit
 
 
@@ -112,7 +112,7 @@ class MusicUpdateView(LoginRequiredMixin, UpdateView):
             return self.render_to_response(self.get_context_data(form=form, formset=formset))
     
 
-class MusicUserListView(LoginRequiredMixin, MinistrationContextMixin, ListView):
+class MusicUserListView(WorshipMemberRequiredMixin, MinistrationContextMixin, ListView):
     model = Music
     template_name = 'list/music_list.html'
     context_object_name = 'musics'
@@ -153,5 +153,4 @@ class MusicUserListView(LoginRequiredMixin, MinistrationContextMixin, ListView):
         }
 
 
-    
     

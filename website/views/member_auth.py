@@ -94,7 +94,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'is_boas_vindas_member': flags['is_boas_vindas'],
             'is_pastor': member.church_role == 'pastor',
             'is_moderacao_member': flags['is_moderacao'],
-            'can_music_member': flags['has_ministries'],
+            'can_music_member': flags['is_worship'],
             'member_schedules': member_schedules,
             'is_new_member': (
                 member.church_role == 'member'
@@ -111,6 +111,7 @@ class MemberDashboardView(MemberRequiredMixin, MinistrationContextMixin, View):
             'is_ministration': self.get_ministration_status(member),
             'is_media': self.get_media_status(member),
             'is_media_leader': self.get_media_leader_status(member),
+            'is_worship': self.get_worship_status(member),
             'is_boas_vindas': MinistryMembership.objects.filter(
                 member=member,
                 is_active=True,

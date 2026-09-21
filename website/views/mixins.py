@@ -138,6 +138,34 @@ class MinistrationContextMixin:
             is_active=True,
             role='leader',
         ).exists()
+
+    def get_worship_status(self, member):
+        return MinistryMembership.objects.filter(
+            member=member,
+            ministry__code='louvor',
+            ministry__is_active=True,
+            is_active=True,
+        ).exists()
+
+
+class WorshipMemberRequiredMixin(MemberRequiredMixin):
+    """Restrict the repertoire to active members of the Louvor ministry."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
+        member = getattr(request.user, 'member', None)
+        allowed = member and MinistryMembership.objects.filter(
+            member=member,
+            ministry__code='louvor',
+            ministry__is_active=True,
+            is_active=True,
+        ).exists()
+        if not allowed:
+            messages.error(request, 'Acesso exclusivo ao Ministério de Louvor.')
+            return redirect('member_dashboard')
+        return super().dispatch(request, *args, **kwargs)
 class ExternalMediaRequiredMixin(MemberRequiredMixin):
     """Restrict the media workspace to its ministry (and superusers)."""
 
