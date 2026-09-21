@@ -219,7 +219,9 @@ EXTERNAL_MEDIA_FFMPEG_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_FFMPEG_TIMEOUT', 2
 # never needs anywhere close to the full pipeline timeout above (it is bounded
 # by the master's own duration), so give it its own, much tighter ceiling to
 # fail fast with a clear error instead of silently burning the whole task.
-EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT', 2700))
+# B-roll-heavy long-form edits can legitimately take longer than the former
+# 45-minute ceiling, while still remaining below the full pipeline timeout.
+EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT', 7200))
 EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfast')
 EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')

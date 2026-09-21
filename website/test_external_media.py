@@ -3,6 +3,7 @@ import io
 import math
 import re
 import struct
+import subprocess
 import tempfile
 import wave
 import zipfile
@@ -1294,6 +1295,8 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(response, 'Revisar edição')
         self.assertContains(response, f'Revisão {revision.revision}')
         self.assertContains(response, 'connect.internal_timeline.v1')
+        self.assertContains(response, 'id="review-panel"')
+        self.assertContains(response, 'id="close-review-panel"')
 
     def make_reviewable_project(self):
         project = self.make_project()
@@ -5034,9 +5037,116 @@ class BrollUnitTests(SimpleTestCase):
         self.assertIn('-filter_complex', command)
         filters = command[command.index('-filter_complex') + 1]
         self.assertIn('overlay=', filters)
-        self.assertIn('if(lt(t,1.3)', filters)
+        # The active window starts at 1s, so transition timings are local to
+        # that segment instead of requiring every overlay to process 0-5s.
+        self.assertIn('if(lt(t,0.3)', filters)
         self.assertIn('fade=t=out', filters)
         self.assertIn('0:a?', command)
+
+    def test_renderer_splits_timeline_and_only_activates_visible_brolls(self):
+        assets = [
+            SimpleNamespace(
+                public_id='00000000-0000-0000-0000-000000000011',
+                media_type='VIDEO', file=SimpleNamespace(path='/tmp/first.mp4'),
+            ),
+            SimpleNamespace(
+                public_id='00000000-0000-0000-0000-000000000012',
+                media_type='VIDEO', file=SimpleNamespace(path='/tmp/second.mp4'),
+            ),
+        ]
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return assets
+
+        decisions = [
+            {
+                'asset_id': str(assets[0].public_id), 'enabled': True,
+                'start_ms': 1000, 'end_ms': 4000, 'display_mode': 'FULLSCREEN',
+                'transform': {}, 'entry': {}, 'exit': {},
+            },
+            {
+                'asset_id': str(assets[1].public_id), 'enabled': True,
+                'start_ms': 2500, 'end_ms': 5000, 'display_mode': 'FULLSCREEN',
+                'transform': {}, 'entry': {}, 'exit': {},
+            },
+        ]
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), decisions, 1920, 1080, duration_ms=6000,
+        )
+        command = runner.run.call_args.args[0]
+        filters = command[command.index('-filter_complex') + 1]
+
+        self.assertIn('color=c=black@0.0:s=1920x1080:d=1.0', filters)
+        self.assertIn('concat=n=5:v=1:a=0,format=rgba[broll_track]', filters)
+        self.assertEqual(filters.count('overlay=eof_action=pass'), 1)
+        self.assertIn('[1:v]split=2', filters)
+        self.assertIn('[2:v]split=2', filters)
+        self.assertNotIn('enable=between', filters)
+        self.assertNotIn('-shortest', command)
+
+    def test_renderer_keeps_master_duration_when_decision_exceeds_it(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='VIDEO', file=SimpleNamespace(path='/tmp/broll.mp4'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), [{
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': 1000, 'end_ms': 9000, 'display_mode': 'FULLSCREEN',
+                'transform': {}, 'entry': {}, 'exit': {},
+            }], 1920, 1080, duration_ms=4000,
+        )
+        command = runner.run.call_args.args[0]
+        filters = command[command.index('-filter_complex') + 1]
+        self.assertIn('trim=start=0.0:duration=3.0', filters)
+        self.assertIn('color=c=black@0.0:s=1920x1080:d=3.0', filters)
+        self.assertNotIn('duration=8.0', filters)
+
+    def test_renderer_reads_a_reused_broll_asset_once(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='VIDEO', file=SimpleNamespace(path='/tmp/broll.mp4'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), [
+                {
+                    'asset_id': str(asset.public_id), 'enabled': True,
+                    'start_ms': 1000, 'end_ms': 2000, 'display_mode': 'FULLSCREEN',
+                    'transform': {}, 'entry': {}, 'exit': {},
+                },
+                {
+                    'asset_id': str(asset.public_id), 'enabled': True,
+                    'start_ms': 3000, 'end_ms': 4000, 'display_mode': 'FULLSCREEN',
+                    'transform': {}, 'entry': {}, 'exit': {},
+                },
+            ], 1920, 1080, duration_ms=5000,
+        )
+        command = runner.run.call_args.args[0]
+        filters = command[command.index('-filter_complex') + 1]
+
+        self.assertEqual(command.count('-stream_loop'), 1)
+        self.assertIn('[1:v]split=2', filters)
+        self.assertNotIn('[2:v]', filters)
 
     def test_renderer_composites_image_on_real_ffmpeg_canvas(self):
         runner = FFmpegRunner()
@@ -5070,10 +5180,20 @@ class BrollUnitTests(SimpleTestCase):
                     'motion': {'type': 'NONE'},
                     'entry': {'type': 'SCALE', 'duration_ms': 100},
                     'exit': {'type': 'SCALE', 'duration_ms': 100},
-                }], 320, 180,
+                }], 320, 180, duration_ms=1000,
             )
             metadata = RenderService(runner).probe_video(result)
+            before = subprocess.run([
+                'ffmpeg', '-v', 'error', '-ss', '0.05', '-i', str(result),
+                '-frames:v', '1', '-vf', 'scale=1:1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-',
+            ], check=True, capture_output=True).stdout
+            during = subprocess.run([
+                'ffmpeg', '-v', 'error', '-ss', '0.5', '-i', str(result),
+                '-frames:v', '1', '-vf', 'scale=1:1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-',
+            ], check=True, capture_output=True).stdout
         self.assertEqual((metadata.width, metadata.height), (320, 180))
+        self.assertGreater(before[2], before[0] + 100)
+        self.assertGreater(during[0], during[2] + 100)
 
     def test_fullscreen_cover_targets_horizontal_vertical_and_ultrawide_presets(self):
         asset = SimpleNamespace(
@@ -5132,6 +5252,33 @@ class BrollUnitTests(SimpleTestCase):
             settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT,
         )
         self.assertLess(settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT, settings.EXTERNAL_MEDIA_FFMPEG_TIMEOUT)
+
+    def test_apply_logs_prepare_start_and_done_around_ffmpeg(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='IMAGE', file=SimpleNamespace(path='/tmp/broll.png'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        project = SimpleNamespace(public_id='proj-log-test', broll_assets=Assets())
+        with self.assertLogs('website.external_media.broll', level='INFO') as logs:
+            BrollRenderService(runner=runner).apply(
+                project, Path('/tmp/master.mp4'), Path('/tmp/output.mp4'), [{
+                    'asset_id': str(asset.public_id), 'enabled': True,
+                    'start_ms': 1000, 'end_ms': 5000, 'display_mode': 'FULLSCREEN',
+                    'transform': {'x': .5, 'y': .5}, 'entry': {}, 'exit': {},
+                }], 1920, 1080,
+            )
+        joined = '\n'.join(logs.output)
+        self.assertIn('broll_render_prepare', joined)
+        self.assertIn('broll_render_input', joined)
+        self.assertIn('broll_render_ffmpeg_start', joined)
+        self.assertIn('broll_render_ffmpeg_done', joined)
 
     def test_apply_skips_and_logs_decision_with_missing_asset(self):
         """An asset removed after its decision was baked into a frozen

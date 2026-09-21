@@ -2557,7 +2557,7 @@ class ExternalMediaProjectPipeline:
                         self.assembly.runner, self.storage,
                     ).apply(
                         project, processing_input, broll_output, brolls,
-                        canvas_width, canvas_height,
+                        canvas_width, canvas_height, duration_ms=expected_duration_ms,
                     )
         overlays = list((revision.timeline if revision else {}).get('overlays') or [])
         if not revision:
