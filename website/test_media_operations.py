@@ -553,6 +553,17 @@ class MediaOperationsTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Event.objects.filter(pk=event.pk).exists())
 
+    def test_removing_media_created_event_does_not_leave_free_demands(self):
+        self.client.post(reverse('media_event_quick_create'), {
+            'event-title': 'Evento com demanda',
+            'event-event_date': '2026-12-28',
+        })
+        event = Event.objects.get(title='Evento com demanda')
+        content = MediaContent.objects.create(title='Demanda do evento', content_type='artwork', event=event)
+        self.client.post(reverse('media_event_remove_from_media', args=[event.pk]))
+        self.assertFalse(MediaContent.objects.filter(pk=content.pk).exists())
+        self.assertFalse(MediaContent.all_objects.filter(pk=content.pk).exists())
+
     def test_media_event_can_be_recreated_after_soft_deletion(self):
         payload = {'event-title': 'Conferência recriável', 'event-event_date': '2026-12-28'}
         self.assertEqual(self.client.post(reverse('media_event_quick_create'), payload).status_code, 302)

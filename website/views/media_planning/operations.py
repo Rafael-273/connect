@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_date, parse_time
 from django.urls import reverse
 from django.views import View
+from safedelete.models import HARD_DELETE
 from website.forms.media_operations import DemandFiltersForm, EventFiltersForm
 from website.forms.media_planning import MediaEventQuickForm
 from website.models import Event, EventDate
@@ -139,6 +140,10 @@ class MediaEventRemoveFromMediaView(MediaLeaderRequiredMixin, View):
         organization = getattr(event, 'media_organization', None)
         with transaction.atomic():
             if organization and organization.created_from_media and event.institutional_status == Event.INSTITUTIONAL_STATUS_PENDING:
+                # MediaContent uses SET_NULL for ordinary Event deletion. Remove
+                # the operational demands first so they never become free items.
+                event.media_contents.all().delete(force_policy=HARD_DELETE)
+                event.month_plans.clear()
                 event.delete()
                 message = f'O evento "{event.title}" e suas demandas foram excluídos.'
             else:
