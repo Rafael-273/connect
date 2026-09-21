@@ -593,6 +593,15 @@ class MediaOperationsTests(TestCase):
         task.refresh_from_db()
         self.assertEqual(task.due_date.date(), datetime.date(2026, 9, 25))
 
+    def test_event_demand_can_be_deleted_without_deleting_event(self):
+        content = self.generate()
+        response = self.client.post(reverse('media_content_delete', args=[content.pk]), {
+            'next': f"{reverse('media_content_list')}?selected=event-{self.event.pk}",
+        })
+        self.assertRedirects(response, f"{reverse('media_content_list')}?selected=event-{self.event.pk}")
+        self.assertFalse(MediaContent.objects.filter(pk=content.pk).exists())
+        self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
+
 
 class MediaOperationsMigrationTests(TransactionTestCase):
     def test_existing_dates_and_links_remain_manual(self):

@@ -171,7 +171,7 @@
         position: absolute; top: calc(100% + 0.25rem); right: 0;
         min-width: 10.5rem; background: #fff; border-radius: 0.75rem;
         border: 1px solid #E5E7EB;
-        padding: 0.375rem; z-index: 30;
+        padding: 0.375rem; z-index: 40;
     }
     .demands-kebab-menu form { margin: 0; }
     .demands-kebab-item {
@@ -993,8 +993,21 @@
     });
     document.querySelectorAll('.demands-kebab-menu').forEach(function (menu) {
         menu.addEventListener('click', function (e) {
+            var editTrigger = e.target.closest('[data-open-edit-modal]');
             var trigger = e.target.closest('[data-open-modal]');
-            if (trigger) {
+            if (editTrigger) {
+                e.preventDefault();
+                menu.setAttribute('hidden', '');
+                populateEditForm({
+                    pk: editTrigger.getAttribute('data-pk'),
+                    title: editTrigger.getAttribute('data-title'),
+                    contentType: editTrigger.getAttribute('data-content-type'),
+                    description: editTrigger.getAttribute('data-description'),
+                    assignments: editTrigger.getAttribute('data-assignments'),
+                    subTeam: editTrigger.getAttribute('data-sub-team'),
+                });
+                openModal('demands-modal-edit');
+            } else if (trigger) {
                 e.preventDefault();
                 menu.setAttribute('hidden', '');
                 openModal(trigger.getAttribute('data-open-modal'));
