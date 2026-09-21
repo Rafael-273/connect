@@ -19,15 +19,9 @@
                 <label class="modal-field-label" for="{{ event_edit_form.title.id_for_label }}">Título</label>
                 {{ event_edit_form.title }}{{ event_edit_form.title.errors }}
             </div>
-            <div class="grid sm:grid-cols-2 gap-3">
-                <div class="modal-section">
-                    <label class="modal-field-label" for="{{ event_edit_form.event_date.id_for_label }}">Data de início</label>
-                    {{ event_edit_form.event_date }}{{ event_edit_form.event_date.errors }}
-                </div>
-                <div class="modal-section">
-                    <label class="modal-field-label" for="{{ event_edit_form.event_time.id_for_label }}">Horário</label>
-                    {{ event_edit_form.event_time }}{{ event_edit_form.event_time.errors }}
-                </div>
+            <div class="modal-section">
+                <p class="modal-section-title">Datas do evento</p>
+                {% include 'member/media_planning/partials/demands_event_dates_section.html' with event_form=event_edit_form prefix='event-edit' extra_event_dates=event_edit_extra_dates %}
             </div>
             <div class="modal-section">
                 <label class="modal-field-label" for="{{ event_edit_form.location.id_for_label }}">Local</label>

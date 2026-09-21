@@ -1075,6 +1075,39 @@
     }
     initMediaEventDeleteConfirm();
 
+    function initEventDateSections() {
+        document.querySelectorAll('.event-dates-section').forEach(function (section) {
+            var list = section.querySelector('.event-dates-list');
+            var addButton = section.querySelector('.event-add-date');
+            var template = document.getElementById((section.dataset.prefix || 'event') + '-date-row-template');
+            if (!list || !addButton || !template || section.dataset.bound) return;
+            section.dataset.bound = '1';
+
+            function updateBadges() {
+                list.querySelectorAll('.event-date-badge').forEach(function (badge, index) {
+                    badge.textContent = String(index + 1);
+                });
+            }
+
+            addButton.addEventListener('click', function () {
+                list.appendChild(template.content.cloneNode(true));
+                updateBadges();
+                var input = list.querySelector('.event-date-row:last-child .event-extra-date');
+                if (input) input.focus();
+            });
+
+            list.addEventListener('click', function (event) {
+                var removeButton = event.target.closest('.event-remove-date');
+                if (!removeButton) return;
+                var row = removeButton.closest('.event-date-row');
+                if (row) row.remove();
+                updateBadges();
+            });
+            updateBadges();
+        });
+    }
+    initEventDateSections();
+
     function applyTypeSelectLabels(select, hintId, subtitleId, iconEl, fallbackIcon) {
         if (!select) return;
         var opt = select.options[select.selectedIndex];

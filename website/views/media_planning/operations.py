@@ -4,12 +4,13 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q, F
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.dateparse import parse_date, parse_time
 from django.urls import reverse
 from django.views import View
 from safedelete.models import HARD_DELETE
 from website.forms.media_operations import DemandFiltersForm, EventFiltersForm
 from website.forms.media_planning import MediaEventQuickForm
-from website.models import Event
+from website.models import Event, EventDate
 from website.models.event import MediaEventOrganization
 from website.services.demands_hub import DONE_STATUSES, content_hub_url
 from website.services.media_operations import filtered_demands
@@ -95,10 +96,34 @@ class MediaEventUpdateView(MediaLeaderRequiredMixin, View):
                 messages.error(request, 'Revise os campos do evento antes de salvar.')
                 return redirect(f"{reverse('media_content_list')}?selected=event-{event.pk}")
             return self.response(request, event, form, status=400)
+        extra_dates = []
+        if modal_edit:
+            for raw_date, raw_time in zip(
+                request.POST.getlist('event-edit-extra_event_date'),
+                request.POST.getlist('event-edit-extra_event_time'),
+            ):
+                if not raw_date:
+                    continue
+                parsed_date = parse_date(raw_date)
+                if not parsed_date:
+                    messages.error(request, 'Informe datas adicionais válidas.')
+                    return redirect(f"{reverse('media_content_list')}?selected=event-{event.pk}")
+                extra_dates.append({
+                    'event_date': parsed_date,
+                    'event_time': parse_time(raw_time) if raw_time else None,
+                })
         for field, value in form.cleaned_data.items():
             setattr(event, field, value)
+        if modal_edit and extra_dates:
+            event.end_date = max([event.event_date, *[row['event_date'] for row in extra_dates]])
         try:
             event.save(update_fields=[*form.cleaned_data, 'update_at'])
+            if modal_edit:
+                EventDate.objects.filter(event=event).delete()
+                EventDate.objects.bulk_create([
+                    EventDate(event=event, event_date=row['event_date'], event_time=row['event_time'])
+                    for row in extra_dates
+                ])
         except ValidationError as exc:
             form.add_error(None, ' '.join(exc.messages))
             return self.response(request, event, form, status=400)

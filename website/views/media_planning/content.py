@@ -147,6 +147,13 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             'event_template': event_template,
             'available_template_count': available_template_count,
             'event_edit_form': event_edit_form,
+            'event_edit_extra_dates': [
+                {
+                    'date': date.event_date.strftime('%Y-%m-%d'),
+                    'time': date.event_time.strftime('%H:%M') if date.event_time else '',
+                }
+                for date in detail['event'].dates.all()
+            ] if detail_type == 'event' and detail else [],
             'filter_kind': request.GET.get('kind', 'all'),
             'filter_q': request.GET.get('q', ''),
             'filter_responsible': request.GET.get('responsible', ''),

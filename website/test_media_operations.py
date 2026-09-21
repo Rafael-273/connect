@@ -554,6 +554,22 @@ class MediaOperationsTests(TestCase):
         self.assertEqual(self.event.title, 'Conferência atualizada')
         self.assertEqual(self.event.event_date, datetime.date(2026, 11, 20))
 
+    def test_event_edit_modal_shows_and_updates_additional_dates(self):
+        EventDate.objects.create(event=self.event, event_date=datetime.date(2026, 10, 16), event_time=datetime.time(19, 30))
+        response = self.client.get(reverse('media_content_list'), {'selected': f'event-{self.event.pk}'})
+        self.assertContains(response, 'value="2026-10-16"')
+        response = self.client.post(reverse('media_event_update', args=[self.event.pk]), {
+            'event-edit-title': self.event.title,
+            'event-edit-event_date': '2026-10-15',
+            'event-edit-event_time': '19:00',
+            'event-edit-extra_event_date': ['2026-10-16', '2026-10-17'],
+            'event-edit-extra_event_time': ['19:30', '20:00'],
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(list(self.event.dates.values_list('event_date', flat=True)), [
+            datetime.date(2026, 10, 16), datetime.date(2026, 10, 17),
+        ])
+
 
 class MediaOperationsMigrationTests(TransactionTestCase):
     def test_existing_dates_and_links_remain_manual(self):
