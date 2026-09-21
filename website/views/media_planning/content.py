@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views import View
 
@@ -41,20 +42,56 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
     template_name = 'member/media_planning/demands_hub.html'
 
     def get(self, request):
+        filter_kind = request.GET.get('kind', 'all')
+        if filter_kind not in ('all', 'events', 'free'):
+            filter_kind = 'all'
         create_mode = request.GET.get('create', '')
         if create_mode not in ('demand', 'event'):
             create_mode = ''
 
         selected = request.GET.get('selected', '')
         sidebar_months = build_sidebar_items(request)
+        nav_context = self._nav_context()
+
+        if request.GET.get('fragment') == 'sidebar':
+            sidebar_context = {
+                **nav_context,
+                'sidebar_months': sidebar_months,
+                'selected': '',
+                'filter_kind': filter_kind,
+                'filter_q': request.GET.get('q', ''),
+                'filter_responsible': request.GET.get('responsible', ''),
+                'filter_team': request.GET.get('team', ''),
+                'filter_event_type': request.GET.get('event_type', ''),
+                'filter_period_from': request.GET.get('period_from', ''),
+                'filter_period_to': request.GET.get('period_to', ''),
+            }
+            return JsonResponse({
+                'sidebar': render_to_string(
+                    'member/media_planning/partials/demands_sidebar.html',
+                    sidebar_context,
+                    request=request,
+                ),
+                'detail': render_to_string(
+                    'member/media_planning/partials/demands_empty.html',
+                    nav_context,
+                    request=request,
+                ),
+            })
+
         filters = get_filter_context()
 
-        if not create_mode and not selected and sidebar_months:
+        # Keep the first visit useful, but do not rebuild a full detail panel just
+        # because the user switched between list tabs.
+        if not create_mode and not selected and not request.GET.get('kind') and sidebar_months:
             first_month = sidebar_months[0]
             if first_month.get('items') and request.GET.get('auto_select', '1') != '0':
                 selected = first_month['items'][0]['key']
 
         kind, pk = parse_selected(selected)
+        if (filter_kind == 'events' and kind != 'event') or (filter_kind == 'free' and kind != 'free'):
+            selected = ''
+            kind, pk = None, None
         detail = None
         detail_type = None
         event_template = None
@@ -112,10 +149,8 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             if event_obj:
                 demand_event_title = event_obj.title
 
-        from website.services.media_planning import template_preview_data
         ctx = {
-            **self._nav_context(),
-            'template_previews': template_preview_data(),
+            **nav_context,
             **filters,
             'create_mode': create_mode,
             'demand_event_id': demand_event_id,
@@ -155,7 +190,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 }
                 for date in detail['event'].dates.all()
             ] if detail_type == 'event' and detail else [],
-            'filter_kind': request.GET.get('kind', 'all'),
+            'filter_kind': filter_kind,
             'filter_q': request.GET.get('q', ''),
             'filter_responsible': request.GET.get('responsible', ''),
             'filter_team': request.GET.get('team', ''),

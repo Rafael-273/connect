@@ -799,8 +799,46 @@
     var filterPanel = document.getElementById('demands-filter-panel');
     var createToggle = document.getElementById('demands-create-toggle');
     var createMenu = document.getElementById('demands-create-menu');
+    var sidebar = document.getElementById('demands-sidebar');
+    var detailPanel = document.getElementById('demands-detail');
 
     function isMobile() { return window.innerWidth < 1024; }
+
+    document.querySelectorAll('[data-demands-kind-tab]').forEach(function (tab) {
+        tab.addEventListener('click', function (event) {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+            if (!sidebar || !detailPanel || !window.fetch) return;
+            event.preventDefault();
+
+            var url = new URL(tab.href, window.location.origin);
+            url.searchParams.set('fragment', 'sidebar');
+            sidebar.classList.add('opacity-50', 'pointer-events-none');
+
+            fetch(url.toString(), {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+                .then(function (response) {
+                    if (!response.ok) throw new Error('Não foi possível carregar a aba.');
+                    return response.json();
+                })
+                .then(function (data) {
+                    sidebar.innerHTML = data.sidebar;
+                    detailPanel.innerHTML = data.detail;
+                    sidebar.classList.remove('mobile-hidden');
+                    detailPanel.classList.add('mobile-hidden');
+                    document.querySelectorAll('[data-demands-kind-tab]').forEach(function (chip) {
+                        chip.classList.toggle('active', chip === tab);
+                    });
+                    var kindField = document.querySelector('#demands-filter-form input[name="kind"]');
+                    if (kindField) kindField.value = new URL(tab.href, window.location.origin).searchParams.get('kind') || 'all';
+                    history.pushState({}, '', tab.href);
+                })
+                .catch(function () {
+                    window.location.href = tab.href;
+                })
+                .finally(function () {
+                    sidebar.classList.remove('opacity-50', 'pointer-events-none');
+                });
+        });
+    });
 
     function openModal(id) {
         var modal = document.getElementById(id);

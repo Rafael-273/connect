@@ -1,7 +1,7 @@
 {% comment %}
   Chips de navegação Demandas & Eventos.
   Param: active = 'all' | 'events' | 'free' | 'event_types' | 'calendar'
-  Opcional: filter_q, filter_responsible, filter_team, filter_event_type, filter_period_from, filter_period_to, selected
+  Opcional: filter_q, filter_responsible, filter_team, filter_event_type, filter_period_from, filter_period_to
 {% endcomment %}
 <style>
     .demands-kind-chips {
@@ -41,11 +41,11 @@
     }
 </style>
 <div class="demands-kind-chips">
-    <a href="{% url 'media_content_list' %}?kind=all{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}{% if selected %}&selected={{ selected }}{% endif %}"
+    <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=all{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
        class="media-chip {% if active == 'all' %}active{% endif %}">Todos</a>
-    <a href="{% url 'media_content_list' %}?kind=events{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
+    <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=events{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
        class="media-chip {% if active == 'events' %}active{% endif %}">Eventos</a>
-    <a href="{% url 'media_content_list' %}?kind=free{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
+    <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=free{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
        class="media-chip {% if active == 'free' %}active{% endif %}">Demandas livres</a>
     <a href="{% url 'media_event_type_list' %}"
        class="media-chip {% if active == 'event_types' %}active{% endif %}">Tipos de eventos</a>
