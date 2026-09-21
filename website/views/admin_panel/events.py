@@ -132,7 +132,7 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
 
     @staticmethod
     def _ensure_unique_slug(slug, exclude_id=None):
-        qs = Event.objects.filter(slug=slug)
+        qs = Event.all_objects.filter(slug=slug)
         if exclude_id:
             qs = qs.exclude(id=exclude_id)
         if qs.exists():

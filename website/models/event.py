@@ -100,7 +100,8 @@ class Event(BaseModel):
             slug = base_slug
             num = 1
 
-            while Event.objects.filter(slug=slug).exists():
+            # Soft-deleted events still retain their database-unique slug.
+            while Event.all_objects.filter(slug=slug).exists():
                 slug = f"{base_slug}-{num}"
                 num += 1
             self.slug = slug[:50]
