@@ -198,6 +198,7 @@ class PreviewCompositionService:
             'outline_width': style.outline_width, 'shadow': style.shadow,
             'shadow_angle': style.shadow_angle, 'shadow_size': style.shadow_size,
             'shadow_blur': style.shadow_blur, 'shadow_opacity': style.shadow_opacity,
+            'max_lines': style.max_lines, 'max_characters': style.max_characters,
         }
 
     @classmethod

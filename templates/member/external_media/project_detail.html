@@ -11,10 +11,7 @@
 {% if project.status == 'AWAITING_REVIEW' %}<a href="{% url 'external_media_project_preview' project.public_id %}" class="media-btn media-primary"><i class="fas fa-wand-magic-sparkles"></i>Revisar edição</a>{% endif %}
 {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
 {% if project.render_job_id %}<a href="{% url 'external_media_project_subtitle_reviews' project.public_id %}" class="media-btn media-primary"><i class="fas fa-closed-captioning"></i>Revisar legendas{% if pending_subtitle_reviews %}<span class="rounded-full bg-white px-2 py-0.5 text-xs" style="color:#C90905">{{ pending_subtitle_reviews }}</span>{% endif %}</a>{% endif %}
-<form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">
-    {% csrf_token %}
-    <button class="media-btn media-secondary"><i class="fas fa-film"></i>Reprocessar vídeo</button>
-</form>
+<button type="button" class="media-btn media-secondary" id="open-reprocess-options"><i class="fas fa-film"></i>Reprocessar vídeo</button>
 {% endif %}
 {% endblock %}
 
@@ -57,6 +54,15 @@
     .project-progress__step.is-error { border-color:#fecaca; color:#b42318; }
     .project-progress__step.is-error .project-progress__step-icon { background:#fff1f2; color:#c90905; }
     .project-progress__step-message { display:block; margin-top:.1rem; color:#98a2b3; font-size:.72rem; font-weight:400; }
+    .project-reprocess-modal { position:fixed; inset:0; z-index:90; display:none; align-items:center; justify-content:center; padding:1rem; background:rgba(15,23,42,.6); }
+    .project-reprocess-modal.is-open { display:flex; }
+    .project-reprocess-modal__card { width:min(100%,42rem); border-radius:1.25rem; background:#fff; padding:1.35rem; box-shadow:0 26px 80px rgba(15,23,42,.32); }
+    .project-reprocess-options { display:grid; gap:.7rem; margin-top:1.2rem; }
+    .project-reprocess-option { display:flex; align-items:center; gap:.85rem; width:100%; padding:.9rem 1rem; border:1px solid #e5e7eb; border-radius:.9rem; text-align:left; transition:.18s; }
+    .project-reprocess-option:hover { border-color:#f0aaa5; background:#fff9f8; }
+    .project-reprocess-option__icon { display:grid; place-items:center; width:2.4rem; height:2.4rem; flex:none; border-radius:.7rem; background:#fff1f2; color:#c90905; }
+    .project-reprocess-option strong { display:block; color:#111827; font-size:.9rem; }
+    .project-reprocess-option small { display:block; margin-top:.1rem; color:#667085; line-height:1.35; }
     @keyframes project-progress-pulse { 50% { opacity:.45; transform:scale(.8); } }
     @media (min-width:640px) { .project-progress__steps { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media (min-width:1024px) { .project-progress__steps { grid-template-columns:repeat(3,minmax(0,1fr)); } }
@@ -82,6 +88,25 @@
     {% if project.error_message %}<p class="mt-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm">{{ project.error_message }}</p>{% endif %}
     <details class="project-progress__details"><summary>Ver etapas do processamento</summary><div class="project-progress__steps" id="progress-steps"><p class="project-progress__steps-title sm:col-span-2 lg:col-span-3">Etapas do processamento</p>{% for step in steps %}<div class="project-progress__step {% if step.status == 'FINISHED' %}is-finished{% elif step.status == 'RUNNING' %}is-running{% elif step.status == 'ERROR' %}is-error{% endif %}"><span class="project-progress__step-icon"><i class="fas {% if step.status == 'FINISHED' %}fa-check{% elif step.status == 'ERROR' %}fa-xmark{% elif step.status == 'RUNNING' %}fa-spinner fa-spin{% elif step.status == 'SKIPPED' %}fa-minus{% else %}fa-circle{% endif %}"></i></span><span>{{ step.label }}{% if step.message %}<small class="project-progress__step-message">{{ step.message }}</small>{% endif %}</span></div>{% endfor %}</div></details>
 </section>
+{% endif %}
+
+{% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
+<div class="project-reprocess-modal" id="reprocess-options-modal" role="dialog" aria-modal="true" aria-labelledby="reprocess-options-title" aria-hidden="true">
+    <div class="project-reprocess-modal__card">
+        <div class="flex items-start justify-between gap-4">
+            <div><span class="w-10 h-10 rounded-xl grid place-items-center text-white" style="background:#C90905"><i class="fas fa-rotate"></i></span><h2 class="text-xl font-black mt-3" id="reprocess-options-title">O que você deseja fazer?</h2><p class="text-sm text-gray-500 mt-1">Escolha de onde retomar este projeto. Seus arquivos originais continuam preservados.</p></div>
+            <button type="button" class="project-media-action" data-close-reprocess-options aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+        </div>
+        <div class="project-reprocess-options">
+            <form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-layer-group"></i></span><span><strong>Voltar aos blocos</strong><small>Altere vídeos, B-rolls, câmeras extras e a organização das cenas antes de processar novamente.</small></span></button></form>
+            {% if project.template_version.interactive_preview_enabled and project.current_timeline_revision_id %}
+            <form method="post" action="{% url 'external_media_project_reopen_review' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-sliders"></i></span><span><strong>Voltar à etapa de edição</strong><small>Abra a timeline atual para ajustar cortes, enquadramentos, B-rolls e legendas antes de uma nova renderização.</small></span></button></form>
+            {% endif %}
+            <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="project-reprocess-option" type="submit"><span class="project-reprocess-option__icon"><i class="fas fa-rotate"></i></span><span><strong>Reprocessar tudo</strong><small>Execute novamente a análise, legendas e renderização usando os vídeos já enviados.</small></span></button></form>
+        </div>
+        <div class="flex justify-end mt-5"><button type="button" class="media-btn media-muted" data-close-reprocess-options>Cancelar</button></div>
+    </div>
+</div>
 {% endif %}
 
 {% if project.status == 'DRAFT' %}
@@ -1559,6 +1584,18 @@
             form.querySelector('[name=description]')?.focus();
         });
     });
+})();
+</script>
+<script>
+(() => {
+    const trigger = document.getElementById('open-reprocess-options');
+    const modal = document.getElementById('reprocess-options-modal');
+    if (!trigger || !modal) return;
+    const close = () => { modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); };
+    trigger.addEventListener('click', () => { modal.classList.add('is-open'); modal.setAttribute('aria-hidden', 'false'); });
+    modal.querySelectorAll('[data-close-reprocess-options]').forEach(button => button.addEventListener('click', close));
+    modal.addEventListener('click', event => { if (event.target === modal) close(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && modal.classList.contains('is-open')) close(); });
 })();
 </script>
 {% endblock %}

@@ -9,6 +9,9 @@
     .media-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 1.25rem; box-shadow: 0 8px 30px rgba(38,2,0,.06); }
     .media-btn { display:inline-flex; align-items:center; justify-content:center; gap:.55rem; border-radius:.8rem; padding:.75rem 1rem; font-weight:800; transition:.2s; }
     .media-btn:hover { transform: translateY(-1px); }
+    .media-flash { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+    .media-flash__close { display:grid; place-items:center; width:2rem; height:2rem; flex:none; border-radius:.55rem; color:#667085; }
+    .media-flash__close:hover { background:#f3f4f6; color:#111827; }
     .media-primary { color:#fff; background:#C90905; }
     .media-secondary { color:#C90905; border:2px solid #C90905; background:#fff; }
     .media-muted { color:#374151; border:1px solid #d1d5db; background:#fff; }
@@ -76,7 +79,7 @@
 
 {% if messages %}
 <div class="w-full px-4 sm:px-6 md:px-8 pt-4">
-    {% for message in messages %}<div class="p-3 mb-2 rounded-xl border bg-white text-sm font-bold">{{ message }}</div>{% endfor %}
+    {% for message in messages %}<div class="media-flash p-3 mb-2 rounded-xl border bg-white text-sm font-bold" role="status"><span>{{ message }}</span><button type="button" class="media-flash__close" aria-label="Fechar aviso" onclick="this.parentElement.remove()"><i class="fas fa-xmark"></i></button></div>{% endfor %}
 </div>
 {% endif %}
 

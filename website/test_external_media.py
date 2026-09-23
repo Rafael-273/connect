@@ -1878,6 +1878,34 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
         self.assertEqual(project.block_media.count(), 1)
 
+    def test_finished_project_can_reopen_interactive_review_without_reprocessing(self):
+        project = self.make_project()
+        revision = TimelineRevision.objects.create(
+            project=project, revision=1, created_by=self.member,
+            timeline={'sequence': {'duration_ms': 1000}}, source_manifest={}, edit_decision_set={},
+        )
+        later_revision = TimelineRevision.objects.create(
+            project=project, revision=2, parent=revision, created_by=self.member,
+            timeline={'sequence': {'duration_ms': 900}}, source_manifest={}, edit_decision_set={},
+        )
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.progress = 100
+        project.current_timeline_revision = later_revision
+        project.approved_timeline_revision = revision
+        project.save(update_fields=[
+            'status', 'progress', 'current_timeline_revision', 'approved_timeline_revision', 'update_at',
+        ])
+
+        response = self.client.post(reverse('external_media_project_reopen_review', args=[project.public_id]))
+
+        self.assertRedirects(response, reverse('external_media_project_preview', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.status, ExternalMediaProject.Status.AWAITING_REVIEW)
+        self.assertEqual(project.progress, 66)
+        self.assertEqual(project.current_timeline_revision_id, revision.id)
+        self.assertEqual(project.approved_timeline_revision_id, revision.id)
+        self.assertTrue(project.configuration['_reopened_for_review'])
+
     @patch('website.external_media.preview.TimelineRevisionService.ensure_initial')
     @patch('website.external_media.preview.ProjectProxyService.prepare')
     @patch.object(ExternalMediaProjectPipeline, 'render')

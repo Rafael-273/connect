@@ -616,6 +616,48 @@ class ExternalMediaProjectResumeEditingView(ExternalMediaRequiredMixin, View):
         return redirect('external_media_project_detail', public_id=project.public_id)
 
 
+class ExternalMediaProjectReopenReviewView(ExternalMediaRequiredMixin, View):
+    """Reopens the interactive editor without discarding the processed media."""
+
+    def post(self, request, public_id):
+        with transaction.atomic():
+            project = get_object_or_404(
+                ExternalMediaProject.objects.select_for_update().select_related('template_version'),
+                public_id=public_id,
+            )
+            if not project.template_version.interactive_preview_enabled:
+                messages.warning(request, 'A etapa de edição não está habilitada neste template.')
+                return redirect('external_media_project_detail', public_id=project.public_id)
+            revision = project.approved_timeline_revision or project.current_timeline_revision
+            if project.status not in {
+                ExternalMediaProject.Status.FINISHED,
+                ExternalMediaProject.Status.ERROR,
+                ExternalMediaProject.Status.CANCELLED,
+            } or not revision:
+                messages.warning(request, 'A edição ficará disponível quando houver uma versão preparada para revisão.')
+                return redirect('external_media_project_detail', public_id=project.public_id)
+
+            # A terminal project can have a current revision that drifted through
+            # session history. Reopen the immutable snapshot actually approved
+            # for the final render, so B-rolls, cuts and duration match it.
+            configuration = dict(project.configuration or {})
+            configuration['_reopened_for_review'] = True
+            project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+            project.progress = 66
+            project.current_step = 'Revise e aprove a edição antes de finalizar'
+            project.error_message = ''
+            project.finished_at = None
+            project.current_timeline_revision = revision
+            project.configuration = configuration
+            project.save(update_fields=[
+                'status', 'progress', 'current_step', 'error_message', 'finished_at',
+                'current_timeline_revision', 'configuration', 'update_at',
+            ])
+            project.preview_sessions.update(current_revision=revision, undo_stack=[], redo_stack=[])
+        messages.success(request, 'Edição reaberta. O resultado anterior continua preservado até uma nova aprovação.')
+        return redirect('external_media_project_preview', public_id=project.public_id)
+
+
 class ExternalMediaProjectRestoreProcessedResultView(ExternalMediaRequiredMixin, View):
     """Reattaches the latest finished result when the user leaves edit mode."""
 
@@ -1648,10 +1690,13 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             project.approved_timeline_revision = None
             project.preview_dirty = False
             project.final_render_outdated = False
+            configuration = dict(project.configuration or {})
+            configuration.pop('_reopened_for_review', None)
+            project.configuration = configuration
             project.save(update_fields=[
                 'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at',
                 'current_timeline_revision', 'approved_timeline_revision',
-                'preview_dirty', 'final_render_outdated', 'update_at',
+                'preview_dirty', 'final_render_outdated', 'configuration', 'update_at',
             ])
             project.preview_sessions.update(current_revision=None, undo_stack=[], redo_stack=[])
             transaction.on_commit(lambda: self._enqueue(project.pk))
@@ -1744,6 +1789,19 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             messages.warning(request, 'O preview ficará disponível após a análise inicial.')
             return redirect('external_media_project_detail', public_id=public_id)
         revision = TimelineRevisionService.ensure_initial(project, self.member)
+        # An AWAITING_REVIEW project with an approved revision is a project that
+        # was reopened after rendering. Its approved snapshot is the source of
+        # truth for the final version, even if a stale session still points to
+        # another revision.
+        reopened_terminal_review = (
+            project.status == ExternalMediaProject.Status.AWAITING_REVIEW
+            and project.approved_timeline_revision_id
+        )
+        if reopened_terminal_review:
+            revision = project.approved_timeline_revision
+            if project.current_timeline_revision_id != revision.pk:
+                project.current_timeline_revision = revision
+                project.save(update_fields=['current_timeline_revision', 'update_at'])
         session = TimelineRevisionService.session(project, self.member, revision)
         # Revisions are immutable snapshots. Older ones were created before the
         # normalized master was exposed to the browser, so enrich only this
@@ -1765,7 +1823,11 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             for cue in timeline.get('captions', []):
                 cue['is_source'] = cue.get('language') == project.template_version.original_language
         job = project.render_job
-        if job and job.original_video and ProjectService.file_exists(job.original_video):
+        # After a finished project is reopened, its job's master may already
+        # contain the final cuts. Use the revision's source proxies instead so
+        # the editable timeline (including B-roll timing) stays authoritative.
+        reopened_for_review = bool((project.configuration or {}).get('_reopened_for_review')) or reopened_terminal_review
+        if job and job.original_video and ProjectService.file_exists(job.original_video) and not reopened_for_review:
             timeline['review_master_url'] = reverse(
                 'external_media_project_preview_master', kwargs={'public_id': project.public_id},
             )
