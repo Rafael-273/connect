@@ -417,12 +417,14 @@ class BrollRenderService:
                         staged, temporary_name = self.storage.stage_temporary(
                             part, f'project-{project_ref}-broll-chunks',
                         )
-                        staged_inputs.append(staged)
+                        staged_inputs.append((staged, end_ms - start_ms))
                         temporary_names.append(temporary_name)
                     else:
-                        staged_inputs.append(part)
+                        staged_inputs.append((part, end_ms - start_ms))
                         local_parts.append(part)
-                self._concat_chunks(project_ref, staged_inputs, output_path, workdir)
+                self._concat_chunks(
+                    project_ref, staged_inputs, video_path, output_path, workdir, duration_ms,
+                )
             finally:
                 for name in temporary_names:
                     self.storage.delete_temporary(name)
@@ -475,12 +477,12 @@ class BrollRenderService:
         filters.append(f'{previous}format=yuv420p[chunk_output]')
         command.extend([
             '-t', f'{duration:.3f}', '-filter_complex', ';'.join(filters),
-            '-map', '[chunk_output]', '-map', '0:a?', '-c:v', 'libx264',
+            '-map', '[chunk_output]', '-c:v', 'libx264',
         ])
         if settings.EXTERNAL_MEDIA_RENDER_PRESET:
             command.extend(['-preset', settings.EXTERNAL_MEDIA_RENDER_PRESET])
         command.extend([
-            '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac',
+            '-crf', '20', '-pix_fmt', 'yuv420p',
             '-avoid_negative_ts', 'make_zero', str(output_path),
         ])
         logger.info(
@@ -489,17 +491,33 @@ class BrollRenderService:
         )
         self.runner.run(command, timeout=settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT)
 
-    def _concat_chunks(self, project_ref, chunks, output_path, workdir):
+    def _concat_chunks(self, project_ref, chunks, master_path, output_path, workdir, duration_ms):
+        """Join the visual chunks and retain one continuous master audio track.
+
+        Encoding AAC independently per chunk adds encoder delay/padding to each
+        small file.  Concatenating those audio streams was the source of the
+        accumulated duration drift.  The chunks are deliberately video-only;
+        the already processed audio is mapped once from the master.
+        """
         manifest = Path(workdir) / 'chunks.ffconcat'
         lines = ['ffconcat version 1.0']
-        for chunk in chunks:
+        for chunk, chunk_duration_ms in chunks:
             value = str(chunk).replace('\\', '\\\\').replace("'", r"'\\''")
             lines.append(f"file '{value}'")
+            # Pin the timeline to the planned segment length rather than to
+            # container-level packet duration rounding of individual chunks.
+            lines.append(f'duration {max(.001, chunk_duration_ms / 1000):.3f}')
         manifest.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        # The chunk sequence always covers the entire expected master.  Keep
+        # the final mux duration bounded as an additional guard against a
+        # trailing video packet at a chunk boundary.
+        duration = max(.001, duration_ms / 1000)
         command = [
             settings.FFMPEG_BINARY, '-y', '-f', 'concat', '-safe', '0',
             '-protocol_whitelist', 'file,http,https,tcp,tls,crypto', '-i', str(manifest),
-            '-c', 'copy', '-movflags', '+faststart', str(output_path),
+            '-i', FFmpegRunner.input_arg(master_path), '-t', f'{duration:.3f}',
+            '-map', '0:v:0', '-map', '1:a?', '-c', 'copy', '-movflags', '+faststart',
+            '-avoid_negative_ts', 'make_zero', str(output_path),
         ]
         logger.info('broll_render_concat_start project=%s chunks=%s', project_ref, len(chunks))
         self.runner.run(command, timeout=settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT)

@@ -5225,7 +5225,49 @@ class BrollUnitTests(SimpleTestCase):
         self.assertGreater(len(chunk_calls), 1)
         self.assertTrue(all(command.count('-i') <= 2 for command in chunk_calls))
         self.assertIn('concat', calls[-1])
+        self.assertIn('-map', calls[-1])
+        self.assertIn('1:a?', calls[-1])
         self.assertEqual(len(storage.deleted), len(chunk_calls))
+
+    def test_chunked_renderer_keeps_the_master_audio_duration(self):
+        runner = FFmpegRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            output = workdir / 'output.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'color=c=blue:s=320x180:d=6:r=30',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=6', '-shortest',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            assets = [
+                SimpleNamespace(
+                    public_id=f'00000000-0000-0000-0000-{index:012d}',
+                    media_type='VIDEO', file=SimpleNamespace(path=str(source)),
+                )
+                for index in range(1, 6)
+            ]
+
+            class Assets:
+                @staticmethod
+                def filter(**kwargs):
+                    return assets
+
+            BrollRenderService(runner=runner).apply(
+                SimpleNamespace(broll_assets=Assets()), source, output, [
+                    {
+                        'asset_id': str(asset.public_id), 'enabled': True,
+                        'start_ms': index * 1000, 'end_ms': (index + 1) * 1000,
+                        'display_mode': 'FULLSCREEN', 'transform': {}, 'entry': {}, 'exit': {},
+                    }
+                    for index, asset in enumerate(assets)
+                ], 320, 180, duration_ms=6000,
+            )
+            report = MediaQualityService(runner).validate_media(
+                output, expected_duration_ms=6000,
+            )
+        self.assertTrue(report.ok, report.errors)
+        self.assertLessEqual(report.metrics['duration_drift_ms'], 100)
 
     def test_renderer_composites_image_on_real_ffmpeg_canvas(self):
         runner = FFmpegRunner()
