@@ -5176,6 +5176,57 @@ class BrollUnitTests(SimpleTestCase):
         self.assertIn('[1:v]split=2', filters)
         self.assertNotIn('[2:v]', filters)
 
+    def test_renderer_chunks_many_broll_sources_and_stages_each_part(self):
+        assets = [
+            SimpleNamespace(
+                public_id=f'00000000-0000-0000-0000-{index:012d}',
+                media_type='VIDEO', file=SimpleNamespace(path=f'/tmp/broll-{index}.mp4'),
+            )
+            for index in range(1, 6)
+        ]
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return assets
+
+        class Storage:
+            def __init__(self):
+                self.deleted = []
+
+            @staticmethod
+            def ffmpeg_input(field):
+                return field.path
+
+            @staticmethod
+            def stage_temporary(source, namespace):
+                return f'https://example.test/{Path(source).name}', f'tmp/{Path(source).name}'
+
+            def delete_temporary(self, name):
+                self.deleted.append(name)
+
+        decisions = [
+            {
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': index * 1000, 'end_ms': (index + 1) * 1000,
+                'display_mode': 'FULLSCREEN', 'transform': {}, 'entry': {}, 'exit': {},
+            }
+            for index, asset in enumerate(assets)
+        ]
+        runner, storage = Mock(), Storage()
+        BrollRenderService(runner=runner, storage=storage).apply(
+            SimpleNamespace(public_id='chunked-project', broll_assets=Assets()),
+            Path('/tmp/master.mp4'), Path('/tmp/output.mp4'), decisions,
+            1920, 1080, duration_ms=6000,
+        )
+
+        calls = [call.args[0] for call in runner.run.call_args_list]
+        chunk_calls = [command for command in calls if '-filter_complex' in command]
+        self.assertGreater(len(chunk_calls), 1)
+        self.assertTrue(all(command.count('-i') <= 2 for command in chunk_calls))
+        self.assertIn('concat', calls[-1])
+        self.assertEqual(len(storage.deleted), len(chunk_calls))
+
     def test_renderer_composites_image_on_real_ffmpeg_canvas(self):
         runner = FFmpegRunner()
         with tempfile.TemporaryDirectory() as directory:

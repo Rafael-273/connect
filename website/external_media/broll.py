@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import tempfile
 from copy import deepcopy
 from pathlib import Path
 
@@ -295,6 +296,11 @@ class BrollTimelineService:
 class BrollRenderService:
     """Executes approved timeline decisions without making editorial choices."""
 
+    # A single FFmpeg graph opens every input even if those assets are never
+    # visible together. Beyond this point render in temporal chunks instead.
+    MAX_MONOLITHIC_SOURCES = 4
+    MAX_CHUNK_DURATION_MS = 20_000
+
     def __init__(self, runner=None, storage=None):
         self.runner = runner or FFmpegRunner()
         self.storage = storage
@@ -352,6 +358,11 @@ class BrollRenderService:
             if duration_ms is not None
             else max(int(item['end_ms']) for item, _asset, _input_index in available)
         )
+        if len(input_indexes) > self.MAX_MONOLITHIC_SOURCES:
+            return self._apply_chunked(
+                project_ref, video_path, output_path, available, width, height,
+                timeline_duration_ms,
+            )
         segments = self._segments(available, timeline_duration_ms)
         filters = self._timeline_filters(segments, width, height)
         command.extend(['-filter_complex', ';'.join(filters), '-map', '[broll_output]', '-map', '0:a?', '-c:v', 'libx264'])
@@ -378,6 +389,120 @@ class BrollRenderService:
             project_ref, len(available), Path(output_path).name,
         )
         return output_path
+
+    def _apply_chunked(self, project_ref, video_path, output_path, available, width, height, duration_ms):
+        """Render temporal chunks so FFmpeg only opens sources visible in each one.
+
+        Completed chunks are moved to S3 immediately by ``stage_temporary``.
+        This bounds both resident memory (active inputs per chunk) and workflow
+        disk usage (one local chunk plus the final concat output).
+        """
+        segments = self._chunk_segments(available, duration_ms)
+        logger.info(
+            'broll_render_chunked_start project=%s chunks=%s layers=%s max_sources_per_graph=%s',
+            project_ref, len(segments), len(available), self.MAX_MONOLITHIC_SOURCES,
+        )
+        staged_inputs, temporary_names, local_parts = [], [], []
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='broll-concat-', dir=output_path.parent) as directory:
+            workdir = Path(directory)
+            try:
+                for index, (start_ms, end_ms, active) in enumerate(segments):
+                    part = workdir / f'part-{index:04d}.mp4'
+                    self._render_chunk(
+                        project_ref, video_path, part, active, start_ms, end_ms, width, height,
+                    )
+                    if self.storage:
+                        staged, temporary_name = self.storage.stage_temporary(
+                            part, f'project-{project_ref}-broll-chunks',
+                        )
+                        staged_inputs.append(staged)
+                        temporary_names.append(temporary_name)
+                    else:
+                        staged_inputs.append(part)
+                        local_parts.append(part)
+                self._concat_chunks(project_ref, staged_inputs, output_path, workdir)
+            finally:
+                for name in temporary_names:
+                    self.storage.delete_temporary(name)
+                for part in local_parts:
+                    part.unlink(missing_ok=True)
+        logger.info(
+            'broll_render_chunked_done project=%s chunks=%s output=%s',
+            project_ref, len(segments), output_path.name,
+        )
+        return output_path
+
+    @classmethod
+    def _chunk_segments(cls, available, duration_ms):
+        chunks = []
+        for start_ms, end_ms, active in cls._segments(available, duration_ms):
+            for chunk_start in range(start_ms, end_ms, cls.MAX_CHUNK_DURATION_MS):
+                chunk_end = min(end_ms, chunk_start + cls.MAX_CHUNK_DURATION_MS)
+                chunks.append((chunk_start, chunk_end, active))
+        return chunks
+
+    def _render_chunk(self, project_ref, video_path, output_path, active, start_ms, end_ms, width, height):
+        duration = max(.001, (end_ms - start_ms) / 1000)
+        command = [
+            settings.FFMPEG_BINARY, '-y', '-ss', f'{start_ms / 1000:.3f}',
+            '-i', FFmpegRunner.input_arg(video_path),
+        ]
+        input_indexes, indexed_active = {}, []
+        for item, asset, _old_index in active:
+            asset_id = str(asset.public_id)
+            input_index = input_indexes.get(asset_id)
+            if input_index is None:
+                source = self.storage.ffmpeg_input(asset.file) if self.storage else asset.file.path
+                if asset.media_type == ProjectBrollAsset.MediaType.IMAGE:
+                    command.extend(['-loop', '1', '-i', FFmpegRunner.input_arg(source)])
+                else:
+                    command.extend(['-stream_loop', '-1', '-i', FFmpegRunner.input_arg(source)])
+                input_index = len(input_indexes) + 1
+                input_indexes[asset_id] = input_index
+            indexed_active.append((item, asset, input_index))
+        filters = ['[0:v]setpts=PTS-STARTPTS[chunk_master]']
+        previous = '[chunk_master]'
+        for layer, (item, asset, input_index) in enumerate(indexed_active, start=1):
+            prepared = f'[chunk_broll_{layer}]'
+            filters.append(self._broll_filter(
+                f'[{input_index}:v]', prepared, item, asset, start_ms, end_ms, width, height,
+            ))
+            composited = f'[chunk_layer_{layer}]'
+            filters.append(self._overlay_filter(previous, prepared, composited, item, start_ms, end_ms))
+            previous = composited
+        filters.append(f'{previous}format=yuv420p[chunk_output]')
+        command.extend([
+            '-t', f'{duration:.3f}', '-filter_complex', ';'.join(filters),
+            '-map', '[chunk_output]', '-map', '0:a?', '-c:v', 'libx264',
+        ])
+        if settings.EXTERNAL_MEDIA_RENDER_PRESET:
+            command.extend(['-preset', settings.EXTERNAL_MEDIA_RENDER_PRESET])
+        command.extend([
+            '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac',
+            '-avoid_negative_ts', 'make_zero', str(output_path),
+        ])
+        logger.info(
+            'broll_render_chunk_start project=%s range_ms=%s-%s active_layers=%s sources=%s',
+            project_ref, start_ms, end_ms, len(indexed_active), len(input_indexes),
+        )
+        self.runner.run(command, timeout=settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT)
+
+    def _concat_chunks(self, project_ref, chunks, output_path, workdir):
+        manifest = Path(workdir) / 'chunks.ffconcat'
+        lines = ['ffconcat version 1.0']
+        for chunk in chunks:
+            value = str(chunk).replace('\\', '\\\\').replace("'", r"'\\''")
+            lines.append(f"file '{value}'")
+        manifest.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        command = [
+            settings.FFMPEG_BINARY, '-y', '-f', 'concat', '-safe', '0',
+            '-protocol_whitelist', 'file,http,https,tcp,tls,crypto', '-i', str(manifest),
+            '-c', 'copy', '-movflags', '+faststart', str(output_path),
+        ]
+        logger.info('broll_render_concat_start project=%s chunks=%s', project_ref, len(chunks))
+        self.runner.run(command, timeout=settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT)
 
     @staticmethod
     def _segments(available, duration_ms):
