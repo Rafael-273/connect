@@ -14,7 +14,6 @@ from ..models.external_media import (
     MediaTemplatePlugin,
     PreviewSession,
     ProxyProfile,
-    ProjectBlockMedia,
     ProjectBrollAsset,
     ProjectSourceProxy,
     SubtitleCue,
@@ -32,6 +31,14 @@ from .workspace import JobWorkspace
 # The final interactive-review assembly is 30 fps. A manual cut may be as
 # short as one rendered frame, which is important for trimming a take's tail.
 MIN_MANUAL_CUT_MS = 33
+
+# Before this version, a phone video carrying a 90°/270° display rotation
+# could have its proxy calculated from its encoded (landscape) dimensions.
+# FFmpeg then rotated the frame and scaled it into that landscape geometry,
+# permanently stretching the people in the browser preview.  Keep this value
+# with the proxy rather than trusting an old READY status, so projects opened
+# after the fix transparently get one correctly shaped source proxy.
+SOURCE_PROXY_GEOMETRY_VERSION = 2
 
 
 class ProjectProxyService:
@@ -60,37 +67,33 @@ class ProjectProxyService:
                 proxy.status == ProjectSourceProxy.Status.READY
                 and proxy.proxy_file
                 and proxy.source_storage_name == field.name
+                and (proxy.metadata or {}).get('geometry_version') == SOURCE_PROXY_GEOMETRY_VERSION
             ):
                 # A proxy is a persistent project asset; opening the review must not rebuild it.
                 continue
             proxy.source_storage_name = field.name
             try:
-                reference = cls._ready_upload_preview(project, source)
-                if reference:
-                    proxy.proxy_file.name = reference.preview_file.name
-                    proxy.duration_ms = reference.duration_ms
-                    if not proxy.duration_ms:
-                        proxy.duration_ms = assembly._duration_ms(
-                            storage.ffmpeg_input(reference.preview_file)
-                        )
-                    proxy.metadata = {'reused_upload_proxy': True, 'temporal_parity': 'trim_applied_at_playback'}
-                else:
-                    media_input = storage.input(field)
-                    with JobWorkspace(
-                        project.public_id,
-                        'interactive-preview',
-                        estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
-                    ) as workspace:
-                        output = workspace.file('proxy', 'proxy.mp4')
-                        assembly.create_proxy(media_input.get_ffmpeg_input(), output, profile=profile)
-                        proxy.duration_ms = assembly._duration_ms(output)
-                        with output.open('rb') as handle:
-                            proxy.proxy_file.save('proxy.mp4', File(handle), save=False)
-                        proxy.metadata = {
-                            'reused_upload_proxy': False,
-                            'profile': profile.code,
-                            'temporal_parity': 'verified_by_duration',
-                        }
+                # Do not reuse ProjectBlockMedia.preview_file here.  Those files
+                # predate the rotation-aware proxy geometry and are exactly what
+                # would make the "Voltar ao original" preview look stretched.
+                # This small per-source asset is generated once and then cached
+                # with the geometry version above.
+                media_input = storage.input(field)
+                with JobWorkspace(
+                    project.public_id,
+                    'interactive-preview',
+                    estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
+                ) as workspace:
+                    output = workspace.file('proxy', 'proxy.mp4')
+                    assembly.create_proxy(media_input.get_ffmpeg_input(), output, profile=profile)
+                    proxy.duration_ms = assembly._duration_ms(output)
+                    with output.open('rb') as handle:
+                        proxy.proxy_file.save('proxy.mp4', File(handle), save=False)
+                    proxy.metadata = {
+                        'geometry_version': SOURCE_PROXY_GEOMETRY_VERSION,
+                        'profile': profile.code,
+                        'temporal_parity': 'verified_by_duration',
+                    }
                 proxy.status = ProjectSourceProxy.Status.READY
                 proxy.error_message = ''
                 proxy.save()
@@ -104,17 +107,6 @@ class ProjectProxyService:
                 'Não foi possível preparar o preview de: ' + ', '.join(errors[:3]) + '.'
             )
         return manifest
-
-    @staticmethod
-    def _ready_upload_preview(project, source):
-        if source.get('kind') not in {'upload', 'custom_upload'}:
-            return None
-        return ProjectBlockMedia.objects.filter(
-            project=project,
-            pk=source.get('source_reference'),
-            preview_status=ProjectBlockMedia.PreviewStatus.READY,
-        ).exclude(preview_file='').first()
-
 
 class PreviewCapabilityRegistry:
     CUTS = 'CUTS'
@@ -363,14 +355,21 @@ class PreviewCompositionService:
                 'external_media_project_preview_master',
                 kwargs={'public_id': project.public_id},
             )
-        has_manual_transforms = any(
+        has_reframe_override = any(
             item.get('type') == 'reframe'
-            and item.get('enabled', True)
-            and (item.get('metadata') or {}).get('manual_transform')
+            and (
+                not item.get('enabled', True)
+                or (item.get('metadata') or {}).get('manual_transform')
+            )
             for item in operations
         )
+        # The assembled review master already contains the automatic crop. Any
+        # user override (including “original framing”) must instead preview the
+        # source proxy, otherwise pixels removed by the first crop cannot return.
+        if has_reframe_override:
+            review_master_url = None
         fidelity = {key: cls.FIDELITY[key] for key in capabilities['available']}
-        if review_master_url and not has_manual_transforms and 'TRANSFORMS' in fidelity:
+        if review_master_url and not has_reframe_override and 'TRANSFORMS' in fidelity:
             fidelity['TRANSFORMS'] = 'EXACT'
         return {
             'schema': 'connect.internal_timeline.v1',
@@ -596,6 +595,15 @@ class TimelineRevisionService:
         if not target or target.get('type') != 'reframe':
             raise ValueError('Enquadramento não encontrado nesta timeline.')
         previous = deepcopy((target.get('metadata') or {}).get('manual_transform'))
+        if values.get('restore_auto'):
+            target['enabled'] = True
+            target.setdefault('metadata', {}).pop('manual_transform', None)
+            revision = cls._create(locked, current.source_manifest, decisions, 'Enquadramento automático restaurado', member, current)
+            session = cls.session(locked, member, revision)
+            cls._record(session, current, revision, 'RESTORE_AUTO_REFRAME', {
+                'decision_id': decision_id,
+            }, {'decision_id': decision_id, 'manual_transform': previous}, member)
+            return revision
         transform = {
             'scale': min(2.0, max(1.0, float(values.get('scale') or 1))),
             'x': min(1.0, max(-1.0, float(values.get('x') or 0))),

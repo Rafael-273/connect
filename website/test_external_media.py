@@ -1878,6 +1878,27 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
         self.assertEqual(project.block_media.count(), 1)
 
+    @patch('website.views.external_media.run_external_media_project.apply_async')
+    def test_review_project_can_be_reprocessed_from_the_interactive_editor(self, apply_async):
+        project = self.make_project()
+        project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        project.current_step = 'Revise e aprove a edição antes de finalizar'
+        project.save(update_fields=['status', 'current_step', 'update_at'])
+        ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='video.mp4',
+            file=SimpleUploadedFile('video.mp4', b'video', content_type='video/mp4'), file_size=5,
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('external_media_project_run', args=[project.public_id]))
+
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.status, ExternalMediaProject.Status.PENDING)
+        self.assertEqual(project.current_step, 'Projeto adicionado à fila')
+        self.assertTrue(project.celery_task_id)
+        self.assertEqual(apply_async.call_args.kwargs['task_id'], project.celery_task_id)
+
     def test_finished_project_can_reopen_interactive_review_without_reprocessing(self):
         project = self.make_project()
         revision = TimelineRevision.objects.create(
@@ -2247,6 +2268,42 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
 
         response = self.client.get(reverse('admin_external_media_template_edit', args=[self.template.pk]))
         self.assertRedirects(response, reverse('admin_external_media_version_edit', args=[self.version.pk]))
+
+    def test_deleting_unused_template_releases_name_and_slug_for_reuse(self):
+        template = MediaTemplate.objects.create(
+            name='Reels', slug='reels', category=MediaTemplate.Category.REELS,
+        )
+        MediaTemplateVersion.objects.create(
+            template=template, version=1, status=MediaTemplateVersion.Status.DRAFT,
+            preset=self.preset, subtitle_style=self.style, output_languages=['pt'],
+        )
+
+        response = self.client.post(
+            reverse('admin_external_media_template_delete', args=[template.pk]),
+        )
+
+        self.assertRedirects(response, reverse('admin_external_media_templates'))
+        self.assertFalse(MediaTemplate.all_objects.filter(pk=template.pk).exists())
+        recreated = MediaTemplate.objects.create(
+            name='Reels', slug='reels', category=MediaTemplate.Category.REELS,
+        )
+        self.assertEqual(recreated.name, 'Reels')
+
+    def test_create_releases_legacy_soft_deleted_template_name(self):
+        archived = MediaTemplate.objects.create(
+            name='Reels', slug='reels', category=MediaTemplate.Category.REELS,
+        )
+        archived.delete()
+
+        response = self.client.post(
+            reverse('admin_external_media_template_create'),
+            self._version_edit_payload(name='Reels'),
+        )
+
+        self.assertEqual(response.status_code, 302)
+        recreated = MediaTemplate.objects.get(name='Reels')
+        self.assertEqual(recreated.slug, 'reels')
+        self.assertFalse(MediaTemplate.all_objects.filter(pk=archived.pk).exists())
 
     def test_admin_can_edit_glossary_term(self):
         term = GlossaryTerm.objects.create(
@@ -2989,6 +3046,23 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(command[command.index('-ss') + 1], '1.250')
         self.assertEqual(command[command.index('-t') + 1], '7.000')
 
+    def test_display_rotation_is_included_in_proxy_dimensions(self):
+        runner = Mock()
+        runner.run.return_value = json.dumps({
+            'streams': [{
+                'width': 1920,
+                'height': 1080,
+                'side_data_list': [{'rotation': 90}],
+            }],
+        })
+        service = VideoAssemblyService(runner=runner)
+
+        self.assertEqual(service._video_dimensions(Path('/tmp/phone.mov')), (1080, 1920))
+        service.create_proxy(Path('/tmp/phone.mov'), Path('/tmp/proxy.mp4'))
+
+        command = runner.run.call_args.args[0]
+        self.assertIn('scale=854:1518:flags=fast_bilinear,fps=30,setsar=1', command)
+
     def test_speech_edit_removes_leading_breath_before_each_take(self):
         with tempfile.TemporaryDirectory() as directory:
             wav_path = Path(directory) / 'analysis.wav'
@@ -3456,6 +3530,102 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         box_height_with_margin = (780.0 - 300.0) * 1.3
         self.assertGreaterEqual(crop_height + 1, box_height_with_margin)
 
+    def test_auto_reframe_body_mode_tightens_an_already_vertical_group(self):
+        service = AutoReframeService(priority='body', safe_margin=0.15, top_margin=0.12, smoothing=1.0)
+        source_width, source_height = 1080, 1920
+        cover_width, cover_height = AutoReframeService.cover_crop_size(
+            source_width, source_height, 1080, 1920,
+        )
+        crop_width, crop_height = service._smart_crop_size(
+            # Union of two people: preserve both, but do not retain the large
+            # empty ceiling from the original camera framing.
+            observations=[(0.0, (100.0, 500.0, 980.0, 1700.0))],
+            cover_width=cover_width,
+            cover_height=cover_height,
+            source_width=source_width,
+            source_height=source_height,
+            target_ratio=1080 / 1920,
+        )
+        self.assertLess(crop_width, cover_width)
+        self.assertLess(crop_height, cover_height)
+        target_y = service._target_crop_y(
+            top=500.0,
+            bottom=1700.0,
+            crop_height=crop_height,
+            max_y=source_height - crop_height,
+        )
+        self.assertGreater(target_y, 0)
+
+    def test_auto_reframe_body_mode_recovers_from_an_edge_to_edge_portrait_detection(self):
+        service = AutoReframeService(priority='body', safe_margin=0.15, top_margin=0.12, smoothing=1.0)
+        crop_width, crop_height = service._smart_crop_size(
+            observations=[(0.0, (0.0, 0.0, 854.0, 1518.0))],
+            cover_width=854,
+            cover_height=1518,
+            source_width=854,
+            source_height=1518,
+            target_ratio=854 / 1518,
+        )
+        self.assertLess(crop_width, 854)
+        self.assertLess(crop_height, 1518)
+        target_y = service._target_crop_y(
+            top=0,
+            bottom=1518,
+            crop_height=crop_height,
+            max_y=1518 - crop_height,
+        )
+        self.assertGreater(target_y, 0)
+
+    def test_auto_reframe_compact_portrait_group_uses_tighter_headroom(self):
+        service = AutoReframeService(priority='body', safe_margin=0.15, top_margin=0.12)
+        generic = service._target_crop_y(300, 1200, 1214, 304)
+        compact = service._target_crop_y(300, 1200, 1214, 304, compact_portrait=True)
+        self.assertGreater(compact, generic)
+        self.assertEqual(round(compact), round(300 - (1214 * .025)))
+
+    def test_manual_reframe_offsets_match_the_editor_image_direction(self):
+        project = SimpleNamespace(
+            approved_timeline_revision=SimpleNamespace(
+                source_manifest={'sources': [{'id': 'camera-1'}]},
+                edit_decision_set={'operations': [{
+                    'type': 'reframe', 'source_id': 'camera-1', 'enabled': True,
+                    'plan_reference': {
+                        'analysis_width': 1080, 'analysis_height': 1920,
+                        'plan': {
+                            'crop_width': 1080, 'crop_height': 1920,
+                            'keyframes': [{'time_seconds': 0, 'x': 0, 'y': 0}],
+                        },
+                    },
+                    # Negative Y moves the displayed image up in the editor,
+                    # therefore the final FFmpeg crop must move down.
+                    'metadata': {'manual_transform': {'scale': 1.25, 'x': 1, 'y': -1}},
+                }]},
+            ),
+        )
+
+        result = ExternalMediaProjectPipeline._approved_reframe_plans(project, [])
+        plan = result[0]['plan']
+        self.assertEqual((plan['crop_width'], plan['crop_height']), (864, 1536))
+        self.assertEqual((plan['keyframes'][0]['x'], plan['keyframes'][0]['y']), (0, 384))
+
+    def test_reframe_can_be_disabled_for_one_source(self):
+        project = SimpleNamespace(
+            approved_timeline_revision=SimpleNamespace(
+                source_manifest={'sources': [{'id': 'camera-1'}]},
+                edit_decision_set={'operations': [{
+                    'type': 'reframe', 'source_id': 'camera-1', 'enabled': False,
+                }]},
+            ),
+        )
+        fallback = [{'analysis_width': 1080, 'analysis_height': 1920, 'plan': {
+            'crop_width': 864, 'crop_height': 1536, 'keyframes': [],
+        }}]
+
+        self.assertEqual(
+            ExternalMediaProjectPipeline._approved_reframe_plans(project, fallback),
+            [{'disabled': True}],
+        )
+
     def test_auto_reframe_vertical_crop_preserves_headroom(self):
         service = AutoReframeService(priority='face', safe_margin=0.15, top_margin=0.18, smoothing=1.0)
         centered_y = ((290 + 850) / 2) - (600 / 2)
@@ -3477,6 +3647,15 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         )
         self.assertLess(top, 400.0)
         self.assertGreaterEqual(bottom - top, 1080 * 0.48 - 1)
+
+    def test_auto_reframe_keeps_portrait_group_box_compact(self):
+        _left, top, _right, bottom = AutoReframeService._normalize_detection_box(
+            100.0, 500.0, 980.0, 1400.0, 1080.0, 1518.0, compact_portrait=True,
+        )
+        # Preserve a little hair room, but do not manufacture a taller body
+        # box that would force a crop with a large empty ceiling.
+        self.assertEqual(round(top), 392)
+        self.assertEqual(round(bottom), 1400)
 
     def test_auto_reframe_face_box_keeps_top_close_to_head(self):
         left, top, width, height = AutoReframeService._face_priority_box(800, 260, 120, 120)

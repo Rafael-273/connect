@@ -5,6 +5,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
 from django.db.models.deletion import ProtectedError
+from django.utils.text import slugify
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -143,7 +144,10 @@ class AdminExternalMediaTemplateDeleteView(LoginRequiredMixin, AdminRequiredMixi
             return redirect('admin_external_media_templates')
         try:
             with transaction.atomic():
-                template.delete()
+                # Templates sem projetos não precisam permanecer arquivados. Além
+                # de remover versões e blocos sem uso, isso libera name/slug para
+                # uma nova configuração com o mesmo nome.
+                template.delete(force_policy=HARD_DELETE)
             messages.success(request, f'Template "{name}" excluído.')
         except ProtectedError:
             messages.error(request, f'Template "{name}" não pode ser excluído porque está em uso.')
@@ -255,6 +259,9 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             messages.warning(request, 'Cadastre um preset de renderização antes de criar templates de mídia.')
             return redirect('admin_external_media_templates')
 
+        if is_create:
+            self._purge_deleted_template_conflicts(request.POST.get('name', ''))
+
         template_form = AdminMediaTemplateForm(
             request.POST,
             request.FILES,
@@ -302,6 +309,21 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             self.template_name,
             self._context(template, version, form, block_formset, template_form, is_create=is_create),
         )
+
+    @staticmethod
+    def _purge_deleted_template_conflicts(name):
+        """Release names held by legacy soft-deleted templates without projects."""
+        candidate = str(name or '').strip()
+        candidate_slug = slugify(candidate)
+        if not candidate or not candidate_slug:
+            return
+        archived = MediaTemplate.all_objects.filter(deleted__isnull=False).filter(
+            Q(name__iexact=candidate) | Q(slug=candidate_slug),
+        )
+        for template in archived:
+            if ExternalMediaProject.objects.filter(template_version__template=template).exists():
+                continue
+            template.delete(force_policy=HARD_DELETE)
 
     @staticmethod
     def _default_preset_and_style():

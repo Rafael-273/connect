@@ -1926,7 +1926,14 @@ class VideoAssemblyService:
         if auto_reframe_config:
             analysis_source = analysis_source or source
             if reframe_plan_data is not None:
-                plan_payload = reframe_plan_data.get('plan')
+                # A reviewer can opt out of Auto Reframe for one take. Keep a
+                # sentinel in the persisted plan list so the final pass does
+                # not analyze that take again and silently restore the crop.
+                if reframe_plan_data.get('disabled'):
+                    auto_reframe_config = None
+                    plan_payload = None
+                else:
+                    plan_payload = reframe_plan_data.get('plan')
                 if plan_payload:
                     reframe_plan = AutoReframePlan.from_dict(plan_payload)
                     analysis_width = int(reframe_plan_data.get('analysis_width') or 0)
@@ -2033,7 +2040,9 @@ class VideoAssemblyService:
         # ``WIDTHxHEIGHT`` CSV representation.
         output = self.runner.run([
             settings.FFPROBE_BINARY, '-v', 'error', '-probesize', '50M', '-analyzeduration', '50M',
-            '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'json',
+            '-select_streams', 'v:0',
+            '-show_entries', 'stream=width,height:stream_tags=rotate:stream_side_data=rotation',
+            '-of', 'json',
             FFmpegRunner.input_arg(source),
         ])
         try:
@@ -2043,6 +2052,22 @@ class VideoAssemblyService:
             height = int(stream.get('height') or 0)
             if width < 2 or height < 2:
                 raise ValueError('missing dimensions')
+            # FFmpeg automatically applies an MP4/MOV display matrix before
+            # `-vf`.  A phone recording can therefore report 1920x1080 pixels
+            # while its rendered frame is 1080x1920.  Using the encoded size to
+            # calculate a proxy or an Auto Reframe crop makes FFmpeg scale the
+            # already-rotated image into the wrong aspect ratio, visibly
+            # stretching people in vertical projects.
+            side_data = stream.get('side_data_list') or []
+            rotation = next((item.get('rotation') for item in side_data if item.get('rotation') is not None), None)
+            if rotation is None:
+                rotation = (stream.get('tags') or {}).get('rotate')
+            try:
+                rotation = int(round(float(rotation or 0))) % 360
+            except (TypeError, ValueError):
+                rotation = 0
+            if rotation in {90, 270}:
+                width, height = height, width
             return width, height
         except (TypeError, ValueError, KeyError, IndexError, json.JSONDecodeError) as exc:
             logger.warning(
@@ -2623,9 +2648,17 @@ class ExternalMediaProjectPipeline:
             for item in operations
             if item.get('type') == 'reframe' and item.get('enabled', True)
         }
+        disabled_sources = {
+            item.get('source_id')
+            for item in operations
+            if item.get('type') == 'reframe' and not item.get('enabled', True)
+        }
         fallback_plans = list(fallback_plans or [])
         result = []
         for index, source in enumerate(manifest.get('sources') or []):
+            if source.get('id') in disabled_sources:
+                result.append({'disabled': True})
+                continue
             raw_fallback = fallback_plans[index] if index < len(fallback_plans) else None
             fallback = dict(raw_fallback) if raw_fallback else None
             operation = by_source.get(source.get('id'))
@@ -2642,8 +2675,13 @@ class ExternalMediaProjectPipeline:
             scale = min(2.0, max(1.0, float(manual.get('scale') or 1)))
             new_width = max(2, round(old_width / scale / 2) * 2)
             new_height = max(2, round(old_height / scale / 2) * 2)
-            offset_x = float(manual.get('x') or 0) * max(0, analysis_width - new_width) / 2
-            offset_y = float(manual.get('y') or 0) * max(0, analysis_height - new_height) / 2
+            # CSS preview translations move the *image* (positive values move
+            # it right/down). FFmpeg moves the crop window instead, so its
+            # offsets must be the inverse. Keeping this mapping aligned is
+            # especially important for a vertical group shot: a negative Y in
+            # the editor removes empty headroom by moving the crop downward.
+            offset_x = -float(manual.get('x') or 0) * max(0, analysis_width - new_width) / 2
+            offset_y = -float(manual.get('y') or 0) * max(0, analysis_height - new_height) / 2
             keyframes = []
             for keyframe in plan.get('keyframes') or []:
                 center_x = float(keyframe.get('x') or 0) + old_width / 2

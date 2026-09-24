@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-AUTO_REFRAME_PLAN_VERSION = 11
+# Version 17 makes source dimensions rotation-aware and lets body/group framing
+# tighten a source that already has the output aspect ratio.  Plans generated from a
+# phone file whose pixels are landscape but whose display matrix is portrait
+# cannot safely be replayed: FFmpeg applies that matrix before our crop filter.
+AUTO_REFRAME_PLAN_VERSION = 17
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -362,6 +366,12 @@ class AutoReframeService:
         face_priority_detection = bool(faces and self.priority == 'face')
         if face_priority_detection:
             boxes = [self._face_priority_box(x, y, width, height) for x, y, width, height in faces]
+        elif self.priority == 'body' and faces:
+            # In a vertical group shot, HOG often joins the people with the
+            # background and reports almost the whole frame as one "body".
+            # Faces give a much more reliable group boundary; expand each one
+            # only to an upper-torso box, then keep their union in frame.
+            boxes = [self._stable_body_box_from_face(x, y, width, height) for x, y, width, height in faces]
         elif body_boxes:
             boxes = body_boxes
         else:
@@ -379,6 +389,7 @@ class AutoReframeService:
         if not face_priority_detection:
             left, top, right, bottom = self._normalize_detection_box(
                 left, top, right, bottom, original_width, original_height,
+                compact_portrait=(self.priority == 'body' and original_height > original_width),
             )
         return (
             (
@@ -466,10 +477,20 @@ class AutoReframeService:
     ):
         required_widths = []
         required_heights = []
+        body_only_widths = []
+        body_only_heights = []
         margin_factor = 1.0 + (2.0 * self.safe_margin)
         for _time, (left, top, right, bottom) in observations:
-            box_width = max(1.0, right - left) * margin_factor
-            box_height = max(1.0, bottom - top) * margin_factor
+            raw_box_width = max(1.0, right - left)
+            raw_box_height = max(1.0, bottom - top)
+            # Keep the unpadded group bounds too. When the input is already
+            # 9:16, the normal cover crop is the entire source and has no room
+            # to move down over people with a large empty area above them.
+            # The body mode may use these bounds to make a modest, safe zoom.
+            body_only_widths.append(max(raw_box_width, raw_box_height * target_ratio))
+            body_only_heights.append(max(raw_box_height, raw_box_width / target_ratio))
+            box_width = raw_box_width * margin_factor
+            box_height = raw_box_height * margin_factor
             width = max(box_width, box_height * target_ratio)
             height = width / target_ratio
             required_widths.append(width)
@@ -478,6 +499,8 @@ class AutoReframeService:
         index = min(len(required_widths) - 1, math.floor(len(required_widths) * 0.90))
         desired_width = sorted(required_widths)[index]
         desired_height = sorted(required_heights)[index]
+        body_only_width = sorted(body_only_widths)[index]
+        body_only_height = sorted(body_only_heights)[index]
         # NOTE: on purpose, this never zooms in further just to gain horizontal pan room to
         # center an off-center person (a "centering zoom" was tried before and reverted): since
         # width/height are locked to `target_ratio`, any extra zoom tight enough to fully center
@@ -495,8 +518,27 @@ class AutoReframeService:
             crop_width = cover_width * tracking_zoom
             crop_height = cover_height * tracking_zoom
         else:
-            crop_width = min(cover_width, max(cover_width * 0.99, desired_width))
-            crop_height = min(cover_height, max(cover_height * 0.99, desired_height))
+            if cover_height >= source_height - 2:
+                # An already-vertical recording has max_y == 0 with a plain
+                # cover crop. Prefer a group-tight crop (never smaller than the
+                # detected people) so `_target_crop_y` can remove dead space
+                # above them. The 78% floor prevents an unstable close-up when
+                # body detection briefly returns a very small box.
+                detector_filled_frame = body_only_width >= cover_width * 0.96
+                if detector_filled_frame:
+                    # A frequent HOG fallback on a two-person phone clip is a
+                    # single box from edge to edge. That is not useful framing
+                    # information; accepting it yields no reframe at all and
+                    # retains the empty ceiling. Use a restrained 1.35x group
+                    # composition instead, matching the safe manual adjustment.
+                    crop_width = cover_width * 0.74
+                    crop_height = cover_height * 0.74
+                else:
+                    crop_width = min(cover_width, max(cover_width * 0.78, body_only_width))
+                    crop_height = min(cover_height, max(cover_height * 0.78, body_only_height))
+            else:
+                crop_width = min(cover_width, max(cover_width * 0.99, desired_width))
+                crop_height = min(cover_height, max(cover_height * 0.99, desired_height))
         if crop_width / crop_height > target_ratio:
             crop_height = crop_width / target_ratio
         else:
@@ -569,7 +611,14 @@ class AutoReframeService:
             (
                 time_seconds,
                 min(max_x, max(0.0, self._horizontal_anchor_x(left, top, right, bottom) - crop_width / 2.0)),
-                self._target_crop_y(top, bottom, crop_height, max_y),
+                self._target_crop_y(
+                    top, bottom, crop_height, max_y,
+                    compact_portrait=(
+                        self.priority == 'body'
+                        and source_height > source_width
+                        and crop_height > crop_width
+                    ),
+                ),
             )
             for time_seconds, (left, top, right, bottom) in observations
         ]
@@ -635,8 +684,13 @@ class AutoReframeService:
             values = values[trim:-trim]
         return values[len(values) // 2]
 
-    def _target_crop_y(self, top, bottom, crop_height, max_y):
-        ideal_y = top - (crop_height * self.top_margin)
+    def _target_crop_y(self, top, bottom, crop_height, max_y, compact_portrait=False):
+        # The body boxes already include a small hair allowance. Keeping the
+        # generic 12% headroom after a portrait group zoom leaves a conspicuous
+        # empty ceiling. The detector box already reserves hair room, so retain
+        # a visible but tight 2.5% composition margin above it.
+        top_margin = min(self.top_margin, 0.025) if compact_portrait else self.top_margin
+        ideal_y = top - (crop_height * top_margin)
         lowest_y_that_preserves_bottom = bottom + (crop_height * self.safe_margin) - crop_height
         if lowest_y_that_preserves_bottom <= ideal_y:
             target_y = ideal_y
@@ -644,10 +698,24 @@ class AutoReframeService:
             # Person taller than the crop: keep the head at the configured headroom and
             # sacrifice lower body instead of sliding the crop down (which cuts the head).
             target_y = ideal_y
-        return min(max_y, max(0.0, target_y))
+        target_y = min(max_y, max(0.0, target_y))
+        source_height = crop_height + max_y
+        if (
+            self.priority == 'body'
+            and crop_height > 0
+            and max_y > 0
+            and top <= source_height * 0.08
+        ):
+            # Edge-to-edge body detections often begin in the empty ceiling.
+            # Keep a stable lower crop rather than letting that false top edge
+            # pin the group at y=0.
+            target_y = max(target_y, max_y * 0.55)
+        return target_y
 
     @staticmethod
-    def _normalize_detection_box(left, top, right, bottom, source_width, source_height):
+    def _normalize_detection_box(
+        left, top, right, bottom, source_width, source_height, compact_portrait=False,
+    ):
         """Turn raw detector output into a stable interview-style MCU framing box.
 
         HOG body boxes often start below the hairline; face fallbacks can be tight.
@@ -655,11 +723,14 @@ class AutoReframeService:
         doesn't over-zoom on the face or drift with inconsistent partial detections.
         """
         box_height = max(1.0, bottom - top)
-        head_pad = box_height * 0.30
+        # Portrait group footage already has limited horizontal room. Do not
+        # turn a face/torso union into a huge pseudo-body box: that was what
+        # forced the crop to retain empty ceiling above the speakers.
+        head_pad = box_height * (0.12 if compact_portrait else 0.30)
         top = max(0.0, top - head_pad)
         box_height = max(1.0, bottom - top)
 
-        min_height = source_height * 0.58
+        min_height = 0 if compact_portrait else source_height * 0.58
         if box_height < min_height:
             center_y = (top + bottom) / 2.0
             half = min_height / 2.0

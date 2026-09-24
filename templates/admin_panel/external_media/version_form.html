@@ -30,17 +30,17 @@
     .block-position-badge { min-width: 36px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: rgba(201,9,5,.08); color: var(--color-primary); font-size: .75rem; font-weight: 800; }
     .block-remove-btn { display: inline-flex; align-items: center; gap: .35rem; color: #dc2626; font-size: .9rem; font-weight: 700; }
     .media-modal-panel.media-modal-panel-wide { width: min(1480px, 100%); }
-    .style-preview-shell { border: 1px solid #e5e7eb; border-radius: 18px; padding: 18px; transition: background .2s ease; }
-    .style-preview-shell[data-backdrop="dark"] { background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%); }
-    .style-preview-shell[data-backdrop="light"] { background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%); border-color: #cbd5e1; }
-    .style-preview-stage { position: relative; width: 100%; border-radius: 18px; overflow: hidden; transition: background .2s ease; }
+    .style-preview-shell { border: 1px solid #e5e7eb; border-radius: 18px; padding: 18px; background: #000; transition: background .2s ease; }
+    .style-preview-shell[data-backdrop="dark"] { background: #000; }
+    .style-preview-shell[data-backdrop="light"] { background: #000; border-color: #cbd5e1; }
+    .style-preview-stage { position: relative; width: 100%; aspect-ratio: var(--preview-width, 16) / var(--preview-height, 9); border-radius: 0; overflow: hidden; transition: background .2s ease; }
     .style-preview-shell[data-backdrop="dark"] .style-preview-stage { background:
         radial-gradient(circle at 75% 18%, rgba(148,163,184,.22), transparent 16%),
         linear-gradient(135deg, rgba(15,23,42,.96), rgba(30,41,59,.82)); }
     .style-preview-shell[data-backdrop="light"] .style-preview-stage { background:
         radial-gradient(circle at 75% 18%, rgba(148,163,184,.35), transparent 18%),
         linear-gradient(135deg, #f1f5f9, #e2e8f0 55%, #cbd5e1); }
-    .style-preview-stage::before { content: ""; display: block; padding-top: var(--preview-ratio, 56.25%); }
+    .style-preview-stage::before { content: none; }
     .style-preview-overlay { position: absolute; inset: 0; }
     .style-preview-subtitle {
         position: absolute; left: 50%; transform: translateX(-50%);
@@ -56,6 +56,14 @@
     .style-preview-shell[data-backdrop="light"] .style-preview-frame-label { background: rgba(15,23,42,.08); color: #334155; }
     .style-preview-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(400px, .95fr); gap: 1.25rem; }
     @media (max-width: 1100px) { .style-preview-grid { grid-template-columns: 1fr; } }
+    /* No editor amplo, apenas o formulário rola. O monitor permanece inteiro à vista. */
+    @media (min-width: 1101px) {
+        #style-modal[data-style-view="editor"] .media-modal-panel-wide { height: min(90vh, 980px); overflow: hidden; display: flex; flex-direction: column; }
+        #style-modal[data-style-view="editor"] #style-editor-view:not(.hidden) { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
+        #style-modal[data-style-view="editor"] .style-preview-grid { flex: 1; min-height: 0; overflow: hidden; }
+        #style-modal[data-style-view="editor"] .style-editor-form { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: .45rem; }
+        #style-modal[data-style-view="editor"] .style-preview-card { min-height: 0; overflow: hidden; align-self: stretch; }
+    }
     .style-preview-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
     .style-preview-meta-card { border: 1px solid #e5e7eb; border-radius: 12px; background: #fff; padding: .85rem 1rem; }
     .style-font-chip { display: inline-flex; align-items: center; gap: .45rem; border-radius: 999px; background: #f8fafc; padding: .3rem .7rem; font-size: .75rem; color: #475569; }
@@ -831,7 +839,7 @@
                         </div>
 
                         <div class="style-preview-grid">
-                            <form method="post" action="{% url 'admin_external_media_subtitle_style_save' %}" class="inline-card bg-white">
+                            <form method="post" action="{% url 'admin_external_media_subtitle_style_save' %}" class="inline-card bg-white style-editor-form">
                                 {% csrf_token %}
                                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                                 <input type="hidden" name="style_id" id="style-id">
@@ -940,7 +948,7 @@
                                 </div>
                             </form>
 
-                            <div class="inline-card bg-white">
+                            <div class="inline-card bg-white style-preview-card">
                                 <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
                                     <div>
                                         <h3 class="font-bold text-gray-900">Preview do estilo</h3>
@@ -1013,7 +1021,7 @@
                                 <div class="style-preview-shell" id="style-preview-shell" data-backdrop="dark">
                                     <div class="flex items-center justify-between gap-3 mb-3">
                                         <span id="style-preview-format-label" class="style-preview-frame-label">16:9 · 1920x1080</span>
-                                        <span class="style-preview-frame-label">Escala 1:1 com o preset selecionado</span>
+                                        <span class="style-preview-frame-label">Escala proporcional ao preset</span>
                                     </div>
                                     <div id="style-preview-stage" class="style-preview-stage" style="--preview-ratio: 56.25%;">
                                         <div class="style-preview-overlay">
@@ -1021,17 +1029,6 @@
                                             <div id="style-preview-original" class="style-preview-subtitle">Hoje queremos convidar você para estar conosco.</div>
                                             <div id="style-preview-translated" class="style-preview-subtitle">Today we want to invite you to join us.</div>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <div class="style-preview-meta mt-4">
-                                    <div class="style-preview-meta-card">
-                                        <p class="text-xs uppercase tracking-[0.18em] text-gray-400 mb-2">Legenda original</p>
-                                        <div id="style-preview-original-meta" class="text-sm text-gray-700"></div>
-                                    </div>
-                                    <div class="style-preview-meta-card">
-                                        <p class="text-xs uppercase tracking-[0.18em] text-gray-400 mb-2">Legenda traduzida</p>
-                                        <div id="style-preview-translated-meta" class="text-sm text-gray-700"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1720,6 +1717,24 @@
         return `${slice.slice(0, breakpoint).trim()}\n${clean.slice(breakpoint).trim()}`;
     }
 
+    function fitPreviewSingleLine(text, style, scale, maxWidth) {
+        const value = String(text || '');
+        const available = Math.max(1, Number(maxWidth) || 1);
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        context.font = `${style.fontWeight || 700} ${Math.max(1, style.fontSize * scale)}px "${style.font}", Arial, sans-serif`;
+        if (context.measureText(value).width <= available) return value;
+        const suffix = '…';
+        let low = 0;
+        let high = value.length;
+        while (low < high) {
+            const middle = Math.ceil((low + high) / 2);
+            if (context.measureText(`${value.slice(0, middle).trimEnd()}${suffix}`).width <= available) low = middle;
+            else high = middle - 1;
+        }
+        return `${value.slice(0, low).trimEnd()}${suffix}`;
+    }
+
     function ratioLabel(width, height) {
         const gcdValue = (a, b) => (b ? gcdValue(b, a % b) : a);
         const divisor = gcdValue(width, height);
@@ -1838,10 +1853,15 @@
         const scale = metrics?.scale || 1;
         const playResX = metrics?.playResX || 1920;
         const playResY = metrics?.playResY || 1080;
+        const isSingleLine = singleLine || style.lines <= 1;
         const margin = Number(marginOverride == null ? style.margin : marginOverride);
         const safeMargin = Number.isFinite(margin) ? Math.max(0, margin) : 0;
 
-        element.textContent = previewText(text, style);
+        const rawText = previewText(text, style);
+        const availableWidth = Math.max(1, (element.parentElement?.clientWidth || 1) - (80 * scale));
+        element.textContent = isSingleLine
+            ? fitPreviewSingleLine(rawText, style, scale, availableWidth)
+            : rawText;
         element.style.fontFamily = `"${style.font}", Arial, sans-serif`;
         element.style.fontWeight = String(style.fontWeight || 700);
         element.style.fontSize = `${Math.max(1, style.fontSize * scale)}px`;
@@ -1852,7 +1872,15 @@
         element.style.lineHeight = style.backgroundEnabled
             ? String(Math.max(0.55, 1.0 * (heightPercent / 100)))
             : '1.0';
+        // Uma linha precisa caber na área segura de 40px de cada lado do ASS.
+        // Sem esta largura explícita, o texto transbordava à direita e parecia
+        // desalinhado mesmo quando sua âncora era central.
+        // A largura continua sendo a do conteúdo. A área segura só limita o
+        // máximo; assim padding horizontal 0 não cria uma faixa até as bordas.
+        element.style.width = 'max-content';
+        element.style.maxWidth = `calc(100% - ${80 * scale}px)`;
         element.style.overflow = 'visible';
+        element.style.textOverflow = 'clip';
         // MarginV no ASS é fração da PlayResY — usar % evita erro de escala do preview.
         applyAlignment(element, style, safeMargin / playResY, 40 / playResX);
 
@@ -1902,7 +1930,7 @@
             const outlineShadow = hardOutlineShadow(style.outline, outlinePx);
             element.style.textShadow = [outlineShadow, dropShadow].filter(Boolean).join(', ') || 'none';
         }
-        element.classList.toggle('single-line', singleLine || style.lines <= 1);
+        element.classList.toggle('single-line', isSingleLine);
     }
 
     function updateStylePreviewMeta(targetId, style) {
@@ -1947,6 +1975,23 @@
         }
     }
 
+    function fitStylePreviewFrame(stage, width, height) {
+        if (!stage || !width || !height) return;
+        const shell = byId('style-preview-shell');
+        const horizontalSpace = Math.max(1, (shell?.clientWidth || stage.parentElement?.clientWidth || width) - 36);
+        const card = stage.closest('.style-preview-card');
+        const meta = card?.querySelector('.style-preview-meta');
+        const cardBottom = card?.getBoundingClientRect().bottom || window.innerHeight;
+        const stageTop = stage.getBoundingClientRect().top;
+        const metaHeight = meta?.getBoundingClientRect().height || 0;
+        // A moldura diminui em presets verticais, mas conserva exatamente a proporção
+        // do preset. Assim font-size, margens e coordenadas usam a mesma escala do ASS.
+        const verticalSpace = Math.max(160, Math.min(440, cardBottom - stageTop - metaHeight - 28));
+        const frameWidth = Math.min(horizontalSpace, verticalSpace * (width / height));
+        stage.style.width = `${Math.max(1, Math.floor(frameWidth))}px`;
+        stage.style.marginInline = 'auto';
+    }
+
     function updateStylePreview() {
         syncStyleBackgroundFields();
         const originalStyle = styleDataFromForm();
@@ -1964,7 +2009,8 @@
         const showTranslation = !!byId('style-preview-show-translation')?.checked && hasCompareStyle;
 
         if (stage) {
-            stage.style.setProperty('--preview-ratio', `${(height / width) * 100}%`);
+            stage.style.setProperty('--preview-width', width);
+            stage.style.setProperty('--preview-height', height);
         }
         const label = byId('style-preview-format-label');
         if (label) {
@@ -1972,6 +2018,7 @@
         }
 
         requestAnimationFrame(() => {
+            fitStylePreviewFrame(stage, width, height);
             const stageWidth = stage?.clientWidth || 0;
             const scale = stageWidth > 0 ? stageWidth / width : 1;
             const metrics = {
@@ -2078,6 +2125,11 @@
         updateStylePreview();
     });
     setPreviewBackdrop('dark');
+    let stylePreviewResizeTimer;
+    window.addEventListener('resize', () => {
+        window.clearTimeout(stylePreviewResizeTimer);
+        stylePreviewResizeTimer = window.setTimeout(updateStylePreview, 80);
+    });
 
     function resetBackgroundMusicForm() {
         byId('bgmusic-form-title').textContent = 'Nova trilha';

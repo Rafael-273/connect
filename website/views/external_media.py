@@ -73,7 +73,7 @@ from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
 
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
-from ..external_media.preview import PreviewCompositionService, TimelineRevisionService
+from ..external_media.preview import ProjectProxyService, PreviewCompositionService, TimelineRevisionService
 from ..external_media.overlays import OverlayAssetRenderer, OverlayTimelineService
 from ..external_media.broll import BrollTimelineService
 from ..external_media.render_workflow import enqueue_project as enqueue_render_project, enqueue_video_work
@@ -1667,6 +1667,11 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             )
             if project.status not in {
                 ExternalMediaProject.Status.DRAFT,
+                # The interactive editor is reached after the first assembly.
+                # Its “Reprocessar” action intentionally starts a fresh pipeline
+                # from the uploaded blocks, so this review state must be allowed
+                # here instead of silently treating the project as still running.
+                ExternalMediaProject.Status.AWAITING_REVIEW,
                 ExternalMediaProject.Status.ERROR,
                 ExternalMediaProject.Status.FINISHED,
                 ExternalMediaProject.Status.CANCELLED,
@@ -1788,6 +1793,11 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         if project.status not in {ExternalMediaProject.Status.AWAITING_REVIEW, ExternalMediaProject.Status.FINISHED}:
             messages.warning(request, 'O preview ficará disponível após a análise inicial.')
             return redirect('external_media_project_detail', public_id=public_id)
+        # Normally the source proxies are prepared by the pipeline.  Do the
+        # inexpensive cache check here as well: projects opened after a proxy
+        # geometry fix must not keep serving a legacy, stretched phone-video
+        # proxy just because the render itself already finished.
+        ProjectProxyService.prepare(project)
         revision = TimelineRevisionService.ensure_initial(project, self.member)
         # An AWAITING_REVIEW project with an approved revision is a project that
         # was reopened after rendering. Its approved snapshot is the source of
@@ -1807,6 +1817,24 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # normalized master was exposed to the browser, so enrich only this
         # response rather than rewriting editorial history just to change a URL.
         timeline = deepcopy(revision.timeline)
+        # Version the browser source URL with the proxy update time.  The proxy
+        # can be regenerated in place after correcting orientation metadata;
+        # without this, an already open tab may keep decoding the old video
+        # bytes from its media cache.
+        proxy_versions = {
+            proxy.source_id: int(proxy.update_at.timestamp() * 1000)
+            for proxy in project.source_proxies.filter(status=ProjectSourceProxy.Status.READY)
+            if proxy.proxy_file
+        }
+        for asset in timeline.get('assets', []):
+            version = proxy_versions.get(asset.get('id'))
+            if version:
+                asset['url'] = (
+                    reverse(
+                        'external_media_project_preview_source',
+                        kwargs={'public_id': project.public_id, 'source_id': asset['id']},
+                    ) + f'?v={version}'
+                )
         # Keep legacy revisions aligned with the final assembly frame rate.
         # RenderPreset has no fps field.
         timeline.setdefault('sequence', {})['fps'] = 30
@@ -1827,18 +1855,22 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # contain the final cuts. Use the revision's source proxies instead so
         # the editable timeline (including B-roll timing) stays authoritative.
         reopened_for_review = bool((project.configuration or {}).get('_reopened_for_review')) or reopened_terminal_review
-        if job and job.original_video and ProjectService.file_exists(job.original_video) and not reopened_for_review:
+        has_reframe_override = any(
+            item.get('type') == 'reframe'
+            and (
+                not item.get('enabled', True)
+                or (item.get('metadata') or {}).get('manual_transform')
+            )
+            for item in revision.edit_decision_set.get('operations', [])
+        )
+        if job and job.original_video and ProjectService.file_exists(job.original_video) and not reopened_for_review and not has_reframe_override:
             timeline['review_master_url'] = reverse(
                 'external_media_project_preview_master', kwargs={'public_id': project.public_id},
             )
-            has_manual_transform = any(
-                item.get('type') == 'reframe'
-                and item.get('enabled', True)
-                and (item.get('metadata') or {}).get('manual_transform')
-                for item in revision.edit_decision_set.get('operations', [])
-            )
-            if not has_manual_transform and 'TRANSFORMS' in (timeline.get('fidelity') or {}):
+            if 'TRANSFORMS' in (timeline.get('fidelity') or {}):
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
+        elif has_reframe_override:
+            timeline['review_master_url'] = None
         music = MusicService.selected_file(project.template_version)
         timeline['has_music'] = bool(music and ProjectService.file_exists(music))
         if music and ProjectService.file_exists(music):
