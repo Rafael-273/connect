@@ -515,9 +515,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const addCaptionTrack=(label,language,kind)=>{const items=captions.filter(item=>String(item.language||'').toLowerCase().startsWith(language));if(!items.length)return;items.forEach(item=>usedCaptions.add(item));makeTrack(label,captionItems(items),kind,false,true,'caption')};
         // Put simultaneous visual elements on independent lanes so both clips
         // remain visible and selectable instead of occupying the same space.
+        // The compositor paints the latest item last (therefore on top), so
+        // allocate from that end and keep the top-most visual layer at top.
         const stackElementLayers=items=>{
             const layers=[];
-            [...items].sort((a,b)=>a.start-b.start||a.end-b.end||String(a.id).localeCompare(String(b.id))).forEach(item=>{
+            [...items].reverse().forEach(item=>{
                 let layer=layers.find(candidate=>candidate.every(placed=>placed.end<=item.start||placed.start>=item.end));
                 if(!layer){layer=[];layers.push(layer)}
                 layer.push(item);
@@ -532,7 +534,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(otherCaptions.length)makeTrack('Legendas',captionItems(otherCaptions),'editor-track__caption',false,true,'caption');
         if(timeline.brolls?.length){
             const elements=timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms}});
-            stackElementLayers(elements).forEach((layer,index)=>makeTrack(index?'Camada '+(index+1):'Elementos',layer,'editor-track__broll',false,false,'broll',true));
+            stackElementLayers(elements).forEach(layer=>makeTrack('Elementos',layer,'editor-track__broll',false,false,'broll',true));
         }
         const sourceVideoSegments=videoSegments();
         makeTrack('Vídeo',sourceVideoSegments,'editor-video-clip',true,false,'video');
