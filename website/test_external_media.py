@@ -5342,7 +5342,36 @@ class BrollUnitTests(SimpleTestCase):
                 filters = command[command.index('-filter_complex') + 1]
                 self.assertIn(f'scale={width}:{height}:force_original_aspect_ratio=increase', filters)
                 self.assertIn(f'crop={width}:{height}', filters)
+                self.assertIn("x='(iw-ow)*0.25':y='(ih-oh)*0.75'", filters)
+                self.assertIn('setsar=1', filters)
                 self.assertNotIn('pad=', filters)
+
+    def test_fullscreen_broll_scale_is_a_cover_zoom_not_a_stretch(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='VIDEO', file=SimpleNamespace(path='/tmp/portrait-broll.mp4'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), [{
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': 0, 'end_ms': 1000, 'display_mode': 'FULLSCREEN',
+                'transform': {'x': .1, 'y': .9, 'scale': 1.5}, 'entry': {}, 'exit': {},
+            }], 1920, 1080,
+        )
+
+        command = runner.run.call_args.args[0]
+        filters = command[command.index('-filter_complex') + 1]
+        self.assertIn('scale=2880:1620:force_original_aspect_ratio=increase', filters)
+        self.assertIn("crop=1920:1080:x='(iw-ow)*0.1':y='(ih-oh)*0.9'", filters)
+        self.assertNotIn('scale=1920:1080:force_original_aspect_ratio=disable', filters)
 
     def test_apply_uses_dedicated_timeout_not_full_pipeline_timeout(self):
         """B-roll compositing uses ``-stream_loop -1`` for video assets, which

@@ -639,9 +639,18 @@ class BrollRenderService:
             # Limit decoded frames before scaling/cropping a looping B-roll source.
             chain.extend([f'trim=start={source_in}:duration={segment_duration}', 'setpts=PTS-STARTPTS'])
             if mode == 'FULLSCREEN':
+                # FULLSCREEN is a cover operation: enlarge the source while
+                # preserving its aspect ratio, then crop the excess.  The
+                # editor's X/Y controls choose the crop focus and Scale is a
+                # true zoom level; neither can stretch a portrait asset onto
+                # a landscape canvas.
+                zoom = min(2, max(1, float(transform.get('scale') or 1)))
+                scaled_width = max(2, round(width * zoom / 2) * 2)
+                scaled_height = max(2, round(height * zoom / 2) * 2)
                 chain.append(
-                    f'scale={width}:{height}:force_original_aspect_ratio=increase,'
-                    f"crop={width}:{height}:x='(iw-ow)*{focus_x}':y='(ih-oh)*{focus_y}'"
+                    f'scale={scaled_width}:{scaled_height}:'
+                    f'force_original_aspect_ratio=increase:flags=lanczos,setsar=1,'
+                    f"crop={width}:{height}:x='(iw-ow)*{focus_x}':y='(ih-oh)*{focus_y}',setsar=1"
                 )
             else:
                 target_w = max(80, round(width * min(.9, max(.08, float(transform.get('scale') or .28)))))

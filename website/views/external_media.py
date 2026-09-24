@@ -1954,6 +1954,19 @@ class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
         return preview_revision_response(project, self.member, revision)
 
 
+class ExternalMediaProjectPreviewVideoSplitView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        try:
+            revision = TimelineRevisionService.create_video_split(
+                project, self.member, payload.get('master_ms'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision)
+
+
 class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View):
     def get(self, request, public_id, decision_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)

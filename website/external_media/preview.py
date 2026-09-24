@@ -390,6 +390,13 @@ class PreviewCompositionService:
                 project.template_version.background_music_id or project.template_version.music_file
             ),
             'clips': clips,
+            # Visual blade points do not remove media by themselves, but must
+            # survive a reload so the member can select either resulting take.
+            'video_splits_ms': sorted({
+                cls._source_to_timeline(int(value), cuts)
+                for value in (decisions.get('video_splits_ms') or [])
+                if 0 < cls._source_to_timeline(int(value), cuts) < timeline_cursor
+            }),
             'video_tracks': [
                 {'id': 'V1', 'role': 'main', 'clips': clips},
                 {'id': 'V2', 'role': 'broll', 'clips': brolls},
@@ -541,6 +548,26 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def create_video_split(cls, project, member, master_ms):
+        """Persist a non-destructive main-video blade point in the timeline."""
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        point = max(0, int(master_ms))
+        duration = int((current.timeline.get('sequence') or {}).get('duration_ms') or 0)
+        if point < MIN_MANUAL_CUT_MS or point > duration - MIN_MANUAL_CUT_MS:
+            raise ValueError('O corte precisa ficar dentro de um vídeo, com ao menos um quadro em cada lado.')
+        decisions = deepcopy(current.edit_decision_set)
+        points = sorted({int(value) for value in (decisions.get('video_splits_ms') or [])} | {point})
+        if any(existing != point and abs(existing - point) < MIN_MANUAL_CUT_MS for existing in points):
+            raise ValueError('Já existe um corte neste quadro.')
+        decisions['video_splits_ms'] = points
+        revision = cls._create(locked, current.source_manifest, decisions, 'Vídeo dividido', member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'SPLIT_VIDEO', {'master_ms': point}, {'master_ms': point}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
     def update_subtitle(cls, project, member, cue_id, text):
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         cue = SubtitleCue.objects.select_for_update().get(pk=cue_id, track__job=locked.render_job)
@@ -593,7 +620,25 @@ class TimelineRevisionService:
         overlays = deepcopy(current.timeline.get('overlays') or [])
         target = next((item for item in overlays if item.get('id') == overlay_id), None)
         previous = deepcopy(target)
-        if delete:
+        split_at = payload.get('split_at_ms')
+        if split_at is not None and not create and not delete:
+            if not target:
+                raise ValueError('Overlay não encontrado nesta timeline.')
+            point = int(split_at)
+            start, end = int(target.get('start_ms') or 0), int(target.get('end_ms') or 0)
+            if point - start < MIN_MANUAL_CUT_MS or end - point < MIN_MANUAL_CUT_MS:
+                raise ValueError('O corte precisa deixar pelo menos um quadro em cada lado.')
+            right = deepcopy(target)
+            target['end_ms'] = point
+            right['id'] = f'{overlay_id}-split-{uuid.uuid4().hex[:8]}'
+            right['start_ms'] = point
+            # A blade cut is instantaneous; do not replay the original entry
+            # animation in the middle of an otherwise continuous overlay.
+            right['animation'] = {**(right.get('animation') or {}), 'type': 'NONE'}
+            right['source'] = 'USER'
+            overlays.append(right)
+            reason, operation = 'Overlay dividido', 'SPLIT_OVERLAY'
+        elif delete:
             if not target:
                 raise ValueError('Overlay não encontrado nesta timeline.')
             overlays.remove(target)
@@ -602,8 +647,11 @@ class TimelineRevisionService:
             if target:
                 raise ValueError('Já existe um overlay com este identificador.')
             overlay_type = str(payload.get('type') or 'TEXT').upper()
-            if overlay_type not in {'TEXT', 'QR_CODE', 'QR_CODE_CARD', 'IMAGE'}:
-                raise ValueError('Tipo de overlay não suportado.')
+            # New timeline elements are text-only.  QR Codes, images and
+            # videos are uploaded as visual media so they get the same crop,
+            # timing, transform and preview workflow as every other asset.
+            if overlay_type != 'TEXT':
+                raise ValueError('Adicione QR Codes e imagens como mídia visual. Elementos novos aceitam apenas texto.')
             target = {
                 'id': overlay_id, 'type': overlay_type, 'purpose': payload.get('purpose', ''),
                 'start_ms': max(0, int(payload.get('start_ms') or 0)),
@@ -652,7 +700,25 @@ class TimelineRevisionService:
         if not target:
             raise ValueError('B-roll não encontrado nesta timeline.')
         previous = deepcopy(target)
-        if delete:
+        split_at = payload.get('split_at_ms')
+        if split_at is not None and not delete and not restore:
+            point = int(split_at)
+            start, end = int(target.get('start_ms') or 0), int(target.get('end_ms') or 0)
+            if point - start < MIN_MANUAL_CUT_MS or end - point < MIN_MANUAL_CUT_MS:
+                raise ValueError('O corte precisa deixar pelo menos um quadro em cada lado.')
+            right = deepcopy(target)
+            target['end_ms'] = point
+            right['id'] = f'{broll_id}-split-{uuid.uuid4().hex[:8]}'
+            right['start_ms'] = point
+            target['exit'] = {**(target.get('exit') or {}), 'type': 'NONE'}
+            right['entry'] = {**(right.get('entry') or {}), 'type': 'NONE'}
+            # A video B-roll must continue from the matching source frame.
+            if str(right.get('media_type') or '').upper() == ProjectBrollAsset.MediaType.VIDEO:
+                right['source_in_ms'] = int(right.get('source_in_ms') or 0) + (point - start)
+            right['source'] = 'USER'
+            brolls.append(right)
+            reason, operation = 'B-roll dividido', 'SPLIT_BROLL'
+        elif delete:
             brolls.remove(target)
             reason, operation = 'B-roll removido', 'DELETE_BROLL'
         elif restore:
