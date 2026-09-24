@@ -226,7 +226,17 @@ class PreviewCompositionService:
         for source in source_manifest.get('sources') or []:
             if not (source.get('metadata') or {}).get('render_enabled', True):
                 continue
-            proxy = proxies.get(source['id'])
+            source_id = str(source['id'])
+            proxy = proxies.get(source_id)
+            if not proxy:
+                # A legacy project can have one proxy for the original take
+                # while its current manifest splits it into -trecho-N ranges.
+                # The ranges seek within that same file; they must therefore
+                # inherit its real duration instead of collapsing to 1 ms when
+                # an element edit creates a fresh timeline revision.
+                base_source_id, marker, segment_index = source_id.rpartition('-trecho-')
+                if marker and segment_index.isdigit():
+                    proxy = proxies.get(base_source_id)
             trim = source.get('trim') or {}
             source_in = int(trim.get('start_ms') or 0)
             raw_duration = int(

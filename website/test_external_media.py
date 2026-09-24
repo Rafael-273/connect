@@ -1305,14 +1305,15 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         job = self.make_job()
         media = ProjectBlockMedia.objects.create(
             project=project, block=self.block, position=1, original_filename='source.mp4',
-            file=SimpleUploadedFile('source.mp4', b'source', content_type='video/mp4'), duration_ms=1000,
+            file=SimpleUploadedFile('source.mp4', b'source', content_type='video/mp4'), duration_ms=5000,
+            trim_ranges=[{'start_ms': 1000, 'end_ms': 3000}],
         )
         profile = ProxyProfile.objects.create(code='test-preview', name='Preview de teste')
         ProjectSourceProxy.objects.create(
             project=project, source_id=f'project-media-{media.pk}', profile=profile,
             source_storage_name=media.file.name,
             proxy_file=SimpleUploadedFile('proxy.mp4', b'proxy', content_type='video/mp4'),
-            status=ProjectSourceProxy.Status.READY,
+            status=ProjectSourceProxy.Status.READY, duration_ms=5000,
         )
         project.render_job = job
         project.status = ExternalMediaProject.Status.FINISHED
@@ -1323,6 +1324,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIsNone(response.context['timeline']['review_master_url'])
+        self.assertEqual(response.context['timeline']['sequence']['duration_ms'], 2000)
 
     def make_reviewable_project(self):
         project = self.make_project()
