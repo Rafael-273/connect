@@ -1305,7 +1305,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         job = self.make_job()
         media = ProjectBlockMedia.objects.create(
             project=project, block=self.block, position=1, original_filename='source.mp4',
-            file=SimpleUploadedFile('source.mp4', b'source', content_type='video/mp4'), duration_ms=5000,
+            file=SimpleUploadedFile('source.mp4', b'source', content_type='video/mp4'),
             trim_ranges=[{'start_ms': 1000, 'end_ms': 3000}],
         )
         profile = ProxyProfile.objects.create(code='test-preview', name='Preview de teste')

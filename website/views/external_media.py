@@ -1812,6 +1812,18 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # normalized master was exposed to the browser, so enrich only this
         # response rather than rewriting editorial history just to change a URL.
         timeline = deepcopy(revision.timeline)
+        # Recover legacy revisions that were saved while a split source had no
+        # matching proxy/duration. Keep this revision's element changes, but
+        # borrow the video structure from the newest intact revision so a page
+        # reload immediately restores its real timeline instead of showing
+        # 00:00 until the next edit.
+        current_duration = int((timeline.get('sequence') or {}).get('duration_ms') or 0)
+        if current_duration < 1000:
+            reference_timeline = TimelineRevisionService.source_duration_reference(project, revision.parent)
+            if reference_timeline:
+                for key in ('sequence', 'assets', 'clips', 'markers', 'video_splits_ms', 'video_tracks'):
+                    if key in reference_timeline:
+                        timeline[key] = deepcopy(reference_timeline[key])
         # Version the browser source URL with the proxy update time.  The proxy
         # can be regenerated in place after correcting orientation metadata;
         # without this, an already open tab may keep decoding the old video

@@ -458,6 +458,50 @@ class PreviewCompositionService:
 
 
 class TimelineRevisionService:
+    @staticmethod
+    def source_duration_reference(project, parent=None):
+        """Return the newest usable source timeline for legacy manifests.
+
+        Older projects can have a manifest with trim ranges but without media
+        durations, and only a proxy for the unsplit take.  A source-only edit
+        must never turn that into one millisecond per clip.
+        """
+        candidates = [parent] if parent else []
+        candidates.extend(
+            project.timeline_revisions.exclude(pk=getattr(parent, 'pk', None)).order_by('-revision')[:50]
+        )
+        for revision in candidates:
+            if not revision:
+                continue
+            timeline = revision.timeline or {}
+            duration = int((timeline.get('sequence') or {}).get('duration_ms') or 0)
+            if duration >= 1000 and timeline.get('assets') and timeline.get('clips'):
+                return timeline
+        return {}
+
+    @classmethod
+    def manifest_with_reference_durations(cls, manifest, reference_timeline):
+        prepared = deepcopy(manifest)
+        known = {
+            str(item.get('id')): int(item.get('duration_ms') or 0)
+            for item in reference_timeline.get('assets', [])
+            if item.get('id') and int(item.get('duration_ms') or 0) > 0
+        }
+        for clip in reference_timeline.get('clips', []):
+            source_id = str(clip.get('asset_id') or '')
+            known[source_id] = max(known.get(source_id, 0), int(clip.get('source_out_ms') or 0))
+        for source in prepared.get('sources', []):
+            if source.get('duration_ms'):
+                continue
+            source_id = str(source.get('id') or '')
+            base_id, marker, segment_index = source_id.rpartition('-trecho-')
+            duration = known.get(source_id) or (
+                known.get(base_id) if marker and segment_index.isdigit() else 0
+            )
+            if duration:
+                source['duration_ms'] = duration
+        return prepared
+
     @classmethod
     @transaction.atomic
     def ensure_initial(cls, project, member=None):
@@ -888,13 +932,16 @@ class TimelineRevisionService:
             overlays = deepcopy(parent.timeline.get('overlays') or [])
         if brolls is None and parent:
             brolls = deepcopy(parent.timeline.get('brolls') or [])
+        composition_manifest = cls.manifest_with_reference_durations(
+            manifest, cls.source_duration_reference(project, parent),
+        )
         timeline = PreviewCompositionService.compose(
-            project, manifest, decisions, number,
+            project, composition_manifest, decisions, number,
             overlays_override=overlays, brolls_override=brolls,
         )
         revision = TimelineRevision.objects.create(
             project=project, revision=number, parent=parent, timeline=timeline,
-            source_manifest=manifest, edit_decision_set=decisions, reason=reason, created_by=member,
+            source_manifest=composition_manifest, edit_decision_set=decisions, reason=reason, created_by=member,
         )
         project.current_timeline_revision = revision
         project.preview_dirty = bool(parent)
