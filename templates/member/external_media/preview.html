@@ -268,6 +268,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function editedToMaster(ms){let removed=0;for(const [start,end] of removedSegments()){const editedStart=start-removed;if(ms<editedStart)break;removed+=end-start}return ms+removed}
     function masterToEdited(ms){let removed=0;for(const [start,end] of removedSegments()){if(ms>=end){removed+=end-start;continue}if(ms>start)return null;break}return ms-removed}
     function sourceFor(clip){ return asset(clip?.asset_id)?.url || ''; }
+    function requestVideoPlay(){
+        const pending=video.play();
+        if(pending&&typeof pending.catch==='function')pending.catch(error=>{
+            // Seeking, replacing the source or pausing while the browser is
+            // still resolving play() is expected in a timeline editor.
+            if(error?.name!=='AbortError')console.warn('Não foi possível iniciar o preview.',error);
+        });
+    }
     const filmstripCache=new Map(),filmstripQueued=new Set(),filmstripQueue=[];
     let filmstripBusy=false;
     function applyFilmstripThumbnail(key,thumbnail){document.querySelectorAll('[data-filmstrip-key]').forEach(clip=>{if(clip.dataset.filmstripKey!==key||!thumbnail)return;clip.style.backgroundImage=`url("${thumbnail}")`;clip.classList.add('has-thumbnail')})}
@@ -321,13 +329,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(useReviewMaster()){
             const source=timeline.review_master_url, masterTime=editedToMaster(globalMs)/1000;
             activeClip=clip;
-            if(video.dataset.source!==source){loading=true;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=masterTime;loading=false;if(autoplay)video.play();},{once:true});}
-            else {video.currentTime=masterTime;if(autoplay)video.play();}
+            if(video.dataset.source!==source){loading=true;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=masterTime;loading=false;if(autoplay)requestVideoPlay();},{once:true});}
+            else {video.currentTime=masterTime;if(autoplay)requestVideoPlay();}
             renderPosition(); syncMusicPosition(); return;
         }
         const source=sourceFor(clip), local=(clip.source_in_ms + globalMs-clip.timeline_in_ms)/1000;
-        if(activeClip?.id!==clip.id || video.dataset.source!==source){loading=true;activeClip=clip;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=local;loading=false;if(autoplay)video.play();},{once:true});}
-        else {video.currentTime=local;if(autoplay)video.play();}
+        if(activeClip?.id!==clip.id || video.dataset.source!==source){loading=true;activeClip=clip;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=local;loading=false;if(autoplay)requestVideoPlay();},{once:true});}
+        else {video.currentTime=local;if(autoplay)requestVideoPlay();}
         renderPosition(); syncMusicPosition();
     }
     function renderPosition(){
@@ -442,7 +450,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     video.addEventListener('ended',()=>{music.pause();if(!useReviewMaster()){const next=timeline.clips[timeline.clips.indexOf(activeClip)+1];if(next)seek(next.timeline_in_ms,true)}});
     video.addEventListener('play',()=>{configureMusic();syncMusicPosition();music.play().catch(()=>{})});
     video.addEventListener('pause',()=>music.pause());
-    play.addEventListener('click',()=>{if(video.paused){video.play();play.innerHTML='<i class="fas fa-pause"></i>'}else{video.pause();play.innerHTML='<i class="fas fa-play"></i>'}});
+    play.addEventListener('click',()=>{if(video.paused){requestVideoPlay();play.innerHTML='<i class="fas fa-pause"></i>'}else{video.pause();play.innerHTML='<i class="fas fa-play"></i>'}});
     document.getElementById('preview-previous').onclick=()=>seek(globalMs-frameDurationMs(),false);document.getElementById('preview-next').onclick=()=>seek(globalMs+frameDurationMs(),false);
     range.addEventListener('input',()=>seek(Number(range.value),!video.paused));
     function frameDurationMs(){return 1000/Math.max(1,Number(timeline.sequence.fps||30))}
@@ -505,13 +513,27 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         tracks.replaceChildren();
         const captions=timeline.captions||[], captionItems=items=>items.map(item=>({id:item.id,start:item.start_ms,end:item.end_ms,label:item.text||'Legenda'})), usedCaptions=new Set();
         const addCaptionTrack=(label,language,kind)=>{const items=captions.filter(item=>String(item.language||'').toLowerCase().startsWith(language));if(!items.length)return;items.forEach(item=>usedCaptions.add(item));makeTrack(label,captionItems(items),kind,false,true,'caption')};
+        // Put simultaneous visual elements on independent lanes so both clips
+        // remain visible and selectable instead of occupying the same space.
+        const stackElementLayers=items=>{
+            const layers=[];
+            [...items].sort((a,b)=>a.start-b.start||a.end-b.end||String(a.id).localeCompare(String(b.id))).forEach(item=>{
+                let layer=layers.find(candidate=>candidate.every(placed=>placed.end<=item.start||placed.start>=item.end));
+                if(!layer){layer=[];layers.push(layer)}
+                layer.push(item);
+            });
+            return layers;
+        };
         // The order mirrors the compositor: top-most graphics first, audio last.
-        if(timeline.overlays?.length)makeTrack('Elementos',timeline.overlays.map(item=>({start:item.start_ms,end:item.end_ms,label:item.purpose||item.type,id:item.id})),'editor-track__overlay',false,false,'overlay',true);
+        if(timeline.overlays?.length)makeTrack('Textos',timeline.overlays.map(item=>({start:item.start_ms,end:item.end_ms,label:item.purpose||item.type,id:item.id})),'editor-track__overlay',false,false,'overlay',true);
         addCaptionTrack('Legenda PT','pt','editor-track__caption editor-track__caption--pt');
         addCaptionTrack('Legenda EN','en','editor-track__caption editor-track__caption--en');
         const otherCaptions=captions.filter(item=>!usedCaptions.has(item));
         if(otherCaptions.length)makeTrack('Legendas',captionItems(otherCaptions),'editor-track__caption',false,true,'caption');
-        if(timeline.brolls?.length)makeTrack('B-roll',timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms}}),'editor-track__broll',false,false,'broll',true);
+        if(timeline.brolls?.length){
+            const elements=timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms}});
+            stackElementLayers(elements).forEach((layer,index)=>makeTrack(index?'Camada '+(index+1):'Elementos',layer,'editor-track__broll',false,false,'broll',true));
+        }
         const sourceVideoSegments=videoSegments();
         makeTrack('Vídeo',sourceVideoSegments,'editor-video-clip',true,false,'video');
         // The source audio follows the exact editorial cuts of each video take.

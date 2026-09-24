@@ -1816,20 +1816,33 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # can be regenerated in place after correcting orientation metadata;
         # without this, an already open tab may keep decoding the old video
         # bytes from its media cache.
-        proxy_versions = {
-            proxy.source_id: int(proxy.update_at.timestamp() * 1000)
+        ready_proxies = {
+            proxy.source_id: proxy
             for proxy in project.source_proxies.filter(status=ProjectSourceProxy.Status.READY)
             if proxy.proxy_file
         }
-        for asset in timeline.get('assets', []):
-            version = proxy_versions.get(asset.get('id'))
-            if version:
-                asset['url'] = (
-                    reverse(
-                        'external_media_project_preview_source',
-                        kwargs={'public_id': project.public_id, 'source_id': asset['id']},
-                    ) + f'?v={version}'
-                )
+        assets = timeline.get('assets', [])
+        assets_have_proxies = bool(assets)
+        for asset in assets:
+            source_id = str(asset.get('id') or '')
+            # Trim ranges were introduced after the first source proxies.  A
+            # segment such as project-media-5-trecho-1 legitimately reuses the
+            # proxy for project-media-5 and seeks within it at playback.
+            base_source_id = re.sub(r'-trecho-\d+$', '', source_id)
+            proxy = ready_proxies.get(source_id) or ready_proxies.get(base_source_id)
+            if not proxy:
+                assets_have_proxies = False
+                # Do not leave a stale source URL in legacy timelines: the
+                # filmstrip/video element would request it and emit a 404.
+                asset['url'] = None
+                continue
+            version = int(proxy.update_at.timestamp() * 1000)
+            asset['url'] = (
+                reverse(
+                    'external_media_project_preview_source',
+                    kwargs={'public_id': project.public_id, 'source_id': proxy.source_id},
+                ) + f'?v={version}'
+            )
         # Keep legacy revisions aligned with the final assembly frame rate.
         # RenderPreset has no fps field.
         timeline.setdefault('sequence', {})['fps'] = 30
@@ -1858,13 +1871,22 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             )
             for item in revision.edit_decision_set.get('operations', [])
         )
-        if job and job.original_video and ProjectService.file_exists(job.original_video) and not reopened_for_review and not has_reframe_override:
+        # A completed delivery can be opened directly by URL, without passing
+        # through the explicit “reopen” action.  In both cases the editor must
+        # use its lightweight source proxies instead of streaming the full
+        # delivery master; otherwise a finished project behaves differently
+        # from a reopened one and makes timeline edits misleadingly expensive.
+        use_editable_source_proxies = (
+            (reopened_for_review or project.status == ExternalMediaProject.Status.FINISHED or has_reframe_override)
+            and assets_have_proxies
+        )
+        if job and job.original_video and ProjectService.file_exists(job.original_video) and not use_editable_source_proxies:
             timeline['review_master_url'] = reverse(
                 'external_media_project_preview_master', kwargs={'public_id': project.public_id},
             )
             if 'TRANSFORMS' in (timeline.get('fidelity') or {}):
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
-        elif has_reframe_override:
+        elif use_editable_source_proxies:
             timeline['review_master_url'] = None
         music = MusicService.selected_file(project.template_version)
         timeline['has_music'] = bool(music and ProjectService.file_exists(music))
@@ -1894,12 +1916,21 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
 
 class ExternalMediaProjectPreviewSourceView(ExternalMediaRequiredMixin, View):
     def get(self, request, public_id, source_id):
-        proxy = get_object_or_404(
-            ProjectSourceProxy,
+        proxies = ProjectSourceProxy.objects.filter(
             project__public_id=public_id,
-            source_id=source_id,
             status=ProjectSourceProxy.Status.READY,
         )
+        proxy = proxies.filter(source_id=source_id).first()
+        if not proxy:
+            # Older projects generated one proxy per uploaded take.  Their
+            # current timeline can contain multiple trim ranges for that same
+            # take, whose ids end with "-trecho-N".  They share the source
+            # media and therefore must share the base proxy as well.
+            base_source_id = re.sub(r'-trecho-\d+$', '', source_id)
+            if base_source_id != source_id:
+                proxy = proxies.filter(source_id=base_source_id).first()
+        if not proxy:
+            raise Http404('Proxy de preview não encontrado.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
         return protected_file_response(request, proxy.proxy_file)

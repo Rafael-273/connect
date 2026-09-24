@@ -116,7 +116,9 @@ from website.models.external_media import (
     ProjectPipelineStep,
     ProjectBlockMedia,
     ProjectCustomBlock,
+    ProjectSourceProxy,
     PreviewSession,
+    ProxyProfile,
     RenderPreset,
     SubtitleCue,
     SubtitleReviewSession,
@@ -1297,6 +1299,30 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(response, 'connect.internal_timeline.v1')
         self.assertContains(response, 'id="review-panel"')
         self.assertContains(response, 'id="close-review-panel"')
+
+    def test_finished_project_preview_uses_editable_proxies_not_delivery_master(self):
+        project = self.make_project()
+        job = self.make_job()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='source.mp4',
+            file=SimpleUploadedFile('source.mp4', b'source', content_type='video/mp4'), duration_ms=1000,
+        )
+        profile = ProxyProfile.objects.create(code='test-preview', name='Preview de teste')
+        ProjectSourceProxy.objects.create(
+            project=project, source_id=f'project-media-{media.pk}', profile=profile,
+            source_storage_name=media.file.name,
+            proxy_file=SimpleUploadedFile('proxy.mp4', b'proxy', content_type='video/mp4'),
+            status=ProjectSourceProxy.Status.READY,
+        )
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+        TimelineRevisionService.ensure_initial(project, self.member)
+
+        response = self.client.get(reverse('external_media_project_preview', args=[project.public_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['timeline']['review_master_url'])
 
     def make_reviewable_project(self):
         project = self.make_project()
