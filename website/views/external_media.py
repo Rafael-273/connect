@@ -73,7 +73,7 @@ from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
 
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
-from ..external_media.preview import ProjectProxyService, PreviewCompositionService, TimelineRevisionService
+from ..external_media.preview import PreviewCompositionService, TimelineRevisionService
 from ..external_media.overlays import OverlayAssetRenderer, OverlayTimelineService
 from ..external_media.broll import BrollTimelineService
 from ..external_media.render_workflow import enqueue_project as enqueue_render_project, enqueue_video_work
@@ -1793,11 +1793,6 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         if project.status not in {ExternalMediaProject.Status.AWAITING_REVIEW, ExternalMediaProject.Status.FINISHED}:
             messages.warning(request, 'O preview ficará disponível após a análise inicial.')
             return redirect('external_media_project_detail', public_id=public_id)
-        # Normally the source proxies are prepared by the pipeline.  Do the
-        # inexpensive cache check here as well: projects opened after a proxy
-        # geometry fix must not keep serving a legacy, stretched phone-video
-        # proxy just because the render itself already finished.
-        ProjectProxyService.prepare(project)
         revision = TimelineRevisionService.ensure_initial(project, self.member)
         # An AWAITING_REVIEW project with an approved revision is a project that
         # was reopened after rendering. Its approved snapshot is the source of
