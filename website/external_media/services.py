@@ -1849,7 +1849,14 @@ class VideoAssemblyService:
                 settings.FFMPEG_BINARY, '-y',
                 '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
                 '-f', 'concat', '-safe', '0', '-i', str(concat_file),
-                '-c', 'copy', '-movflags', '+faststart', str(assembled),
+                # Video is already normalized to CFR 30 fps. Re-encode only
+                # the concatenated audio clock: stream-copying AAC packets
+                # preserves per-take encoder delay/timestamps and can make
+                # speech drift further away as a vertical project progresses.
+                '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'copy', '-c:a', 'aac',
+                '-b:a', '192k', '-af', 'aresample=async=1000:first_pts=0',
+                '-ar', '48000', '-ac', '2', '-avoid_negative_ts', 'make_zero',
+                '-movflags', '+faststart', str(assembled),
             ])
         finally:
             for temporary_name in temporary_normalized:
@@ -1889,7 +1896,10 @@ class VideoAssemblyService:
             # Every proxy has a zero-based, 48 kHz audio timeline.  This makes the
             # proxy reliable for analysis and prevents timestamp drift when it is
             # later used as the source of an edit decision.
-            '-af', 'aresample=async=1:first_pts=0',
+            # `async=1` can only correct one sample per second (~0.02 ms/s),
+            # which is not enough for VFR phone recordings after CFR video
+            # normalization. 1000 keeps speech locked to the 30 fps clock.
+            '-af', 'aresample=async=1000:first_pts=0',
             '-ar', '48000', '-ac', '2', '-shortest', '-avoid_negative_ts', 'make_zero',
             '-movflags', '+faststart', str(destination),
         ])
@@ -1991,10 +2001,10 @@ class VideoAssemblyService:
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',
             '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
             '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k',
-            # Reset and compensate the audio clock at the one place every source
-            # passes through before concat.  Without this, a VFR upload converted
-            # to 30 fps can keep its original audio timestamps and slowly diverge.
-            '-af', 'aresample=async=1:first_pts=0',
+            # Reset and actively compensate the audio clock at the one place
+            # every source passes through before concat. A VFR upload converted
+            # to 30 fps otherwise retains timestamps that make speech drift.
+            '-af', 'aresample=async=1000:first_pts=0',
             '-ar', '48000', '-ac', '2', '-colorspace', 'bt709', '-color_primaries', 'bt709',
             '-color_trc', 'bt709', '-shortest', '-avoid_negative_ts', 'make_zero', str(destination),
         ])

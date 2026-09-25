@@ -3604,6 +3604,26 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         )
         self.assertGreater(target_y, 0)
 
+    def test_auto_reframe_portrait_body_mode_uses_one_centered_stable_group_anchor(self):
+        service = AutoReframeService(priority='body', smoothing=.8)
+        keyframes = service._stable_portrait_body_keyframes(
+            observations=[
+                (0.0, (120, 430, 970, 1670)),
+                # Speaking gestures and detector jitter must not pan the crop.
+                (1.0, (90, 410, 1010, 1680)),
+                (2.0, (180, 450, 940, 1660)),
+            ],
+            crop_width=800,
+            crop_height=1422,
+            source_width=1080,
+            source_height=1920,
+        )
+
+        self.assertEqual(len(keyframes), 1)
+        self.assertEqual(keyframes[0].time_seconds, 0)
+        self.assertEqual(keyframes[0].x, 140)
+        self.assertEqual(keyframes[0].y % 8, 0)
+
     def test_auto_reframe_compact_portrait_group_uses_tighter_headroom(self):
         service = AutoReframeService(priority='body', safe_margin=0.15, top_margin=0.12)
         generic = service._target_crop_y(300, 1200, 1214, 304)

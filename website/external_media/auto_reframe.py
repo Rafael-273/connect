@@ -16,11 +16,12 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-# Version 17 makes source dimensions rotation-aware and lets body/group framing
+# Version 18 makes source dimensions rotation-aware, keeps portrait Body
+# group framing stable, and lets body/group framing
 # tighten a source that already has the output aspect ratio.  Plans generated from a
 # phone file whose pixels are landscape but whose display matrix is portrait
 # cannot safely be replayed: FFmpeg applies that matrix before our crop filter.
-AUTO_REFRAME_PLAN_VERSION = 17
+AUTO_REFRAME_PLAN_VERSION = 18
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -260,14 +261,23 @@ class AutoReframeService:
                 observations, crop_width, crop_height, source_width, source_height,
                 output_width / output_height,
             )
-            keyframes = (
-                self._stable_face_keyframes(
+            if self.priority == 'face':
+                keyframes = self._stable_face_keyframes(
                     observations, crop_width, crop_height, source_width, source_height,
                 )
-                if self.priority == 'face' else self._smooth_keyframes(
+            elif self.priority == 'body' and source_height > source_width and output_height > output_width:
+                # A vertical Body setup is normally a static, two-person or
+                # standing presentation shot. HOG/face boxes fluctuate with
+                # hands and who is speaking, so tracking every sample makes a
+                # stationary camera look as if it is panning. Use one robust
+                # group anchor for the take instead.
+                keyframes = self._stable_portrait_body_keyframes(
                     observations, crop_width, crop_height, source_width, source_height,
                 )
-            )
+            else:
+                keyframes = self._smooth_keyframes(
+                    observations, crop_width, crop_height, source_width, source_height,
+                )
             return AutoReframePlan(crop_width, crop_height, tuple(keyframes))
         except Exception as exc:
             # Some OpenCV exceptions include the source string. Log only its
@@ -598,6 +608,29 @@ class AutoReframeService:
         geometric_center_x = max_x / 2.0
         if abs(target_x - geometric_center_x) <= crop_width * 0.10:
             target_x = geometric_center_x
+        return [ReframeKeyframe(0.0, target_x, target_y)]
+
+    def _stable_portrait_body_keyframes(
+        self, observations, crop_width, crop_height, source_width, source_height,
+    ):
+        """Keep a vertically-shot group in a consistent, non-moving frame."""
+        max_x = max(0.0, source_width - crop_width)
+        max_y = max(0.0, source_height - crop_height)
+        target_ys = [
+            self._target_crop_y(
+                top, bottom, crop_height, max_y, compact_portrait=True,
+            )
+            for _time, (_left, top, _right, bottom) in observations
+        ]
+        locked_y = self._locked_vertical_target(target_ys, max_y)
+        if locked_y is None:
+            values = sorted(target_ys)
+            locked_y = values[len(values) // 2] if values else max_y / 2.0
+        # A centered group composition remains identical between takes from a
+        # stationary camera. Quantizing Y removes tiny per-take detector noise
+        # without visible stepping in the resulting crop.
+        target_x = max_x / 2.0
+        target_y = min(max_y, max(0.0, round(locked_y / 8.0) * 8.0))
         return [ReframeKeyframe(0.0, target_x, target_y)]
 
     def _smooth_keyframes(self, observations, crop_width, crop_height, source_width, source_height):
