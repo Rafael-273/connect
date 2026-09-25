@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-# Version 20 makes source dimensions rotation-aware, keeps portrait Body
+# Version 21 makes source dimensions rotation-aware, keeps portrait Body
 # group framing stable, and lets body/group framing
 # tighten a source that already has the output aspect ratio.  Plans generated from a
 # phone file whose pixels are landscape but whose display matrix is portrait
 # cannot safely be replayed: FFmpeg applies that matrix before our crop filter.
-AUTO_REFRAME_PLAN_VERSION = 20
+AUTO_REFRAME_PLAN_VERSION = 21
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):

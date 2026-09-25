@@ -160,6 +160,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 {% block media_content %}
 {{ timeline|json_script:"preview-timeline" }}
 {{ overlay_presets|json_script:"overlay-presets" }}
+{{ music_tracks|json_script:"music-tracks" }}
 <div class="preview-shell">
     <div class="preview-layout">
         <section class="media-card preview-player-card overflow-hidden">
@@ -223,6 +224,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 (() => {
     let timeline = JSON.parse(document.getElementById('preview-timeline').textContent);
     const overlayPresets = JSON.parse(document.getElementById('overlay-presets').textContent);
+    const musicTracks = JSON.parse(document.getElementById('music-tracks').textContent);
     const video = document.getElementById('preview-video'), range = document.getElementById('preview-range');
     const sourceCaption = document.getElementById('preview-caption-source'), translatedCaption = document.getElementById('preview-caption-translated'), time = document.getElementById('preview-time');
     const overlayLayer = document.getElementById('preview-overlay-layer'), brollLayer = document.getElementById('preview-broll-layer'), transformBox = document.getElementById('preview-transform-box');
@@ -338,7 +340,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             renderPosition(); syncMusicPosition(); return;
         }
         const source=sourceFor(clip), local=(clip.source_in_ms + globalMs-clip.timeline_in_ms)/1000;
-        if(activeClip?.id!==clip.id || video.dataset.source!==source){loading=true;activeClip=clip;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=local;loading=false;if(autoplay)requestVideoPlay();},{once:true});}
+        if(activeClip?.id!==clip.id || video.dataset.source!==source){loading=true;activeClip=clip;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=local;video.addEventListener('seeked',()=>{loading=false;if(autoplay)requestVideoPlay();},{once:true});},{once:true});}
         else {video.currentTime=local;if(autoplay)requestVideoPlay();}
         renderPosition(); syncMusicPosition();
     }
@@ -693,5 +695,6 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     new MutationObserver(renameVisualMedia).observe(document.getElementById('editor-tracks'),{childList:true,subtree:true});
     configureMusic();renderList();seek(globalMs);renameVisualMedia();updateEditControls();
 })();
+    document.addEventListener('dblclick',async event=>{if(!event.target.closest('.editor-track--music'))return;const choices=musicTracks.map(track=>`${track.id}: ${track.name}`).join('\n');const selected=prompt(`Escolha a trilha pelo número:\n${choices}`);if(!selected)return;try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{track_id:Number(selected)});timeline.music={...(timeline.music||{}),...data.music};configureMusic();syncMusicPosition();alert('Trilha selecionada. Ela será aplicada no próximo reprocessamento.')}catch(error){alert(error.message)}});
 </script>
 {% endblock %}

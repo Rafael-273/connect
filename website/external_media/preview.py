@@ -310,12 +310,16 @@ class PreviewCompositionService:
             for cue in SubtitleCue.objects.filter(track__job_id=project.render_job_id).select_related('track').order_by(
                 'track__language', 'start_ms', 'pk',
             ):
+                start_ms = cls._source_to_timeline(cue.start_ms, cuts)
+                end_ms = cls._source_to_timeline(cue.end_ms, cuts)
+                if end_ms <= start_ms:
+                    continue
                 captions.append({
                     'id': cue.pk,
                     'track_id': cue.track_id,
                     'language': cue.track.language,
-                    'start_ms': cue.start_ms,
-                    'end_ms': cue.end_ms,
+                    'start_ms': start_ms,
+                    'end_ms': end_ms,
                     'text': cue.text,
                     'is_source': cue.track.is_source,
                 })

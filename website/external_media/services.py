@@ -26,6 +26,7 @@ from safedelete.models import HARD_DELETE
 
 from website.ai import AIServiceError, TranscriptionSegment, get_ai_service
 from website.models.external_media import (
+    BackgroundMusicTrack,
     ExternalMediaJob,
     ExternalMediaProject,
     GlossaryTerm,
@@ -2174,16 +2175,26 @@ class VideoAssemblyService:
             candidates.append((index, source_width, source_height, plan, max_y))
 
         # A single take gains nothing from a shared reference. With two or more,
-        # use the widest safe crop (never cut a person) and a lower-quartile Y
-        # anchor (enough headroom even if one observation sits a little higher).
+        # use the widest *detected* group crop and a lower-quartile Y anchor.
+        # A full-frame plan is a detector fallback, not a valid vote for the
+        # composition: letting it participate would erase the crop for every
+        # other take and reintroduce the empty ceiling.
         if len(candidates) < 2:
             return []
-        crop_width_ratio = max(plan.crop_width / source_width for _, source_width, _, plan, _ in candidates)
+        framed_candidates = [
+            candidate for candidate in candidates
+            if candidate[3].crop_width / candidate[1] < 0.97
+        ]
+        reference_candidates = framed_candidates or candidates
+        crop_width_ratio = (
+            max(plan.crop_width / source_width for _, source_width, _, plan, _ in reference_candidates)
+            if framed_candidates else 0.84
+        )
         y_ratios = sorted(
-            keyframe.y / max_y for _, _, _, plan, max_y in candidates if max_y > 0
+            keyframe.y / max_y for _, _, _, plan, max_y in reference_candidates if max_y > 0
             for keyframe in plan.keyframes[:1]
         )
-        shared_y_ratio = y_ratios[max(0, (len(y_ratios) - 1) // 4)] if y_ratios else 0.0
+        shared_y_ratio = y_ratios[max(0, (len(y_ratios) - 1) // 4)] if y_ratios else 0.65
         output_ratio = output_width / output_height
         for index, source_width, source_height, _plan, _max_y in candidates:
             crop_width = self._even(min(source_width, source_width * crop_width_ratio))
@@ -2471,7 +2482,9 @@ class ExternalMediaProjectPipeline:
         if not sources:
             raise ExternalMediaError('Nenhum vídeo foi encontrado para montar o projeto.')
         lut_field = self.lut.selected_file(version, codes)
-        music_field = self.music.selected_file(version, codes)
+        override_id = (project.configuration or {}).get('music_override_track_id')
+        override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
+        music_field = override.audio_file if override else self.music.selected_file(version, codes)
         lut = materialize_small_asset(lut_field, 'template_lut') if lut_field else None
         music = materialize_small_asset(music_field, 'template_music') if music_field else None
         available = {

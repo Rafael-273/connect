@@ -48,6 +48,7 @@ from ..forms.external_media import (
     VideoMasteringUploadForm,
 )
 from ..models.external_media import (
+    BackgroundMusicTrack,
     ExternalMediaJob,
     ExternalMediaProject,
     ExternalMediaProjectExport,
@@ -1900,7 +1901,9 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
         elif use_editable_source_proxies:
             timeline['review_master_url'] = None
-        music = MusicService.selected_file(project.template_version)
+        override_id = (project.configuration or {}).get('music_override_track_id')
+        override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
+        music = override.audio_file if override else MusicService.selected_file(project.template_version)
         timeline['has_music'] = bool(music and ProjectService.file_exists(music))
         if music and ProjectService.file_exists(music):
             timeline['music'] = {
@@ -1920,6 +1923,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             }
         return render(request, 'member/external_media/preview.html', self.media_context(
             project=project, revision=revision, session=session, timeline=timeline,
+            music_tracks=list(BackgroundMusicTrack.objects.exclude(audio_file='').values('id', 'name', 'category', 'tempo')),
             overlay_presets=list(OverlayPreset.objects.filter(is_active=True).values(
                 'code', 'name', 'overlay_type', 'style', 'position', 'animation',
             )),
@@ -1973,12 +1977,23 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
             ).prefetch_related('template_version__plugins'),
             public_id=public_id,
         )
-        music = MusicService.selected_file(project.template_version)
+        override_id = (project.configuration or {}).get('music_override_track_id')
+        override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
+        music = override.audio_file if override else MusicService.selected_file(project.template_version)
         if not music or not ProjectService.file_exists(music):
             raise Http404('A trilha deste template não está disponível.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
         return protected_file_response(request, music)
+
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        track = get_object_or_404(BackgroundMusicTrack, pk=payload.get('track_id'), audio_file__isnull=False)
+        project.configuration = {**(project.configuration or {}), 'music_override_track_id': track.pk}
+        project.save(update_fields=['configuration', 'update_at'])
+        revision = project.current_timeline_revision or TimelineRevisionService.ensure_initial(project, self.member)
+        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline, 'music': {'url': reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id}), 'name': track.name}})
 
 
 def preview_revision_response(project, member, revision, **extra):
