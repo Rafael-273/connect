@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-# Version 18 makes source dimensions rotation-aware, keeps portrait Body
+# Version 20 makes source dimensions rotation-aware, keeps portrait Body
 # group framing stable, and lets body/group framing
 # tighten a source that already has the output aspect ratio.  Plans generated from a
 # phone file whose pixels are landscape but whose display matrix is portrait
 # cannot safely be replayed: FFmpeg applies that matrix before our crop filter.
-AUTO_REFRAME_PLAN_VERSION = 18
+AUTO_REFRAME_PLAN_VERSION = 20
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -530,22 +530,18 @@ class AutoReframeService:
         else:
             if cover_height >= source_height - 2:
                 # An already-vertical recording has max_y == 0 with a plain
-                # cover crop. Prefer a group-tight crop (never smaller than the
-                # detected people) so `_target_crop_y` can remove dead space
-                # above them. The 78% floor prevents an unstable close-up when
-                # body detection briefly returns a very small box.
+                # cover crop. Use one conservative baseline for every take:
+                # per-take detector confidence used to make a static camera
+                # alternate between no crop, a tight crop, and a cropped arm.
+                # We only widen that baseline when reliable group bounds need
+                # it, so the presenters retain a consistent composition.
                 detector_filled_frame = body_only_width >= cover_width * 0.96
                 if detector_filled_frame:
-                    # A frequent HOG fallback on a two-person phone clip is a
-                    # single box from edge to edge. That is not useful framing
-                    # information; accepting it yields no reframe at all and
-                    # retains the empty ceiling. Use a restrained 1.35x group
-                    # composition instead, matching the safe manual adjustment.
-                    crop_width = cover_width * 0.74
-                    crop_height = cover_height * 0.74
+                    crop_width = cover_width * 0.84
+                    crop_height = cover_height * 0.84
                 else:
-                    crop_width = min(cover_width, max(cover_width * 0.78, body_only_width))
-                    crop_height = min(cover_height, max(cover_height * 0.78, body_only_height))
+                    crop_width = min(cover_width, max(cover_width * 0.84, body_only_width * 1.04))
+                    crop_height = min(cover_height, max(cover_height * 0.84, body_only_height * 1.04))
             else:
                 crop_width = min(cover_width, max(cover_width * 0.99, desired_width))
                 crop_height = min(cover_height, max(cover_height * 0.99, desired_height))

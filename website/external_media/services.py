@@ -48,7 +48,7 @@ from .audio_noise import (
     ReductionMode,
 )
 from .audio_validation import AudioValidationService
-from .auto_reframe import AUTO_REFRAME_PLAN_VERSION, AutoReframePlan, AutoReframeService
+from .auto_reframe import AUTO_REFRAME_PLAN_VERSION, AutoReframePlan, AutoReframeService, ReframeKeyframe
 from .background_voice import BackgroundVoiceRemovalService
 from .broll import BrollRenderService, BrollTimelineService
 from .canonical import (
@@ -1721,6 +1721,18 @@ class VideoAssemblyService:
         ]
         analysis_sources = [source.path for source in analysis_source_items]
         reframe_plans = reframe_plans or []
+        if (
+            not reframe_plans
+            and auto_reframe_config
+            and auto_reframe_config.get('priority') == 'body'
+            and height > width
+        ):
+            # Phone recordings split into editorial takes still share the same
+            # camera framing. Build their plans together so a detector blip in
+            # one take cannot make the group jump in zoom or vertical position.
+            reframe_plans = self._consistent_portrait_body_plans(
+                analysis_sources, width, height, auto_reframe_config,
+            )
         timeline_cursor = 0
         normalize_jobs = []
         for index, source_item in enumerate(source_items):
@@ -1827,11 +1839,16 @@ class VideoAssemblyService:
             for index, reframe_plan in enumerate(reframe_results):
                 effective_auto_reframe_config = normalize_jobs[index]['auto_reframe_config']
                 used_auto_reframe = bool(reframe_plan) or used_auto_reframe
+                supplied_plan = normalize_jobs[index]['reframe_plan_data']
                 self.last_reframe_plans.append(
                     (
-                        serialized_reframe_plans[index]
-                        if index in serialized_reframe_plans
-                        else self._serialize_reframe_plan(reframe_plan, analysis_sources[index])
+                        supplied_plan
+                        if supplied_plan is not None
+                        else (
+                            serialized_reframe_plans[index]
+                            if index in serialized_reframe_plans
+                            else self._serialize_reframe_plan(reframe_plan, analysis_sources[index])
+                        )
                     ) if effective_auto_reframe_config else None
                 )
             concat_file = workdir / 'concat.txt'
@@ -1854,7 +1871,7 @@ class VideoAssemblyService:
                 # preserves per-take encoder delay/timestamps and can make
                 # speech drift further away as a vertical project progresses.
                 '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'copy', '-c:a', 'aac',
-                '-b:a', '192k', '-af', 'aresample=async=1000:first_pts=0',
+                '-b:a', '192k', '-af', 'asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0',
                 '-ar', '48000', '-ac', '2', '-avoid_negative_ts', 'make_zero',
                 '-movflags', '+faststart', str(assembled),
             ])
@@ -1885,10 +1902,17 @@ class VideoAssemblyService:
         fps = int(getattr(profile, 'fps', 0) or 30)
         crf = int(getattr(profile, 'video_crf', 0) or settings.EXTERNAL_MEDIA_PROXY_CRF)
         audio_bitrate = int(getattr(profile, 'audio_bitrate_kbps', 0) or 96)
+        video_filters = [
+            *self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'trim'),
+            f'scale={proxy_width}:{proxy_height}:flags=fast_bilinear', f'fps={fps}', 'setsar=1',
+        ]
+        audio_filters = [
+            *self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'atrim'),
+            'aresample=async=1000:first_pts=0',
+        ]
         command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source)]
         command.extend([
-            *self._trim_output_args(trim_start_ms, trim_end_ms),
-            '-vf', f'scale={proxy_width}:{proxy_height}:flags=fast_bilinear,fps={fps},setsar=1',
+            '-vf', ','.join(video_filters),
             '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264',
             '-preset', settings.EXTERNAL_MEDIA_PROXY_PRESET,
             '-crf', str(crf),
@@ -1899,7 +1923,7 @@ class VideoAssemblyService:
             # `async=1` can only correct one sample per second (~0.02 ms/s),
             # which is not enough for VFR phone recordings after CFR video
             # normalization. 1000 keeps speech locked to the 30 fps clock.
-            '-af', 'aresample=async=1000:first_pts=0',
+            '-af', ','.join(audio_filters),
             '-ar', '48000', '-ac', '2', '-shortest', '-avoid_negative_ts', 'make_zero',
             '-movflags', '+faststart', str(destination),
         ])
@@ -1925,7 +1949,10 @@ class VideoAssemblyService:
         command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source)]
         if not has_audio:
             command.extend(['-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo'])
-        filters = []
+        # Rebase both streams after every source trim. A phone take can carry
+        # an audio PTS offset even if its video begins at zero; output-side
+        # seeking preserves that gap and it becomes audible after concat.
+        filters = self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'trim')
         if metadata.is_hdr:
             filters.extend([
                 'format=gbrpf32le',
@@ -1997,14 +2024,16 @@ class VideoAssemblyService:
                     f"[lut_original][lut_graded]blend=all_expr='A*{1 - intensity:.3f}+B*{intensity:.3f}'",
                 ])
         command.extend([
-            *self._trim_output_args(trim_start_ms, trim_end_ms),
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',
             '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
             '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k',
             # Reset and actively compensate the audio clock at the one place
             # every source passes through before concat. A VFR upload converted
             # to 30 fps otherwise retains timestamps that make speech drift.
-            '-af', 'aresample=async=1000:first_pts=0',
+            '-af', ','.join([
+                *self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'atrim'),
+                'aresample=async=1000:first_pts=0',
+            ]),
             '-ar', '48000', '-ac', '2', '-colorspace', 'bt709', '-color_primaries', 'bt709',
             '-color_trc', 'bt709', '-shortest', '-avoid_negative_ts', 'make_zero', str(destination),
         ])
@@ -2104,13 +2133,79 @@ class VideoAssemblyService:
         return AssemblySource(Path(source))
 
     @staticmethod
-    def _trim_output_args(trim_start_ms=0, trim_end_ms=None):
+    def _timeline_trim_filters(trim_start_ms=0, trim_end_ms=None, filter_name='trim'):
+        """Trim a stream and reset its timestamps to the edited timeline."""
         start_ms = max(0, int(trim_start_ms or 0))
-        args = ['-ss', f'{start_ms / 1000:.3f}'] if start_ms else []
-        if trim_end_ms:
-            duration_ms = max(1, int(trim_end_ms) - start_ms)
-            args.extend(['-t', f'{duration_ms / 1000:.3f}'])
-        return args
+        end_ms = max(0, int(trim_end_ms or 0)) if trim_end_ms else None
+        filters = []
+        if start_ms or end_ms:
+            options = []
+            if start_ms:
+                options.append(f'start={start_ms / 1000:.3f}')
+            if end_ms:
+                options.append(f'end={max(start_ms + 1, end_ms) / 1000:.3f}')
+            filters.append(f"{filter_name}={':'.join(options)}")
+        filters.append('asetpts=PTS-STARTPTS' if filter_name == 'atrim' else 'setpts=PTS-STARTPTS')
+        return filters
+
+    def _consistent_portrait_body_plans(self, analysis_sources, output_width, output_height, config):
+        """Create compatible Body plans with one shared composition per recording."""
+        plans = [None] * len(analysis_sources)
+        candidates = []
+        for index, source in enumerate(analysis_sources):
+            try:
+                source_width, source_height = self._video_dimensions(source)
+            except ExternalMediaError:
+                continue
+            if source_height <= source_width:
+                continue
+            plan = AutoReframeService(
+                priority='body',
+                safe_margin=config.get('safe_margin', 0.15),
+                top_margin=config.get('top_margin'),
+                interval_frames=config.get('interval_frames'),
+                smoothing=config.get('smoothing', 0.18),
+                horizontal_smoothing=config.get('horizontal_smoothing'),
+                vertical_lock=config.get('vertical_lock'),
+            ).analyze(source, output_width, output_height)
+            if not plan or not plan.keyframes:
+                continue
+            max_y = max(0, source_height - plan.crop_height)
+            candidates.append((index, source_width, source_height, plan, max_y))
+
+        # A single take gains nothing from a shared reference. With two or more,
+        # use the widest safe crop (never cut a person) and a lower-quartile Y
+        # anchor (enough headroom even if one observation sits a little higher).
+        if len(candidates) < 2:
+            return []
+        crop_width_ratio = max(plan.crop_width / source_width for _, source_width, _, plan, _ in candidates)
+        y_ratios = sorted(
+            keyframe.y / max_y for _, _, _, plan, max_y in candidates if max_y > 0
+            for keyframe in plan.keyframes[:1]
+        )
+        shared_y_ratio = y_ratios[max(0, (len(y_ratios) - 1) // 4)] if y_ratios else 0.0
+        output_ratio = output_width / output_height
+        for index, source_width, source_height, _plan, _max_y in candidates:
+            crop_width = self._even(min(source_width, source_width * crop_width_ratio))
+            crop_height = self._even(crop_width / output_ratio)
+            if crop_height > source_height:
+                crop_height = self._even(source_height)
+                crop_width = self._even(crop_height * output_ratio)
+            max_x = max(0, source_width - crop_width)
+            max_y = max(0, source_height - crop_height)
+            plan = AutoReframePlan(
+                crop_width=crop_width,
+                crop_height=crop_height,
+                keyframes=(
+                    ReframeKeyframe(0.0, max_x / 2, min(max_y, max(0, max_y * shared_y_ratio))),
+                ),
+            )
+            plans[index] = {
+                'analysis_width': source_width,
+                'analysis_height': source_height,
+                'plan': plan.as_dict(),
+            }
+        return plans
 
 
 class ExternalMediaProjectPipeline:
