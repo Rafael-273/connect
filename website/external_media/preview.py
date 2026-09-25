@@ -38,7 +38,9 @@ MIN_MANUAL_CUT_MS = 33
 # permanently stretching the people in the browser preview.  Keep this value
 # with the proxy rather than trusting an old READY status, so projects opened
 # after the fix transparently get one correctly shaped source proxy.
-SOURCE_PROXY_GEOMETRY_VERSION = 2
+# Version 3 also rebuilds phone MOV proxies with their audio timestamps rebased
+# to the video clock. Older cached proxies can retain a delayed AAC start PTS.
+SOURCE_PROXY_GEOMETRY_VERSION = 3
 
 
 class ProjectProxyService:
