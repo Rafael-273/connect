@@ -347,7 +347,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         const source=sourceFor(clip), local=(clip.source_in_ms + globalMs-clip.timeline_in_ms)/1000;
         if(activeClip?.id!==clip.id || video.dataset.source!==source){loading=true;activeClip=clip;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=local;video.addEventListener('seeked',()=>{loading=false;if(autoplay)requestVideoPlay();},{once:true});},{once:true});}
-        else {video.currentTime=local;if(autoplay)requestVideoPlay();}
+        else {activeClip=clip;video.currentTime=local;if(autoplay)requestVideoPlay();}
         renderPosition(); syncMusicPosition();
     }
     function renderPosition(){
@@ -700,7 +700,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function renameVisualMedia(){document.querySelectorAll('.editor-track__label').forEach(label=>{if(label.textContent.trim()==='B-roll')label.childNodes[label.childNodes.length-1].nodeValue=' Elementos'});document.querySelectorAll('[data-add-timeline]').forEach(button=>{if(button.dataset.addTimeline==='broll')button.lastChild.nodeValue='Adicionar elemento';if(button.dataset.addTimeline==='overlay')button.innerHTML='<i class="fas fa-font"></i>Adicionar texto'})}
     new MutationObserver(renameVisualMedia).observe(document.getElementById('editor-tracks'),{childList:true,subtree:true});
     document.addEventListener('dblclick',async event=>{if(!event.target.closest('.editor-track--music'))return;const choices=musicTracks.map(track=>`${track.id}: ${track.name}`).join('\n');const selected=prompt(`Escolha a trilha pelo número:\n${choices}`);if(!selected)return;try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{track_id:Number(selected)});timeline.music={...(timeline.music||{}),...data.music};configureMusic();syncMusicPosition();alert('Trilha selecionada. Ela será aplicada no próximo reprocessamento.')}catch(error){alert(error.message)}});
-    configureMusic();renderList();seek(globalMs);renameVisualMedia();updateEditControls();
+    let reframeSettingsClipboard=null;
+    function enhanceReframeClipboard(){list.querySelectorAll('[data-reframe-original]').forEach(original=>{const card=original.closest('article');if(!card||card.dataset.reframeClipboard)return;card.dataset.reframeClipboard='true';const actions=document.createElement('div');actions.className='flex gap-2 mt-2';actions.innerHTML=`<button type="button" class="media-btn media-muted !py-2 flex-1" data-copy-reframe><i class="fas fa-copy"></i> Copiar ajuste</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-paste-reframe ${reframeSettingsClipboard?'':'disabled'}><i class="fas fa-paste"></i> Colar ajuste</button>`;const saved=card.querySelector('[data-saved]');saved?.before(actions);const copy=actions.querySelector('[data-copy-reframe]'),paste=actions.querySelector('[data-paste-reframe]');copy.onclick=()=>{reframeSettingsClipboard=Object.fromEntries([...card.querySelectorAll('[data-transform]')].map(field=>[field.dataset.transform,Number(field.value)]));list.querySelectorAll('[data-paste-reframe]').forEach(button=>button.disabled=false);copy.innerHTML='<i class="fas fa-check"></i> Copiado'};paste.onclick=async()=>{if(!reframeSettingsClipboard)return;const decision=[...timeline.decisions].find(item=>item.type==='reframe'&&decisionSourceId(item)===inspectorSelection?.id);if(!decision)return;try{paste.disabled=true;await saveTransform(decision.id,reframeSettingsClipboard,card);renderList()}finally{paste.disabled=false}}})}
+    new MutationObserver(enhanceReframeClipboard).observe(list,{childList:true,subtree:true});
+    configureMusic();renderList();enhanceReframeClipboard();seek(globalMs);renameVisualMedia();updateEditControls();
 })();
 </script>
 {% endblock %}
