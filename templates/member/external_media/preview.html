@@ -336,6 +336,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function syncMusicPosition(){if(!timeline.music||!Number.isFinite(music.duration)||music.duration<=0)return;const target=(globalMs/1000)%music.duration;if(Math.abs(music.currentTime-target)>.55)music.currentTime=target}
     function speechBeds(){const gap=Number(timeline.music?.speech_gap_hold_ms||1800),cues=[...(timeline.captions||[])].sort((a,b)=>a.start_ms-b.start_ms),beds=[];cues.forEach(cue=>{const start=Number(cue.start_ms),end=Number(cue.end_ms);const last=beds.at(-1);if(last&&start-last.end<=gap)last.end=Math.max(last.end,end);else beds.push({start,end})});return beds}
     function updateMusicVolume(){if(!timeline.music)return;const config=timeline.music,duration=timeline.sequence.duration_ms/1000,now=globalMs/1000;let factor=1;if(config.fade_in_seconds>0)factor=Math.min(factor,now/config.fade_in_seconds);if(config.fade_out_seconds>0)factor=Math.min(factor,Math.max(0,(duration-now)/config.fade_out_seconds));if(config.ducking_enabled){const attack=Math.max(1,Number(config.attack_ms||140)),hold=Math.max(0,Number(config.hold_ms||300)),release=Math.max(1,Number(config.release_ms||850)),duck=Math.pow(10,-Number(config.duck_db||14)/20);for(const bed of speechBeds()){const start=bed.start,end=bed.end;if(now*1000<start||now*1000>end+hold+release)continue;if(now*1000<start+attack)factor*=1-(1-duck)*((now*1000-start)/attack);else if(now*1000<=end+hold)factor*=duck;else factor*=duck+(1-duck)*((now*1000-end-hold)/release);break}}music.volume=Math.max(0,Math.min(1,Number(config.volume||.15)*factor))}
+    function holdPreviewFrame(){if(!video.videoWidth||!video.videoHeight)return;try{const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);previewStage.style.backgroundImage=`url("${canvas.toDataURL('image/jpeg',.82)}")`;previewStage.style.backgroundSize='cover';previewStage.style.backgroundPosition='center';video.style.opacity='0'}catch(_){}}
+    function releasePreviewFrame(){video.style.opacity='1';previewStage.style.backgroundImage=''}
     function seek(ms, autoplay=false){
         globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs); if(!clip)return;
         if(useReviewMaster()){
@@ -346,7 +348,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             renderPosition(); syncMusicPosition(); return;
         }
         const source=sourceFor(clip), local=(clip.source_in_ms + globalMs-clip.timeline_in_ms)/1000;
-        if(activeClip?.id!==clip.id || video.dataset.source!==source){loading=true;activeClip=clip;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=local;video.addEventListener('seeked',()=>{loading=false;if(autoplay)requestVideoPlay();},{once:true});},{once:true});}
+        if(activeClip?.id!==clip.id || video.dataset.source!==source){holdPreviewFrame();loading=true;activeClip=clip;video.dataset.source=source;video.src=source;video.addEventListener('loadedmetadata',()=>{video.currentTime=local;video.addEventListener('seeked',()=>{loading=false;releasePreviewFrame();if(autoplay)requestVideoPlay();},{once:true});},{once:true});}
         else {activeClip=clip;video.currentTime=local;if(autoplay)requestVideoPlay();}
         renderPosition(); syncMusicPosition();
     }

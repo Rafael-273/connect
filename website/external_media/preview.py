@@ -372,16 +372,12 @@ class PreviewCompositionService:
                 kwargs={'public_id': project.public_id},
             )
         has_reframe_override = any(
-            item.get('type') == 'reframe'
-            and (
-                not item.get('enabled', True)
-                or (item.get('metadata') or {}).get('manual_transform')
-            )
+            item.get('type') == 'reframe' and not item.get('enabled', True)
             for item in operations
         )
-        # The assembled review master already contains the automatic crop. Any
-        # user override (including “original framing”) must instead preview the
-        # source proxy, otherwise pixels removed by the first crop cannot return.
+        # Manual zoom/pan is applied live over the continuous master. Only the
+        # explicit original-framing option needs an individual source proxy,
+        # because it restores pixels removed by the automatic crop.
         if has_reframe_override:
             review_master_url = None
         fidelity = {key: cls.FIDELITY[key] for key in capabilities['available']}

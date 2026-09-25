@@ -1872,27 +1872,11 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             for cue in timeline.get('captions', []):
                 cue['is_source'] = cue.get('language') == project.template_version.original_language
         job = project.render_job
-        # After a finished project is reopened, its job's master may already
-        # contain the final cuts. Use the revision's source proxies instead so
-        # the editable timeline (including B-roll timing) stays authoritative.
-        reopened_for_review = bool((project.configuration or {}).get('_reopened_for_review')) or reopened_terminal_review
         has_reframe_override = any(
-            item.get('type') == 'reframe'
-            and (
-                not item.get('enabled', True)
-                or (item.get('metadata') or {}).get('manual_transform')
-            )
+            item.get('type') == 'reframe' and not item.get('enabled', True)
             for item in revision.edit_decision_set.get('operations', [])
         )
-        # A completed delivery can be opened directly by URL, without passing
-        # through the explicit “reopen” action.  In both cases the editor must
-        # use its lightweight source proxies instead of streaming the full
-        # delivery master; otherwise a finished project behaves differently
-        # from a reopened one and makes timeline edits misleadingly expensive.
-        use_editable_source_proxies = (
-            (reopened_for_review or project.status == ExternalMediaProject.Status.FINISHED or has_reframe_override)
-            and assets_have_proxies
-        )
+        use_editable_source_proxies = has_reframe_override and assets_have_proxies
         if job and job.original_video and ProjectService.file_exists(job.original_video) and not use_editable_source_proxies:
             timeline['review_master_url'] = reverse(
                 'external_media_project_preview_master', kwargs={'public_id': project.public_id},
