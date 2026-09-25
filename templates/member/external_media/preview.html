@@ -196,12 +196,18 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     <div class="preview-modal__card">
         <span class="w-11 h-11 rounded-xl grid place-items-center text-white" style="background:#C90905"><i class="fas fa-rotate"></i></span>
         <h2 class="text-xl font-black mt-4" id="reprocess-title">Reprocessar projeto?</h2>
-        <p class="text-sm text-gray-500 mt-2">O projeto será reprocessado do início com os vídeos já enviados. A edição atual será perdida e uma nova versão será gerada.</p>
-        <form method="post" action="{% url 'external_media_project_run' project.public_id %}" class="flex justify-end gap-2 mt-6">
+        <p class="text-sm text-gray-500 mt-2">Reprocesse os vídeos atuais ou volte aos blocos para trocar, adicionar, remover ou reordenar os arquivos antes de gerar a nova versão.</p>
+        <div class="flex flex-wrap justify-end gap-2 mt-6">
+        <form method="post" action="{% url 'external_media_project_resume_editing' project.public_id %}">
+            {% csrf_token %}
+            <button type="submit" class="media-btn media-secondary"><i class="fas fa-table-cells-large"></i>Voltar aos blocos</button>
+        </form>
+        <form method="post" action="{% url 'external_media_project_run' project.public_id %}" class="flex gap-2">
             {% csrf_token %}
             <button type="button" class="media-btn media-muted" id="cancel-reprocess">Cancelar</button>
             <button type="submit" class="media-btn media-primary"><i class="fas fa-rotate"></i>Reprocessar</button>
         </form>
+        </div>
     </div>
 </div>
 
