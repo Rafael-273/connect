@@ -78,6 +78,60 @@ class MediaQualityService:
                 )
         return report
 
+    def validate_preview_proxy(
+        self, path: Path, *, expected_duration_ms=None, expected_width=None, expected_height=None,
+    ):
+        """Verify the clock used by an interactive source proxy.
+
+        A proxy can have a valid container duration while AAC packets still
+        start seconds after its video stream.  Browsers then show a silent
+        beginning and the editor's caption clock appears wrong.  The preview
+        must reject that asset before it is cached as READY.
+        """
+        report = QualityReport()
+        probe = self._probe(path)
+        streams = probe.get('streams') or []
+        video = next((item for item in streams if item.get('codec_type') == 'video'), None)
+        audio = next((item for item in streams if item.get('codec_type') == 'audio'), None)
+        duration_ms = self._duration_ms(probe)
+        report.metrics['duration_ms'] = duration_ms
+        if not video:
+            report.errors.append('O proxy não possui faixa de vídeo.')
+            return report
+        if not audio:
+            report.errors.append('O proxy não possui faixa de áudio.')
+            return report
+        video_width = int(video.get('width') or 0)
+        video_height = int(video.get('height') or 0)
+        report.metrics.update({'video_width': video_width, 'video_height': video_height})
+        if expected_width and expected_height and (
+            video_width != int(expected_width) or video_height != int(expected_height)
+        ):
+            report.errors.append('A geometria do proxy diverge do preview planejado.')
+        video_start = self._stream_time_ms(video, 'start_time')
+        audio_start = self._stream_time_ms(audio, 'start_time')
+        video_duration = self._stream_time_ms(video, 'duration')
+        audio_duration = self._stream_time_ms(audio, 'duration')
+        report.metrics.update({
+            'video_start_ms': video_start,
+            'audio_start_ms': audio_start,
+            'video_duration_ms': video_duration,
+            'audio_duration_ms': audio_duration,
+        })
+        # A few AAC priming samples are normal. Anything past 120 ms is a
+        # real editor-visible gap, not encoder padding.
+        if abs(audio_start - video_start) > 120:
+            report.errors.append('O áudio do proxy não inicia sincronizado com o vídeo.')
+        if video_duration and audio_duration and abs(video_duration - audio_duration) > 350:
+            report.errors.append('A duração do áudio do proxy diverge do vídeo.')
+        if expected_duration_ms and duration_ms:
+            drift = abs(duration_ms - int(expected_duration_ms))
+            report.metrics['expected_duration_ms'] = int(expected_duration_ms)
+            report.metrics['duration_drift_ms'] = drift
+            if drift > max(350, round(int(expected_duration_ms) * .015)):
+                report.errors.append('A duração do proxy diverge da fonte.')
+        return report
+
     @staticmethod
     def validate_cuts(cuts, duration_ms):
         report = QualityReport(metrics={'cut_count': len(cuts)})
@@ -124,6 +178,13 @@ class MediaQualityService:
     def _duration_ms(probe):
         try:
             return max(0, round(float((probe.get('format') or {}).get('duration')) * 1000))
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _stream_time_ms(stream, key):
+        try:
+            return round(float(stream.get(key) or 0) * 1000)
         except (TypeError, ValueError):
             return 0
 

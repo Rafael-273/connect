@@ -1,9 +1,12 @@
 from copy import deepcopy
+from datetime import timedelta
+import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import uuid
 
 from django.core.files import File
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Max
 from django.urls import reverse
@@ -23,9 +26,12 @@ from ..models.external_media import (
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder
 from .exceptions import ExternalMediaError
 from .services import StorageService, VideoAssemblyService
+from .quality_control import MediaQualityService
 from .overlays import OverlayTimelineService
 from .broll import BrollTimelineService
 from .workspace import JobWorkspace
+
+logger = logging.getLogger(__name__)
 
 
 # The final interactive-review assembly is 30 fps. A manual cut may be as
@@ -40,22 +46,82 @@ MIN_MANUAL_CUT_MS = 33
 # after the fix transparently get one correctly shaped source proxy.
 # Version 3 also rebuilds phone MOV proxies with their audio timestamps rebased
 # to the video clock. Older cached proxies can retain a delayed AAC start PTS.
-SOURCE_PROXY_GEOMETRY_VERSION = 3
+SOURCE_PROXY_GEOMETRY_VERSION = 4
+REVIEW_MASTER_PROXY_ID = '__review-master__'
+TIMELINE_REVIEW_PROXY_PREFIX = '__timeline-review-r'
+TIMELINE_REVIEW_PROXY_LEASE = timedelta(minutes=15)
 
 
 class ProjectProxyService:
+    @staticmethod
+    def timeline_review_proxy_id(revision):
+        return f'{TIMELINE_REVIEW_PROXY_PREFIX}{revision.pk}__'
+
     @classmethod
-    def prepare(cls, project):
-        state = ProjectProcessingState(project)
-        manifest = state.get_source_manifest() or SourceManifestBuilder.build(project, project.render_job_id)
+    def has_usable_timeline_review_proxy(cls, proxy, revision):
+        metadata = (proxy.metadata or {}) if proxy else {}
+        return bool(
+            proxy
+            and proxy.status == ProjectSourceProxy.Status.READY
+            and proxy.proxy_file
+            and metadata.get('timeline_revision_id') == revision.pk
+        )
+
+    @classmethod
+    def _claim_timeline_review_proxy(cls, project, revision, profile):
+        """Claim one revision proxy render without holding a DB lock for FFmpeg.
+
+        The lease is persisted with the proxy so separate Celery workers (and
+        not just separate HTTP requests) agree on the single active render.
+        A stale lease is safely recovered after a worker crash.
+        """
+        with transaction.atomic():
+            proxy, _ = ProjectSourceProxy.objects.get_or_create(
+                project=project,
+                source_id=cls.timeline_review_proxy_id(revision),
+                profile=profile,
+                defaults={'source_storage_name': project.render_job.original_video.name},
+            )
+            proxy = ProjectSourceProxy.objects.select_for_update().get(pk=proxy.pk)
+            if cls.has_usable_timeline_review_proxy(proxy, revision):
+                return proxy, None
+            metadata = dict(proxy.metadata or {})
+            active_lease = metadata.get('generation_lease')
+            if (
+                proxy.status == ProjectSourceProxy.Status.PENDING
+                and active_lease
+                and timezone.now() - proxy.update_at < TIMELINE_REVIEW_PROXY_LEASE
+            ):
+                return proxy, None
+            lease = uuid.uuid4().hex
+            metadata['generation_lease'] = lease
+            proxy.status = ProjectSourceProxy.Status.PENDING
+            proxy.error_message = ''
+            proxy.source_storage_name = project.render_job.original_video.name
+            proxy.metadata = metadata
+            proxy.save(update_fields=[
+                'status', 'error_message', 'source_storage_name', 'metadata', 'update_at',
+            ])
+            return proxy, lease
+
+    @classmethod
+    def _profile(cls, project):
         profile = project.template_version.preview_proxy_profile
         if not profile:
             profile, _ = ProxyProfile.objects.get_or_create(
                 code='community-1',
                 defaults={'name': 'Community 1', 'max_width': 960, 'fps': 30, 'video_crf': 27, 'is_default': True},
             )
+        return profile
+
+    @classmethod
+    def prepare(cls, project):
+        state = ProjectProcessingState(project)
+        manifest = state.get_source_manifest() or SourceManifestBuilder.build(project, project.render_job_id)
+        profile = cls._profile(project)
         storage = StorageService()
         assembly = VideoAssemblyService(storage=storage)
+        quality = MediaQualityService(assembly.runner)
         errors = []
         for source in manifest.get('sources') or []:
             field = SourceManifestBuilder.resolve_field(project, source)
@@ -87,7 +153,12 @@ class ProjectProxyService:
                     estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
                 ) as workspace:
                     output = workspace.file('proxy', 'proxy.mp4')
-                    assembly.create_proxy(media_input.get_ffmpeg_input(), output, profile=profile)
+                    input_source = media_input.get_ffmpeg_input()
+                    assembly.create_proxy(input_source, output, profile=profile)
+                    if assembly._has_audio(input_source):
+                        quality.validate_preview_proxy(
+                            output, expected_duration_ms=assembly._duration_ms(input_source),
+                        ).require_ok()
                     proxy.duration_ms = assembly._duration_ms(output)
                     with output.open('rb') as handle:
                         proxy.proxy_file.save('proxy.mp4', File(handle), save=False)
@@ -104,11 +175,232 @@ class ProjectProxyService:
                 proxy.error_message = str(exc)[:255]
                 proxy.save(update_fields=['status', 'error_message', 'source_storage_name', 'update_at'])
                 errors.append(source.get('filename') or source['id'])
+        # A single lightweight version of the already assembled review master
+        # gives the browser continuous playback without making it download the
+        # delivery-quality source on first open.  It deliberately lives beside
+        # (rather than replaces) the per-take proxies: manual framing still
+        # needs those sources until a revision-specific compositor is ready.
+        job = project.render_job
+        if job and job.original_video:
+            master_proxy, _ = ProjectSourceProxy.objects.get_or_create(
+                project=project,
+                source_id=REVIEW_MASTER_PROXY_ID,
+                profile=profile,
+                defaults={'source_storage_name': job.original_video.name},
+            )
+            if not (
+                master_proxy.status == ProjectSourceProxy.Status.READY
+                and master_proxy.proxy_file
+                and master_proxy.source_storage_name == job.original_video.name
+                and (master_proxy.metadata or {}).get('geometry_version') == SOURCE_PROXY_GEOMETRY_VERSION
+            ):
+                master_proxy.source_storage_name = job.original_video.name
+                try:
+                    media_input = storage.input(job.original_video)
+                    with JobWorkspace(
+                        project.public_id,
+                        'continuous-review-preview',
+                        estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
+                    ) as workspace:
+                        output = workspace.file('review-master', 'proxy.mp4')
+                        input_source = media_input.get_ffmpeg_input()
+                        assembly.create_proxy(input_source, output, profile=profile)
+                        if assembly._has_audio(input_source):
+                            quality.validate_preview_proxy(
+                                output, expected_duration_ms=assembly._duration_ms(input_source),
+                            ).require_ok()
+                        master_proxy.duration_ms = assembly._duration_ms(output)
+                        with output.open('rb') as handle:
+                            master_proxy.proxy_file.save('review-master.mp4', File(handle), save=False)
+                    master_proxy.metadata = {
+                        'geometry_version': SOURCE_PROXY_GEOMETRY_VERSION,
+                        'profile': profile.code,
+                        'kind': 'continuous_review_master',
+                        'temporal_parity': 'verified_by_duration',
+                    }
+                    master_proxy.status = ProjectSourceProxy.Status.READY
+                    master_proxy.error_message = ''
+                    master_proxy.save()
+                except Exception as exc:
+                    # A missing convenience proxy must never block an editor
+                    # that can still fall back to the assembled master.
+                    master_proxy.status = ProjectSourceProxy.Status.ERROR
+                    master_proxy.error_message = str(exc)[:255]
+                    master_proxy.save(update_fields=['status', 'error_message', 'source_storage_name', 'update_at'])
         if errors:
             raise ExternalMediaError(
                 'Não foi possível preparar o preview de: ' + ', '.join(errors[:3]) + '.'
             )
         return manifest
+
+    @classmethod
+    def build_timeline_review_proxy(cls, project_id, revision_id):
+        """Render one lightweight, continuous source for a timeline revision.
+
+        Captions, overlays and B-roll stay browser layers, but the main video
+        and speech audio are concatenated exactly in the edited order.  This
+        is what lets manual framing retain fidelity without swapping the video
+        element at every take boundary.
+        """
+        project = ExternalMediaProject.objects.select_related(
+            'template_version__preset', 'template_version__preview_proxy_profile', 'render_job',
+        ).get(pk=project_id)
+        revision = TimelineRevision.objects.get(pk=revision_id, project=project)
+        job = project.render_job
+        if not job or not job.original_video:
+            return None
+        profile = cls._profile(project)
+        proxy, lease = cls._claim_timeline_review_proxy(project, revision, profile)
+        if lease is None:
+            return proxy
+        storage = StorageService()
+        assembly = VideoAssemblyService(storage=storage)
+        quality = MediaQualityService(assembly.runner)
+        try:
+            source = storage.input(job.original_video).get_ffmpeg_input()
+            filters, segment_count = cls._timeline_review_filters(revision, assembly)
+            if not segment_count:
+                raise ExternalMediaError('A revisão não possui trechos de vídeo para o preview contínuo.')
+            expected_duration_ms = cls._timeline_review_duration_ms(revision)
+            source_width, source_height = assembly._video_dimensions(source)
+            proxy_width = min(source_width, int(getattr(profile, 'max_width', 0) or settings.EXTERNAL_MEDIA_PROXY_WIDTH))
+            proxy_height = assembly._even(proxy_width * source_height / source_width)
+            filter_graph = ';'.join(filters + [
+                f'[joinedv]scale={proxy_width}:{proxy_height}:flags=fast_bilinear,fps={int(getattr(profile, "fps", 0) or 30)},setsar=1[vout]',
+            ])
+            with JobWorkspace(
+                project.public_id, f'timeline-review-r{revision.revision}',
+                estimated_bytes=storage.input(job.original_video).workspace_estimate(needs_proxy=True),
+            ) as workspace:
+                output = workspace.file('timeline-review', 'proxy.mp4')
+                command = [settings.FFMPEG_BINARY, '-y', '-i', assembly.runner.input_arg(source), '-filter_complex', filter_graph,
+                    '-map', '[vout]', '-map', '[joineda]', '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_PROXY_PRESET,
+                    '-crf', str(int(getattr(profile, 'video_crf', 0) or settings.EXTERNAL_MEDIA_PROXY_CRF)), '-pix_fmt', 'yuv420p',
+                    '-c:a', 'aac', '-b:a', f'{int(getattr(profile, "audio_bitrate_kbps", 0) or 96)}k', '-ar', '48000', '-ac', '2',
+                    '-movflags', '+faststart', str(output)]
+                assembly.runner.run(command)
+                # Do not mark a continuous review proxy as ready solely
+                # because FFmpeg exited successfully.  An AAC stream can
+                # still begin seconds after the picture, which recreates the
+                # silent-take/caption drift bug this proxy is meant to avoid.
+                quality.validate_preview_proxy(
+                    output,
+                    expected_duration_ms=expected_duration_ms,
+                    expected_width=proxy_width,
+                    expected_height=proxy_height,
+                ).require_ok()
+                proxy.duration_ms = assembly._duration_ms(output)
+                with output.open('rb') as handle:
+                    proxy.proxy_file.save('timeline-review.mp4', File(handle), save=False)
+            with transaction.atomic():
+                locked_proxy = ProjectSourceProxy.objects.select_for_update().get(pk=proxy.pk)
+                # A replacement worker may have recovered an expired lease
+                # while this long FFmpeg process was still ending. Its result
+                # is authoritative; do not publish this older one over it.
+                if (locked_proxy.metadata or {}).get('generation_lease') != lease:
+                    return locked_proxy
+                locked_proxy.proxy_file = proxy.proxy_file
+                locked_proxy.duration_ms = proxy.duration_ms
+                locked_proxy.status = ProjectSourceProxy.Status.READY
+                locked_proxy.error_message = ''
+                locked_proxy.metadata = {
+                    'kind': 'timeline_review', 'timeline_revision_id': revision.pk,
+                    'timeline_revision': revision.revision, 'continuous': True,
+                    'temporal_parity': 'verified_audio_timing_duration_and_geometry',
+                    'geometry': {'width': proxy_width, 'height': proxy_height},
+                }
+                locked_proxy.save()
+                logger.info(
+                    'Preview contínuo pronto para projeto %s, revisão %s.',
+                    project.public_id, revision.revision,
+                )
+                return locked_proxy
+        except Exception as exc:
+            # Do not let an expired worker overwrite a newer lease's result.
+            with transaction.atomic():
+                locked_proxy = ProjectSourceProxy.objects.select_for_update().get(pk=proxy.pk)
+                metadata = dict(locked_proxy.metadata or {})
+                if metadata.get('generation_lease') == lease:
+                    metadata.pop('generation_lease', None)
+                    locked_proxy.status = ProjectSourceProxy.Status.ERROR
+                    locked_proxy.error_message = str(exc)[:255]
+                    locked_proxy.metadata = metadata
+                    locked_proxy.save(update_fields=[
+                        'status', 'error_message', 'source_storage_name', 'metadata', 'update_at',
+                    ])
+            logger.exception(
+                'Falha ao gerar preview contínuo do projeto %s, revisão %s.',
+                project.public_id, revision.revision,
+            )
+            raise
+
+    @classmethod
+    def _timeline_review_filters(cls, revision, assembly):
+        manifest = revision.source_manifest or {}
+        timeline = revision.timeline or {}
+        clip_end_by_source = {}
+        for clip in timeline.get('clips') or []:
+            source_id = str(clip.get('asset_id') or '')
+            clip_end_by_source[source_id] = max(
+                clip_end_by_source.get(source_id, 0), int(clip.get('source_out_ms') or 0),
+            )
+        source_starts, cursor = {}, 0
+        for source in manifest.get('sources') or []:
+            if not (source.get('metadata') or {}).get('render_enabled', True):
+                continue
+            trim = source.get('trim') or {}
+            start = int(trim.get('start_ms') or 0)
+            end = int(trim.get('end_ms') or source.get('duration_ms') or clip_end_by_source.get(str(source.get('id'))) or start)
+            source_starts[str(source.get('id'))] = (cursor, start)
+            cursor += max(1, end - start)
+        transforms = {
+            str(item.get('source_id')): (item.get('metadata') or {}).get('manual_transform')
+            for item in (revision.edit_decision_set.get('operations') or [])
+            if item.get('type') == 'reframe' and item.get('enabled', True)
+        }
+        video_filters, audio_filters, count = [], [], 0
+        for clip in timeline.get('clips') or []:
+            source_id = str(clip.get('asset_id') or '')
+            if source_id not in source_starts:
+                continue
+            master_start, trim_start = source_starts[source_id]
+            start = (master_start + int(clip.get('source_in_ms') or 0) - trim_start) / 1000
+            end = (master_start + int(clip.get('source_out_ms') or 0) - trim_start) / 1000
+            if end <= start:
+                continue
+            transform = transforms.get(source_id) or {}
+            scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
+            x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
+            y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
+            crop = '' if scale == 1 else (
+                f',crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
+                f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
+                f'scale=trunc(iw*{scale:.5f}/2)*2:trunc(ih*{scale:.5f}/2)*2'
+            )
+            video_filters.append(f'[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS{crop}[v{count}]')
+            audio_filters.append(f'[0:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{count}]')
+            count += 1
+        if count:
+            joined = ''.join(f'[v{index}][a{index}]' for index in range(count))
+            video_filters.append(f'{joined}concat=n={count}:v=1:a=1[joinedv][joineda]')
+        return [*video_filters, *audio_filters], count
+
+    @classmethod
+    def _timeline_review_duration_ms(cls, revision):
+        """Return the exact edited clock expected from the concatenated clips."""
+        renderable_sources = {
+            str(source.get('id'))
+            for source in ((revision.source_manifest or {}).get('sources') or [])
+            if (source.get('metadata') or {}).get('render_enabled', True)
+        }
+        duration = 0
+        for clip in (revision.timeline or {}).get('clips') or []:
+            if str(clip.get('asset_id') or '') not in renderable_sources:
+                continue
+            start = int(clip.get('source_in_ms') or 0)
+            end = int(clip.get('source_out_ms') or 0)
+            duration += max(0, end - start)
+        return duration
 
 class PreviewCapabilityRegistry:
     CUTS = 'CUTS'
@@ -372,12 +664,16 @@ class PreviewCompositionService:
                 kwargs={'public_id': project.public_id},
             )
         has_reframe_override = any(
-            item.get('type') == 'reframe' and not item.get('enabled', True)
+            item.get('type') == 'reframe'
+            and (
+                not item.get('enabled', True)
+                or (item.get('metadata') or {}).get('manual_transform')
+            )
             for item in operations
         )
-        # Manual zoom/pan is applied live over the continuous master. Only the
-        # explicit original-framing option needs an individual source proxy,
-        # because it restores pixels removed by the automatic crop.
+        # Until a fresh continuous review proxy is composed, a manual transform
+        # must use the source proxy. The prior assembled master can contain a
+        # previous crop and would show a different zoom from the final render.
         if has_reframe_override:
             review_master_url = None
         fidelity = {key: cls.FIDELITY[key] for key in capabilities['available']}
@@ -678,6 +974,41 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def update_music(cls, project, member, track_id):
+        """Store the chosen music in the immutable editorial snapshot.
+
+        Music used to be written directly to ``project.configuration``.  That
+        made undo/redo and reopening a finished project disagree with the
+        version that would actually be rendered.  Keeping its id in the
+        timeline gives it exactly the same history semantics as captions,
+        framing and B-roll.
+        """
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        previous = (current.timeline or {}).get('music_override_track_id')
+        track_id = int(track_id) if track_id else None
+        # Once the project is edited again, do not let a pre-revision override
+        # shadow an undo back to the template music.
+        legacy_configuration = dict(locked.configuration or {})
+        if legacy_configuration.pop('music_override_track_id', None) is not None:
+            locked.configuration = legacy_configuration
+            locked.save(update_fields=['configuration', 'update_at'])
+        if previous == track_id:
+            return current
+        revision = cls._create(
+            locked, current.source_manifest, current.edit_decision_set,
+            'Trilha sonora alterada', member, current,
+            music_override_track_id=track_id,
+        )
+        session = cls.session(locked, member, revision)
+        cls._record(
+            session, current, revision, 'UPDATE_MUSIC',
+            {'track_id': track_id}, {'track_id': previous}, member,
+        )
+        return revision
+
+    @classmethod
+    @transaction.atomic
     def mutate_overlay(cls, project, member, overlay_id, payload, *, create=False, delete=False):
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
@@ -925,7 +1256,10 @@ class TimelineRevisionService:
         return revision
 
     @classmethod
-    def _create(cls, project, manifest, decisions, reason, member, parent=None, overlays=None, brolls=None):
+    def _create(
+        cls, project, manifest, decisions, reason, member, parent=None,
+        overlays=None, brolls=None, music_override_track_id=None,
+    ):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
         # kind of edit creates a child revision, otherwise template overlays
@@ -941,6 +1275,13 @@ class TimelineRevisionService:
             project, composition_manifest, decisions, number,
             overlays_override=overlays, brolls_override=brolls,
         )
+        # Keep the selected track through every unrelated mutation.  ``None``
+        # means inherit the parent; callers changing music pass an explicit
+        # id (or the empty-string sentinel when clearing it in the future).
+        if music_override_track_id is None and parent:
+            music_override_track_id = (parent.timeline or {}).get('music_override_track_id')
+        if music_override_track_id:
+            timeline['music_override_track_id'] = int(music_override_track_id)
         revision = TimelineRevision.objects.create(
             project=project, revision=number, parent=parent, timeline=timeline,
             source_manifest=composition_manifest, edit_decision_set=decisions, reason=reason, created_by=member,
@@ -951,7 +1292,26 @@ class TimelineRevisionService:
         project.save(update_fields=[
             'current_timeline_revision', 'preview_dirty', 'final_render_outdated', 'update_at',
         ])
+        # This is deliberately deferred: an edit must be saved even if a
+        # worker is temporarily unavailable. The editor continues on source
+        # proxies until the continuous revision proxy is ready.
+        if project.render_job_id and project.render_job and project.render_job.original_video:
+            transaction.on_commit(lambda: cls._enqueue_timeline_review_proxy(project.pk, revision.pk))
         return revision
+
+    @staticmethod
+    def _enqueue_timeline_review_proxy(project_id, revision_id):
+        try:
+            from .tasks import create_timeline_review_proxy
+
+            create_timeline_review_proxy.delay(project_id, revision_id)
+            return True
+        except Exception:
+            logger.warning(
+                'Não foi possível agendar o proxy contínuo da revisão %s do projeto %s.',
+                revision_id, project_id,
+            )
+            return False
 
     @classmethod
     def _record(cls, session, previous, revision, operation_type, payload, inverse_payload, member):

@@ -74,7 +74,7 @@ from website.external_media.canonical import (
     normalize_edit_ranges,
 )
 from website.external_media.content_review import OffContextAnalyzer, build_utterances
-from website.external_media.preview import PreviewCompositionService, TimelineRevisionService
+from website.external_media.preview import ProjectProxyService, PreviewCompositionService, TimelineRevisionService
 from website.external_media.tasks import (
     _execution_is_current,
     _premiere_archive_filename,
@@ -127,6 +127,7 @@ from website.models.external_media import (
     SubtitleSuggestion,
     SubtitleTrack,
     SubtitleVideoVersion,
+    TimelineMutation,
     TimelineRevision,
 )
 from website.models import Member, Ministry, MinistryMembership, User
@@ -1281,6 +1282,30 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertFalse(project.preview_dirty)
         self.assertTrue(project.final_render_outdated)
 
+    def test_music_choice_is_revisioned_and_undoable(self):
+        project = self.make_project()
+        project.configuration = {
+            'source_manifest': {'schema': 'connect.source_manifest.v1', 'sources': []},
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+            # Existing projects may have this legacy value; the first edit must
+            # migrate away from it so it cannot override an undo later.
+            'music_override_track_id': 999,
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+        initial = TimelineRevisionService.ensure_initial(project, self.member)
+
+        selected = TimelineRevisionService.update_music(project, self.member, 123)
+
+        self.assertEqual(selected.timeline['music_override_track_id'], 123)
+        project.refresh_from_db()
+        self.assertNotIn('music_override_track_id', project.configuration)
+        self.assertEqual(
+            TimelineMutation.objects.filter(to_revision=selected, operation_type='UPDATE_MUSIC').count(), 1,
+        )
+        restored = TimelineRevisionService.navigate_history(project, self.member, 'undo')
+        self.assertEqual(restored.pk, initial.pk)
+        self.assertNotIn('music_override_track_id', restored.timeline)
+
     def test_interactive_preview_page_uses_the_persisted_timeline(self):
         project = self.make_project()
         project.status = ExternalMediaProject.Status.AWAITING_REVIEW
@@ -1299,8 +1324,12 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(response, 'connect.internal_timeline.v1')
         self.assertContains(response, 'id="review-panel"')
         self.assertContains(response, 'id="close-review-panel"')
+        self.assertContains(response, 'id="music-select-modal"')
+        self.assertContains(response, 'id="text-element-modal"')
+        self.assertNotContains(response, 'Escolha a trilha pelo número')
+        self.assertNotContains(response, 'prompt(')
 
-    def test_finished_project_preview_uses_editable_proxies_not_delivery_master(self):
+    def test_finished_project_preview_uses_continuous_master_until_manual_framing(self):
         project = self.make_project()
         job = self.make_job()
         media = ProjectBlockMedia.objects.create(
@@ -1323,8 +1352,107 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         response = self.client.get(reverse('external_media_project_preview', args=[project.public_id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.context['timeline']['review_master_url'])
+        self.assertIsNotNone(response.context['timeline']['review_master_url'])
         self.assertEqual(response.context['timeline']['sequence']['duration_ms'], 2000)
+
+    def test_revision_proxy_status_exposes_a_failed_continuous_preview(self):
+        project = self.make_project()
+        project.configuration = {
+            'source_manifest': {'schema': 'connect.source_manifest.v1', 'sources': []},
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+        revision = TimelineRevisionService.ensure_initial(project, self.member)
+        profile = ProxyProfile.objects.create(code='revision-proxy-status', name='Status de proxy')
+        ProjectSourceProxy.objects.create(
+            project=project,
+            source_id=ProjectProxyService.timeline_review_proxy_id(revision),
+            profile=profile,
+            source_storage_name='master.mp4',
+            status=ProjectSourceProxy.Status.ERROR,
+            error_message='Áudio do proxy não inicia sincronizado.',
+        )
+
+        response = self.client.get(
+            reverse('external_media_project_preview_revision_proxy', args=[project.public_id]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            'status': 'ERROR', 'revision': revision.revision,
+            'error': 'Áudio do proxy não inicia sincronizado.',
+        })
+
+    @patch('website.external_media.preview.TimelineRevisionService._enqueue_timeline_review_proxy', return_value=True)
+    def test_retry_revision_proxy_marks_it_pending_before_enqueueing(self, enqueue):
+        project = self.make_project()
+        job = self.make_job()
+        profile = ProxyProfile.objects.create(code='revision-proxy-retry', name='Retry de proxy')
+        self.version.preview_proxy_profile = profile
+        self.version.save(update_fields=['preview_proxy_profile', 'update_at'])
+        project.render_job = job
+        project.configuration = {
+            'source_manifest': {'schema': 'connect.source_manifest.v1', 'sources': []},
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        project.save(update_fields=['render_job', 'configuration', 'update_at'])
+        revision = TimelineRevisionService.ensure_initial(project, self.member)
+        proxy = ProjectSourceProxy.objects.create(
+            project=project,
+            source_id=ProjectProxyService.timeline_review_proxy_id(revision),
+            profile=profile,
+            source_storage_name=job.original_video.name,
+            status=ProjectSourceProxy.Status.ERROR,
+            error_message='Falha anterior.',
+        )
+
+        response = self.client.post(
+            reverse('external_media_project_preview_revision_proxy', args=[project.public_id]),
+            data='{}', content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['status'], 'PENDING')
+        proxy.refresh_from_db()
+        self.assertEqual(proxy.status, ProjectSourceProxy.Status.PENDING)
+        self.assertEqual(proxy.error_message, '')
+        enqueue.assert_called_once_with(project.pk, revision.pk)
+
+    def test_revision_proxy_claim_reuses_active_lease_and_recovers_stale_lease(self):
+        project = self.make_project()
+        job = self.make_job()
+        profile = ProxyProfile.objects.create(code='revision-proxy-lease', name='Lease de proxy')
+        project.render_job = job
+        project.configuration = {
+            'source_manifest': {'schema': 'connect.source_manifest.v1', 'sources': []},
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        project.save(update_fields=['render_job', 'configuration', 'update_at'])
+        revision = TimelineRevisionService.ensure_initial(project, self.member)
+        proxy = ProjectSourceProxy.objects.create(
+            project=project,
+            source_id=ProjectProxyService.timeline_review_proxy_id(revision),
+            profile=profile,
+            source_storage_name=job.original_video.name,
+            status=ProjectSourceProxy.Status.PENDING,
+            metadata={'generation_lease': 'worker-a'},
+        )
+
+        claimed, lease = ProjectProxyService._claim_timeline_review_proxy(project, revision, profile)
+
+        self.assertEqual(claimed.pk, proxy.pk)
+        self.assertIsNone(lease)
+        ProjectSourceProxy.objects.filter(pk=proxy.pk).update(
+            update_at=timezone.now() - timedelta(minutes=16),
+        )
+        recovered, replacement_lease = ProjectProxyService._claim_timeline_review_proxy(
+            project, revision, profile,
+        )
+
+        self.assertEqual(recovered.pk, proxy.pk)
+        self.assertIsNotNone(replacement_lease)
+        recovered.refresh_from_db()
+        self.assertEqual(recovered.metadata['generation_lease'], replacement_lease)
 
     def make_reviewable_project(self):
         project = self.make_project()
@@ -3070,9 +3198,67 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         service.create_proxy(Path('/tmp/take.mov'), Path('/tmp/proxy.mp4'), 1250, 8250)
 
         command = runner.run.call_args.args[0]
-        self.assertLess(command.index('-i'), command.index('-ss'))
-        self.assertEqual(command[command.index('-ss') + 1], '1.250')
-        self.assertEqual(command[command.index('-t') + 1], '7.000')
+        self.assertIn('trim=start=1.250:end=8.250,setpts=PTS-STARTPTS', command[command.index('-vf') + 1])
+        self.assertIn('atrim=start=1.250:end=8.250,asetpts=PTS-STARTPTS', command[command.index('-af') + 1])
+
+    def test_revision_proxy_filters_concatenate_cuts_and_manual_transform(self):
+        revision = SimpleNamespace(
+            source_manifest={'sources': [{
+                'id': 'take-1', 'duration_ms': 10_000, 'metadata': {'render_enabled': True},
+            }]},
+            timeline={'clips': [{
+                'asset_id': 'take-1', 'source_in_ms': 0, 'source_out_ms': 3000,
+            }, {
+                'asset_id': 'take-1', 'source_in_ms': 5000, 'source_out_ms': 10_000,
+            }]},
+            edit_decision_set={'operations': [{
+                'type': 'reframe', 'source_id': 'take-1', 'enabled': True,
+                'metadata': {'manual_transform': {'scale': 1.25, 'x': .2, 'y': -.3}},
+            }]},
+        )
+
+        filters, count = ProjectProxyService._timeline_review_filters(revision, None)
+
+        self.assertEqual(count, 2)
+        self.assertIn('trim=start=0.000:end=3.000', ';'.join(filters))
+        self.assertIn('trim=start=5.000:end=10.000', ';'.join(filters))
+        self.assertIn('crop=trunc(iw/1.25000/2)*2', ';'.join(filters))
+        self.assertIn('concat=n=2:v=1:a=1', ';'.join(filters))
+        self.assertEqual(ProjectProxyService._timeline_review_duration_ms(revision), 8000)
+
+    def test_preview_proxy_rejects_delayed_audio_stream(self):
+        runner = Mock()
+        runner.run.return_value = json.dumps({
+            'format': {'duration': '12.0'},
+            'streams': [
+                {'codec_type': 'video', 'start_time': '0.0', 'duration': '12.0'},
+                {'codec_type': 'audio', 'start_time': '4.8', 'duration': '7.2'},
+            ],
+        })
+
+        report = MediaQualityService(runner).validate_preview_proxy(
+            Path('/tmp/delayed-proxy.mp4'), expected_duration_ms=12000,
+        )
+
+        self.assertFalse(report.ok)
+        self.assertIn('O áudio do proxy não inicia sincronizado com o vídeo.', report.errors)
+
+    def test_preview_proxy_rejects_unexpected_geometry(self):
+        runner = Mock()
+        runner.run.return_value = json.dumps({
+            'format': {'duration': '12.0'},
+            'streams': [
+                {'codec_type': 'video', 'width': 640, 'height': 360, 'start_time': '0.0', 'duration': '12.0'},
+                {'codec_type': 'audio', 'start_time': '0.0', 'duration': '12.0'},
+            ],
+        })
+
+        report = MediaQualityService(runner).validate_preview_proxy(
+            Path('/tmp/wrong-shape-proxy.mp4'), expected_width=360, expected_height=640,
+        )
+
+        self.assertFalse(report.ok)
+        self.assertIn('A geometria do proxy diverge do preview planejado.', report.errors)
 
     def test_display_rotation_is_included_in_proxy_dimensions(self):
         runner = Mock()
@@ -3089,7 +3275,10 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         service.create_proxy(Path('/tmp/phone.mov'), Path('/tmp/proxy.mp4'))
 
         command = runner.run.call_args.args[0]
-        self.assertIn('scale=854:1518:flags=fast_bilinear,fps=30,setsar=1', command)
+        self.assertIn(
+            'scale=854:1518:flags=fast_bilinear,fps=30,setsar=1',
+            command[command.index('-vf') + 1],
+        )
 
     def test_speech_edit_removes_leading_breath_before_each_take(self):
         with tempfile.TemporaryDirectory() as directory:

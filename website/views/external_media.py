@@ -74,7 +74,9 @@ from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
 
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
-from ..external_media.preview import PreviewCompositionService, TimelineRevisionService
+from ..external_media.preview import (
+    PreviewCompositionService, ProjectProxyService, REVIEW_MASTER_PROXY_ID, TimelineRevisionService,
+)
 from ..external_media.overlays import OverlayAssetRenderer, OverlayTimelineService
 from ..external_media.broll import BrollTimelineService
 from ..external_media.render_workflow import enqueue_project as enqueue_render_project, enqueue_video_work
@@ -1873,44 +1875,48 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
                 cue['is_source'] = cue.get('language') == project.template_version.original_language
         job = project.render_job
         has_reframe_override = any(
-            item.get('type') == 'reframe' and not item.get('enabled', True)
+            item.get('type') == 'reframe'
+            and (
+                not item.get('enabled', True)
+                or (item.get('metadata') or {}).get('manual_transform')
+            )
             for item in revision.edit_decision_set.get('operations', [])
         )
         use_editable_source_proxies = has_reframe_override and assets_have_proxies
-        if job and job.original_video and ProjectService.file_exists(job.original_video) and not use_editable_source_proxies:
+        revision_proxy = ready_proxies.get(ProjectProxyService.timeline_review_proxy_id(revision))
+        if not ProjectProxyService.has_usable_timeline_review_proxy(revision_proxy, revision):
+            revision_proxy = None
+        if revision_proxy:
+            version = int(revision_proxy.update_at.timestamp() * 1000)
             timeline['review_master_url'] = reverse(
-                'external_media_project_preview_master', kwargs={'public_id': project.public_id},
-            )
+                'external_media_project_preview_source',
+                kwargs={'public_id': project.public_id, 'source_id': revision_proxy.source_id},
+            ) + f'?v={version}'
+            # Unlike the source master, this proxy has cuts already applied.
+            # Its browser clock is therefore the edited timeline clock.
+            timeline['review_master_is_edited'] = True
+            timeline['review_proxy_status'] = 'READY'
+        elif job and job.original_video and ProjectService.file_exists(job.original_video) and not use_editable_source_proxies:
+            review_proxy = ready_proxies.get(REVIEW_MASTER_PROXY_ID)
+            if review_proxy:
+                version = int(review_proxy.update_at.timestamp() * 1000)
+                timeline['review_master_url'] = reverse(
+                    'external_media_project_preview_source',
+                    kwargs={'public_id': project.public_id, 'source_id': REVIEW_MASTER_PROXY_ID},
+                ) + f'?v={version}'
+            else:
+                timeline['review_master_url'] = reverse(
+                    'external_media_project_preview_master', kwargs={'public_id': project.public_id},
+                )
             if 'TRANSFORMS' in (timeline.get('fidelity') or {}):
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
         elif use_editable_source_proxies:
             timeline['review_master_url'] = None
-        override_id = (project.configuration or {}).get('music_override_track_id')
-        override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
-        music = override.audio_file if override else MusicService.selected_file(project.template_version)
-        timeline['has_music'] = bool(music and ProjectService.file_exists(music))
-        if music and ProjectService.file_exists(music):
-            timeline['music'] = {
-                'url': reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id}),
-                'volume': float(project.template_version.music_volume),
-                'fade_in_seconds': float(project.template_version.fade_in_seconds),
-                'fade_out_seconds': float(project.template_version.fade_out_seconds),
-                'ducking_enabled': bool(
-                    project.template_version.audio_mixing_enabled
-                    and project.template_version.audio_ducking_enabled
-                ),
-                'duck_db': float((project.template_version.audio_mixing_config or {}).get('base_duck_db', 14)),
-                'attack_ms': int((project.template_version.audio_mixing_config or {}).get('attack_ms', 140)),
-                'hold_ms': int((project.template_version.audio_mixing_config or {}).get('hold_ms', 300)),
-                'release_ms': int((project.template_version.audio_mixing_config or {}).get('release_ms', 850)),
-                'speech_gap_hold_ms': int((project.template_version.audio_mixing_config or {}).get('speech_gap_hold_ms', 1800)),
-            }
+            timeline['review_proxy_status'] = 'PENDING'
+        timeline = preview_timeline_with_music(project, timeline)
         return render(request, 'member/external_media/preview.html', self.media_context(
             project=project, revision=revision, session=session, timeline=timeline,
             music_tracks=list(BackgroundMusicTrack.objects.exclude(audio_file='').values('id', 'name', 'category', 'tempo')),
-            overlay_presets=list(OverlayPreset.objects.filter(is_active=True).values(
-                'code', 'name', 'overlay_type', 'style', 'position', 'animation',
-            )),
         ))
 
 
@@ -1951,6 +1957,66 @@ class ExternalMediaProjectPreviewMasterView(ExternalMediaRequiredMixin, View):
         return protected_file_response(request, job.original_video)
 
 
+class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, View):
+    """Reports whether the current revision has its continuous proxy ready."""
+
+    def get(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        revision = project.current_timeline_revision
+        if not revision:
+            return JsonResponse({'status': 'PENDING'})
+        proxy = ProjectSourceProxy.objects.filter(
+            project=project, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
+        ).order_by('-update_at').first()
+        if not proxy:
+            return JsonResponse({'status': 'PENDING', 'revision': revision.revision})
+        if not ProjectProxyService.has_usable_timeline_review_proxy(proxy, revision):
+            if proxy.status == ProjectSourceProxy.Status.ERROR:
+                return JsonResponse({
+                    'status': 'ERROR', 'revision': revision.revision, 'error': proxy.error_message,
+                })
+            return JsonResponse({'status': 'PENDING', 'revision': revision.revision})
+        version = int(proxy.update_at.timestamp() * 1000)
+        return JsonResponse({
+            'status': 'READY', 'revision': revision.revision,
+            'url': reverse(
+                'external_media_project_preview_source',
+                kwargs={'public_id': project.public_id, 'source_id': proxy.source_id},
+            ) + f'?v={version}',
+        })
+
+    def post(self, request, public_id):
+        """Retry only the lightweight review proxy after a transient failure."""
+        project = get_object_or_404(
+            ExternalMediaProject.objects.select_related(
+                'render_job', 'template_version__preview_proxy_profile',
+            ),
+            public_id=public_id,
+        )
+        revision = project.current_timeline_revision
+        if not revision:
+            return JsonResponse({'error': 'Não há uma revisão para preparar.'}, status=409)
+        job = project.render_job
+        if not job or not job.original_video:
+            return JsonResponse({'error': 'O vídeo-base para o preview contínuo não está disponível.'}, status=409)
+        proxy, _ = ProjectSourceProxy.objects.get_or_create(
+            project=project,
+            source_id=ProjectProxyService.timeline_review_proxy_id(revision),
+            profile=ProjectProxyService._profile(project),
+            defaults={'source_storage_name': job.original_video.name},
+        )
+        previous_status, previous_error = proxy.status, proxy.error_message
+        proxy.status = ProjectSourceProxy.Status.PENDING
+        proxy.error_message = ''
+        proxy.source_storage_name = job.original_video.name
+        proxy.save(update_fields=['status', 'error_message', 'source_storage_name', 'update_at'])
+        if not TimelineRevisionService._enqueue_timeline_review_proxy(project.pk, revision.pk):
+            proxy.status, proxy.error_message = previous_status, previous_error
+            proxy.save(update_fields=['status', 'error_message', 'update_at'])
+            return JsonResponse({'error': 'Não foi possível agendar o preview contínuo agora.'}, status=503)
+        return JsonResponse({'status': 'PENDING', 'revision': revision.revision})
+
+
 class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
     """Streams the template music so it can be synchronized in the browser."""
 
@@ -1961,8 +2027,18 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
             ).prefetch_related('template_version__plugins'),
             public_id=public_id,
         )
-        override_id = (project.configuration or {}).get('music_override_track_id')
-        override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
+        requested_track_id = request.GET.get('track_id')
+        revision = project.current_timeline_revision
+        override_id = ((revision.timeline if revision else {}) or {}).get('music_override_track_id')
+        override_id = override_id or (project.configuration or {}).get('music_override_track_id')
+        # A requested track is an audition only. It never alters the current
+        # revision; the POST endpoint remains the sole save operation.
+        if requested_track_id:
+            override = get_object_or_404(
+                BackgroundMusicTrack, pk=requested_track_id, audio_file__isnull=False,
+            )
+        else:
+            override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
         music = override.audio_file if override else MusicService.selected_file(project.template_version)
         if not music or not ProjectService.file_exists(music):
             raise Http404('A trilha deste template não está disponível.')
@@ -1974,20 +2050,66 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
         track = get_object_or_404(BackgroundMusicTrack, pk=payload.get('track_id'), audio_file__isnull=False)
-        project.configuration = {**(project.configuration or {}), 'music_override_track_id': track.pk}
-        project.save(update_fields=['configuration', 'update_at'])
-        revision = project.current_timeline_revision or TimelineRevisionService.ensure_initial(project, self.member)
-        return JsonResponse({'revision': revision.revision, 'timeline': revision.timeline, 'music': {'url': reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id}), 'name': track.name}})
+        revision = TimelineRevisionService.update_music(project, self.member, track.pk)
+        return preview_revision_response(project, self.member, revision, music_name=track.name)
 
 
 def preview_revision_response(project, member, revision, **extra):
     """Keep preview mutations and history navigation on the same response shape."""
+    timeline = preview_timeline_with_music(project, revision.timeline)
+    proxy = ProjectSourceProxy.objects.filter(
+        project=project, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
+        status=ProjectSourceProxy.Status.READY,
+    ).first()
+    if ProjectProxyService.has_usable_timeline_review_proxy(proxy, revision):
+        version = int(proxy.update_at.timestamp() * 1000)
+        timeline['review_master_url'] = reverse(
+            'external_media_project_preview_source',
+            kwargs={'public_id': project.public_id, 'source_id': proxy.source_id},
+        ) + f'?v={version}'
+        timeline['review_master_is_edited'] = True
+        timeline['review_proxy_status'] = 'READY'
+    else:
+        timeline['review_proxy_status'] = 'PENDING'
     return JsonResponse({
         'revision': revision.revision,
-        'timeline': revision.timeline,
+        'timeline': timeline,
         'history': TimelineRevisionService.history_state(project, member),
         **extra,
     })
+
+
+def preview_timeline_with_music(project, timeline):
+    """Add browser-only music metadata without mutating a stored revision."""
+    timeline = deepcopy(timeline or {})
+    override_id = timeline.get('music_override_track_id') or (project.configuration or {}).get('music_override_track_id')
+    override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
+    music = override.audio_file if override else MusicService.selected_file(project.template_version)
+    timeline['has_music'] = bool(music and ProjectService.file_exists(music))
+    if timeline['has_music']:
+        music_url = reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id})
+        # The browser uses this URL as the audio cache key. Include the track
+        # id so replacing a song reloads the <audio> element immediately
+        # instead of retaining the prior source under the same endpoint.
+        if override:
+            music_url += f'?track_id={override.pk}'
+        timeline['music'] = {
+            'url': music_url,
+            'name': override.name if override else '',
+            'volume': float(project.template_version.music_volume),
+            'fade_in_seconds': float(project.template_version.fade_in_seconds),
+            'fade_out_seconds': float(project.template_version.fade_out_seconds),
+            'ducking_enabled': bool(
+                project.template_version.audio_mixing_enabled
+                and project.template_version.audio_ducking_enabled
+            ),
+            'duck_db': float((project.template_version.audio_mixing_config or {}).get('base_duck_db', 14)),
+            'attack_ms': int((project.template_version.audio_mixing_config or {}).get('attack_ms', 140)),
+            'hold_ms': int((project.template_version.audio_mixing_config or {}).get('hold_ms', 300)),
+            'release_ms': int((project.template_version.audio_mixing_config or {}).get('release_ms', 850)),
+            'speech_gap_hold_ms': int((project.template_version.audio_mixing_config or {}).get('speech_gap_hold_ms', 1800)),
+        }
+    return timeline
 
 
 class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):

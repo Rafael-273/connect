@@ -94,6 +94,19 @@ def create_project_preview(self, media_id):
         raise
 
 
+@shared_task(bind=True, autoretry_for=(), name='external_media.create_timeline_review_proxy')
+def create_timeline_review_proxy(self, project_id, revision_id):
+    """Build the non-blocking continuous proxy for one immutable revision."""
+    from .preview import ProjectProxyService
+
+    proxy = ProjectProxyService.build_timeline_review_proxy(project_id, revision_id)
+    return {
+        'status': proxy.status if proxy else 'SKIPPED',
+        'proxy_id': proxy.pk if proxy else None,
+        'revision_id': revision_id,
+    }
+
+
 @shared_task(bind=True, autoretry_for=(), name='external_media.create_project_broll_preview')
 def create_project_broll_preview(self, asset_id):
     """Create a browser-compatible proxy for a video B-roll asset."""

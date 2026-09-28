@@ -2482,7 +2482,14 @@ class ExternalMediaProjectPipeline:
         if not sources:
             raise ExternalMediaError('Nenhum vídeo foi encontrado para montar o projeto.')
         lut_field = self.lut.selected_file(version, codes)
-        override_id = (project.configuration or {}).get('music_override_track_id')
+        # Editorial choices are frozen in the approved timeline revision.  The
+        # configuration fallback only preserves projects edited before music
+        # became a revisioned setting.
+        music_revision = project.approved_timeline_revision or project.current_timeline_revision
+        override_id = (
+            ((music_revision.timeline if music_revision else {}) or {}).get('music_override_track_id')
+            or (project.configuration or {}).get('music_override_track_id')
+        )
         override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
         music_field = override.audio_file if override else self.music.selected_file(version, codes)
         lut = materialize_small_asset(lut_field, 'template_lut') if lut_field else None
