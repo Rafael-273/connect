@@ -3,6 +3,7 @@ from datetime import timedelta
 import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Thread
 import uuid
 
 from django.core.files import File
@@ -1368,14 +1369,41 @@ class TimelineRevisionService:
 
     @staticmethod
     def _enqueue_timeline_review_proxy(project_id, revision_id):
-        try:
-            from .tasks import create_timeline_review_proxy
+        """Queue the optional preview without ever delaying an editor save.
 
-            create_timeline_review_proxy.delay(project_id, revision_id)
+        Redis is an infrastructure dependency for the render queue.  When it
+        is temporarily down Celery can spend many seconds retrying a publish;
+        doing that inside ``transaction.on_commit`` used to make a slider look
+        as if its change had not been saved.  The revision itself is already
+        durable, so publish on a daemon thread and let the editor keep using
+        source proxies until the continuous preview is available.
+        """
+        def dispatch():
+            try:
+                from .tasks import create_timeline_review_proxy
+
+                create_timeline_review_proxy.apply_async(
+                    args=(project_id, revision_id),
+                    queue='media_previews',
+                    ignore_result=True,
+                    retry=False,
+                )
+            except Exception:
+                logger.warning(
+                    'Não foi possível agendar o proxy contínuo da revisão %s do projeto %s.',
+                    revision_id, project_id,
+                )
+
+        try:
+            Thread(
+                target=dispatch,
+                name=f'timeline-preview-{revision_id}',
+                daemon=True,
+            ).start()
             return True
         except Exception:
             logger.warning(
-                'Não foi possível agendar o proxy contínuo da revisão %s do projeto %s.',
+                'Não foi possível iniciar o agendamento do proxy contínuo da revisão %s do projeto %s.',
                 revision_id, project_id,
             )
             return False

@@ -203,6 +203,7 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 # optional browser preview is still being generated.
 CELERY_TASK_ROUTES = {
     'external_media.create_project_preview': {'queue': 'media_previews'},
+    'external_media.create_timeline_review_proxy': {'queue': 'media_previews'},
     'external_media.create_subtitle_review_preview': {'queue': 'media_previews'},
 }
 EXTERNAL_MEDIA_MAX_UPLOAD_MB = int(os.getenv('EXTERNAL_MEDIA_MAX_UPLOAD_MB', 10240))
