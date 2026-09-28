@@ -1852,30 +1852,32 @@ class VideoAssemblyService:
                         )
                     ) if effective_auto_reframe_config else None
                 )
-            concat_file = workdir / 'concat.txt'
-            concat_file.write_text(
-                ''.join(
-                    f"file '{str(path).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n"
-                    for path in normalized
-                ),
-                encoding='utf-8',
-            )
-            # The manifest contains presigned URLs while this workspace exists.
-            concat_file.chmod(0o600)
             assembled = output_path if not music_path else workdir / 'assembled_without_music.mp4'
-            self.runner.run([
-                settings.FFMPEG_BINARY, '-y',
-                '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
-                '-f', 'concat', '-safe', '0', '-i', str(concat_file),
-                # Video is already normalized to CFR 30 fps. Re-encode only
-                # the concatenated audio clock: stream-copying AAC packets
-                # preserves per-take encoder delay/timestamps and can make
-                # speech drift further away as a vertical project progresses.
-                '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'copy', '-c:a', 'aac',
-                '-b:a', '192k', '-af', 'asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0',
-                '-ar', '48000', '-ac', '2', '-avoid_negative_ts', 'make_zero',
-                '-movflags', '+faststart', str(assembled),
+            # The concat demuxer trusts each input container's duration and
+            # packet timestamps. A phone take with delayed AAC can therefore
+            # add silence at its boundary even after its image has started.
+            # Rebase every normalized stream in a concat filter instead: its
+            # resulting clock is the same one subtitles and the editor use.
+            concat_filters, concat_inputs = [], []
+            command = [settings.FFMPEG_BINARY, '-y']
+            for index, path in enumerate(normalized):
+                command.extend(['-i', self.runner.input_arg(path)])
+                concat_filters.extend([
+                    f'[{index}:v:0]setpts=PTS-STARTPTS[v{index}]',
+                    f'[{index}:a:0]asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
+                ])
+                concat_inputs.append(f'[v{index}][a{index}]')
+            concat_filters.append(
+                f"{''.join(concat_inputs)}concat=n={len(normalized)}:v=1:a=1[vout][aout]"
+            )
+            command.extend([
+                '-filter_complex', ';'.join(concat_filters), '-map', '[vout]', '-map', '[aout]',
+                '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
+                '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p',
+                '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+                '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', str(assembled),
             ])
+            self.runner.run(command)
         finally:
             for temporary_name in temporary_normalized:
                 self.storage.delete_temporary(temporary_name)
