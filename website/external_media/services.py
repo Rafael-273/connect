@@ -2774,6 +2774,11 @@ class ExternalMediaProjectPipeline:
             item.get('source_id'): item
             for item in operations
             if item.get('type') == 'reframe' and item.get('enabled', True)
+            # A scoped editor decision is rendered faithfully by the review
+            # proxy.  The final assembler still normalizes one source at a
+            # time, so it must never pick an arbitrary side of a blade and
+            # apply it to the entire source.
+            and 'segment_start_ms' not in (item.get('metadata') or {})
         }
         disabled_sources = {
             item.get('source_id')

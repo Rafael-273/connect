@@ -353,10 +353,16 @@ class ProjectProxyService:
             end = int(trim.get('end_ms') or source.get('duration_ms') or clip_end_by_source.get(str(source.get('id'))) or start)
             source_starts[str(source.get('id'))] = (cursor, start)
             cursor += max(1, end - start)
+        reframe_operations = [
+            item for item in (revision.edit_decision_set.get('operations') or [])
+            if item.get('type') == 'reframe' and item.get('enabled', True)
+        ]
         transforms = {
             str(item.get('source_id')): (item.get('metadata') or {}).get('manual_transform')
-            for item in (revision.edit_decision_set.get('operations') or [])
-            if item.get('type') == 'reframe' and item.get('enabled', True)
+            for item in reframe_operations
+            # Scoped decisions belong to a blade segment. They must not
+            # overwrite another segment simply because they occur later.
+            if 'segment_start_ms' not in (item.get('metadata') or {})
         }
         video_filters, audio_filters, count = [], [], 0
         for clip in timeline.get('clips') or []:
@@ -368,18 +374,39 @@ class ProjectProxyService:
             end = (master_start + int(clip.get('source_out_ms') or 0) - trim_start) / 1000
             if end <= start:
                 continue
-            transform = transforms.get(source_id) or {}
-            scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
-            x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
-            y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
-            crop = '' if scale == 1 else (
-                f',crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
-                f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
-                f'scale=trunc(iw*{scale:.5f}/2)*2:trunc(ih*{scale:.5f}/2)*2'
+            clip_start_ms, clip_end_ms = round(start * 1000), round(end * 1000)
+            scoped = sorted(
+                (item for item in reframe_operations if (
+                    str(item.get('source_id')) == source_id
+                    and 'segment_start_ms' in (item.get('metadata') or {})
+                )),
+                key=lambda item: int((item.get('metadata') or {}).get('segment_start_ms') or 0),
             )
-            video_filters.append(f'[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS{crop}[v{count}]')
-            audio_filters.append(f'[0:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{count}]')
-            count += 1
+            boundaries = {clip_start_ms, clip_end_ms}
+            for item in scoped:
+                metadata = item.get('metadata') or {}
+                for boundary in (metadata.get('segment_start_ms'), metadata.get('segment_end_ms')):
+                    if boundary is not None and clip_start_ms < int(boundary) < clip_end_ms:
+                        boundaries.add(int(boundary))
+            ordered_boundaries = sorted(boundaries)
+            for part_start_ms, part_end_ms in zip(ordered_boundaries, ordered_boundaries[1:]):
+                transform = transforms.get(source_id) or {}
+                for item in scoped:
+                    metadata = item.get('metadata') or {}
+                    if int(metadata.get('segment_start_ms') or 0) <= part_start_ms < int(metadata.get('segment_end_ms') or 0):
+                        transform = metadata.get('manual_transform') or {}
+                        break
+                scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
+                x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
+                y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
+                crop = '' if scale == 1 else (
+                    f',crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
+                    f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
+                    f'scale=trunc(iw*{scale:.5f}/2)*2:trunc(ih*{scale:.5f}/2)*2'
+                )
+                video_filters.append(f'[0:v]trim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},setpts=PTS-STARTPTS{crop}[v{count}]')
+                audio_filters.append(f'[0:a]atrim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{count}]')
+                count += 1
         if count:
             joined = ''.join(f'[v{index}][a{index}]' for index in range(count))
             video_filters.append(f'{joined}concat=n={count}:v=1:a=1[joinedv][joineda]')
@@ -509,6 +536,7 @@ class PreviewCompositionService:
             item.get('source_id'): (item.get('metadata') or {}).get('manual_transform')
             for item in operations
             if item.get('type') == 'reframe' and item.get('enabled', True)
+            and 'segment_start_ms' not in (item.get('metadata') or {})
         }
         assets, clips, markers = [], [], []
         source_cursor = timeline_cursor = 0
@@ -912,6 +940,42 @@ class TimelineRevisionService:
         if any(existing != point and abs(existing - point) < MIN_MANUAL_CUT_MS for existing in points):
             raise ValueError('Já existe um corte neste quadro.')
         decisions['video_splits_ms'] = points
+        # The two visual takes must also receive independent reframe decisions.
+        # They inherit the old framing at first, then can be adjusted separately.
+        cursor = 0
+        source_id = None
+        source_start = source_end = 0
+        for source in current.source_manifest.get('sources') or []:
+            if not (source.get('metadata') or {}).get('render_enabled', True):
+                continue
+            trim = source.get('trim') or {}
+            trim_start = int(trim.get('start_ms') or 0)
+            trim_end = int(trim.get('end_ms') or source.get('duration_ms') or trim_start)
+            source_start, source_end = cursor, cursor + max(1, trim_end - trim_start)
+            if source_start < point < source_end:
+                source_id = str(source.get('id'))
+                break
+            cursor = source_end
+        if source_id:
+            operations = decisions.setdefault('operations', [])
+            target = next((item for item in operations if (
+                item.get('type') == 'reframe'
+                and item.get('enabled', True)
+                and str(item.get('source_id')) == source_id
+                and int((item.get('metadata') or {}).get('segment_start_ms') or source_start) < point
+                and point < int((item.get('metadata') or {}).get('segment_end_ms') or source_end)
+            )), None)
+            if target:
+                metadata = target.setdefault('metadata', {})
+                segment_start = int(metadata.get('segment_start_ms') or source_start)
+                segment_end = int(metadata.get('segment_end_ms') or source_end)
+                sibling = deepcopy(target)
+                sibling['id'] = f"{target.get('id')}-segment-{uuid.uuid4().hex[:10]}"
+                sibling.setdefault('metadata', {})['segment_start_ms'] = point
+                sibling['metadata']['segment_end_ms'] = segment_end
+                metadata['segment_start_ms'] = segment_start
+                metadata['segment_end_ms'] = point
+                operations.append(sibling)
         revision = cls._create(locked, current.source_manifest, decisions, 'Vídeo dividido', member, current)
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'SPLIT_VIDEO', {'master_ms': point}, {'master_ms': point}, member)
