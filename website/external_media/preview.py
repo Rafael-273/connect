@@ -1025,8 +1025,11 @@ class TimelineRevisionService:
             'x': min(1.0, max(-1.0, float(values.get('x') or 0))),
             'y': min(1.0, max(-1.0, float(values.get('y') or 0))),
         }
-        if previous == transform:
+        if previous == transform and target.get('enabled', True):
             return current
+        # Moving a slider is an explicit manual framing choice, including when
+        # the member had previously opted out of Auto Reframe.
+        target['enabled'] = True
         target.setdefault('metadata', {})['manual_transform'] = transform
         target['origin'] = 'USER'
         revision = cls._create(locked, current.source_manifest, decisions, 'Enquadramento ajustado', member, current)
