@@ -2054,6 +2054,14 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
+        if 'volume' in payload:
+            try:
+                revision = TimelineRevisionService.update_music_volume(
+                    project, self.member, payload['volume'],
+                )
+            except (TypeError, ValueError):
+                return JsonResponse({'error': 'Volume de música inválido.'}, status=400)
+            return preview_revision_response(project, self.member, revision)
         track = get_object_or_404(BackgroundMusicTrack, pk=payload.get('track_id'), audio_file__isnull=False)
         revision = TimelineRevisionService.update_music(project, self.member, track.pk)
         return preview_revision_response(project, self.member, revision, music_name=track.name)
@@ -2101,7 +2109,9 @@ def preview_timeline_with_music(project, timeline):
         timeline['music'] = {
             'url': music_url,
             'name': override.name if override else '',
-            'volume': float(project.template_version.music_volume),
+            'volume': max(0.0, min(1.0, float(timeline.get(
+                'music_volume', project.template_version.music_volume,
+            )))),
             'fade_in_seconds': float(project.template_version.fade_in_seconds),
             'fade_out_seconds': float(project.template_version.fade_out_seconds),
             'ducking_enabled': bool(

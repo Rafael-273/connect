@@ -2876,6 +2876,10 @@ class ExternalMediaProjectPipeline:
         AudioMasteringService).
         """
         version = project.template_version
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        music_volume = max(0.0, min(1.0, float(
+            ((revision.timeline if revision else {}) or {}).get('music_volume', version.music_volume)
+        )))
         final_path = video_path
         retained_temporary_names = []
         noise_metrics = None
@@ -2936,7 +2940,7 @@ class ExternalMediaProjectPipeline:
             ) as processing_input:
                 mix_result = AudioMixingService(self.assembly.runner).mix(
                     processing_input, music_path, mixed_path,
-                    music_volume=version.music_volume,
+                    music_volume=music_volume,
                     duration_ms=duration_ms,
                     speech_blocks=speech_blocks,
                     protected_ranges=protected_ranges,

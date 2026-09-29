@@ -1077,6 +1077,30 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def update_music_volume(cls, project, member, volume):
+        """Save the member's music gain in the same immutable revision."""
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        requested = max(0.0, min(1.0, float(volume)))
+        previous = float((current.timeline or {}).get(
+            'music_volume', locked.template_version.music_volume,
+        ))
+        if abs(previous - requested) < .0001:
+            return current
+        revision = cls._create(
+            locked, current.source_manifest, current.edit_decision_set,
+            'Volume da trilha ajustado', member, current,
+            music_volume=requested,
+        )
+        session = cls.session(locked, member, revision)
+        cls._record(
+            session, current, revision, 'UPDATE_MUSIC_VOLUME',
+            {'volume': requested}, {'volume': previous}, member,
+        )
+        return revision
+
+    @classmethod
+    @transaction.atomic
     def mutate_overlay(cls, project, member, overlay_id, payload, *, create=False, delete=False):
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
@@ -1328,7 +1352,7 @@ class TimelineRevisionService:
     @classmethod
     def _create(
         cls, project, manifest, decisions, reason, member, parent=None,
-        overlays=None, brolls=None, music_override_track_id=None,
+        overlays=None, brolls=None, music_override_track_id=None, music_volume=None,
     ):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
@@ -1352,6 +1376,10 @@ class TimelineRevisionService:
             music_override_track_id = (parent.timeline or {}).get('music_override_track_id')
         if music_override_track_id:
             timeline['music_override_track_id'] = int(music_override_track_id)
+        if music_volume is None and parent:
+            music_volume = (parent.timeline or {}).get('music_volume')
+        if music_volume is not None:
+            timeline['music_volume'] = max(0.0, min(1.0, float(music_volume)))
         revision = TimelineRevision.objects.create(
             project=project, revision=number, parent=parent, timeline=timeline,
             source_manifest=composition_manifest, edit_decision_set=decisions, reason=reason, created_by=member,
