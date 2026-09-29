@@ -423,6 +423,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(!node){node=document.createElement(expectedTag.toLowerCase());node.className='preview-broll-item';node.dataset.brollId=item.id;if(node.tagName==='VIDEO'){node.muted=true;node.playsInline=true;node.loop=true;node.preload='metadata'}brollLayer.append(node)}
             if(node.dataset.src!==media.url){node.dataset.src=media.url;node.src=media.url;if(node.tagName==='VIDEO')node.load()}
             const fullscreen=item.display_mode!=='OVERLAY',transform=item.transform||{},elapsed=globalMs-item.start_ms,remaining=item.end_ms-globalMs,duration=Math.max(1,item.end_ms-item.start_ms),progress=Math.max(0,Math.min(1,elapsed/duration)),motion=item.motion||{};
+            // Layer 0 is the uppermost timeline row. Match the same stacking
+            // convention used by the final FFmpeg composition in the browser.
+            node.style.zIndex=String(100-Math.max(0,Number(item.layer)||0));
             node.classList.toggle('is-fullscreen',fullscreen);node.style.objectFit=item.fit==='CONTAIN'?'contain':'cover';node.style.objectPosition=`${Number(transform.x??.5)*100}% ${Number(transform.y??.5)*100}%`;
             if(fullscreen){node.style.left='0';node.style.top='0';node.style.width='100%';node.style.height='100%'}else{node.style.left=`${Number(transform.x??.82)*100}%`;node.style.top=`${Number(transform.y??.78)*100}%`;node.style.width=`${Math.max(.08,Math.min(.9,Number(transform.scale??.28)))*100}%`;node.style.height='auto'}
             let scale=fullscreen?Math.max(1,Math.min(2,Number(transform.scale??1))):1;const motionType=String(motion.type||'NONE');if(motionType==='ZOOM_IN')scale*=Number(motion.from_scale||1)+(Number(motion.to_scale||1.06)-Number(motion.from_scale||1))*progress;if(motionType==='ZOOM_OUT')scale*=Number(motion.to_scale||1.06)+(Number(motion.from_scale||1)-Number(motion.to_scale||1.06))*progress;
@@ -538,7 +541,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const endpoint=kind==='broll'
             ? `{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`
             : `{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`;
-        try{applyTimeline(await api(endpoint,{start_ms:Math.round(startMs),end_ms:Math.round(endMs),...(layer===null?{}:{layer})}),false,false);renderEditorTimeline()}
+        // A B-roll move creates a new immutable revision. Refresh the player
+        // against that revision too; otherwise it can keep showing the prior
+        // source buffer (and its old reframe) until the page is reloaded.
+        try{applyTimeline(await api(endpoint,{start_ms:Math.round(startMs),end_ms:Math.round(endMs),...(layer===null?{}:{layer})}),false,true);renderEditorTimeline()}
         catch(error){alert(error.message);renderEditorTimeline()}
     }
     function makeTimelineItemDraggable(clip,lane,item,kind,duration){

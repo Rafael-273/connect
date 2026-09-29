@@ -1837,8 +1837,13 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             if proxy.proxy_file
         }
         assets = timeline.get('assets', [])
-        assets_have_proxies = bool(assets)
-        for asset in assets:
+        # B-roll assets have their own protected endpoint. They are not source
+        # takes and therefore never have a ProjectSourceProxy. Rewriting every
+        # timeline asset below used to clear their URL on a page reload, which
+        # made an otherwise valid B-roll silently disappear from the preview.
+        source_assets = [asset for asset in assets if not asset.get('asset_id')]
+        assets_have_proxies = bool(source_assets)
+        for asset in source_assets:
             source_id = str(asset.get('id') or '')
             # Trim ranges were introduced after the first source proxies.  A
             # segment such as project-media-5-trecho-1 legitimately reuses the
