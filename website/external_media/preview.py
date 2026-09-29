@@ -1198,6 +1198,8 @@ class TimelineRevisionService:
                 target['start_ms'] = max(0, min(duration - 1, int(payload['start_ms'])))
             if 'end_ms' in payload:
                 target['end_ms'] = min(duration, max(target['start_ms'] + 1, int(payload['end_ms'])))
+            if 'layer' in payload:
+                target['layer'] = max(0, min(20, int(payload['layer'])))
             if 'source_in_ms' in payload:
                 target['source_in_ms'] = max(0, int(payload['source_in_ms']))
             if 'source_out_ms' in payload:

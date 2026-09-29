@@ -323,7 +323,9 @@ class BrollRenderService:
         command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path)]
         available = []
         input_indexes = {}
-        for item in decisions:
+        # Layer 0 is the uppermost editor lane. FFmpeg paints later overlays
+        # over earlier ones, therefore compose bottom lanes before top lanes.
+        for item in sorted(decisions, key=lambda value: -int(value.get('layer') or 0)):
             asset = assets.get(str(item.get('asset_id')))
             if not asset:
                 logger.warning(

@@ -534,17 +534,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         try{applyTimeline(await api(endpoint,{split_at_ms:cutAt}))}catch(error){alert(error.message)}
     }
     function timelinePoint(event,lane,duration){const rect=lane.getBoundingClientRect();return Math.max(0,Math.min(duration,(event.clientX-rect.left)/rect.width*duration))}
-    async function moveTimelineItem(kind,id,startMs,endMs){
+    async function moveTimelineItem(kind,id,startMs,endMs,layer=null){
         const endpoint=kind==='broll'
             ? `{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`
             : `{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`;
-        try{applyTimeline(await api(endpoint,{start_ms:Math.round(startMs),end_ms:Math.round(endMs)}),false,false)}
+        try{applyTimeline(await api(endpoint,{start_ms:Math.round(startMs),end_ms:Math.round(endMs),...(layer===null?{}:{layer})}),false,false);renderEditorTimeline()}
         catch(error){alert(error.message);renderEditorTimeline()}
     }
     function makeTimelineItemDraggable(clip,lane,item,kind,duration){
         if(!['broll','overlay'].includes(kind))return;
         clip.classList.add('is-timeline-draggable');
-        clip.title+=' · arraste o centro para reposicionar ou as extremidades para ajustar a duração';
+        clip.title+=kind==='broll'
+            ? ' · arraste o centro para reposicionar ou trocar de camada; arraste as extremidades para ajustar a duração'
+            : ' · arraste o centro para reposicionar ou as extremidades para ajustar a duração';
         clip.addEventListener('pointermove',event=>{if(clip.classList.contains('is-timeline-dragging'))return;const box=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,box.width*.22));clip.style.cursor=event.clientX-box.left<=edge||box.right-event.clientX<=edge?'ew-resize':'grab'});
         clip.addEventListener('pointerdown',event=>{
             if(event.button!==0)return;
@@ -555,7 +557,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const clipBox=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,clipBox.width*.22));
             const resizeMode=event.clientX-clipBox.left<=edge?'start':clipBox.right-event.clientX<=edge?'end':'move';
             const pointerStart=timelinePoint(event,lane,duration),wasPlaying=!video.paused;
-            let nextStart=originalStart,nextEnd=originalEnd,moved=false;
+            let nextStart=originalStart,nextEnd=originalEnd,nextLayer=Number(item.layer||0),moved=false;
             clip.setPointerCapture?.(event.pointerId);
             clip.classList.add('is-timeline-dragging');
             const move=pointerEvent=>{
@@ -563,7 +565,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 if(resizeMode==='start')nextStart=Math.max(0,Math.min(originalEnd-minimumCutMs(),snapToFrame(originalStart+delta)));
                 else if(resizeMode==='end')nextEnd=Math.max(originalStart+minimumCutMs(),Math.min(duration,snapToFrame(originalEnd+delta)));
                 else nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta))),nextEnd=nextStart+length;
-                moved=moved||(resizeMode==='end'?Math.abs(nextEnd-originalEnd):Math.abs(nextStart-originalStart))>=minimumCutMs();
+                if(kind==='broll'){const targetLane=document.elementFromPoint(pointerEvent.clientX,pointerEvent.clientY)?.closest('[data-broll-layer]');if(targetLane)nextLayer=Number(targetLane.dataset.brollLayer||0)}
+                moved=moved||(resizeMode==='end'?Math.abs(nextEnd-originalEnd):Math.abs(nextStart-originalStart))>=minimumCutMs()||nextLayer!==Number(item.layer||0);
                 clip.style.left=`${Math.max(0,nextStart/duration*100)}%`;
                 clip.style.width=`${Math.max(.02,(nextEnd-nextStart)/duration*100)}%`;
             };
@@ -573,7 +576,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 clip.classList.remove('is-timeline-dragging');
                 if(!moved)return;
                 clip.dataset.timelineDrag='1';
-                moveTimelineItem(kind,item.id,nextStart,nextEnd);
+                moveTimelineItem(kind,item.id,nextStart,nextEnd,kind==='broll'?nextLayer:null);
                 if(resizeMode==='move')seek(nextStart,wasPlaying);
             };
             clip.addEventListener('pointermove',move);clip.addEventListener('pointerup',finish);clip.addEventListener('pointercancel',finish);
@@ -609,8 +612,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const otherCaptions=captions.filter(item=>!usedCaptions.has(item));
         if(otherCaptions.length)makeTrack('Legendas',captionItems(otherCaptions),'editor-track__caption',false,true,'caption');
         if(timeline.brolls?.length){
-            const elements=timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms}});
-            stackElementLayers(elements).forEach(layer=>makeTrack('Elementos',layer,'editor-track__broll',false,false,'broll',true));
+            const elements=timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms,layer:item.layer}});
+            const automatic=stackElementLayers(elements),automaticLayer=new Map();automatic.forEach((items,index)=>items.forEach(item=>automaticLayer.set(item.id,index)));
+            const byLayer=new Map();elements.forEach(item=>{const hasManualLayer=item.layer!==null&&item.layer!==undefined&&item.layer!==''&&Number.isFinite(Number(item.layer));const layer=hasManualLayer?Number(item.layer):automaticLayer.get(item.id)||0;item.layer=layer;if(!byLayer.has(layer))byLayer.set(layer,[]);byLayer.get(layer).push(item)});
+            const maxLayer=Math.max(0,...byLayer.keys())+1;
+            for(let layer=0;layer<=maxLayer;layer++){makeTrack('Elementos',byLayer.get(layer)||[],'editor-track__broll',false,false,'broll',true);tracks.lastElementChild.querySelector('.editor-track__lane').dataset.brollLayer=String(layer)}
         }
         const sourceVideoSegments=videoSegments();
         makeTrack('Vídeo',sourceVideoSegments,'editor-video-clip',true,false,'video');
