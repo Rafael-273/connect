@@ -41,7 +41,10 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             && this.preloader.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
             && Math.abs(this.preloader.currentTime - time) < .35) {
             const outgoing = this.video, incoming = this.preloader;
-            incoming.muted = outgoing.muted;
+            const outgoingMuted = outgoing.muted;
+            // Start muted under the visible take. Audio changes at the same
+            // moment as the visual frame, avoiding both a flash and overlap.
+            incoming.muted = true;
             incoming.volume = outgoing.volume;
             incoming.playbackRate = outgoing.playbackRate;
             incoming.dataset.source = source;
@@ -50,18 +53,26 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             this.switching = true;
             this.onVideoChange(incoming, outgoing);
             const reveal = () => {
-                // Do not expose a decoded-but-paused first frame. The old take
-                // remains live until the new element has actually started.
-                outgoing.pause();
-                incoming.style.opacity = '1'; incoming.style.zIndex = '1';
-                outgoing.style.opacity = '0'; outgoing.style.zIndex = '0';
-                this.preloader = outgoing;
-                this.preloader.muted = true;
-                this.switching = false;
-                this.onLoading(false);
-                const queued = this.queuedWarm;
-                this.queuedWarm = null;
-                if (queued) this.warm(queued.source, queued.time);
+                const finishReveal = () => {
+                    // `playing` can precede compositing by one frame. Paint
+                    // the incoming frame before hiding the outgoing one.
+                    incoming.style.opacity = '1'; incoming.style.zIndex = '1';
+                    incoming.muted = outgoingMuted;
+                    requestAnimationFrame(() => {
+                        outgoing.pause();
+                        outgoing.style.opacity = '0'; outgoing.style.zIndex = '0';
+                    });
+                    this.preloader = outgoing;
+                    this.preloader.muted = true;
+                    this.switching = false;
+                    this.onLoading(false);
+                    const queued = this.queuedWarm;
+                    this.queuedWarm = null;
+                    if (queued) this.warm(queued.source, queued.time);
+                };
+                if (typeof incoming.requestVideoFrameCallback === 'function') {
+                    incoming.requestVideoFrameCallback(finishReveal);
+                } else requestAnimationFrame(finishReveal);
             };
             if (autoplay) {
                 incoming.addEventListener('playing', reveal, {once: true});
