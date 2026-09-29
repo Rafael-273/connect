@@ -372,7 +372,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function holdPreviewFrame(){if(!video.videoWidth||!video.videoHeight)return;try{const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);previewStage.style.backgroundImage=`url("${canvas.toDataURL('image/jpeg',.82)}")`;previewStage.style.backgroundSize='cover';previewStage.style.backgroundPosition='center';video.style.opacity='0'}catch(_){}}
     function releasePreviewFrame(){video.style.opacity='1';previewStage.style.backgroundImage=''}
     const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{loading=value;if(!value)requestAnimationFrame(renderEditorTimeline)},play:requestVideoPlay});
-    function warmNextClip(clip){if(useReviewMaster())return;const index=timeline.clips.indexOf(clip),next=timeline.clips[index+1];if(next)sourcePlayer.warm(sourceFor(next))}
+    function warmNextClip(clip){if(useReviewMaster())return;const index=timeline.clips.indexOf(clip),next=timeline.clips[index+1];if(next)sourcePlayer.warm(sourceFor(next),Number(next.source_in_ms||0)/1000)}
     function seek(ms, autoplay=false){
         globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs); if(!clip)return;
         if(useReviewMaster()){

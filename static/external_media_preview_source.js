@@ -16,6 +16,9 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.preloader.muted = true;
         this.preloader.playsInline = true;
         this.preloader.preload = 'auto';
+        this.preloadRequestId = 0;
+        this.preloadedSource = '';
+        this.preloadedTime = 0;
     }
 
     seek(source, timeSeconds, {autoplay = false, freeze = true} = {}) {
@@ -43,22 +46,54 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             this.onLoading(false);
             if (freeze) this.releaseFrame();
         };
+        const completeWhenFramePaints = () => {
+            if (requestId !== this.requestId || completed) return;
+            // `canplay` is not sufficient on all browsers: it may precede the
+            // first composited frame after a source switch. Keep the outgoing
+            // frame frozen until the incoming image is actually decoded.
+            if (typeof this.video.requestVideoFrameCallback === 'function') {
+                this.video.requestVideoFrameCallback(() => complete());
+            } else {
+                requestAnimationFrame(complete);
+            }
+        };
+        const waitForTargetFrame = () => {
+            if (requestId !== this.requestId) return;
+            if (this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+                completeWhenFramePaints();
+            } else {
+                this.video.addEventListener('loadeddata', completeWhenFramePaints, {once: true});
+            }
+        };
         this.video.addEventListener('loadedmetadata', () => {
             if (requestId !== this.requestId) return;
             this.video.currentTime = time;
-            // `seeked` only means the timestamp changed; it can still paint a
-            // black frame while the decoder catches up. `canplay` guarantees
-            // the target source has enough decoded data to replace the held
-            // frame without a visible flash.
-            this.video.addEventListener('canplay', complete, {once: true});
+            this.video.addEventListener('seeked', waitForTargetFrame, {once: true});
+            // At timestamp zero, some engines do not dispatch `seeked`.
+            if (time < 0.01) {
+                this.video.addEventListener('loadeddata', waitForTargetFrame, {once: true});
+            }
         }, {once: true});
         this.video.addEventListener('error', fail, {once: true});
     }
 
-    warm(source) {
-        if (!source || source === this.video.dataset.source || source === this.preloader.dataset.source) return;
+    warm(source, timeSeconds = 0) {
+        const time = Math.max(0, Number(timeSeconds) || 0);
+        if (!source || source === this.video.dataset.source) return;
+        if (source === this.preloader.dataset.source && Math.abs(this.preloadedTime - time) < 0.05) return;
+        const requestId = ++this.preloadRequestId;
+        this.preloadedSource = '';
+        this.preloadedTime = time;
         this.preloader.dataset.source = source;
         this.preloader.src = source;
+        this.preloader.addEventListener('loadedmetadata', () => {
+            if (requestId !== this.preloadRequestId) return;
+            this.preloader.currentTime = Math.min(time, Math.max(0, this.preloader.duration - 0.05));
+        }, {once: true});
+        this.preloader.addEventListener('seeked', () => {
+            if (requestId !== this.preloadRequestId) return;
+            this.preloadedSource = source;
+        }, {once: true});
         this.preloader.load();
     }
 };
