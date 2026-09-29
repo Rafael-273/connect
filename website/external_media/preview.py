@@ -708,13 +708,17 @@ class PreviewCompositionService:
         fidelity = {key: cls.FIDELITY[key] for key in capabilities['available']}
         if review_master_url and not has_reframe_override and 'TRANSFORMS' in fidelity:
             fidelity['TRANSFORMS'] = 'EXACT'
+        output_preset = project.render_job.preset if project.render_job_id else project.template_version.preset
         return {
             'schema': 'connect.internal_timeline.v1',
             'timeline_revision': revision,
             'project': {'id': str(project.public_id), 'name': project.name},
             'sequence': {
-                'width': project.template_version.preset.width or 1920,
-                'height': project.template_version.preset.height or 1080,
+                # Subtitles are burned using the render job's frozen preset.
+                # The editor must use that same canvas, even if a template was
+                # changed after this project was created.
+                'width': output_preset.width or 1920,
+                'height': output_preset.height or 1080,
                 # The final assembly is rendered at 30 fps. RenderPreset only
                 # describes the output dimensions/codecs, not a frame rate.
                 'fps': 30,
