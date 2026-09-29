@@ -538,28 +538,34 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const endpoint=kind==='broll'
             ? `{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`
             : `{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`;
-        try{applyTimeline(await api(endpoint,{start_ms:Math.round(startMs),end_ms:Math.round(endMs)}))}
+        try{applyTimeline(await api(endpoint,{start_ms:Math.round(startMs),end_ms:Math.round(endMs)}),false,false)}
         catch(error){alert(error.message);renderEditorTimeline()}
     }
     function makeTimelineItemDraggable(clip,lane,item,kind,duration){
         if(!['broll','overlay'].includes(kind))return;
         clip.classList.add('is-timeline-draggable');
-        clip.title+=' · arraste para reposicionar';
+        clip.title+=' · arraste o centro para reposicionar ou as extremidades para ajustar a duração';
+        clip.addEventListener('pointermove',event=>{if(clip.classList.contains('is-timeline-dragging'))return;const box=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,box.width*.22));clip.style.cursor=event.clientX-box.left<=edge||box.right-event.clientX<=edge?'ew-resize':'grab'});
         clip.addEventListener('pointerdown',event=>{
             if(event.button!==0)return;
             // The blade click belongs to this clip, not to the drag handler.
             if(editTool==='blade')return;
             event.preventDefault();event.stopPropagation();
-            const originalStart=Number(item.start),length=Math.max(1,Number(item.end)-originalStart);
+            const originalStart=Number(item.start),originalEnd=Number(item.end),length=Math.max(1,originalEnd-originalStart);
+            const clipBox=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,clipBox.width*.22));
+            const resizeMode=event.clientX-clipBox.left<=edge?'start':clipBox.right-event.clientX<=edge?'end':'move';
             const pointerStart=timelinePoint(event,lane,duration),wasPlaying=!video.paused;
-            let nextStart=originalStart,moved=false;
+            let nextStart=originalStart,nextEnd=originalEnd,moved=false;
             clip.setPointerCapture?.(event.pointerId);
             clip.classList.add('is-timeline-dragging');
             const move=pointerEvent=>{
                 const delta=timelinePoint(pointerEvent,lane,duration)-pointerStart;
-                nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta)));
-                moved=moved||Math.abs(nextStart-originalStart)>=minimumCutMs();
+                if(resizeMode==='start')nextStart=Math.max(0,Math.min(originalEnd-minimumCutMs(),snapToFrame(originalStart+delta)));
+                else if(resizeMode==='end')nextEnd=Math.max(originalStart+minimumCutMs(),Math.min(duration,snapToFrame(originalEnd+delta)));
+                else nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta))),nextEnd=nextStart+length;
+                moved=moved||(resizeMode==='end'?Math.abs(nextEnd-originalEnd):Math.abs(nextStart-originalStart))>=minimumCutMs();
                 clip.style.left=`${Math.max(0,nextStart/duration*100)}%`;
+                clip.style.width=`${Math.max(.02,(nextEnd-nextStart)/duration*100)}%`;
             };
             const finish=pointerEvent=>{
                 clip.removeEventListener('pointermove',move);clip.removeEventListener('pointerup',finish);clip.removeEventListener('pointercancel',finish);
@@ -567,8 +573,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 clip.classList.remove('is-timeline-dragging');
                 if(!moved)return;
                 clip.dataset.timelineDrag='1';
-                moveTimelineItem(kind,item.id,nextStart,nextStart+length);
-                seek(nextStart,wasPlaying);
+                moveTimelineItem(kind,item.id,nextStart,nextEnd);
+                if(resizeMode==='move')seek(nextStart,wasPlaying);
             };
             clip.addEventListener('pointermove',move);clip.addEventListener('pointerup',finish);clip.addEventListener('pointercancel',finish);
         });
