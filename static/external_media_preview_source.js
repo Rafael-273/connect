@@ -28,6 +28,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.preloadedTime = 0;
         this.switching = false;
         this.queuedWarm = null;
+        this.waitingForPreload = null;
     }
 
     seek(source, timeSeconds, {autoplay = false, freeze = true} = {}) {
@@ -35,6 +36,28 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         if (this.video.dataset.source === source) {
             this.video.currentTime = time;
             if (autoplay) this.play();
+            return;
+        }
+        // Never replace the visible decoder with an unready source at a cut.
+        // Holding the last frame is preferable to a black flash; the queued
+        // seek resumes as soon as the already-requested next take is usable.
+        if (autoplay && this.preloader.dataset.source === source && this.preloadedSource !== source) {
+            const waiting = `${source}:${time.toFixed(3)}`;
+            if (this.waitingForPreload !== waiting) {
+                this.waitingForPreload = waiting;
+                this.onLoading(true);
+                this.video.pause();
+                const resume = () => {
+                    if (this.waitingForPreload !== waiting) return;
+                    this.waitingForPreload = null;
+                    this.seek(source, time, {autoplay: true, freeze});
+                };
+                this.preloader.addEventListener('seeked', resume, {once: true});
+                this.preloader.addEventListener('canplay', resume, {once: true});
+                this.preloader.addEventListener('error', () => {
+                    if (this.waitingForPreload === waiting) this.waitingForPreload = null;
+                }, {once: true});
+            }
             return;
         }
         if (this.preloadedSource === source

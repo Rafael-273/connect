@@ -404,7 +404,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         renderOverlays();
         renderBrolls();
         renderDirectTransformControl();
-        renderEditorTimeline();
+        renderTimelinePlayhead();
         updateMusicVolume();
         updateEditControls();
     }
@@ -573,6 +573,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             clip.addEventListener('pointermove',move);clip.addEventListener('pointerup',finish);clip.addEventListener('pointercancel',finish);
         });
     }
+    let timelinePlayheadFrame=0;
+    function renderTimelinePlayhead(){if(timelinePlayheadFrame)return;timelinePlayheadFrame=requestAnimationFrame(()=>{timelinePlayheadFrame=0;const duration=Math.max(1,Number(timeline.sequence.duration_ms||1)),canvas=document.getElementById('editor-canvas'),head=canvas?.querySelector('.editor-playhead'),lane=canvas?.querySelector('.editor-track__lane');if(!head||!lane)return;const canvasBox=canvas.getBoundingClientRect(),laneBox=lane.getBoundingClientRect();head.style.left=`${laneBox.left-canvasBox.left+laneBox.width*Math.min(1,globalMs/duration)}px`})}
     function renderEditorTimeline(){
         const duration=Math.max(1,Number(timeline.sequence.duration_ms||1)), tracks=document.getElementById('editor-tracks');
         document.getElementById('editor-canvas').style.width=`${timelineZoom*100}%`;
