@@ -384,7 +384,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             renderPosition(); syncMusicPosition(); return;
         }
         const source=sourceFor(clip), local=(clip.source_in_ms + globalMs-clip.timeline_in_ms)/1000;
-        activeClip=clip;warmNextClip(clip);sourcePlayer.seek(source,local,{autoplay,freeze:true});
+        // Consume a warmed take before recycling the secondary buffer for the
+        // one after it. Reversing this order discarded the ready frame at
+        // every boundary and made the double buffer ineffective.
+        activeClip=clip;sourcePlayer.seek(source,local,{autoplay,freeze:true});warmNextClip(clip);
         renderPosition(); syncMusicPosition();
     }
     function renderPosition(){

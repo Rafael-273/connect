@@ -26,6 +26,8 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.preloadRequestId = 0;
         this.preloadedSource = '';
         this.preloadedTime = 0;
+        this.switching = false;
+        this.queuedWarm = null;
     }
 
     seek(source, timeSeconds, {autoplay = false, freeze = true} = {}) {
@@ -39,20 +41,33 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             && this.preloader.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
             && Math.abs(this.preloader.currentTime - time) < .35) {
             const outgoing = this.video, incoming = this.preloader;
-            outgoing.pause();
             incoming.muted = outgoing.muted;
             incoming.volume = outgoing.volume;
             incoming.playbackRate = outgoing.playbackRate;
             incoming.dataset.source = source;
-            incoming.style.opacity = '1'; incoming.style.zIndex = '1';
-            outgoing.style.opacity = '0'; outgoing.style.zIndex = '0';
             this.video = incoming;
-            this.preloader = outgoing;
-            this.preloader.muted = true;
             this.preloadedSource = '';
+            this.switching = true;
             this.onVideoChange(incoming, outgoing);
-            this.onLoading(false);
-            if (autoplay) this.play();
+            const reveal = () => {
+                // Do not expose a decoded-but-paused first frame. The old take
+                // remains live until the new element has actually started.
+                outgoing.pause();
+                incoming.style.opacity = '1'; incoming.style.zIndex = '1';
+                outgoing.style.opacity = '0'; outgoing.style.zIndex = '0';
+                this.preloader = outgoing;
+                this.preloader.muted = true;
+                this.switching = false;
+                this.onLoading(false);
+                const queued = this.queuedWarm;
+                this.queuedWarm = null;
+                if (queued) this.warm(queued.source, queued.time);
+            };
+            if (autoplay) {
+                incoming.addEventListener('playing', reveal, {once: true});
+                this.onLoading(true);
+                this.play();
+            } else reveal();
             return;
         }
         const requestId = ++this.requestId;
@@ -106,6 +121,10 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
 
     warm(source, timeSeconds = 0) {
         const time = Math.max(0, Number(timeSeconds) || 0);
+        if (this.switching) {
+            this.queuedWarm = {source, time};
+            return;
+        }
         if (!source || source === this.video.dataset.source) return;
         if (source === this.preloader.dataset.source && Math.abs(this.preloadedTime - time) < 0.05) return;
         const requestId = ++this.preloadRequestId;
