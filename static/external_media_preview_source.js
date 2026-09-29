@@ -5,17 +5,24 @@
  * a fast scrub from showing a stale frame or resuming the wrong take.
  */
 window.ConnectPreviewSource = class ConnectPreviewSource {
-    constructor(video, {holdFrame = () => {}, releaseFrame = () => {}, onLoading = () => {}, play = () => {}} = {}) {
+    constructor(video, {holdFrame = () => {}, releaseFrame = () => {}, onLoading = () => {}, onVideoChange = () => {}, play = () => {}} = {}) {
         this.video = video;
         this.holdFrame = holdFrame;
         this.releaseFrame = releaseFrame;
         this.onLoading = onLoading;
+        this.onVideoChange = onVideoChange;
         this.play = play;
         this.requestId = 0;
         this.preloader = document.createElement('video');
         this.preloader.muted = true;
         this.preloader.playsInline = true;
         this.preloader.preload = 'auto';
+        this.video.classList.add('preview-source-buffer');
+        this.video.style.zIndex = '1';
+        this.preloader.className = 'preview-source-buffer';
+        this.preloader.style.opacity = '0';
+        this.preloader.style.zIndex = '0';
+        video.parentNode?.append(this.preloader);
         this.preloadRequestId = 0;
         this.preloadedSource = '';
         this.preloadedTime = 0;
@@ -25,6 +32,26 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         const time = Math.max(0, Number(timeSeconds) || 0);
         if (this.video.dataset.source === source) {
             this.video.currentTime = time;
+            if (autoplay) this.play();
+            return;
+        }
+        if (this.preloadedSource === source
+            && this.preloader.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+            && Math.abs(this.preloader.currentTime - time) < .35) {
+            const outgoing = this.video, incoming = this.preloader;
+            outgoing.pause();
+            incoming.muted = outgoing.muted;
+            incoming.volume = outgoing.volume;
+            incoming.playbackRate = outgoing.playbackRate;
+            incoming.dataset.source = source;
+            incoming.style.opacity = '1'; incoming.style.zIndex = '1';
+            outgoing.style.opacity = '0'; outgoing.style.zIndex = '0';
+            this.video = incoming;
+            this.preloader = outgoing;
+            this.preloader.muted = true;
+            this.preloadedSource = '';
+            this.onVideoChange(incoming, outgoing);
+            this.onLoading(false);
             if (autoplay) this.play();
             return;
         }

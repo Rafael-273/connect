@@ -168,6 +168,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     .preview-modal__card #subtitle-edit-input{background:#0d1118!important;border-color:#5b687d!important;color:#f8fafc!important;caret-color:#f8fafc}
     .preview-modal__card #subtitle-edit-input::placeholder{color:#8f9aac;opacity:1}
     .preview-modal__card #subtitle-edit-input:focus{border-color:#e9433e!important;box-shadow:0 0 0 3px rgba(233,67,62,.2)}
+    /* Two decoded source buffers allow a take boundary to swap without black. */
+    .preview-stage>.preview-source-buffer{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .08s linear}
 </style>
 {% endblock %}
 
@@ -264,7 +266,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 (() => {
     let timeline = JSON.parse(document.getElementById('preview-timeline').textContent);
     const musicTracks = JSON.parse(document.getElementById('music-tracks').textContent);
-    const video = document.getElementById('preview-video'), range = document.getElementById('preview-range');
+    let video = document.getElementById('preview-video'); const range = document.getElementById('preview-range');
     const sourceCaption = document.getElementById('preview-caption-source'), translatedCaption = document.getElementById('preview-caption-translated'), time = document.getElementById('preview-time');
     const overlayLayer = document.getElementById('preview-overlay-layer'), brollLayer = document.getElementById('preview-broll-layer'), transformBox = document.getElementById('preview-transform-box');
     const list = document.getElementById('review-list'), play = document.getElementById('preview-play');
@@ -371,7 +373,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function updateMusicVolume(){musicController.updateVolume(timeline.music,timeline.sequence.duration_ms,globalMs,timeline.captions)}
     function holdPreviewFrame(){if(!video.videoWidth||!video.videoHeight)return;try{const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);previewStage.style.backgroundImage=`url("${canvas.toDataURL('image/jpeg',.82)}")`;previewStage.style.backgroundSize='cover';previewStage.style.backgroundPosition='center';video.style.opacity='0'}catch(_){}}
     function releasePreviewFrame(){video.style.opacity='1';previewStage.style.backgroundImage=''}
-    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{loading=value;if(!value)requestAnimationFrame(renderEditorTimeline)},play:requestVideoPlay});
+    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{loading=value;if(!value)requestAnimationFrame(renderEditorTimeline)},onVideoChange:next=>{video=next;bindVideoEvents(next)},play:requestVideoPlay});
     function warmNextClip(clip){if(useReviewMaster())return;const index=timeline.clips.indexOf(clip),next=timeline.clips[index+1];if(next)sourcePlayer.warm(sourceFor(next),Number(next.source_in_ms||0)/1000)}
     function seek(ms, autoplay=false){
         globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs); if(!clip)return;
@@ -503,6 +505,16 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     video.addEventListener('ended',()=>{musicController.pause();if(!useReviewMaster()){const next=timeline.clips[timeline.clips.indexOf(activeClip)+1];if(next)seek(next.timeline_in_ms,true)}});
     video.addEventListener('play',()=>{configureMusic();syncMusicPosition();updateMusicVolume();musicController.play().catch(()=>{})});
     video.addEventListener('pause',()=>musicController.pause());
+    const sourceEventBound=new WeakSet();
+    function bindVideoEvents(playerVideo){
+        if(sourceEventBound.has(playerVideo))return;
+        sourceEventBound.add(playerVideo);
+        playerVideo.addEventListener('timeupdate',()=>{if(playerVideo!==video||loading||!activeClip)return;if(useReviewMaster()){const edited=masterToEdited(playerVideo.currentTime*1000);if(edited===null){const cut=removedSegments().find(([start,end])=>playerVideo.currentTime*1000>start&&playerVideo.currentTime*1000<end);if(cut){playerVideo.currentTime=cut[1]/1000;return}}globalMs=Math.max(0,Math.min(edited??0,timeline.sequence.duration_ms));activeClip=clipAt(globalMs)}else{globalMs=activeClip.timeline_in_ms+Math.max(0,playerVideo.currentTime*1000-activeClip.source_in_ms);if(playerVideo.currentTime*1000>=activeClip.source_out_ms-40){const next=timeline.clips[timeline.clips.indexOf(activeClip)+1];if(next)seek(next.timeline_in_ms,true);else playerVideo.pause();}}renderPosition();clearTimeout(saveTimer);saveTimer=setTimeout(()=>api('{% url "external_media_project_preview_session" project.public_id %}',{position_ms:Math.round(globalMs),ui_state:{edit_tool:editTool}}),700);});
+        playerVideo.addEventListener('ended',()=>{if(playerVideo!==video)return;musicController.pause();if(!useReviewMaster()){const next=timeline.clips[timeline.clips.indexOf(activeClip)+1];if(next)seek(next.timeline_in_ms,true)}});
+        playerVideo.addEventListener('play',()=>{if(playerVideo!==video)return;configureMusic();syncMusicPosition();updateMusicVolume();musicController.play().catch(()=>{})});
+        playerVideo.addEventListener('pause',()=>{if(playerVideo===video)musicController.pause()});
+    }
+    sourceEventBound.add(video);
     play.addEventListener('click',()=>{if(video.paused){requestVideoPlay();play.innerHTML='<i class="fas fa-pause"></i>'}else{video.pause();play.innerHTML='<i class="fas fa-play"></i>'}});
     document.getElementById('preview-previous').onclick=()=>seek(globalMs-frameDurationMs(),false);document.getElementById('preview-next').onclick=()=>seek(globalMs+frameDurationMs(),false);
     range.addEventListener('input',()=>seek(Number(range.value),!video.paused));
