@@ -1901,6 +1901,15 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             # Its browser clock is therefore the edited timeline clock.
             timeline['review_master_is_edited'] = True
             timeline['review_proxy_status'] = 'READY'
+            rendered_layers = (revision_proxy.metadata or {}).get('rendered_layers') or []
+            timeline['review_rendered_layers'] = rendered_layers
+            for capability, layer in {
+                'SUBTITLES': 'CAPTIONS', 'BROLL': 'BROLL', 'GRAPHICS': 'OVERLAYS',
+            }.items():
+                if layer in rendered_layers and capability in (timeline.get('fidelity') or {}):
+                    timeline['fidelity'][capability] = 'EXACT'
+            if 'TRANSFORMS' in (timeline.get('fidelity') or {}):
+                timeline['fidelity']['TRANSFORMS'] = 'EXACT'
         elif job and job.original_video and ProjectService.file_exists(job.original_video) and not use_editable_source_proxies:
             review_proxy = ready_proxies.get(REVIEW_MASTER_PROXY_ID)
             if review_proxy:
@@ -1988,6 +1997,7 @@ class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, V
                 'external_media_project_preview_source',
                 kwargs={'public_id': project.public_id, 'source_id': proxy.source_id},
             ) + f'?v={version}',
+            'rendered_layers': (proxy.metadata or {}).get('rendered_layers') or [],
         })
 
     def post(self, request, public_id):
@@ -2460,7 +2470,10 @@ class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, View):
             )
             if project.status != ExternalMediaProject.Status.AWAITING_REVIEW:
                 return JsonResponse({'error': 'Este projeto não está aguardando revisão.'}, status=409)
-            revision = TimelineRevisionService.approve(project, self.member)
+            try:
+                revision = TimelineRevisionService.approve(project, self.member)
+            except ValueError as exc:
+                return JsonResponse({'error': str(exc)}, status=400)
             project.status = ExternalMediaProject.Status.PENDING
             project.progress = 68
             project.current_step = 'Renderização aprovada e adicionada à fila'

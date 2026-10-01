@@ -238,10 +238,10 @@ class ProjectProxyService:
     def build_timeline_review_proxy(cls, project_id, revision_id):
         """Render one lightweight, continuous source for a timeline revision.
 
-        Captions, overlays and B-roll stay browser layers, but the main video
-        and speech audio are concatenated exactly in the edited order.  This
-        is what lets manual framing retain fidelity without swapping the video
-        element at every take boundary.
+        This is a delivery-preview, not merely a transport proxy: its main
+        video, B-roll, overlays and ASS subtitles are rendered server-side
+        from the immutable revision. The browser must not draw those layers a
+        second time once this asset is ready.
         """
         project = ExternalMediaProject.objects.select_related(
             'template_version__preset', 'template_version__preview_proxy_profile', 'render_job',
@@ -263,9 +263,13 @@ class ProjectProxyService:
             if not segment_count:
                 raise ExternalMediaError('A revisão não possui trechos de vídeo para o preview contínuo.')
             expected_duration_ms = cls._timeline_review_duration_ms(revision)
+            # Use the delivery canvas. Rendering a smaller proxy and then
+            # asking libass/Pillow/FFmpeg to infer positions at browser size
+            # is precisely what caused the preview to drift from delivery.
+            preset = job.preset or project.template_version.preset
             source_width, source_height = assembly._video_dimensions(source)
-            proxy_width = min(source_width, int(getattr(profile, 'max_width', 0) or settings.EXTERNAL_MEDIA_PROXY_WIDTH))
-            proxy_height = assembly._even(proxy_width * source_height / source_width)
+            proxy_width = int(getattr(preset, 'width', 0) or source_width)
+            proxy_height = int(getattr(preset, 'height', 0) or source_height)
             filter_graph = ';'.join(filters + [
                 f'[joinedv]scale={proxy_width}:{proxy_height}:flags=fast_bilinear,fps={int(getattr(profile, "fps", 0) or 30)},setsar=1[vout]',
             ])
@@ -273,13 +277,47 @@ class ProjectProxyService:
                 project.public_id, f'timeline-review-r{revision.revision}',
                 estimated_bytes=storage.input(job.original_video).workspace_estimate(needs_proxy=True),
             ) as workspace:
-                output = workspace.file('timeline-review', 'proxy.mp4')
+                main_output = workspace.file('output', 'timeline-review-main.mp4')
                 command = [settings.FFMPEG_BINARY, '-y', '-i', assembly.runner.input_arg(source), '-filter_complex', filter_graph,
                     '-map', '[vout]', '-map', '[joineda]', '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_PROXY_PRESET,
                     '-crf', str(int(getattr(profile, 'video_crf', 0) or settings.EXTERNAL_MEDIA_PROXY_CRF)), '-pix_fmt', 'yuv420p',
                     '-c:a', 'aac', '-b:a', f'{int(getattr(profile, "audio_bitrate_kbps", 0) or 96)}k', '-ar', '48000', '-ac', '2',
-                    '-movflags', '+faststart', str(output)]
+                    '-movflags', '+faststart', str(main_output)]
                 assembly.runner.run(command)
+                rendered_layers = []
+                output = main_output
+                duration_ms = cls._timeline_review_duration_ms(revision)
+                brolls = list((revision.timeline or {}).get('brolls') or [])
+                if brolls:
+                    from .broll import BrollRenderService
+
+                    broll_output = workspace.file('output', 'timeline-review-broll.mp4')
+                    output = BrollRenderService(assembly.runner, storage).apply(
+                        project, output, broll_output, brolls, proxy_width, proxy_height,
+                        duration_ms=duration_ms,
+                    )
+                    rendered_layers.append('BROLL')
+                overlays = list((revision.timeline or {}).get('overlays') or [])
+                if overlays:
+                    from .overlays import OverlayRenderService
+
+                    overlay_output = workspace.file('output', 'timeline-review-overlays.mp4')
+                    output = OverlayRenderService(assembly.runner).apply(
+                        output, overlay_output, overlays, proxy_width, proxy_height, workspace.path,
+                    )
+                    rendered_layers.append('OVERLAYS')
+                tracks = list(job.subtitle_tracks.all().order_by('language', 'pk'))
+                if tracks and project.template_version.subtitles_enabled:
+                    from .services import RenderService
+
+                    subtitle_output = workspace.file('output', 'timeline-review-subtitles.mp4')
+                    RenderService(assembly.runner).render_tracks(
+                        output, tracks, subtitle_output, preset, job.subtitle_style, workspace.path,
+                        source_language=project.template_version.original_language,
+                        translated_style=job.translated_subtitle_style or job.subtitle_style,
+                    )
+                    output = subtitle_output
+                    rendered_layers.append('CAPTIONS')
                 # Do not mark a continuous review proxy as ready solely
                 # because FFmpeg exited successfully.  An AAC stream can
                 # still begin seconds after the picture, which recreates the
@@ -309,6 +347,7 @@ class ProjectProxyService:
                     'timeline_revision': revision.revision, 'continuous': True,
                     'temporal_parity': 'verified_audio_timing_duration_and_geometry',
                     'geometry': {'width': proxy_width, 'height': proxy_height},
+                    'rendered_layers': rendered_layers,
                 }
                 locked_proxy.save()
                 logger.info(
@@ -485,7 +524,10 @@ class PreviewCompositionService:
 
     FIDELITY = {
         'CUTS': 'EXACT',
-        'SUBTITLES': 'EXACT',
+        # Timing is mapped to the same edited clock, but browser typography
+        # and libass do not share one rasterizer. Do not promise pixel parity
+        # for wrapping, glyph metrics or ASS-only background/shadow behavior.
+        'SUBTITLES': 'APPROXIMATE',
         'TRANSFORMS': 'APPROXIMATE',
         'CAMERA_SWITCHES': 'NOT_AVAILABLE',
         'LAYOUTS': 'NOT_AVAILABLE',
@@ -945,42 +987,11 @@ class TimelineRevisionService:
         if any(existing != point and abs(existing - point) < MIN_MANUAL_CUT_MS for existing in points):
             raise ValueError('Já existe um corte neste quadro.')
         decisions['video_splits_ms'] = points
-        # The two visual takes must also receive independent reframe decisions.
-        # They inherit the old framing at first, then can be adjusted separately.
-        cursor = 0
-        source_id = None
-        source_start = source_end = 0
-        for source in current.source_manifest.get('sources') or []:
-            if not (source.get('metadata') or {}).get('render_enabled', True):
-                continue
-            trim = source.get('trim') or {}
-            trim_start = int(trim.get('start_ms') or 0)
-            trim_end = int(trim.get('end_ms') or source.get('duration_ms') or trim_start)
-            source_start, source_end = cursor, cursor + max(1, trim_end - trim_start)
-            if source_start < point < source_end:
-                source_id = str(source.get('id'))
-                break
-            cursor = source_end
-        if source_id:
-            operations = decisions.setdefault('operations', [])
-            target = next((item for item in operations if (
-                item.get('type') == 'reframe'
-                and item.get('enabled', True)
-                and str(item.get('source_id')) == source_id
-                and int((item.get('metadata') or {}).get('segment_start_ms') or source_start) < point
-                and point < int((item.get('metadata') or {}).get('segment_end_ms') or source_end)
-            )), None)
-            if target:
-                metadata = target.setdefault('metadata', {})
-                segment_start = int(metadata.get('segment_start_ms') or source_start)
-                segment_end = int(metadata.get('segment_end_ms') or source_end)
-                sibling = deepcopy(target)
-                sibling['id'] = f"{target.get('id')}-segment-{uuid.uuid4().hex[:10]}"
-                sibling.setdefault('metadata', {})['segment_start_ms'] = point
-                sibling['metadata']['segment_end_ms'] = segment_end
-                metadata['segment_start_ms'] = segment_start
-                metadata['segment_end_ms'] = point
-                operations.append(sibling)
+        # A blade is an editorial/timeline boundary, not a new render source.
+        # The final assembler normalizes one source at a time; cloning reframe
+        # operations here made it possible to approve different framing for
+        # each side of a blade even though the delivery renderer could only
+        # honour one of them. Keep one framing decision per source.
         revision = cls._create(locked, current.source_manifest, decisions, 'Vídeo dividido', member, current)
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'SPLIT_VIDEO', {'master_ms': point}, {'master_ms': point}, member)
@@ -1015,6 +1026,26 @@ class TimelineRevisionService:
         target = next((item for item in decisions.get('operations', []) if item.get('id') == decision_id), None)
         if not target or target.get('type') != 'reframe':
             raise ValueError('Enquadramento não encontrado nesta timeline.')
+        if 'segment_start_ms' in (target.get('metadata') or {}):
+            # Revisions created before per-source framing was enforced may
+            # still contain one reframe operation for each side of a blade.
+            # Promote the user-selected value to the whole take now instead
+            # of silently rendering only an arbitrary segment at delivery.
+            source_id = target.get('source_id')
+            normalized = deepcopy(target)
+            metadata = normalized.setdefault('metadata', {})
+            metadata.pop('segment_start_ms', None)
+            metadata.pop('segment_end_ms', None)
+            decisions['operations'] = [
+                item for item in decisions.get('operations', [])
+                if not (
+                    item.get('type') == 'reframe'
+                    and item.get('source_id') == source_id
+                    and 'segment_start_ms' in (item.get('metadata') or {})
+                )
+            ]
+            decisions['operations'].append(normalized)
+            target = normalized
         previous = deepcopy((target.get('metadata') or {}).get('manual_transform'))
         if values.get('restore_auto'):
             target['enabled'] = True
@@ -1343,6 +1374,25 @@ class TimelineRevisionService:
     def approve(cls, project, member):
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         revision = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        proxy = ProjectSourceProxy.objects.filter(
+            project=locked, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
+        ).first()
+        if not ProjectProxyService.has_usable_timeline_review_proxy(proxy, revision):
+            raise ValueError(
+                'A prévia de entrega desta revisão ainda está sendo gerada. '
+                'Aguarde ela ficar pronta antes de aprovar.'
+            )
+        scoped_reframes = [
+            item for item in (revision.edit_decision_set.get('operations') or [])
+            if item.get('type') == 'reframe'
+            and 'segment_start_ms' in (item.get('metadata') or {})
+        ]
+        if scoped_reframes:
+            raise ValueError(
+                'Esta revisão contém enquadramentos por trecho de uma versão anterior. '
+                'Eles não podem ser aprovados porque o render final aplica enquadramento por take. '
+                'Desfaça a divisão ou restaure o enquadramento automático e ajuste novamente.'
+            )
         revision.approved_at = timezone.now()
         revision.save(update_fields=['approved_at', 'update_at'])
         locked.approved_timeline_revision = revision

@@ -19,8 +19,10 @@ Ele nunca decide cortes, câmera, layout, cor ou áudio. Essas decisões chegam 
 
 Cada capacidade declara sua fidelidade no payload do preview:
 
-- `EXACT`: cortes e legendas, aplicados na mesma base temporal do render.
-- `APPROXIMATE`: transformações, cor e automação de áudio no navegador.
+- `EXACT`: cortes e as camadas visuais do proxy de entrega pronto (enquadramento,
+  B-roll, overlays e legendas ASS), aplicados pela mesma família de renderizadores.
+- `APPROXIMATE`: o fallback no navegador enquanto o proxy de entrega é preparado,
+  além de cor e automação de áudio no navegador.
 - `NOT_AVAILABLE`: capacidades ainda sem representação visual no browser.
 
 O proxy `community-1` reduz resolução e bitrate, mas não altera a velocidade ou a base
@@ -35,7 +37,8 @@ catalogado por projeto e fonte.
 4. Cada edição cria uma revisão e marca o resultado final como desatualizado.
 5. Restaurar um corte remapeia também as legendas posteriores.
 6. Undo/redo troca a revisão ativa e restaura as legendas daquele snapshot.
-7. Aprovar fixa a revisão e enfileira a renderização.
+7. Aprovar exige que o proxy de entrega da revisão esteja pronto, fixa a revisão e
+   enfileira a renderização.
 8. Render e exportação registram o número exato da revisão consumida.
 
 Novas capacidades devem ser adicionadas ao `PreviewCapabilityRegistry` e ao compositor.
