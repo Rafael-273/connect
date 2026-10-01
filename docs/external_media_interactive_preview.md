@@ -37,8 +37,8 @@ catalogado por projeto e fonte.
 4. Cada edição cria uma revisão e marca o resultado final como desatualizado.
 5. Restaurar um corte remapeia também as legendas posteriores.
 6. Undo/redo troca a revisão ativa e restaura as legendas daquele snapshot.
-7. Aprovar exige que o proxy de entrega da revisão esteja pronto, fixa a revisão e
-   enfileira a renderização.
+7. Aprovar fixa a revisão e enfileira a renderização. O proxy de entrega é uma
+   conveniência assíncrona de revisão e nunca bloqueia a fila final.
 8. Render e exportação registram o número exato da revisão consumida.
 
 Novas capacidades devem ser adicionadas ao `PreviewCapabilityRegistry` e ao compositor.

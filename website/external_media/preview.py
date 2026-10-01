@@ -1374,14 +1374,10 @@ class TimelineRevisionService:
     def approve(cls, project, member):
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         revision = locked.current_timeline_revision or cls.ensure_initial(locked, member)
-        proxy = ProjectSourceProxy.objects.filter(
-            project=locked, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
-        ).first()
-        if not ProjectProxyService.has_usable_timeline_review_proxy(proxy, revision):
-            raise ValueError(
-                'A prévia de entrega desta revisão ainda está sendo gerada. '
-                'Aguarde ela ficar pronta antes de aprovar.'
-            )
+        # The revision proxy improves visual review, but it is asynchronous
+        # infrastructure. A slow preview worker must never prevent approval
+        # or leave a project stuck in review; the final renderer consumes this
+        # immutable revision directly.
         scoped_reframes = [
             item for item in (revision.edit_decision_set.get('operations') or [])
             if item.get('type') == 'reframe'
