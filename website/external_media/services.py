@@ -2818,24 +2818,34 @@ class ExternalMediaProjectPipeline:
             old_width = int(plan.get('crop_width') or analysis_width)
             old_height = int(plan.get('crop_height') or analysis_height)
             scale = min(2.0, max(1.0, float(manual.get('scale') or 1)))
-            new_width = max(2, round(old_width / scale / 2) * 2)
-            new_height = max(2, round(old_height / scale / 2) * 2)
-            # CSS preview translations move the *image* (positive values move
-            # it right/down). FFmpeg moves the crop window instead, so its
-            # offsets must be the inverse. Keeping this mapping aligned is
-            # especially important for a vertical group shot: a negative Y in
-            # the editor removes empty headroom by moving the crop downward.
-            offset_x = -float(manual.get('x') or 0) * max(0, analysis_width - new_width) / 2
-            offset_y = -float(manual.get('y') or 0) * max(0, analysis_height - new_height) / 2
-            keyframes = []
-            for keyframe in plan.get('keyframes') or []:
-                center_x = float(keyframe.get('x') or 0) + old_width / 2
-                center_y = float(keyframe.get('y') or 0) + old_height / 2
-                keyframes.append({
-                    **keyframe,
-                    'x': min(analysis_width - new_width, max(0, center_x - new_width / 2 + offset_x)),
-                    'y': min(analysis_height - new_height, max(0, center_y - new_height / 2 + offset_y)),
-                })
+            # A manual transform is an absolute editor composition over the
+            # original take. It replaces Auto Reframe; applying it on top of
+            # the automatic crop multiplies zoom and Y displacement. Recover
+            # the largest centered cover crop with the delivery aspect ratio,
+            # then reproduce the browser's scale/translation from that base.
+            target_ratio = old_width / max(1, old_height)
+            source_ratio = analysis_width / max(1, analysis_height)
+            if source_ratio >= target_ratio:
+                cover_height = analysis_height
+                cover_width = min(analysis_width, round(cover_height * target_ratio))
+            else:
+                cover_width = analysis_width
+                cover_height = min(analysis_height, round(cover_width / max(target_ratio, .000001)))
+            cover_width = max(2, round(cover_width / 2) * 2)
+            cover_height = max(2, round(cover_height / 2) * 2)
+            new_width = max(2, round(cover_width / scale / 2) * 2)
+            new_height = max(2, round(cover_height / scale / 2) * 2)
+            base_x = (analysis_width - cover_width) / 2 + (cover_width - new_width) / 2
+            base_y = (analysis_height - cover_height) / 2 + (cover_height - new_height) / 2
+            crop_x = base_x - float(manual.get('x') or 0) * max(0, cover_width - new_width) / 2
+            crop_y = base_y - float(manual.get('y') or 0) * max(0, cover_height - new_height) / 2
+            crop_x = min(analysis_width - new_width, max(0, crop_x))
+            crop_y = min(analysis_height - new_height, max(0, crop_y))
+            source_keyframes = plan.get('keyframes') or [{'time_seconds': 0}]
+            keyframes = [
+                {**keyframe, 'x': crop_x, 'y': crop_y}
+                for keyframe in source_keyframes
+            ]
             plan_data['plan'] = {
                 **plan, 'crop_width': new_width, 'crop_height': new_height, 'keyframes': keyframes,
             }

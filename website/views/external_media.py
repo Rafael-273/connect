@@ -1891,6 +1891,11 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         revision_proxy = ready_proxies.get(ProjectProxyService.timeline_review_proxy_id(revision))
         if not ProjectProxyService.has_usable_timeline_review_proxy(revision_proxy, revision):
             revision_proxy = None
+        # A revision proxy is based on the already auto-reframed master and
+        # cannot undo that crop. Manual framing is defined over the original
+        # take, so keep the browser on the per-source proxies in this case.
+        if has_reframe_override:
+            revision_proxy = None
         if revision_proxy:
             version = int(revision_proxy.update_at.timestamp() * 1000)
             timeline['review_master_url'] = reverse(
@@ -1926,7 +1931,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
         elif use_editable_source_proxies:
             timeline['review_master_url'] = None
-            timeline['review_proxy_status'] = 'PENDING'
+            timeline['review_proxy_status'] = 'SOURCE'
         timeline = preview_timeline_with_music(project, timeline)
         return render(request, 'member/external_media/preview.html', self.media_context(
             project=project, revision=revision, session=session, timeline=timeline,
@@ -1979,6 +1984,16 @@ class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, V
         revision = project.current_timeline_revision
         if not revision:
             return JsonResponse({'status': 'PENDING'})
+        has_reframe_override = any(
+            item.get('type') == 'reframe'
+            and (
+                not item.get('enabled', True)
+                or (item.get('metadata') or {}).get('manual_transform')
+            )
+            for item in revision.edit_decision_set.get('operations', [])
+        )
+        if has_reframe_override:
+            return JsonResponse({'status': 'SOURCE', 'revision': revision.revision})
         proxy = ProjectSourceProxy.objects.filter(
             project=project, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
         ).order_by('-update_at').first()
@@ -2084,7 +2099,15 @@ def preview_revision_response(project, member, revision, **extra):
         project=project, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
         status=ProjectSourceProxy.Status.READY,
     ).first()
-    if ProjectProxyService.has_usable_timeline_review_proxy(proxy, revision):
+    has_reframe_override = any(
+        item.get('type') == 'reframe'
+        and (
+            not item.get('enabled', True)
+            or (item.get('metadata') or {}).get('manual_transform')
+        )
+        for item in revision.edit_decision_set.get('operations', [])
+    )
+    if not has_reframe_override and ProjectProxyService.has_usable_timeline_review_proxy(proxy, revision):
         version = int(proxy.update_at.timestamp() * 1000)
         timeline['review_master_url'] = reverse(
             'external_media_project_preview_source',
@@ -2093,7 +2116,8 @@ def preview_revision_response(project, member, revision, **extra):
         timeline['review_master_is_edited'] = True
         timeline['review_proxy_status'] = 'READY'
     else:
-        timeline['review_proxy_status'] = 'PENDING'
+        timeline['review_master_url'] = None
+        timeline['review_proxy_status'] = 'SOURCE' if has_reframe_override else 'PENDING'
     return JsonResponse({
         'revision': revision.revision,
         'timeline': timeline,
