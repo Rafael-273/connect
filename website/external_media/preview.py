@@ -1384,10 +1384,38 @@ class TimelineRevisionService:
             and 'segment_start_ms' in (item.get('metadata') or {})
         ]
         if scoped_reframes:
-            raise ValueError(
-                'Esta revisão contém enquadramentos por trecho de uma versão anterior. '
-                'Eles não podem ser aprovados porque o render final aplica enquadramento por take. '
-                'Desfaça a divisão ou restaure o enquadramento automático e ajuste novamente.'
+            # Legacy blades used to clone a reframe decision per segment even
+            # though the final assembler has one framing plan per source. Do
+            # not strand those projects in review: create an auditable child
+            # revision that consolidates each take. A manual value wins; when
+            # more than one exists, the last saved one is the member's latest
+            # explicit editorial choice.
+            decisions = deepcopy(revision.edit_decision_set)
+            operations = decisions.get('operations') or []
+            for source_id in {item.get('source_id') for item in scoped_reframes}:
+                candidates = [
+                    item for item in operations
+                    if item.get('type') == 'reframe'
+                    and item.get('source_id') == source_id
+                    and 'segment_start_ms' in (item.get('metadata') or {})
+                ]
+                if not candidates:
+                    continue
+                manual = [
+                    item for item in candidates
+                    if (item.get('metadata') or {}).get('manual_transform')
+                ]
+                chosen = deepcopy((manual or candidates)[-1])
+                chosen_metadata = chosen.setdefault('metadata', {})
+                chosen_metadata.pop('segment_start_ms', None)
+                chosen_metadata.pop('segment_end_ms', None)
+                candidate_ids = {id(item) for item in candidates}
+                operations = [item for item in operations if id(item) not in candidate_ids]
+                operations.append(chosen)
+            decisions['operations'] = operations
+            revision = cls._create(
+                locked, revision.source_manifest, decisions,
+                'Enquadramentos por trecho consolidados para renderização', member, revision,
             )
         revision.approved_at = timezone.now()
         revision.save(update_fields=['approved_at', 'update_at'])
