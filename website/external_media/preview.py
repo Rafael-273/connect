@@ -1047,6 +1047,15 @@ class TimelineRevisionService:
             decisions['operations'].append(normalized)
             target = normalized
         previous = deepcopy((target.get('metadata') or {}).get('manual_transform'))
+        if values.get('restore_original'):
+            target['enabled'] = False
+            target.setdefault('metadata', {}).pop('manual_transform', None)
+            revision = cls._create(locked, current.source_manifest, decisions, 'Enquadramento original restaurado', member, current)
+            session = cls.session(locked, member, revision)
+            cls._record(session, current, revision, 'RESTORE_ORIGINAL_REFRAME', {
+                'decision_id': decision_id,
+            }, {'decision_id': decision_id, 'manual_transform': previous}, member)
+            return revision
         if values.get('restore_auto'):
             target['enabled'] = True
             target.setdefault('metadata', {}).pop('manual_transform', None)
