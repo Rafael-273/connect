@@ -259,7 +259,14 @@ class ProjectProxyService:
         quality = MediaQualityService(assembly.runner)
         try:
             source = storage.input(job.original_video).get_ffmpeg_input()
-            filters, segment_count = cls._timeline_review_filters(revision, assembly)
+            source_width, source_height = assembly._video_dimensions(source)
+            # A manual crop uses even rounding. Without restoring every part
+            # to one canvas before concat, adjacent pieces can differ by a few
+            # pixels (for example 850x262 vs 854x266) and FFmpeg rejects the
+            # entire review proxy.
+            filters, segment_count = cls._timeline_review_filters(
+                revision, assembly, concat_width=source_width, concat_height=source_height,
+            )
             if not segment_count:
                 raise ExternalMediaError('A revisão não possui trechos de vídeo para o preview contínuo.')
             expected_duration_ms = cls._timeline_review_duration_ms(revision)
@@ -267,7 +274,6 @@ class ProjectProxyService:
             # asking libass/Pillow/FFmpeg to infer positions at browser size
             # is precisely what caused the preview to drift from delivery.
             preset = job.preset or project.template_version.preset
-            source_width, source_height = assembly._video_dimensions(source)
             proxy_width = int(getattr(preset, 'width', 0) or source_width)
             proxy_height = int(getattr(preset, 'height', 0) or source_height)
             filter_graph = ';'.join(filters + [
@@ -375,7 +381,7 @@ class ProjectProxyService:
             raise
 
     @classmethod
-    def _timeline_review_filters(cls, revision, assembly):
+    def _timeline_review_filters(cls, revision, assembly, concat_width=None, concat_height=None):
         manifest = revision.source_manifest or {}
         timeline = revision.timeline or {}
         clip_end_by_source = {}
@@ -444,7 +450,11 @@ class ProjectProxyService:
                     f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
                     f'scale=trunc(iw*{scale:.5f}/2)*2:trunc(ih*{scale:.5f}/2)*2'
                 )
-                video_filters.append(f'[0:v]trim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},setpts=PTS-STARTPTS{crop}[v{count}]')
+                normalize = (
+                    f',scale={int(concat_width)}:{int(concat_height)}:flags=fast_bilinear,setsar=1'
+                    if concat_width and concat_height else ''
+                )
+                video_filters.append(f'[0:v]trim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},setpts=PTS-STARTPTS{crop}{normalize}[v{count}]')
                 audio_filters.append(f'[0:a]atrim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{count}]')
                 count += 1
         if count:

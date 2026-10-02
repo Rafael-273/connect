@@ -3870,6 +3870,30 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual((plan['crop_width'], plan['crop_height']), (1080, 1920))
         self.assertEqual((plan['keyframes'][0]['x'], plan['keyframes'][0]['y']), (0, 0))
 
+    def test_manual_reframe_can_reach_source_area_outside_centered_cover(self):
+        project = SimpleNamespace(
+            approved_timeline_revision=SimpleNamespace(
+                source_manifest={'sources': [{'id': 'camera-1'}]},
+                edit_decision_set={'operations': [{
+                    'type': 'reframe', 'source_id': 'camera-1', 'enabled': True,
+                    'plan_reference': {
+                        'analysis_width': 1920, 'analysis_height': 1080,
+                        'plan': {
+                            'crop_width': 1920, 'crop_height': 600,
+                            'keyframes': [{'time_seconds': 0, 'x': 0, 'y': 240}],
+                        },
+                    },
+                    'metadata': {'manual_transform': {'scale': 1, 'x': 0, 'y': 1}},
+                }]},
+            ),
+        )
+
+        result = ExternalMediaProjectPipeline._approved_reframe_plans(project, [])
+        plan = result[0]['plan']
+
+        self.assertEqual((plan['crop_width'], plan['crop_height']), (1920, 600))
+        self.assertEqual((plan['keyframes'][0]['x'], plan['keyframes'][0]['y']), (0, 0))
+
     def test_reframe_can_be_disabled_for_one_source(self):
         project = SimpleNamespace(
             approved_timeline_revision=SimpleNamespace(

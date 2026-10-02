@@ -2821,8 +2821,11 @@ class ExternalMediaProjectPipeline:
             # A manual transform is an absolute editor composition over the
             # original take. It replaces Auto Reframe; applying it on top of
             # the automatic crop multiplies zoom and Y displacement. Recover
-            # the largest centered cover crop with the delivery aspect ratio,
-            # then reproduce the browser's scale/translation from that base.
+            # the largest cover crop with the delivery aspect ratio. X/Y then
+            # choose the crop across the whole original take, including the
+            # source area outside the centered cover crop. This is what lets a
+            # member recover headroom or lateral content after choosing
+            # "Voltar ao original".
             target_ratio = old_width / max(1, old_height)
             source_ratio = analysis_width / max(1, analysis_height)
             if source_ratio >= target_ratio:
@@ -2835,10 +2838,10 @@ class ExternalMediaProjectPipeline:
             cover_height = max(2, round(cover_height / 2) * 2)
             new_width = max(2, round(cover_width / scale / 2) * 2)
             new_height = max(2, round(cover_height / scale / 2) * 2)
-            base_x = (analysis_width - cover_width) / 2 + (cover_width - new_width) / 2
-            base_y = (analysis_height - cover_height) / 2 + (cover_height - new_height) / 2
-            crop_x = base_x - float(manual.get('x') or 0) * max(0, cover_width - new_width) / 2
-            crop_y = base_y - float(manual.get('y') or 0) * max(0, cover_height - new_height) / 2
+            available_x = max(0, analysis_width - new_width)
+            available_y = max(0, analysis_height - new_height)
+            crop_x = available_x / 2 - float(manual.get('x') or 0) * available_x / 2
+            crop_y = available_y / 2 - float(manual.get('y') or 0) * available_y / 2
             crop_x = min(analysis_width - new_width, max(0, crop_x))
             crop_y = min(analysis_height - new_height, max(0, crop_y))
             source_keyframes = plan.get('keyframes') or [{'time_seconds': 0}]
