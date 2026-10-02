@@ -77,13 +77,17 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             this.onVideoChange(incoming, outgoing);
             const reveal = () => {
                 const finishReveal = () => {
-                    // `playing` can precede compositing by one frame. Paint
-                    // the incoming frame before hiding the outgoing one.
-                    incoming.style.opacity = '1'; incoming.style.zIndex = '1';
+                    // `playing` can precede compositing by one frame. Put the
+                    // confirmed incoming frame above the outgoing one and do
+                    // a hard cut, matching the final render's boundary.
+                    incoming.style.transition = 'none';
+                    outgoing.style.transition = 'none';
+                    incoming.style.opacity = '1'; incoming.style.zIndex = '2';
+                    outgoing.pause();
+                    outgoing.style.opacity = '0'; outgoing.style.zIndex = '0';
                     incoming.muted = outgoingMuted;
                     requestAnimationFrame(() => {
-                        outgoing.pause();
-                        outgoing.style.opacity = '0'; outgoing.style.zIndex = '0';
+                        incoming.style.zIndex = '1';
                     });
                     this.preloader = outgoing;
                     this.preloader.muted = true;

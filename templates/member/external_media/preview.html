@@ -172,8 +172,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     .preview-modal__card #subtitle-edit-input{background:#0d1118!important;border-color:#5b687d!important;color:#f8fafc!important;caret-color:#f8fafc}
     .preview-modal__card #subtitle-edit-input::placeholder{color:#8f9aac;opacity:1}
     .preview-modal__card #subtitle-edit-input:focus{border-color:#e9433e!important;box-shadow:0 0 0 3px rgba(233,67,62,.2)}
-    /* Two decoded source buffers allow a take boundary to swap without black. */
-    .preview-stage>.preview-source-buffer{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:opacity .08s linear}
+    /* The incoming buffer is revealed only after its frame has been painted.
+       A fade here creates a false flash that does not exist in the render. */
+    .preview-stage>.preview-source-buffer{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:none}
     /* Desktop editor: the workspace is a fixed viewport, with only the
        timeline tracks scrolling when there are more lanes than room. */
     @media (min-width:761px){
