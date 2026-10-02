@@ -363,7 +363,20 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function removedSegments(){return timeline.decisions.filter(item=>item.type==='remove_segment'&&item.enabled!==false).map(item=>[Number(item.source_in_ms||0),Number(item.source_out_ms||0)]).filter(([start,end])=>end>start).sort((a,b)=>a[0]-b[0])}
     // The timeline excludes accepted cuts. The review master does not, so map
     // between both clocks instead of showing a different image after a cut.
-    function editedToMaster(ms){if(timeline.review_master_is_edited)return ms;let removed=0;for(const [start,end] of removedSegments()){const editedStart=start-removed;if(ms<editedStart)break;removed+=end-start}return ms+removed}
+    function editedToMaster(ms,boundary='after'){
+        if(timeline.review_master_is_edited)return ms;
+        let removed=0;
+        for(const [start,end] of removedSegments()){
+            const editedStart=start-removed;
+            // A collapsed cut has one edited-time coordinate but two master
+            // edges. A segment ending there belongs before the cut; a segment
+            // starting there belongs after it. Treating both as "after" made
+            // an adjacent second cut include the first one.
+            if(ms<editedStart||(boundary==='before'&&ms===editedStart))break;
+            removed+=end-start;
+        }
+        return ms+removed;
+    }
     function masterToEdited(ms){if(timeline.review_master_is_edited)return ms;let removed=0;for(const [start,end] of removedSegments()){if(ms>=end){removed+=end-start;continue}if(ms>start)return null;break}return ms-removed}
     function sourceFor(clip){ return asset(clip?.asset_id)?.url || ''; }
     function requestVideoPlay(){
@@ -902,7 +915,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         button.disabled=true;
         try{
             const data=await api('{% url "external_media_project_preview_cut_create" project.public_id %}',{
-                start_ms:Math.round(editedToMaster(segment.start)),end_ms:Math.round(editedToMaster(segment.end)),
+                start_ms:Math.round(editedToMaster(segment.start,'after')),end_ms:Math.round(editedToMaster(segment.end,'before')),
             });
             applyTimeline(data);
         }catch(error){
