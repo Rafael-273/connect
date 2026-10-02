@@ -1242,6 +1242,70 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         )
         media.delete(force_policy=HARD_DELETE)
 
+    def test_manual_cut_shifts_preview_captions_exactly_once(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        manifest = SourceManifestBuilder.build(project)
+        project.configuration = {
+            'source_manifest': manifest,
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['configuration', 'render_job', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=6000, end_ms=7000, text='Depois do corte',
+        )
+
+        initial = TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.create_manual_cut(
+            project, self.member, 2000, 3000,
+        )
+
+        cue.refresh_from_db()
+        self.assertEqual(initial.timeline['captions'][0]['start_ms'], 6000)
+        self.assertEqual(initial.timeline['caption_clock'], 'edited')
+        self.assertEqual((cue.start_ms, cue.end_ms), (5000, 6000))
+        self.assertEqual(revision.timeline['sequence']['duration_ms'], 9000)
+        self.assertEqual(
+            (revision.timeline['captions'][0]['start_ms'], revision.timeline['captions'][0]['end_ms']),
+            (5000, 6000),
+        )
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_legacy_preview_revision_uses_current_edited_caption_clock(self):
+        project = self.make_project()
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['render_job', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=5000, end_ms=6000, text='Tempo oficial',
+        )
+        legacy_timeline = {
+            'captions': [{
+                'id': cue.pk, 'track_id': track.pk, 'language': 'pt',
+                'start_ms': 4000, 'end_ms': 5000, 'text': 'Tempo antigo', 'is_source': True,
+            }],
+        }
+
+        PreviewCompositionService.hydrate_legacy_caption_clock(project, legacy_timeline)
+
+        self.assertEqual(legacy_timeline['caption_clock'], 'edited')
+        self.assertEqual(
+            (legacy_timeline['captions'][0]['start_ms'], legacy_timeline['captions'][0]['end_ms']),
+            (5000, 6000),
+        )
+        self.assertEqual(legacy_timeline['captions'][0]['text'], 'Tempo oficial')
+
     def test_preview_applies_all_pending_noise_reductions_in_one_revision(self):
         project = self.make_project()
         manifest = SourceManifestBuilder.build(project)

@@ -568,6 +568,32 @@ class PreviewCompositionService:
         }
 
     @classmethod
+    def hydrate_legacy_caption_clock(cls, project, timeline):
+        """Expose legacy revision captions on their authoritative edited clock."""
+        if timeline.get('caption_clock') == 'edited' or not project.render_job_id:
+            return timeline
+        captions = []
+        for cue in SubtitleCue.objects.filter(track__job_id=project.render_job_id).select_related('track').order_by(
+            'track__language', 'start_ms', 'pk',
+        ):
+            start_ms = max(0, int(cue.start_ms or 0))
+            end_ms = max(0, int(cue.end_ms or 0))
+            if end_ms <= start_ms:
+                continue
+            captions.append({
+                'id': cue.pk,
+                'track_id': cue.track_id,
+                'language': cue.track.language,
+                'start_ms': start_ms,
+                'end_ms': end_ms,
+                'text': cue.text,
+                'is_source': cue.track.is_source,
+            })
+        timeline['captions'] = captions
+        timeline['caption_clock'] = 'edited'
+        return timeline
+
+    @classmethod
     def compose(
         cls, project, source_manifest, decisions, revision,
         overlays_override=None, brolls_override=None,
@@ -685,8 +711,13 @@ class PreviewCompositionService:
             for cue in SubtitleCue.objects.filter(track__job_id=project.render_job_id).select_related('track').order_by(
                 'track__language', 'start_ms', 'pk',
             ):
-                start_ms = cls._source_to_timeline(cue.start_ms, cuts)
-                end_ms = cls._source_to_timeline(cue.end_ms, cuts)
+                # SubtitleCue timestamps already use the currently edited
+                # timeline clock. Initial transcription is remapped after the
+                # automatic speech edits, and member cuts shift the persisted
+                # cues in `_shift_cues_for_decision`. Applying `cuts` here a
+                # second time made every caption after a cut advance twice.
+                start_ms = max(0, int(cue.start_ms or 0))
+                end_ms = max(0, int(cue.end_ms or 0))
                 if end_ms <= start_ms:
                     continue
                 captions.append({
@@ -799,6 +830,7 @@ class PreviewCompositionService:
             'overlay_tracks': [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': overlays}],
             'overlays': overlays,
             'captions': captions,
+            'caption_clock': 'edited',
             'caption_styles': {
                 'source': cls.subtitle_style_payload(getattr(project.render_job, 'subtitle_style', None))
                 if project.render_job_id else {},

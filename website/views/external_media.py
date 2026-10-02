@@ -1815,6 +1815,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # normalized master was exposed to the browser, so enrich only this
         # response rather than rewriting editorial history just to change a URL.
         timeline = deepcopy(revision.timeline)
+        PreviewCompositionService.hydrate_legacy_caption_clock(project, timeline)
         # Recover legacy revisions that were saved while a split source had no
         # matching proxy/duration. Keep this revision's element changes, but
         # borrow the video structure from the newest intact revision so a page
@@ -2095,6 +2096,7 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
 def preview_revision_response(project, member, revision, **extra):
     """Keep preview mutations and history navigation on the same response shape."""
     timeline = preview_timeline_with_music(project, revision.timeline)
+    PreviewCompositionService.hydrate_legacy_caption_clock(project, timeline)
     # The page GET replaces stored/original asset URLs with the normalized
     # source proxies.  Mutations used to skip that step, so applying their JSON
     # response could make an already open preview decode a different video than
