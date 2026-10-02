@@ -183,12 +183,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         header:has(~ .media-shell .preview-shell) .media-header-identity>a:first-child span{width:2.65rem;height:2.65rem}
         .media-shell:has(.preview-shell){height:calc(100dvh - 4.5rem)!important;min-height:0!important;padding:0!important;overflow:hidden}
         .preview-shell{height:100%;min-height:0!important;padding:.45rem clamp(1rem,3vw,3rem) 0!important;overflow:hidden}
-        .preview-layout{flex:0 0 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+        .preview-layout{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
         .preview-player-card{flex:none;max-width:100%;margin:0 auto!important}
         .preview-shell>.editor-timeline__transport{flex:none;min-height:3.1rem;margin-top:.45rem!important;padding-top:.35rem;padding-bottom:.35rem}
-        /* Give the working surface priority: a slightly smaller monitor keeps
-           more tracks visible without returning to page-level scrolling. */
-        .preview-shell>.editor-timeline{flex:1 1 0;min-height:12rem;margin-top:0!important;overflow:hidden}
+        /* Tracks scroll inside a stable surface. Do not let a short set of
+           tracks stretch to fill the workspace when an inspector is opened. */
+        .preview-shell>.editor-timeline{box-sizing:border-box;flex:0 1 clamp(12rem,38dvh,26rem);height:clamp(12rem,38dvh,26rem);min-height:12rem;max-height:26rem;margin-top:0!important;overflow:hidden}
         .editor-timeline{grid-template-rows:minmax(0,1fr)}
         .editor-timeline__bar,.editor-timeline__scroller{grid-row:1}
         .editor-timeline__scroller{height:100%;min-height:0;overflow:auto;overscroll-behavior:contain}
@@ -295,7 +295,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const overlayLayer = document.getElementById('preview-overlay-layer'), brollLayer = document.getElementById('preview-broll-layer'), transformBox = document.getElementById('preview-transform-box');
     const list = document.getElementById('review-list'), play = document.getElementById('preview-play');
     const reviewPanel = document.getElementById('review-panel');
-    function setReviewPanel(open){reviewPanel.classList.toggle('is-open',open);reviewPanel.setAttribute('aria-hidden',String(!open));document.querySelector('.preview-shell').classList.toggle('is-inspector-open',open);requestAnimationFrame(fitPreviewStage)}
+    function setReviewPanel(open){
+        const shell=document.querySelector('.preview-shell');
+        const stateChanged=reviewPanel.classList.contains('is-open')!==open||shell.classList.contains('is-inspector-open')!==open;
+        reviewPanel.classList.toggle('is-open',open);reviewPanel.setAttribute('aria-hidden',String(!open));shell.classList.toggle('is-inspector-open',open);
+        // Selecting another take while the inspector is already visible must
+        // not recalculate the workspace. That feedback loop made the timeline
+        // consume more height on every click.
+        if(stateChanged)requestAnimationFrame(()=>{fitPreviewStage();syncInspectorHeight()});
+    }
     document.getElementById('close-review-panel').addEventListener('click',()=>setReviewPanel(false));
     const previewShell=document.querySelector('.preview-shell'), previewStage=document.querySelector('.preview-stage'), previewPlayerCard=document.querySelector('.preview-player-card');
     function fitPreviewStage(){
