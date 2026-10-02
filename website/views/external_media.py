@@ -2095,6 +2095,32 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
 def preview_revision_response(project, member, revision, **extra):
     """Keep preview mutations and history navigation on the same response shape."""
     timeline = preview_timeline_with_music(project, revision.timeline)
+    # The page GET replaces stored/original asset URLs with the normalized
+    # source proxies.  Mutations used to skip that step, so applying their JSON
+    # response could make an already open preview decode a different video than
+    # the one displayed after a reload (and consequently appear to jump its
+    # framing).  Keep the AJAX response on exactly the same protected, versioned
+    # sources as the initial page response.
+    ready_proxies = {
+        source_proxy.source_id: source_proxy
+        for source_proxy in project.source_proxies.filter(status=ProjectSourceProxy.Status.READY)
+        if source_proxy.proxy_file
+    }
+    for asset in (timeline.get('assets') or []):
+        # Assets with an asset_id are B-roll and use their own endpoint.
+        if asset.get('asset_id'):
+            continue
+        source_id = str(asset.get('id') or '')
+        base_source_id = re.sub(r'-trecho-\d+$', '', source_id)
+        source_proxy = ready_proxies.get(source_id) or ready_proxies.get(base_source_id)
+        if not source_proxy:
+            asset['url'] = None
+            continue
+        version = int(source_proxy.update_at.timestamp() * 1000)
+        asset['url'] = reverse(
+            'external_media_project_preview_source',
+            kwargs={'public_id': project.public_id, 'source_id': source_proxy.source_id},
+        ) + f'?v={version}'
     proxy = ProjectSourceProxy.objects.filter(
         project=project, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
         status=ProjectSourceProxy.Status.READY,
@@ -2115,6 +2141,7 @@ def preview_revision_response(project, member, revision, **extra):
         ) + f'?v={version}'
         timeline['review_master_is_edited'] = True
         timeline['review_proxy_status'] = 'READY'
+        timeline['review_rendered_layers'] = (proxy.metadata or {}).get('rendered_layers') or []
     else:
         timeline['review_master_url'] = None
         timeline['review_proxy_status'] = 'SOURCE' if has_reframe_override else 'PENDING'
