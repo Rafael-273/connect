@@ -1279,6 +1279,28 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         )
         media.delete(force_policy=HARD_DELETE)
 
+    def test_video_split_after_a_cut_uses_the_original_master_clock(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        manifest = SourceManifestBuilder.build(project)
+        project.configuration = {
+            'source_manifest': manifest,
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': [{
+                'id': 'existing-cut', 'type': 'remove_segment', 'source_id': 'project-master',
+                'source_in_ms': 2000, 'source_out_ms': 3000, 'enabled': True,
+            }]},
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.create_video_split(project, self.member, 9500)
+
+        self.assertEqual(revision.edit_decision_set['video_splits_ms'], [9500])
+        media.delete(force_policy=HARD_DELETE)
+
     def test_legacy_preview_revision_uses_current_edited_caption_clock(self):
         project = self.make_project()
         job = self.make_job()

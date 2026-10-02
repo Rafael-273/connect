@@ -917,6 +917,39 @@ class TimelineRevisionService:
                 source['duration_ms'] = duration
         return prepared
 
+    @staticmethod
+    def _available_master_video_ranges(manifest, decisions):
+        """Return uncut video ranges in the original assembled-master clock."""
+        cuts = sorted(
+            (
+                max(0, int(item.get('source_in_ms') or 0)),
+                max(0, int(item.get('source_out_ms') or 0)),
+            )
+            for item in (decisions.get('operations') or [])
+            if item.get('type') == 'remove_segment' and item.get('enabled', True)
+        )
+        ranges, cursor = [], 0
+        for source in manifest.get('sources') or []:
+            if not (source.get('metadata') or {}).get('render_enabled', True):
+                continue
+            trim = source.get('trim') or {}
+            source_start = max(0, int(trim.get('start_ms') or 0))
+            source_duration = int(
+                source.get('duration_ms')
+                or (source.get('metadata') or {}).get('duration_ms')
+                or trim.get('end_ms')
+                or source_start
+            )
+            source_end = max(source_start, min(
+                source_duration, int(trim.get('end_ms') or source_duration),
+            ))
+            duration = source_end - source_start
+            if not duration:
+                continue
+            ranges.extend(PreviewCompositionService._subtract(cursor, cursor + duration, cuts))
+            cursor += duration
+        return ranges
+
     @classmethod
     @transaction.atomic
     def ensure_initial(cls, project, member=None):
@@ -1021,8 +1054,13 @@ class TimelineRevisionService:
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
         point = max(0, int(master_ms))
-        duration = int((current.timeline.get('sequence') or {}).get('duration_ms') or 0)
-        if point < MIN_MANUAL_CUT_MS or point > duration - MIN_MANUAL_CUT_MS:
+        available_ranges = cls._available_master_video_ranges(
+            current.source_manifest, current.edit_decision_set,
+        )
+        if not any(
+            start + MIN_MANUAL_CUT_MS <= point <= end - MIN_MANUAL_CUT_MS
+            for start, end in available_ranges
+        ):
             raise ValueError('O corte precisa ficar dentro de um vídeo, com ao menos um quadro em cada lado.')
         decisions = deepcopy(current.edit_decision_set)
         points = sorted({int(value) for value in (decisions.get('video_splits_ms') or [])} | {point})
