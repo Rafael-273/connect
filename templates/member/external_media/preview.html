@@ -338,6 +338,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const musicController = new window.ConnectPreviewAudio(music);
     const csrf = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
     let activeClip = null, globalMs = {{ session.position_ms|default:0 }}, loading = false, saveTimer, timelineZoom = 1, editTool = 'select', bladePoints = [...(timeline.video_splits_ms||[])], selectedSegment = null, editingSubtitleCue = null, inspectorSelection = null, activePreviewRevision = {{ revision.revision }};
+    let selectedCaptionIds = new Set();
     const BROLL_CLIPBOARD_KEY = 'connect-broll-settings-{{ project.public_id }}';
     let brollSettingsClipboard = null;
     try { const stored = sessionStorage.getItem(BROLL_CLIPBOARD_KEY); if (stored) brollSettingsClipboard = JSON.parse(stored); } catch (_) {}
@@ -690,6 +691,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const originalStart=Number(item.start),originalEnd=Number(item.end),length=Math.max(1,originalEnd-originalStart);
             const clipBox=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,clipBox.width*.22));
             const resizeMode=event.clientX-clipBox.left<=edge?'start':clipBox.right-event.clientX<=edge?'end':'move';
+            const groupOriginal=kind==='caption'&&resizeMode==='move'
+                ? (timeline.captions||[]).filter(cue=>selectedCaptionIds.has(String(cue.id))).map(cue=>({id:cue.id,start:Number(cue.start_ms),end:Number(cue.end_ms)))
+                : [];
+            if(kind==='caption'&&resizeMode==='move'&&!groupOriginal.length)groupOriginal.push({id:item.id,start:originalStart,end:originalEnd});
+            const groupStart=groupOriginal.length?Math.min(...groupOriginal.map(cue=>cue.start)):originalStart;
+            const groupEnd=groupOriginal.length?Math.max(...groupOriginal.map(cue=>cue.end)):originalEnd;
             const pointerStart=timelinePoint(event,lane,duration),wasPlaying=!video.paused;
             let nextStart=originalStart,nextEnd=originalEnd,nextLayer=Number(item.layer||0),moved=false;
             clip.setPointerCapture?.(event.pointerId);
@@ -698,6 +705,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 const delta=timelinePoint(pointerEvent,lane,duration)-pointerStart;
                 if(resizeMode==='start')nextStart=Math.max(0,Math.min(originalEnd-minimumCutMs(),snapToFrame(originalStart+delta)));
                 else if(resizeMode==='end')nextEnd=Math.max(originalStart+minimumCutMs(),Math.min(duration,snapToFrame(originalEnd+delta)));
+                else if(groupOriginal.length>1){const groupDelta=Math.max(-groupStart,Math.min(duration-groupEnd,snapToFrame(delta)));nextStart=originalStart+groupDelta;nextEnd=originalEnd+groupDelta}
                 else nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta))),nextEnd=nextStart+length;
                 if(kind==='broll'){const targetLane=document.elementFromPoint(pointerEvent.clientX,pointerEvent.clientY)?.closest('[data-broll-layer]');if(targetLane)nextLayer=Number(targetLane.dataset.brollLayer||0)}
                 moved=moved||(resizeMode==='end'?Math.abs(nextEnd-originalEnd):Math.abs(nextStart-originalStart))>=minimumCutMs()||nextLayer!==Number(item.layer||0);
@@ -710,6 +718,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 clip.classList.remove('is-timeline-dragging');
                 if(!moved)return;
                 clip.dataset.timelineDrag='1';
+                if(kind==='caption'&&groupOriginal.length>1&&resizeMode==='move'){
+                    const groupDelta=nextStart-originalStart;
+                    groupOriginal.forEach(cue=>{const start=cue.start+groupDelta,end=cue.end+groupDelta,model=(timeline.captions||[]).find(value=>String(value.id)===String(cue.id));if(model){model.start_ms=start;model.end_ms=end}queueTimelineMove('caption',cue.id,start,end)});
+                    renderEditorTimeline();
+                    return;
+                }
                 // Keep the client model in sync with the visual position, so
                 // the next drag begins from where the user just dropped it,
                 // even before the asynchronous save has finished.
@@ -763,7 +777,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const makeTrack=(label,items,kind='',isVideo=false,isCaption=false,selectKind=null,canBlade=false)=>{const row=document.createElement('div');row.className=`editor-track editor-track--${selectKind||'base'}`;const lane=document.createElement('div');lane.className=`editor-track__lane ${(isVideo||canBlade)&&editTool==='blade'?'is-blade':''}`;items.forEach(item=>{const clip=document.createElement('button'),rawWidth=(item.end-item.start)/duration*100,isSourceSegment=isVideo||kind.includes('source-audio'),tiny=isSourceSegment&&rawWidth<.35,isBroll=kind.includes('editor-track__broll'),isFilmstrip=(kind.includes('editor-video-clip')||isBroll)&&!tiny,isInspectorSelected=inspectorSelection?.kind===selectKind&&String(inspectorSelection.id)===String(item.id);const selectSourceSegment=()=>{selectedSegment={start:item.start,end:item.end};updateEditControls()};clip.type='button';clip.className=`editor-track__clip ${kind} ${tiny?'is-tiny':''} ${selectedSegment&&selectedSegment.start===item.start&&selectedSegment.end===item.end||isInspectorSelected?'is-selected':''}`;clip.style.left=`${Math.max(0,item.start/duration*100)}%`;clip.style.width=`${Math.max(.02,rawWidth)}%`;if(isFilmstrip){const assetSource=isBroll?item.assetUrl:asset(item.assetId)?.url,usingMaster=!isBroll&&!assetSource&&Boolean(timeline.review_master_url),source=assetSource||(usingMaster?timeline.review_master_url:''),thumbnailTime=usingMaster?editedToMaster(item.start):Number(item.sourceTimeMs||0);if(source){const key=`${isBroll?'broll-'+item.id:item.assetId}:${Math.round(thumbnailTime)}`;clip.classList.add('editor-filmstrip');clip.dataset.filmstripKey=key;clip.innerHTML=`<span class="editor-filmstrip__label">${esc(item.label)}</span>`;if(String(item.mediaType||'').toUpperCase()==='IMAGE'){clip.style.backgroundImage=`url("${source}")`;clip.classList.add('has-thumbnail')}else{clip.dataset.filmstripSource=source;clip.dataset.filmstripTime=String(Math.max(0,thumbnailTime/1000))}}else clip.textContent=item.label}else if(kind.includes('source-audio')){clip.classList.add('editor-waveform');clip.innerHTML=`<span class="editor-waveform__bars"></span><span class="editor-waveform__label">Áudio original</span>`}else clip.textContent=tiny?'':item.label;clip.title=`${item.label} · ${fmt(item.start)} — ${fmt(item.end)}${tiny?' · trecho curto: clique para selecionar e pressione Del para remover':''}${isCaption?' · arraste para mover ou redimensionar; clique duplo para editar':''}`;clip.addEventListener('pointerdown',event=>{if(event.button===0&&editTool!=='blade'&&isSourceSegment)selectSourceSegment()});clip.onclick=event=>{event.stopPropagation();if(clip.dataset.timelineDrag){delete clip.dataset.timelineDrag;return}const point=timelinePoint(event,lane,duration);if(editTool==='blade'&&(isVideo||canBlade)){if(isVideo)addBladeAt(point);else splitTimelineItem(selectKind,item.id,point);return}if(isSourceSegment){selectSourceSegment();if(isVideo&&selectKind)selectInspector(selectKind,item.inspectorId??item.assetId,item.label,item);renderEditorTimeline();requestAnimationFrame(updateEditControls);return}if(selectKind){selectInspector(selectKind,item.inspectorId??item.id,item.label,null);renderEditorTimeline();return}if(isCaption)return;seek(item.start,!video.paused)};if(isCaption)clip.ondblclick=event=>{event.preventDefault();event.stopPropagation();const cue=timeline.captions.find(value=>value.id===item.id);if(cue)openSubtitleEditor(cue)};makeTimelineItemDraggable(clip,lane,item,selectKind,duration);lane.append(clip)});if(isVideo)lane.onclick=event=>{if(editTool==='blade')addBladeAt(timelinePoint(event,lane,duration))};row.innerHTML=`<span class="editor-track__label">${label}</span>`;row.append(lane);tracks.append(row)};
         tracks.replaceChildren();
         const captions=timeline.captions||[], captionItems=items=>items.map(item=>({id:item.id,start:item.start_ms,end:item.end_ms,label:item.text||'Legenda'})), usedCaptions=new Set();
-        const addCaptionTrack=(label,language,kind)=>{const items=captions.filter(item=>String(item.language||'').toLowerCase().startsWith(language));if(!items.length)return;items.forEach(item=>usedCaptions.add(item));makeTrack(label,captionItems(items),kind,false,true,'caption')};
+        const wireCaptionSelection=items=>{[...tracks.lastElementChild.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{const cue=items[index];if(!cue)return;clip.classList.toggle('is-selected',selectedCaptionIds.has(String(cue.id)));clip.addEventListener('click',event=>{if(!event.shiftKey)return;event.preventDefault();event.stopImmediatePropagation();toggleCaptionSelection(cue)},true)})};
+        const addCaptionTrack=(label,language,kind)=>{const items=captions.filter(item=>String(item.language||'').toLowerCase().startsWith(language));if(!items.length)return;items.forEach(item=>usedCaptions.add(item));makeTrack(label,captionItems(items),kind,false,true,'caption');wireCaptionSelection(items)};
         // Put simultaneous visual elements on independent lanes so both clips
         // remain visible and selectable instead of occupying the same space.
         // The compositor paints the latest item last (therefore on top), so
@@ -782,7 +797,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         addCaptionTrack('Legenda PT','pt','editor-track__caption editor-track__caption--pt');
         addCaptionTrack('Legenda EN','en','editor-track__caption editor-track__caption--en');
         const otherCaptions=captions.filter(item=>!usedCaptions.has(item));
-        if(otherCaptions.length)makeTrack('Legendas',captionItems(otherCaptions),'editor-track__caption',false,true,'caption');
+        if(otherCaptions.length){makeTrack('Legendas',captionItems(otherCaptions),'editor-track__caption',false,true,'caption');wireCaptionSelection(otherCaptions)}
         if(timeline.brolls?.length){
             const elements=timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms,layer:item.layer}});
             const automatic=stackElementLayers(elements),automaticLayer=new Map();automatic.forEach((items,index)=>items.forEach(item=>automaticLayer.set(item.id,index)));
@@ -804,8 +819,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // virtual 'project-master' timeline; the backend resolves which real take
     // produced each one into related_source_id so clicking a take can filter them.
     function decisionSourceId(item){return item.related_source_id||item.source_id}
-    function selectInspector(kind,id,label,segment=null){if(kind!=='video')selectedSegment=null;inspectorSelection={kind,id:id??null,label:label||'',masterStartMs:segment?.masterStartMs};setReviewPanel(true);renderList();updateEditControls()}
-    function clearInspectorSelection(){inspectorSelection=null;setReviewPanel(false);renderList()}
+    function selectInspector(kind,id,label,segment=null){if(kind!=='video')selectedSegment=null;if(kind==='caption')selectedCaptionIds=new Set([String(id)]);else selectedCaptionIds.clear();inspectorSelection={kind,id:id??null,label:label||'',masterStartMs:segment?.masterStartMs};setReviewPanel(true);renderList();updateEditControls()}
+    function toggleCaptionSelection(cue){
+        const id=String(cue.id);
+        if(selectedCaptionIds.has(id))selectedCaptionIds.delete(id);else selectedCaptionIds.add(id);
+        selectedSegment=null;
+        if(selectedCaptionIds.size){inspectorSelection={kind:'caption',id:cue.id,label:cue.text||'Legenda'};setReviewPanel(true)}else{inspectorSelection=null;setReviewPanel(false)}
+        renderList();updateEditControls();renderEditorTimeline();
+    }
+    function clearInspectorSelection(){inspectorSelection=null;selectedCaptionIds.clear();setReviewPanel(false);renderList();renderEditorTimeline()}
     function inspectorSelectionStillValid(){
         if(!inspectorSelection)return true;
         switch(inspectorSelection.kind){
