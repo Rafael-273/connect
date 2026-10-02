@@ -1279,6 +1279,48 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         )
         media.delete(force_policy=HARD_DELETE)
 
+    def test_preview_subtitle_timing_and_delete_are_undoable(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        project.configuration = {
+            'source_manifest': SourceManifestBuilder.build(project),
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['configuration', 'render_job', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=1000, end_ms=2000, text='Legenda editável',
+        )
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        moved = TimelineRevisionService.update_subtitle(
+            project, self.member, cue.pk, start_ms=1500, end_ms=2600,
+        )
+        cue.refresh_from_db()
+        self.assertEqual((cue.start_ms, cue.end_ms), (1500, 2600))
+        self.assertEqual(
+            (moved.timeline['captions'][0]['start_ms'], moved.timeline['captions'][0]['end_ms']),
+            (1500, 2600),
+        )
+
+        removed = TimelineRevisionService.update_subtitle(project, self.member, cue.pk, delete=True)
+        self.assertEqual(removed.timeline['captions'], [])
+        self.assertFalse(SubtitleCue.objects.filter(pk=cue.pk).exists())
+
+        TimelineRevisionService.navigate_history(project, self.member, 'undo')
+        restored = SubtitleCue.objects.get(pk=cue.pk)
+        self.assertEqual((restored.start_ms, restored.end_ms), (1500, 2600))
+        TimelineRevisionService.navigate_history(project, self.member, 'redo')
+        self.assertFalse(SubtitleCue.objects.filter(pk=cue.pk).exists())
+        media.delete(force_policy=HARD_DELETE)
+
     def test_video_split_after_a_cut_uses_the_original_master_clock(self):
         project = self.make_project()
         media = ProjectBlockMedia.objects.create(

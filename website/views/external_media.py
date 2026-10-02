@@ -2292,10 +2292,17 @@ class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id, cue_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
-        text = str(payload.get('text') or '').strip()
-        if not text:
-            return JsonResponse({'error': 'A legenda não pode ficar vazia.'}, status=400)
-        revision = TimelineRevisionService.update_subtitle(project, self.member, cue_id, text)
+        delete = bool(payload.get('delete'))
+        text = payload.get('text') if 'text' in payload else None
+        try:
+            revision = TimelineRevisionService.update_subtitle(
+                project, self.member, cue_id,
+                text=text,
+                start_ms=payload.get('start_ms'), end_ms=payload.get('end_ms'),
+                delete=delete,
+            )
+        except (ValueError, TypeError) as exc:
+            return JsonResponse({'error': str(exc) or 'Os dados da legenda são inválidos.'}, status=400)
         return preview_revision_response(project, self.member, revision)
 
 

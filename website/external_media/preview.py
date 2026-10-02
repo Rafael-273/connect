@@ -1079,22 +1079,52 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
-    def update_subtitle(cls, project, member, cue_id, text):
+    def update_subtitle(cls, project, member, cue_id, text=None, start_ms=None, end_ms=None, delete=False):
+        """Update one cue without losing the revision/undo contract.
+
+        Cues live in the edited timeline clock.  Keeping their values on the
+        model means the final subtitle renderer, the review proxy and the
+        interactive timeline all consume the same source of truth.
+        """
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         cue = SubtitleCue.objects.select_for_update().get(pk=cue_id, track__job=locked.render_job)
-        previous = cue.text
-        cue.text = text.strip()
-        if cue.text == previous:
-            return locked.current_timeline_revision or cls.ensure_initial(locked, member)
-        cue.save(update_fields=['text', 'update_at'])
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        if delete:
+            cue.delete()
+            revision = cls._create(
+                locked, current.source_manifest, current.edit_decision_set, 'Legenda removida', member, current,
+            )
+            session = cls.session(locked, member, revision)
+            cls._record(session, current, revision, 'DELETE_SUBTITLE', {'cue_id': cue_id}, {'cue_id': cue_id}, member)
+            return revision
+
+        previous = {'text': cue.text, 'start_ms': cue.start_ms, 'end_ms': cue.end_ms}
+        if text is not None:
+            cue.text = str(text).strip()
+        if start_ms is not None:
+            cue.start_ms = max(0, int(start_ms))
+        if end_ms is not None:
+            cue.end_ms = int(end_ms)
+        duration = int((current.timeline.get('sequence') or {}).get('duration_ms') or 0)
+        if duration:
+            cue.start_ms = min(cue.start_ms, max(0, duration - MIN_MANUAL_CUT_MS))
+            cue.end_ms = min(cue.end_ms, duration)
+        if not cue.text:
+            raise ValueError('A legenda não pode ficar vazia.')
+        if cue.end_ms - cue.start_ms < MIN_MANUAL_CUT_MS:
+            raise ValueError('A legenda precisa ter ao menos um quadro de duração.')
+        if (cue.text, cue.start_ms, cue.end_ms) == (
+            previous['text'], previous['start_ms'], previous['end_ms'],
+        ):
+            return locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        cue.save(update_fields=['text', 'start_ms', 'end_ms', 'update_at'])
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set, 'Legenda atualizada', member, current,
         )
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'UPDATE_SUBTITLE', {
-            'cue_id': cue_id, 'text': cue.text,
-        }, {'cue_id': cue_id, 'text': previous}, member)
+            'cue_id': cue_id, 'text': cue.text, 'start_ms': cue.start_ms, 'end_ms': cue.end_ms,
+        }, {'cue_id': cue_id, **previous}, member)
         return revision
 
     @classmethod
@@ -1648,10 +1678,20 @@ class TimelineRevisionService:
         if not project.render_job_id:
             return
         by_id = {int(item['id']): item for item in revision.timeline.get('captions') or []}
-        cues = list(SubtitleCue.objects.filter(track__job=project.render_job, pk__in=by_id))
+        # Cues are soft-deleted so Delete can be undone/redone just like every
+        # other timeline operation.  The revision snapshot is authoritative:
+        # an id present there must be restored, and one absent must be hidden.
+        cues = list(SubtitleCue.all_objects.filter(track__job=project.render_job))
         for cue in cues:
-            item = by_id[cue.pk]
+            item = by_id.get(cue.pk)
+            if item is None:
+                if cue.deleted is None:
+                    cue.delete()
+                continue
+            if cue.deleted is not None:
+                cue.undelete()
             cue.start_ms = int(item['start_ms'])
             cue.end_ms = int(item['end_ms'])
             cue.text = item['text']
-        SubtitleCue.objects.bulk_update(cues, ['start_ms', 'end_ms', 'text'])
+        active = [cue for cue in cues if cue.pk in by_id]
+        SubtitleCue.objects.bulk_update(active, ['start_ms', 'end_ms', 'text'])
