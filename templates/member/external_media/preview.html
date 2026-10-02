@@ -692,7 +692,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const clipBox=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,clipBox.width*.22));
             const resizeMode=event.clientX-clipBox.left<=edge?'start':clipBox.right-event.clientX<=edge?'end':'move';
             const groupOriginal=kind==='caption'&&resizeMode==='move'
-                ? (timeline.captions||[]).filter(cue=>selectedCaptionIds.has(String(cue.id))).map(cue=>({id:cue.id,start:Number(cue.start_ms),end:Number(cue.end_ms)))
+                ? (timeline.captions||[]).filter(cue=>selectedCaptionIds.has(String(cue.id))).map(cue=>({id:cue.id,start:Number(cue.start_ms),end:Number(cue.end_ms)}))
                 : [];
             if(kind==='caption'&&resizeMode==='move'&&!groupOriginal.length)groupOriginal.push({id:item.id,start:originalStart,end:originalEnd});
             const groupStart=groupOriginal.length?Math.min(...groupOriginal.map(cue=>cue.start)):originalStart;
