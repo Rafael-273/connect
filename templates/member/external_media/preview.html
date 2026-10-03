@@ -365,7 +365,6 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // The timeline excludes accepted cuts. The review master does not, so map
     // between both clocks instead of showing a different image after a cut.
     function editedToMaster(ms,boundary='after'){
-        if(timeline.review_master_is_edited)return ms;
         let removed=0;
         for(const [start,end] of removedSegments()){
             const editedStart=start-removed;
@@ -378,7 +377,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         return ms+removed;
     }
-    function masterToEdited(ms){if(timeline.review_master_is_edited)return ms;let removed=0;for(const [start,end] of removedSegments()){if(ms>=end){removed+=end-start;continue}if(ms>start)return null;break}return ms-removed}
+    function masterToEdited(ms){let removed=0;for(const [start,end] of removedSegments()){if(ms>=end){removed+=end-start;continue}if(ms>start)return null;break}return ms-removed}
+    // The active playback asset can use either clock. Editorial mutations,
+    // however, always use the untouched project-master clock consumed by the
+    // final renderer. Keeping these concerns separate prevents a READY
+    // revision proxy from saving later cuts too early by the duration of all
+    // preceding cuts.
+    function editedToPlayback(ms){return timeline.review_master_is_edited?ms:editedToMaster(ms)}
+    function playbackToEdited(ms){return timeline.review_master_is_edited?ms:masterToEdited(ms)}
     function sourceFor(clip){ return asset(clip?.asset_id)?.url || ''; }
     function requestVideoPlay(){
         const pending=video.play();
@@ -446,7 +452,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function seek(ms, autoplay=false){
         globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs); if(!clip)return;
         if(useReviewMaster()){
-            const source=timeline.review_master_url, masterTime=editedToMaster(globalMs)/1000;
+            const source=timeline.review_master_url, masterTime=editedToPlayback(globalMs)/1000;
             activeClip=clip;
             sourcePlayer.seek(source,masterTime,{autoplay,freeze:false});
             renderPosition(); syncMusicPosition(); return;
@@ -588,7 +594,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         playerVideo.addEventListener('timeupdate',()=>{
             if(playerVideo!==video||loading||!activeClip)return;
             if(useReviewMaster()){
-                const edited=masterToEdited(playerVideo.currentTime*1000);
+                const edited=playbackToEdited(playerVideo.currentTime*1000);
                 if(edited===null){const cut=removedSegments().find(([start,end])=>playerVideo.currentTime*1000>start&&playerVideo.currentTime*1000<end);if(cut){playerVideo.currentTime=cut[1]/1000;return}}
                 globalMs=Math.max(0,Math.min(edited??0,timeline.sequence.duration_ms));activeClip=clipAt(globalMs);
             }else{

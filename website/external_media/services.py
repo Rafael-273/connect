@@ -2684,27 +2684,33 @@ class ExternalMediaProjectPipeline:
             self.assembly.last_block_ranges,
         )
         if approved:
-            approved_cuts = [
-                SpeechCut(
-                    int(item.get('source_in_ms') or 0),
-                    int(item.get('source_out_ms') or 0),
-                    (item.get('metadata') or {}).get('kind', 'silence'),
-                    item.get('reason') or '',
-                )
-                for item in (approved.edit_decision_set.get('operations') or [])
-                if item.get('type') == 'remove_segment' and item.get('enabled', True)
-            ]
-            # Review decisions use the analysis/proxy master clock. The final
-            # render rebuilds the high-resolution master from every original
-            # take; one-frame duration differences accumulate between takes.
-            # Remap at each take boundary so a late cut still targets the exact
-            # content approved in the editor instead of drifting into speech.
-            combined_cuts.extend(self._remap_analysis_cuts_to_final(
-                approved_cuts,
-                configuration.get('analysis_source_block_ranges') or [],
-                self.assembly.last_block_ranges,
-                original_duration_ms,
-            ))
+            snapshot_cuts = self._cuts_from_approved_timeline(
+                approved, self.assembly.last_block_ranges, original_duration_ms,
+            )
+            if snapshot_cuts is not None:
+                # The immutable clip list is the exact sequence played by the
+                # editor and by its continuous review proxy. Deriving the
+                # delivery cuts from those kept clips makes the final output
+                # obey that visual contract even when proxy durations differ
+                # from the high-resolution takes by a frame.
+                combined_cuts.extend(snapshot_cuts)
+            else:
+                approved_cuts = [
+                    SpeechCut(
+                        int(item.get('source_in_ms') or 0),
+                        int(item.get('source_out_ms') or 0),
+                        (item.get('metadata') or {}).get('kind', 'silence'),
+                        item.get('reason') or '',
+                    )
+                    for item in (approved.edit_decision_set.get('operations') or [])
+                    if item.get('type') == 'remove_segment' and item.get('enabled', True)
+                ]
+                combined_cuts.extend(self._remap_analysis_cuts_to_final(
+                    approved_cuts,
+                    configuration.get('analysis_source_block_ranges') or [],
+                    self.assembly.last_block_ranges,
+                    original_duration_ms,
+                ))
         else:
             if background_plan and background_plan.cuts:
                 combined_cuts.extend(background_plan.cuts)
@@ -2957,6 +2963,69 @@ class ExternalMediaProjectPipeline:
                 continue
             remapped.append(SpeechCut(start_ms, end_ms, cut.kind, cut.label))
         return remapped
+
+    @staticmethod
+    def _cuts_from_approved_timeline(revision, final_ranges, final_duration_ms):
+        """Build delivery cuts from the exact kept clips approved in the editor."""
+        timeline = revision.timeline or {}
+        clips = timeline.get('clips') or []
+        manifest_sources = [
+            source for source in (revision.source_manifest or {}).get('sources', [])
+            if (source.get('metadata') or {}).get('render_enabled', True)
+        ]
+        if not clips or len(manifest_sources) != len(final_ranges):
+            return None
+        source_ranges = {}
+        for source, final in zip(manifest_sources, final_ranges):
+            trim = source.get('trim') or {}
+            trim_start_ms = int(trim.get('start_ms') or 0)
+            source_duration_ms = int(
+                source.get('duration_ms')
+                or (source.get('metadata') or {}).get('duration_ms')
+                or trim.get('end_ms')
+                or trim_start_ms
+            )
+            trim_end_ms = min(source_duration_ms, int(trim.get('end_ms') or source_duration_ms))
+            source_ranges[str(source.get('id'))] = {
+                'trim_start_ms': trim_start_ms,
+                'analysis_duration_ms': max(0, trim_end_ms - trim_start_ms),
+                'final_start_ms': int(final.get('start_ms') or 0),
+                'final_end_ms': int(final.get('end_ms') or 0),
+            }
+        kept = []
+        for clip in clips:
+            target = source_ranges.get(str(clip.get('asset_id') or ''))
+            if not target:
+                return None
+            local_start = max(0, int(clip.get('source_in_ms') or 0) - target['trim_start_ms'])
+            local_end = max(local_start, int(clip.get('source_out_ms') or 0) - target['trim_start_ms'])
+            start_ms = (
+                target['final_start_ms'] if local_start <= 0
+                else min(target['final_end_ms'], target['final_start_ms'] + local_start)
+            )
+            end_ms = (
+                target['final_end_ms']
+                if local_end >= target['analysis_duration_ms']
+                else min(target['final_end_ms'], target['final_start_ms'] + local_end)
+            )
+            if end_ms > start_ms:
+                kept.append((start_ms, end_ms))
+        if not kept:
+            return None
+        merged = []
+        for start_ms, end_ms in sorted(kept):
+            if merged and start_ms <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end_ms))
+            else:
+                merged.append((start_ms, end_ms))
+        cuts, cursor = [], 0
+        for start_ms, end_ms in merged:
+            if start_ms > cursor:
+                cuts.append(SpeechCut(cursor, start_ms, 'timeline', 'Corte aprovado no editor'))
+            cursor = max(cursor, end_ms)
+        if cursor < int(final_duration_ms):
+            cuts.append(SpeechCut(cursor, int(final_duration_ms), 'timeline', 'Corte aprovado no editor'))
+        return cuts
 
     @staticmethod
     def _remap_analysis_time_to_final(value_ms, analysis_ranges, final_ranges, final_duration_ms):

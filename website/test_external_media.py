@@ -3739,6 +3739,31 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
 
         self.assertEqual(cuts, [SpeechCut(2166, 2366, 'manual', 'Corte manual')])
 
+    def test_final_render_derives_cuts_from_the_exact_approved_preview_clips(self):
+        revision = SimpleNamespace(
+            source_manifest={'sources': [
+                {'id': 'take-a', 'duration_ms': 1000, 'trim': {'start_ms': 0, 'end_ms': 1000}},
+                {'id': 'take-b', 'duration_ms': 1000, 'trim': {'start_ms': 0, 'end_ms': 1000}},
+            ]},
+            timeline={'clips': [
+                {'asset_id': 'take-a', 'source_in_ms': 0, 'source_out_ms': 1000},
+                {'asset_id': 'take-b', 'source_in_ms': 0, 'source_out_ms': 100},
+                {'asset_id': 'take-b', 'source_in_ms': 200, 'source_out_ms': 1000},
+            ]},
+        )
+        final_ranges = [
+            {'start_ms': 0, 'end_ms': 1033},
+            {'start_ms': 1033, 'end_ms': 2066},
+        ]
+
+        cuts = ExternalMediaProjectPipeline._cuts_from_approved_timeline(
+            revision, final_ranges, 2066,
+        )
+
+        self.assertEqual(cuts, [
+            SpeechCut(1133, 1233, 'timeline', 'Corte aprovado no editor'),
+        ])
+
     def test_quality_control_rejects_subtitles_over_intact_blocks(self):
         cue = SimpleNamespace(start_ms=900, end_ms=1400, cue_index=3)
         track = SimpleNamespace(language='pt', cues=SimpleNamespace(all=lambda: [cue]))
