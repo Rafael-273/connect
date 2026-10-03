@@ -1538,11 +1538,17 @@ class TimelineRevisionService:
             )
         revision.approved_at = timezone.now()
         revision.save(update_fields=['approved_at', 'update_at'])
+        # Approval must pin both pointers to the same immutable snapshot.  If an
+        # approval had to consolidate legacy per-segment reframes, ``revision``
+        # is a new child and leaving ``current`` on its parent made the editor
+        # and the final worker legitimately read different timelines.
+        locked.current_timeline_revision = revision
         locked.approved_timeline_revision = revision
         locked.preview_dirty = False
         locked.final_render_outdated = True
         locked.save(update_fields=[
-            'approved_timeline_revision', 'preview_dirty', 'final_render_outdated', 'update_at',
+            'current_timeline_revision', 'approved_timeline_revision', 'preview_dirty',
+            'final_render_outdated', 'update_at',
         ])
         return revision
 

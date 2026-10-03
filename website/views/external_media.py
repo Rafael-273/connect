@@ -1746,6 +1746,18 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
             if project.template_version.interactive_preview_enabled and not project.approved_timeline_revision_id:
                 messages.warning(request, 'Revise e aprove a edição antes de renderizar.')
                 return redirect('external_media_project_preview', public_id=public_id)
+            if (
+                project.template_version.interactive_preview_enabled
+                and (
+                    project.preview_dirty
+                    or project.current_timeline_revision_id != project.approved_timeline_revision_id
+                )
+            ):
+                messages.warning(
+                    request,
+                    'A edição exibida mudou após a última aprovação. Aprove esta revisão antes de renderizar.',
+                )
+                return redirect('external_media_project_preview', public_id=public_id)
             project.status = ExternalMediaProject.Status.PENDING
             project.progress = 84
             project.current_step = 'Renderização adicionada à fila'

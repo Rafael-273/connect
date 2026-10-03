@@ -631,4 +631,10 @@ class SpeechEditService:
             cursor = max(cursor, cut.end_ms)
         if cursor < plan.duration_ms:
             intervals.append((cursor, plan.duration_ms))
-        return [item for item in intervals if item[1] - item[0] >= 80]
+        # The interactive editor works at frame precision and can legitimately
+        # leave a one-frame clip between two nearby cuts. Dropping intervals
+        # shorter than 80 ms here made delivery remove frames that were still
+        # visible (and often audible as the start/end of a word) in preview.
+        # FFmpeg's trim/fps pipeline will quantize the positive interval to the
+        # available frames, so retain every interval approved by the editor.
+        return [item for item in intervals if item[1] > item[0]]

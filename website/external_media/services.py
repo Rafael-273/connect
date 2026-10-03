@@ -2418,6 +2418,16 @@ class ExternalMediaProjectPipeline:
             raise ExternalMediaError('O projeto ainda não possui conteúdo preparado.')
         if project.template_version.interactive_preview_enabled and not project.approved_timeline_revision_id:
             raise ExternalMediaError('A edição precisa ser aprovada antes da renderização final.')
+        if (
+            project.template_version.interactive_preview_enabled
+            and (
+                project.preview_dirty
+                or project.current_timeline_revision_id != project.approved_timeline_revision_id
+            )
+        ):
+            raise ExternalMediaError(
+                'A revisão atual difere da revisão aprovada. Aprove novamente antes de renderizar.'
+            )
         try:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 68, 'Preparando a versão final')
             self._step(project, 'render', ProjectPipelineStep.Status.RUNNING)
@@ -2683,11 +2693,13 @@ class ExternalMediaProjectPipeline:
             original_duration_ms,
             self.assembly.last_block_ranges,
         )
+        exact_approved_timeline_cuts = False
         if approved:
             snapshot_cuts = self._cuts_from_approved_timeline(
                 approved, self.assembly.last_block_ranges, original_duration_ms,
             )
             if snapshot_cuts is not None:
+                exact_approved_timeline_cuts = True
                 # The immutable clip list is the exact sequence played by the
                 # editor and by its continuous review proxy. Deriving the
                 # delivery cuts from those kept clips makes the final output
@@ -2730,14 +2742,15 @@ class ExternalMediaProjectPipeline:
         if combined_cuts:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 82, 'Ajustando seu vídeo')
             edited = workdir / 'project_master_speech_edited.mp4'
-            combined_plan = SpeechEditPlan.normalized(
-                combined_cuts,
-                original_duration_ms,
-                max(
-                    getattr(background_plan, 'crossfade_ms', 0) or 0,
-                    getattr(plan, 'crossfade_ms', 0) or 0,
-                    40,
-                ),
+            crossfade_ms = max(
+                getattr(background_plan, 'crossfade_ms', 0) or 0,
+                getattr(plan, 'crossfade_ms', 0) or 0,
+                40,
+            )
+            combined_plan = (
+                SpeechEditPlan(tuple(combined_cuts), original_duration_ms, crossfade_ms)
+                if exact_approved_timeline_cuts
+                else SpeechEditPlan.normalized(combined_cuts, original_duration_ms, crossfade_ms)
             )
             cut_report = self.quality.validate_cuts(combined_plan.cuts, original_duration_ms)
             cut_report.require_ok()
@@ -2814,10 +2827,28 @@ class ExternalMediaProjectPipeline:
             deep_audio=True,
         )
         quality_report.require_ok()
+        render_contract = {
+            'approved_revision': approved.revision if approved else None,
+            'approved_revision_id': approved.pk if approved else None,
+            'cut_source': 'approved_timeline_clips' if exact_approved_timeline_cuts else 'edit_decisions',
+            'source_duration_ms': original_duration_ms,
+            'expected_duration_ms': expected_duration_ms,
+            'cuts': [cut.as_dict() for cut in combined_plan.cuts],
+        }
+        logger.info(
+            'external_media_render_contract project=%s revision=%s source=%s duration_ms=%s expected_ms=%s cuts=%s',
+            project.public_id,
+            render_contract['approved_revision'],
+            render_contract['cut_source'],
+            original_duration_ms,
+            expected_duration_ms,
+            len(combined_plan.cuts),
+        )
         project.configuration = {
             **(project.configuration or {}),
             'timeline_validation': timeline_report,
             'quality_report': quality_report.as_dict(),
+            'render_contract': render_contract,
         }
         project.save(update_fields=['configuration', 'update_at'])
         if not approved:

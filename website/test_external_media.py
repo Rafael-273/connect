@@ -1406,9 +1406,38 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
 
         project.refresh_from_db()
         self.assertEqual(approved, revision)
+        self.assertEqual(project.current_timeline_revision, revision)
         self.assertEqual(project.approved_timeline_revision, revision)
         self.assertFalse(project.preview_dirty)
         self.assertTrue(project.final_render_outdated)
+
+    def test_render_refuses_a_revision_that_changed_after_approval(self):
+        project = self.make_project()
+        approved = TimelineRevision.objects.create(
+            project=project, revision=1, created_by=self.member,
+            timeline={'sequence': {'duration_ms': 1000}}, source_manifest={}, edit_decision_set={},
+        )
+        current = TimelineRevision.objects.create(
+            project=project, revision=2, parent=approved, created_by=self.member,
+            timeline={'sequence': {'duration_ms': 900}}, source_manifest={}, edit_decision_set={},
+        )
+        project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        project.current_timeline_revision = current
+        project.approved_timeline_revision = approved
+        project.preview_dirty = True
+        project.save(update_fields=[
+            'status', 'current_timeline_revision', 'approved_timeline_revision',
+            'preview_dirty', 'update_at',
+        ])
+
+        response = self.client.post(reverse('external_media_project_render', args=[project.public_id]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('external_media_project_preview', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.status, ExternalMediaProject.Status.AWAITING_REVIEW)
+        self.assertEqual(project.current_timeline_revision, current)
+        self.assertEqual(project.approved_timeline_revision, approved)
 
     def test_music_choice_is_revisioned_and_undoable(self):
         project = self.make_project()
@@ -3703,6 +3732,17 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(plan.saved_ms, 1000)
         self.assertEqual(plan.remap_time(2000), 1000)
 
+    def test_speech_edit_preserves_a_short_approved_interval_between_nearby_cuts(self):
+        plan = SpeechEditPlan.normalized([
+            SpeechCut(100, 200, 'manual'),
+            SpeechCut(250, 350, 'manual'),
+        ], 500)
+
+        self.assertEqual(
+            SpeechEditService._keep_intervals(plan),
+            [(0, 100), (200, 250), (350, 500)],
+        )
+
     def test_proxy_timeline_validation_rejects_large_duration_drift(self):
         configuration = {
             'analysis_source_duration_ms': 10000,
@@ -3811,6 +3851,29 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertTrue(output_exists)
         self.assertLess(duration, 1600)
         self.assertGreater(duration, 1450)
+
+    def test_speech_edit_ffmpeg_keeps_a_short_clip_between_two_cuts(self):
+        runner = FFmpegRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            output = workdir / 'edited.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30:duration=0.5',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.5', '-shortest',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            plan = SpeechEditPlan.normalized([
+                SpeechCut(100, 200, 'manual'),
+                SpeechCut(270, 350, 'manual'),
+            ], 500)
+            SpeechEditService(runner).apply(source, output, plan)
+            duration = SpeechEditService(runner).duration_ms(output)
+
+        # Keeps 0-100, 200-270 and 350-500. The former 80 ms filter silently
+        # discarded the middle 70 ms and produced a visibly shorter result.
+        self.assertGreaterEqual(duration, 290)
+        self.assertLessEqual(duration, 380)
 
     def test_speech_edit_keeps_audio_and_video_aligned_after_many_cuts(self):
         runner = FFmpegRunner()
