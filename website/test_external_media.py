@@ -3718,6 +3718,27 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
                 [{'block_key': 'testimony', 'start_ms': 0, 'end_ms': 12000}],
             )
 
+    def test_final_render_remaps_review_cuts_after_accumulated_take_drift(self):
+        analysis_ranges = [
+            {'block_key': 'a', 'start_ms': 0, 'end_ms': 1000},
+            {'block_key': 'b', 'start_ms': 1000, 'end_ms': 2000},
+            {'block_key': 'c', 'start_ms': 2000, 'end_ms': 3000},
+        ]
+        final_ranges = [
+            {'block_key': 'a', 'start_ms': 0, 'end_ms': 1033},
+            {'block_key': 'b', 'start_ms': 1033, 'end_ms': 2066},
+            {'block_key': 'c', 'start_ms': 2066, 'end_ms': 3099},
+        ]
+
+        cuts = ExternalMediaProjectPipeline._remap_analysis_cuts_to_final(
+            [SpeechCut(2100, 2300, 'manual', 'Corte manual')],
+            analysis_ranges,
+            final_ranges,
+            3099,
+        )
+
+        self.assertEqual(cuts, [SpeechCut(2166, 2366, 'manual', 'Corte manual')])
+
     def test_quality_control_rejects_subtitles_over_intact_blocks(self):
         cue = SimpleNamespace(start_ms=900, end_ms=1400, cue_index=3)
         track = SimpleNamespace(language='pt', cues=SimpleNamespace(all=lambda: [cue]))

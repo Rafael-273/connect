@@ -2684,7 +2684,7 @@ class ExternalMediaProjectPipeline:
             self.assembly.last_block_ranges,
         )
         if approved:
-            combined_cuts.extend(
+            approved_cuts = [
                 SpeechCut(
                     int(item.get('source_in_ms') or 0),
                     int(item.get('source_out_ms') or 0),
@@ -2693,7 +2693,18 @@ class ExternalMediaProjectPipeline:
                 )
                 for item in (approved.edit_decision_set.get('operations') or [])
                 if item.get('type') == 'remove_segment' and item.get('enabled', True)
-            )
+            ]
+            # Review decisions use the analysis/proxy master clock. The final
+            # render rebuilds the high-resolution master from every original
+            # take; one-frame duration differences accumulate between takes.
+            # Remap at each take boundary so a late cut still targets the exact
+            # content approved in the editor instead of drifting into speech.
+            combined_cuts.extend(self._remap_analysis_cuts_to_final(
+                approved_cuts,
+                configuration.get('analysis_source_block_ranges') or [],
+                self.assembly.last_block_ranges,
+                original_duration_ms,
+            ))
         else:
             if background_plan and background_plan.cuts:
                 combined_cuts.extend(background_plan.cuts)
@@ -2928,6 +2939,41 @@ class ExternalMediaProjectPipeline:
             'duration_drift_ms': duration_drift_ms,
             'largest_block_drift_ms': largest_block_drift_ms,
         }
+
+    @classmethod
+    def _remap_analysis_cuts_to_final(cls, cuts, analysis_ranges, final_ranges, final_duration_ms):
+        """Translate review-clock cuts onto the freshly assembled delivery clock."""
+        if not cuts or not analysis_ranges or len(analysis_ranges) != len(final_ranges):
+            return list(cuts)
+        remapped = []
+        for cut in cuts:
+            start_ms = cls._remap_analysis_time_to_final(
+                cut.start_ms, analysis_ranges, final_ranges, final_duration_ms,
+            )
+            end_ms = cls._remap_analysis_time_to_final(
+                cut.end_ms, analysis_ranges, final_ranges, final_duration_ms,
+            )
+            if end_ms <= start_ms:
+                continue
+            remapped.append(SpeechCut(start_ms, end_ms, cut.kind, cut.label))
+        return remapped
+
+    @staticmethod
+    def _remap_analysis_time_to_final(value_ms, analysis_ranges, final_ranges, final_duration_ms):
+        value_ms = max(0, int(value_ms))
+        for analysis, final in zip(analysis_ranges, final_ranges):
+            analysis_start = int(analysis.get('start_ms') or 0)
+            analysis_end = int(analysis.get('end_ms') or analysis_start)
+            if value_ms > analysis_end:
+                continue
+            final_start = int(final.get('start_ms') or 0)
+            final_end = int(final.get('end_ms') or final_start)
+            # The media is never time-stretched between analysis and delivery.
+            # Preserve the offset inside the take, while clamping a proxy-only
+            # trailing frame to the real end of its high-resolution source.
+            offset = max(0, value_ms - analysis_start)
+            return min(final_end, final_start + offset)
+        return min(max(0, int(final_duration_ms)), value_ms)
 
     def _finalize_audio(self, project, job, workdir, video_path, music_path, plan):
         """Processes dialogue, mixes in music (with adaptive ducking, if enabled), then
