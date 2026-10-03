@@ -230,6 +230,10 @@ EXTERNAL_MEDIA_INTERMEDIATE_CRF = int(os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_CRF
 # Mantém a renderização final rápida em máquinas multi-core sem abrir encodes
 # demais e deixar o computador sem responsividade.
 EXTERNAL_MEDIA_ASSEMBLY_WORKERS = int(os.getenv('EXTERNAL_MEDIA_ASSEMBLY_WORKERS', 2))
+# The concat filter keeps a decoder and frame queue for every input. Keeping a
+# bounded fan-in prevents long projects (dozens of editorial takes) from
+# exhausting the worker's memory during the final assembly pass.
+EXTERNAL_MEDIA_CONCAT_BATCH_SIZE = int(os.getenv('EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 8))
 EXTERNAL_MEDIA_PROXY_WIDTH = int(os.getenv('EXTERNAL_MEDIA_PROXY_WIDTH', 854))
 EXTERNAL_MEDIA_PROXY_CRF = int(os.getenv('EXTERNAL_MEDIA_PROXY_CRF', 30))
 EXTERNAL_MEDIA_PROXY_PRESET = os.getenv('EXTERNAL_MEDIA_PROXY_PRESET', 'ultrafast')

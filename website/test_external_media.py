@@ -4308,6 +4308,23 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             self.assertEqual(service.last_block_ranges[0]['end_ms'], service.last_block_ranges[1]['start_ms'])
             self.assertGreater(service.last_block_ranges[1]['end_ms'], service.last_block_ranges[1]['start_ms'])
 
+    def test_video_assembly_batches_a_long_concat_to_bound_ffmpeg_inputs(self):
+        runner = Mock()
+        service = VideoAssemblyService(runner=runner)
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            settings, 'EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 3,
+        ):
+            workdir = Path(directory)
+            output = workdir / 'assembled.mp4'
+            service._concat_normalized(
+                [workdir / f'normalized_{index:03d}.mp4' for index in range(17)], output, workdir,
+            )
+
+        commands = [call.args[0] for call in runner.run.call_args_list]
+        self.assertGreater(len(commands), 1)
+        self.assertTrue(all(command.count('-i') <= 3 for command in commands))
+        self.assertEqual(commands[-1][-1], str(output))
+
     def test_video_assembly_creates_lightweight_proxy(self):
         runner = FFmpegRunner()
         with tempfile.TemporaryDirectory() as directory:

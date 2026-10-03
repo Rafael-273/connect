@@ -1858,26 +1858,7 @@ class VideoAssemblyService:
             # add silence at its boundary even after its image has started.
             # Rebase every normalized stream in a concat filter instead: its
             # resulting clock is the same one subtitles and the editor use.
-            concat_filters, concat_inputs = [], []
-            command = [settings.FFMPEG_BINARY, '-y']
-            for index, path in enumerate(normalized):
-                command.extend(['-i', self.runner.input_arg(path)])
-                concat_filters.extend([
-                    f'[{index}:v:0]setpts=PTS-STARTPTS[v{index}]',
-                    f'[{index}:a:0]asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
-                ])
-                concat_inputs.append(f'[v{index}][a{index}]')
-            concat_filters.append(
-                f"{''.join(concat_inputs)}concat=n={len(normalized)}:v=1:a=1[vout][aout]"
-            )
-            command.extend([
-                '-filter_complex', ';'.join(concat_filters), '-map', '[vout]', '-map', '[aout]',
-                '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
-                '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p',
-                '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
-                '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', str(assembled),
-            ])
-            self.runner.run(command)
+            self._concat_normalized(normalized, assembled, workdir)
         finally:
             for temporary_name in temporary_normalized:
                 self.storage.delete_temporary(temporary_name)
@@ -1896,6 +1877,63 @@ class VideoAssemblyService:
                 ducking_enabled=False,
             )
         return used_auto_reframe
+
+    def _concat_normalized(self, paths, output_path, workdir):
+        """Join normalized clips with a bounded number of FFmpeg inputs.
+
+        A concat filter allocates decode/filter queues for every input. A
+        project with 40+ takes used to open every S3 stream in one process,
+        which can be killed by the container OOM killer even though each take
+        is small on disk. Build a small concat tree instead, preserving the
+        same timestamp rebasing at every level.
+        """
+        batch_size = max(2, int(getattr(settings, 'EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 8)))
+        current = list(paths)
+        temporary_batches = []
+        pass_index = 0
+        try:
+            while len(current) > batch_size:
+                next_paths = []
+                for batch_index, offset in enumerate(range(0, len(current), batch_size)):
+                    destination = workdir / f'concat-{pass_index:02d}-{batch_index:03d}.mp4'
+                    self._concat_group(current[offset:offset + batch_size], destination)
+                    temporary_batches.append(destination)
+                    next_paths.append(destination)
+                current = next_paths
+                pass_index += 1
+            self._concat_group(current, output_path)
+        finally:
+            for path in temporary_batches:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning('Não foi possível remover intermediário de concatenação %s.', path)
+
+    def _concat_group(self, paths, output_path):
+        if not paths:
+            raise ExternalMediaError('Não há trechos de vídeo para concatenar.')
+        concat_filters, concat_inputs = [], []
+        # Keeping filter-complex single-threaded bounds the queue allocation
+        # for each batch. Parallelism belongs at the job/worker level here.
+        command = [settings.FFMPEG_BINARY, '-y', '-threads', '1', '-filter_complex_threads', '1']
+        for index, path in enumerate(paths):
+            command.extend(['-i', self.runner.input_arg(path)])
+            concat_filters.extend([
+                f'[{index}:v:0]setpts=PTS-STARTPTS[v{index}]',
+                f'[{index}:a:0]asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
+            ])
+            concat_inputs.append(f'[v{index}][a{index}]')
+        concat_filters.append(
+            f"{''.join(concat_inputs)}concat=n={len(paths)}:v=1:a=1[vout][aout]"
+        )
+        command.extend([
+            '-filter_complex', ';'.join(concat_filters), '-map', '[vout]', '-map', '[aout]',
+            '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
+            '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+            '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', str(output_path),
+        ])
+        self.runner.run(command)
 
     def create_proxy(self, source, destination, trim_start_ms=0, trim_end_ms=None, profile=None):
         source_width, source_height = self._video_dimensions(source)
