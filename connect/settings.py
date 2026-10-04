@@ -223,6 +223,14 @@ EXTERNAL_MEDIA_FFMPEG_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_FFMPEG_TIMEOUT', 2
 # B-roll-heavy long-form edits can legitimately take longer than the former
 # 45-minute ceiling, while still remaining below the full pipeline timeout.
 EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT', 7200))
+# The chunked B-roll renderer revisits the same master many times.  Workflow
+# disks are ephemeral, but a bounded per-run copy is safe and avoids opening a
+# large S3 object for every chunk.  This is deliberately separate from the
+# general remote materialization fallback, whose lower limit protects callers
+# that cannot account for an additional render output.
+EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB = int(
+    os.getenv('EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB', 512)
+)
 EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfast')
 EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')

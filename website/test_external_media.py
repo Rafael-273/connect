@@ -6211,6 +6211,60 @@ class BrollUnitTests(SimpleTestCase):
         self.assertIn('1:a?', calls[-1])
         self.assertEqual(len(storage.deleted), len(chunk_calls))
 
+    def test_chunked_renderer_materializes_a_safe_remote_master_once(self):
+        assets = [
+            SimpleNamespace(
+                public_id=f'00000000-0000-0000-0000-{index:012d}',
+                media_type='VIDEO', file=SimpleNamespace(path=f'/tmp/broll-{index}.mp4'),
+            )
+            for index in range(1, 6)
+        ]
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return assets
+
+        class Storage:
+            @staticmethod
+            def ffmpeg_input(field):
+                return field.path
+
+            @staticmethod
+            def stage_temporary(source, namespace):
+                return f'https://example.test/{Path(source).name}', f'tmp/{Path(source).name}'
+
+            @staticmethod
+            def delete_temporary(name):
+                return None
+
+        decisions = [
+            {
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': index * 1000, 'end_ms': (index + 1) * 1000,
+                'display_mode': 'FULLSCREEN', 'transform': {}, 'entry': {}, 'exit': {},
+            }
+            for index, asset in enumerate(assets)
+        ]
+        remote_master = RemoteMediaSource(
+            'https://example.test/master.mp4', storage_name='tmp/master.mp4', size_bytes=10 * 1024 ** 2,
+        )
+        runner = Mock()
+        with patch.object(settings, 'EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB', 32):
+            BrollRenderService(runner=runner, storage=Storage()).apply(
+                SimpleNamespace(public_id='chunked-project', broll_assets=Assets()),
+                remote_master, Path('/tmp/output.mp4'), decisions, 1920, 1080, duration_ms=6000,
+            )
+
+        commands = [call.args[0] for call in runner.run.call_args_list]
+        remux = commands[0]
+        self.assertIn('-c', remux)
+        self.assertIn('copy', remux)
+        self.assertEqual(remux[remux.index('-i') + 1], str(remote_master))
+        chunk_commands = [command for command in commands if '-filter_complex' in command]
+        self.assertTrue(chunk_commands)
+        self.assertTrue(all('master-local.mp4' in command[command.index('-i') + 1] for command in chunk_commands))
+
     def test_chunked_renderer_keeps_the_master_audio_duration(self):
         runner = FFmpegRunner()
         with tempfile.TemporaryDirectory() as directory:
@@ -6354,6 +6408,31 @@ class BrollUnitTests(SimpleTestCase):
         self.assertIn('scale=2880:1620:force_original_aspect_ratio=increase', filters)
         self.assertIn("crop=1920:1080:x='(iw-ow)*0.1':y='(ih-oh)*0.9'", filters)
         self.assertNotIn('scale=1920:1080:force_original_aspect_ratio=disable', filters)
+
+    def test_fullscreen_moving_image_uses_editor_position_as_zoom_anchor(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='IMAGE', file=SimpleNamespace(path='/tmp/broll.png'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), [{
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': 0, 'end_ms': 1000, 'display_mode': 'FULLSCREEN',
+                'transform': {'x': .2, 'y': .8, 'scale': 1},
+                'motion': {'type': 'ZOOM_IN'}, 'entry': {}, 'exit': {},
+            }], 1920, 1080,
+        )
+        command = runner.run.call_args.args[0]
+        filters = command[command.index('-filter_complex') + 1]
+        self.assertIn("zoompan=z='1+0.06*(on+0)/30':x='(iw-iw/zoom)*0.2':y='(ih-ih/zoom)*0.8'", filters)
 
     def test_apply_uses_dedicated_timeout_not_full_pipeline_timeout(self):
         """B-roll compositing uses ``-stream_loop -1`` for video assets, which

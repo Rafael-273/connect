@@ -16,6 +16,7 @@ from website.ai import AIServiceError, get_ai_service
 from website.models.external_media import MediaTemplatePlugin, ProjectBrollAsset, SubtitleCue
 
 from .ffmpeg_runner import FFmpegRunner
+from .media_input import RemoteMediaSource
 
 
 logger = logging.getLogger(__name__)
@@ -410,10 +411,16 @@ class BrollRenderService:
         with tempfile.TemporaryDirectory(prefix='broll-concat-', dir=output_path.parent) as directory:
             workdir = Path(directory)
             try:
+                # A Workflow has no persistent disk, but it does have bounded
+                # scratch space for this run.  Keeping a reasonably sized
+                # master here is materially different from a cross-run cache:
+                # it is deleted with the workspace and simply prevents every
+                # temporal chunk from reopening the same S3 object.
+                chunk_master = self._materialize_chunk_master(project_ref, video_path, workdir)
                 for index, (start_ms, end_ms, active) in enumerate(segments):
                     part = workdir / f'part-{index:04d}.mp4'
                     self._render_chunk(
-                        project_ref, video_path, part, active, start_ms, end_ms, width, height,
+                        project_ref, chunk_master, part, active, start_ms, end_ms, width, height,
                     )
                     if self.storage:
                         staged, temporary_name = self.storage.stage_temporary(
@@ -425,7 +432,7 @@ class BrollRenderService:
                         staged_inputs.append((part, end_ms - start_ms))
                         local_parts.append(part)
                 self._concat_chunks(
-                    project_ref, staged_inputs, video_path, output_path, workdir, duration_ms,
+                    project_ref, staged_inputs, chunk_master, output_path, workdir, duration_ms,
                 )
             finally:
                 for name in temporary_names:
@@ -437,6 +444,41 @@ class BrollRenderService:
             project_ref, len(segments), output_path.name,
         )
         return output_path
+
+    def _materialize_chunk_master(self, project_ref, video_path, workdir):
+        """Return a local, lossless per-run master when its size is safe.
+
+        Chunking protects FFmpeg from opening too many B-roll sources at once,
+        but otherwise makes it reopen the master for every boundary.  A
+        remuxed local copy avoids that repeated S3 stream without changing a
+        single encoded video or audio packet.  Oversized masters retain the
+        streaming path rather than risking the workflow's scratch disk.
+        """
+        if not isinstance(video_path, RemoteMediaSource):
+            return video_path
+        size_bytes = max(0, int(getattr(video_path, 'size_bytes', 0) or 0))
+        max_bytes = max(0, int(settings.EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB)) * 1024 ** 2
+        if not size_bytes or not max_bytes or size_bytes > max_bytes:
+            logger.info(
+                'broll_render_master_local_skipped project=%s bytes=%s max_bytes=%s',
+                project_ref, size_bytes, max_bytes,
+            )
+            return video_path
+        local_master = Path(workdir) / 'master-local.mp4'
+        logger.info(
+            'broll_render_master_local_start project=%s bytes=%s', project_ref, size_bytes,
+        )
+        self.runner.run([
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path),
+            '-map', '0:v:0', '-map', '0:a?', '-c', 'copy', '-movflags', '+faststart',
+            '-avoid_negative_ts', 'make_zero', str(local_master),
+        ], timeout=settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT)
+        logger.info(
+            'broll_render_master_local_ready project=%s bytes=%s path=%s',
+            project_ref, local_master.stat().st_size if local_master.exists() else size_bytes,
+            local_master.name,
+        )
+        return local_master
 
     @classmethod
     def _chunk_segments(cls, available, duration_ms):
@@ -630,11 +672,20 @@ class BrollRenderService:
                 zoom = '1.04'
             else:
                 zoom = f'1+0.06*(on+{offset_frames})/{frames}'
-            x = 'iw-iw/zoom' if motion == 'PAN_LEFT' else ('0' if motion == 'PAN_RIGHT' else 'iw/2-(iw/zoom/2)')
+            # zoompan crops from the enlarged image itself.  The old centered
+            # expressions ignored the editor's X/Y controls for the default
+            # ZOOM_IN/ZOOM_OUT image motion, unlike video and non-moving image
+            # fullscreen paths. Keep explicit pan motions intact, but anchor
+            # all zoom motions to the same normalized editor position.
+            x = (
+                'iw-iw/zoom' if motion == 'PAN_LEFT'
+                else ('0' if motion == 'PAN_RIGHT' else f'(iw-iw/zoom)*{focus_x}')
+            )
+            y = f'(ih-ih/zoom)*{focus_y}'
             chain.append(
                 f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
                 f"crop={width * 2}:{height * 2},zoompan=z='{zoom}':x='{x}':"
-                f"y='ih/2-(ih/zoom/2)':d=1:s={width}x{height}:fps=30"
+                f"y='{y}':d=1:s={width}x{height}:fps=30"
             )
             chain.extend([f'trim=duration={segment_duration}', 'setpts=PTS-STARTPTS'])
         else:
