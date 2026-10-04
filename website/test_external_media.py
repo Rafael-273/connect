@@ -3779,6 +3779,59 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
 
         self.assertEqual(cuts, [SpeechCut(2166, 2366, 'manual', 'Corte manual')])
 
+    def test_source_local_validation_accepts_2250ms_accumulated_legacy_proxy_drift(self):
+        analysis, final, cursor = [], [], 0
+        for index in range(47):
+            duration = 3000 + (48 if index < 46 else 42)
+            analysis.append({'block_key': str(index), 'start_ms': cursor, 'end_ms': cursor + duration})
+            final.append({'block_key': str(index), 'start_ms': index * 3000, 'end_ms': (index + 1) * 3000})
+            cursor += duration
+        configuration = {'analysis_source_duration_ms': cursor, 'analysis_source_block_ranges': analysis}
+        intervals = [{'source_index': index, 'start_ms': 100, 'end_ms': 200} for index in range(47)]
+        report = ExternalMediaProjectPipeline._validate_analysis_timeline(
+            configuration, 141000, final, source_intervals=intervals,
+        )
+        self.assertTrue(report['ok'])
+        self.assertEqual(report['duration_drift_ms'], 2250)
+        self.assertEqual(report['largest_block_drift_ms'], 48)
+        self.assertEqual(report['coordinate_space'], 'source_local')
+        with self.assertRaisesMessage(ExternalMediaError, 'perderam sincronismo'):
+            ExternalMediaProjectPipeline._validate_analysis_timeline(configuration, 141000, final)
+
+    def test_source_local_validation_still_rejects_changed_sources(self):
+        configuration = {'analysis_source_duration_ms': 3000, 'analysis_source_block_ranges': [
+            {'block_key': 'a', 'start_ms': 0, 'end_ms': 3000},
+        ]}
+        for ranges, message in [
+            ([], 'quantidade de blocos'),
+            ([{'block_key': 'b', 'start_ms': 0, 'end_ms': 3000}], 'ordem dos blocos'),
+            ([{'block_key': 'a', 'start_ms': 0, 'end_ms': 5000}], 'não está sincronizado'),
+        ]:
+            with self.subTest(message=message), self.assertRaisesMessage(ExternalMediaError, message):
+                ExternalMediaProjectPipeline._validate_analysis_timeline(
+                    configuration, 5000, ranges,
+                    source_intervals=[{'source_index': 0, 'start_ms': 100, 'end_ms': 200}],
+                )
+
+    def test_assembly_preflight_failure_happens_before_encoding(self):
+        runner = Mock()
+        service = VideoAssemblyService(runner=runner)
+        preflight = Mock(side_effect=ExternalMediaError('Fonte incompatível'))
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            service, '_effective_duration_ms', return_value=1000,
+        ), patch.object(service, '_normalize') as normalize:
+            with self.assertRaisesMessage(ExternalMediaError, 'Fonte incompatível'):
+                service.assemble(
+                    [Path('a.mp4'), Path('b.mp4')], Path(directory) / 'out.mp4',
+                    SimpleNamespace(width=160, height=90), Path(directory),
+                    source_intervals=[{'source_index': 0, 'start_ms': 100, 'end_ms': 200}],
+                    preflight=preflight,
+                )
+        preflight.assert_called_once()
+        self.assertEqual(len(preflight.call_args.args[0]), 2)
+        normalize.assert_not_called()
+        runner.run.assert_not_called()
+
     def test_final_render_derives_cuts_from_the_exact_approved_preview_clips(self):
         revision = SimpleNamespace(
             source_manifest={'sources': [

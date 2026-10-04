@@ -1693,7 +1693,7 @@ class VideoAssemblyService:
     def assemble(
         self, sources, output_path, preset, workdir, lut_path=None, lut_intensity=50, music_path=None,
         music_volume=0.15, auto_reframe_config=None, analysis_sources=None,
-        reframe_plans=None, progress_callback=None, source_intervals=None,
+        reframe_plans=None, progress_callback=None, source_intervals=None, preflight=None,
     ):
         self.last_reframe_plans = []
         self.last_protected_ranges = []
@@ -1784,6 +1784,11 @@ class VideoAssemblyService:
                 'preserve_framing': source_item.skip_extra_processing,
             })
             normalized.append(destination)
+
+        # Probe and validate the complete source list before encoding any take.
+        # A stale review must fail here, not after a long delivery assembly.
+        if preflight is not None:
+            preflight(self.last_block_ranges)
 
         # In the final pass the proxy phase has already produced all crop plans.
         # The 4K takes are then independent, so a bounded pool can encode two at
@@ -2690,6 +2695,14 @@ class ExternalMediaProjectPipeline:
                     ),
                 )
         self._update(project, ExternalMediaProject.Status.PROCESSING, 72, 'Montando seu vídeo')
+        preflight_report = {}
+
+        def validate_source_timeline(ranges):
+            preflight_report.update(self._validate_analysis_timeline(
+                configuration, int(ranges[-1]['end_ms']), ranges,
+                source_intervals=source_intervals,
+            ))
+
         with timed_step('assemble_final_master', clips=len(sources), reused_reframe_plans=bool(saved_reframe_plans)):
             self.assembly.assemble(
                 sources,
@@ -2709,6 +2722,7 @@ class ExternalMediaProjectPipeline:
                 analysis_sources=analysis_sources,
                 reframe_plans=saved_reframe_plans,
                 source_intervals=source_intervals,
+                preflight=validate_source_timeline if source_intervals is not None else None,
                 progress_callback=lambda completed, total: self._update(
                     project,
                     ExternalMediaProject.Status.PROCESSING,
@@ -2731,10 +2745,11 @@ class ExternalMediaProjectPipeline:
             if source_intervals is not None
             else SpeechEditService(self.assembly.runner).duration_ms(assembled)
         )
-        timeline_report = self._validate_analysis_timeline(
+        timeline_report = preflight_report or self._validate_analysis_timeline(
             configuration,
             original_duration_ms,
             self.assembly.last_block_ranges,
+            source_intervals=source_intervals,
         )
         exact_approved_timeline_cuts = False
         if approved:
@@ -2995,14 +3010,19 @@ class ExternalMediaProjectPipeline:
         return result
 
     @staticmethod
-    def _validate_analysis_timeline(configuration, original_duration_ms, final_ranges):
+    def _validate_analysis_timeline(configuration, original_duration_ms, final_ranges, *, source_intervals=None):
         analysis_duration_ms = int(configuration.get('analysis_source_duration_ms') or 0)
         analysis_ranges = configuration.get('analysis_source_block_ranges') or []
         if not analysis_duration_ms:
             raise ExternalMediaError('A duração da timeline de análise não foi registrada.')
         duration_drift_ms = abs(original_duration_ms - analysis_duration_ms)
         duration_tolerance_ms = max(1000, round(original_duration_ms * 0.01))
-        if duration_drift_ms > duration_tolerance_ms:
+        # Only cuts positioned on a joined master depend on its cumulative
+        # clock. Approved source-local cuts do not: old proxy encoder padding
+        # can accumulate across dozens of takes without changing any selected
+        # source interval. Keep recording this drift, and still validate every
+        # take below, but do not use that obsolete global clock to reject them.
+        if source_intervals is None and duration_drift_ms > duration_tolerance_ms:
             raise ExternalMediaError(
                 'O proxy e o vídeo original perderam sincronismo '
                 f'({duration_drift_ms / 1000:.2f}s de diferença).'
@@ -3024,6 +3044,8 @@ class ExternalMediaProjectPipeline:
                 )
         return {
             'ok': True,
+            'coordinate_space': 'source_local' if source_intervals is not None else 'assembled_master',
+            'cumulative_drift_exceeds_master_tolerance': duration_drift_ms > duration_tolerance_ms,
             'analysis_duration_ms': analysis_duration_ms,
             'original_duration_ms': original_duration_ms,
             'duration_drift_ms': duration_drift_ms,
