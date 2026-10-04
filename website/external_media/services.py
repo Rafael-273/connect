@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 # Persist the timing implementation independently of framing/geometry. Existing
 # review assets keep their original clock until explicitly rebuilt; a new final
 # render must not be mistaken for proof that those old assets were regenerated.
-ASSEMBLY_TIMING_VERSION = 1
+ASSEMBLY_TIMING_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -1693,7 +1693,7 @@ class VideoAssemblyService:
     def assemble(
         self, sources, output_path, preset, workdir, lut_path=None, lut_intensity=50, music_path=None,
         music_volume=0.15, auto_reframe_config=None, analysis_sources=None,
-        reframe_plans=None, progress_callback=None,
+        reframe_plans=None, progress_callback=None, source_intervals=None,
     ):
         self.last_reframe_plans = []
         self.last_protected_ranges = []
@@ -1702,6 +1702,7 @@ class VideoAssemblyService:
         source_paths = [source.path for source in source_items]
         if (
             len(source_items) == 1
+            and source_intervals is None
             and not lut_path
             and not music_path
             and not auto_reframe_config
@@ -1863,7 +1864,15 @@ class VideoAssemblyService:
             # add silence at its boundary even after its image has started.
             # Rebase every normalized stream in a concat filter instead: its
             # resulting clock is the same one subtitles and the editor use.
-            self._concat_normalized(normalized, assembled, workdir)
+            if source_intervals is None:
+                self._concat_normalized(normalized, assembled, workdir)
+            else:
+                # Cut in each take's own clock, before concatenation. Container
+                # durations and AAC padding from previous takes must never
+                # participate in choosing the samples of the next take.
+                selected = [normalized[item['source_index']] for item in source_intervals]
+                intervals = [(item['start_ms'], item['end_ms']) for item in source_intervals]
+                self._concat_normalized(selected, assembled, workdir, intervals=intervals)
         finally:
             for temporary_name in temporary_normalized:
                 self.storage.delete_temporary(temporary_name)
@@ -1883,7 +1892,7 @@ class VideoAssemblyService:
             )
         return used_auto_reframe
 
-    def _concat_normalized(self, paths, output_path, workdir):
+    def _concat_normalized(self, paths, output_path, workdir, intervals=None):
         """Join normalized clips with a bounded number of FFmpeg inputs.
 
         A concat filter allocates decode/filter queues for every input. A
@@ -1894,6 +1903,9 @@ class VideoAssemblyService:
         """
         batch_size = max(2, int(getattr(settings, 'EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 8)))
         current = list(paths)
+        if intervals is not None and len(intervals) != len(current):
+            raise ExternalMediaError('Os trechos aprovados não correspondem aos vídeos disponíveis.')
+        current_intervals = list(intervals) if intervals is not None else None
         temporary_batches = []
         pass_index = 0
         try:
@@ -1901,12 +1913,18 @@ class VideoAssemblyService:
                 next_paths = []
                 for batch_index, offset in enumerate(range(0, len(current), batch_size)):
                     destination = workdir / f'concat-{pass_index:02d}-{batch_index:03d}.mp4'
-                    self._concat_group(current[offset:offset + batch_size], destination)
+                    self._concat_group(
+                        current[offset:offset + batch_size], destination,
+                        intervals=current_intervals[offset:offset + batch_size] if current_intervals is not None else None,
+                    )
                     temporary_batches.append(destination)
                     next_paths.append(destination)
                 current = next_paths
+                # These files already contain the kept pieces. Never apply
+                # source-local trims a second time at a higher concat level.
+                current_intervals = None
                 pass_index += 1
-            self._concat_group(current, output_path)
+            self._concat_group(current, output_path, intervals=current_intervals)
         finally:
             for path in temporary_batches:
                 try:
@@ -1914,7 +1932,7 @@ class VideoAssemblyService:
                 except OSError:
                     logger.warning('Não foi possível remover intermediário de concatenação %s.', path)
 
-    def _concat_group(self, paths, output_path):
+    def _concat_group(self, paths, output_path, intervals=None):
         if not paths:
             raise ExternalMediaError('Não há trechos de vídeo para concatenar.')
         concat_filters, concat_inputs = [], []
@@ -1923,9 +1941,16 @@ class VideoAssemblyService:
         command = [settings.FFMPEG_BINARY, '-y', '-threads', '1', '-filter_complex_threads', '1']
         for index, path in enumerate(paths):
             command.extend(['-i', self.runner.input_arg(path)])
+            video_trim = audio_trim = ''
+            if intervals is not None:
+                start_ms, end_ms = intervals[index]
+                if start_ms < 0 or end_ms <= start_ms:
+                    raise ExternalMediaError('A revisão contém um trecho de vídeo inválido.')
+                bounds = f'start={start_ms / 1000:.3f}:end={end_ms / 1000:.3f}'
+                video_trim, audio_trim = f'trim={bounds},', f'atrim={bounds},'
             concat_filters.extend([
-                f'[{index}:v:0]setpts=PTS-STARTPTS[v{index}]',
-                f'[{index}:a:0]asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
+                f'[{index}:v:0]{video_trim}setpts=PTS-STARTPTS[v{index}]',
+                f'[{index}:a:0]{audio_trim}asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
             ])
             concat_inputs.append(f'[v{index}][a{index}]')
         concat_filters.append(
@@ -2623,6 +2648,10 @@ class ExternalMediaProjectPipeline:
         plugins = self.templates.enabled_plugins(project)
         sources, lut_path, music_path = self._materialize(project, plugins, workdir)
         assembled = workdir / 'project_master_original.mp4'
+        source_intervals = (
+            self._approved_source_intervals(project.approved_timeline_revision, sources)
+            if project.approved_timeline_revision else None
+        )
         auto_reframe_plugin = next(
             (plugin for plugin in plugins if plugin.code == MediaTemplatePlugin.Code.AUTO_TRACKING),
             None,
@@ -2679,6 +2708,7 @@ class ExternalMediaProjectPipeline:
                 ) if auto_reframe_plugin else None,
                 analysis_sources=analysis_sources,
                 reframe_plans=saved_reframe_plans,
+                source_intervals=source_intervals,
                 progress_callback=lambda completed, total: self._update(
                     project,
                     ExternalMediaProject.Status.PROCESSING,
@@ -2696,7 +2726,11 @@ class ExternalMediaProjectPipeline:
         # them back to the original master and apply both plans in one FFmpeg pass.
         # This removes an entire 4K re-encode without changing the resulting cuts.
         combined_cuts = []
-        original_duration_ms = SpeechEditService(self.assembly.runner).duration_ms(assembled)
+        original_duration_ms = (
+            int(self.assembly.last_block_ranges[-1]['end_ms'])
+            if source_intervals is not None
+            else SpeechEditService(self.assembly.runner).duration_ms(assembled)
+        )
         timeline_report = self._validate_analysis_timeline(
             configuration,
             original_duration_ms,
@@ -2763,12 +2797,13 @@ class ExternalMediaProjectPipeline:
             )
             cut_report = self.quality.validate_cuts(combined_plan.cuts, original_duration_ms)
             cut_report.require_ok()
-            with timed_step('apply_combined_speech_edits_to_final_master', cuts=len(combined_plan.cuts)):
-                with self.storage.staged_processing_input(
-                    final_path, f'project-{project.public_id}-speech-edit',
-                ) as processing_input:
-                    SpeechEditService(self.assembly.runner).apply(processing_input, edited, combined_plan)
-            final_path = edited
+            if source_intervals is None:
+                with timed_step('apply_combined_speech_edits_to_final_master', cuts=len(combined_plan.cuts)):
+                    with self.storage.staged_processing_input(
+                        final_path, f'project-{project.public_id}-speech-edit',
+                    ) as processing_input:
+                        SpeechEditService(self.assembly.runner).apply(processing_input, edited, combined_plan)
+                final_path = edited
         else:
             combined_plan = SpeechEditPlan.normalized((), original_duration_ms)
         job = project.render_job
@@ -2782,7 +2817,11 @@ class ExternalMediaProjectPipeline:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 87, 'Ajustando o áudio')
             with timed_step('finalize_audio_final_master'):
                 final_path = self._finalize_audio(project, job, workdir, final_path, music_path, combined_plan)
-        expected_duration_ms = max(1, original_duration_ms - combined_plan.saved_ms)
+        expected_duration_ms = (
+            sum(item['end_ms'] - item['start_ms'] for item in source_intervals)
+            if source_intervals is not None
+            else max(1, original_duration_ms - combined_plan.saved_ms)
+        )
         revision = project.approved_timeline_revision or project.current_timeline_revision
         brolls = list((revision.timeline if revision else {}).get('brolls') or [])
         if brolls:
@@ -2841,7 +2880,10 @@ class ExternalMediaProjectPipeline:
             'analysis_timing_version': configuration.get('analysis_timing_version'),
             'approved_revision': approved.revision if approved else None,
             'approved_revision_id': approved.pk if approved else None,
-            'cut_source': 'approved_timeline_clips' if exact_approved_timeline_cuts else 'edit_decisions',
+            'cut_source': 'approved_source_intervals' if source_intervals is not None else (
+                'approved_timeline_clips' if exact_approved_timeline_cuts else 'edit_decisions'
+            ),
+            'source_intervals': source_intervals,
             'source_duration_ms': original_duration_ms,
             'expected_duration_ms': expected_duration_ms,
             'cuts': [cut.as_dict() for cut in combined_plan.cuts],
@@ -3005,6 +3047,37 @@ class ExternalMediaProjectPipeline:
                 continue
             remapped.append(SpeechCut(start_ms, end_ms, cut.kind, cut.label))
         return remapped
+
+    @staticmethod
+    def _approved_source_intervals(revision, sources):
+        """Resolve kept clips without projecting them onto a new master clock."""
+        clips = (revision.timeline or {}).get('clips') or []
+        if not clips:
+            raise ExternalMediaError('A revisão aprovada não possui trechos de vídeo para renderizar.')
+        by_id = {str(source.label): (index, source) for index, source in enumerate(sources)}
+        manifest = {
+            str(item['id']): item for item in (revision.source_manifest or {}).get('sources', [])
+            if (item.get('metadata') or {}).get('render_enabled', True)
+        }
+        result = []
+        for clip in clips:
+            source_id = str(clip.get('asset_id') or '')
+            if source_id not in by_id or source_id not in manifest:
+                raise ExternalMediaError('Um vídeo da revisão aprovada não está mais disponível para renderizar.')
+            index, source = by_id[source_id]
+            approved_trim = manifest[source_id].get('trim') or {}
+            if (
+                int(approved_trim.get('start_ms') or 0) != int(source.trim_start_ms or 0)
+                or (approved_trim.get('end_ms') is not None
+                    and int(approved_trim['end_ms']) != source.trim_end_ms)
+            ):
+                raise ExternalMediaError('Os limites de um take mudaram após a aprovação. Revise a edição antes de renderizar.')
+            start = int(clip.get('source_in_ms') or 0) - int(source.trim_start_ms or 0)
+            end = int(clip.get('source_out_ms') or 0) - int(source.trim_start_ms or 0)
+            if start < 0 or end <= start:
+                raise ExternalMediaError('A revisão aprovada contém um trecho de vídeo inválido.')
+            result.append({'source_id': source_id, 'source_index': index, 'start_ms': start, 'end_ms': end})
+        return result
 
     @staticmethod
     def _cuts_from_approved_timeline(revision, final_ranges, final_duration_ms):

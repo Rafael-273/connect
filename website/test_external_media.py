@@ -3804,6 +3804,55 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             SpeechCut(1133, 1233, 'timeline', 'Corte aprovado no editor'),
         ])
 
+    def test_approved_source_intervals_preserve_order_splits_and_local_times(self):
+        sources = [AssemblySource(Path('a.mp4'), label='a', trim_start_ms=100, trim_end_ms=1100),
+                   AssemblySource(Path('b.mp4'), label='b')]
+        revision = SimpleNamespace(source_manifest={'sources': [
+            {'id': 'a', 'trim': {'start_ms': 100, 'end_ms': 1100}}, {'id': 'b'},
+        ]}, timeline={'clips': [
+            {'asset_id': 'b', 'source_in_ms': 250, 'source_out_ms': 500},
+            {'asset_id': 'a', 'source_in_ms': 300, 'source_out_ms': 600},
+            {'asset_id': 'a', 'source_in_ms': 600, 'source_out_ms': 630},
+        ]})
+        intervals = ExternalMediaProjectPipeline._approved_source_intervals(revision, sources)
+        self.assertEqual([(i['source_index'], i['start_ms'], i['end_ms']) for i in intervals],
+                         [(1, 250, 500), (0, 200, 500), (0, 500, 530)])
+        sources[0] = AssemblySource(Path('a.mp4'), label='a', trim_start_ms=200, trim_end_ms=1100)
+        with self.assertRaisesMessage(ExternalMediaError, 'limites de um take mudaram'):
+            ExternalMediaProjectPipeline._approved_source_intervals(revision, sources)
+
+    def test_approved_final_master_does_not_apply_global_cuts_again(self):
+        revision = SimpleNamespace(pk=4, revision=2, edit_decision_set={'operations': []},
+            source_manifest={'sources': [{'id': 'a', 'duration_ms': 1000}]},
+            timeline={'clips': [
+                {'asset_id': 'a', 'source_in_ms': 0, 'source_out_ms': 400},
+                {'asset_id': 'a', 'source_in_ms': 600, 'source_out_ms': 1000},
+            ]})
+        ranges = [{'start_ms': 0, 'end_ms': 1000, 'block_key': 'a'}]
+        project = SimpleNamespace(public_id='test', approved_timeline_revision=revision,
+            current_timeline_revision=revision, render_job=SimpleNamespace(pk=1),
+            configuration={'analysis_source_duration_ms': 1000, 'analysis_source_block_ranges': ranges},
+            template_version=SimpleNamespace(preset=SimpleNamespace(width=160, height=90),
+                lut_intensity=0, music_volume=0, audio_mastering_enabled=False,
+                dialogue_processing_enabled=False, audio_noise_cleanup_enabled=False), save=Mock())
+        pipeline = ExternalMediaProjectPipeline()
+        pipeline.templates = Mock()
+        pipeline.templates.enabled_plugins.return_value = []
+        pipeline.assembly = Mock(last_block_ranges=ranges)
+        pipeline.quality = Mock()
+        pipeline.quality.validate_media.return_value.as_dict.return_value = {'ok': True}
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            pipeline, '_materialize', return_value=([AssemblySource(Path('a.mp4'), label='a')], None, None),
+        ), patch.object(pipeline, '_update'), patch(
+            'website.external_media.services.replace_file_safely',
+        ), patch.object(SpeechEditService, 'apply') as apply_cuts:
+            pipeline._prepare_final_master(project, Path(directory))
+        apply_cuts.assert_not_called()
+        intervals = pipeline.assembly.assemble.call_args.kwargs['source_intervals']
+        self.assertEqual([(i['start_ms'], i['end_ms']) for i in intervals], [(0, 400), (600, 1000)])
+        self.assertEqual(pipeline.quality.validate_media.call_args.kwargs['expected_duration_ms'], 800)
+        self.assertEqual(project.configuration['render_contract']['cut_source'], 'approved_source_intervals')
+
     def test_quality_control_rejects_subtitles_over_intact_blocks(self):
         cue = SimpleNamespace(start_ms=900, end_ms=1400, cue_index=3)
         track = SimpleNamespace(language='pt', cues=SimpleNamespace(all=lambda: [cue]))
@@ -4433,6 +4482,54 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertGreater(len(commands), 1)
         self.assertTrue(all(command.count('-i') <= 3 for command in commands))
         self.assertEqual(commands[-1][-1], str(output))
+
+    def test_source_local_cut_ignores_duration_drift_in_preceding_takes(self):
+        import numpy as np
+
+        runner = FFmpegRunner()
+        service = VideoAssemblyService(runner=runner)
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=30:duration=1',
+                '-f', 'lavfi', '-i', 'aevalsrc=0.3*sin(2*PI*(220*t+900*t*t)):s=48000:d=1',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            output = workdir / 'kept.mp4'
+            with patch.object(service, '_effective_duration_ms', return_value=1150):
+                service.assemble([source] * 4, output, SimpleNamespace(width=160, height=90), workdir,
+                    source_intervals=[{'source_index': 3, 'start_ms': 400, 'end_ms': 700}])
+            raw = subprocess.check_output([
+                'ffmpeg', '-v', 'error', '-i', str(output), '-vn', '-ac', '1',
+                '-ar', '48000', '-f', 'f32le', '-',
+            ])
+            actual = np.frombuffer(raw, dtype='<f4')
+            # Both edges contain the exact chirp selected in take 4, even when
+            # the preceding duration records disagree with the real files.
+            for left, right in [(0.005, 0.055), (0.245, 0.295)]:
+                start, end = round(left * 48000), round(right * 48000)
+                t = np.arange(start, end) / 48000 + 0.4
+                expected = np.sin(2 * np.pi * (220 * t + 900 * t * t))
+                self.assertGreater(np.corrcoef(actual[start:end], expected)[0, 1], 0.98)
+
+    def test_batched_source_intervals_are_trimmed_once_and_in_order(self):
+        runner = Mock()
+        runner.input_arg.side_effect = FFmpegRunner.input_arg
+        service = VideoAssemblyService(runner=runner)
+        with tempfile.TemporaryDirectory() as directory, patch.object(settings, 'EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 3):
+            workdir = Path(directory)
+            paths = [workdir / f'take-{index}.mp4' for index in range(10)]
+            intervals = [(100 * index, 100 * index + 200) for index in range(10)]
+            service._concat_normalized(paths, workdir / 'result.mp4', workdir, intervals=intervals)
+        commands = [call.args[0] for call in runner.run.call_args_list]
+        graphs = [command[command.index('-filter_complex') + 1] for command in commands]
+        self.assertTrue(all(command.count('-i') <= 3 for command in commands))
+        self.assertEqual(sum(graph.count('atrim=') for graph in graphs), 10)
+        self.assertNotIn('atrim=', graphs[-1])
+        first_pass_inputs = [command[index + 1] for command in commands[:4]
+                             for index, value in enumerate(command) if value == '-i']
+        self.assertEqual(first_pass_inputs, [str(path) for path in paths])
 
     def test_proxy_and_delivery_preserve_audio_content_at_the_same_cut_boundaries(self):
         import numpy as np
