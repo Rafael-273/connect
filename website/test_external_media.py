@@ -4434,6 +4434,59 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertTrue(all(command.count('-i') <= 3 for command in commands))
         self.assertEqual(commands[-1][-1], str(output))
 
+    def test_proxy_and_delivery_preserve_audio_content_at_the_same_cut_boundaries(self):
+        import numpy as np
+
+        runner = FFmpegRunner()
+        service = VideoAssemblyService(runner=runner)
+        preset = SimpleNamespace(width=160, height=90)
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source, proxy = workdir / 'source.mp4', workdir / 'proxy.mp4'
+            # A chirp gives each audio window a distinct signature. Checking
+            # duration alone misses shifted syllables in otherwise valid MP4s.
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i',
+                'testsrc2=size=160x90:rate=30:duration=1.017',
+                '-f', 'lavfi', '-i',
+                'aevalsrc=0.3*sin(2*PI*(220*t+900*t*t)):s=48000:d=1.017',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            service.create_proxy(source, proxy)
+            outputs = []
+            # Ten takes force multiple concat batches. Analysis has one extra
+            # encode (proxy creation), which used to shift its content by AAC
+            # priming delay at every take relative to the delivery master.
+            for label, input_path in [('preview', proxy), ('delivery', source)]:
+                master = workdir / f'{label}.mp4'
+                service.assemble([input_path] * 10, master, preset, workdir)
+                streams = json.loads(subprocess.check_output([
+                    'ffprobe', '-v', 'error', '-show_entries',
+                    'stream=codec_type,start_time', '-of', 'json', str(master),
+                ]))['streams']
+                for stream in streams:
+                    self.assertLess(abs(float(stream['start_time'])), 0.001)
+                edited = workdir / f'{label}-cut.mp4'
+                plan = SpeechEditPlan((
+                    SpeechCut(350, 700, 'manual'),
+                    SpeechCut(4270, 4610, 'manual'),
+                    SpeechCut(9460, 9720, 'manual'),
+                ), 10000)
+                SpeechEditService(runner).apply(master, edited, plan)
+                raw = subprocess.check_output([
+                    'ffmpeg', '-v', 'error', '-i', str(edited),
+                    '-vn', '-ac', '1', '-ar', '48000', '-f', 'f32le', '-',
+                ])
+                outputs.append(np.frombuffer(raw, dtype='<f4'))
+            preview, delivery = outputs
+            self.assertEqual(len(preview), len(delivery))
+            # Compare actual sound before and after each cut, including late
+            # takes; agreement in total duration alone is not sufficient.
+            for seconds in (0.25, 0.35, 3.82, 3.92, 8.67, 8.77):
+                start = round(seconds * 48000)
+                left, right = preview[start:start + 2400], delivery[start:start + 2400]
+                self.assertGreater(np.corrcoef(left, right)[0, 1], 0.98, seconds)
+
     def test_video_assembly_creates_lightweight_proxy(self):
         runner = FFmpegRunner()
         with tempfile.TemporaryDirectory() as directory:

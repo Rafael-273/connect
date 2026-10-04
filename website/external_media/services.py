@@ -69,6 +69,11 @@ from .workspace import JobWorkspace
 
 logger = logging.getLogger(__name__)
 
+# Persist the timing implementation independently of framing/geometry. Existing
+# review assets keep their original clock until explicitly rebuilt; a new final
+# render must not be mistaken for proof that those old assets were regenerated.
+ASSEMBLY_TIMING_VERSION = 1
+
 
 @dataclass(frozen=True)
 class AssemblySource:
@@ -1931,7 +1936,10 @@ class VideoAssemblyService:
             '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
             '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p',
             '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
-            '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', str(output_path),
+            # Preserve presentation time zero. B-frame DTS and AAC priming may
+            # be negative; shifting them to zero also shifts actual content.
+            # MP4 edit lists account for that encoder delay without moving PTS.
+            '-avoid_negative_ts', 'disabled', '-movflags', '+faststart', str(output_path),
         ])
         self.runner.run(command)
 
@@ -1965,7 +1973,7 @@ class VideoAssemblyService:
             # which is not enough for VFR phone recordings after CFR video
             # normalization. 1000 keeps speech locked to the 30 fps clock.
             '-af', ','.join(audio_filters),
-            '-ar', '48000', '-ac', '2', '-shortest', '-avoid_negative_ts', 'make_zero',
+            '-ar', '48000', '-ac', '2', '-shortest', '-avoid_negative_ts', 'disabled',
             '-movflags', '+faststart', str(destination),
         ])
         self.runner.run(command)
@@ -2076,7 +2084,7 @@ class VideoAssemblyService:
                 'aresample=async=1000:first_pts=0',
             ]),
             '-ar', '48000', '-ac', '2', '-colorspace', 'bt709', '-color_primaries', 'bt709',
-            '-color_trc', 'bt709', '-shortest', '-avoid_negative_ts', 'make_zero', str(destination),
+            '-color_trc', 'bt709', '-shortest', '-avoid_negative_ts', 'disabled', str(destination),
         ])
         self.runner.run(command)
         return reframe_plan
@@ -2355,6 +2363,7 @@ class ExternalMediaProjectPipeline:
                     **(project.configuration or {}),
                     'proxy_pipeline': True,
                     'analysis_source_duration_ms': self.assembly._duration_ms(assembled),
+                    'analysis_timing_version': ASSEMBLY_TIMING_VERSION,
                     'analysis_source_block_ranges': self.assembly.last_block_ranges,
                     'auto_reframe_plan_version': AUTO_REFRAME_PLAN_VERSION,
                     'auto_reframe_plans': self.assembly.last_reframe_plans if auto_reframe_plugin else [],
@@ -2828,6 +2837,8 @@ class ExternalMediaProjectPipeline:
         )
         quality_report.require_ok()
         render_contract = {
+            'timing_version': ASSEMBLY_TIMING_VERSION,
+            'analysis_timing_version': configuration.get('analysis_timing_version'),
             'approved_revision': approved.revision if approved else None,
             'approved_revision_id': approved.pk if approved else None,
             'cut_source': 'approved_timeline_clips' if exact_approved_timeline_cuts else 'edit_decisions',
