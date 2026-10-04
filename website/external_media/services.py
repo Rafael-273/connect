@@ -1770,6 +1770,9 @@ class VideoAssemblyService:
                 100 if lut_is_prepared else lut_intensity
             )
             normalize_jobs.append({
+                # Kept separately from the normalized-output position because
+                # identical recipes may be collapsed before encoding.
+                'source_index': index,
                 'source': source,
                 'destination': destination,
                 'width': width,
@@ -1784,6 +1787,18 @@ class VideoAssemblyService:
                 'preserve_framing': source_item.skip_extra_processing,
             })
             normalized.append(destination)
+
+        # A single upload can legitimately appear many times in an approved
+        # timeline.  Normalizing it once per selected range was by far the
+        # most expensive part of final rendering: each invocation reopened,
+        # decoded and reframed the same S3 object.  When the visual recipe is
+        # identical, normalize the complete source once, stage that one output
+        # in S3, and trim its approved ranges only while concatenating.  This
+        # never changes a cut boundary: the source-local interval remains the
+        # same immutable timestamp saved by the editor.
+        normalize_jobs, normalized, source_intervals, source_job_indexes = self._reuse_source_normalizations(
+            normalize_jobs, normalized, source_items, source_intervals,
+        )
 
         # Probe and validate the complete source list before encoding any take.
         # A stale review must fail here, not after a long delivery assembly.
@@ -1819,18 +1834,18 @@ class VideoAssemblyService:
                         # dimensions before deleting that proxy below.
                         serialized_reframe_plans[index - 1] = self._serialize_reframe_plan(
                             reframe_plan,
-                            analysis_sources[index - 1],
+                            analysis_sources[job['source_index']],
                         )
-                    source_temporary_name = source_items[index - 1].temporary_storage_name
+                    source_temporary_name = source_items[job['source_index']].temporary_storage_name
                     if source_temporary_name:
                         self.storage.delete_temporary(source_temporary_name)
-                    analysis_temporary_name = analysis_source_items[index - 1].temporary_storage_name
+                    analysis_temporary_name = analysis_source_items[job['source_index']].temporary_storage_name
                     if analysis_temporary_name and analysis_temporary_name != source_temporary_name:
                         self.storage.delete_temporary(analysis_temporary_name)
                     if settings.USE_S3:
                         staged, temporary_name = self.storage.stage_temporary(
                             normalized[index - 1],
-                            f'assembly-{uuid.uuid4().hex[:12]}-{index - 1:03d}',
+                            f'assembly-{uuid.uuid4().hex[:12]}-{job["source_index"]:03d}',
                         )
                         normalized[index - 1] = staged
                         temporary_normalized.append(temporary_name)
@@ -1848,18 +1863,20 @@ class VideoAssemblyService:
                     self.storage.delete_temporary(temporary_name)
                 raise
         try:
-            for index, reframe_plan in enumerate(reframe_results):
-                effective_auto_reframe_config = normalize_jobs[index]['auto_reframe_config']
+            reframe_results_by_job = dict(enumerate(reframe_results))
+            for source_index, job_index in enumerate(source_job_indexes):
+                reframe_plan = reframe_results_by_job[job_index]
+                effective_auto_reframe_config = normalize_jobs[job_index]['auto_reframe_config']
                 used_auto_reframe = bool(reframe_plan) or used_auto_reframe
-                supplied_plan = normalize_jobs[index]['reframe_plan_data']
+                supplied_plan = normalize_jobs[job_index]['reframe_plan_data']
                 self.last_reframe_plans.append(
                     (
                         supplied_plan
                         if supplied_plan is not None
                         else (
-                            serialized_reframe_plans[index]
-                            if index in serialized_reframe_plans
-                            else self._serialize_reframe_plan(reframe_plan, analysis_sources[index])
+                            serialized_reframe_plans[job_index]
+                            if job_index in serialized_reframe_plans
+                            else self._serialize_reframe_plan(reframe_plan, analysis_sources[source_index])
                         )
                     ) if effective_auto_reframe_config else None
                 )
@@ -1896,6 +1913,81 @@ class VideoAssemblyService:
                 ducking_enabled=False,
             )
         return used_auto_reframe
+
+    @classmethod
+    def _reuse_source_normalizations(cls, jobs, normalized, source_items, source_intervals):
+        """Collapse identical source recipes and translate clip ranges to them.
+
+        Reuse is intentionally limited to approved source-local rendering. A
+        legacy global master may have cuts in a different coordinate space, and
+        an unsaved Auto Reframe analysis must still run independently per take.
+        """
+        if not source_intervals:
+            return jobs, normalized, source_intervals, list(range(len(source_items)))
+
+        unique_jobs = []
+        unique_outputs = []
+        original_to_unique = {}
+        job_indexes = []
+        for source_index, job in enumerate(jobs):
+            if job['auto_reframe_config'] and job['reframe_plan_data'] is None:
+                # The detector is part of the recipe. Until its result is
+                # persisted, treating two ranges as equivalent could alter the
+                # framing a member approved.
+                key = ('unplanned-reframe', source_index)
+            else:
+                key = cls._normalization_recipe_key(job)
+            job_index = original_to_unique.get(key)
+            if job_index is None:
+                job_index = len(unique_jobs)
+                original_to_unique[key] = job_index
+                unique_job = dict(job)
+                unique_job['source_index'] = source_index
+                # The selected clip is trimmed after this shared normalized
+                # source is read back from S3. Keep the whole source here so
+                # every selected range has precisely the same origin clock.
+                unique_job['trim_start_ms'] = 0
+                unique_job['trim_end_ms'] = None
+                unique_job['destination'] = normalized[source_index]
+                unique_jobs.append(unique_job)
+                unique_outputs.append(normalized[source_index])
+            job_indexes.append(job_index)
+
+        translated_intervals = []
+        for interval in source_intervals:
+            original_index = int(interval['source_index'])
+            source = source_items[original_index]
+            translated_intervals.append({
+                **interval,
+                'source_index': job_indexes[original_index],
+                'start_ms': int(interval['start_ms']) + int(source.trim_start_ms or 0),
+                'end_ms': int(interval['end_ms']) + int(source.trim_start_ms or 0),
+            })
+        if len(unique_jobs) < len(jobs):
+            logger.info(
+                'external_media_source_reuse source_entries=%s unique_recipes=%s reused_entries=%s',
+                len(jobs), len(unique_jobs), len(jobs) - len(unique_jobs),
+            )
+        return unique_jobs, unique_outputs, translated_intervals, job_indexes
+
+    @staticmethod
+    def _normalization_recipe_key(job):
+        source = job['source']
+        analysis_source = job.get('analysis_source')
+        source_key = getattr(source, 'storage_name', '') or str(source)
+        analysis_key = getattr(analysis_source, 'storage_name', '') or str(analysis_source)
+        plan = job.get('reframe_plan_data') or {}
+        return json.dumps({
+            'source': source_key,
+            'analysis_source': analysis_key,
+            'width': int(job['width']),
+            'height': int(job['height']),
+            'lut_path': str(job.get('lut_path') or ''),
+            'lut_intensity': int(job.get('lut_intensity') or 0),
+            'auto_reframe': job.get('auto_reframe_config') or {},
+            'reframe_plan': plan,
+            'preserve_framing': bool(job.get('preserve_framing')),
+        }, sort_keys=True, default=str)
 
     def _concat_normalized(self, paths, output_path, workdir, intervals=None):
         """Join normalized clips with a bounded number of FFmpeg inputs.
@@ -2021,7 +2113,7 @@ class VideoAssemblyService:
     def _normalize(
         self, source, destination, width, height, lut_path, lut_intensity=50, auto_reframe_config=None,
         analysis_source=None, reframe_plan_data=None, trim_start_ms=0, trim_end_ms=None,
-        preserve_framing=False,
+        preserve_framing=False, source_index=None,
     ):
         has_audio = self._has_audio(source)
         metadata = RenderService(runner=self.runner).probe_video(source)

@@ -4584,6 +4584,66 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
                              for index, value in enumerate(command) if value == '-i']
         self.assertEqual(first_pass_inputs, [str(path) for path in paths])
 
+    def test_reuses_one_normalization_for_multiple_ranges_of_the_same_source(self):
+        service = VideoAssemblyService(runner=Mock())
+        source_a = RemoteMediaSource('https://example.test/a', storage_name='projects/a.mov')
+        source_b = RemoteMediaSource('https://example.test/b', storage_name='projects/b.mov')
+        sources = [
+            AssemblySource(source_a, label='a-1', trim_start_ms=100, trim_end_ms=400),
+            AssemblySource(source_a, label='a-2', trim_start_ms=500, trim_end_ms=900),
+            AssemblySource(source_b, label='b', trim_start_ms=0, trim_end_ms=300),
+        ]
+        jobs = [
+            {
+                'source': item.path, 'analysis_source': item.path, 'destination': Path(f'/tmp/{index}.mp4'),
+                'width': 1080, 'height': 1920, 'lut_path': None, 'lut_intensity': 0,
+                'auto_reframe_config': {'priority': 'face'}, 'reframe_plan_data': {'plan': {'x': 1}},
+                'trim_start_ms': item.trim_start_ms, 'trim_end_ms': item.trim_end_ms,
+                'preserve_framing': False,
+            }
+            for index, item in enumerate(sources)
+        ]
+        intervals = [
+            {'source_index': 0, 'start_ms': 20, 'end_ms': 80},
+            {'source_index': 1, 'start_ms': 30, 'end_ms': 90},
+            {'source_index': 2, 'start_ms': 40, 'end_ms': 100},
+        ]
+
+        unique_jobs, outputs, translated, indexes = service._reuse_source_normalizations(
+            jobs, [item['destination'] for item in jobs], sources, intervals,
+        )
+
+        self.assertEqual(len(unique_jobs), 2)
+        self.assertEqual(len(outputs), 2)
+        self.assertEqual(indexes, [0, 0, 1])
+        self.assertEqual(unique_jobs[0]['trim_start_ms'], 0)
+        self.assertIsNone(unique_jobs[0]['trim_end_ms'])
+        self.assertEqual(
+            [(item['source_index'], item['start_ms'], item['end_ms']) for item in translated],
+            [(0, 120, 180), (0, 530, 590), (1, 40, 100)],
+        )
+
+    def test_does_not_reuse_a_source_without_a_persisted_reframe_plan(self):
+        service = VideoAssemblyService(runner=Mock())
+        source = RemoteMediaSource('https://example.test/a', storage_name='projects/a.mov')
+        sources = [AssemblySource(source, trim_end_ms=200), AssemblySource(source, trim_start_ms=200, trim_end_ms=400)]
+        jobs = [
+            {
+                'source': source, 'analysis_source': source, 'destination': Path(f'/tmp/{index}.mp4'),
+                'width': 1080, 'height': 1920, 'lut_path': None, 'lut_intensity': 0,
+                'auto_reframe_config': {'priority': 'face'}, 'reframe_plan_data': None,
+                'trim_start_ms': item.trim_start_ms, 'trim_end_ms': item.trim_end_ms,
+                'preserve_framing': False,
+            }
+            for index, item in enumerate(sources)
+        ]
+        unique_jobs, _, _, indexes = service._reuse_source_normalizations(
+            jobs, [item['destination'] for item in jobs], sources,
+            [{'source_index': 0, 'start_ms': 0, 'end_ms': 100}, {'source_index': 1, 'start_ms': 0, 'end_ms': 100}],
+        )
+        self.assertEqual(len(unique_jobs), 2)
+        self.assertEqual(indexes, [0, 1])
+
     def test_proxy_and_delivery_preserve_audio_content_at_the_same_cut_boundaries(self):
         import numpy as np
 
