@@ -1788,14 +1788,15 @@ class VideoAssemblyService:
             })
             normalized.append(destination)
 
+        original_reframe_plans = [job['reframe_plan_data'] for job in normalize_jobs]
         # A single upload can legitimately appear many times in an approved
         # timeline.  Normalizing it once per selected range was by far the
         # most expensive part of final rendering: each invocation reopened,
         # decoded and reframed the same S3 object.  When the visual recipe is
-        # identical, normalize the complete source once, stage that one output
-        # in S3, and trim its approved ranges only while concatenating.  This
-        # never changes a cut boundary: the source-local interval remains the
-        # same immutable timestamp saved by the editor.
+        # identical, normalize one minimal envelope containing its approved
+        # ranges, stage that output in S3, and trim individual ranges only
+        # while concatenating. This never changes a cut boundary: the
+        # source-local timestamps saved by the editor remain authoritative.
         normalize_jobs, normalized, source_intervals, source_job_indexes = self._reuse_source_normalizations(
             normalize_jobs, normalized, source_items, source_intervals,
         )
@@ -1868,7 +1869,10 @@ class VideoAssemblyService:
                 reframe_plan = reframe_results_by_job[job_index]
                 effective_auto_reframe_config = normalize_jobs[job_index]['auto_reframe_config']
                 used_auto_reframe = bool(reframe_plan) or used_auto_reframe
-                supplied_plan = normalize_jobs[job_index]['reframe_plan_data']
+                # The encoder may receive a time-shifted copy of the plan when
+                # only an approved source envelope is normalized. Persist and
+                # expose the immutable plan approved by the editor instead.
+                supplied_plan = original_reframe_plans[source_index]
                 self.last_reframe_plans.append(
                     (
                         supplied_plan
@@ -1943,9 +1947,8 @@ class VideoAssemblyService:
                 original_to_unique[key] = job_index
                 unique_job = dict(job)
                 unique_job['source_index'] = source_index
-                # The selected clip is trimmed after this shared normalized
-                # source is read back from S3. Keep the whole source here so
-                # every selected range has precisely the same origin clock.
+                # Start from the source clock. Once all approved intervals are
+                # known below, the job is narrowed to their smallest envelope.
                 unique_job['trim_start_ms'] = 0
                 unique_job['trim_end_ms'] = None
                 unique_job['destination'] = normalized[source_index]
@@ -1963,12 +1966,75 @@ class VideoAssemblyService:
                 'start_ms': int(interval['start_ms']) + int(source.trim_start_ms or 0),
                 'end_ms': int(interval['end_ms']) + int(source.trim_start_ms or 0),
             })
+
+        # Encoding an entire upload and discarding most of it during concat was
+        # the dominant final-render cost. Normalize only the smallest source
+        # envelope containing the approved ranges for each visual recipe. The
+        # concat intervals are rebased to that envelope, so cut boundaries do
+        # not move. A persisted tracking plan is shifted by the same amount to
+        # keep its crop curve on the original source clock.
+        interval_bounds = {}
+        for interval in translated_intervals:
+            job_index = int(interval['source_index'])
+            current = interval_bounds.setdefault(
+                job_index, [int(interval['start_ms']), int(interval['end_ms'])],
+            )
+            current[0] = min(current[0], int(interval['start_ms']))
+            current[1] = max(current[1], int(interval['end_ms']))
+        bounded_jobs = set()
+        for job_index, (start_ms, end_ms) in interval_bounds.items():
+            job = unique_jobs[job_index]
+            # A newly generated detector plan has no persisted source-clock
+            # contract yet. Keep that rare path unchanged; approved renders
+            # normally arrive here with a saved plan.
+            if job['auto_reframe_config'] and job['reframe_plan_data'] is None:
+                continue
+            job['trim_start_ms'] = start_ms
+            job['trim_end_ms'] = end_ms
+            job['reframe_plan_data'] = cls._shift_reframe_plan_time(
+                job['reframe_plan_data'], start_ms,
+            )
+            bounded_jobs.add(job_index)
+        for interval in translated_intervals:
+            job_index = int(interval['source_index'])
+            if job_index not in bounded_jobs:
+                continue
+            envelope_start = interval_bounds[job_index][0]
+            interval['start_ms'] = int(interval['start_ms']) - envelope_start
+            interval['end_ms'] = int(interval['end_ms']) - envelope_start
+        if bounded_jobs:
+            logger.info(
+                'external_media_normalization_envelopes jobs=%s encoded_duration_ms=%s selected_duration_ms=%s',
+                len(bounded_jobs),
+                sum(interval_bounds[index][1] - interval_bounds[index][0] for index in bounded_jobs),
+                sum(int(item['end_ms']) - int(item['start_ms']) for item in translated_intervals),
+            )
         if len(unique_jobs) < len(jobs):
             logger.info(
                 'external_media_source_reuse source_entries=%s unique_recipes=%s reused_entries=%s',
                 len(jobs), len(unique_jobs), len(jobs) - len(unique_jobs),
             )
         return unique_jobs, unique_outputs, translated_intervals, job_indexes
+
+    @staticmethod
+    def _shift_reframe_plan_time(plan_data, trim_start_ms):
+        if not plan_data or plan_data.get('disabled') or not plan_data.get('plan') or not trim_start_ms:
+            return plan_data
+        plan = plan_data['plan']
+        offset_seconds = int(trim_start_ms) / 1000
+        return {
+            **plan_data,
+            'plan': {
+                **plan,
+                'keyframes': [
+                    {
+                        **keyframe,
+                        'time_seconds': float(keyframe.get('time_seconds') or 0) - offset_seconds,
+                    }
+                    for keyframe in (plan.get('keyframes') or [])
+                ],
+            },
+        }
 
     @staticmethod
     def _normalization_recipe_key(job):

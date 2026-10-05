@@ -231,6 +231,13 @@ EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_BROLL_RENDER
 EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB = int(
     os.getenv('EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB', 512)
 )
+# The timeline compositor can efficiently build one B-roll track while
+# decoding the master only once.  Sixteen sources remains within the observed
+# Workflow scratch/memory envelope and avoids re-encoding every boundary as a
+# separate clip. Keep this configurable for smaller workers.
+EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES = int(
+    os.getenv('EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES', 16)
+)
 EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfast')
 EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')

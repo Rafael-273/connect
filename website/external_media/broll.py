@@ -298,8 +298,8 @@ class BrollRenderService:
     """Executes approved timeline decisions without making editorial choices."""
 
     # A single FFmpeg graph opens every input even if those assets are never
-    # visible together. Beyond this point render in temporal chunks instead.
-    MAX_MONOLITHIC_SOURCES = 4
+    # visible together. The limit is configurable because the monolithic path
+    # decodes the master once and is substantially faster for typical projects.
     MAX_CHUNK_DURATION_MS = 20_000
 
     def __init__(self, runner=None, storage=None):
@@ -361,10 +361,11 @@ class BrollRenderService:
             if duration_ms is not None
             else max(int(item['end_ms']) for item, _asset, _input_index in available)
         )
-        if len(input_indexes) > self.MAX_MONOLITHIC_SOURCES:
+        max_monolithic_sources = max(1, int(settings.EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES))
+        if len(input_indexes) > max_monolithic_sources:
             return self._apply_chunked(
                 project_ref, video_path, output_path, available, width, height,
-                timeline_duration_ms,
+                timeline_duration_ms, max_monolithic_sources,
             )
         segments = self._segments(available, timeline_duration_ms)
         filters = self._timeline_filters(segments, width, height)
@@ -393,7 +394,10 @@ class BrollRenderService:
         )
         return output_path
 
-    def _apply_chunked(self, project_ref, video_path, output_path, available, width, height, duration_ms):
+    def _apply_chunked(
+        self, project_ref, video_path, output_path, available, width, height, duration_ms,
+        max_monolithic_sources,
+    ):
         """Render temporal chunks so FFmpeg only opens sources visible in each one.
 
         Completed chunks are moved to S3 immediately by ``stage_temporary``.
@@ -403,7 +407,7 @@ class BrollRenderService:
         segments = self._chunk_segments(available, duration_ms)
         logger.info(
             'broll_render_chunked_start project=%s chunks=%s layers=%s max_sources_per_graph=%s',
-            project_ref, len(segments), len(available), self.MAX_MONOLITHIC_SOURCES,
+            project_ref, len(segments), len(available), max_monolithic_sources,
         )
         staged_inputs, temporary_names, local_parts = [], [], []
         output_path = Path(output_path)
@@ -666,25 +670,32 @@ class BrollRenderService:
             motion = str((item.get('motion') or {}).get('type')).upper()
             frames = max(1, round(item_duration * 30))
             offset_frames = max(0, round((segment_start_ms - item_start_ms) / 1000 * 30))
+            base_scale = min(2, max(1, float(transform.get('scale') or 1)))
             if motion == 'ZOOM_OUT':
-                zoom = f'1.06-0.06*(on+{offset_frames})/{frames}'
+                zoom = f'{base_scale}*(1.06-0.06*(on+{offset_frames})/{frames})'
             elif motion in {'PAN_LEFT', 'PAN_RIGHT'}:
-                zoom = '1.04'
+                zoom = f'{base_scale}*1.04'
             else:
-                zoom = f'1+0.06*(on+{offset_frames})/{frames}'
-            # zoompan crops from the enlarged image itself.  The old centered
-            # expressions ignored the editor's X/Y controls for the default
-            # ZOOM_IN/ZOOM_OUT image motion, unlike video and non-moving image
-            # fullscreen paths. Keep explicit pan motions intact, but anchor
-            # all zoom motions to the same normalized editor position.
-            x = (
-                'iw-iw/zoom' if motion == 'PAN_LEFT'
-                else ('0' if motion == 'PAN_RIGHT' else f'(iw-iw/zoom)*{focus_x}')
-            )
-            y = f'(ih-ih/zoom)*{focus_y}'
+                zoom = f'{base_scale}*(1+0.06*(on+{offset_frames})/{frames})'
+            progress = f'min(1,(on+{offset_frames})/{frames})'
+            if motion == 'PAN_LEFT':
+                x = f'(iw-iw/zoom)*{progress}'
+            elif motion == 'PAN_RIGHT':
+                x = f'(iw-iw/zoom)*(1-{progress})'
+            else:
+                x = '(iw-iw/zoom)/2'
+            y = '(ih-ih/zoom)/2'
+            # CSS applies object-fit/object-position first and then scales the
+            # resulting fullscreen element around its centre.  Do the same:
+            # choose the cover crop with the editor's X/Y values before
+            # zoompan, then use zoompan only for the manual scale and motion.
+            # Previously the first crop was always centred, so X/Y could only
+            # move through the tiny (4-6%) zoom margin and appeared ignored.
             chain.append(
                 f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
-                f"crop={width * 2}:{height * 2},zoompan=z='{zoom}':x='{x}':"
+                f"crop={width * 2}:{height * 2}:"
+                f"x='(iw-ow)*{focus_x}':y='(ih-oh)*{focus_y}',"
+                f"zoompan=z='{zoom}':x='{x}':"
                 f"y='{y}':d=1:s={width}x{height}:fps=30"
             )
             chain.extend([f'trim=duration={segment_duration}', 'setpts=PTS-STARTPTS'])

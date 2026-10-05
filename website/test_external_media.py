@@ -4616,12 +4616,30 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(len(unique_jobs), 2)
         self.assertEqual(len(outputs), 2)
         self.assertEqual(indexes, [0, 0, 1])
-        self.assertEqual(unique_jobs[0]['trim_start_ms'], 0)
-        self.assertIsNone(unique_jobs[0]['trim_end_ms'])
+        self.assertEqual((unique_jobs[0]['trim_start_ms'], unique_jobs[0]['trim_end_ms']), (120, 590))
+        self.assertEqual((unique_jobs[1]['trim_start_ms'], unique_jobs[1]['trim_end_ms']), (40, 100))
         self.assertEqual(
             [(item['source_index'], item['start_ms'], item['end_ms']) for item in translated],
-            [(0, 120, 180), (0, 530, 590), (1, 40, 100)],
+            [(0, 0, 60), (0, 410, 470), (1, 0, 60)],
         )
+
+    def test_bounded_normalization_shifts_saved_reframe_plan_to_the_new_clock(self):
+        plan = {
+            'analysis_width': 640, 'analysis_height': 360,
+            'plan': {
+                'crop_width': 300, 'crop_height': 300,
+                'keyframes': [
+                    {'time_seconds': 1.0, 'x': 10, 'y': 20},
+                    {'time_seconds': 2.0, 'x': 30, 'y': 40},
+                ],
+            },
+        }
+        shifted = VideoAssemblyService._shift_reframe_plan_time(plan, 1250)
+        self.assertEqual(
+            [item['time_seconds'] for item in shifted['plan']['keyframes']],
+            [-0.25, 0.75],
+        )
+        self.assertEqual(plan['plan']['keyframes'][0]['time_seconds'], 1.0)
 
     def test_does_not_reuse_a_source_without_a_persisted_reframe_plan(self):
         service = VideoAssemblyService(runner=Mock())
@@ -6196,11 +6214,12 @@ class BrollUnitTests(SimpleTestCase):
             for index, asset in enumerate(assets)
         ]
         runner, storage = Mock(), Storage()
-        BrollRenderService(runner=runner, storage=storage).apply(
-            SimpleNamespace(public_id='chunked-project', broll_assets=Assets()),
-            Path('/tmp/master.mp4'), Path('/tmp/output.mp4'), decisions,
-            1920, 1080, duration_ms=6000,
-        )
+        with patch.object(settings, 'EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES', 4):
+            BrollRenderService(runner=runner, storage=storage).apply(
+                SimpleNamespace(public_id='chunked-project', broll_assets=Assets()),
+                Path('/tmp/master.mp4'), Path('/tmp/output.mp4'), decisions,
+                1920, 1080, duration_ms=6000,
+            )
 
         calls = [call.args[0] for call in runner.run.call_args_list]
         chunk_calls = [command for command in calls if '-filter_complex' in command]
@@ -6250,7 +6269,10 @@ class BrollUnitTests(SimpleTestCase):
             'https://example.test/master.mp4', storage_name='tmp/master.mp4', size_bytes=10 * 1024 ** 2,
         )
         runner = Mock()
-        with patch.object(settings, 'EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB', 32):
+        with (
+            patch.object(settings, 'EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB', 32),
+            patch.object(settings, 'EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES', 4),
+        ):
             BrollRenderService(runner=runner, storage=Storage()).apply(
                 SimpleNamespace(public_id='chunked-project', broll_assets=Assets()),
                 remote_master, Path('/tmp/output.mp4'), decisions, 1920, 1080, duration_ms=6000,
@@ -6289,16 +6311,17 @@ class BrollUnitTests(SimpleTestCase):
                 def filter(**kwargs):
                     return assets
 
-            BrollRenderService(runner=runner).apply(
-                SimpleNamespace(broll_assets=Assets()), source, output, [
-                    {
-                        'asset_id': str(asset.public_id), 'enabled': True,
-                        'start_ms': index * 1000, 'end_ms': (index + 1) * 1000,
-                        'display_mode': 'FULLSCREEN', 'transform': {}, 'entry': {}, 'exit': {},
-                    }
-                    for index, asset in enumerate(assets)
-                ], 320, 180, duration_ms=6000,
-            )
+            with patch.object(settings, 'EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES', 4):
+                BrollRenderService(runner=runner).apply(
+                    SimpleNamespace(broll_assets=Assets()), source, output, [
+                        {
+                            'asset_id': str(asset.public_id), 'enabled': True,
+                            'start_ms': index * 1000, 'end_ms': (index + 1) * 1000,
+                            'display_mode': 'FULLSCREEN', 'transform': {}, 'entry': {}, 'exit': {},
+                        }
+                        for index, asset in enumerate(assets)
+                    ], 320, 180, duration_ms=6000,
+                )
             report = MediaQualityService(runner).validate_media(
                 output, expected_duration_ms=6000,
             )
@@ -6409,7 +6432,7 @@ class BrollUnitTests(SimpleTestCase):
         self.assertIn("crop=1920:1080:x='(iw-ow)*0.1':y='(ih-oh)*0.9'", filters)
         self.assertNotIn('scale=1920:1080:force_original_aspect_ratio=disable', filters)
 
-    def test_fullscreen_moving_image_uses_editor_position_as_zoom_anchor(self):
+    def test_fullscreen_moving_image_applies_editor_crop_before_zoom(self):
         asset = SimpleNamespace(
             public_id='00000000-0000-0000-0000-000000000010',
             media_type='IMAGE', file=SimpleNamespace(path='/tmp/broll.png'),
@@ -6432,7 +6455,37 @@ class BrollUnitTests(SimpleTestCase):
         )
         command = runner.run.call_args.args[0]
         filters = command[command.index('-filter_complex') + 1]
-        self.assertIn("zoompan=z='1+0.06*(on+0)/30':x='(iw-iw/zoom)*0.2':y='(ih-ih/zoom)*0.8'", filters)
+        self.assertIn(
+            "crop=3840:2160:x='(iw-ow)*0.2':y='(ih-oh)*0.8',"
+            "zoompan=z='1*(1+0.06*(on+0)/30)':"
+            "x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2'",
+            filters,
+        )
+
+    def test_fullscreen_moving_image_preserves_manual_scale(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='IMAGE', file=SimpleNamespace(path='/tmp/broll.png'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), [{
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': 0, 'end_ms': 1000, 'display_mode': 'FULLSCREEN',
+                'transform': {'x': .5, 'y': .5, 'scale': 1.5},
+                'motion': {'type': 'ZOOM_OUT'}, 'entry': {}, 'exit': {},
+            }], 1920, 1080,
+        )
+        command = runner.run.call_args.args[0]
+        filters = command[command.index('-filter_complex') + 1]
+        self.assertIn("zoompan=z='1.5*(1.06-0.06*(on+0)/30)'", filters)
 
     def test_apply_uses_dedicated_timeout_not_full_pipeline_timeout(self):
         """B-roll compositing uses ``-stream_loop -1`` for video assets, which
