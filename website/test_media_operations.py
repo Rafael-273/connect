@@ -425,8 +425,7 @@ class MediaOperationsTests(TestCase):
             'edit-sub_team': str(self.team.pk),
             'edit-assignment_role': ['Designer'],
             'edit-assignment_user': [str(user.pk)],
-            'edit-assignment_due_days': ['7'],
-            'edit-assignment_due_relation': ['before'],
+            'edit-assignment_due_date': ['2026-10-08'],
         })
         self.assertEqual(response.status_code, 302)
         content.refresh_from_db()

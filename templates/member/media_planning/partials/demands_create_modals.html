@@ -50,12 +50,11 @@
 
             <div class="modal-section">
                 <p class="modal-section-title">Equipe e prazos</p>
-                <p class="text-xs text-gray-500 mb-2">Informe os dias de cada etapa em relação ao evento (ex.: 7 dias antes).</p>
-                <p class="text-xs text-gray-500 mb-3">Defina quem faz cada parte e quando — ex: Filmmaker, Editor, Publicador.</p>
+                <p class="text-xs text-gray-500 mb-3">Defina quem faz cada parte e a data de prazo — ex: Filmmaker, Editor, Publicador.</p>
                 <label class="modal-field-label" for="id_demand-sub_team">Equipe responsável (opcional)</label>
                 {{ demand_form.sub_team }}{{ demand_form.sub_team.errors }}
                 <p class="team-assignment-help text-xs text-gray-500 my-2" role="status"></p>
-                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='demand'  assignments=demand_assignments blank_assignment=blank_assignment %}
+                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='demand' assignments=demand_assignments blank_assignment=blank_assignment use_absolute_dates=True %}
             </div>
 
             <div class="demands-modal-footer">

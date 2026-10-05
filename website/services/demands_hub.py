@@ -553,14 +553,33 @@ def build_sidebar_items(request):
     )
 
     if q:
-        events_qs = events_qs.filter(Q(title__icontains=q) | Q(location__icontains=q))
+        # Eventos funcionam como agrupadores de demandas. Ao procurar uma
+        # demanda, etapa ou responsável, o evento correspondente também deve
+        # aparecer na lista lateral — e não somente quando o seu próprio
+        # título coincide com a busca.
+        events_qs = events_qs.filter(
+            Q(title__icontains=q)
+            | Q(description__icontains=q)
+            | Q(location__icontains=q)
+            | Q(event_type__name__icontains=q)
+            | Q(media_contents__title__icontains=q)
+            | Q(media_contents__description__icontains=q)
+            | Q(media_contents__responsible__email__icontains=q)
+            | Q(media_contents__responsible__member__name__icontains=q)
+            | Q(media_contents__tasks__title__icontains=q)
+            | Q(media_contents__tasks__description__icontains=q)
+            | Q(media_contents__tasks__assigned_to__email__icontains=q)
+            | Q(media_contents__tasks__assigned_to__member__name__icontains=q)
+        ).distinct()
     if event_type_id:
         events_qs = events_qs.filter(event_type_id=event_type_id)
     if period_from:
         events_qs = events_qs.filter(event_date__gte=period_from)
     if period_to:
         events_qs = events_qs.filter(event_date__lte=period_to)
-    if not period_from and not period_to:
+    # Sem uma busca, a lista inicial privilegia a agenda recente. Uma busca
+    # explícita, porém, deve alcançar o histórico inteiro.
+    if not q and not period_from and not period_to:
         events_qs = events_qs.filter(event_date__gte=today - datetime.timedelta(days=30))
 
     if responsible_id or team_id:
@@ -579,7 +598,17 @@ def build_sidebar_items(request):
         Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member'))
     )
     if q:
-        free_qs = free_qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
+        free_qs = free_qs.filter(
+            Q(title__icontains=q)
+            | Q(description__icontains=q)
+            | Q(sub_team__name__icontains=q)
+            | Q(responsible__email__icontains=q)
+            | Q(responsible__member__name__icontains=q)
+            | Q(tasks__title__icontains=q)
+            | Q(tasks__description__icontains=q)
+            | Q(tasks__assigned_to__email__icontains=q)
+            | Q(tasks__assigned_to__member__name__icontains=q)
+        ).distinct()
     if responsible_id:
         free_qs = free_qs.filter(responsible_id=responsible_id)
     if team_id:

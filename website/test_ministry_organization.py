@@ -336,8 +336,7 @@ class MinistryDemandTests(TestCase):
             f'{prefix}-sub_team': self.team.pk,
             f'{prefix}-assignment_role': ['Operador'],
             f'{prefix}-assignment_user': [str(user_id or self.user.pk)],
-            f'{prefix}-assignment_due_days': ['7'],
-            f'{prefix}-assignment_due_relation': ['before'],
+            f'{prefix}-assignment_due_date': ['2026-11-13'],
         }
 
     def test_demand_without_team_remains_supported(self):
@@ -406,8 +405,7 @@ class MinistryDemandTests(TestCase):
         data = self.payload()
         data['demand-assignment_role'] = ['Designer', 'Publicador']
         data['demand-assignment_user'] = [str(self.user.pk), str(self.other_user.pk)]
-        data['demand-assignment_due_days'] = ['14', '7']
-        data['demand-assignment_due_relation'] = ['before', 'before']
+        data['demand-assignment_due_date'] = ['2026-11-06', '2026-11-13']
         self.client.post(reverse('media_demand_quick_create'), data)
         content = MediaContent.objects.get(title='Transmissão')
         titles = list(content.tasks.order_by('sort_order', 'pk').values_list('title', flat=True))
@@ -457,19 +455,41 @@ class MinistryDemandTests(TestCase):
         self.assertContains(response, self.team.name)
         self.assertNotContains(response, self.foreign_team.name)
 
+    def test_hub_search_finds_event_from_its_nested_demand_and_task(self):
+        import datetime
+        from website.services.event_media_integration import start_media_organization
+
+        event = Event.objects.create(
+            title='Culto central',
+            event_date=datetime.date.today() - datetime.timedelta(days=90),
+            display_start=datetime.date.today() - datetime.timedelta(days=90),
+            display_end=datetime.date.today() - datetime.timedelta(days=90),
+        )
+        start_media_organization(event)
+        content = MediaContent.objects.create(
+            title='Cobertura especial', content_type='video', event=event,
+        )
+        MediaTask.objects.create(title='Editar teaser', content=content, assigned_to=self.user)
+
+        self.client.force_login(self.user)
+        self.assertContains(
+            self.client.get(reverse('media_content_list'), {'q': 'teaser'}),
+            'Culto central',
+        )
+
     def test_quick_form_accepts_standard_dictionary_data(self):
         from website.forms.media_planning import MediaDemandQuickForm
         form = MediaDemandQuickForm({'title': 'Livre', 'content_type': 'artwork'})
         self.assertTrue(form.is_valid(), form.errors)
 
-    def test_invalid_assignment_date_is_not_silently_discarded(self):
+    def test_quick_create_saves_the_exact_assignment_date(self):
         self.client.force_login(self.user)
         data = self.payload()
-        data['demand-assignment_due_days'] = ['-1']
-        data['demand-assignment_due_relation'] = ['before']
         response = self.client.post(reverse('media_demand_quick_create'), data)
-        self.assertContains(response, 'quantidade válida', status_code=400)
-        self.assertFalse(MediaContent.objects.exists())
+        self.assertEqual(response.status_code, 302)
+        task = MediaContent.objects.get(title='Transmissão').tasks.get()
+        self.assertEqual(task.due_date.date().isoformat(), '2026-11-13')
+        self.assertIsNone(task.due_offset_days)
 
     def test_update_can_change_team_and_reassign_existing_steps(self):
         self.client.force_login(self.user)

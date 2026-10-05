@@ -58,6 +58,7 @@ def _invalid_demand_response(view, request, form, assignments):
             'id': row.get('task_id', ''),
             'due_days': offset_parts['due_days'],
             'due_relation': offset_parts['due_relation'],
+            'due_date': row.get('due_date').date().isoformat() if row.get('due_date') else '',
             'is_custom_role': row.get('role') not in ASSIGNMENT_ROLE_PRESETS,
         })
     request.failed_demand_assignments = failed_rows
@@ -86,7 +87,9 @@ class MediaDemandQuickCreateView(MediaMemberRequiredMixin, View):
 
     def post(self, request):
         form = MediaDemandQuickForm(request.POST, prefix='demand')
-        assignments = parse_demand_assignments(request.POST, prefix='demand')
+        # Demandas criadas pelo hub são planejadas para uma data concreta.
+        # Regras relativas continuam sendo configuradas nos templates de evento.
+        assignments = parse_demand_assignments(request.POST, prefix='demand', absolute_dates=True)
         if not form.is_valid():
             return _invalid_demand_response(self, request, form, assignments)
         event = None
@@ -132,7 +135,7 @@ class MediaDemandQuickUpdateView(MediaMemberRequiredMixin, View):
         assignments = parse_demand_assignments(
             request.POST,
             prefix='edit',
-            absolute_dates=bool(content.event_id),
+            absolute_dates=True,
         )
         if not form.is_valid():
             return _invalid_demand_response(self, request, form, assignments)
