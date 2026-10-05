@@ -1731,7 +1731,7 @@ class VideoAssemblyService:
         if (
             not reframe_plans
             and auto_reframe_config
-            and auto_reframe_config.get('priority') == 'body'
+            and auto_reframe_config.get('priority') in {'body', 'full_body'}
             and height > width
         ):
             # Phone recordings split into editorial takes still share the same
@@ -2386,7 +2386,7 @@ class VideoAssemblyService:
         return filters
 
     def _consistent_portrait_body_plans(self, analysis_sources, output_width, output_height, config):
-        """Create compatible Body plans with one shared composition per recording."""
+        """Create compatible stable body plans with one shared composition per recording."""
         plans = [None] * len(analysis_sources)
         candidates = []
         for index, source in enumerate(analysis_sources):
@@ -2397,7 +2397,7 @@ class VideoAssemblyService:
             if source_height <= source_width:
                 continue
             plan = AutoReframeService(
-                priority='body',
+                priority=config.get('priority', 'body'),
                 safe_margin=config.get('safe_margin', 0.15),
                 top_margin=config.get('top_margin'),
                 interval_frames=config.get('interval_frames'),
@@ -2430,7 +2430,14 @@ class VideoAssemblyService:
             keyframe.y / max_y for _, _, _, plan, max_y in reference_candidates if max_y > 0
             for keyframe in plan.keyframes[:1]
         )
+        x_ratios = sorted(
+            keyframe.x / max(1, source_width - plan.crop_width)
+            for _, source_width, _, plan, _ in reference_candidates
+            if source_width > plan.crop_width
+            for keyframe in plan.keyframes[:1]
+        )
         shared_y_ratio = y_ratios[max(0, (len(y_ratios) - 1) // 4)] if y_ratios else 0.65
+        shared_x_ratio = x_ratios[len(x_ratios) // 2] if x_ratios else 0.5
         output_ratio = output_width / output_height
         for index, source_width, source_height, _plan, _max_y in candidates:
             crop_width = self._even(min(source_width, source_width * crop_width_ratio))
@@ -2444,7 +2451,11 @@ class VideoAssemblyService:
                 crop_width=crop_width,
                 crop_height=crop_height,
                 keyframes=(
-                    ReframeKeyframe(0.0, max_x / 2, min(max_y, max(0, max_y * shared_y_ratio))),
+                    ReframeKeyframe(
+                        0.0,
+                        min(max_x, max(0, max_x * shared_x_ratio)),
+                        min(max_y, max(0, max_y * shared_y_ratio)),
+                    ),
                 ),
             )
             plans[index] = {

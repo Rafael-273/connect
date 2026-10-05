@@ -3080,6 +3080,20 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(plugin.configuration['safe_margin'], 0.15)
         self.assertEqual(plugin.configuration['top_margin'], 0.12)
 
+    def test_admin_panel_saves_stable_full_body_reframe_priority(self):
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                language_mode='single',
+                advanced_plugins=[MediaTemplatePlugin.Code.AUTO_TRACKING],
+                auto_reframe_priority='full_body',
+            ),
+        )
+        self.assertRedirects(response, reverse('admin_external_media_template_detail', args=[self.template.pk]))
+        plugin = self.version.plugins.get(code=MediaTemplatePlugin.Code.AUTO_TRACKING)
+        self.assertEqual(plugin.configuration['priority'], 'full_body')
+        self.assertEqual(plugin.configuration['top_margin'], 0.05)
+
 
 class ExternalMediaRetryTests(ExternalMediaFixtureMixin, TestCase):
     def setUp(self):
@@ -4158,6 +4172,27 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         compact = service._target_crop_y(300, 1200, 1214, 304, compact_portrait=True)
         self.assertGreater(compact, generic)
         self.assertEqual(round(compact), round(300 - (1214 * .025)))
+
+    def test_auto_reframe_full_body_mode_centers_a_standing_speaker_stably(self):
+        service = AutoReframeService(priority='full_body', safe_margin=.10, top_margin=.05)
+        keyframes = service._stable_full_body_keyframes(
+            observations=[
+                (0.0, (180, 300, 620, 1700)),
+                (1.0, (190, 310, 630, 1710)),
+            ],
+            crop_width=800,
+            crop_height=1422,
+            source_width=1080,
+            source_height=1920,
+        )
+        self.assertEqual(len(keyframes), 1)
+        # The robust upper median resists an opening-frame detection wobble.
+        self.assertEqual(keyframes[0].x, 10)
+        self.assertEqual(round(keyframes[0].y), round(310 - (1422 * .05)))
+
+    def test_auto_reframe_full_body_face_fallback_reaches_legs(self):
+        _left, _top, _width, height = AutoReframeService._full_body_box_from_face(400, 250, 100, 100)
+        self.assertEqual(height, 970)
 
     def test_manual_reframe_offsets_match_the_editor_image_direction(self):
         project = SimpleNamespace(

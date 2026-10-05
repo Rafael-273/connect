@@ -236,6 +236,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             ('static', 'Melhorar enquadramento - zoom sutil, sem acompanhar pessoas'),
             ('face', 'Rosto — ideal para sermões e falas'),
             ('body', 'Corpo — ideal para apresentações e movimento'),
+            ('full_body', 'Pessoa inteira — estável para alguém em pé'),
         ],
         initial='face',
         required=False,
@@ -595,8 +596,8 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                 configuration = {
                     **configuration,
                     'priority': reframe_priority,
-                    'safe_margin': 0.18 if reframe_priority == 'face' else 0.15,
-                    'top_margin': 0.02 if reframe_priority == 'face' else 0.12,
+                    'safe_margin': 0.18 if reframe_priority == 'face' else 0.10 if reframe_priority == 'full_body' else 0.15,
+                    'top_margin': 0.02 if reframe_priority == 'face' else 0.05 if reframe_priority == 'full_body' else 0.12,
                     'interval_frames': 10,
                     'smoothing': 0.18,
                     'horizontal_smoothing': 0.34 if reframe_priority == 'face' else 0.18,
