@@ -70,6 +70,7 @@ from .views.media_planning import (
 )
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView, MusicUserListView
 from .views.home import HomeView, TestimonyListView, ContactView
+from .views.philadelphia_site import PhiladelphiaSiteView
 from .views.visitor import VisitorCreateView, MemberVisitorCreateView, MemberVisitorListView, PastoralVisitorListView, PastoralVisitorReportView
 from .views.evangelism import EvangelismCreateView, EvangelismListView
 from .views.member import (
@@ -299,6 +300,7 @@ urlpatterns = [
     path('ministries/<int:ministry_id>/manuals/<int:pk>/archive/', ministry_org.MinistryManualArchive.as_view(), name='ministry_manual_archive'),
 
     path('', HomeView.as_view(), name='home'),
+    path('philadelphia-site/', PhiladelphiaSiteView.as_view(), name='philadelphia_site'),
     path('testemunhos/', TestimonyListView.as_view(), name='testemunhos'),
     path('contato/', ContactView.as_view(), name='contato'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),

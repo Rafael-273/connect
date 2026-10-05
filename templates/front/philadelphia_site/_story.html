@@ -1,0 +1,23 @@
+{% load static %}
+<section class="section video-section" id="sonho" aria-labelledby="video-title">
+  <div class="content-width narrow center"><p class="eyebrow">A campanha</p><h2 id="video-title">Veja o sonho que Deus colocou diante de nós.</h2></div>
+  <div class="video-frame content-width" {% if campaign.video_url %}data-video-url="{{ campaign.video_url }}"{% endif %}>
+    {% if campaign.video_url %}<iframe src="{{ campaign.video_url }}" title="Vídeo da campanha Sítio Filadélfia" loading="lazy" allowfullscreen></iframe>{% else %}<div class="video-placeholder"><span aria-hidden="true">▶</span><p>Vídeo da campanha em breve</p></div>{% endif %}
+  </div>
+</section>
+<section class="section dream-section" aria-labelledby="dream-title">
+  <div class="content-width two-columns">
+    <div><p class="eyebrow">O sonho</p><h2 id="dream-title">Um lugar com propósito</h2><div class="prose"><p>Hoje temos diante de nós a oportunidade de conquistar o Sítio Filadélfia: um espaço com aproximadamente 6.000 m², preparado para receber pessoas, famílias e gerações.</p><p>Mais do que adquirir um espaço, queremos construir um lugar onde a Igreja possa viver comunhão, celebrar, servir e cumprir o propósito de Deus.</p><p>Um ambiente para famílias, crianças, jovens e adolescentes. Um lugar para encontros, celebrações, treinamentos e momentos que marcarão vidas.</p></div></div>
+    <div class="photo-composition" aria-label="Fotografias do Sítio Filadélfia">
+      {% for photo in campaign.site_photos|slice:':3' %}<img src="{% static photo.src %}" alt="{{ photo.alt }}" loading="lazy">{% empty %}<div class="photo-placeholder tall">As fotografias do sítio serão compartilhadas aqui.</div>{% endfor %}
+    </div>
+  </div>
+</section>
+<section class="section structure-section" id="estrutura" aria-labelledby="structure-title">
+  <div class="content-width"><p class="eyebrow">O que já existe</p><h2 id="structure-title">Um espaço que já carrega tantas possibilidades</h2>
+    <div class="structure-gallery">{% for photo in campaign.structure_photos %}<article><img src="{% static photo.src %}" alt="{{ photo.alt }}" loading="lazy"><span>0{{ forloop.counter }}</span><h3>{{ photo.title }}</h3><p>{{ photo.description }}</p></article>{% endfor %}</div>
+    {% if campaign.site_photos %}<button class="text-button" type="button" data-open-gallery>Ver todas as fotos <span aria-hidden="true">↗</span></button>{% endif %}
+  </div>
+</section>
+<section class="purpose-section"><div class="content-width narrow center"><p class="eyebrow light">Mais do que uma estrutura</p><p class="statement">Não estamos falando apenas de paredes, salas e construções.<br><em>Estamos falando de vidas.</em></p><p>Queremos que este lugar seja um ambiente onde famílias sejam fortalecidas, pessoas encontrem comunhão e novas gerações possam crescer na presença de Deus.</p></div></section>
+<section class="section mission-section" aria-labelledby="mission-title"><div class="content-width narrow center"><p class="eyebrow">Centro missionário</p><h2 id="mission-title">Um lugar para receber, capacitar e enviar</h2><p>Sonhamos que o Sítio Filadélfia também se torne um Centro Missionário. Um lugar onde pessoas possam ser recebidas, treinadas, capacitadas e enviadas para anunciar o Evangelho ao redor do mundo.</p><div class="mission-flow"><span>Receber</span><b>→</b><span>Capacitar</span><b>→</b><span>Enviar</span></div></div></section>
