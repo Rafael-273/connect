@@ -1,13 +1,14 @@
 {% load static %}
-<section class="hero" aria-labelledby="hero-title">
-  {% if campaign.hero_image %}
-    <img class="hero-image" src="{% static campaign.hero_image %}" alt="Vista do Sítio Filadélfia" fetchpriority="high">
-  {% else %}<div class="hero-image image-awaiting" aria-hidden="true"></div>{% endif %}
-  <div class="hero-shade"></div>
-  <div class="hero-content content-width">
-    <p class="eyebrow light">Sítio Filadélfia</p>
-    <h1 id="hero-title">Um sonho.<br>Um propósito.<br>Uma conquista que faremos juntos.</h1>
-    <p class="hero-lead">Deus nos deu um sonho, e juntos vamos transformá-lo em milagre.</p>
-    <div class="hero-actions"><a class="button button-primary" href="#contribuir">Quero fazer parte</a><a class="button button-ghost" href="#sonho">Conheça o projeto</a></div>
+<section class="hero hero-editorial" aria-labelledby="hero-title">
+  <div class="hero-layout content-width">
+    <div class="hero-copy">
+      <p class="eyebrow" data-i18n="siteName">Sítio Filadélfia</p>
+      <h1 id="hero-title" data-i18n="heroTitle">Um sonho.<br>Um propósito.</h1>
+      <p class="hero-lead" data-i18n="heroLead">Uma conquista que faremos juntos. Deus nos deu esse sonho, e juntos vamos transformá-lo em milagre.</p>
+      <div class="hero-actions"><a class="button button-primary" href="#contribuir" data-i18n="heroJoin">Quero fazer parte</a><a class="hero-link" href="#sonho"><span data-i18n="heroProject">Conheça o projeto</span> <span aria-hidden="true">→</span></a></div>
+    </div>
+    {% if campaign.hero_image %}
+      <figure class="hero-visual"><img src="{% static campaign.hero_image %}" alt="Entrada do Sítio Filadélfia" fetchpriority="high"></figure>
+    {% else %}<div class="hero-visual image-awaiting" aria-hidden="true"></div>{% endif %}
   </div>
 </section>

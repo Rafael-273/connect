@@ -1,6 +1,7 @@
 from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventRemoveFromMediaView, MediaEventUpdateView
 from .views import ministry_organization as ministry_org
 from django.urls import path
+from django.views.generic import RedirectView
 from django.contrib.auth import views as auth_views
 from django.conf import settings
 from .views.media_planning import (
@@ -300,7 +301,12 @@ urlpatterns = [
     path('ministries/<int:ministry_id>/manuals/<int:pk>/archive/', ministry_org.MinistryManualArchive.as_view(), name='ministry_manual_archive'),
 
     path('', HomeView.as_view(), name='home'),
-    path('philadelphia-site/', PhiladelphiaSiteView.as_view(), name='philadelphia_site'),
+    path('sitio-filadelfia/', PhiladelphiaSiteView.as_view(), name='philadelphia_site'),
+    path(
+        'philadelphia-site/',
+        RedirectView.as_view(pattern_name='philadelphia_site', permanent=True),
+        name='philadelphia_site_legacy',
+    ),
     path('testemunhos/', TestimonyListView.as_view(), name='testemunhos'),
     path('contato/', ContactView.as_view(), name='contato'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
