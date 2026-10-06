@@ -47,6 +47,7 @@
   document.querySelectorAll('.value-option').forEach((button) => button.addEventListener('click', () => {
     document.querySelectorAll('.value-option').forEach((item) => item.setAttribute('aria-pressed', 'false'));
     button.setAttribute('aria-pressed', 'true');
+    document.querySelector('#pix-title')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }));
   const dialog = document.querySelector('.gallery-lightbox');
   const images = dialog ? [...dialog.querySelectorAll('img')] : [];
