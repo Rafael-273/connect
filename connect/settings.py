@@ -180,6 +180,13 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 SITE_DOMAIN = os.getenv('SITE_DOMAIN', 'localhost:8000')
 
+# Dados exibidos na página pública do Sítio Filadélfia.
+PHILADELPHIA_PIX_KEY = os.getenv('PHILADELPHIA_PIX_KEY', '')
+PHILADELPHIA_PIX_QR_CODE = os.getenv('PHILADELPHIA_PIX_QR_CODE', '')
+PHILADELPHIA_CREDIT_CARD_URL = os.getenv('PHILADELPHIA_CREDIT_CARD_URL', '')
+PHILADELPHIA_CAMPAIGN_VIDEO_URL = os.getenv('PHILADELPHIA_CAMPAIGN_VIDEO_URL', '')
+PHILADELPHIA_INSTAGRAM_REEL_URL = os.getenv('PHILADELPHIA_INSTAGRAM_REEL_URL', '')
+
 # OpenAI (texto + transcrição de arquivos). O tradutor ao vivo continua usando
 # Azure Speech; o modelo de texto deve ser escolhido por cada fluxo/view.
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')

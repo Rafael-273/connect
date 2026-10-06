@@ -1,0 +1,42 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Conheça o sonho do Sítio Filadélfia e faça parte desta conquista. Um lugar de comunhão, celebração, capacitação e envio para o Reino.">
+  <meta name="theme-color" content="#27475E">
+  <meta property="og:title" content="Sítio Filadélfia">
+  <meta property="og:description" content="Um sonho. Um propósito. Uma conquista que faremos juntos.">
+  {% if campaign.hero_image %}<meta property="og:image" content="{% static campaign.hero_image %}">{% endif %}
+  <meta property="og:type" content="website">
+  <title>Sítio Filadélfia | Igreja Batista Nova Filadélfia</title>
+  <link rel="icon" type="image/png" href="{% static 'assets/favicon.png' %}">
+  <link rel="stylesheet" href="{% static 'philadelphia_site.css' %}">
+</head>
+<body class="philadelphia-page">
+  <a class="skip-link" href="#conteudo" data-i18n="skip">Pular para o conteúdo</a>
+  <header class="campaign-header">
+    <div class="campaign-nav content-width">
+      <a class="campaign-brand" href="{% url 'home' %}" aria-label="Voltar para o site da Igreja Filadélfia">
+        <img src="{% static 'assets/logo.png' %}" alt="Igreja Filadélfia">
+      </a>
+      <nav class="campaign-links" aria-label="Navegação do Sítio Filadélfia" data-i18n-aria-label="navLabel">
+        <a href="#sonho" data-i18n="navProject">O projeto</a>
+        <a href="#estrutura" data-i18n="navStructure">A estrutura</a>
+        <a href="#futuro" data-i18n="navVision">A visão</a>
+      </nav>
+      <div class="header-actions"><button class="language-toggle" type="button" data-language-toggle aria-label="Mudar idioma para inglês"><span aria-hidden="true">EN</span><span class="language-toggle-label" data-i18n="languageShort">EN</span></button><a href="#contribuir" class="header-link"><span data-i18n="navJoin">Fazer parte</span> <span aria-hidden="true">↗</span></a></div>
+    </div>
+  </header>
+  <main id="conteudo">
+    {% include 'front/philadelphia_site/_hero.html' %}
+    {% include 'front/philadelphia_site/_story.html' %}
+    {% include 'front/philadelphia_site/_future.html' %}
+    {% include 'front/philadelphia_site/_contribution.html' %}
+  </main>
+  <a class="mobile-cta" href="#contribuir" data-i18n="navJoin">Fazer parte</a>
+  {% include 'front/philadelphia_site/_lightbox.html' %}
+  <script src="{% static 'philadelphia_site.js' %}" defer></script>
+</body>
+</html>
