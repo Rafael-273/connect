@@ -31,7 +31,10 @@ class PhiladelphiaSiteView(TemplateView):
                 '5.000 – 10.000',
                 'Acima de 10.000',
             ),
-            'hero_image': 'philadelphia-site/Entrada do Parque Filadélfia em Dia Ensolarado.png',
+            # Use the same Unicode normalization as the asset filename. The
+            # decomposed accent form caused a 404 after static files were
+            # collected in production.
+            'hero_image': 'philadelphia-site/Entrada do Parque Filadélfia em Dia Ensolarado.png',
             'structure_photos': (
                 {'src': 'philadelphia-site/Imagem do ChatGPT 6 de out. de 2026, 10_20_42-1.png', 'alt': 'Piscina e paisagismo do Sítio Filadélfia', 'title': 'Área da piscina', 'description': 'Lazer, convivência e paisagismo.'},
                 {'src': 'philadelphia-site/Imagem do ChatGPT 6 de out. de 2026, 10_20_43-2.png', 'alt': 'Fachada da casa principal do Sítio Filadélfia', 'title': 'Casa principal', 'description': 'Estrutura para hospedagem, reuniões e apoio.'},
