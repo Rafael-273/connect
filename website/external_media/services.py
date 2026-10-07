@@ -1308,8 +1308,14 @@ class RenderService:
         filters = []
         if metadata.is_hdr:
             filters.extend([
+                # Tonemap only works correctly in linear light. The previous
+                # float conversion skipped this transfer step and forced a
+                # 100-nit peak, which could make HLG/PQ phone footage look
+                # several stops darker after processing.
+                'zscale=transfer=linear:npl=1000',
                 'format=gbrpf32le',
-                'tonemap=tonemap=hable:desat=0:peak=100',
+                'tonemap=tonemap=hable:desat=0',
+                'zscale=transfer=bt709:primaries=bt709:matrix=bt709',
                 'format=yuv420p',
             ])
         if preset.width and preset.height:
@@ -2217,8 +2223,10 @@ class VideoAssemblyService:
         filters = self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'trim')
         if metadata.is_hdr:
             filters.extend([
+                'zscale=transfer=linear:npl=1000',
                 'format=gbrpf32le',
-                'tonemap=tonemap=hable:desat=0:peak=100',
+                'tonemap=tonemap=hable:desat=0',
+                'zscale=transfer=bt709:primaries=bt709:matrix=bt709',
                 'format=yuv420p',
             ])
         reframe_plan = None

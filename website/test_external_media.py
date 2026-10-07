@@ -4933,8 +4933,10 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             ),
         )
 
+        self.assertIn('zscale=transfer=linear:npl=1000', filters)
         self.assertIn('format=gbrpf32le', filters)
-        self.assertIn('tonemap=tonemap=hable:desat=0:peak=100', filters)
+        self.assertIn('tonemap=tonemap=hable:desat=0', filters)
+        self.assertIn('zscale=transfer=bt709:primaries=bt709:matrix=bt709', filters)
         self.assertEqual(filters[-1], 'format=yuv420p')
 
     def test_audio_copy_falls_back_to_aac_when_ffmpeg_rejects_it(self):
