@@ -2125,10 +2125,16 @@ class VideoAssemblyService:
                     scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
                     x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
                     y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
+                    # ``crop`` rounds to even pixels for yuv420p. Scaling it
+                    # back by the inverse zoom can therefore miss the source
+                    # canvas by one or two pixels (e.g. 1078 instead of
+                    # 1080), which makes FFmpeg's concat reject the segment.
+                    # Probe the normalized input and restore that exact canvas.
+                    target_width, target_height = self._video_dimensions(path)
                     transform_filter = (
                         f'crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
                         f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
-                        f'scale=trunc(iw*{scale:.5f}/2)*2:trunc(ih*{scale:.5f}/2)*2,'
+                        f'scale={target_width}:{target_height}:flags=lanczos,'
                     )
             concat_filters.extend([
                 f'[{index}:v:0]{video_trim}{transform_filter}setpts=PTS-STARTPTS[v{index}]',
