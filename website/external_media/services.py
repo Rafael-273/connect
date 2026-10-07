@@ -2293,12 +2293,12 @@ class VideoAssemblyService:
             red = float(color_adjustment.get('red') or 0) + float(color_adjustment.get('yellow') or 0) + float(color_adjustment.get('magenta') or 0)
             green = float(color_adjustment.get('green') or 0) + float(color_adjustment.get('yellow') or 0) + float(color_adjustment.get('cyan') or 0)
             blue = float(color_adjustment.get('blue') or 0) + float(color_adjustment.get('cyan') or 0) + float(color_adjustment.get('magenta') or 0)
-            red = min(1.0, max(-1.0, (red / 300) + temperature))
-            green = min(1.0, max(-1.0, green / 300))
-            blue = min(1.0, max(-1.0, (blue / 300) - temperature))
+            red = max(0.0, min(2.0, 1 + ((red / 300) + temperature) * .28))
+            green = max(0.0, min(2.0, 1 + (green / 300) * .28))
+            blue = max(0.0, min(2.0, 1 + ((blue / 300) - temperature) * .28))
             filters.extend([
                 f'eq=brightness={brightness:.4f}:contrast={contrast:.4f}:saturation={saturation:.4f}',
-                f'colorbalance=rs={red:.4f}:gs={green:.4f}:bs={blue:.4f}',
+                f'colorchannelmixer=rr={red:.4f}:gg={green:.4f}:bb={blue:.4f}',
             ])
         command.extend([
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',
@@ -3167,10 +3167,18 @@ class ExternalMediaProjectPipeline:
             for item in operations
             if item.get('type') == 'reframe' and not item.get('enabled', True)
         }
+        scoped_manual_sources = {
+            item.get('source_id')
+            for item in operations
+            if item.get('type') == 'reframe'
+            and item.get('enabled', True)
+            and (item.get('metadata') or {}).get('manual_transform')
+            and 'segment_start_ms' in (item.get('metadata') or {})
+        }
         fallback_plans = list(fallback_plans or [])
         result = []
         for index, source in enumerate(manifest.get('sources') or []):
-            if source.get('id') in disabled_sources:
+            if source.get('id') in disabled_sources or source.get('id') in scoped_manual_sources:
                 result.append({'disabled': True})
                 continue
             raw_fallback = fallback_plans[index] if index < len(fallback_plans) else None
