@@ -2284,9 +2284,15 @@ class VideoAssemblyService:
             contrast = min(200, max(0, float(color_adjustment.get('contrast') or 100))) / 100
             saturation = min(200, max(0, float(color_adjustment.get('saturation') or 100))) / 100
             temperature = min(100, max(-100, float(color_adjustment.get('temperature') or 0))) / 100
+            red = float(color_adjustment.get('red') or 0) + float(color_adjustment.get('yellow') or 0) + float(color_adjustment.get('magenta') or 0)
+            green = float(color_adjustment.get('green') or 0) + float(color_adjustment.get('yellow') or 0) + float(color_adjustment.get('cyan') or 0)
+            blue = float(color_adjustment.get('blue') or 0) + float(color_adjustment.get('cyan') or 0) + float(color_adjustment.get('magenta') or 0)
+            red = min(1.0, max(-1.0, (red / 300) + temperature))
+            green = min(1.0, max(-1.0, green / 300))
+            blue = min(1.0, max(-1.0, (blue / 300) - temperature))
             filters.extend([
                 f'eq=brightness={brightness:.4f}:contrast={contrast:.4f}:saturation={saturation:.4f}',
-                f'colorbalance=rs={temperature:.4f}:bs={-temperature:.4f}',
+                f'colorbalance=rs={red:.4f}:gs={green:.4f}:bs={blue:.4f}',
             ])
         command.extend([
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',

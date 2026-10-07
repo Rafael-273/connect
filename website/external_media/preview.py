@@ -455,9 +455,15 @@ class ProjectProxyService:
                 contrast = min(200, max(0, float(color.get('contrast') or 100))) / 100
                 saturation = min(200, max(0, float(color.get('saturation') or 100))) / 100
                 temperature = min(100, max(-100, float(color.get('temperature') or 0))) / 100
+                red = float(color.get('red') or 0) + float(color.get('yellow') or 0) + float(color.get('magenta') or 0)
+                green = float(color.get('green') or 0) + float(color.get('yellow') or 0) + float(color.get('cyan') or 0)
+                blue = float(color.get('blue') or 0) + float(color.get('cyan') or 0) + float(color.get('magenta') or 0)
+                red = min(1.0, max(-1.0, (red / 300) + temperature))
+                green = min(1.0, max(-1.0, green / 300))
+                blue = min(1.0, max(-1.0, (blue / 300) - temperature))
                 grade = '' if not color else (
                     f',eq=brightness={brightness:.4f}:contrast={contrast:.4f}:saturation={saturation:.4f}'
-                    f',colorbalance=rs={temperature:.4f}:bs={-temperature:.4f}'
+                    f',colorbalance=rs={red:.4f}:gs={green:.4f}:bs={blue:.4f}'
                 )
                 crop = '' if scale == 1 else (
                     f',crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
@@ -1240,6 +1246,10 @@ class TimelineRevisionService:
             'contrast': min(200, max(0, int(float(values.get('contrast', 100))))),
             'saturation': min(200, max(0, int(float(values.get('saturation', 100))))),
             'temperature': min(100, max(-100, int(float(values.get('temperature', 0))))),
+            **{
+                channel: min(100, max(-100, int(float(values.get(channel, 0)))))
+                for channel in ('red', 'yellow', 'green', 'cyan', 'blue', 'magenta')
+            },
         }
         decisions = deepcopy(current.edit_decision_set)
         operations = decisions.setdefault('operations', [])
