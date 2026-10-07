@@ -410,6 +410,11 @@ class ProjectProxyService:
             # overwrite another segment simply because they occur later.
             if 'segment_start_ms' not in (item.get('metadata') or {})
         }
+        color_adjustments = {
+            str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
+            for item in (revision.edit_decision_set.get('operations') or [])
+            if item.get('type') == 'color_adjustment' and item.get('enabled', True)
+        }
         video_filters, audio_filters, count = [], [], 0
         for clip in timeline.get('clips') or []:
             source_id = str(clip.get('asset_id') or '')
@@ -445,6 +450,15 @@ class ProjectProxyService:
                 scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
                 x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
                 y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
+                color = color_adjustments.get(source_id) or {}
+                brightness = min(100, max(-100, float(color.get('brightness') or 0))) / 200
+                contrast = min(200, max(0, float(color.get('contrast') or 100))) / 100
+                saturation = min(200, max(0, float(color.get('saturation') or 100))) / 100
+                temperature = min(100, max(-100, float(color.get('temperature') or 0))) / 100
+                grade = '' if not color else (
+                    f',eq=brightness={brightness:.4f}:contrast={contrast:.4f}:saturation={saturation:.4f}'
+                    f',colorbalance=rs={temperature:.4f}:bs={-temperature:.4f}'
+                )
                 crop = '' if scale == 1 else (
                     f',crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
                     f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
@@ -454,7 +468,7 @@ class ProjectProxyService:
                     f',scale={int(concat_width)}:{int(concat_height)}:flags=fast_bilinear,setsar=1'
                     if concat_width and concat_height else ''
                 )
-                video_filters.append(f'[0:v]trim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},setpts=PTS-STARTPTS{crop}{normalize}[v{count}]')
+                video_filters.append(f'[0:v]trim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},setpts=PTS-STARTPTS{crop}{normalize}{grade}[v{count}]')
                 audio_filters.append(f'[0:a]atrim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{count}]')
                 count += 1
         if count:
@@ -617,6 +631,11 @@ class PreviewCompositionService:
             if item.get('type') == 'reframe' and item.get('enabled', True)
             and 'segment_start_ms' not in (item.get('metadata') or {})
         }
+        color_adjustments = {
+            str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
+            for item in operations
+            if item.get('type') == 'color_adjustment' and item.get('enabled', True)
+        }
         assets, clips, markers = [], [], []
         source_cursor = timeline_cursor = 0
         # Ranges kept in the pre-cut "project_timeline" coordinate space (the
@@ -682,6 +701,7 @@ class PreviewCompositionService:
                     'skip_extra_processing': bool((source.get('metadata') or {}).get('skip_extra_processing')),
                     'effects': ([{'type': 'transform', **transforms[source['id']]}]
                                 if transforms.get(source['id']) else []),
+                    'color_adjustment': color_adjustments.get(source_id),
                 })
                 timeline_cursor += duration
             markers.append({
@@ -783,10 +803,11 @@ class PreviewCompositionService:
             )
             for item in operations
         )
+        has_color_adjustment = bool(color_adjustments)
         # Until a fresh continuous review proxy is composed, a manual transform
         # must use the source proxy. The prior assembled master can contain a
         # previous crop and would show a different zoom from the final render.
-        if has_reframe_override:
+        if has_reframe_override or has_color_adjustment:
             review_master_url = None
         fidelity = {key: cls.FIDELITY[key] for key in capabilities['available']}
         if review_master_url and not has_reframe_override and 'TRANSFORMS' in fidelity:
@@ -1136,26 +1157,32 @@ class TimelineRevisionService:
         target = next((item for item in decisions.get('operations', []) if item.get('id') == decision_id), None)
         if not target or target.get('type') != 'reframe':
             raise ValueError('Enquadramento não encontrado nesta timeline.')
-        if 'segment_start_ms' in (target.get('metadata') or {}):
-            # Revisions created before per-source framing was enforced may
-            # still contain one reframe operation for each side of a blade.
-            # Promote the user-selected value to the whole take now instead
-            # of silently rendering only an arbitrary segment at delivery.
-            source_id = target.get('source_id')
-            normalized = deepcopy(target)
-            metadata = normalized.setdefault('metadata', {})
-            metadata.pop('segment_start_ms', None)
-            metadata.pop('segment_end_ms', None)
-            decisions['operations'] = [
-                item for item in decisions.get('operations', [])
-                if not (
-                    item.get('type') == 'reframe'
-                    and item.get('source_id') == source_id
-                    and 'segment_start_ms' in (item.get('metadata') or {})
-                )
-            ]
-            decisions['operations'].append(normalized)
-            target = normalized
+        try:
+            segment_start = int(values.get('segment_start_ms'))
+            segment_end = int(values.get('segment_end_ms'))
+        except (TypeError, ValueError):
+            segment_start = segment_end = None
+        if segment_start is not None and segment_end is not None and segment_end - segment_start >= MIN_MANUAL_CUT_MS:
+            # A blade only changes the timeline; it does not create a new
+            # source file. Create a scoped child decision so a zoom made to
+            # one side of the blade never leaks into the other side.
+            scoped = next((item for item in decisions.get('operations', []) if (
+                item.get('type') == 'reframe'
+                and item.get('source_id') == target.get('source_id')
+                and int((item.get('metadata') or {}).get('segment_start_ms', -1)) == segment_start
+                and int((item.get('metadata') or {}).get('segment_end_ms', -1)) == segment_end
+            )), None)
+            if not scoped:
+                scoped = deepcopy(target)
+                scoped['id'] = f'reframe-segment-{uuid.uuid4().hex[:12]}'
+                scoped['metadata'] = {
+                    **(scoped.get('metadata') or {}),
+                    'segment_start_ms': segment_start,
+                    'segment_end_ms': segment_end,
+                }
+                scoped['metadata'].pop('manual_transform', None)
+                decisions['operations'].append(scoped)
+            target = scoped
         previous = deepcopy((target.get('metadata') or {}).get('manual_transform'))
         if values.get('restore_original'):
             target['enabled'] = False
@@ -1192,6 +1219,56 @@ class TimelineRevisionService:
         cls._record(session, current, revision, 'UPDATE_TRANSFORM', {
             'decision_id': decision_id, **transform,
         }, {'decision_id': decision_id, 'manual_transform': previous}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
+    def update_color_adjustment(cls, project, member, source_id, values):
+        """Persist the Lumetri-like basic grade in the editorial revision.
+
+        The operation is deliberately source-scoped: selecting a take in the
+        video lane never changes the other camera takes.  Both the review
+        compositor and the delivery assembly consume this same metadata.
+        """
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        valid_sources = {str(item.get('id')) for item in (current.source_manifest or {}).get('sources') or []}
+        if str(source_id) not in valid_sources:
+            raise ValueError('Camada de vídeo não encontrada nesta timeline.')
+        adjustment = {
+            'brightness': min(100, max(-100, int(float(values.get('brightness', 0))))),
+            'contrast': min(200, max(0, int(float(values.get('contrast', 100))))),
+            'saturation': min(200, max(0, int(float(values.get('saturation', 100))))),
+            'temperature': min(100, max(-100, int(float(values.get('temperature', 0))))),
+        }
+        decisions = deepcopy(current.edit_decision_set)
+        operations = decisions.setdefault('operations', [])
+        target = next((item for item in operations if item.get('type') == 'color_adjustment' and str(item.get('source_id')) == str(source_id)), None)
+        previous = deepcopy((target or {}).get('metadata', {}).get('adjustment'))
+        if values.get('reset'):
+            if not target:
+                return current
+            operations.remove(target)
+            reason, operation = 'Cor restaurada', 'RESET_COLOR_ADJUSTMENT'
+        else:
+            if previous == adjustment:
+                return current
+            if not target:
+                target = {
+                    'id': f'color-adjustment-{len(operations) + 1}', 'type': 'color_adjustment',
+                    'source_id': str(source_id), 'origin': 'USER', 'producer': 'interactive_preview',
+                    'producer_version': '1', 'reason': 'basic_color_grade', 'confidence': None, 'metadata': {},
+                }
+                operations.append(target)
+            target['enabled'] = True
+            target['origin'] = 'USER'
+            target.setdefault('metadata', {})['adjustment'] = adjustment
+            reason, operation = 'Cor ajustada', 'UPDATE_COLOR_ADJUSTMENT'
+        revision = cls._create(locked, current.source_manifest, decisions, reason, member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, operation, {
+            'source_id': str(source_id), 'adjustment': None if values.get('reset') else adjustment,
+        }, {'source_id': str(source_id), 'adjustment': previous}, member)
         return revision
 
     @classmethod
@@ -1497,45 +1574,9 @@ class TimelineRevisionService:
         # infrastructure. A slow preview worker must never prevent approval
         # or leave a project stuck in review; the final renderer consumes this
         # immutable revision directly.
-        scoped_reframes = [
-            item for item in (revision.edit_decision_set.get('operations') or [])
-            if item.get('type') == 'reframe'
-            and 'segment_start_ms' in (item.get('metadata') or {})
-        ]
-        if scoped_reframes:
-            # Legacy blades used to clone a reframe decision per segment even
-            # though the final assembler has one framing plan per source. Do
-            # not strand those projects in review: create an auditable child
-            # revision that consolidates each take. A manual value wins; when
-            # more than one exists, the last saved one is the member's latest
-            # explicit editorial choice.
-            decisions = deepcopy(revision.edit_decision_set)
-            operations = decisions.get('operations') or []
-            for source_id in {item.get('source_id') for item in scoped_reframes}:
-                candidates = [
-                    item for item in operations
-                    if item.get('type') == 'reframe'
-                    and item.get('source_id') == source_id
-                    and 'segment_start_ms' in (item.get('metadata') or {})
-                ]
-                if not candidates:
-                    continue
-                manual = [
-                    item for item in candidates
-                    if (item.get('metadata') or {}).get('manual_transform')
-                ]
-                chosen = deepcopy((manual or candidates)[-1])
-                chosen_metadata = chosen.setdefault('metadata', {})
-                chosen_metadata.pop('segment_start_ms', None)
-                chosen_metadata.pop('segment_end_ms', None)
-                candidate_ids = {id(item) for item in candidates}
-                operations = [item for item in operations if id(item) not in candidate_ids]
-                operations.append(chosen)
-            decisions['operations'] = operations
-            revision = cls._create(
-                locked, revision.source_manifest, decisions,
-                'Enquadramentos por trecho consolidados para renderização', member, revision,
-            )
+        # Scoped reframes are intentional editorial decisions.  Keep them
+        # untouched on approval: collapsing them into one source-wide crop
+        # would make the last adjusted side of a blade overwrite all others.
         revision.approved_at = timezone.now()
         revision.save(update_fields=['approved_at', 'update_at'])
         # Approval must pin both pointers to the same immutable snapshot.  If an

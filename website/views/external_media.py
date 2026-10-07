@@ -2331,6 +2331,18 @@ class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View)
         return preview_revision_response(project, self.member, revision)
 
 
+class ExternalMediaProjectPreviewColorView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id, source_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        try:
+            revision = TimelineRevisionService.update_color_adjustment(
+                project, self.member, source_id, json.loads(request.body or '{}'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc) or 'Os ajustes de cor são inválidos.'}, status=400)
+        return preview_revision_response(project, self.member, revision)
+
+
 class ExternalMediaProjectOverlayDataView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id, overlay_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)

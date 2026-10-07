@@ -1694,6 +1694,7 @@ class VideoAssemblyService:
         self, sources, output_path, preset, workdir, lut_path=None, lut_intensity=50, music_path=None,
         music_volume=0.15, auto_reframe_config=None, analysis_sources=None,
         reframe_plans=None, progress_callback=None, source_intervals=None, preflight=None,
+        source_color_adjustments=None,
     ):
         self.last_reframe_plans = []
         self.last_protected_ranges = []
@@ -1728,6 +1729,7 @@ class VideoAssemblyService:
         ]
         analysis_sources = [source.path for source in analysis_source_items]
         reframe_plans = reframe_plans or []
+        source_color_adjustments = source_color_adjustments or {}
         if (
             not reframe_plans
             and auto_reframe_config
@@ -1785,6 +1787,7 @@ class VideoAssemblyService:
                 'trim_start_ms': source_item.trim_start_ms,
                 'trim_end_ms': source_item.trim_end_ms,
                 'preserve_framing': source_item.skip_extra_processing,
+                'color_adjustment': source_color_adjustments.get(source_item.label),
             })
             normalized.append(destination)
 
@@ -1897,7 +1900,7 @@ class VideoAssemblyService:
                 # durations and AAC padding from previous takes must never
                 # participate in choosing the samples of the next take.
                 selected = [normalized[item['source_index']] for item in source_intervals]
-                intervals = [(item['start_ms'], item['end_ms']) for item in source_intervals]
+                intervals = source_intervals
                 self._concat_normalized(selected, assembled, workdir, intervals=intervals)
         finally:
             for temporary_name in temporary_normalized:
@@ -2052,6 +2055,7 @@ class VideoAssemblyService:
             'lut_intensity': int(job.get('lut_intensity') or 0),
             'auto_reframe': job.get('auto_reframe_config') or {},
             'reframe_plan': plan,
+            'color_adjustment': job.get('color_adjustment') or {},
             'preserve_framing': bool(job.get('preserve_framing')),
         }, sort_keys=True, default=str)
 
@@ -2105,14 +2109,29 @@ class VideoAssemblyService:
         for index, path in enumerate(paths):
             command.extend(['-i', self.runner.input_arg(path)])
             video_trim = audio_trim = ''
+            transform_filter = ''
             if intervals is not None:
-                start_ms, end_ms = intervals[index]
+                interval = intervals[index]
+                start_ms, end_ms = (
+                    (interval['start_ms'], interval['end_ms'])
+                    if isinstance(interval, dict) else interval
+                )
                 if start_ms < 0 or end_ms <= start_ms:
                     raise ExternalMediaError('A revisão contém um trecho de vídeo inválido.')
                 bounds = f'start={start_ms / 1000:.3f}:end={end_ms / 1000:.3f}'
                 video_trim, audio_trim = f'trim={bounds},', f'atrim={bounds},'
+                transform = interval.get('manual_transform') if isinstance(interval, dict) else None
+                if transform:
+                    scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
+                    x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
+                    y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
+                    transform_filter = (
+                        f'crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
+                        f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
+                        f'scale=trunc(iw*{scale:.5f}/2)*2:trunc(ih*{scale:.5f}/2)*2,'
+                    )
             concat_filters.extend([
-                f'[{index}:v:0]{video_trim}setpts=PTS-STARTPTS[v{index}]',
+                f'[{index}:v:0]{video_trim}{transform_filter}setpts=PTS-STARTPTS[v{index}]',
                 f'[{index}:a:0]{audio_trim}asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
             ])
             concat_inputs.append(f'[v{index}][a{index}]')
@@ -2179,7 +2198,7 @@ class VideoAssemblyService:
     def _normalize(
         self, source, destination, width, height, lut_path, lut_intensity=50, auto_reframe_config=None,
         analysis_source=None, reframe_plan_data=None, trim_start_ms=0, trim_end_ms=None,
-        preserve_framing=False, source_index=None,
+        preserve_framing=False, source_index=None, color_adjustment=None,
     ):
         has_audio = self._has_audio(source)
         metadata = RenderService(runner=self.runner).probe_video(source)
@@ -2260,6 +2279,15 @@ class VideoAssemblyService:
                     f"[lut_graded_source]lut3d='{escaped}'[lut_graded]",
                     f"[lut_original][lut_graded]blend=all_expr='A*{1 - intensity:.3f}+B*{intensity:.3f}'",
                 ])
+        if color_adjustment:
+            brightness = min(100, max(-100, float(color_adjustment.get('brightness') or 0))) / 200
+            contrast = min(200, max(0, float(color_adjustment.get('contrast') or 100))) / 100
+            saturation = min(200, max(0, float(color_adjustment.get('saturation') or 100))) / 100
+            temperature = min(100, max(-100, float(color_adjustment.get('temperature') or 0))) / 100
+            filters.extend([
+                f'eq=brightness={brightness:.4f}:contrast={contrast:.4f}:saturation={saturation:.4f}',
+                f'colorbalance=rs={temperature:.4f}:bs={-temperature:.4f}',
+            ])
         command.extend([
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',
             '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
@@ -2833,6 +2861,11 @@ class ExternalMediaProjectPipeline:
         configuration = project.configuration or {}
         saved_reframe_plans = configuration.get('auto_reframe_plans') or []
         approved_revision = project.approved_timeline_revision
+        approved_color_adjustments = {
+            str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
+            for item in ((approved_revision.edit_decision_set.get('operations') if approved_revision else []) or [])
+            if item.get('type') == 'color_adjustment' and item.get('enabled', True)
+        }
         if approved_revision:
             # The review screen is an approval of this exact framing plan. Its
             # plan references are immutable revision data and must win over a
@@ -2891,6 +2924,7 @@ class ExternalMediaProjectPipeline:
                 analysis_sources=analysis_sources,
                 reframe_plans=saved_reframe_plans,
                 source_intervals=source_intervals,
+                source_color_adjustments=approved_color_adjustments,
                 preflight=validate_source_timeline if source_intervals is not None else None,
                 progress_callback=lambda completed, total: self._update(
                     project,
@@ -3250,6 +3284,21 @@ class ExternalMediaProjectPipeline:
             str(item['id']): item for item in (revision.source_manifest or {}).get('sources', [])
             if (item.get('metadata') or {}).get('render_enabled', True)
         }
+        source_master_starts, cursor = {}, 0
+        for source in (revision.source_manifest or {}).get('sources', []):
+            if not (source.get('metadata') or {}).get('render_enabled', True):
+                continue
+            trim = source.get('trim') or {}
+            start = int(trim.get('start_ms') or 0)
+            end = int(trim.get('end_ms') or source.get('duration_ms') or start)
+            source_master_starts[str(source.get('id'))] = (cursor, start)
+            cursor += max(1, end - start)
+        scoped_reframes = [
+            item for item in (revision.edit_decision_set.get('operations') or [])
+            if item.get('type') == 'reframe'
+            and item.get('enabled', True)
+            and 'segment_start_ms' in (item.get('metadata') or {})
+        ]
         result = []
         for clip in clips:
             source_id = str(clip.get('asset_id') or '')
@@ -3267,7 +3316,32 @@ class ExternalMediaProjectPipeline:
             end = int(clip.get('source_out_ms') or 0) - int(source.trim_start_ms or 0)
             if start < 0 or end <= start:
                 raise ExternalMediaError('A revisão aprovada contém um trecho de vídeo inválido.')
-            result.append({'source_id': source_id, 'source_index': index, 'start_ms': start, 'end_ms': end})
+            master_base, trim_start = source_master_starts.get(source_id, (0, int(source.trim_start_ms or 0)))
+            master_start = master_base + int(clip.get('source_in_ms') or 0) - trim_start
+            master_end = master_base + int(clip.get('source_out_ms') or 0) - trim_start
+            boundaries = {master_start, master_end}
+            matching = [
+                item for item in scoped_reframes
+                if str(item.get('source_id')) == source_id
+            ]
+            for item in matching:
+                metadata = item.get('metadata') or {}
+                for boundary in (metadata.get('segment_start_ms'), metadata.get('segment_end_ms')):
+                    if boundary is not None and master_start < int(boundary) < master_end:
+                        boundaries.add(int(boundary))
+            for part_start, part_end in zip(sorted(boundaries), sorted(boundaries)[1:]):
+                transform = next((
+                    (item.get('metadata') or {}).get('manual_transform')
+                    for item in matching
+                    if int((item.get('metadata') or {}).get('segment_start_ms') or 0) <= part_start
+                    < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
+                ), None)
+                result.append({
+                    'source_id': source_id, 'source_index': index,
+                    'start_ms': start + part_start - master_start,
+                    'end_ms': start + part_end - master_start,
+                    'manual_transform': transform,
+                })
         return result
 
     @staticmethod
