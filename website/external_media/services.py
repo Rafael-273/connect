@@ -2134,7 +2134,7 @@ class VideoAssemblyService:
                     transform_filter = (
                         f'crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
                         f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
-                        f'scale={target_width}:{target_height}:flags=lanczos,'
+                        f'scale={target_width}:{target_height}:flags=lanczos,setsar=1,format=yuv420p,'
                     )
             concat_filters.extend([
                 f'[{index}:v:0]{video_trim}{transform_filter}setpts=PTS-STARTPTS[v{index}]',
