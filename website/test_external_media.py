@@ -4933,9 +4933,12 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             ),
         )
 
-        self.assertIn('zscale=transfer=linear:npl=1000', filters)
+        self.assertIn(
+            'zscale=matrixin=bt2020nc:transferin=smpte2084:primariesin=bt2020:transfer=linear:npl=1000',
+            filters,
+        )
         self.assertIn('format=gbrpf32le', filters)
-        self.assertIn('tonemap=tonemap=hable:desat=0', filters)
+        self.assertIn('tonemap=tonemap=mobius:param=0.30:desat=0', filters)
         self.assertIn('zscale=transfer=bt709:primaries=bt709:matrix=bt709', filters)
         self.assertEqual(filters[-1], 'format=yuv420p')
 

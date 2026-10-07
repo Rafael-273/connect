@@ -1304,20 +1304,27 @@ class RenderService:
         return Path(settings.BASE_DIR) / 'static' / 'fonts' / 'subtitles'
 
     @staticmethod
+    def hdr_to_sdr_filters(metadata):
+        """Convert phone HLG/PQ footage to SDR without crushing midtones."""
+        matrix = metadata.color_space or 'bt2020nc'
+        transfer = metadata.color_transfer or 'arib-std-b67'
+        primaries = metadata.color_primaries or 'bt2020'
+        return [
+            f'zscale=matrixin={matrix}:transferin={transfer}:primariesin={primaries}:transfer=linear:npl=1000',
+            'format=gbrpf32le',
+            # Mobius leaves the ordinary tonal range intact and compresses
+            # highlights only after its knee. Hable made indoor HLG footage
+            # visibly darker than the browser/source preview.
+            'tonemap=tonemap=mobius:param=0.30:desat=0',
+            'zscale=transfer=bt709:primaries=bt709:matrix=bt709',
+            'format=yuv420p',
+        ]
+
+    @staticmethod
     def build_video_filters(preset, escaped_ass_path, metadata):
         filters = []
         if metadata.is_hdr:
-            filters.extend([
-                # Tonemap only works correctly in linear light. The previous
-                # float conversion skipped this transfer step and forced a
-                # 100-nit peak, which could make HLG/PQ phone footage look
-                # several stops darker after processing.
-                'zscale=transfer=linear:npl=1000',
-                'format=gbrpf32le',
-                'tonemap=tonemap=hable:desat=0',
-                'zscale=transfer=bt709:primaries=bt709:matrix=bt709',
-                'format=yuv420p',
-            ])
+            filters.extend(RenderService.hdr_to_sdr_filters(metadata))
         if preset.width and preset.height:
             filters.extend([
                 f'scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase:flags=lanczos',
@@ -2222,13 +2229,7 @@ class VideoAssemblyService:
         # seeking preserves that gap and it becomes audible after concat.
         filters = self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'trim')
         if metadata.is_hdr:
-            filters.extend([
-                'zscale=transfer=linear:npl=1000',
-                'format=gbrpf32le',
-                'tonemap=tonemap=hable:desat=0',
-                'zscale=transfer=bt709:primaries=bt709:matrix=bt709',
-                'format=yuv420p',
-            ])
+            filters.extend(RenderService.hdr_to_sdr_filters(metadata))
         reframe_plan = None
         if auto_reframe_config:
             analysis_source = analysis_source or source
