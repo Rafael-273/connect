@@ -1140,6 +1140,13 @@ class TimelineRevisionService:
             raise ValueError('A legenda não pode ficar vazia.')
         if cue.end_ms - cue.start_ms < MIN_MANUAL_CUT_MS:
             raise ValueError('A legenda precisa ter ao menos um quadro de duração.')
+        overlaps = SubtitleCue.objects.select_for_update().filter(
+            track_id=cue.track_id,
+            start_ms__lt=cue.end_ms,
+            end_ms__gt=cue.start_ms,
+        ).exclude(pk=cue.pk).exists()
+        if overlaps:
+            raise ValueError('As legendas da mesma faixa não podem se sobrepor.')
         if (cue.text, cue.start_ms, cue.end_ms) == (
             previous['text'], previous['start_ms'], previous['end_ms'],
         ):

@@ -344,7 +344,7 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
             3: 'Peace be with you.',
             4: 'Amen.',
         }
-        SubtitleCue.objects.create(
+        other_cue = SubtitleCue.objects.create(
             track=self.track, cue_index=3, start_ms=9000, end_ms=11000, text='Paz do Senhor.',
         )
         SubtitleCue.objects.create(
@@ -1309,6 +1309,17 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             (moved.timeline['captions'][0]['start_ms'], moved.timeline['captions'][0]['end_ms']),
             (1500, 2600),
         )
+
+        SubtitleCue.objects.create(
+            track=track, cue_index=2, start_ms=3000, end_ms=4000, text='Outra legenda',
+        )
+        with self.assertRaisesMessage(ValueError, 'As legendas da mesma faixa não podem se sobrepor.'):
+            TimelineRevisionService.update_subtitle(
+                project, self.member, cue.pk, start_ms=2500, end_ms=3500,
+            )
+        cue.refresh_from_db()
+        self.assertEqual((cue.start_ms, cue.end_ms), (1500, 2600))
+        other_cue.delete()
 
         removed = TimelineRevisionService.update_subtitle(project, self.member, cue.pk, delete=True)
         self.assertEqual(removed.timeline['captions'], [])

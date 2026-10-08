@@ -4,22 +4,24 @@
 {% block media_header_title %}
 <div class="flex items-center gap-3 min-w-0">
     <a href="{% url 'external_media_project_detail' project.public_id %}" class="block min-w-0">
-        <strong class="block text-lg truncate">Revisar edição</strong>
-        <small>{{ project.name }}</small>
+        <strong class="block text-lg truncate">{{ project.name }}</strong>
+        <small>Revisar edição</small>
     </a>
 </div>
 {% endblock %}
 
 {% block media_header_actions %}
-<div class="editor-header-group">
-    <button type="button" class="media-btn media-muted" id="btn-back-to-blocks" title="Voltar à tela de blocos para editar os vídeos enviados"><i class="fas fa-arrow-left"></i><span class="hidden sm:inline">Voltar</span></button>
-    <button type="button" class="media-btn media-muted" id="btn-reprocess" title="Reprocessar o projeto do zero"><i class="fas fa-rotate"></i><span class="hidden md:inline">Reprocessar</span></button>
-</div>
 <div class="editor-header-history" aria-label="Histórico de alterações">
     <button type="button" class="media-btn media-muted disabled:opacity-40" data-history="undo" {% if not session.undo_stack %}disabled{% endif %} title="Desfazer"><i class="fas fa-rotate-left"></i><span class="sr-only">Desfazer</span></button>
     <button type="button" class="media-btn media-muted disabled:opacity-40" data-history="redo" {% if not session.redo_stack %}disabled{% endif %} title="Refazer"><i class="fas fa-rotate-right"></i><span class="sr-only">Refazer</span></button>
 </div>
-<a class="media-btn media-muted editor-subtitle-action" href="{% url 'external_media_project_subtitle_reviews' project.public_id %}" title="Enviar para aprovação de legendas"><i class="fas fa-paper-plane"></i><span class="hidden lg:inline">Legendas</span></a>
+<div class="editor-header-menu">
+    <button type="button" class="media-btn media-muted editor-header-menu__trigger" id="editor-more-actions" aria-expanded="false" aria-controls="editor-more-menu" title="Mais ações"><i class="fas fa-ellipsis"></i><span class="sr-only">Mais ações</span></button>
+    <div class="editor-header-menu__popover" id="editor-more-menu" role="menu" hidden>
+        <button type="button" class="editor-header-menu__item" id="btn-reprocess" role="menuitem"><i class="fas fa-rotate"></i>Reprocessar</button>
+        <a class="editor-header-menu__item" href="{% url 'external_media_project_subtitle_reviews' project.public_id %}" role="menuitem"><i class="fas fa-paper-plane"></i>Revisar legendas</a>
+    </div>
+</div>
 <button type="button" class="media-btn media-primary" id="approve-preview"><i class="fas fa-check"></i><span class="hidden sm:inline">Aprovar edição</span><span class="sm:hidden">Aprovar</span></button>
 {% endblock %}
 
@@ -123,15 +125,23 @@
     .editor-timeline__bar>div{display:grid!important;gap:.45rem!important}
     .editor-timeline__bar .editor-tool,.editor-timeline__bar #delete-segment{width:2.2rem;height:2.2rem;padding:0;justify-content:center;white-space:nowrap}
     .editor-timeline__bar .editor-tool kbd{display:none}
+    .editor-timeline__tool-divider{width:1.25rem;height:1px;margin:.15rem auto;background:#344154}
+    .editor-timeline__zoom-value{min-width:2.2rem;color:#8f9daf;font-size:.62rem;font-weight:800;text-align:center}
+    .editor-timeline__bar [data-timeline-zoom],.editor-timeline__bar .editor-timeline__zoom-value,.editor-timeline__bar .editor-timeline__tool-divider{display:none}
+    .timeline-zoom-control{position:absolute;right:clamp(1rem,3vw,3rem);display:flex;align-items:center;gap:.55rem;padding-left:1rem;border-left:1px solid #293546}.timeline-zoom-control button{display:grid;place-items:center;width:1.9rem;height:1.9rem;border-radius:.35rem;color:#b8c5d6}.timeline-zoom-control button:hover{background:#202b3a;color:#fff}.timeline-zoom-control button:disabled{opacity:.35;cursor:not-allowed}.timeline-zoom-control input{width:8rem;height:.35rem;accent-color:#e23b35;cursor:pointer}
+    /* Keep scrolling available without letting the browser chrome compete with the editor. */
+    .preview-shell *{scrollbar-width:thin;scrollbar-color:#3d4b5f transparent}.preview-shell ::-webkit-scrollbar{width:7px;height:7px}.preview-shell ::-webkit-scrollbar-track{background:transparent}.preview-shell ::-webkit-scrollbar-thumb{border:2px solid transparent;border-radius:999px;background:#3d4b5f;background-clip:padding-box}.preview-shell ::-webkit-scrollbar-thumb:hover{background:#596b83;background-clip:padding-box}.preview-shell ::-webkit-scrollbar-corner{background:transparent}
     .editor-timeline__scroller{grid-column:2;grid-row:2;width:100%;min-width:0;margin:0}
     .editor-timeline__canvas{min-width:100%!important;box-sizing:border-box}
     .editor-ruler,#editor-tracks,.editor-track{width:100%;min-width:100%;box-sizing:border-box}
     @media(max-width:760px){.editor-timeline{display:block}.editor-timeline__transport{margin-bottom:.8rem}.editor-timeline__bar{padding:0 0 .8rem;margin-bottom:.8rem;border-bottom:1px solid #293140;flex-direction:row;align-items:center}.editor-timeline__bar>div{display:flex!important;flex-wrap:wrap}.editor-timeline__bar .editor-tool,.editor-timeline__bar #delete-segment{width:auto}}
     .media-header-actions{gap:.55rem!important}.editor-header-group,.editor-header-history{display:flex;align-items:center;gap:.35rem}.editor-header-history{padding-left:.55rem;border-left:1px solid #2b3340}.editor-header-history .media-btn{width:2.8rem;height:2.8rem;padding:0}.editor-subtitle-action{min-width:2.8rem}.editor-header-group .media-btn{padding-left:.8rem;padding-right:.8rem}@media(max-width:640px){.editor-header-history{padding-left:0;border-left:0}.editor-subtitle-action{padding-left:.75rem!important;padding-right:.75rem!important}}
+    .editor-header-menu{position:relative}.editor-header-menu__trigger{width:2.8rem;height:2.8rem;padding:0!important;justify-content:center}.editor-header-menu__popover{position:absolute;z-index:90;top:calc(100% + .55rem);right:0;width:13.75rem;padding:.4rem;border:1px solid #354154;border-radius:.65rem;background:#151c27;box-shadow:0 18px 44px rgba(0,0,0,.36)}.editor-header-menu__item{display:flex;width:100%;align-items:center;gap:.65rem;border-radius:.4rem;padding:.62rem .7rem;color:#dce5f1;font-size:.78rem;font-weight:700;text-align:left}.editor-header-menu__item:hover{background:#253244;color:#fff}.editor-header-menu__item:disabled{opacity:.42;cursor:not-allowed}.editor-header-menu__item i{width:1rem;color:#a9b8cc;text-align:center}.editor-header-menu__divider{display:block;height:1px;margin:.35rem 0;background:#303c4e}
     /* On wide workspaces the inspector is part of the canvas, not a drawer over it. */
     @media(min-width:900px){.preview-shell.is-inspector-open .preview-layout{display:grid;grid-template-columns:minmax(20rem,1fr) minmax(0,min(68rem,58vw));gap:clamp(1rem,2vw,2rem);align-items:center}.preview-shell.is-inspector-open .preview-player-card{grid-column:2;grid-row:1;width:100%;margin:0 auto}.preview-adjustments{grid-column:1;grid-row:1;align-self:stretch;position:static;display:none;width:100%;height:auto;max-height:none;border-radius:.55rem;transform:none;box-shadow:none;background:#0d1118}.preview-adjustments.is-open{display:flex}.preview-adjustments>.p-4{align-items:flex-start;flex-wrap:wrap}.preview-adjustments>.p-4>div:last-child{flex-wrap:wrap;justify-content:flex-end}}
     /* Desktop inspector: a docked editing surface, rather than a floating dialog. */
     @media(min-width:900px){
+        .preview-shell.is-inspector-open{padding-left:0!important}
         .preview-adjustments{border:0;border-right:1px solid #293546;border-radius:0;background:linear-gradient(180deg,#111923 0%,#0c1119 100%)}
         .preview-adjustments.is-open{animation:inspector-enter .26s cubic-bezier(.2,.8,.2,1) both}
         .preview-adjustments__head{min-height:5.25rem;padding:1rem 1.15rem;background:rgba(19,28,40,.92);border-bottom:1px solid #2a3748}
@@ -175,8 +185,8 @@
 #text-element-modal textarea:focus,#text-element-modal input:focus{border-color:#ed403c;outline:2px solid rgba(237,64,60,.2);outline-offset:1px}
 /* Após reabrir a edição há um aviso entre o header e o editor; não dependa de irmãos imediatos. */
 header:has(~ .media-shell .preview-shell){background:#0d1016;border-color:#2b313d!important;color:#eef2f7}
-header:has(~ .media-shell .preview-shell) .media-header-identity strong{color:#f8fafc}
-header:has(~ .media-shell .preview-shell) .media-header-identity small{color:#8f9aac}
+header:has(~ .media-shell .preview-shell) .media-header-identity strong{color:#f8fafc;line-height:1.1;margin:0}
+header:has(~ .media-shell .preview-shell) .media-header-identity small{display:block;margin-top:0!important;color:#8f9aac;line-height:1.15}
 header:has(~ .media-shell .preview-shell) .media-btn.media-muted{background:#151a23;border-color:#303846;color:#e4e9f1}
 header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{background:#202735}
 /* O monitor do editor representa o quadro final: mantenha-o retangular. */
@@ -195,9 +205,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
        timeline tracks scrolling when there are more lanes than room. */
     @media (min-width:761px){
         html:has(.preview-shell),body:has(.preview-shell){height:100%;overflow:hidden}
-        header:has(~ .media-shell .preview-shell) .media-header-inner{min-height:4.5rem;padding-top:.55rem!important;padding-bottom:.55rem!important;gap:.75rem!important;flex-wrap:nowrap}
-        header:has(~ .media-shell .preview-shell) .media-header-identity>a:first-child span{width:2.65rem;height:2.65rem}
-        .media-shell:has(.preview-shell){height:calc(100dvh - 4.5rem)!important;min-height:0!important;padding:0!important;overflow:hidden}
+        header:has(~ .media-shell .preview-shell) .media-header-inner{min-height:3.8rem;padding-top:.35rem!important;padding-bottom:.35rem!important;gap:.65rem!important;flex-wrap:nowrap}
+        header:has(~ .media-shell .preview-shell) .media-header-identity>a:first-child span{width:2.25rem;height:2.25rem}
+        header:has(~ .media-shell .preview-shell) .media-header-identity strong{font-size:1rem!important}
+        header:has(~ .media-shell .preview-shell) .media-header-identity small{font-size:.68rem!important}
+        header:has(~ .media-shell .preview-shell) .media-btn{min-height:2.35rem!important;font-size:.78rem}
+        header:has(~ .media-shell .preview-shell) .editor-header-history .media-btn,header:has(~ .media-shell .preview-shell) .editor-header-menu__trigger{width:2.35rem;height:2.35rem}
+        .media-shell:has(.preview-shell){height:calc(100dvh - 3.8rem)!important;min-height:0!important;padding:0!important;overflow:hidden}
         .preview-shell{height:100%;min-height:0!important;padding:.45rem clamp(1rem,3vw,3rem) 0!important;overflow:hidden}
         .preview-layout{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
         .preview-player-card{flex:none;max-width:100%;margin:0 auto!important}
@@ -233,8 +247,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             <div class="preview-list p-3 space-y-2" id="review-list"></div>
     </aside>
     </div>
-    <div class="editor-timeline__transport preview-controls"><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time">00:00 / 00:00</span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"></div>
-    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Ferramenta lâmina (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-plus"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
+    <div class="editor-timeline__transport preview-controls"><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time">00:00 / 00:00</span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
+    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Ferramenta lâmina (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
 </div>
 
 <div class="preview-modal" id="back-to-blocks-modal" role="dialog" aria-modal="true" aria-labelledby="back-to-blocks-title">
@@ -312,6 +326,16 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const overlayLayer = document.getElementById('preview-overlay-layer'), brollLayer = document.getElementById('preview-broll-layer'), transformBox = document.getElementById('preview-transform-box');
     const list = document.getElementById('review-list'), play = document.getElementById('preview-play');
     const reviewPanel = document.getElementById('review-panel');
+    const moreActionsButton=document.getElementById('editor-more-actions'),moreActionsMenu=document.getElementById('editor-more-menu');
+    function setMoreActions(open){
+        if(!moreActionsButton||!moreActionsMenu)return;
+        moreActionsButton.setAttribute('aria-expanded',String(open));
+        moreActionsMenu.hidden=!open;
+    }
+    moreActionsButton?.addEventListener('click',event=>{event.stopPropagation();setMoreActions(moreActionsMenu.hidden)});
+    moreActionsMenu?.addEventListener('click',()=>setMoreActions(false));
+    document.addEventListener('click',event=>{if(!moreActionsMenu?.contains(event.target)&&!moreActionsButton?.contains(event.target))setMoreActions(false)});
+    document.addEventListener('keydown',event=>{if(event.key==='Escape')setMoreActions(false)});
     function setReviewPanel(open){
         const shell=document.querySelector('.preview-shell');
         const stateChanged=reviewPanel.classList.contains('is-open')!==open||shell.classList.contains('is-inspector-open')!==open;
@@ -330,9 +354,6 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         previewPlayerCard.classList.toggle('is-portrait-preview',portrait);
         if(!window.matchMedia('(min-width:761px)').matches){previewStage.style.removeProperty('width');previewPlayerCard.style.removeProperty('width');return}
         const inspectorOpen=previewShell.classList.contains('is-inspector-open');
-        // With the inspector closed, restore the regular editor monitor size
-        // instead of retaining the narrower inline width used beside a panel.
-        if(!inspectorOpen&&!portrait){previewStage.style.removeProperty('width');previewPlayerCard.style.removeProperty('width');return}
         // Reserve a stable portion of the viewport for transport and the
         // scrollable timeline. Constraining both dimensions prevents the
         // document itself from growing taller than the editing workspace.
@@ -385,6 +406,16 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         return timeline.clips.findIndex(item=>String(item.asset_id)===String(clip.asset_id)&&Number(item.timeline_in_ms)===Number(clip.timeline_in_ms)&&Number(item.timeline_out_ms)===Number(clip.timeline_out_ms)&&Number(item.source_in_ms)===Number(clip.source_in_ms));
     }
     const nextClipAfter = clip => {const index=clipIndex(clip);return index>=0?timeline.clips[index+1]||null:null};
+    function navigateVideoTake(direction){
+        const clips=[...(timeline.clips||[])].sort((left,right)=>Number(left.timeline_in_ms)-Number(right.timeline_in_ms));
+        if(!clips.length)return;
+        const currentIndex=clips.findIndex(clip=>globalMs>=Number(clip.timeline_in_ms)&&globalMs<Number(clip.timeline_out_ms));
+        let target=null;
+        if(currentIndex>=0)target=clips[currentIndex+direction]||null;
+        else if(direction>0)target=clips.find(clip=>Number(clip.timeline_in_ms)>globalMs)||null;
+        else target=[...clips].reverse().find(clip=>Number(clip.timeline_out_ms)<globalMs)||null;
+        if(target)seek(Number(target.timeline_in_ms),false);
+    }
     const useReviewMaster = () => Boolean(timeline.review_master_url);
     const reviewRenders = layer => useReviewMaster() && (timeline.review_rendered_layers||[]).includes(layer);
     function removedSegments(){return timeline.decisions.filter(item=>item.type==='remove_segment'&&item.enabled!==false).map(item=>[Number(item.source_in_ms||0),Number(item.source_out_ms||0)]).filter(([start,end])=>end>start).sort((a,b)=>a[0]-b[0])}
@@ -675,6 +706,18 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function timelinePoint(event,lane,duration){const rect=lane.getBoundingClientRect();return Math.max(0,Math.min(duration,(event.clientX-rect.left)/rect.width*duration))}
     const pendingTimelineMoves=[];
     let savingTimelineMove=false;
+    function captionTimingOverlaps(changes){
+        const changedIds=new Set(changes.map(change=>String(change.id)));
+        return changes.some(change=>{
+            const cue=(timeline.captions||[]).find(item=>String(item.id)===String(change.id));
+            return cue&&(timeline.captions||[]).some(other=>
+                String(other.track_id)===String(cue.track_id)
+                &&!changedIds.has(String(other.id))
+                &&Number(other.start_ms)<change.end
+                &&Number(other.end_ms)>change.start
+            );
+        });
+    }
     function queueTimelineMove(kind,id,startMs,endMs,layer=null){
         const key=`${kind}:${id}`;
         // Coalesce repeated drags of the same item while a prior save is in
@@ -754,6 +797,16 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 clip.classList.remove('is-timeline-dragging');
                 if(!moved)return;
                 clip.dataset.timelineDrag='1';
+                const captionChanges=kind==='caption'
+                    ? (groupOriginal.length>1
+                        ? groupOriginal.map(cue=>({id:cue.id,start:cue.start+(nextStart-originalStart),end:cue.end+(nextStart-originalStart)}))
+                        : [{id:item.id,start:nextStart,end:nextEnd}])
+                    : [];
+                if(captionChanges.length&&captionTimingOverlaps(captionChanges)){
+                    renderEditorTimeline();
+                    alert('As legendas da mesma faixa não podem se sobrepor.');
+                    return;
+                }
                 if(kind==='caption'&&groupOriginal.length>1&&resizeMode==='move'){
                     const groupDelta=nextStart-originalStart;
                     groupOriginal.forEach(cue=>{const start=cue.start+groupDelta,end=cue.end+groupDelta,model=(timeline.captions||[]).find(value=>String(value.id)===String(cue.id));if(model){model.start_ms=start;model.end_ms=end}queueTimelineMove('caption',cue.id,start,end)});
@@ -808,7 +861,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         // so all tracks always run from 00:00 through the final take.
         const timelineCanvas=document.getElementById('editor-canvas');
         const viewportWidth=timelineViewportWidth();
-        timelineCanvas.style.width=`${Math.max(viewportWidth,Math.round(viewportWidth*timelineZoom))}px`;
+        timelineCanvas.style.setProperty('width',`${Math.max(viewportWidth,Math.round(viewportWidth*timelineZoom))}px`,'important');
         document.getElementById('timeline-middle').textContent=fmt(duration/2);document.getElementById('timeline-end').textContent=fmt(duration);
         const makeTrack=(label,items,kind='',isVideo=false,isCaption=false,selectKind=null,canBlade=false)=>{const row=document.createElement('div');row.className=`editor-track editor-track--${selectKind||'base'}`;const lane=document.createElement('div');lane.className=`editor-track__lane ${(isVideo||canBlade)&&editTool==='blade'?'is-blade':''}`;items.forEach(item=>{const clip=document.createElement('button'),rawWidth=(item.end-item.start)/duration*100,isSourceSegment=isVideo||kind.includes('source-audio'),tiny=isSourceSegment&&rawWidth<.35,isBroll=kind.includes('editor-track__broll'),isFilmstrip=(kind.includes('editor-video-clip')||isBroll)&&!tiny,isInspectorSelected=inspectorSelection?.kind===selectKind&&String(inspectorSelection.id)===String(item.id);const selectSourceSegment=()=>{selectedSegment={start:item.start,end:item.end};updateEditControls()};clip.type='button';clip.className=`editor-track__clip ${kind} ${tiny?'is-tiny':''} ${selectedSegment&&selectedSegment.start===item.start&&selectedSegment.end===item.end||isInspectorSelected?'is-selected':''}`;clip.style.left=`${Math.max(0,item.start/duration*100)}%`;clip.style.width=`${Math.max(.02,rawWidth)}%`;if(isFilmstrip){const assetSource=isBroll?item.assetUrl:asset(item.assetId)?.url,usingMaster=!isBroll&&!assetSource&&Boolean(timeline.review_master_url),source=assetSource||(usingMaster?timeline.review_master_url:''),thumbnailTime=usingMaster?editedToMaster(item.start):Number(item.sourceTimeMs||0);if(source){const key=`${isBroll?'broll-'+item.id:item.assetId}:${Math.round(thumbnailTime)}`;clip.classList.add('editor-filmstrip');clip.dataset.filmstripKey=key;clip.innerHTML=`<span class="editor-filmstrip__label">${esc(item.label)}</span>`;if(String(item.mediaType||'').toUpperCase()==='IMAGE'){clip.style.backgroundImage=`url("${source}")`;clip.classList.add('has-thumbnail')}else{clip.dataset.filmstripSource=source;clip.dataset.filmstripTime=String(Math.max(0,thumbnailTime/1000))}}else clip.textContent=item.label}else if(kind.includes('source-audio')){clip.classList.add('editor-waveform');clip.innerHTML=`<span class="editor-waveform__bars"></span><span class="editor-waveform__label">Áudio original</span>`}else clip.textContent=tiny?'':item.label;clip.title=`${item.label} · ${fmt(item.start)} — ${fmt(item.end)}${tiny?' · trecho curto: clique para selecionar e pressione Del para remover':''}${isCaption?' · arraste para mover ou redimensionar; clique duplo para editar':''}`;clip.addEventListener('pointerdown',event=>{if(event.button===0&&editTool!=='blade'&&isSourceSegment)selectSourceSegment()});clip.onclick=event=>{event.stopPropagation();if(clip.dataset.timelineDrag){delete clip.dataset.timelineDrag;return}const point=timelinePoint(event,lane,duration);if(editTool==='blade'&&(isVideo||canBlade)){if(isVideo)addBladeAt(point);else splitTimelineItem(selectKind,item.id,point);return}if(isSourceSegment){selectSourceSegment();if(isVideo&&selectKind)selectInspector(selectKind,item.inspectorId??item.assetId,item.label,item);renderEditorTimeline();requestAnimationFrame(updateEditControls);return}if(selectKind){selectInspector(selectKind,item.inspectorId??item.id,item.label,null);renderEditorTimeline();return}if(isCaption)return;seek(item.start,!video.paused)};if(isCaption)clip.ondblclick=event=>{event.preventDefault();event.stopPropagation();const cue=timeline.captions.find(value=>value.id===item.id);if(cue)openSubtitleEditor(cue)};makeTimelineItemDraggable(clip,lane,item,selectKind,duration);lane.append(clip)});if(isVideo)lane.onclick=event=>{if(editTool==='blade')addBladeAt(timelinePoint(event,lane,duration))};row.innerHTML=`<span class="editor-track__label">${label}</span>`;row.append(lane);tracks.append(row)};
         tracks.replaceChildren();
@@ -1063,6 +1116,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const stopTimelineNeedleDrag=event=>{if(!draggingTimelineNeedle)return;draggingTimelineNeedle=false;if(editorCanvas.hasPointerCapture?.(event.pointerId))editorCanvas.releasePointerCapture(event.pointerId)};
     editorCanvas.addEventListener('pointerup',stopTimelineNeedleDrag);editorCanvas.addEventListener('pointercancel',stopTimelineNeedleDrag);
     const editorScroller=document.getElementById('editor-scroller');
+    editorScroller.title='Use a roda do mouse ou o trackpad para navegar horizontalmente pela timeline';
     const timelineZoomLimits={min:1,max:16};
     const clampTimelineValue=(value,min,max)=>Math.max(min,Math.min(max,value));
     function timelineViewportWidth(){
@@ -1080,39 +1134,86 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const maximumScroll=Math.max(0,editorScroller.scrollWidth-editorScroller.clientWidth);
         editorScroller.scrollLeft=clampTimelineValue(needle.offsetLeft-targetViewportX,0,maximumScroll);
     }
-    editorScroller.addEventListener('wheel',event=>{
-        event.preventDefault();
+    function changeTimelineZoom(multiplier){
         const currentNeedle=editorCanvas.querySelector('.editor-playhead');
         const scrollerBox=editorScroller.getBoundingClientRect();
         const currentViewportX=currentNeedle
             ? currentNeedle.getBoundingClientRect().left-scrollerBox.left
             : null;
         const next=clampTimelineValue(
-            timelineZoom*(event.deltaY<0?1.4:1/1.4),
+            timelineZoom*multiplier,
             timelineZoomLimits.min,timelineZoomLimits.max,
         );
         if(Math.abs(next-timelineZoom)<.01){
+            updateTimelineZoomControls();
             renderEditorTimeline();
             requestAnimationFrame(()=>keepTimelinePlayheadInView(currentViewportX));
             return;
         }
         timelineZoom=next;
+        updateTimelineZoomControls();
         renderEditorTimeline();
         // The canvas is rebuilt on every zoom. Anchor it to the current
         // playhead (or center it when it was outside the visible viewport)
         // instead of carrying a stale scroll delta into the new canvas.
         requestAnimationFrame(()=>keepTimelinePlayheadInView(currentViewportX));
+    }
+    function updateTimelineZoomControls(){
+        const value=document.getElementById('timeline-zoom-value');
+        if(value)value.textContent=`${Math.round(timelineZoom*100)}%`;
+        const range=document.getElementById('timeline-zoom-range');
+        if(range)range.value=String(timelineZoom);
+        document.querySelector('[data-timeline-zoom="out"]')?.toggleAttribute('disabled',timelineZoom<=timelineZoomLimits.min);
+        document.querySelector('[data-timeline-zoom="in"]')?.toggleAttribute('disabled',timelineZoom>=timelineZoomLimits.max);
+        document.getElementById('timeline-zoom-decrease')?.toggleAttribute('disabled',timelineZoom<=timelineZoomLimits.min);
+        document.getElementById('timeline-zoom-increase')?.toggleAttribute('disabled',timelineZoom>=timelineZoomLimits.max);
+    }
+    editorScroller.addEventListener('wheel',event=>{
+        event.preventDefault();
+        // A trackpad reports horizontal and vertical gestures independently.
+        // Keep horizontal navigation for time, while a vertical gesture reveals
+        // additional timeline lanes whenever that surface can scroll down.
+        if(event.deltaX)editorScroller.scrollLeft+=event.deltaX;
+        if(event.deltaY){
+            const hasVerticalOverflow=editorScroller.scrollHeight>editorScroller.clientHeight+1;
+            if(hasVerticalOverflow)editorScroller.scrollTop+=event.deltaY;
+            else editorScroller.scrollLeft+=event.deltaY;
+        }
     },{passive:false});
+    document.querySelector('[data-timeline-zoom="out"]')?.addEventListener('click',event=>{
+        event.preventDefault();event.stopPropagation();changeTimelineZoom(1/2);
+    });
+    document.querySelector('[data-timeline-zoom="in"]')?.addEventListener('click',event=>{
+        event.preventDefault();event.stopPropagation();changeTimelineZoom(2);
+    });
+    document.getElementById('timeline-zoom-decrease')?.addEventListener('click',()=>changeTimelineZoom(1/2));
+    document.getElementById('timeline-zoom-increase')?.addEventListener('click',()=>changeTimelineZoom(2));
+    document.getElementById('timeline-zoom-range')?.addEventListener('input',event=>{
+        const next=clampTimelineValue(Number(event.currentTarget.value),timelineZoomLimits.min,timelineZoomLimits.max);
+        changeTimelineZoom(next/timelineZoom);
+    });
+    updateTimelineZoomControls();
+    document.addEventListener('keydown',event=>{
+        const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
+        if(typing||!event.metaKey)return;
+        const key=event.key.toLowerCase();
+        const historyAction=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;
+        if(!historyAction)return;
+        event.preventDefault();
+        document.querySelector(`[data-history="${historyAction}"]`)?.click();
+    });
+    document.addEventListener('keydown',event=>{
+        if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+        if(event.key!=='ArrowUp'&&event.key!=='ArrowDown')return;
+        event.preventDefault();
+        navigateVideoTake(event.key==='ArrowUp'?-1:1);
+    });
     document.getElementById('cancel-subtitle-edit').onclick=closeSubtitleEditor;document.getElementById('cancel-subtitle-edit-footer').onclick=closeSubtitleEditor;saveSubtitleEdit.onclick=saveOpenSubtitleEditor;
     document.querySelectorAll('[data-tool]').forEach(button=>button.onclick=()=>{editTool=button.dataset.tool;updateEditControls();renderEditorTimeline()});document.getElementById('delete-segment').onclick=deleteSelectedSegment;document.addEventListener('keydown',event=>{const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if(event.key==='Escape'&&reviewPanel.classList.contains('is-open')){setReviewPanel(false);return}if(typing)return;const key=event.key.toLowerCase(),frame=1000/Math.max(1,Number(timeline.sequence.fps||30)),step=event.metaKey||event.ctrlKey?5000:event.shiftKey?1000:frame;if((event.ctrlKey||event.metaKey)&&key==='k'){event.preventDefault();addBladeAt(globalMs);return}if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();seek(globalMs+(event.key==='ArrowLeft'?-step:step),false);return}if(key==='v'){editTool='select';updateEditControls();renderEditorTimeline()}if(key==='b'){editTool='blade';updateEditControls();renderEditorTimeline()}if(key==='c'){event.preventDefault();addBladeAt(globalMs)}if((event.key==='Delete'||event.key==='Backspace')&&selectedSegment){event.preventDefault();deleteSelectedSegment()}});
     document.getElementById('apply-all-noise').onclick=applyAllNoise;
     document.getElementById('add-timeline-element').onclick=addBrollAtPlayhead;
     document.getElementById('add-timeline-text').onclick=addOverlayAtPlayhead;
     const modal=document.getElementById('approve-modal');document.getElementById('approve-preview').onclick=()=>modal.classList.add('is-open');document.getElementById('cancel-approve').onclick=()=>modal.classList.remove('is-open');document.getElementById('confirm-approve').onclick=async event=>{const button=event.currentTarget;button.disabled=true;button.textContent='Enviando…';try{const data=await api('{% url "external_media_project_preview_approve" project.public_id %}');location.href=data.redirect_url}catch(error){button.disabled=false;button.textContent='Aprovar e renderizar';alert(error.message)}};
-    const backModal=document.getElementById('back-to-blocks-modal');
-    document.getElementById('btn-back-to-blocks').onclick=()=>backModal.classList.add('is-open');
-    document.getElementById('cancel-back-to-blocks').onclick=()=>backModal.classList.remove('is-open');
-    backModal.addEventListener('click',event=>{if(event.target===backModal)backModal.classList.remove('is-open')});
     const reprocessModal=document.getElementById('reprocess-modal');
     document.getElementById('btn-reprocess').onclick=()=>reprocessModal.classList.add('is-open');
     document.getElementById('cancel-reprocess').onclick=()=>reprocessModal.classList.remove('is-open');
