@@ -1,6 +1,6 @@
 {% extends 'member/external_media/base.html' %}
 
-{% block title %}Projetos de mídia{% endblock %}
+{% block title %}Projetos de edição{% endblock %}
 
 {% block head %}
 {{ block.super }}
@@ -124,6 +124,14 @@
         box-shadow: 0 24px 64px rgba(15, 23, 42, .24);
         overflow: hidden;
     }
+    .media-create-dialog { width: min(32rem, 100%); }
+    .media-create-dialog .media-confirm-content { padding: 1.5rem; }
+    .media-create-dialog label { display:block; margin-bottom:.4rem; color:#374151; font-size:.875rem; font-weight:700; }
+    .media-create-dialog input,
+    .media-create-dialog select { width:100%; padding:.7rem .8rem; border:1px solid #d1d5db; border-radius:.7rem; background:#fff; }
+    .media-create-dialog input:focus,
+    .media-create-dialog select:focus { outline:none; border-color:#C90905; box-shadow:0 0 0 3px rgba(201,9,5,.1); }
+    .media-create-dialog .errorlist { margin:.35rem 0 0; color:#b91c1c; font-size:.8125rem; }
     .media-confirm-content { padding: 1.6rem; }
     .media-confirm-icon {
         width: 2.8rem;
@@ -300,8 +308,8 @@
 {% endblock %}
 
 {% block media_header_title %}
-<p class="text-xs font-bold uppercase tracking-widest mb-0.5" style="color:#C90905">Histórico de processamentos</p>
-<h1 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">Projetos de <span style="color:#C90905">mídia</span></h1>
+<p class="text-xs font-bold uppercase tracking-widest mb-0.5" style="color:#C90905">Área de edição</p>
+<h1 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">Projetos de <span style="color:#C90905">edição</span></h1>
 <p class="text-sm text-gray-600 font-medium mt-1">
     {% if query or status != 'all' %}
         {{ total }} resultado{{ total|pluralize }} encontrado{{ total|pluralize }}
@@ -309,10 +317,6 @@
         {{ total_all }} projeto{{ total_all|pluralize }} · {{ processing_count }} em andamento · {{ total_downloads }} download{{ total_downloads|pluralize }}
     {% endif %}
 </p>
-{% endblock %}
-
-{% block media_header_actions %}
-<a href="{% url 'external_media_mastering_create' %}" class="hidden sm:inline-flex media-btn media-secondary"><i class="fas fa-wave-square"></i>Masterizar vídeo</a>
 {% endblock %}
 
 {% block media_content %}
@@ -379,21 +383,21 @@
             </div>
         </div>
 
-        <a href="{% url 'external_media_create' %}"
+        <button type="button" data-open-create-project
            class="sm:hidden flex-shrink-0 w-10 h-10 text-white rounded-lg transition-all flex items-center justify-center"
            style="background-color: #C90905;"
            title="Novo projeto"
            aria-label="Novo projeto">
             <i class="fas fa-plus"></i>
-        </a>
+        </button>
         </form>
 
-        <a href="{% url 'external_media_create' %}"
+        <button type="button" data-open-create-project
            class="hidden sm:flex flex-shrink-0 px-4 py-2 text-white rounded-lg transition-all duration-200 items-center gap-2 text-sm font-semibold"
            style="background-color: #C90905;">
             <i class="fas fa-plus"></i>
             Novo projeto
-        </a>
+        </button>
     </div>
 </div>
 
@@ -481,52 +485,42 @@
                         Ainda não há projetos criados. Comece produzindo o primeiro vídeo!
                     {% endif %}
                 </p>
-                <a href="{% url 'external_media_create' %}" class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
+                <button type="button" data-open-create-project class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
                     <i class="fas fa-plus"></i>
                     Novo projeto
-                </a>
+                </button>
             </div>
         {% endif %}
     </div>
+</div>
 
-    {% if mastering_jobs %}
-    <section class="media-legacy-section">
-        <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
-            <div>
-                <h2 class="text-lg font-black text-gray-900 mb-1">Masterizações</h2>
-                <p class="text-sm text-gray-500">Vídeos finalizados tratados sem recompressão da imagem.</p>
+<div id="create-project-modal" class="media-confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="create-project-title">
+    <div class="media-confirm-dialog media-create-dialog" role="document">
+        <form method="post" action="{% url 'external_media_create' %}">
+            {% csrf_token %}
+            <div class="media-confirm-content">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-start gap-3">
+                        <span class="media-confirm-icon"><i class="fas fa-plus"></i></span>
+                        <div class="pt-0.5">
+                            <h2 id="create-project-title" class="text-xl font-black text-gray-900">Novo projeto de edição</h2>
+                            <p class="text-sm text-gray-600 leading-relaxed mt-1">Dê um nome e escolha o template para começar.</p>
+                        </div>
+                    </div>
+                    <button type="button" data-close-create-project class="w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors" aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+                </div>
+                {% for error in create_form.non_field_errors %}<p class="mt-4 text-sm font-bold text-red-700">{{ error }}</p>{% endfor %}
+                <div class="mt-5 space-y-4">
+                    <div>{{ create_form.name.label_tag }}{{ create_form.name }}{{ create_form.name.errors }}</div>
+                    <div>{{ create_form.template_version.label_tag }}{{ create_form.template_version }}{{ create_form.template_version.errors }}</div>
+                </div>
+                <div class="media-confirm-actions">
+                    <button type="button" class="media-confirm-cancel" data-close-create-project>Cancelar</button>
+                    <button type="submit" class="media-confirm-delete"><i class="fas fa-arrow-right mr-1"></i>Continuar</button>
+                </div>
             </div>
-            <a href="{% url 'external_media_mastering_create' %}" class="media-btn media-secondary text-sm"><i class="fas fa-plus"></i>Nova masterização</a>
-        </div>
-        <div class="media-project-list space-y-3">
-            {% for mastering in mastering_jobs %}
-            <article class="media-project-card">
-                <div class="media-project-card-header">
-                    <div class="media-project-avatar"><i class="fas fa-wave-square"></i></div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-base font-bold text-gray-900 truncate">{{ mastering.name }}</h3>
-                        <p class="text-xs text-gray-500">{{ mastering.mastering_profile.name|default:'Aguardando perfil' }}</p>
-                    </div>
-                    <span class="media-status-badge {% if mastering.status == 'FINISHED' %}is-finished{% elif mastering.status == 'ERROR' %}is-error{% else %}is-processing{% endif %}">{{ mastering.get_status_display }}</span>
-                </div>
-                <div class="media-project-card-body">
-                    <div class="media-info-grid">
-                        <div class="media-info-item"><i class="far fa-calendar-alt"></i><span>{{ mastering.created_at|date:'d/m/Y H:i' }}</span></div>
-                        <div class="media-info-item"><i class="fas fa-volume-up"></i><span>{% if mastering.output_metrics.integrated_lufs != None %}{{ mastering.output_metrics.integrated_lufs|floatformat:1 }} LUFS{% else %}Análise em andamento{% endif %}</span></div>
-                        <div class="media-info-item"><i class="fas fa-download"></i><span>{{ mastering.download_count }} download{{ mastering.download_count|pluralize }}</span></div>
-                    </div>
-                    <a href="{% url 'external_media_mastering_detail' mastering.public_id %}" class="media-open-btn">
-                        <span class="media-open-btn-icon"><i class="fas fa-sliders-h"></i></span>
-                        <span class="mt-2">Abrir masterização</span>
-                        <i class="fas fa-arrow-right media-open-btn-arrow mr-1"></i>
-                    </a>
-                </div>
-            </article>
-            {% endfor %}
-        </div>
-    </section>
-    {% endif %}
-
+        </form>
+    </div>
 </div>
 
 <div id="delete-project-modal" class="media-confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
@@ -571,6 +565,36 @@
         document.getElementById('hidden-status').value = document.getElementById('panel-status').value;
         document.getElementById('media-filter-form').submit();
     });
+
+    (function() {
+        const modal = document.getElementById('create-project-modal');
+        const form = modal.querySelector('form');
+        let trigger = null;
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            trigger?.focus();
+        }
+
+        document.querySelectorAll('[data-open-create-project]').forEach((button) => {
+            button.addEventListener('click', () => {
+                trigger = button;
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                form.querySelector('input, select')?.focus();
+            });
+        });
+        modal.querySelectorAll('[data-close-create-project]').forEach((button) => {
+            button.addEventListener('click', closeModal);
+        });
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) closeModal();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+        });
+    })();
 
     (function() {
         const modal = document.getElementById('delete-project-modal');

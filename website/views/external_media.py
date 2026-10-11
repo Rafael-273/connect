@@ -261,6 +261,7 @@ class ExternalMediaDashboardView(ExternalMediaRequiredMixin, ExternalMediaContex
         )
 
         return render(request, 'member/external_media/dashboard.html', self.media_context(
+            create_form=ExternalMediaProjectForm(),
             query=query,
             status=status,
             total=projects.count(),
@@ -273,9 +274,6 @@ class ExternalMediaDashboardView(ExternalMediaRequiredMixin, ExternalMediaContex
             ]).count(),
             finished_count=all_projects.filter(status=ExternalMediaProject.Status.FINISHED).count(),
             total_downloads=summary['total'] or 0,
-            mastering_jobs=VideoMasteringJob.objects.select_related(
-                'created_by', 'mastering_profile',
-            ).order_by('-created_at')[:50],
         ))
 
 
@@ -513,6 +511,10 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 media for media in block_data['media']
                 if media.camera_role == ProjectBlockMedia.CameraRole.SECONDARY
             ]
+        # Blocos com vídeo padrão já fazem parte da edição automaticamente. Eles
+        # não exigem nenhuma ação de quem está criando o projeto e, portanto,
+        # não devem competir visualmente com os campos de upload.
+        blocks = [block for block in blocks if not block['has_default_video']]
         block_by_key = {
             f"{'c' if item['is_custom'] else 't'}-{item['definition'].pk}": item
             for item in blocks

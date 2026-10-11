@@ -20,13 +20,26 @@
 <style>
     .media-shell { padding-bottom: 1rem; }
     .project-media-block { overflow:hidden; border-color:#e8edf3; box-shadow:0 5px 18px rgba(15,23,42,.045); }
+    .project-media-block.is-ready { border-color:#bbf7d0; }
+    .project-media-block.is-ready .project-media-block__header { background:linear-gradient(90deg,#f0fdf4 0%,#fff 72%); border-color:#dcfce7; }
     .project-media-block__header { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:1rem 1.15rem; border-bottom:1px solid #eef1f5; background:linear-gradient(90deg, #fffafa 0%, #fff 72%); }
     .project-media-block__identity { display:flex; align-items:center; gap:.75rem; min-width:0; }
-    .project-media-block__number { display:inline-flex; align-items:center; justify-content:center; width:2rem; height:2rem; flex:none; border-radius:.7rem; background:#fff1f2; color:#C90905; font-size:.78rem; font-weight:900; }
+    .project-media-block__number { display:inline-flex; align-items:center; justify-content:center; width:2.35rem; height:2.35rem; flex:none; border-radius:.8rem; background:#fff1f2; color:#C90905; font-size:.95rem; font-weight:900!important; box-shadow:inset 0 0 0 1px rgba(201,9,5,.06); }
+    .project-media-block__title { color:#111827; font-size:1.1rem; font-weight:900!important; letter-spacing:-.018em; line-height:1.2; }
+    @media (min-width:640px) { .project-media-block__title { font-size:1.2rem; } }
     .project-media-block__body { padding:1rem 1.15rem 1.15rem; }
     .project-media-block__required { color:#C90905; background:#fff1f2; border-radius:999px; padding:.22rem .5rem; font-size:.68rem; font-weight:800; }
     .project-media-block__optional { color:#64748b; background:#f1f5f9; border-radius:999px; padding:.22rem .5rem; font-size:.68rem; font-weight:800; }
+    .project-media-block__state { display:inline-flex; align-items:center; gap:.35rem; border-radius:999px; padding:.3rem .55rem; font-size:.7rem; font-weight:800; white-space:nowrap; }
+    .project-media-block__state.is-ready { color:#15803d; background:#dcfce7; }
+    .project-media-block__state.is-empty { color:#9a6700; background:#fff7ed; }
     .project-media-default { display:flex; align-items:center; gap:.65rem; padding:.8rem .9rem; border:1px solid #fecaca; border-radius:.85rem; background:#fff7f7; color:#9f1239; font-size:.875rem; font-weight:700; }
+    .project-media-empty { display:flex; align-items:center; gap:.6rem; margin-bottom:.85rem; color:#667085; font-size:.85rem; }
+    .project-media-empty i { display:grid; place-items:center; width:1.75rem; height:1.75rem; border-radius:.55rem; background:#f1f5f9; color:#94a3b8; }
+    .project-upload-slot { border:1.5px dashed #f3b7b2; background:linear-gradient(135deg,#fffafa,#fff); }
+    .project-upload-input { width:100%; border:1px solid #e2e8f0; border-radius:.7rem; padding:.4rem; background:#fff; color:#475467; font-size:.82rem; cursor:pointer; }
+    .project-upload-input::file-selector-button { margin-right:.7rem; border:0; border-radius:.5rem; padding:.55rem .7rem; background:#c90905; color:#fff; font-size:.78rem; font-weight:800; cursor:pointer; }
+    .project-uploaded-media { border-color:#bbf7d0!important; background:#fff!important; }
     .project-media-action { width:2rem; height:2rem; display:inline-flex; align-items:center; justify-content:center; border:1px solid #e2e8f0; border-radius:.6rem; background:#fff; color:#64748b; }
     .project-media-action:hover { color:#C90905; border-color:#fecaca; background:#fff7f7; }
     .project-media-action.is-danger:hover { color:#dc2626; background:#fff1f2; }
@@ -122,20 +135,21 @@
     </form>
 </section>
 {% endif %}
+<div class="mb-4 flex items-end justify-between gap-4"><div><h2 class="text-lg font-black text-gray-900">Vídeos do projeto</h2><p class="mt-1 text-sm text-gray-500">Envie apenas os vídeos dos blocos abaixo. Os demais já estão configurados.</p></div><span class="hidden sm:inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{{ blocks|length }} bloco{{ blocks|length|pluralize:"s" }} para revisar</span></div>
 <div class="space-y-4 mb-7" data-custom-block-list data-custom-block-reorder-url="{% url 'external_media_project_custom_block_reorder' project.public_id %}">
 {% for item in blocks %}
-    <section class="media-card project-media-block" data-project-block-id="{% if item.is_custom %}c-{{ item.definition.pk }}{% else %}t-{{ item.definition.pk }}{% endif %}" {% if item.is_custom %}data-custom-block{% endif %}>
+    <section class="media-card project-media-block {% if item.primary_media %}is-ready{% endif %}" data-project-block-id="{% if item.is_custom %}c-{{ item.definition.pk }}{% else %}t-{{ item.definition.pk }}{% endif %}" {% if item.is_custom %}data-custom-block{% endif %}>
         <div class="project-media-block__header">
-            <div class="project-media-block__identity">{% if item.is_custom %}<button type="button" draggable="true" class="project-media-action cursor-grab active:cursor-grabbing" data-custom-block-drag-handle title="Arraste para mudar a posição"><i class="fas fa-grip-vertical"></i></button>{% endif %}<span class="project-media-block__number">{{ forloop.counter }}</span><div class="min-w-0"><h3 class="font-black text-base sm:text-lg truncate">{{ item.definition.name }}</h3>{% if item.definition.description %}<p class="text-sm text-gray-500 mt-0.5 truncate">{{ item.definition.description }}</p>{% endif %}</div></div>
-            <div class="flex items-center gap-2">{% if item.definition.is_required %}<span class="project-media-block__required">Obrigatório</span>{% else %}<span class="project-media-block__optional">{% if item.is_custom %}Personalizado{% else %}Opcional{% endif %}</span>{% endif %}{% if item.is_custom %}<button type="button" class="project-media-action" data-custom-block-edit data-name="{{ item.definition.name }}" data-description="{{ item.definition.description }}" data-url="{% url 'external_media_project_custom_block_edit' project.public_id item.definition.pk %}" title="Editar bloco"><i class="fas fa-pen"></i></button><button type="button" class="project-media-action is-danger" data-custom-block-delete data-name="{{ item.definition.name }}" data-url="{% url 'external_media_project_custom_block_delete' project.public_id item.definition.pk %}" title="Excluir bloco"><i class="fas fa-trash"></i></button>{% endif %}</div>
+            <div class="project-media-block__identity">{% if item.is_custom %}<button type="button" draggable="true" class="project-media-action cursor-grab active:cursor-grabbing" data-custom-block-drag-handle title="Arraste para mudar a posição"><i class="fas fa-grip-vertical"></i></button>{% endif %}<span class="project-media-block__number">{{ forloop.counter }}</span><div class="min-w-0"><h3 class="project-media-block__title truncate">{{ item.definition.name }}</h3>{% if item.definition.description %}<p class="text-sm text-gray-500 mt-0.5 truncate">{{ item.definition.description }}</p>{% endif %}</div></div>
+            <div class="flex items-center gap-2">{% if item.primary_media %}<span class="project-media-block__state is-ready"><i class="fas fa-check"></i>Vídeo adicionado</span>{% else %}<span class="project-media-block__state is-empty"><i class="fas fa-arrow-up"></i>Enviar vídeo</span>{% endif %}{% if item.definition.is_required %}<span class="project-media-block__required">Obrigatório</span>{% else %}<span class="project-media-block__optional">{% if item.is_custom %}Personalizado{% else %}Opcional{% endif %}</span>{% endif %}{% if item.is_custom %}<button type="button" class="project-media-action" data-custom-block-edit data-name="{{ item.definition.name }}" data-description="{{ item.definition.description }}" data-url="{% url 'external_media_project_custom_block_edit' project.public_id item.definition.pk %}" title="Editar bloco"><i class="fas fa-pen"></i></button><button type="button" class="project-media-action is-danger" data-custom-block-delete data-name="{{ item.definition.name }}" data-url="{% url 'external_media_project_custom_block_delete' project.public_id item.definition.pk %}" title="Excluir bloco"><i class="fas fa-trash"></i></button>{% endif %}</div>
         </div>
         <div class="project-media-block__body flex flex-col">
         {% if item.primary_media %}
-        <section class="order-1 mb-4 overflow-hidden rounded-xl border border-red-100 bg-red-50/30">
-            <div class="flex items-center justify-between border-b border-red-100 bg-red-50/70 px-3 py-2"><div class="flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-xs text-white"><i class="fas fa-video"></i></span><div><strong class="block text-sm text-gray-900">Vídeo do bloco</strong><span class="block text-xs text-gray-500">Câmera principal da cena</span></div></div><span class="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-red-700">Principal</span></div>
+        <section class="order-1 mb-4 overflow-hidden rounded-xl border border-green-100 bg-green-50/30">
+            <div class="flex items-center justify-between border-b border-green-100 bg-green-50/70 px-3 py-2"><div class="flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-green-600 text-xs text-white"><i class="fas fa-check"></i></span><div><strong class="block text-sm text-gray-900">Vídeo do bloco</strong><span class="block text-xs text-gray-500">Câmera principal da cena</span></div></div><span class="rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-green-700">Adicionado</span></div>
             <div class="space-y-2 p-2" data-media-sortable data-reorder-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_media_reorder' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}{% endif %}">
         {% for media in item.primary_media %}
-        <div class="flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm media-sort-item" draggable="{% if media.preview_status == 'READY' %}true{% else %}false{% endif %}" data-media-id="{{ media.pk }}">
+        <div class="project-uploaded-media flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm media-sort-item" draggable="{% if media.preview_status == 'READY' %}true{% else %}false{% endif %}" data-media-id="{{ media.pk }}">
             <div class="flex items-center min-w-0 gap-3">
                 <button type="button" class="text-gray-400 cursor-grab active:cursor-grabbing p-1 {% if media.preview_status != 'READY' %}invisible{% endif %}" title="Arraste para mudar a ordem"><i class="fas fa-grip-vertical"></i></button>
                 <div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">Câmera principal · {{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div>
@@ -161,7 +175,7 @@
             {% elif item.has_missing_default_video %}
                 <p class="order-1 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-3 text-sm mb-3"><i class="fas fa-triangle-exclamation mr-2"></i>Este bloco possui um vídeo padrão configurado, mas o arquivo não está disponível no armazenamento. Reenvie-o no admin-panel para utilizá-lo automaticamente.</p>
             {% else %}
-                <p class="order-1 text-sm text-gray-400 mb-3" data-no-upload>Nenhum upload.</p>
+                <p class="order-1 project-media-empty" data-no-upload><i class="fas fa-video"></i>Nenhum vídeo adicionado ainda.</p>
             {% endif %}
         {% endif %}
         {% if item.extra_media %}
@@ -243,12 +257,12 @@
         {% endif %}
         {% if not item.has_default_video %}
         {% if item.definition.max_occurrences == 0 or item.media|length < item.definition.max_occurrences %}
-        <section class="order-2 mt-4 rounded-xl border border-red-100 bg-red-50/30 p-3"><div class="mb-3 flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-xs text-white"><i class="fas fa-upload"></i></span><div><strong class="block text-sm text-gray-900">Enviar vídeo do bloco</strong><span class="block text-xs text-gray-500">Vídeo principal que será usado nesta cena</span></div></div>
+        <section class="project-upload-slot order-2 mt-4 rounded-xl p-3"><div class="mb-3 flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-xs text-white"><i class="fas fa-upload"></i></span><div><strong class="block text-sm text-gray-900">{% if item.primary_media %}Adicionar outro vídeo{% else %}Enviar vídeo do bloco{% endif %}</strong><span class="block text-xs text-gray-500">Selecione o vídeo principal desta cena</span></div></div>
         <div class="hidden space-y-2 mb-3" data-upload-results></div>
         <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload' project.public_id item.definition.pk %}{% endif %}" class="media-form media-upload-form space-y-3" data-reorder-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_media_reorder' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}{% endif %}"{% if use_s3 %} data-presign-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload_presign' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload_presign' project.public_id item.definition.pk %}{% endif %}"{% endif %}>
             {% csrf_token %}
             <div class="flex flex-col sm:flex-row gap-3">
-                <input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="flex-1" data-trim-file>
+                <input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="project-upload-input flex-1" data-trim-file>
                 <span class="hidden media-btn media-muted" data-upload-status><i class="fas fa-upload"></i><span data-upload-status-label>Enviando 0%</span></span>
             </div>
             <p class="text-xs text-gray-500">MP4, MOV, MKV, WEBM, AVI ou M4V · máx. {{ external_media_max_upload_mb }} MB por arquivo.</p>
@@ -321,6 +335,12 @@
         {% endif %}
         </div>
     </section>
+{% empty %}
+    <div class="media-card p-8 text-center">
+        <span class="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-green-50 text-green-700"><i class="fas fa-check"></i></span>
+        <h3 class="mt-3 font-black text-gray-900">Tudo pronto para começar</h3>
+        <p class="mt-1 text-sm text-gray-500">Os vídeos deste template já estão configurados.</p>
+    </div>
 {% endfor %}
 </div>
 
@@ -329,7 +349,6 @@
     <form method="post" action="{% url 'external_media_project_custom_block_create' project.public_id %}" class="grid gap-3 border-t p-5 sm:grid-cols-[1fr_1fr_auto]">{% csrf_token %}{{ custom_block_form.name }}{{ custom_block_form.description }}<button class="media-btn media-primary">Adicionar bloco</button></form>
 </details>
 
-{% if validation_errors %}<div class="rounded-xl bg-amber-50 text-amber-800 p-4 mb-4">{% for error in validation_errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
 <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
 <script>
 (function(){
@@ -352,7 +371,7 @@
             block.insertBefore(results, form);
         }
         const row = document.createElement('div');
-        row.className = 'flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 media-sort-item';
+        row.className = 'project-uploaded-media flex items-center justify-between gap-3 rounded-xl bg-gray-50 p-3 media-sort-item';
         row.dataset.mediaId = media.id;
         row.draggable = false;
         const identity = document.createElement('div');
@@ -383,6 +402,13 @@
         actions.append(status);
         row.append(identity, actions);
         results.append(row);
+        const projectBlock = block.closest('.project-media-block');
+        projectBlock?.classList.add('is-ready');
+        const state = projectBlock?.querySelector('.project-media-block__state');
+        if (state) {
+            state.className = 'project-media-block__state is-ready';
+            state.innerHTML = '<i class="fas fa-check"></i>Vídeo adicionado';
+        }
     }
     async function updatePreviewStates() {
         const pending = document.querySelectorAll('[data-preview-pending][data-preview-status-url]');
