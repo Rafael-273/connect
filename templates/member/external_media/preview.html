@@ -580,11 +580,26 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         return candidates.find(item=>{const meta=item.metadata||{};return meta.segment_start_ms!==undefined&&Number(meta.segment_start_ms)<=masterMs&&masterMs<Number(meta.segment_end_ms)})
             ||candidates.find(item=>(item.metadata||{}).segment_start_ms===undefined)||null;
     }
+    function activeTransformScope(){
+        // A blade creates visual sub-sections of a take, but a framing
+        // adjustment belongs to the actual timeline take. Persisting the
+        // blade-sized range made a zoom disappear as soon as playback crossed
+        // that tiny section (often about one second after the adjustment).
+        const clip=activeClip||clipAt(globalMs);
+        if(clip){
+            const start=Number(editedToMaster(Number(clip.timeline_in_ms||0),'after'));
+            const end=Number(editedToMaster(Number(clip.timeline_out_ms||0),'before'));
+            if(Number.isFinite(start)&&Number.isFinite(end)&&end>start)return {segment_start_ms:Math.round(start),segment_end_ms:Math.round(end)};
+        }
+        if(Number.isFinite(inspectorSelection?.masterStartMs)&&Number.isFinite(inspectorSelection?.masterEndMs))return {segment_start_ms:Math.round(inspectorSelection.masterStartMs),segment_end_ms:Math.round(inspectorSelection.masterEndMs)};
+        return {};
+    }
     function selectedReframeDecision(){
         if(inspectorSelection?.kind!=='video')return null;
         // A disabled decision still belongs to the selected take and must stay
         // available in the inspector so the member can restore Auto Reframe.
-        return reframeDecisionAt(inspectorSelection.id,Number(inspectorSelection.masterStartMs??editedToMaster(selectedSegment?.start??globalMs)),true);
+        const scope=activeTransformScope();
+        return reframeDecisionAt(inspectorSelection.id,Number(scope.segment_start_ms??editedToMaster(selectedSegment?.start??globalMs)),true);
     }
     function selectedBroll(){
         if(inspectorSelection?.kind!=='broll')return null;
@@ -619,7 +634,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const endpoint=target.kind==='broll'
                 ? `{% url 'external_media_project_preview' project.public_id %}brolls/${target.id}/`
                 : `{% url 'external_media_project_preview' project.public_id %}transforms/${target.id}/`;
-            const scope=target.kind==='video'&&Number.isFinite(inspectorSelection?.masterStartMs)&&Number.isFinite(inspectorSelection?.masterEndMs)?{segment_start_ms:Math.round(inspectorSelection.masterStartMs),segment_end_ms:Math.round(inspectorSelection.masterEndMs)}:{};
+            const scope=target.kind==='video'?activeTransformScope():{};
             applyTimeline(await api(endpoint,target.kind==='broll'?{transform:values}:{...values,...scope}),false,false);
         }catch(error){applyDirectTransform(target,previous);alert(error.message)}
     }
@@ -1047,7 +1062,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         applyTimeline(data,true,false);
         renderEditorTimeline();
     }
-    async function saveTransform(id,values,card,version=null){try{const wasUsingReviewMaster=useReviewMaster(),showChangedTake=Boolean(values.restore_original||values.restore_auto),changedTakeStart=showChangedTake?selectedSegment?.start:null,scope=inspectorSelection?.kind==='video'&&Number.isFinite(inspectorSelection.masterStartMs)&&Number.isFinite(inspectorSelection.masterEndMs)?{segment_start_ms:Math.round(inspectorSelection.masterStartMs),segment_end_ms:Math.round(inspectorSelection.masterEndMs)}:{},data=await api(`{% url 'external_media_project_preview' project.public_id %}transforms/${id}/`,{...values,...scope});if(version!==null&&card._transformSaveVersion!==version)return;card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,wasUsingReviewMaster!==Boolean(data.timeline.review_master_url));if(Number.isFinite(changedTakeStart))seek(changedTakeStart,!video.paused)}catch(error){if(version!==null&&card._transformSaveVersion!==version)return;card.querySelector('[data-saved]').textContent=error.message}}
+    async function saveTransform(id,values,card,version=null){try{const wasUsingReviewMaster=useReviewMaster(),showChangedTake=Boolean(values.restore_original||values.restore_auto),changedTakeStart=showChangedTake?selectedSegment?.start:null,scope=inspectorSelection?.kind==='video'?activeTransformScope():{},data=await api(`{% url 'external_media_project_preview' project.public_id %}transforms/${id}/`,{...values,...scope});if(version!==null&&card._transformSaveVersion!==version)return;card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,wasUsingReviewMaster!==Boolean(data.timeline.review_master_url));if(Number.isFinite(changedTakeStart))seek(changedTakeStart,!video.paused)}catch(error){if(version!==null&&card._transformSaveVersion!==version)return;card.querySelector('[data-saved]').textContent=error.message}}
     async function saveOverlay(id,card){const content=Object.fromEntries([...card.querySelectorAll('[data-overlay-content]')].map(field=>[field.dataset.overlayContent,field.value]));const position=Object.fromEntries([...card.querySelectorAll('[data-overlay-position]')].map(field=>[field.dataset.overlayPosition,Number(field.value)]));const numbers=Object.fromEntries([...card.querySelectorAll('[data-overlay-number]')].map(field=>[field.dataset.overlayNumber,Math.round(Number(field.value)*1000)]));try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`,{content,position,animation:{type:card.querySelector('[data-overlay-animation]').value,duration:.35,easing:'ease-out'},...numbers});card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
     async function deleteOverlay(id){if(!confirm('Remover este elemento deste projeto?'))return;applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`,{delete:true}),true,false)}
     function readBrollStyleFromCard(card){const transform=Object.fromEntries([...card.querySelectorAll('[data-broll-transform]')].map(field=>[field.dataset.brollTransform,Number(field.value)])),motion=card.querySelector('[data-broll-motion]')?.value,payload={display_mode:card.querySelector('[data-broll-mode]').value,transform,entry:{type:card.querySelector('[data-broll-entry]')?.value||'NONE',duration_ms:300,easing:'ease-out'},exit:{type:card.querySelector('[data-broll-exit]')?.value||'NONE',duration_ms:250,easing:'ease-in'}};if(motion)payload.motion={type:motion,from_scale:1,to_scale:1.06,easing:'EASE_IN_OUT'};const sourceIn=card.querySelector('[data-broll-number="source_in_ms"]'),sourceOut=card.querySelector('[data-broll-number="source_out_ms"]');if(sourceIn)payload.source_in_ms=msFromMin(sourceIn.value);if(sourceOut)payload.source_out_ms=msFromMin(sourceOut.value);return payload}

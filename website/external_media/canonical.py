@@ -165,6 +165,13 @@ class EffectiveCapabilities:
             result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.TRANSLATION_EN, configuration={}))
         if version.color_lut_id or version.lut_file:
             result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.LUT, configuration={}))
+        # Abertura e encerramento são assets estruturais do template. Não são
+        # cenas que o usuário precisa preencher, portanto a simples presença
+        # do arquivo já os torna parte da montagem.
+        if version.intro_enabled and version.intro_video:
+            result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.INTRO, configuration={}))
+        if version.outro_enabled and version.outro_video:
+            result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.OUTRO, configuration={}))
         has_music = bool(
             (version.background_music_id and version.background_music and version.background_music.audio_file)
             or version.music_file
@@ -203,7 +210,7 @@ class SourceManifestBuilder:
                 'position': position,
                 'block_id': entity.pk if entity else None,
                 'block_type': 'custom' if custom_block else ('template' if block else None),
-                'block_key': f'custom-{custom_block.pk}' if custom_block else (block.key if block else ''),
+                'block_key': f'custom-{custom_block.pk}' if custom_block else (block.key if block else ('project-main' if kind == 'project_upload' else '')),
                 'block_name': entity.name if entity else role,
                 'source_reference': str(getattr(media, 'pk', '') or getattr(block, 'pk', '') or getattr(custom_block, 'pk', '') or role),
                 'storage_name': field.name,
@@ -245,17 +252,21 @@ class SourceManifestBuilder:
                 })
                 position += 1
 
-        # Keep the current capability semantics; intro/outro remain absent until
-        # a template enables them through the same effective resolver.
-        if version.intro_video and MediaTemplatePlugin.Code.INTRO in capabilities:
+        if version.intro_enabled and version.intro_video and MediaTemplatePlugin.Code.INTRO in capabilities:
             append('template_intro', f'template-intro-{version.pk}', version.intro_video, role='intro')
 
-        media_by_block, media_by_custom = {}, {}
+        media_by_block, media_by_custom, direct_media = {}, {}, []
         for item in project.block_media.select_related('block', 'custom_block').all().order_by('position', 'camera_order', 'pk'):
             if item.block_id:
                 media_by_block.setdefault(item.block_id, []).append(item)
             elif item.custom_block_id:
                 media_by_custom.setdefault(item.custom_block_id, []).append(item)
+            else:
+                direct_media.append(item)
+        # A template may intentionally have no scenes. In that case the member
+        # uploads the main video directly and intro/outro still wrap it.
+        for item in direct_media:
+            append('project_upload', f'project-media-{item.pk}', item.file, role='main', media=item)
         block_entries = []
         for block in version.blocks.all().order_by('order', 'pk'):
             items = media_by_block.get(block.pk, [])
@@ -278,7 +289,7 @@ class SourceManifestBuilder:
             block_entries = [entry for _, _, entry in sorted(decorated)]
         for kind, source_id, field, role, block, custom, media in block_entries:
             append(kind, source_id, field, role=role, block=block, custom_block=custom, media=media)
-        if version.outro_video and MediaTemplatePlugin.Code.OUTRO in capabilities:
+        if version.outro_enabled and version.outro_video and MediaTemplatePlugin.Code.OUTRO in capabilities:
             append('template_outro', f'template-outro-{version.pk}', version.outro_video, role='outro')
         multicam_groups = {}
         for source in sources:
@@ -315,7 +326,7 @@ class SourceManifestBuilder:
     def resolve_field(project, source):
         """Returns the original Django file field referenced by a manifest item."""
         kind, reference = source['kind'], str(source.get('source_reference') or '')
-        if kind in {'upload', 'custom_upload'}:
+        if kind in {'upload', 'custom_upload', 'project_upload'}:
             item = project.block_media.select_related('block', 'custom_block').get(pk=reference)
             return item.file
         version = project.template_version

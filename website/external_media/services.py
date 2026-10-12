@@ -1434,7 +1434,12 @@ class TemplateService:
 
     @staticmethod
     def enabled_plugins(project):
-        return EffectiveCapabilities.resolve(project)
+        # This AI suggestion is no longer part of the editing workflow. Ignore
+        # capability snapshots made before it was removed from templates.
+        return [
+            plugin for plugin in EffectiveCapabilities.resolve(project)
+            if plugin.code != MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION
+        ]
 
 
 class ProjectService:
@@ -1489,9 +1494,17 @@ class ProjectService:
             if ProjectService.file_exists(item.file):
                 counts[item.block_id] = counts.get(item.block_id, 0) + 1
             else:
+                owner = item.block or item.custom_block
                 errors.append(
-                    f'{(item.block or item.custom_block).name}: o vídeo enviado não está mais disponível. Envie-o novamente.'
+                    f'{owner.name if owner else "Vídeo principal"}: o vídeo enviado não está mais disponível. Envie-o novamente.'
                 )
+        if not project.template_version.blocks.exists():
+            direct_count = sum(
+                1 for item in project.block_media.filter(block__isnull=True, custom_block__isnull=True)
+                if ProjectService.file_exists(item.file)
+            )
+            if not direct_count:
+                errors.append('Envie o vídeo principal do projeto.')
         for block in project.template_version.blocks.all():
             count = counts.get(block.pk, 0)
             has_default = ProjectService.file_exists(block.default_video)
@@ -1673,8 +1686,10 @@ class LUTService:
 class IntroOutroService:
     @staticmethod
     def enabled_fields(version, enabled_codes):
-        intro = version.intro_video if MediaTemplatePlugin.Code.INTRO in enabled_codes and version.intro_video else None
-        outro = version.outro_video if MediaTemplatePlugin.Code.OUTRO in enabled_codes and version.outro_video else None
+        # Intro/outro are fixed template assets. Keep the optional argument for
+        # callers of the legacy API, but do not require a plugin toggle.
+        intro = version.intro_video if version.intro_enabled and version.intro_video else None
+        outro = version.outro_video if version.outro_enabled and version.outro_video else None
         return intro, outro
 
 

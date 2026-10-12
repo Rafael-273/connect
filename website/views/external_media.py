@@ -414,7 +414,7 @@ class ExternalMediaCreateView(ExternalMediaRequiredMixin, ExternalMediaContextMi
         project.created_by = self.member
         project.configuration = dict(project.template_version.default_settings)
         project.save()
-        messages.success(request, 'Projeto criado. Agora envie os vídeos de cada bloco.')
+        messages.success(request, 'Projeto criado com sucesso.')
         return redirect('external_media_project_detail', public_id=project.public_id)
 
 
@@ -471,12 +471,22 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
         media_by_block = {}
         broll_by_block = {}
         missing_media_by_block = {}
+        direct_media = []
+        direct_brolls = []
         for item in project.block_media.all():
             if ProjectService.file_exists(item.file):
+                if not item.block_id and not item.custom_block_id:
+                    direct_media.append(item)
+                    continue
                 media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
             else:
+                if not item.block_id and not item.custom_block_id:
+                    continue
                 missing_media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
         for asset in project.broll_assets.filter(is_enabled=True):
+            if not asset.block_id and not asset.custom_block_id:
+                direct_brolls.append(asset)
+                continue
             key = ('custom', asset.custom_block_id) if asset.custom_block_id else ('template', asset.block_id)
             broll_by_block.setdefault(key, []).append(asset)
         blocks = [
@@ -528,6 +538,9 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
         return render(request, 'member/external_media/project_detail.html', self.media_context(
             project=project,
             blocks=blocks,
+            has_template_scenes=project.template_version.blocks.exists(),
+            direct_media=direct_media,
+            direct_brolls=direct_brolls,
             plugins=project.template_version.plugins.all(),
             steps=project.pipeline_steps.all(),
             upload_form=ProjectBlockMediaForm(),
@@ -868,6 +881,65 @@ class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
         return redirect('external_media_project_detail', public_id=public_id)
 
 
+class ExternalMediaProjectDirectUploadView(ExternalMediaProjectUploadView):
+    """Upload for templates intentionally created without project scenes."""
+
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        if project.status != ExternalMediaProject.Status.DRAFT:
+            return self._error_response(request, public_id, 'Os uploads ficam bloqueados após iniciar o pipeline.')
+        if project.template_version.blocks.exists():
+            return self._error_response(request, public_id, 'Este template organiza os vídeos por cenas.')
+        form = ProjectBlockMediaForm(request.POST, request.FILES)
+        if not form.is_valid():
+            return self._error_response(request, public_id, 'Não foi possível enviar o vídeo: ' + ' '.join(
+                error for errors in form.errors.values() for error in errors
+            ))
+        requested_camera_role = form.cleaned_data.get('camera_role') or ProjectBlockMedia.CameraRole.PRIMARY
+        is_extra_camera = requested_camera_role == ProjectBlockMedia.CameraRole.SECONDARY
+        item = form.save(commit=False)
+        item.project = project
+        direct_media = ProjectBlockMedia.all_objects.filter(
+            project=project, block__isnull=True, custom_block__isnull=True,
+        )
+        if is_extra_camera:
+            try:
+                item.position = int(request.POST.get('camera_position') or 0)
+            except (TypeError, ValueError):
+                item.position = 0
+            primary_exists = direct_media.filter(
+                position=item.position, camera_role=ProjectBlockMedia.CameraRole.PRIMARY,
+            ).exists()
+            if not primary_exists:
+                return self._error_response(request, public_id, 'Escolha o vídeo principal ao qual esta câmera pertence.')
+            item.camera_role = ProjectBlockMedia.CameraRole.SECONDARY
+            item.camera_key = f'camera-{get_random_string(12).lower()}'
+            item.camera_order = (direct_media.filter(position=item.position).aggregate(value=Max('camera_order'))['value'] or 0) + 1
+            item.camera_label = (form.cleaned_data.get('camera_label') or '').strip() or 'Câmera extra'
+        else:
+            item.position = (direct_media.aggregate(value=Max('position'))['value'] or 0) + 1
+            item.camera_role = ProjectBlockMedia.CameraRole.PRIMARY
+            item.camera_key = 'primary'
+            item.camera_order = 1
+            item.camera_label = 'Vídeo principal'
+        item.camera_hint = form.cleaned_data.get('camera_hint') or ProjectBlockMedia.CameraHint.AUTO
+        item.original_filename = item.file.name
+        item.file_size = item.file.size
+        item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_start_seconds')) or 0
+        item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_end_seconds'))
+        item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
+        item.save()
+        self._enqueue_preview(item)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'id': item.pk, 'name': item.original_filename, 'size': item.file_size,
+                'status_url': reverse('external_media_project_media_status', args=[project.public_id, item.pk]),
+                'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, item.pk]),
+            })
+        messages.success(request, 'Vídeo principal adicionado ao projeto.')
+        return redirect('external_media_project_detail', public_id=public_id)
+
+
 class ExternalMediaProjectSettingsView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(
@@ -895,9 +967,9 @@ class ExternalMediaProjectCustomBlockView(ExternalMediaRequiredMixin, View):
             if not custom_block.pk:
                 custom_block.position = (project.custom_blocks.aggregate(value=Max('position'))['value'] or 0) + 1
             custom_block.save()
-            messages.success(request, 'Bloco personalizado salvo.')
+            messages.success(request, 'Cena personalizada salva.')
         else:
-            messages.error(request, 'Informe um nome para o bloco personalizado.')
+            messages.error(request, 'Informe um nome para a cena personalizada.')
         return redirect('external_media_project_detail', public_id=public_id)
 
 
@@ -905,7 +977,7 @@ class ExternalMediaProjectCustomBlockDeleteView(ExternalMediaRequiredMixin, View
     def post(self, request, public_id, block_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
         get_object_or_404(ProjectCustomBlock, pk=block_id, project=project).delete()
-        messages.success(request, 'Bloco personalizado removido.')
+        messages.success(request, 'Cena personalizada removida.')
         return redirect('external_media_project_detail', public_id=public_id)
 
 
@@ -1082,6 +1154,54 @@ class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
         return JsonResponse({
             'upload_url': upload_url,
             'content_type': content_type,
+            'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
+            'allocation': allocation,
+            'allocation_sig': _sign_upload_allocation(allocation),
+        })
+
+
+class ExternalMediaProjectDirectUploadPresignView(ExternalMediaRequiredMixin, View):
+    """Allocate an S3 upload for a template without scenes."""
+
+    def post(self, request, public_id):
+        if not settings.USE_S3:
+            return JsonResponse({'detail': 'Upload direto ao S3 requer USE_S3=TRUE.'}, status=400)
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
+        if project.template_version.blocks.exists():
+            return JsonResponse({'detail': 'Este template organiza os vídeos por cenas.'}, status=400)
+        try:
+            data = json.loads(request.body)
+            filename = str(data.get('filename') or '').strip()
+            file_size = int(data.get('size') or 0)
+        except (ValueError, TypeError):
+            return JsonResponse({'detail': 'Corpo da requisição inválido.'}, status=400)
+        if Path(filename).suffix.lower() not in VIDEO_EXTENSIONS:
+            return JsonResponse({'detail': 'Formato não suportado. Envie MP4, MOV, MKV, WEBM, AVI ou M4V.'}, status=400)
+        if file_size <= 0 or file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
+            return JsonResponse({'detail': f'O vídeo excede o limite de {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.'}, status=400)
+        position = (
+            ProjectBlockMedia.objects.filter(project=project, block__isnull=True, custom_block__isnull=True)
+            .aggregate(value=Max('position'))['value'] or 0
+        ) + 1
+        storage_key = external_media_project_upload_path(
+            SimpleNamespace(project=project, block_id=None, block=None, position=position), filename,
+        )
+        try:
+            upload_url = _generate_presigned_put(storage_key, str(data.get('content_type') or 'video/octet-stream'))
+        except Exception:
+            return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
+        allocation = {
+            'project_id': str(project.public_id), 'block_id': None, 'custom_block_id': None,
+            'storage_key': storage_key, 'filename': filename, 'size': file_size, 'position': position,
+            'camera_key': 'primary', 'camera_role': ProjectBlockMedia.CameraRole.PRIMARY,
+            'camera_order': 1, 'camera_label': 'Vídeo principal',
+            'camera_hint': str(data.get('camera_hint') or ProjectBlockMedia.CameraHint.AUTO),
+            'trim_start_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_start_seconds')) or 0,
+            'trim_end_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_end_seconds')),
+        }
+        return JsonResponse({
+            'upload_url': upload_url,
+            'content_type': str(data.get('content_type') or 'video/octet-stream'),
             'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
             'allocation': allocation,
             'allocation_sig': _sign_upload_allocation(allocation),
@@ -1276,6 +1396,8 @@ class ExternalMediaProjectUploadCompleteView(ExternalMediaRequiredMixin, View):
         custom_block_id = allocation.get('custom_block_id')
         block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version) if block_id else None
         custom_block = get_object_or_404(ProjectCustomBlock, pk=custom_block_id, project=project) if custom_block_id else None
+        if not block and not custom_block and project.template_version.blocks.exists():
+            return JsonResponse({'detail': 'Este template organiza os vídeos por cenas.'}, status=400)
 
         item = ProjectBlockMedia(
             project=project,
@@ -1355,7 +1477,7 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             )
             return None
 
-    def post(self, request, public_id, block_id, custom=False):
+    def post(self, request, public_id, block_id=None, custom=False):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         if project.status != ExternalMediaProject.Status.DRAFT:
             return self._error_response(
@@ -1363,7 +1485,10 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             )
         block = None
         custom_block = None
-        if custom:
+        if block_id is None:
+            if project.template_version.blocks.exists():
+                return self._error_response(request, project, 'Este template organiza os elementos por cenas.')
+        elif custom:
             custom_block = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project)
         else:
             block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version)
@@ -1378,17 +1503,11 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             ProjectBrollAsset.MediaType.VIDEO if suffix in VIDEO_EXTENSIONS
             else ProjectBrollAsset.MediaType.IMAGE
         )
-        config = BrollTimelineService.configuration(project)
-        if not config.get('enabled'):
-            return self._error_response(request, project, 'O Template não habilitou B-rolls.')
-        if media_type == 'VIDEO' and not config.get('allow_video', True):
-            return self._error_response(request, project, 'Este Template não permite B-roll de vídeo.')
-        if media_type == 'IMAGE' and not config.get('allow_image', True):
-            return self._error_response(request, project, 'Este Template não permite B-roll de imagem.')
         item = form.save(commit=False)
         item.project = project
         item.block = block
         item.custom_block = custom_block
+        item.description = ''
         item.media_type = media_type
         item.original_filename = upload.name
         item.file_size = upload.size
@@ -1399,7 +1518,11 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             if media_type == ProjectBrollAsset.MediaType.VIDEO
             else ProjectBrollAsset.PreviewStatus.READY
         )
-        owner_filter = {'custom_block': custom_block} if custom_block else {'block': block}
+        owner_filter = (
+            {'custom_block': custom_block} if custom_block else
+            {'block': block} if block else
+            {'block__isnull': True, 'custom_block__isnull': True}
+        )
         item.position = (project.broll_assets.filter(**owner_filter).aggregate(value=Max('position'))['value'] or 0) + 1
         item.save()
         self._enqueue_preview(item)
@@ -2474,9 +2597,6 @@ class ExternalMediaProjectPreviewBrollAssetView(ExternalMediaRequiredMixin, View
 class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
-        config = BrollTimelineService.configuration(project)
-        if not config.get('enabled'):
-            return JsonResponse({'error': 'O Template não habilitou B-rolls.'}, status=400)
         form = ProjectBrollAssetForm(request.POST, request.FILES)
         if not form.is_valid():
             return JsonResponse({'error': ' '.join(error for errors in form.errors.values() for error in errors)}, status=400)
@@ -2493,10 +2613,6 @@ class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, Vie
             if Path(upload.name).suffix.lower() in VIDEO_EXTENSIONS
             else ProjectBrollAsset.MediaType.IMAGE
         )
-        if media_type == ProjectBrollAsset.MediaType.VIDEO and not config.get('allow_video', True):
-            return JsonResponse({'error': 'Este Template não permite B-roll de vídeo.'}, status=400)
-        if media_type == ProjectBrollAsset.MediaType.IMAGE and not config.get('allow_image', True):
-            return JsonResponse({'error': 'Este Template não permite B-roll de imagem.'}, status=400)
         asset = form.save(commit=False)
         asset.project, asset.block, asset.custom_block = project, block, custom_block
         asset.media_type = media_type

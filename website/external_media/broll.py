@@ -37,9 +37,18 @@ class BrollTimelineService:
     @classmethod
     def configuration(cls, project):
         plugin = project.template_version.plugins.filter(
-            code=MediaTemplatePlugin.Code.BROLL, is_enabled=True,
+            code=MediaTemplatePlugin.Code.BROLL,
         ).first()
-        return {**cls.DEFAULTS, **(plugin.configuration or {})} if plugin else {'enabled': False}
+        # B-roll is always available at the project/block level. A legacy
+        # template plugin can still hold presentation defaults, but it no
+        # longer decides whether a member may add an image or video.
+        return {
+            **cls.DEFAULTS,
+            **((plugin.configuration or {}) if plugin else {}),
+            'enabled': True,
+            'allow_video': True,
+            'allow_image': True,
+        }
 
     @classmethod
     def ensure_auto_decisions(cls, project, ai_service=None):
@@ -143,7 +152,6 @@ class BrollTimelineService:
                 'id': f'broll-asset-{asset.public_id}',
                 'asset_id': str(asset.public_id),
                 'name': asset.original_filename,
-                'description': asset.description,
                 'media_type': asset.media_type,
                 'duration_ms': asset.duration_ms,
                 'url': reverse('external_media_project_preview_broll_asset', kwargs={
@@ -169,7 +177,6 @@ class BrollTimelineService:
             start, end = ranges.get(block_key, (0, max((cue['end_ms'] for cue in cues), default=5000)))
             request_assets.append({
                 'asset_id': str(asset.public_id), 'media_type': asset.media_type,
-                'description': asset.description or asset.original_filename,
                 'duration_ms': asset.duration_ms, 'block_key': block_key,
                 'allowed_range_ms': [start, end],
             })
@@ -194,16 +201,11 @@ class BrollTimelineService:
     @classmethod
     def _fallback_decision(cls, asset, ranges, cues, config, index):
         block_start, block_end = ranges.get(cls._asset_block_key(asset), (0, max((c['end_ms'] for c in cues), default=5000)))
-        words = set(re.findall(r'[\wÀ-ÿ]{4,}', (asset.description or asset.original_filename).lower()))
-        relevant = [cue for cue in cues if block_start <= cue['start_ms'] < block_end]
-        best = max(relevant, key=lambda cue: len(words & set(re.findall(r'[\wÀ-ÿ]{4,}', cue['text'].lower()))), default=None)
-        start = int(best['start_ms'] if best else block_start + index * 1000)
+        start = int(block_start + index * 1000)
         duration = min(6000, max(2500, int(asset.duration_ms or 5000)))
         start = min(max(block_start, start), max(block_start, block_end - 1))
         end = min(block_end, start + duration)
-        description = (asset.description or asset.original_filename).lower()
-        overlay = config.get('allow_overlay') and any(token in description for token in ('qr', 'logo', 'card', 'inscri'))
-        return cls._decision(asset, start, max(start + 1, end), 'OVERLAY' if overlay else 'FULLSCREEN', .55, config)
+        return cls._decision(asset, start, max(start + 1, end), 'FULLSCREEN', .55, config)
 
     @classmethod
     def _validated_ai_decision(cls, asset, candidate, ranges, config, fallback):
@@ -260,7 +262,9 @@ class BrollTimelineService:
 
     @staticmethod
     def _asset_block_key(asset):
-        return f'custom-{asset.custom_block_id}' if asset.custom_block_id else str(asset.block.key)
+        if asset.custom_block_id:
+            return f'custom-{asset.custom_block_id}'
+        return str(asset.block.key) if asset.block_id else 'project-main'
 
     @staticmethod
     def _configured_block_ranges(project):

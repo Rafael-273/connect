@@ -17,7 +17,6 @@ from ..models.external_media import (
     MediaTemplateVersion,
     OverlayPreset,
     ProjectBlockMedia,
-    ProxyProfile,
     RenderPreset,
     SpeechFillerTerm,
     SubtitleStyle,
@@ -31,15 +30,11 @@ ADVANCED_PLUGIN_CODES = {
     MediaTemplatePlugin.Code.SILENCE_REMOVAL,
     MediaTemplatePlugin.Code.FILLER_REMOVAL,
     MediaTemplatePlugin.Code.AUTO_TRACKING,
-    MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
-    MediaTemplatePlugin.Code.BROLL,
 }
 ADVANCED_PLUGIN_CHOICES = [
     (MediaTemplatePlugin.Code.SILENCE_REMOVAL, 'Corte de silêncio'),
     (MediaTemplatePlugin.Code.FILLER_REMOVAL, 'Remover vícios de fala'),
     (MediaTemplatePlugin.Code.AUTO_TRACKING, 'Auto Reframe inteligente'),
-    (MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION, 'Detectar trechos fora de contexto (IA)'),
-    (MediaTemplatePlugin.Code.BROLL, 'B-roll automático (vídeos e imagens)'),
 ]
 RENDER_PRESET_VIDEO_CODEC_CHOICES = [
     ('libx264', 'H.264 (libx264) — compatível com telão, YouTube e redes sociais'),
@@ -183,17 +178,6 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             '{"global_mode": "LIGHT", "detect_transient_noise": true, "transient_action": "REVIEW"}'
         ),
     )
-    broll_config_raw = forms.CharField(
-        label='Configuração do B-roll (JSON)',
-        required=False,
-        widget=forms.Textarea(attrs={'rows': 7}),
-        help_text=(
-            'Controla os assets visuais do Template. Exemplo: '
-            '{"enabled": true, "allow_video": true, "allow_image": true, '
-            '"allow_overlay": true, "auto_placement": true, "smart_crop": false, '
-            '"image_motion": "AUTO", "default_transition": "FADE"}'
-        ),
-    )
     LANGUAGE_MODE_SINGLE = 'single'
     LANGUAGE_MODE_TRANSLATED = 'translated'
     LANGUAGE_MODE_BILINGUAL_SOURCE = 'bilingual_source'
@@ -210,7 +194,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
     language_mode = forms.ChoiceField(
         label='Tipo de idioma do vídeo',
         choices=LANGUAGE_MODE_CHOICES,
-        initial=LANGUAGE_MODE_TRANSLATED,
+        initial=LANGUAGE_MODE_SINGLE,
     )
     spoken_languages = forms.MultipleChoiceField(
         label='Idiomas falados no vídeo',
@@ -274,9 +258,10 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
     class Meta:
         model = MediaTemplateVersion
         fields = [
-            'preset', 'interactive_preview_enabled', 'preview_proxy_profile',
+            'preset', 'interactive_preview_enabled',
             'subtitles_enabled', 'subtitle_style', 'translated_subtitle_style',
             'original_language',
+            'intro_video', 'intro_enabled', 'outro_video', 'outro_enabled',
             'color_lut', 'lut_file', 'lut_intensity', 'background_music',
             'dialogue_processing_enabled',
             'audio_noise_cleanup_enabled',
@@ -286,11 +271,14 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         labels = {
             'preset': 'Preset de renderização',
             'interactive_preview_enabled': 'Revisão interativa antes da renderização',
-            'preview_proxy_profile': 'Qualidade do preview',
             'subtitles_enabled': 'Gerar legendas no vídeo',
             'subtitle_style': 'Estilo da legenda original',
             'translated_subtitle_style': 'Estilo da legenda traduzida',
             'original_language': 'Idioma padrão da legenda',
+            'intro_video': 'Vídeo de abertura',
+            'intro_enabled': 'Ativar abertura',
+            'outro_video': 'Vídeo de encerramento',
+            'outro_enabled': 'Ativar encerramento',
             'color_lut': 'LUT de cor',
             'lut_file': 'Arquivo LUT legado',
             'lut_intensity': 'Intensidade do LUT',
@@ -303,6 +291,8 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             'audio_mastering_enabled': 'Masterização',
         }
         widgets = {
+            'intro_video': forms.ClearableFileInput(attrs={'accept': 'video/*'}),
+            'outro_video': forms.ClearableFileInput(attrs={'accept': 'video/*'}),
             'lut_file': forms.ClearableFileInput(),
             'lut_intensity': forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': 1}),
         }
@@ -349,7 +339,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             )
             initial.setdefault(
                 'language_mode',
-                (instance.default_settings or {}).get('language_mode', self.LANGUAGE_MODE_TRANSLATED),
+                (instance.default_settings or {}).get('language_mode', self.LANGUAGE_MODE_SINGLE),
             )
             initial.setdefault(
                 'spoken_languages',
@@ -377,12 +367,6 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                     initial.setdefault(
                         'auto_reframe_priority',
                         (auto_reframe.configuration or {}).get('priority', 'face'),
-                    )
-                broll_plugin = instance.plugins.filter(code=MediaTemplatePlugin.Code.BROLL).first()
-                if broll_plugin:
-                    initial.setdefault(
-                        'broll_config_raw',
-                        json.dumps(broll_plugin.configuration or {}, indent=2, ensure_ascii=False),
                     )
                 speech_plugin = instance.plugins.filter(
                     code__in=[
@@ -436,7 +420,6 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         ).order_by('text')
         list(filler_terms_qs)
         self.fields['preset'].queryset = preset_qs
-        self.fields['preview_proxy_profile'].queryset = ProxyProfile.objects.filter(is_active=True).order_by('-is_default', 'name')
         self.fields['subtitle_style'].queryset = subtitle_styles_qs
         self.fields['translated_subtitle_style'].queryset = translated_styles_qs
         self.fields['translated_subtitle_style'].required = False
@@ -455,9 +438,6 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             self.fields['filler_terms'].initial = filler_terms_qs
         if is_new_instance:
             self.fields['spoken_languages'].initial = ['pt']
-            preview_profile = ProxyProfile.objects.filter(is_active=True, is_default=True).first()
-            if preview_profile:
-                self.fields['preview_proxy_profile'].initial = preview_profile.pk
             default_profile = MasteringProfile.objects.filter(is_active=True, is_default=True).first()
             if default_profile:
                 self.fields['mastering_profile'].initial = default_profile.pk
@@ -497,20 +477,6 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             raise forms.ValidationError('Use um objeto JSON, por exemplo {"global_mode": "LIGHT"}.')
         return value
 
-    def clean_broll_config_raw(self):
-        value = self._parse_json(
-            self.cleaned_data.get('broll_config_raw'), {}, 'Configuração do B-roll',
-        )
-        if not isinstance(value, dict):
-            raise forms.ValidationError('Use um objeto JSON para configurar o B-roll.')
-        valid_motion = {'AUTO', 'NONE', 'ZOOM_IN', 'ZOOM_OUT', 'PAN_LEFT', 'PAN_RIGHT'}
-        valid_transition = {'NONE', 'FADE', 'SLIDE', 'SCALE'}
-        if str(value.get('image_motion', 'AUTO')).upper() not in valid_motion:
-            raise forms.ValidationError('image_motion possui um valor inválido.')
-        if str(value.get('default_transition', 'FADE')).upper() not in valid_transition:
-            raise forms.ValidationError('default_transition possui um valor inválido.')
-        return value
-
     @staticmethod
     def _parse_json(raw, default, label):
         if not raw:
@@ -523,7 +489,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
     def save(self, commit=True):
         instance = super().save(commit=False)
         default_settings = dict(self.cleaned_data.get('default_settings_raw') or {})
-        language_mode = self.cleaned_data.get('language_mode') or self.LANGUAGE_MODE_TRANSLATED
+        language_mode = self.cleaned_data.get('language_mode') or self.LANGUAGE_MODE_SINGLE
         default_settings['language_mode'] = language_mode
         spoken_languages = self.cleaned_data.get('spoken_languages') or [instance.original_language]
         if language_mode in (self.LANGUAGE_MODE_SINGLE, self.LANGUAGE_MODE_TRANSLATED):
@@ -605,11 +571,6 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                     # shifting the frame as speakers move.
                     'static_zoom': 1.06 if is_static_frame else 1.0,
                 }
-            elif code == MediaTemplatePlugin.Code.BROLL and 'broll_config_raw' in self.data:
-                configuration = {
-                    **configuration,
-                    **(self.cleaned_data.get('broll_config_raw') or {}),
-                }
             elif code in {
                 MediaTemplatePlugin.Code.SILENCE_REMOVAL,
                 MediaTemplatePlugin.Code.FILLER_REMOVAL,
@@ -641,6 +602,41 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
                     configuration=configuration,
                 )
 
+        # B-roll is a project-level optional asset, not a template capability.
+        # Keep a legacy plugin row enabled for pipeline history/configuration,
+        # while uploads remain available on every block regardless of template.
+        broll_plugin, created = MediaTemplatePlugin.objects.get_or_create(
+            version=instance,
+            code=MediaTemplatePlugin.Code.BROLL,
+            defaults={
+                'order': len(ADVANCED_PLUGIN_CHOICES) + 1,
+                'is_enabled': True,
+                'user_can_override': False,
+                'configuration': {},
+            },
+        )
+        if not created and (not broll_plugin.is_enabled or broll_plugin.user_can_override):
+            broll_plugin.is_enabled = True
+            broll_plugin.user_can_override = False
+            broll_plugin.save(update_fields=['is_enabled', 'user_can_override', 'update_at'])
+
+        # The off-context AI suggestion was retired from template editing.
+        # Keep historical rows, but deactivate them whenever a template is saved.
+        off_context_plugin, created = MediaTemplatePlugin.objects.get_or_create(
+            version=instance,
+            code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
+            defaults={
+                'order': len(ADVANCED_PLUGIN_CHOICES) + 2,
+                'is_enabled': False,
+                'user_can_override': False,
+                'configuration': {},
+            },
+        )
+        if not created and (off_context_plugin.is_enabled or off_context_plugin.user_can_override):
+            off_context_plugin.is_enabled = False
+            off_context_plugin.user_can_override = False
+            off_context_plugin.save(update_fields=['is_enabled', 'user_can_override', 'update_at'])
+
 
 class AdminMediaTemplateBlockForm(forms.ModelForm):
     overlay_definitions_raw = forms.CharField(
@@ -648,7 +644,7 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
         required=False,
         widget=forms.HiddenInput(),
         help_text=(
-            'Configure os elementos que devem aparecer automaticamente neste bloco. '
+            'Configure os elementos que devem aparecer automaticamente nesta cena. '
             'O conteúdo será solicitado ao membro no projeto.'
         ),
     )
@@ -660,12 +656,12 @@ class AdminMediaTemplateBlockForm(forms.ModelForm):
             'min_occurrences', 'max_occurrences', 'skip_extra_processing', 'remove_background_voice', 'default_video',
         ]
         labels = {
-            'name': 'Nome do bloco',
+            'name': 'Nome da cena',
             'description': 'Descrição',
             'order': 'Posição no vídeo',
-            'default_video': 'Vídeo fixo deste bloco',
+            'default_video': 'Vídeo fixo desta cena',
             'is_required': 'Obrigatório',
-            'skip_extra_processing': 'Manter este bloco intacto',
+            'skip_extra_processing': 'Manter esta cena intacta',
             'remove_background_voice': 'Remover voz de fundo / entrevistador',
             'allows_multiple': 'Aceitar mais de um vídeo',
             'min_occurrences': 'Mínimo de vídeos',
@@ -1402,7 +1398,8 @@ AdminMediaTemplateBlockFormSet = inlineformset_factory(
     MediaTemplateBlock,
     form=AdminMediaTemplateBlockForm,
     formset=AdminMediaTemplateBlockFormSetBase,
-    extra=1,
+    # Scenes are optional. The UI starts empty and adds one only on request.
+    extra=0,
     can_delete=True,
 )
 

@@ -107,12 +107,26 @@ class ProjectProxyService:
 
     @classmethod
     def _profile(cls, project):
-        profile = project.template_version.preview_proxy_profile
+        # Preview quality is a system-wide setting.  Keeping it independent
+        # from each template prevents templates from producing different
+        # review proxies while there is only one supported profile.
+        profile = ProxyProfile.objects.filter(is_active=True, is_default=True).first()
         if not profile:
-            profile, _ = ProxyProfile.objects.get_or_create(
+            profile, created = ProxyProfile.objects.get_or_create(
                 code='community-1',
-                defaults={'name': 'Community 1', 'max_width': 960, 'fps': 30, 'video_crf': 27, 'is_default': True},
+                defaults={
+                    'name': 'Community 1',
+                    'max_width': 960,
+                    'fps': 30,
+                    'video_crf': 27,
+                    'is_default': True,
+                    'is_active': True,
+                },
             )
+            if not created and (not profile.is_active or not profile.is_default):
+                profile.is_active = True
+                profile.is_default = True
+                profile.save(update_fields=['is_active', 'is_default', 'update_at'])
         return profile
 
     @classmethod
@@ -1714,6 +1728,14 @@ class TimelineRevisionService:
 
     @staticmethod
     def _shift_cues_for_decision(project, decisions, target, enabling):
+        """Keep subtitle cues on the same edited clock as a removed take.
+
+        A cut collapses the timeline. Shifting only captions that start after
+        the cut left captions that intersected the removed video untouched,
+        making them survive over unrelated takes and overlap the next cue.
+        Trim the intersecting part instead; a cue contained entirely in the
+        deleted take is soft-deleted so revision history can restore it.
+        """
         duration = max(0, int(target.get('source_out_ms') or 0) - int(target.get('source_in_ms') or 0))
         if not duration or not project.render_job_id:
             return
@@ -1730,12 +1752,51 @@ class TimelineRevisionService:
             if int(item.get('source_in_ms') or 0) < source_start
         )
         timeline_point = max(0, source_start - removed_before)
-        delta = -duration if enabling else duration
-        cues = SubtitleCue.objects.filter(track__job=project.render_job, start_ms__gte=timeline_point)
+        if not enabling:
+            # History navigation restores the exact caption snapshot through
+            # ``_sync_cues_from_revision``. Keep the legacy inverse shift for
+            # disabling an automatic cut directly from the inspector.
+            cues = SubtitleCue.objects.filter(track__job=project.render_job, start_ms__gte=timeline_point)
+            for cue in cues:
+                cue.start_ms = max(0, cue.start_ms + duration)
+                cue.end_ms = max(cue.start_ms + 1, cue.end_ms + duration)
+            SubtitleCue.objects.bulk_update(cues, ['start_ms', 'end_ms'])
+            return
+
+        cut_end = timeline_point + duration
+        changed = []
+        removed = []
+        cues = SubtitleCue.objects.select_for_update().filter(track__job=project.render_job)
         for cue in cues:
-            cue.start_ms = max(0, cue.start_ms + delta)
-            cue.end_ms = max(cue.start_ms + 1, cue.end_ms + delta)
-        SubtitleCue.objects.bulk_update(cues, ['start_ms', 'end_ms'])
+            start, end = int(cue.start_ms), int(cue.end_ms)
+            if end <= timeline_point:
+                continue
+            if start >= cut_end:
+                cue.start_ms = start - duration
+                cue.end_ms = end - duration
+            elif start >= timeline_point and end <= cut_end:
+                # The entire caption belongs to the video being removed.
+                removed.append(cue)
+                continue
+            elif start < timeline_point and end <= cut_end:
+                # Keep only the words shown before the cut.
+                cue.end_ms = timeline_point
+            elif start >= timeline_point and end > cut_end:
+                # Keep only the portion after the cut; it begins where the
+                # two remaining video edges meet.
+                cue.start_ms = timeline_point
+                cue.end_ms = end - duration
+            else:
+                # The caption spans both sides of the removed segment.
+                cue.end_ms = end - duration
+            if cue.end_ms - cue.start_ms < MIN_MANUAL_CUT_MS:
+                removed.append(cue)
+            else:
+                changed.append(cue)
+        if changed:
+            SubtitleCue.objects.bulk_update(changed, ['start_ms', 'end_ms'])
+        for cue in removed:
+            cue.delete()
 
     @staticmethod
     def _sync_cues_from_revision(project, revision):

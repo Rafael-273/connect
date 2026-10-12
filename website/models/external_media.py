@@ -916,9 +916,11 @@ class MediaTemplateVersion(BaseModel):
     intro_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
+    intro_enabled = models.BooleanField(default=True, verbose_name='Usar vídeo de abertura')
     outro_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
+    outro_enabled = models.BooleanField(default=True, verbose_name='Usar vídeo de encerramento')
     lut_file = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
@@ -1205,7 +1207,8 @@ class ProjectBlockMedia(BaseModel):
         verbose_name_plural = 'Vídeos dos blocos'
 
     def __str__(self):
-        return f'{self.project}: {(self.block or self.custom_block).name} #{self.position}'
+        owner = self.block or self.custom_block
+        return f'{self.project}: {owner.name if owner else "Vídeo principal"} #{self.position}'
 
 
 class ProjectBrollAsset(BaseModel):
@@ -1259,8 +1262,9 @@ class ProjectBrollAsset(BaseModel):
                 check=(
                     models.Q(block__isnull=False, custom_block__isnull=True)
                     | models.Q(block__isnull=True, custom_block__isnull=False)
+                    | models.Q(block__isnull=True, custom_block__isnull=True)
                 ),
-                name='broll_asset_exactly_one_block',
+                name='broll_asset_at_most_one_block',
             ),
         ]
         verbose_name = 'Asset de B-roll'

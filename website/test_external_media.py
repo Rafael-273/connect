@@ -1,4 +1,5 @@
 import json
+import base64
 import io
 import math
 import re
@@ -88,6 +89,7 @@ from website.external_media.services import (
     ExternalMediaProjectPipeline,
     FFmpegRunner,
     LUTService,
+    ProjectService,
     RenderService,
     SubtitleService,
     TemplateService,
@@ -115,6 +117,7 @@ from website.models.external_media import (
     MediaTemplateVersion,
     ProjectPipelineStep,
     ProjectBlockMedia,
+    ProjectBrollAsset,
     ProjectCustomBlock,
     ProjectSourceProxy,
     PreviewSession,
@@ -1310,7 +1313,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             (1500, 2600),
         )
 
-        SubtitleCue.objects.create(
+        other_cue = SubtitleCue.objects.create(
             track=track, cue_index=2, start_ms=3000, end_ms=4000, text='Outra legenda',
         )
         with self.assertRaisesMessage(ValueError, 'As legendas da mesma faixa não podem se sobrepor.'):
@@ -1330,6 +1333,61 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual((restored.start_ms, restored.end_ms), (1500, 2600))
         TimelineRevisionService.navigate_history(project, self.member, 'redo')
         self.assertFalse(SubtitleCue.objects.filter(pk=cue.pk).exists())
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_manual_cut_trims_or_removes_captions_linked_to_removed_video(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        project.configuration = {
+            'source_manifest': SourceManifestBuilder.build(project),
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['configuration', 'render_job', 'update_at'])
+        cues = {}
+        for language, start, end, text in (
+            ('pt', 1500, 2500, 'Começa antes do corte'),
+            ('en', 2200, 2800, 'Inteira no corte'),
+            ('es', 2500, 3600, 'Termina depois do corte'),
+            ('fr', 1500, 3500, 'Atravessa o corte'),
+        ):
+            track = SubtitleTrack.objects.create(job=job, language=language, is_source=language == 'pt')
+            cues[language] = SubtitleCue.objects.create(
+                track=track, cue_index=1, start_ms=start, end_ms=end, text=text,
+            )
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.create_manual_cut(project, self.member, 2000, 3000)
+
+        self.assertEqual(
+            (SubtitleCue.objects.get(pk=cues['pt'].pk).start_ms, SubtitleCue.objects.get(pk=cues['pt'].pk).end_ms),
+            (1500, 2000),
+        )
+        self.assertFalse(SubtitleCue.objects.filter(pk=cues['en'].pk).exists())
+        self.assertIsNotNone(SubtitleCue.all_objects.get(pk=cues['en'].pk).deleted)
+        self.assertEqual(
+            (SubtitleCue.objects.get(pk=cues['es'].pk).start_ms, SubtitleCue.objects.get(pk=cues['es'].pk).end_ms),
+            (2000, 2600),
+        )
+        self.assertEqual(
+            (SubtitleCue.objects.get(pk=cues['fr'].pk).start_ms, SubtitleCue.objects.get(pk=cues['fr'].pk).end_ms),
+            (1500, 2500),
+        )
+        self.assertEqual({cue['language'] for cue in revision.timeline['captions']}, {'pt', 'es', 'fr'})
+
+        TimelineRevisionService.navigate_history(project, self.member, 'undo')
+        self.assertEqual(
+            (SubtitleCue.objects.get(pk=cues['en'].pk).start_ms, SubtitleCue.objects.get(pk=cues['en'].pk).end_ms),
+            (2200, 2800),
+        )
+        TimelineRevisionService.navigate_history(project, self.member, 'redo')
+        self.assertFalse(SubtitleCue.objects.filter(pk=cues['en'].pk).exists())
         media.delete(force_policy=HARD_DELETE)
 
     def test_video_split_after_a_cut_uses_the_original_master_clock(self):
@@ -1555,9 +1613,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
     def test_retry_revision_proxy_marks_it_pending_before_enqueueing(self, enqueue):
         project = self.make_project()
         job = self.make_job()
-        profile = ProxyProfile.objects.create(code='revision-proxy-retry', name='Retry de proxy')
-        self.version.preview_proxy_profile = profile
-        self.version.save(update_fields=['preview_proxy_profile', 'update_at'])
+        profile = ProjectProxyService._profile(project)
         project.render_job = job
         project.configuration = {
             'source_manifest': {'schema': 'connect.source_manifest.v1', 'sources': []},
@@ -1876,6 +1932,79 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(upload.block, self.block)
         self.assertEqual(upload.position, 1)
 
+    def test_template_without_scenes_accepts_a_direct_project_video(self):
+        self.block.delete()
+        self.version.intro_video.save('abertura.mp4', ContentFile(b'intro'), save=False)
+        self.version.outro_video.save('encerramento.mp4', ContentFile(b'outro'), save=True)
+        project = self.make_project()
+
+        response = self.client.post(
+            reverse('external_media_project_direct_upload', args=[project.public_id]),
+            {'file': SimpleUploadedFile('principal.mp4', b'video', content_type='video/mp4')},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        upload = ProjectBlockMedia.objects.get(project=project)
+        self.assertIsNone(upload.block)
+        self.assertIsNone(upload.custom_block)
+        self.assertEqual(upload.camera_label, 'Vídeo principal')
+        manifest = SourceManifestBuilder.build(project)
+        self.assertEqual(
+            [source['kind'] for source in manifest['sources']],
+            ['template_intro', 'project_upload', 'template_outro'],
+        )
+        self.assertEqual(manifest['sources'][1]['source_reference'], str(upload.pk))
+        self.version.outro_enabled = False
+        self.version.save(update_fields=['outro_enabled', 'update_at'])
+        self.assertEqual(
+            [source['kind'] for source in SourceManifestBuilder.build(project)['sources']],
+            ['template_intro', 'project_upload'],
+        )
+        self.assertEqual(ProjectService.validate_uploads(project), [])
+        detail = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
+        self.assertContains(detail, 'Vídeo principal')
+        self.assertNotContains(detail, 'Adicionar cena personalizada')
+
+    def test_direct_project_video_accepts_elements_and_extra_cameras(self):
+        self.block.delete()
+        project = self.make_project()
+        primary = ProjectBlockMedia.objects.create(
+            project=project,
+            file=SimpleUploadedFile('principal.mp4', b'video', content_type='video/mp4'),
+            original_filename='principal.mp4', file_size=5, position=1,
+            camera_role=ProjectBlockMedia.CameraRole.PRIMARY, camera_key='primary', camera_order=1,
+        )
+        png = base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        )
+
+        element_response = self.client.post(
+            reverse('external_media_project_direct_broll_upload', args=[project.public_id]),
+            {
+                'description': 'QR Code para inscrição', 'duration_seconds': '5',
+                'file': SimpleUploadedFile(
+                    'qr.png', png, content_type='image/png',
+                ),
+            },
+        )
+        camera_response = self.client.post(
+            reverse('external_media_project_direct_upload', args=[project.public_id]),
+            {
+                'camera_role': 'SECONDARY', 'camera_position': str(primary.position),
+                'camera_label': 'Câmera lateral',
+                'file': SimpleUploadedFile('lateral.mp4', b'video', content_type='video/mp4'),
+            },
+        )
+
+        self.assertEqual(element_response.status_code, 302)
+        self.assertEqual(camera_response.status_code, 302)
+        element = ProjectBrollAsset.objects.get(project=project)
+        self.assertIsNone(element.block)
+        self.assertIsNone(element.custom_block)
+        camera = ProjectBlockMedia.objects.get(project=project, camera_role=ProjectBlockMedia.CameraRole.SECONDARY)
+        self.assertEqual(camera.position, primary.position)
+        self.assertEqual(camera.camera_label, 'Câmera lateral')
+
     def test_preview_task_skips_media_deleted_before_worker_start(self):
         result = create_project_preview.run(999999)
 
@@ -1910,7 +2039,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         response = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Gerar vídeo')
-        self.assertContains(response, 'Adicionar bloco personalizado')
+        self.assertContains(response, 'Adicionar cena personalizada')
 
     def test_project_duration_minutes_rounds_up(self):
         project = self.make_project()
@@ -2355,7 +2484,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.refresh_from_db()
         self.assertNotIn('off_context_plan', project.configuration)
 
-    def test_off_context_detection_stores_disabled_suggestions_for_review(self):
+    def test_off_context_detection_legacy_plugin_is_ignored(self):
         MediaTemplatePlugin.objects.create(
             version=self.version, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION, order=4,
         )
@@ -2382,21 +2511,16 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         pipeline._apply_off_context_detection(job, Path('/tmp/video.mp4'), detailed)
 
         project.refresh_from_db()
-        stored_cuts = project.configuration['off_context_plan']['cuts']
-        self.assertEqual(stored_cuts[0]['start_ms'], 1000)
-        self.assertEqual(stored_cuts[0]['end_ms'], 2000)
+        self.assertNotIn('off_context_plan', project.configuration)
         step = ProjectPipelineStep.objects.get(
             project=project, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
         )
-        self.assertEqual(step.status, ProjectPipelineStep.Status.FINISHED)
-        self.assertIn('1 trecho', step.message)
-        # The suggestion must not have been folded into a real, enabled cut yet.
+        self.assertEqual(step.status, ProjectPipelineStep.Status.PENDING)
         decisions = EditDecisionSetBuilder.build(project)
         off_context_ops = [
             item for item in decisions['operations'] if item['producer'] == 'off_context_detection'
         ]
-        self.assertEqual(len(off_context_ops), 1)
-        self.assertFalse(off_context_ops[0]['enabled'])
+        self.assertEqual(off_context_ops, [])
 
     def test_off_context_detection_survives_a_failed_ai_call(self):
         MediaTemplatePlugin.objects.create(
@@ -2427,7 +2551,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         step = ProjectPipelineStep.objects.get(
             project=project, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
         )
-        self.assertEqual(step.status, ProjectPipelineStep.Status.FINISHED)
+        self.assertEqual(step.status, ProjectPipelineStep.Status.PENDING)
 
     def test_speech_edit_remaps_block_ranges_to_the_edited_timeline(self):
         MediaTemplatePlugin.objects.create(
@@ -3058,19 +3182,17 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(silence.configuration['profile'], 'conservative')
         self.assertEqual(fillers.configuration['filler_words'], ['eh', 'hum', 'tipo'])
 
-    def test_admin_panel_can_enable_off_context_detection(self):
+    def test_admin_panel_keeps_off_context_detection_disabled(self):
         response = self.client.post(
             reverse('admin_external_media_version_edit', args=[self.version.pk]),
-            self._version_edit_payload(
-                advanced_plugins=[MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION],
-            ),
+            self._version_edit_payload(),
         )
         self.assertRedirects(
             response,
             reverse('admin_external_media_template_detail', args=[self.template.pk]),
         )
         plugin = self.version.plugins.get(code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION)
-        self.assertTrue(plugin.is_enabled)
+        self.assertFalse(plugin.is_enabled)
 
     def test_admin_panel_saves_auto_reframe_priority(self):
         response = self.client.post(

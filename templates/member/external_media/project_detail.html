@@ -37,6 +37,12 @@
     .project-media-empty { display:flex; align-items:center; gap:.6rem; margin-bottom:.85rem; color:#667085; font-size:.85rem; }
     .project-media-empty i { display:grid; place-items:center; width:1.75rem; height:1.75rem; border-radius:.55rem; background:#f1f5f9; color:#94a3b8; }
     .project-upload-slot { border:1.5px dashed #f3b7b2; background:linear-gradient(135deg,#fffafa,#fff); }
+    .project-add-more summary::-webkit-details-marker { display:none; }
+    .project-actions-menu { position:relative; }
+    .project-actions-menu summary::-webkit-details-marker { display:none; }
+    .project-actions-menu__list { position:absolute; z-index:20; top:calc(100% + .45rem); right:0; width:13rem; overflow:hidden; border:1px solid #e2e8f0; border-radius:.8rem; background:#fff; padding:.35rem; box-shadow:0 16px 36px rgba(15,23,42,.16); }
+    .project-actions-menu__item { display:flex; width:100%; align-items:center; gap:.65rem; border-radius:.55rem; padding:.65rem .7rem; color:#475467; font-size:.82rem; font-weight:700; text-align:left; }
+    .project-actions-menu__item:hover { background:#f8fafc; color:#c90905; }
     .project-upload-input { width:100%; border:1px solid #e2e8f0; border-radius:.7rem; padding:.4rem; background:#fff; color:#475467; font-size:.82rem; cursor:pointer; }
     .project-upload-input::file-selector-button { margin-right:.7rem; border:0; border-radius:.5rem; padding:.55rem .7rem; background:#c90905; color:#fff; font-size:.78rem; font-weight:800; cursor:pointer; }
     .project-uploaded-media { border-color:#bbf7d0!important; background:#fff!important; }
@@ -77,9 +83,17 @@
     .project-reprocess-option strong { display:block; color:#111827; font-size:.9rem; }
     .project-reprocess-option small { display:block; margin-top:.1rem; color:#667085; line-height:1.35; }
     @keyframes project-progress-pulse { 50% { opacity:.45; transform:scale(.8); } }
+    @keyframes media-trim-sheet-in { from { transform:translateY(1.5rem); opacity:.6; } to { transform:translateY(0); opacity:1; } }
     @media (min-width:640px) { .project-progress__steps { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media (min-width:1024px) { .project-progress__steps { grid-template-columns:repeat(3,minmax(0,1fr)); } }
-    @media (max-width:640px) { .project-progress__top { align-items:center; } }
+    @media (max-width:900px), (hover:none) and (pointer:coarse) {
+        .project-progress__top { align-items:center; }
+        [data-media-trim-modal] { align-items:flex-end!important; padding:0!important; }
+        .media-trim-modal__sheet { position:relative; width:100%!important; max-width:none!important; max-height:calc(100dvh - .75rem); overflow-y:auto; overscroll-behavior:contain; border-radius:1.4rem 1.4rem 0 0!important; padding:1.35rem 1rem 1rem!important; animation:media-trim-sheet-in .22s ease-out; }
+        .media-trim-modal__sheet::before { content:''; position:absolute; top:.55rem; left:50%; width:2.5rem; height:.25rem; border-radius:999px; background:#d1d5db; transform:translateX(-50%); }
+        .media-trim-footer-actions { display:grid!important; grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; }
+        .media-trim-footer-actions .media-btn { width:100%; }
+    }
 </style>
 {% endblock %}
 
@@ -135,7 +149,28 @@
     </form>
 </section>
 {% endif %}
-<div class="mb-4 flex items-end justify-between gap-4"><div><h2 class="text-lg font-black text-gray-900">Vídeos do projeto</h2><p class="mt-1 text-sm text-gray-500">Envie apenas os vídeos dos blocos abaixo. Os demais já estão configurados.</p></div><span class="hidden sm:inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{{ blocks|length }} bloco{{ blocks|length|pluralize:"s" }} para revisar</span></div>
+{% if not has_template_scenes %}
+<section class="media-card project-media-block {% if direct_media %}is-ready{% endif %} mb-7" data-project-block-id="project-main">
+    <div class="project-media-block__header"><div class="project-media-block__identity"><span class="project-media-block__number"><i class="fas fa-video"></i></span><div><h3 class="project-media-block__title">Vídeo do projeto</h3><p class="text-sm text-gray-500 mt-0.5">Envio direto, sem cenas predefinidas</p></div></div><div class="flex items-center gap-2"><span class="project-media-block__state {% if direct_media %}is-ready{% else %}is-empty{% endif %}">{% if direct_media %}<i class="fas fa-check"></i>Vídeo adicionado{% else %}<i class="fas fa-arrow-up"></i>Enviar vídeo{% endif %}</span>{% if direct_media %}<details class="project-actions-menu"><summary class="project-media-action cursor-pointer" aria-label="Mais opções"><i class="fas fa-ellipsis"></i></summary><div class="project-actions-menu__list"><button type="button" class="project-actions-menu__item" onclick="const card=document.querySelector('[data-broll-assets-list]');card.classList.remove('hidden');document.getElementById('direct-elements-panel').open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-photo-film text-violet-600"></i>Adicionar elemento</button><button type="button" class="project-actions-menu__item" onclick="const panel=document.getElementById('direct-camera-panel');panel.classList.remove('hidden');panel.open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-camera text-sky-600"></i>Adicionar câmera extra</button></div></details>{% endif %}</div></div>
+    <div class="project-media-block__body">
+        {% if direct_media %}<div class="space-y-2 mb-4">{% for media in direct_media %}
+        <div class="project-uploaded-media flex items-center justify-between gap-3 rounded-lg border border-white bg-white p-3 shadow-sm"><div class="min-w-0"><strong class="block truncate">{{ media.original_filename }}</strong><span class="text-xs text-gray-500">{{ media.file_size|filesizeformat }}{% if media.trim_ranges %} · {{ media.trim_ranges|length }} trechos aplicados{% elif media.trim_start_ms or media.trim_end_ms %} · corte aplicado{% endif %}</span></div><div class="flex items-center gap-1 shrink-0">{% if media.preview_status == 'READY' %}<button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-preview-start="{{ media.trim_start_ms|default:0 }}" data-media-preview-end="{{ media.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button><button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-trim data-media-name="{{ media.original_filename }}" data-media-url="{% url 'external_media_project_media_preview' project.public_id media.pk %}" data-media-trim-url="{% url 'external_media_project_media_trim' project.public_id media.pk %}" data-media-trim-start="{{ media.trim_start_ms|default:0 }}" data-media-trim-end="{{ media.trim_end_ms|default_if_none:'' }}" data-media-trim-ranges="{{ media.trim_ranges|default:'[]'|escapejs }}"><i class="fas fa-scissors"></i><span class="hidden sm:inline">Cortar</span></button>{% elif media.preview_status == 'ERROR' %}<span class="text-xs text-amber-700" title="{{ media.preview_error }}">Preview indisponível</span>{% else %}<span class="text-xs text-gray-500" data-preview-pending data-preview-status-url="{% url 'external_media_project_media_status' project.public_id media.pk %}"><i class="fas fa-spinner fa-spin mr-1"></i>Preparando preview</span>{% endif %}<form method="post" action="{% url 'external_media_project_media_delete' project.public_id media.pk %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover"><i class="fas fa-trash"></i></button></form></div></div>
+        {% endfor %}</div>{% endif %}
+        {% if direct_media %}
+        <section class="order-3 mt-4 overflow-hidden rounded-xl border border-violet-100 bg-violet-50/30{% if not direct_brolls %} hidden{% endif %}" data-broll-assets-list>
+            <div class="flex items-center justify-between gap-3 border-b border-violet-100 bg-violet-50/70 px-3 py-2"><div class="flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600 text-xs text-white"><i class="fas fa-photo-film"></i></span><div><strong class="block text-sm text-gray-900">Elementos</strong><span class="block text-xs text-gray-500">Elementos visuais de apoio do vídeo</span></div></div>{% if not direct_brolls %}<button type="button" class="project-media-action" aria-label="Fechar elementos" onclick="document.getElementById('direct-elements-panel').open=false;this.closest('[data-broll-assets-list]').classList.add('hidden')"><i class="fas fa-xmark"></i></button>{% endif %}</div>
+            <div class="space-y-2 p-2" data-broll-assets-items>{% for broll in direct_brolls %}<div class="flex items-center justify-between gap-3 rounded-lg border border-violet-100 bg-white p-3"><div class="min-w-0"><strong class="block truncate"><i class="fas {% if broll.media_type == 'VIDEO' %}fa-video{% else %}fa-image{% endif %} mr-1 text-violet-600"></i>{{ broll.original_filename }}</strong><span class="text-xs text-gray-500">{{ broll.get_media_type_display }}</span></div><form method="post" action="{% url 'external_media_project_broll_delete' project.public_id broll.public_id %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover elemento"><i class="fas fa-trash"></i></button></form></div>{% endfor %}</div>
+            <details id="direct-elements-panel" class="project-add-more p-2"><summary class="media-btn media-muted cursor-pointer text-sm"><i class="fas fa-plus"></i>Adicionar elemento</summary><div class="mt-3" data-broll-upload-list><form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_direct_broll_upload' project.public_id %}" class="grid gap-3 rounded-lg border border-violet-100 bg-white p-3 sm:grid-cols-[1fr_10rem]" data-broll-upload-form>{% csrf_token %}<span class="hidden" data-broll-form-title>Novo elemento</span><label class="text-xs font-bold text-gray-600">Arquivo do elemento<input type="file" name="file" accept=".mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal" data-broll-file></label><label class="text-xs font-bold text-gray-600">Duração (s)<input type="number" name="duration_seconds" min=".1" max="3600" step=".1" value="5" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label><p class="text-xs text-gray-500 sm:col-span-2">Envie uma imagem, QR Code ou vídeo. O envio começa ao escolher o arquivo.</p><p class="hidden text-xs font-semibold text-violet-700 sm:col-span-2" data-broll-upload-status></p></form></div></details>
+        </section>
+        <details id="direct-camera-panel" class="relative hidden mt-4 rounded-xl border border-sky-100 bg-sky-50/30 p-3"><summary class="cursor-pointer text-sm font-semibold text-gray-700"><i class="fas fa-camera mr-2 text-sky-600"></i>Adicionar câmera extra</summary><button type="button" class="project-media-action absolute right-3 top-3" aria-label="Fechar câmera extra" onclick="const panel=this.closest('details');panel.open=false;panel.classList.add('hidden')"><i class="fas fa-xmark"></i></button><form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_direct_upload' project.public_id %}" class="mt-3 grid gap-3 md:grid-cols-2">{% csrf_token %}<input type="hidden" name="camera_role" value="SECONDARY"><div><label class="text-xs font-semibold text-gray-600">Vídeo principal</label><select name="camera_position" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">{% for media in direct_media %}{% if media.camera_role == 'PRIMARY' %}<option value="{{ media.position }}">{{ media.original_filename }}</option>{% endif %}{% endfor %}</select></div><div><label class="text-xs font-semibold text-gray-600">Nome da câmera</label><input name="camera_label" maxlength="80" placeholder="Ex.: Câmera lateral" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"></div><div class="md:col-span-2"><label class="text-xs font-semibold text-gray-600">Arquivo da câmera</label><input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="mt-1 w-full text-sm"></div><div class="md:col-span-2"><button class="media-btn media-muted text-sm"><i class="fas fa-plus"></i>Adicionar câmera</button></div></form></details>
+        {% endif %}
+        {% if direct_media %}<details class="project-add-more mt-4"><summary class="media-btn media-muted cursor-pointer text-sm"><i class="fas fa-plus"></i>Adicionar outro vídeo</summary>{% endif %}
+        <section class="project-upload-slot {% if direct_media %}mt-3{% endif %} rounded-xl p-3"><div class="mb-3 flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-xs text-white"><i class="fas fa-upload"></i></span><div><strong class="block text-sm text-gray-900">{% if direct_media %}Adicionar outro vídeo{% else %}Enviar vídeo principal{% endif %}</strong><span class="block text-xs text-gray-500">O envio começa automaticamente ao escolher o arquivo. Você poderá cortá-lo depois que o preview estiver pronto.</span></div></div><form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_direct_upload' project.public_id %}" class="space-y-2">{% csrf_token %}<input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="project-upload-input" onchange="if (this.files.length) this.form.requestSubmit()"><p class="text-xs text-gray-500">MP4, MOV, MKV, WEBM, AVI ou M4V · máx. {{ external_media_max_upload_mb }} MB por arquivo.</p></form></section>
+        {% if direct_media %}</details>{% endif %}
+    </div>
+</section>
+{% else %}
+<div class="mb-4 flex items-end justify-between gap-4"><div><h2 class="text-lg font-black text-gray-900">Cenas do projeto</h2><p class="mt-1 text-sm text-gray-500">Envie os vídeos de cada cena abaixo. Os demais já estão configurados.</p></div><span class="hidden sm:inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{{ blocks|length }} cena{{ blocks|length|pluralize:"s" }} para revisar</span></div>
 <div class="space-y-4 mb-7" data-custom-block-list data-custom-block-reorder-url="{% url 'external_media_project_custom_block_reorder' project.public_id %}">
 {% for item in blocks %}
     <section class="media-card project-media-block {% if item.primary_media %}is-ready{% endif %}" data-project-block-id="{% if item.is_custom %}c-{{ item.definition.pk }}{% else %}t-{{ item.definition.pk }}{% endif %}" {% if item.is_custom %}data-custom-block{% endif %}>
@@ -174,8 +209,6 @@
                 <p class="order-1 project-media-default mb-3"><i class="fas fa-circle-play"></i><strong>Vídeo do bloco:</strong> este bloco usará o vídeo já definido.</p>
             {% elif item.has_missing_default_video %}
                 <p class="order-1 rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-3 text-sm mb-3"><i class="fas fa-triangle-exclamation mr-2"></i>Este bloco possui um vídeo padrão configurado, mas o arquivo não está disponível no armazenamento. Reenvie-o no admin-panel para utilizá-lo automaticamente.</p>
-            {% else %}
-                <p class="order-1 project-media-empty" data-no-upload><i class="fas fa-video"></i>Nenhum vídeo adicionado ainda.</p>
             {% endif %}
         {% endif %}
         {% if item.extra_media %}
@@ -222,7 +255,7 @@
                 <div class="space-y-2 p-2" data-broll-assets-items>
                 {% for broll in item.brolls %}
                 <div class="flex items-center justify-between gap-3 rounded-lg bg-white border border-violet-100 p-3">
-                    <div class="min-w-0"><strong class="block truncate"><i class="fas {% if broll.media_type == 'VIDEO' %}fa-video{% else %}fa-image{% endif %} mr-1 text-violet-600"></i>{{ broll.original_filename }}</strong><span class="text-xs text-gray-500">{{ broll.get_media_type_display }}{% if broll.description %} · {{ broll.description }}{% endif %}{% if broll.trim_start_ms or broll.trim_end_ms %} · corte aplicado{% endif %}</span></div>
+                    <div class="min-w-0"><strong class="block truncate"><i class="fas {% if broll.media_type == 'VIDEO' %}fa-video{% else %}fa-image{% endif %} mr-1 text-violet-600"></i>{{ broll.original_filename }}</strong><span class="text-xs text-gray-500">{{ broll.get_media_type_display }}{% if broll.trim_start_ms or broll.trim_end_ms %} · corte aplicado{% endif %}</span></div>
                     <div class="flex items-center gap-1 shrink-0">
                         {% if broll.media_type == 'VIDEO' and broll.preview_status == 'READY' %}
                         <button type="button" class="media-btn media-muted text-sm !px-3 !py-2" data-media-preview data-media-name="{{ broll.original_filename }}" data-media-url="{% url 'external_media_project_broll_preview' project.public_id broll.public_id %}" data-media-preview-start="{{ broll.trim_start_ms|default:0 }}" data-media-preview-end="{{ broll.trim_end_ms|default_if_none:'' }}"><i class="fas fa-play"></i><span class="hidden sm:inline">Ver</span></button>
@@ -239,13 +272,12 @@
                 </div>
             </section>
             <details class="order-4 mt-4 rounded-xl border border-violet-100 bg-violet-50/30 p-3">
-                <summary class="cursor-pointer text-sm font-semibold text-gray-700"><i class="fas fa-photo-film mr-2 text-violet-600"></i>Adicionar B-roll <span class="font-normal text-gray-500">(opcional)</span></summary>
-                <p class="mt-2 text-xs text-gray-500">Cada B-roll possui descrição e duração próprias. Preencha esses dados e escolha o arquivo: o envio começa automaticamente.</p>
+                <summary class="cursor-pointer text-sm font-semibold text-gray-700"><i class="fas fa-photo-film mr-2 text-violet-600"></i>Adicionar elemento <span class="font-normal text-gray-500">(opcional)</span></summary>
+                <p class="mt-2 text-xs text-gray-500">Escolha uma imagem, QR Code ou vídeo de apoio. O envio começa automaticamente.</p>
                 <div class="mt-3 space-y-3" data-broll-upload-list>
                     <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_broll_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_broll_upload' project.public_id item.definition.pk %}{% endif %}" class="grid gap-3 rounded-lg border border-violet-100 bg-white p-3 sm:grid-cols-2" data-broll-upload-form {% if use_s3 %}data-presign-url="{% if item.is_custom %}{% url 'external_media_project_custom_broll_upload_presign' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_broll_upload_presign' project.public_id item.definition.pk %}{% endif %}"{% endif %}>
                         {% csrf_token %}
-                        <div class="flex items-center justify-between sm:col-span-2"><strong class="text-sm text-gray-700" data-broll-form-title>Novo B-roll</strong><button type="button" class="hidden text-xs text-red-600" data-remove-broll-form>Remover</button></div>
-                        <label class="text-xs font-bold text-gray-600">Descrição para a IA<input type="text" name="description" maxlength="500" placeholder="Ex.: QR Code para inscrição" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
+                        <div class="flex items-center justify-between sm:col-span-2"><strong class="text-sm text-gray-700" data-broll-form-title>Novo elemento</strong><button type="button" class="hidden text-xs text-red-600" data-remove-broll-form>Remover</button></div>
                         <label class="text-xs font-bold text-gray-600">Duração sugerida (s)<input type="number" name="duration_seconds" min=".1" max="3600" step=".1" value="5" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label>
                         <label class="text-xs font-bold text-gray-600 sm:col-span-2">Foto, PNG/QR Code ou vídeo<input type="file" name="file" accept=".mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal" data-broll-file></label>
                         <p class="text-xs text-gray-500 sm:col-span-2">Vídeos: MP4, MOV, MKV, WEBM, AVI ou M4V · imagens: PNG, JPG ou WEBP · máx. {{ external_media_max_upload_mb }} MB por arquivo.</p>
@@ -274,7 +306,7 @@
             <div class="media-trim-panel" data-trim-panel>
                 <div class="flex items-center gap-2 mb-3 text-sm font-black text-red-700"><i class="fas fa-scissors"></i>Cortar antes de enviar</div>
                 <div class="media-trim-player mb-3">
-                    <video preload="metadata" class="media-trim-video" data-trim-video></video>
+                    <video preload="metadata" playsinline webkit-playsinline disablepictureinpicture controlslist="nofullscreen noremoteplayback" class="media-trim-video" data-trim-video></video>
                     <div class="media-trim-controls">
                         <div class="media-trim-control-row">
                             <button type="button" class="media-trim-icon-btn" data-trim-play aria-label="Reproduzir trecho"><i class="fas fa-play"></i></button>
@@ -345,9 +377,10 @@
 </div>
 
 <details class="media-card mb-7">
-    <summary class="cursor-pointer list-none p-5 font-black text-gray-800"><i class="fas fa-plus-circle mr-2" style="color:#C90905"></i>Adicionar bloco personalizado</summary>
-    <form method="post" action="{% url 'external_media_project_custom_block_create' project.public_id %}" class="grid gap-3 border-t p-5 sm:grid-cols-[1fr_1fr_auto]">{% csrf_token %}{{ custom_block_form.name }}{{ custom_block_form.description }}<button class="media-btn media-primary">Adicionar bloco</button></form>
+    <summary class="cursor-pointer list-none p-5 font-black text-gray-800"><i class="fas fa-plus-circle mr-2" style="color:#C90905"></i>Adicionar cena personalizada</summary>
+    <form method="post" action="{% url 'external_media_project_custom_block_create' project.public_id %}" class="grid gap-3 border-t p-5 sm:grid-cols-[1fr_1fr_auto]">{% csrf_token %}{{ custom_block_form.name }}{{ custom_block_form.description }}<button class="media-btn media-primary">Adicionar cena</button></form>
 </details>
+{% endif %}
 
 <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
 <script>
@@ -1020,14 +1053,14 @@
 <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-custom-block-edit-modal aria-hidden="true"><section class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div class="flex items-center justify-between mb-4"><h2 class="font-black text-lg">Editar bloco personalizado</h2><button type="button" class="project-media-action" data-custom-modal-close><i class="fas fa-xmark"></i></button></div><form method="post" data-custom-block-edit-form class="space-y-3">{% csrf_token %}<input name="name" class="w-full rounded-xl border px-3 py-2" placeholder="Nome"><input name="description" class="w-full rounded-xl border px-3 py-2" placeholder="Descrição opcional"><div class="flex justify-end gap-2"><button type="button" class="media-btn media-muted" data-custom-modal-close>Cancelar</button><button class="media-btn media-primary">Salvar</button></div></form></section></div>
 <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-custom-block-delete-modal aria-hidden="true"><section class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><i class="fas fa-trash text-xl text-red-600"></i><h2 class="font-black text-lg mt-3">Excluir bloco personalizado?</h2><p class="text-sm text-gray-500 mt-1">Os vídeos deste bloco também serão removidos.</p><form method="post" data-custom-block-delete-form class="flex justify-end gap-2 mt-5">{% csrf_token %}<button type="button" class="media-btn media-muted" data-custom-modal-close>Cancelar</button><button class="media-btn media-primary">Excluir bloco</button></form></section></div>
 
-<div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-media-trim-modal aria-hidden="true">
-    <section class="w-full max-w-4xl rounded-2xl bg-white p-4 sm:p-5 shadow-2xl">
+<div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-media-trim-modal aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="media-trim-title">
+    <section class="media-trim-modal__sheet w-full max-w-4xl rounded-2xl bg-white p-4 sm:p-5 shadow-2xl">
         <div class="flex items-center justify-between gap-4 mb-4">
-            <div><h2 class="font-black text-lg truncate" data-media-trim-title>Cortar vídeo</h2><p class="text-sm text-gray-500">Escolha um ou mais trechos. Eles serão unidos na ordem exibida.</p></div>
+            <div><h2 id="media-trim-title" class="font-black text-lg truncate" data-media-trim-title>Cortar vídeo</h2><p class="text-sm text-gray-500">Escolha um ou mais trechos. Eles serão unidos na ordem exibida.</p></div>
             <button type="button" class="media-btn media-muted !px-3 !py-2" data-media-trim-close aria-label="Fechar"><i class="fas fa-xmark"></i></button>
         </div>
         <div class="media-trim-player">
-            <video preload="metadata" class="media-trim-video" data-media-trim-player></video>
+            <video preload="metadata" playsinline webkit-playsinline disablepictureinpicture controlslist="nofullscreen noremoteplayback" class="media-trim-video" data-media-trim-player></video>
             <div class="media-trim-controls">
                 <div class="media-trim-control-row">
                     <button type="button" class="media-trim-icon-btn" data-media-trim-play aria-label="Reproduzir trecho"><i class="fas fa-play"></i></button>
@@ -1050,7 +1083,7 @@
         <p class="hidden text-sm text-red-700 mt-3" data-media-trim-error></p>
         <div class="flex flex-wrap items-center justify-between gap-3 mt-5">
             <p class="flex items-center gap-2 text-xs text-gray-500"><i class="fas fa-circle-info text-gray-400"></i>Prévia otimizada para edição. O vídeo final mantém a qualidade original.</p>
-            <div class="flex gap-3">
+            <div class="media-trim-footer-actions flex gap-3">
                 <button type="button" class="media-btn media-muted" data-media-trim-close>Cancelar</button>
                 <button type="button" class="media-btn media-primary" data-media-trim-save><i class="fas fa-scissors"></i>Salvar corte</button>
             </div>
@@ -1068,7 +1101,7 @@
             </div>
         </div>
         <div class="media-trim-player">
-            <video preload="metadata" class="media-trim-video" data-media-preview-player></video>
+            <video preload="metadata" playsinline webkit-playsinline disablepictureinpicture controlslist="nofullscreen noremoteplayback" class="media-trim-video" data-media-preview-player></video>
             <div class="media-trim-controls">
                 <div class="media-trim-control-row">
                     <button type="button" class="media-trim-icon-btn" data-media-preview-play aria-label="Reproduzir vídeo"><i class="fas fa-play"></i></button>
@@ -1104,6 +1137,15 @@
     const trimEndHandle = trimModal?.querySelector('[data-media-trim-end-handle]');
     const trimRangesList = trimModal?.querySelector('[data-media-trim-ranges]');
     const trimAddRange = trimModal?.querySelector('[data-media-trim-add]');
+    const keepVideoInline = (video) => {
+        if (!video) return;
+        video.playsInline = true;
+        video.setAttribute('playsinline', '');
+        video.setAttribute('webkit-playsinline', '');
+        video.setAttribute('disablepictureinpicture', '');
+        video.setAttribute('controlslist', 'nofullscreen noremoteplayback');
+    };
+    keepVideoInline(trimPlayer);
     let trimUrl = '';
     let trimIsSingle = false;
     let activeTrimHandle = null;
@@ -1258,6 +1300,7 @@
 
     const modal = document.querySelector('[data-media-preview-modal]');
     const player = modal?.querySelector('[data-media-preview-player]');
+    keepVideoInline(player);
     const title = modal?.querySelector('[data-media-preview-title]');
     const fullPreviewButton = modal?.querySelector('[data-media-preview-full]');
     const previewPlayButton = modal?.querySelector('[data-media-preview-play]');
@@ -1467,7 +1510,10 @@
         request.onerror = () => reject(new Error('Não foi possível enviar o B-roll ao S3.'));
         request.send(file);
     });
-    const formTitle = (form, index) => form.querySelector('[data-broll-form-title]').textContent = index ? `Novo B-roll ${index + 1}` : 'Novo B-roll';
+    const formTitle = (form, index) => {
+        const title = form.querySelector('[data-broll-form-title]');
+        if (title) title.textContent = index ? `Novo B-roll ${index + 1}` : 'Novo B-roll';
+    };
     const jsonOrRedirect = async (response) => {
         // A versão sem S3 pode responder com um redirect normal do Django.
         // Não tente interpretar a página HTML de destino como JSON.

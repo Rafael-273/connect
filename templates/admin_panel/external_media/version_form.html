@@ -108,7 +108,7 @@
                         <a href="{% url 'admin_external_media_template_detail' template.id %}" class="text-xs text-gray-500 hover:underline">{{ template.name }}</a>
                         {% endif %}
                         <h1 class="text-xl sm:text-2xl font-bold text-gray-900 leading-tight">{{ title }}</h1>
-                        <p class="text-sm text-gray-500 mt-0.5">Identidade, renderização, blocos e processamentos do template.</p>
+                        <p class="text-sm text-gray-500 mt-0.5">Identidade, renderização, cenas e processamentos do template.</p>
                     </div>
                 </div>
                 <a href="{% if is_create %}{% url 'admin_external_media_templates' %}{% else %}{% url 'admin_external_media_template_detail' template.id %}{% endif %}" class="hidden sm:inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium">
@@ -156,6 +156,11 @@
                             {% if form.preset.errors %}<p class="text-xs text-red-600 mt-1">{{ form.preset.errors.0 }}</p>{% endif %}
                         </div>
                         <label class="inline-card bg-white flex items-center gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
+                            <input type="hidden" name="{{ form.interactive_preview_enabled.html_name }}" value="">
+                            {{ form.interactive_preview_enabled }}
+                            <span><span class="block font-semibold text-gray-900">{{ form.interactive_preview_enabled.label }}</span><span class="block text-xs text-gray-500 mt-1">Permite conferir cortes, legendas e enquadramento antes do vídeo final.</span></span>
+                        </label>
+                        <label class="inline-card bg-white flex items-center gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
                             <input type="hidden" name="{{ form.subtitles_enabled.html_name }}" value="">
                             {{ form.subtitles_enabled }}
                             <span>
@@ -163,15 +168,10 @@
                                 <span class="block text-xs text-gray-500 mt-1">Ative para criar a legenda no idioma principal.</span>
                             </span>
                         </label>
-                        <label class="inline-card bg-white flex items-center gap-3 cursor-pointer hover:border-[var(--color-primary)] transition">
-                            <input type="hidden" name="{{ form.interactive_preview_enabled.html_name }}" value="">
-                            {{ form.interactive_preview_enabled }}
-                            <span><span class="block font-semibold text-gray-900">{{ form.interactive_preview_enabled.label }}</span><span class="block text-xs text-gray-500 mt-1">Permite conferir cortes, legendas e enquadramento antes do vídeo final.</span></span>
-                        </label>
-                        <div id="preview-profile-field">
-                            <label class="form-label">{{ form.preview_proxy_profile.label }}</label>
-                            {{ form.preview_proxy_profile }}
-                            <p class="text-xs text-gray-500 mt-1">Use Community 1 para uma prévia leve e sincronizada.</p>
+                        <div id="language-mode-field" class="md:col-span-2">
+                            <label class="form-label">{{ form.language_mode.label }}</label>
+                            {{ form.language_mode }}
+                            {% if form.language_mode.errors %}<p class="text-xs text-red-600 mt-1">{{ form.language_mode.errors.0 }}</p>{% endif %}
                         </div>
                         <div id="subtitle-style-field">
                             <label class="form-label">{{ form.subtitle_style.label }}</label>
@@ -199,11 +199,6 @@
                             <label class="form-label">{{ form.original_language.label }}</label>
                             {{ form.original_language }}
                             {% if form.original_language.errors %}<p class="text-xs text-red-600 mt-1">{{ form.original_language.errors.0 }}</p>{% endif %}
-                        </div>
-                        <div id="language-mode-field">
-                            <label class="form-label">{{ form.language_mode.label }}</label>
-                            {{ form.language_mode }}
-                            {% if form.language_mode.errors %}<p class="text-xs text-red-600 mt-1">{{ form.language_mode.errors.0 }}</p>{% endif %}
                         </div>
                         <div id="spoken-languages-field">
                             <label class="form-label">{{ form.spoken_languages.label }}</label>
@@ -246,7 +241,7 @@
                         </div>
                         <div id="lut-intensity-field" class="hidden">
                             <label class="form-label">{{ form.lut_intensity.label }}</label>{{ form.lut_intensity }}
-                            <p class="text-xs text-gray-500 mt-1">50% mantém o tratamento mais suave. Blocos marcados como intactos não recebem o LUT.</p>
+                            <p class="text-xs text-gray-500 mt-1">50% mantém o tratamento mais suave. Cenas marcadas como intactas não recebem o LUT.</p>
                             {% if form.lut_intensity.errors %}<p class="text-xs text-red-600 mt-1">{{ form.lut_intensity.errors.0 }}</p>{% endif %}
                         </div>
                         <div>
@@ -380,11 +375,6 @@
                                     Tenta limpar vícios de fala como “é…”, “ahn…” e repetições desnecessárias.
                                     {% elif choice.data.value == 'auto_tracking' %}
                                     Ajusta o quadro automaticamente. Você pode acompanhar pessoas ou usar um zoom estável para podcasts.
-                                    {% elif choice.data.value == 'off_context_detection' %}
-                                    Usa IA para apontar erros de fala e comentários de bastidor como sugestão de corte.
-                                    O membro decide na revisão interativa; nada é cortado automaticamente.
-                                    {% elif choice.data.value == 'broll' %}
-                                    Permite fotos, vídeos e PNGs/QR Codes por bloco. A IA sugere o momento e o usuário confirma no Preview.
                                     {% endif %}
                                 </p>
                             </div>
@@ -400,12 +390,6 @@
                             Pessoa inteira mantém quem está em pé centralizado, sem acompanhar pequenos movimentos, com uma margem discreta acima da cabeça.
                         </p>
                         {% if form.auto_reframe_priority.errors %}<p class="text-xs text-red-600 mt-2">{{ form.auto_reframe_priority.errors.0 }}</p>{% endif %}
-                    </div>
-                    <div id="broll-settings" class="mt-4 inline-card bg-white">
-                        <label class="form-label">{{ form.broll_config_raw.label }}</label>
-                        {{ form.broll_config_raw }}
-                        <p class="text-xs text-gray-500 mt-2">{{ form.broll_config_raw.help_text }}</p>
-                        {% if form.broll_config_raw.errors %}<p class="text-xs text-red-600 mt-2">{{ form.broll_config_raw.errors.0 }}</p>{% endif %}
                     </div>
                     <div id="speech-edit-settings" class="mt-4 inline-card bg-white">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -446,9 +430,23 @@
                 </div>
 
                 <div class="admin-card p-6">
-                    <div class="section-title"><ion-icon name="albums-outline"></ion-icon><span>Blocos do projeto</span></div>
+                    <div class="section-title"><ion-icon name="film-outline"></ion-icon><span>Estrutura do vídeo</span></div>
+                    <p class="block-help mb-4">A abertura e o encerramento são opcionais e ficam fora das cenas. Você pode manter os arquivos salvos e escolher quando usá-los.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="inline-card bg-white">
+                            <div class="flex items-start justify-between gap-3 mb-3"><div><p class="font-semibold text-gray-900">Abertura</p><p class="text-xs text-gray-500 mt-1">Entra antes das cenas ou do vídeo principal.</p></div><label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 whitespace-nowrap">{{ form.intro_enabled }} {{ form.intro_enabled.label }}</label></div>
+                            <label class="form-label">{{ form.intro_video.label }}</label>{{ form.intro_video }}
+                            {% if form.intro_video.errors %}<p class="text-xs text-red-600 mt-1">{{ form.intro_video.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div class="inline-card bg-white">
+                            <div class="flex items-start justify-between gap-3 mb-3"><div><p class="font-semibold text-gray-900">Encerramento</p><p class="text-xs text-gray-500 mt-1">Entra depois de todas as cenas ou do vídeo principal.</p></div><label class="inline-flex items-center gap-2 text-sm font-semibold text-gray-700 whitespace-nowrap">{{ form.outro_enabled }} {{ form.outro_enabled.label }}</label></div>
+                            <label class="form-label">{{ form.outro_video.label }}</label>{{ form.outro_video }}
+                            {% if form.outro_video.errors %}<p class="text-xs text-red-600 mt-1">{{ form.outro_video.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+                    <div class="section-title"><ion-icon name="albums-outline"></ion-icon><span>Cenas do projeto</span></div>
                     <div class="block-help mb-4">
-                        Cada bloco pode receber <strong>quantos vídeos forem necessários</strong>. Você só precisa definir o nome, a descrição e a ordem das partes do projeto.
+                        As cenas são opcionais. Sem nenhuma cena, o projeto recebe um <strong>vídeo principal</strong> direto; introdução e encerramento continuam funcionando normalmente.
                     </div>
                     {% if overlay_presets %}
                     <div class="block-help mb-4">
@@ -466,9 +464,9 @@
                             {{ block_form.order }}
                             <div class="flex items-center justify-between gap-3 mb-4">
                                 <div class="flex items-center gap-3">
-                                    <button type="button" class="drag-handle" title="Arrastar bloco"><ion-icon name="reorder-three-outline" class="text-xl"></ion-icon></button>
+                                    <button type="button" class="drag-handle" title="Arrastar cena"><ion-icon name="reorder-three-outline" class="text-xl"></ion-icon></button>
                                     <span class="block-position-badge" data-block-position>{{ forloop.counter }}</span>
-                                    <span class="text-sm font-bold text-gray-700">Bloco</span>
+                                    <span class="text-sm font-bold text-gray-700">Cena</span>
                                 </div>
                                 {{ block_form.allows_multiple }}
                                 {% if block_form.DELETE %}
@@ -489,7 +487,7 @@
                                 <div class="md:col-span-3">
                                     {{ block_form.overlay_definitions_raw }}
                                     <div class="rounded-xl border border-gray-200 bg-gray-50 p-4" data-overlay-builder>
-                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem neste bloco.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
+                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem nesta cena.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
                                         <div class="space-y-3" data-overlay-items></div>
                                         <p class="text-sm text-gray-500" data-overlay-empty>Nenhum elemento visual configurado.</p>
                                     </div>
@@ -508,9 +506,9 @@
                             {{ block_formset.empty_form.order }}
                             <div class="flex items-center justify-between gap-3 mb-4">
                                 <div class="flex items-center gap-3">
-                                    <button type="button" class="drag-handle" title="Arrastar bloco"><ion-icon name="reorder-three-outline" class="text-xl"></ion-icon></button>
+                                    <button type="button" class="drag-handle" title="Arrastar cena"><ion-icon name="reorder-three-outline" class="text-xl"></ion-icon></button>
                                     <span class="block-position-badge" data-block-position>1</span>
-                                    <span class="text-sm font-bold text-gray-700">Bloco</span>
+                                    <span class="text-sm font-bold text-gray-700">Cena</span>
                                 </div>
                                 {{ block_formset.empty_form.allows_multiple }}
                                 <div class="hidden">{{ block_formset.empty_form.DELETE }}</div>
@@ -526,7 +524,7 @@
                                 <div class="md:col-span-3">
                                     {{ block_formset.empty_form.overlay_definitions_raw }}
                                     <div class="rounded-xl border border-gray-200 bg-gray-50 p-4" data-overlay-builder>
-                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem neste bloco.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
+                                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3"><div><strong class="text-sm text-gray-900">Elementos visuais</strong><p class="text-xs text-gray-500 mt-1">Data, texto, QR Code, chamada ou imagem nesta cena.</p></div><div class="flex items-center gap-2"><a href="{% url 'admin_external_media_overlay_presets' %}" target="_blank" class="text-xs font-bold text-gray-600 hover:text-[var(--color-primary)]">Gerenciar presets visuais</a><button type="button" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-[var(--color-primary)] text-white text-sm font-semibold" data-add-overlay><ion-icon name="add-outline"></ion-icon>Adicionar elemento</button></div></div>
                                         <div class="space-y-3" data-overlay-items></div>
                                         <p class="text-sm text-gray-500" data-overlay-empty>Nenhum elemento visual configurado.</p>
                                     </div>
@@ -539,7 +537,7 @@
                     <div class="mt-4">
                         <button type="button" id="add-block-button" class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold">
                             <ion-icon name="add-outline"></ion-icon>
-                            Adicionar bloco
+                            Adicionar cena
                         </button>
                     </div>
                 </div>
@@ -2263,6 +2261,18 @@
         if (!dialogueEnabled) setAdvancedFieldVisible('dialogue', false);
         if (!noiseEnabled) setAdvancedFieldVisible('noise', false);
     }
+    function enableDuckingForSelectedMusic() {
+        // A background track needs room for dialogue.  When one is chosen,
+        // start with the recommended adaptive mix; the operator can still
+        // opt out afterwards if this particular template needs a fixed mix.
+        if (!byId('id_background_music')?.value) return;
+        ['id_audio_mixing_enabled', 'id_audio_ducking_enabled', 'id_audio_spectral_ducking_enabled']
+            .forEach((id) => {
+                const checkbox = byId(id);
+                if (checkbox) checkbox.checked = true;
+            });
+        syncAudioIntelligentUI();
+    }
     function setAdvancedFieldVisible(kind, visible) {
         const field = byId(`${kind}-advanced-field`);
         const toggle = byId(`${kind}-advanced-toggle`);
@@ -2433,16 +2443,13 @@
         bindBlockCard(card);
         updateBlockOrder();
     }
-    function syncInteractivePreviewUI() {
-        byId('preview-profile-field')?.classList.toggle('hidden', !byId('id_interactive_preview_enabled')?.checked);
-    }
     byId('id_language_mode')?.addEventListener('change', syncLanguageModeUI);
     byId('id_subtitles_enabled')?.addEventListener('change', syncLanguageModeUI);
     byId('id_audio_mixing_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_background_music')?.addEventListener('change', enableDuckingForSelectedMusic);
     byId('id_dialogue_processing_enabled')?.addEventListener('change', syncAudioIntelligentUI);
     byId('id_audio_noise_cleanup_enabled')?.addEventListener('change', syncAudioIntelligentUI);
     byId('id_audio_mastering_enabled')?.addEventListener('change', syncAudioIntelligentUI);
-    byId('id_interactive_preview_enabled')?.addEventListener('change', syncInteractivePreviewUI);
     ['mixing', 'dialogue', 'noise'].forEach((kind) => {
         byId(`${kind}-advanced-toggle`)?.addEventListener('click', () => {
             const field = byId(`${kind}-advanced-field`);
@@ -2462,7 +2469,6 @@
     syncSpeechEditUI();
     syncAudioIntelligentUI();
     syncLUTIntensityUI();
-    syncInteractivePreviewUI();
     updateBlockOrder();
     updateStylePreview();
 </script>
