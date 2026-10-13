@@ -5795,6 +5795,25 @@ class DialogueProcessingUnitTests(SimpleTestCase):
         self.assertNotIn((2000, 3000), gains_by_block)
 
 
+class FFmpegRunnerTests(SimpleTestCase):
+    def test_failed_command_includes_a_compact_redacted_diagnostic(self):
+        runner = FFmpegRunner()
+        failure = subprocess.CalledProcessError(
+            1, ['ffmpeg'], stderr=(
+                'Error initializing complex filters.\n'
+                'No such filter: deesser\n'
+                'https://bucket.example/video.mp4?X-Amz-Signature=secret\n'
+                'Invalid argument\n'
+            ),
+        )
+        with patch('website.external_media.ffmpeg_runner.subprocess.run', side_effect=failure):
+            with self.assertRaisesMessage(ExternalMediaError, 'No such filter: deesser') as raised:
+                runner.run(['ffmpeg', '-i', 'input.mp4', 'output.mp4'])
+
+        self.assertNotIn('secret', str(raised.exception))
+        self.assertIn('[REDACTED]', str(raised.exception))
+
+
 class DialogueProcessingSmokeTests(SimpleTestCase):
     @staticmethod
     def _render_two_speaker_tone(path, duration_s=4):

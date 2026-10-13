@@ -60,10 +60,32 @@ class FFmpegRunner:
             # it because the command may contain a short-lived signed URL.
             raise ExternalMediaError('O processamento de vídeo excedeu o tempo limite.') from None
         except subprocess.CalledProcessError as exc:
-            logger.error('FFmpeg falhou: %s', self.redact_sensitive_urls((exc.stderr or '')[-4000:]))
+            stderr = self.redact_sensitive_urls(exc.stderr or '')
+            logger.error('FFmpeg falhou: %s', stderr[-4000:])
             # CalledProcessError also embeds the command; keeping it as __cause__
             # would leak the presigned query in an outer exception traceback.
-            raise ExternalMediaError('O FFmpeg não conseguiu processar este vídeo.') from None
+            detail = self._failure_detail(stderr)
+            message = 'O FFmpeg não conseguiu processar este vídeo.'
+            if detail:
+                # The workflow surface only shows the exception text, while the
+                # actual FFmpeg stderr used to remain exclusively in worker logs.
+                # Return a compact, URL-redacted diagnostic so a bad filter or
+                # unsupported codec can be fixed without guessing.
+                message = f'{message} Detalhe do FFmpeg: {detail}'
+            raise ExternalMediaError(message) from None
+
+    @staticmethod
+    def _failure_detail(stderr):
+        """Return the useful tail of FFmpeg stderr without URLs or control chars."""
+        lines = [
+            re.sub(r'\s+', ' ', line).strip()
+            for line in str(stderr or '').splitlines()
+            if line.strip()
+        ]
+        # FFmpeg reports the actionable cause at the end (usually one or two
+        # lines such as "No such filter" and "Invalid argument").  Do not put
+        # an unbounded stderr payload into the workflow's user-facing error.
+        return ' | '.join(lines[-4:])[:1000]
 
     @staticmethod
     def redact_sensitive_urls(value):
