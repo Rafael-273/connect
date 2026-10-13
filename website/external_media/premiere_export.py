@@ -214,7 +214,7 @@ class PremiereExporter:
         audio = ET.SubElement(media, 'audio')
         audio_format = ET.SubElement(audio, 'format')
         sample = ET.SubElement(audio_format, 'samplecharacteristics')
-        self._text(sample, 'depth', 16)
+        self._text(sample, 'depth', timeline['sequence'].get('audio_bit_depth', 24))
         self._text(sample, 'samplerate', timeline['sequence']['audio_sample_rate'])
         for audio_track_index, track_data in enumerate(timeline['audio_tracks'], start=1):
             track = ET.SubElement(audio, 'track')
@@ -369,7 +369,7 @@ class PremiereExporter:
         if asset.get('has_audio', True):
             audio = ET.SubElement(media, 'audio')
             sample = ET.SubElement(audio, 'samplecharacteristics')
-            self._text(sample, 'depth', 16)
+            self._text(sample, 'depth', asset.get('bit_depth') or sequence.get('audio_bit_depth', 24))
             self._text(sample, 'samplerate', sequence['audio_sample_rate'])
             self._text(audio, 'channelcount', sequence['audio_channels'])
 
@@ -495,6 +495,7 @@ class ExportValidationService:
             errors.append('A timeline possui duração inválida.')
         if not timeline.get('video_tracks'):
             errors.append('Nenhuma trilha de vídeo foi criada.')
+        postproduction = self._validate_postproduction_layout(timeline, errors, warnings)
         offline = [
             asset['path'] for asset in timeline.get('assets', [])
             if not exists_in_package(package_root / asset['path'].removeprefix('./'))
@@ -509,9 +510,106 @@ class ExportValidationService:
             'audio_track_count': len(timeline.get('audio_tracks', [])),
             'caption_track_count': len(timeline.get('captions', [])),
             'offline_media': offline,
+            'postproduction': postproduction,
         }
         if errors:
             raise ExternalMediaError('Falha ao validar exportação: ' + ' '.join(errors))
+        return report
+
+    @staticmethod
+    def _validate_postproduction_layout(timeline, errors, warnings):
+        """Checks the deterministic layout used by the enhanced Premiere package.
+
+        Legacy packages remain valid: the stricter checks are activated only when the
+        consolidated visual asset is present.
+        """
+        assets = {asset.get('id'): asset for asset in timeline.get('assets', [])}
+        consolidated = assets.get('video_consolidated')
+        report = {
+            'layout': 'legacy_editable_sources',
+            'consolidated_video': False,
+            'dialogue_stem': False,
+            'music_stem': False,
+            'caption_overlay': False,
+            'reference_mix_in_sequence': False,
+        }
+        if not consolidated:
+            return report
+
+        report['layout'] = 'consolidated_postproduction'
+        report['consolidated_video'] = True
+        sequence = timeline.get('sequence', {})
+        duration_ms = int(sequence.get('duration_ms') or 0)
+        if consolidated.get('has_audio') is not False:
+            errors.append('O vídeo consolidado V1 deve estar sem áudio.')
+        if (
+            int(consolidated.get('width') or 0) != int(sequence.get('width') or 0)
+            or int(consolidated.get('height') or 0) != int(sequence.get('height') or 0)
+        ):
+            errors.append('A resolução do vídeo consolidado não corresponde à sequência.')
+        expected_fps = float(sequence.get('fps') or 0)
+        actual_fps = float(consolidated.get('fps') or 0)
+        if expected_fps and abs(expected_fps - actual_fps) > 0.06:
+            errors.append('O FPS do vídeo consolidado não corresponde à sequência.')
+        if duration_ms and abs(int(consolidated.get('duration_ms') or 0) - duration_ms) > 250:
+            errors.append('A duração do vídeo consolidado diverge da timeline.')
+
+        video_tracks = timeline.get('video_tracks', [])
+        main_track = next((track for track in video_tracks if track.get('role') == 'main'), None)
+        main_clips = (main_track or {}).get('clips') or []
+        if len(main_clips) != 1 or main_clips[0].get('asset_id') != consolidated.get('id'):
+            errors.append('V1 deve conter somente o vídeo consolidado.')
+        elif main_clips[0].get('effects'):
+            errors.append('V1 não deve duplicar efeitos já incorporados ao vídeo consolidado.')
+
+        referenced_audio_ids = {
+            clip.get('asset_id')
+            for track in timeline.get('audio_tracks', [])
+            for clip in track.get('clips', [])
+        }
+        reference = next(
+            (asset for asset in assets.values() if asset.get('role') == 'reference_mix'), None,
+        )
+        if reference and reference.get('id') in referenced_audio_ids:
+            report['reference_mix_in_sequence'] = True
+            errors.append('O mix de referência não pode ficar ativo junto com os stems.')
+
+        for role, label in (('dialogue', 'voz'), ('music', 'música')):
+            asset = next((item for item in assets.values() if item.get('role') == role), None)
+            if not asset:
+                continue
+            report[f'{role}_stem'] = True
+            if int(asset.get('bit_depth') or 0) != 24:
+                errors.append(f'O stem de {label} deve usar PCM 24-bit.')
+            if int(asset.get('sample_rate') or 0) != 48000:
+                errors.append(f'O stem de {label} deve usar 48 kHz.')
+            clips = [
+                clip for track in timeline.get('audio_tracks', [])
+                for clip in track.get('clips', []) if clip.get('asset_id') == asset.get('id')
+            ]
+            if len(clips) != 1:
+                errors.append(f'O stem de {label} deve aparecer uma única vez na timeline.')
+            elif (
+                int(clips[0].get('timeline_in_ms') or 0) != 0
+                or abs(int(clips[0].get('timeline_out_ms') or 0) - duration_ms) > 1
+            ):
+                errors.append(f'O stem de {label} deve cobrir toda a duração da timeline.')
+
+        caption_asset = next(
+            (asset for asset in assets.values() if asset.get('role') == 'caption_overlay'), None,
+        )
+        if caption_asset:
+            report['caption_overlay'] = True
+            caption_track = next((track for track in video_tracks if track.get('id') == 'V2'), None)
+            if caption_asset.get('alpha_mode') != 'straight':
+                errors.append('A camada visual de legendas deve preservar transparência alpha.')
+            if not caption_track or not any(
+                clip.get('asset_id') == caption_asset.get('id')
+                for clip in caption_track.get('clips', [])
+            ):
+                errors.append('A camada visual de legendas deve estar posicionada em V2.')
+        elif timeline.get('captions'):
+            warnings.append('O pacote contém legendas editáveis, mas não a referência visual transparente em V2.')
         return report
 
 
@@ -525,7 +623,7 @@ class PremierePackageService:
         timeline_path.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding='utf-8')
         xml_path = package_root / 'Project' / 'timeline.xml'
         PremiereExporter().export(timeline, xml_path)
-        progress('PACKAGING_ASSETS', 66, 'Organizando originais, áudio, legendas e LUTs')
+        progress('PACKAGING_ASSETS', 66, 'Organizando vídeo, áudio e legendas')
         progress('VALIDATING', 78, 'Validando XML, referências e mídia offline')
         report = json_compatible(ExportValidationService().validate(
             package_root, timeline, xml_path, virtual_assets=source_files,
@@ -535,6 +633,15 @@ class PremierePackageService:
         )
         caption_overlay_available = any(
             asset.get('role') == 'caption_overlay' for asset in timeline.get('assets', [])
+        )
+        dialogue_available = any(
+            asset.get('role') == 'dialogue' for asset in timeline.get('assets', [])
+        )
+        music_available = any(
+            asset.get('role') == 'music' for asset in timeline.get('assets', [])
+        )
+        reference_mix_available = any(
+            asset.get('role') == 'reference_mix' for asset in timeline.get('assets', [])
         )
         caption_instructions = (
             'A trilha “Legendas estilizadas (visual final)” é um ProRes 4444 com transparência '
@@ -548,11 +655,20 @@ class PremierePackageService:
         )
         (package_root / 'README.txt').write_text(
             'Abra Project/timeline.xml no Adobe Premiere Pro.\n'
-            'Media contém os vídeos originais. Audio contém os WAVs de diálogo e a música de fundo.\n'
-            'A1 é o diálogo separado; A2 é a música, com keyframes de volume equivalentes ao ducking do render.\n'
+            'V1 contém o vídeo consolidado aprovado, sem áudio e sem legendas incorporadas.\n'
+            'O reenquadramento, os cortes, a cor e os elementos visuais já estão aplicados em V1.\n'
+            + ('A1 é a voz tratada em WAV PCM 48 kHz/24-bit.\n' if dialogue_available else '')
+            + (
+                'A2 é a música em WAV PCM 48 kHz/24-bit, com volume e ducking já aplicados.\n'
+                if music_available else ''
+            )
+            + (
+                'Audio/mix_referencia.wav contém o mix estéreo aprovado apenas para conferência; '
+                'não o reproduza simultaneamente com os stems.\n'
+                if reference_mix_available else ''
+            )
             + caption_instructions +
-            'LUT, tratamento de diálogo e masterização constam nos metadados; reaplique-os no Premiere '\
-            'quando quiser uma edição não destrutiva.\n'
+            'A masterização do mix completo não foi duplicada individualmente nos stems.\n'
             'Consulte Metadata/timeline.json e Metadata/validation.json para detalhes.\n'
             'A masterização final deve ser feita após a edição, usando “Masterizar Vídeo”.\n',
             encoding='utf-8',

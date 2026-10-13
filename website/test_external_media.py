@@ -2058,6 +2058,9 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Gerar vídeo')
         self.assertContains(response, 'Adicionar cena personalizada')
+        self.assertContains(response, 'data-project-submit-overlay')
+        self.assertContains(response, "document.addEventListener('submit'")
+        self.assertContains(response, 'Aguarde e não feche esta página.')
 
     def test_project_duration_minutes_rounds_up(self):
         project = self.make_project()
@@ -5688,7 +5691,7 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertEqual(_premiere_archive_filename(project), 'anuncio-setembro-2026-premiere.zip')
 
     def test_selected_background_music_is_exported_without_a_legacy_plugin(self):
-        builder = InternalTimelineBuilder()
+        builder = InternalTimelineBuilder(runner=Mock())
         builder._copy_field = Mock()
         builder._probe = Mock(return_value={'duration_ms': 1000})
         music_file = SimpleNamespace(name='background/podcast-theme.mp3')
@@ -5709,7 +5712,11 @@ class EditableTimelineExportTests(SimpleTestCase):
             asset, track = builder._music(project, Path(directory), 2500)
 
         self.assertEqual(asset['id'], 'audio_music')
-        self.assertEqual(len(track['clips']), 3)
+        self.assertEqual(asset['path'], './Audio/musica.wav')
+        self.assertEqual(asset['bit_depth'], 24)
+        self.assertEqual(len(track['clips']), 1)
+        self.assertEqual(track['clips'][0]['timeline_out_ms'], 2500)
+        self.assertEqual(track['volume_automation'], [])
         self.assertEqual(track['role'], 'music')
 
     def test_premiere_json_payload_converts_decimals_to_numbers(self):
@@ -5814,12 +5821,26 @@ class EditableTimelineExportTests(SimpleTestCase):
                 'timeline_in_ms': 0, 'timeline_out_ms': 1000,
                 'source_in_ms': 0, 'source_out_ms': 1000,
             }]
+            project = SimpleNamespace(
+                template_version=SimpleNamespace(
+                    audio_noise_cleanup_enabled=False,
+                    audio_noise_cleanup_config={},
+                    dialogue_processing_enabled=False,
+                    dialogue_processing_config={},
+                    audio_mixing_config={},
+                ),
+                approved_timeline_revision=None,
+                current_timeline_revision=None,
+                configuration={},
+                render_job_id=None,
+            )
             assets, dialogue_clips = InternalTimelineBuilder()._dialogue_assets(
-                [(source, {})], clips, root,
+                project, [(source, {})], clips, root,
             )
             self.assertEqual(len(assets), 1)
-            self.assertTrue((root / 'Audio' / 'dialogue_001_take.wav').exists())
-            self.assertEqual(dialogue_clips[0]['asset_id'], 'video_1_dialogue')
+            self.assertTrue((root / 'Audio' / 'voz.wav').exists())
+            self.assertEqual(assets[0]['bit_depth'], 24)
+            self.assertEqual(dialogue_clips[0]['asset_id'], 'audio_dialogue')
 
     def test_keyframe_simplifier_keeps_trajectory_endpoints(self):
         points = [
@@ -5963,6 +5984,142 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertIn('<horiz>0.0</horiz>', xml)
         self.assertIn('<vert>0.0</vert>', xml)
         self.assertNotIn('<horiz>1920</horiz>', xml)
+
+    def test_consolidated_postproduction_layout_has_no_duplicate_motion_or_reference_audio(self):
+        timeline = {
+            'project': {'name': 'Reels aprovado'},
+            'sequence': {
+                'name': 'Reels aprovado', 'duration_ms': 2000, 'width': 1080, 'height': 1920,
+                'fps': 30.0, 'timebase': 30, 'ntsc': False, 'audio_sample_rate': 48000,
+                'audio_channels': 2, 'audio_bit_depth': 24,
+            },
+            'assets': [{
+                'id': 'video_consolidated', 'name': 'Vídeo consolidado',
+                'path': './Media/video_consolidado.mp4', 'type': 'video', 'role': 'main',
+                'has_audio': False, 'duration_ms': 2000, 'width': 1080, 'height': 1920,
+                'fps': 30.0,
+            }, {
+                'id': 'audio_dialogue', 'name': 'Voz tratada', 'path': './Audio/voz.wav',
+                'type': 'audio', 'role': 'dialogue', 'duration_ms': 2000, 'bit_depth': 24,
+                'sample_rate': 48000, 'channels': 2,
+            }, {
+                'id': 'audio_music', 'name': 'Música', 'path': './Audio/musica.wav',
+                'type': 'audio', 'role': 'music', 'duration_ms': 2000, 'bit_depth': 24,
+                'sample_rate': 48000, 'channels': 2,
+            }, {
+                'id': 'audio_reference_mix', 'name': 'Mix de referência',
+                'path': './Audio/mix_referencia.wav', 'type': 'audio', 'role': 'reference_mix',
+                'duration_ms': 2000, 'bit_depth': 24, 'active_in_sequence': False,
+            }, {
+                'id': 'caption_overlay_pt', 'name': 'Legendas estilizadas',
+                'path': './Graphics/captions_pt_styled.mov', 'type': 'video',
+                'role': 'caption_overlay', 'has_audio': False, 'alpha_mode': 'straight',
+                'duration_ms': 2000, 'width': 1080, 'height': 1920, 'fps': 30.0,
+            }],
+            'video_tracks': [{
+                'id': 'V1', 'role': 'main', 'locked': True, 'clips': [{
+                    'id': 'video_consolidated_clip', 'asset_id': 'video_consolidated',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000, 'audio_enabled': False,
+                    'effects': [],
+                }],
+            }, {
+                'id': 'V2', 'role': 'caption_overlay', 'locked': True, 'clips': [{
+                    'id': 'caption_overlay_pt_clip', 'asset_id': 'caption_overlay_pt',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000, 'audio_enabled': False,
+                }],
+            }],
+            'audio_tracks': [{
+                'id': 'A1', 'role': 'dialogue', 'clips': [{
+                    'id': 'dialogue_stem', 'asset_id': 'audio_dialogue',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000,
+                }],
+            }, {
+                'id': 'A2', 'role': 'music', 'clips': [{
+                    'id': 'music_stem', 'asset_id': 'audio_music',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000,
+                }],
+            }],
+            'clips': [{'id': 'source_decision_clip'}], 'captions': [], 'markers': [],
+            'compatibility': {'warnings': []},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in [
+                'Media/video_consolidado.mp4', 'Audio/voz.wav', 'Audio/musica.wav',
+                'Audio/mix_referencia.wav', 'Graphics/captions_pt_styled.mov',
+            ]:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'asset')
+            (root / 'Project').mkdir()
+            xml_path = root / 'Project' / 'timeline.xml'
+            PremiereExporter().export(timeline, xml_path)
+            report = ExportValidationService().validate(root, timeline, xml_path)
+            xml = xml_path.read_text(encoding='utf-8')
+
+        self.assertTrue(report['valid'])
+        self.assertEqual(report['postproduction']['layout'], 'consolidated_postproduction')
+        self.assertFalse(report['postproduction']['reference_mix_in_sequence'])
+        self.assertNotIn('<effectid>basic</effectid>', xml)
+        self.assertNotIn('../Audio/mix_referencia.wav', xml)
+
+    def test_consolidated_video_is_copied_without_audio(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'approved.mp4'
+            package = root / 'package'
+            (package / 'Media').mkdir(parents=True)
+            subprocess.run([
+                settings.FFMPEG_BINARY, '-y', '-f', 'lavfi', '-i',
+                'color=c=blue:s=320x180:r=30:d=1', '-f', 'lavfi', '-i',
+                'sine=frequency=440:sample_rate=48000:duration=1', '-shortest',
+                '-c:v', 'mpeg4', '-c:a', 'aac', str(source),
+            ], check=True, capture_output=True)
+            media_input = SimpleNamespace(get_ffmpeg_input=lambda: source)
+            project = SimpleNamespace(
+                render_job=SimpleNamespace(original_video=SimpleNamespace(name='approved.mp4')),
+            )
+            with patch('website.external_media.timeline.media_input_factory', return_value=media_input):
+                asset, track = InternalTimelineBuilder()._consolidated_video(
+                    project, package,
+                    {'width': 320, 'height': 180, 'fps': 30.0}, 1000,
+                )
+            audio_stream = subprocess.run([
+                settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'a:0',
+                '-show_entries', 'stream=index', '-of', 'csv=p=0',
+                str(package / 'Media' / 'video_consolidado.mp4'),
+            ], check=True, capture_output=True, text=True).stdout.strip()
+
+        self.assertEqual(audio_stream, '')
+        self.assertFalse(asset['has_audio'])
+        self.assertEqual(track['clips'][0]['effects'], [])
+
+    def test_consolidated_layout_accepts_project_without_music_or_captions(self):
+        timeline = {
+            'sequence': {'duration_ms': 1000, 'width': 1920, 'height': 1080, 'fps': 30},
+            'assets': [{
+                'id': 'video_consolidated', 'role': 'main', 'has_audio': False,
+                'duration_ms': 1000, 'width': 1920, 'height': 1080, 'fps': 30,
+            }],
+            'video_tracks': [{'id': 'V1', 'role': 'main', 'clips': [{
+                'asset_id': 'video_consolidated', 'effects': [],
+            }]}],
+            'audio_tracks': [], 'captions': [],
+        }
+        errors, warnings = [], []
+
+        report = ExportValidationService._validate_postproduction_layout(
+            timeline, errors, warnings,
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+        self.assertFalse(report['music_stem'])
+        self.assertFalse(report['caption_overlay'])
 
     def test_reframe_keeps_proxy_plan_as_normalized_geometry(self):
         effect = InternalTimelineBuilder()._transform_effect(

@@ -82,8 +82,18 @@
     .project-reprocess-option__icon { display:grid; place-items:center; width:2.4rem; height:2.4rem; flex:none; border-radius:.7rem; background:#fff1f2; color:#c90905; }
     .project-reprocess-option strong { display:block; color:#111827; font-size:.9rem; }
     .project-reprocess-option small { display:block; margin-top:.1rem; color:#667085; line-height:1.35; }
+    .project-submit-overlay { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; padding:1rem; background:rgba(15,23,42,.62); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); }
+    .project-submit-overlay.is-active { display:flex; }
+    .project-submit-overlay__card { display:flex; width:min(100%,22rem); align-items:center; gap:1rem; border:1px solid rgba(255,255,255,.7); border-radius:1.1rem; background:rgba(255,255,255,.97); padding:1rem 1.15rem; color:#111827; box-shadow:0 24px 70px rgba(15,23,42,.3); }
+    .project-submit-overlay__spinner { width:2.5rem; height:2.5rem; flex:none; display:grid; place-items:center; border-radius:.8rem; background:#fff1f2; color:#c90905; }
+    .project-submit-overlay__spinner i { animation:project-submit-spin .75s linear infinite; }
+    .project-submit-overlay__title { display:block; font-size:.92rem; font-weight:900; }
+    .project-submit-overlay__hint { display:block; margin-top:.15rem; color:#667085; font-size:.75rem; line-height:1.35; }
+    body.project-submit-busy { overflow:hidden; }
     @keyframes project-progress-pulse { 50% { opacity:.45; transform:scale(.8); } }
+    @keyframes project-submit-spin { to { transform:rotate(360deg); } }
     @keyframes media-trim-sheet-in { from { transform:translateY(1.5rem); opacity:.6; } to { transform:translateY(0); opacity:1; } }
+    @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } }
     @media (min-width:640px) { .project-progress__steps { grid-template-columns:repeat(2,minmax(0,1fr)); } }
     @media (min-width:1024px) { .project-progress__steps { grid-template-columns:repeat(3,minmax(0,1fr)); } }
     @media (max-width:900px), (hover:none) and (pointer:coarse) {
@@ -892,13 +902,13 @@
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
             <h2 class="text-xl font-black">Exportar projeto</h2>
-            <p class="text-sm text-gray-500 mt-1">Baixe o resultado final ou continue a edição com os arquivos originais no Premiere.</p>
+            <p class="text-sm text-gray-500 mt-1">Exporte o vídeo já editado e reenquadrado, com legendas e faixas de áudio separadas para continuar a pós-produção no Premiere.</p>
         </div>
         <div class="flex flex-wrap gap-2">
             <a href="{% url 'external_media_editor' project.render_job.public_id %}" class="media-btn media-secondary"><i class="fas fa-pen"></i>Editar legendas</a>
             <form method="post" action="{% url 'external_media_project_export_premiere' project.public_id %}">
                 {% csrf_token %}
-                <button class="media-btn media-primary"><i class="fas fa-file-export"></i>Adobe Premiere</button>
+                <button class="media-btn media-primary"><i class="fas fa-file-export"></i>Exportar para Adobe Premiere Pro</button>
             </form>
         </div>
     </div>
@@ -1065,6 +1075,13 @@
 })();
 </script>
 {% endif %}
+
+<div class="project-submit-overlay" data-project-submit-overlay aria-hidden="true" role="status" aria-live="assertive" aria-label="Processando solicitação">
+    <div class="project-submit-overlay__card">
+        <span class="project-submit-overlay__spinner" aria-hidden="true"><i class="fas fa-spinner"></i></span>
+        <span><strong class="project-submit-overlay__title" data-project-submit-message>Processando…</strong><small class="project-submit-overlay__hint">Aguarde e não feche esta página.</small></span>
+    </div>
+</div>
 
 <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-custom-block-edit-modal aria-hidden="true"><section class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div class="flex items-center justify-between mb-4"><h2 class="font-black text-lg">Editar bloco personalizado</h2><button type="button" class="project-media-action" data-custom-modal-close><i class="fas fa-xmark"></i></button></div><form method="post" data-custom-block-edit-form class="space-y-3">{% csrf_token %}<input name="name" class="w-full rounded-xl border px-3 py-2" placeholder="Nome"><input name="description" class="w-full rounded-xl border px-3 py-2" placeholder="Descrição opcional"><div class="flex justify-end gap-2"><button type="button" class="media-btn media-muted" data-custom-modal-close>Cancelar</button><button class="media-btn media-primary">Salvar</button></div></form></section></div>
 <div class="fixed inset-0 z-50 hidden items-center justify-center bg-black/75 p-4" data-custom-block-delete-modal aria-hidden="true"><section class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><i class="fas fa-trash text-xl text-red-600"></i><h2 class="font-black text-lg mt-3">Excluir bloco personalizado?</h2><p class="text-sm text-gray-500 mt-1">Os vídeos deste bloco também serão removidos.</p><form method="post" data-custom-block-delete-form class="flex justify-end gap-2 mt-5">{% csrf_token %}<button type="button" class="media-btn media-muted" data-custom-modal-close>Cancelar</button><button class="media-btn media-primary">Excluir bloco</button></form></section></div>
@@ -1301,12 +1318,14 @@
         data.append('trim_end_seconds', trimEnd.value);
         data.append('trim_ranges', JSON.stringify(trimRanges));
         trimSave.disabled = true;
+        window.projectSubmitOverlay?.show('Salvando corte…');
         try {
             const response = await fetch(trimUrl, {method: 'POST', body: data, credentials: 'same-origin', headers: {'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '', 'X-Requested-With': 'XMLHttpRequest'}});
             const result = await response.json();
             if (!response.ok) throw new Error(result.detail || 'Não foi possível salvar o corte.');
             window.location.reload();
         } catch (error) {
+            window.projectSubmitOverlay?.hide();
             trimError.textContent = error.message;
             trimError.classList.remove('hidden');
             trimSave.disabled = false;
@@ -1684,6 +1703,68 @@
     modal.querySelectorAll('[data-close-reprocess-options]').forEach(button => button.addEventListener('click', close));
     modal.addEventListener('click', event => { if (event.target === modal) close(); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && modal.classList.contains('is-open')) close(); });
+})();
+</script>
+<script>
+(() => {
+    const overlay = document.querySelector('[data-project-submit-overlay]');
+    const message = overlay?.querySelector('[data-project-submit-message]');
+    if (!overlay || !message) return;
+
+    const loadingMessage = (submitter) => {
+        const explicit = submitter?.dataset.loadingMessage;
+        if (explicit) return explicit;
+        const label = (
+            submitter?.textContent || submitter?.getAttribute('aria-label')
+            || submitter?.getAttribute('title') || ''
+        ).replace(/\s+/g, ' ').trim().toLowerCase();
+        if (label.includes('excluir') || label.includes('remover')) return 'Removendo…';
+        if (label.includes('salvar')) return 'Salvando…';
+        if (label.includes('exportar')) return 'Preparando exportação…';
+        if (label.includes('gerar') || label.includes('processar') || label.includes('renderiza')) return 'Iniciando processamento…';
+        if (label.includes('adicionar') || label.includes('enviar')) return 'Enviando…';
+        return 'Processando…';
+    };
+    const show = (text='Processando…') => {
+        message.textContent = text;
+        overlay.classList.add('is-active');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('project-submit-busy');
+        document.body.setAttribute('aria-busy', 'true');
+    };
+    const hide = () => {
+        overlay.classList.remove('is-active');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('project-submit-busy');
+        document.body.removeAttribute('aria-busy');
+    };
+    window.projectSubmitOverlay = {show, hide};
+
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || event.defaultPrevented || form.matches('[data-no-submit-overlay]')) return;
+        if (form.dataset.submitPending === 'true') {
+            event.preventDefault();
+            return;
+        }
+        form.dataset.submitPending = 'true';
+        form.querySelectorAll('button[type="submit"], button:not([type]), input[type="submit"]').forEach((control) => {
+            if (!control.disabled) {
+                control.dataset.submitOverlayDisabled = 'true';
+                control.disabled = true;
+            }
+        });
+        show(loadingMessage(event.submitter));
+    });
+
+    window.addEventListener('pageshow', () => {
+        document.querySelectorAll('[data-submit-overlay-disabled="true"]').forEach((control) => {
+            control.disabled = false;
+            delete control.dataset.submitOverlayDisabled;
+        });
+        document.querySelectorAll('form[data-submit-pending="true"]').forEach((form) => delete form.dataset.submitPending);
+        hide();
+    });
 })();
 </script>
 {% endblock %}
