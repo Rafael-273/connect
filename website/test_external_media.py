@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import wave
 import zipfile
+from html import unescape
 from decimal import Decimal
 from datetime import timedelta
 from pathlib import Path
@@ -2061,6 +2062,47 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(response, 'data-project-submit-overlay')
         self.assertContains(response, "document.addEventListener('submit'")
         self.assertContains(response, 'Aguarde e não feche esta página.')
+
+    def test_media_trim_restores_all_saved_ranges_in_the_edit_modal(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project,
+            block=self.block,
+            position=1,
+            original_filename='mensagem.mp4',
+            file=SimpleUploadedFile('mensagem.mp4', b'video', content_type='video/mp4'),
+            preview_status=ProjectBlockMedia.PreviewStatus.READY,
+        )
+        ranges = [
+            {'start_seconds': 2, 'end_seconds': 18},
+            {'start_seconds': 31.25, 'end_seconds': 49.5},
+        ]
+
+        save_response = self.client.post(
+            reverse('external_media_project_media_trim', args=[project.public_id, media.pk]),
+            {
+                'trim_start_seconds': '2',
+                'trim_end_seconds': '18',
+                'trim_ranges': json.dumps(ranges),
+            },
+        )
+
+        self.assertEqual(save_response.status_code, 200)
+        media.refresh_from_db()
+        expected_ranges = [
+            {'start_ms': 2000, 'end_ms': 18000},
+            {'start_ms': 31250, 'end_ms': 49500},
+        ]
+        self.assertEqual(media.trim_ranges, expected_ranges)
+
+        detail_response = self.client.get(
+            reverse('external_media_project_detail', args=[project.public_id]),
+        )
+        rendered = detail_response.content.decode()
+        match = re.search(r'data-media-trim-ranges="([^"]+)"', rendered)
+
+        self.assertIsNotNone(match)
+        self.assertEqual(json.loads(unescape(match.group(1))), expected_ranges)
 
     def test_project_duration_minutes_rounds_up(self):
         project = self.make_project()

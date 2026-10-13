@@ -1,3 +1,4 @@
+import json
 import uuid
 from pathlib import Path
 
@@ -1194,6 +1195,16 @@ class ProjectBlockMedia(BaseModel):
     preview_file = models.FileField(upload_to=external_media_project_preview_path, storage=get_external_media_storage, blank=True, max_length=255)
     preview_status = models.CharField(max_length=16, choices=PreviewStatus.choices, default=PreviewStatus.PENDING)
     preview_error = models.CharField(max_length=255, blank=True)
+
+    @property
+    def trim_ranges_json(self):
+        """JSON pronto para ser usado com segurança nos atributos ``data-*``.
+
+        A representação padrão de uma lista no template usa aspas simples,
+        enquanto o editor no navegador precisa de JSON válido para restaurar
+        todos os trechos previamente salvos.
+        """
+        return json.dumps(self.trim_ranges or [], cls=DjangoJSONEncoder, separators=(',', ':'))
 
     class Meta:
         ordering = ['block__order', 'position', 'pk']
