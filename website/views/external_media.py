@@ -2043,7 +2043,15 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             )
             for item in revision.edit_decision_set.get('operations', [])
         )
-        use_editable_source_proxies = has_reframe_override and assets_have_proxies
+        # A manual frame must never fall back to the assembled master: that
+        # master was rendered before the member moved the zoom/position
+        # sliders.  Requiring *every* asset to have a source proxy here made a
+        # missing, unrelated take silently reactivate that stale master after
+        # reload, so the saved adjustment appeared to be lost.  The browser
+        # already resolves each source independently (including trim-range
+        # aliases), therefore keep source playback whenever a manual frame is
+        # present.
+        use_editable_source_proxies = has_reframe_override
         revision_proxy = ready_proxies.get(ProjectProxyService.timeline_review_proxy_id(revision))
         if not ProjectProxyService.has_usable_timeline_review_proxy(revision_proxy, revision):
             revision_proxy = None

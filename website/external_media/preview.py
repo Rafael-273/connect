@@ -1665,10 +1665,29 @@ class TimelineRevisionService:
         project.save(update_fields=[
             'current_timeline_revision', 'preview_dirty', 'final_render_outdated', 'update_at',
         ])
+        # A manual framing decision is previewed from the source take, not
+        # from the assembled master. A continuous revision proxy would be
+        # discarded by the editor in that case (it may already contain an
+        # earlier auto crop), so do not enqueue one for every slider change.
+        # Besides wasting worker capacity, those redundant jobs obscured the
+        # real editor state with a warning on each adjustment.
+        has_manual_framing = any(
+            item.get('type') == 'reframe'
+            and (
+                not item.get('enabled', True)
+                or (item.get('metadata') or {}).get('manual_transform')
+            )
+            for item in decisions.get('operations', [])
+        )
         # This is deliberately deferred: an edit must be saved even if a
         # worker is temporarily unavailable. The editor continues on source
         # proxies until the continuous revision proxy is ready.
-        if project.render_job_id and project.render_job and project.render_job.original_video:
+        if (
+            not has_manual_framing
+            and project.render_job_id
+            and project.render_job
+            and project.render_job.original_video
+        ):
             transaction.on_commit(lambda: cls._enqueue_timeline_review_proxy(project.pk, revision.pk))
         return revision
 

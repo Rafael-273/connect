@@ -2063,6 +2063,51 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(response, "document.addEventListener('submit'")
         self.assertContains(response, 'Aguarde e não feche esta página.')
 
+    def test_preview_keeps_source_mode_after_reloading_a_manual_transform(self):
+        """A missing proxy in another take cannot hide a saved zoom."""
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+        decisions = {
+            'operations': [{
+                'id': 'reframe-take-1',
+                'type': 'reframe',
+                'source_id': 'take-1',
+                'enabled': True,
+                'metadata': {'manual_transform': {'scale': 1.35, 'x': .2, 'y': -.1}},
+            }],
+        }
+        timeline = {
+            'sequence': {'duration_ms': 5_000},
+            'assets': [
+                {'id': 'take-1', 'name': 'Take com proxy', 'duration_ms': 5_000},
+                {'id': 'take-2', 'name': 'Take sem proxy', 'duration_ms': 1_000},
+            ],
+            'clips': [{
+                'id': 'clip-1', 'asset_id': 'take-1', 'timeline_in_ms': 0,
+                'timeline_out_ms': 5_000, 'source_in_ms': 0, 'source_out_ms': 5_000,
+            }],
+            'decisions': decisions['operations'],
+        }
+        revision = TimelineRevision.objects.create(
+            project=project,
+            revision=1,
+            timeline=timeline,
+            source_manifest={'sources': []},
+            edit_decision_set=decisions,
+            created_by=self.member,
+        )
+        project.current_timeline_revision = revision
+        project.save(update_fields=['current_timeline_revision', 'update_at'])
+
+        response = self.client.get(reverse('external_media_project_preview', args=[project.public_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['timeline']['review_master_url'])
+        self.assertEqual(response.context['timeline']['review_proxy_status'], 'SOURCE')
+
     def test_media_trim_restores_all_saved_ranges_in_the_edit_modal(self):
         project = self.make_project()
         media = ProjectBlockMedia.objects.create(
