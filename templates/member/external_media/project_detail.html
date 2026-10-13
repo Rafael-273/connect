@@ -170,7 +170,6 @@
     </div>
 </section>
 {% else %}
-<div class="mb-4 flex items-end justify-between gap-4"><div><h2 class="text-lg font-black text-gray-900">Cenas do projeto</h2><p class="mt-1 text-sm text-gray-500">Envie os vídeos de cada cena abaixo. Os demais já estão configurados.</p></div><span class="hidden sm:inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{{ blocks|length }} cena{{ blocks|length|pluralize:"s" }} para revisar</span></div>
 <div class="space-y-4 mb-7" data-custom-block-list data-custom-block-reorder-url="{% url 'external_media_project_custom_block_reorder' project.public_id %}">
 {% for item in blocks %}
     <section class="media-card project-media-block {% if item.primary_media %}is-ready{% endif %}" data-project-block-id="{% if item.is_custom %}c-{{ item.definition.pk }}{% else %}t-{{ item.definition.pk }}{% endif %}" {% if item.is_custom %}data-custom-block{% endif %}>
@@ -289,6 +288,7 @@
         {% endif %}
         {% if not item.has_default_video %}
         {% if item.definition.max_occurrences == 0 or item.media|length < item.definition.max_occurrences %}
+        {% if item.primary_media %}<details class="order-2 mt-4"><summary class="media-btn media-muted cursor-pointer text-sm"><i class="fas fa-plus"></i>Adicionar outro vídeo</summary>{% endif %}
         <section class="project-upload-slot order-2 mt-4 rounded-xl p-3"><div class="mb-3 flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-xs text-white"><i class="fas fa-upload"></i></span><div><strong class="block text-sm text-gray-900">{% if item.primary_media %}Adicionar outro vídeo{% else %}Enviar vídeo do bloco{% endif %}</strong><span class="block text-xs text-gray-500">Selecione o vídeo principal desta cena</span></div></div>
         <div class="hidden space-y-2 mb-3" data-upload-results></div>
         <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload' project.public_id item.definition.pk %}{% endif %}" class="media-form media-upload-form space-y-3" data-reorder-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_media_reorder' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}{% endif %}"{% if use_s3 %} data-presign-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload_presign' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload_presign' project.public_id item.definition.pk %}{% endif %}"{% endif %}>
@@ -349,6 +349,7 @@
             </div>
         </form>
         </section>
+        {% if item.primary_media %}</details>{% endif %}
         {% if item.media %}
         <details id="scene-camera-panel-{{ forloop.counter }}" class="relative order-6 mt-4 hidden rounded-xl border border-sky-100 bg-sky-50/30 p-3">
             <summary class="cursor-pointer text-sm font-semibold text-gray-700"><i class="fas fa-camera mr-2 text-sky-600"></i>Adicionar câmera extra</summary>
