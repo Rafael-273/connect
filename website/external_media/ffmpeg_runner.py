@@ -78,7 +78,11 @@ class FFmpegRunner:
     def _failure_detail(stderr):
         """Return the useful tail of FFmpeg stderr without URLs or control chars."""
         lines = [
-            re.sub(r'\s+', ' ', line).strip()
+            re.sub(
+                r"(expression\s+)'[^']{200,}'",
+                r"\1'[expressão omitida]'",
+                re.sub(r'\s+', ' ', line).strip(),
+            )
             for line in str(stderr or '').splitlines()
             if line.strip()
         ]

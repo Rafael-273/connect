@@ -3736,7 +3736,13 @@ class ExternalMediaProjectPipeline:
         project.save(update_fields=['status', 'current_step', 'error_message', 'update_at'])
         ProjectPipelineStep.objects.filter(
             project=project, status=ProjectPipelineStep.Status.RUNNING,
-        ).update(status=ProjectPipelineStep.Status.ERROR, message=message, finished_at=timezone.now())
+        ).update(
+            status=ProjectPipelineStep.Status.ERROR,
+            # ProjectPipelineStep.message is a CharField(255); the project itself
+            # retains the complete diagnostic in its TextField.
+            message=(message or '')[:255],
+            finished_at=timezone.now(),
+        )
 
 
 class ExternalMediaPipeline:

@@ -219,7 +219,7 @@ class PremiereExporter:
         for audio_track_index, track_data in enumerate(timeline['audio_tracks'], start=1):
             track = ET.SubElement(audio, 'track')
             self._text(track, 'name', track_data.get('name') or f'Audio {audio_track_index}')
-            self._text(track, 'enabled', 'TRUE')
+            self._text(track, 'enabled', 'TRUE' if track_data.get('enabled', True) else 'FALSE')
             self._text(track, 'locked', 'FALSE')
             for clip in track_data['clips']:
                 self._clipitem(
@@ -562,17 +562,20 @@ class ExportValidationService:
         elif main_clips[0].get('effects'):
             errors.append('V1 não deve duplicar efeitos já incorporados ao vídeo consolidado.')
 
-        referenced_audio_ids = {
-            clip.get('asset_id')
-            for track in timeline.get('audio_tracks', [])
-            for clip in track.get('clips', [])
-        }
         reference = next(
             (asset for asset in assets.values() if asset.get('role') == 'reference_mix'), None,
         )
-        if reference and reference.get('id') in referenced_audio_ids:
+        reference_tracks = [
+            track for track in timeline.get('audio_tracks', [])
+            if any(clip.get('asset_id') == reference.get('id') for clip in track.get('clips', []))
+        ] if reference else []
+        if reference_tracks:
             report['reference_mix_in_sequence'] = True
-            errors.append('O mix de referência não pode ficar ativo junto com os stems.')
+            report['reference_mix_disabled_track'] = not any(
+                track.get('enabled', True) for track in reference_tracks
+            )
+            if not report['reference_mix_disabled_track']:
+                errors.append('O mix de referência deve permanecer desativado junto com os stems.')
 
         for role, label in (('dialogue', 'voz'), ('music', 'música')):
             asset = next((item for item in assets.values() if item.get('role') == role), None)
@@ -663,8 +666,8 @@ class PremierePackageService:
                 if music_available else ''
             )
             + (
-                'Audio/mix_referencia.wav contém o mix estéreo aprovado apenas para conferência; '
-                'não o reproduza simultaneamente com os stems.\n'
+                'A faixa “Mix de referência masterizado” contém o mix estéreo aprovado, desativado por padrão, para conferência A/B. '
+                'Ative-o somente com A1/A2 silenciadas; Audio/mix_referencia.wav é a mesma referência.\n'
                 if reference_mix_available else ''
             )
             + caption_instructions +

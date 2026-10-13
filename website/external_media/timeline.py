@@ -177,6 +177,19 @@ class InternalTimelineBuilder:
         reference_mix_asset = self._reference_mix(project, package_root, duration_ms)
         if reference_mix_asset:
             assets.append(reference_mix_asset)
+            # Keep the mastered delivery mix immediately available for A/B in
+            # Premiere, but disabled so it can never double the dialogue/music
+            # stems on first import.
+            audio_tracks.append({
+                'id': 'A5', 'name': 'Mix de referência masterizado (desativado)',
+                'role': 'reference_mix', 'enabled': False,
+                'clips': [{
+                    'id': 'reference_mix_clip', 'asset_id': reference_mix_asset['id'],
+                    'name': reference_mix_asset['name'],
+                    'timeline_in_ms': 0, 'timeline_out_ms': duration_ms,
+                    'source_in_ms': 0, 'source_out_ms': duration_ms,
+                }],
+            })
 
         # V1 already contains colour and graphic overlays. Those assets are retained
         # only by the editable-source fallback, where the XML still needs them.

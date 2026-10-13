@@ -5794,6 +5794,25 @@ class DialogueProcessingUnitTests(SimpleTestCase):
         # The block that's already at the reference level needs no correction at all.
         self.assertNotIn((2000, 3000), gains_by_block)
 
+    def test_leveling_uses_small_filters_instead_of_one_nested_expression(self):
+        runner = Mock()
+        processor = DialogueProcessor(runner=runner)
+        blocks = [SpeechBlock(index * 1000, index * 1000 + 700) for index in range(20)]
+        processor._compute_block_gains = lambda *args: (
+            [(block, 1.0 if index % 2 else -1.0) for index, block in enumerate(blocks)], -20.0,
+        )
+
+        processor.process(
+            Path('/tmp/input.mp4'), Path('/tmp/output.mp4'), duration_ms=20_000,
+            speech_blocks=blocks, settings_=DialogueSettings(),
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertNotIn('if(lt(t', graph)
+        self.assertIn("enable='between(t\\,", graph)
+        self.assertGreater(graph.count('volume=eval=frame'), len(blocks))
+
 
 class FFmpegRunnerTests(SimpleTestCase):
     def test_failed_command_includes_a_compact_redacted_diagnostic(self):
@@ -6305,6 +6324,12 @@ class EditableTimelineExportTests(SimpleTestCase):
                     'timeline_in_ms': 0, 'timeline_out_ms': 2000,
                     'source_in_ms': 0, 'source_out_ms': 2000,
                 }],
+            }, {
+                'id': 'A5', 'role': 'reference_mix', 'enabled': False, 'clips': [{
+                    'id': 'reference_mix_clip', 'asset_id': 'audio_reference_mix',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000,
+                }],
             }],
             'clips': [{'id': 'source_decision_clip'}], 'captions': [], 'markers': [],
             'compatibility': {'warnings': []},
@@ -6326,9 +6351,11 @@ class EditableTimelineExportTests(SimpleTestCase):
 
         self.assertTrue(report['valid'])
         self.assertEqual(report['postproduction']['layout'], 'consolidated_postproduction')
-        self.assertFalse(report['postproduction']['reference_mix_in_sequence'])
+        self.assertTrue(report['postproduction']['reference_mix_in_sequence'])
+        self.assertTrue(report['postproduction']['reference_mix_disabled_track'])
         self.assertNotIn('<effectid>basic</effectid>', xml)
-        self.assertNotIn('../Audio/mix_referencia.wav', xml)
+        self.assertIn('../Audio/mix_referencia.wav', xml)
+        self.assertIn('<enabled>FALSE</enabled>', xml)
 
     def test_consolidated_video_is_copied_without_audio(self):
         with tempfile.TemporaryDirectory() as directory:

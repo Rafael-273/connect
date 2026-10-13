@@ -9,7 +9,7 @@ from django.conf import settings
 
 from .audio_mixing import clip_blocks_against_protected_ranges
 from .audio_utils import (
-    build_piecewise_expression, clamp, linear_gain_from_db, parse_mean_volume_db,
+    clamp, linear_gain_from_db, parse_mean_volume_db,
     settings_from_config,
 )
 from .ffmpeg_runner import FFmpegRunner
@@ -177,6 +177,43 @@ class DialogueProcessor:
                 block_gains.append((block, gain_db))
         return block_gains, reference_db
 
+    @staticmethod
+    def _leveling_filters(block_gains, duration_ms, transition_ms=120):
+        """Build small, independent volume filters for each leveling ramp.
+
+        Encoding a long envelope in one nested ``if`` expression exceeds FFmpeg's
+        expression evaluator on projects with many speech blocks. These segments do
+        not overlap, so chained filters preserve the same gain envelope safely.
+        """
+        duration_s = max(0.001, duration_ms / 1000)
+        transition_s = max(0.01, transition_ms / 1000)
+        ordered = sorted(block_gains, key=lambda item: item[0].start_ms)
+        segments = []
+        for index, (block, gain) in enumerate(ordered):
+            start_s = max(0.0, block.start_ms / 1000)
+            end_s = min(duration_s, block.end_ms / 1000)
+            if end_s <= start_s:
+                continue
+            attack_end_s = min(end_s, start_s + transition_s)
+            next_start_s = (
+                ordered[index + 1][0].start_ms / 1000
+                if index + 1 < len(ordered) else duration_s
+            )
+            release_end_s = min(end_s + transition_s, next_start_s, duration_s)
+            if attack_end_s > start_s:
+                segments.append((
+                    start_s, attack_end_s,
+                    f'1.0000+({gain - 1:.4f})*(t-{start_s:.3f})/{attack_end_s - start_s:.3f}',
+                ))
+            if end_s > attack_end_s:
+                segments.append((attack_end_s, end_s, f'{gain:.4f}'))
+            if release_end_s > end_s:
+                segments.append((
+                    end_s, release_end_s,
+                    f'{gain:.4f}+({1 - gain:.4f})*(t-{end_s:.3f})/{release_end_s - end_s:.3f}',
+                ))
+        return segments
+
     def process(
         self, video_path: Path, output_path: Path, *,
         duration_ms: int, speech_blocks=None, protected_ranges=None,
@@ -209,12 +246,18 @@ class DialogueProcessor:
             filters = ['[0:a]anull[dlg]']
         current_label = 'dlg'
         if block_gains:
-            envelope = build_leveling_envelope(
-                [(block, linear_gain_from_db(gain_db)) for block, gain_db in block_gains], duration_ms,
-            )
-            expression = build_piecewise_expression(envelope)
-            filters.append(f"[{current_label}]volume=eval=frame:volume='{expression}'[leveled]")
-            current_label = 'leveled'
+            linear_gains = [
+                (block, linear_gain_from_db(gain_db)) for block, gain_db in block_gains
+            ]
+            for index, (start_s, end_s, expression) in enumerate(
+                self._leveling_filters(linear_gains, duration_ms),
+            ):
+                label = f'leveled_{index}'
+                filters.append(
+                    f"[{current_label}]volume=eval=frame:volume='{expression}':"
+                    f"enable='between(t\\,{start_s:.3f}\\,{end_s:.3f})'[{label}]"
+                )
+                current_label = label
 
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path), '-filter_complex', ';'.join(filters),
