@@ -33,6 +33,7 @@ from website.external_media.audio_mixing import (
     SpeechBlock,
     build_ducking_envelope,
     combine_gain_envelopes,
+    ducking_options,
     normalize_volume_keyframes,
     resolved_ducking_config,
     build_spectral_windows,
@@ -5317,6 +5318,11 @@ class AudioMixingUnitTests(SimpleTestCase):
         self.assertEqual(settings_['voice_gain_db'], 0.0)
         self.assertEqual(settings_['voice_activation_db'], -96.0)
         self.assertEqual(settings_['between_speech_gain'], 1.0)
+
+    def test_legacy_boolean_ducking_is_normalized(self):
+        self.assertEqual(ducking_options({'ducking': True}), {'enabled': True})
+        self.assertEqual(ducking_options({'ducking': False}), {'enabled': False})
+        self.assertEqual(ducking_options({'ducking': {'enabled': True}}), {'enabled': True})
 
     def test_group_speech_blocks_merges_close_intervals(self):
         blocks = group_speech_blocks([(0, 1000), (1300, 2000), (2100, 2400)], gap_threshold_ms=450)

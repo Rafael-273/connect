@@ -75,7 +75,7 @@ from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
 
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
-from ..external_media.audio_mixing import resolved_ducking_config
+from ..external_media.audio_mixing import ducking_options, resolved_ducking_config
 from ..external_media.preview import (
     PreviewCompositionService, ProjectProxyService, REVIEW_MASTER_PROXY_ID, TimelineRevisionService,
 )
@@ -2335,9 +2335,10 @@ def preview_timeline_with_music(project, timeline):
     music = override.audio_file if override else MusicService.selected_file(project.template_version)
     timeline['has_music'] = bool(music and ProjectService.file_exists(music))
     if timeline['has_music']:
-        audio_mix = dict(timeline.get('audio_mix') or {})
+        raw_audio_mix = timeline.get('audio_mix')
+        audio_mix = dict(raw_audio_mix) if isinstance(raw_audio_mix, dict) else {}
         effective_mix = resolved_ducking_config(audio_mix or project.template_version.audio_mixing_config)
-        ducking = audio_mix.get('ducking') or {}
+        ducking = ducking_options(audio_mix)
         music_url = reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id})
         # The browser uses this URL as the audio cache key. Include the track
         # id so replacing a song reloads the <audio> element immediately

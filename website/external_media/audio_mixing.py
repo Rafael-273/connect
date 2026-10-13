@@ -83,7 +83,7 @@ def resolved_ducking_config(config=None):
     ``ducking`` object. Keeping this normalization at the audio boundary means
     old projects render identically and all consumers share one interpretation.
     """
-    config = dict(config or {})
+    config = dict(config) if isinstance(config, dict) else {}
     nested = config.pop('ducking', {})
     nested = dict(nested) if isinstance(nested, dict) else {}
     profile = str(config.get('profile') or nested.get('profile') or DEFAULT_DUCKING_PROFILE)
@@ -98,6 +98,22 @@ def resolved_ducking_config(config=None):
     resolved.update({key: value for key, value in config.items() if key != 'profile'})
     resolved['profile'] = profile
     return resolved
+
+
+def ducking_options(config=None):
+    """Normalize legacy boolean ducking values into the structured format.
+
+    Early project revisions persisted ``ducking: true``/``false``. Newer
+    revisions persist an object so they can also carry spectral settings.
+    Render and preview consumers must accept both while old projects exist.
+    """
+    config = config if isinstance(config, dict) else {}
+    value = config.get('ducking')
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, bool):
+        return {'enabled': value}
+    return {}
 
 
 @dataclass(frozen=True)

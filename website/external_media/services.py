@@ -39,7 +39,7 @@ from website.models.external_media import (
 )
 
 from .audio_mastering import AudioMasteringService, MasteringTarget
-from .audio_mixing import AudioMixingService, DuckingSettings, group_speech_blocks
+from .audio_mixing import AudioMixingService, DuckingSettings, ducking_options, group_speech_blocks
 from .audio_noise import (
     AudioCleanupService,
     AudioNoiseAnalysisService,
@@ -3541,7 +3541,7 @@ class ExternalMediaProjectPipeline:
             ducking_settings = DuckingSettings.from_config(
                 revision_mix or version.audio_mixing_config,
             )
-            revision_ducking = revision_mix.get('ducking') or {}
+            revision_ducking = ducking_options(revision_mix)
             mixed_path = workdir / 'audio_mixed.mp4'
             with self.storage.staged_processing_input(
                 final_path, f'project-{project.public_id}-audio-mix',

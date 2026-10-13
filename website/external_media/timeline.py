@@ -11,7 +11,7 @@ from django.conf import settings
 from .audio_mixing import (
     DuckingSettings, build_ducking_envelope, build_dynamic_ducking_envelope,
     build_spectral_windows, combine_gain_envelopes, group_speech_blocks,
-    normalize_volume_keyframes,
+    ducking_options, normalize_volume_keyframes,
 )
 from .audio_noise import AudioCleanupService, NoiseCleanupSettings, NoiseReductionDecision
 from .audio_utils import build_piecewise_expression, linear_gain_from_db
@@ -747,7 +747,7 @@ class InternalTimelineBuilder:
         revision = project.approved_timeline_revision or project.current_timeline_revision
         revision_timeline = (revision.timeline if revision else {}) or {}
         revision_mix = dict(revision_timeline.get('audio_mix') or {})
-        revision_ducking = revision_mix.get('ducking') or {}
+        revision_ducking = ducking_options(revision_mix)
         track = version.background_music
         # The selected track is the source of truth. Older versions may not have a
         # persisted music plugin even though the platform render already uses it.
