@@ -5310,6 +5310,14 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
 
 
 class AudioMixingUnitTests(SimpleTestCase):
+    def test_legacy_ducking_config_receives_new_control_defaults(self):
+        settings_ = resolved_ducking_config({'base_duck_db': 9.0})
+
+        self.assertEqual(settings_['base_duck_db'], 9.0)
+        self.assertEqual(settings_['voice_gain_db'], 0.0)
+        self.assertEqual(settings_['voice_activation_db'], -96.0)
+        self.assertEqual(settings_['between_speech_gain'], 1.0)
+
     def test_group_speech_blocks_merges_close_intervals(self):
         blocks = group_speech_blocks([(0, 1000), (1300, 2000), (2100, 2400)], gap_threshold_ms=450)
         self.assertEqual(len(blocks), 1)

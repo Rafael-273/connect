@@ -55,6 +55,26 @@ DUCKING_PROFILES = {
 }
 DEFAULT_DUCKING_PROFILE = 'balanced'
 
+# Keep all persisted template and revision configurations forwards-compatible.
+# In particular, projects created before the editor gained voice gain and
+# sensitivity controls do not contain these keys.
+DUCKING_DEFAULTS = {
+    'attack_ms': 140,
+    'hold_ms': 300,
+    'release_ms': 850,
+    'speech_gap_hold_ms': 1800,
+    'base_duck_db': 11.0,
+    'min_duck_db': 8.0,
+    'max_duck_db': 15.0,
+    'target_voice_to_music_gap_db': 14.0,
+    'spectral_max_cut_db': 5.0,
+    'spectral_center_hz': 1200,
+    'spectral_bandwidth_octaves': 2.2,
+    'between_speech_gain': 1.0,
+    'voice_activation_db': -96.0,
+    'voice_gain_db': 0.0,
+}
+
 
 def resolved_ducking_config(config=None):
     """Return backwards-compatible flat settings from a template/revision config.
@@ -69,7 +89,9 @@ def resolved_ducking_config(config=None):
     profile = str(config.get('profile') or nested.get('profile') or DEFAULT_DUCKING_PROFILE)
     if profile not in DUCKING_PROFILES:
         profile = DEFAULT_DUCKING_PROFILE
-    resolved = dict(DUCKING_PROFILES[profile])
+    # A profile may itself be from an older deployment and therefore omit
+    # controls introduced later. Start with stable defaults before applying it.
+    resolved = {**DUCKING_DEFAULTS, **DUCKING_PROFILES[profile]}
     # Flat values have historically been accepted, and should win over the
     # profile. Values inside ducking are the structured equivalent.
     resolved.update(nested)

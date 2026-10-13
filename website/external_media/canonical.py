@@ -406,9 +406,9 @@ class EditDecisionSetBuilder:
                 'reason': 'background_music', 'confidence': None,
                 'metadata': {
                     'schema': 'connect.audio_mix.v1',
-                    'profile': mixing['profile'],
+                    'profile': mixing.get('profile', 'balanced'),
                     'music_volume': float(version.music_volume),
-                    'voice_gain_db': mixing['voice_gain_db'],
+                    'voice_gain_db': mixing.get('voice_gain_db', 0.0),
                     'ducking': {
                         **{key: value for key, value in mixing.items() if key != 'profile'},
                         'enabled': bool(version.audio_ducking_enabled),
