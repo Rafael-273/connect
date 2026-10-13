@@ -225,6 +225,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         .preview-shell.is-inspector-open .preview-layout{display:grid;grid-template-columns:minmax(20rem,1fr) minmax(0,min(68rem,58vw));gap:clamp(1rem,2vw,2rem);align-items:center;min-height:0}
     }
     .adjustment-tabs{position:sticky;top:0;z-index:3;display:flex;gap:.2rem;overflow-x:auto;padding:.7rem 1rem;background:#111923;border-bottom:1px solid #273547;scrollbar-width:none}.adjustment-tabs::-webkit-scrollbar{display:none}.adjustment-tab{flex:0 0 auto;border:1px solid transparent;border-radius:.38rem;background:transparent;color:#95a4b8;padding:.48rem .7rem;font-size:.72rem;font-weight:800;transition:background .16s,border-color .16s,color .16s}.adjustment-tab:hover{background:#1b2736;color:#eef2f7}.adjustment-tab.is-active{border-color:#8d302f;background:rgba(201,9,5,.16);color:#fff;box-shadow:inset 0 -2px #f04438}.preview-decision[data-adjustment-category][hidden]{display:none!important}
+    .transcript-card{padding:0!important;overflow:hidden}.transcript-card__toolbar{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:1rem;border-bottom:1px solid #293546}.transcript-card__toolbar strong{color:#f5f7fb}.transcript-card__toolbar small{color:#9aa8ba}.transcript-download{flex:0 0 auto;display:inline-flex;align-items:center;gap:.4rem;border:1px solid #3d4c61;border-radius:.45rem;padding:.48rem .62rem;color:#dce7f4;font-size:.72rem;font-weight:800}.transcript-download:hover{border-color:#7588a2;background:#202c3b;color:#fff}.transcript-list{max-height:25rem;overflow:auto;padding:.45rem}.transcript-cue{display:grid;grid-template-columns:3.65rem minmax(0,1fr);gap:.65rem;width:100%;border:1px solid transparent;border-radius:.55rem;padding:.65rem;text-align:left;color:#dce5ef;transition:.15s}.transcript-cue:hover{background:#1c2736}.transcript-cue.is-current{border-color:#a93635;background:rgba(201,9,5,.16);box-shadow:inset 3px 0 #ed4b45}.transcript-cue__time{color:#8fa0b5;font-size:.68rem;font-variant-numeric:tabular-nums;font-weight:800}.transcript-cue__text{font-size:.8rem;line-height:1.4}.transcript-help{padding:.55rem 1rem .8rem;color:#8fa0b5;font-size:.7rem}.transcript-empty{padding:1.2rem;color:#9aa8ba;text-align:center;font-size:.8rem}
 </style>
 {% endblock %}
 
@@ -382,7 +383,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const musicController = new window.ConnectPreviewAudio(music);
     const csrf = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
     let activeClip = null, globalMs = {{ session.position_ms|default:0 }}, loading = false, saveTimer, timelineZoom = 1, editTool = 'select', bladePoints = [...(timeline.video_splits_ms||[])], selectedSegment = null, editingSubtitleCue = null, inspectorSelection = null, activePreviewRevision = {{ revision.revision }};
-    let selectedCaptionIds = new Set(), activeAdjustmentTab = '';
+    let selectedCaptionIds = new Set(), activeAdjustmentTab = '', activeTranscriptCueId = null;
     const BROLL_CLIPBOARD_KEY = 'connect-broll-settings-{{ project.public_id }}';
     const COLOR_CLIPBOARD_KEY = 'connect-color-settings-{{ project.public_id }}';
     let brollSettingsClipboard = null;
@@ -547,12 +548,23 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         video.style.filter=grade?`url(#preview-temperature-filter) brightness(${1+Number(grade.brightness||0)/200}) contrast(${Number(grade.contrast??100)/100}) saturate(${Number(grade.saturation??100)/100})`:'';
         document.getElementById('preview-block').textContent=activeClip?.block?.name || asset(activeClip?.asset_id)?.name || 'Vídeo';
         document.querySelectorAll('[data-start]').forEach(card=>card.classList.toggle('is-current',globalMs>=Number(card.dataset.start)&&globalMs<Number(card.dataset.end)));
+        syncTranscriptPosition();
         renderOverlays();
         renderBrolls();
         renderDirectTransformControl();
         renderTimelinePlayhead();
         updateMusicVolume();
         updateEditControls();
+    }
+    function syncTranscriptPosition(){
+        const cues=[...document.querySelectorAll('[data-transcript-cue]')];
+        if(!cues.length)return;
+        const current=cues.find(node=>globalMs>=Number(node.dataset.start)&&globalMs<Number(node.dataset.end))||null;
+        cues.forEach(node=>node.classList.toggle('is-current',node===current));
+        if(current&&current.dataset.transcriptCue!==activeTranscriptCueId){
+            activeTranscriptCueId=current.dataset.transcriptCue;
+            current.scrollIntoView({block:'nearest',behavior:'smooth'});
+        }else if(!current)activeTranscriptCueId=null;
     }
     function renderOverlays(){
         if(reviewRenders('OVERLAYS')){overlayLayer.replaceChildren();return}
@@ -592,8 +604,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         // ranges after several cuts. The manual decision must win; otherwise
         // the inspector retains the slider value while playback renders the
         // earlier automatic decision instead.
-        return scoped.find(item=>item.enabled!==false&&Boolean((item.metadata||{}).manual_transform))
-            ||scoped[0]
+        // Operations are append-only. A later restore-original (disabled) or
+        // manual adjustment must override an inherited decision for exactly
+        // this take, regardless of how many blade points exist.
+        return [...scoped].reverse().find(item=>item.enabled===false||Boolean((item.metadata||{}).manual_transform))
+            ||scoped.at(-1)
             ||all.find(item=>(includeDisabled||item.enabled!==false)&&(item.metadata||{}).segment_start_ms===undefined)||null;
     }
     function activeTransformScope(){
@@ -995,7 +1010,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function inspectorHeader(){
         const title=document.getElementById('review-panel-title'),subtitle=document.getElementById('review-panel-subtitle');
         if(!inspectorSelection){title.textContent='Pontos da edição';subtitle.textContent='Clique em um take, b-roll, elemento ou na trilha sonora na timeline para ver seus ajustes.';return}
-        const labels={video:'Vídeo selecionado',audio:'Áudio selecionado',broll:'Elemento selecionado',overlay:'Texto selecionado',music:'Trilha sonora',caption:'Legenda selecionada'};
+        const labels={video:'Vídeo selecionado',audio:'Áudio selecionado',broll:'Elemento selecionado',overlay:'Texto selecionado',music:'Trilha sonora',caption:'Transcrição sincronizada'};
         title.textContent=labels[inspectorSelection.kind]||'Ajustes';subtitle.textContent=inspectorSelection.label||'';
     }
     function compactBrollInspector(card){
@@ -1028,6 +1043,34 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(transforms)transform.body.append(transforms);
         const source=createSection('Fonte','',false);if(assetField)source.body.append(assetField);
         card.append(time.section,transform.section,source.section);
+    }
+    function renderCaptionTranscript(){
+        const selected=(timeline.captions||[]).find(item=>String(item.id)===String(inspectorSelection?.id));
+        if(!selected)return;
+        const language=String(selected.language||'').toLowerCase();
+        const cues=(timeline.captions||[])
+            .filter(item=>String(item.language||'').toLowerCase()===language)
+            .sort((left,right)=>Number(left.start_ms)-Number(right.start_ms));
+        const card=document.createElement('article');
+        card.className='preview-decision transcript-card';
+        card.innerHTML=`<div class="transcript-card__toolbar"><div><strong>Transcrição sincronizada</strong><small class="block mt-1">${esc(String(selected.language||'').toUpperCase())} · clique para navegar · duplo clique para editar</small></div><button type="button" class="transcript-download" data-download-transcript><i class="fas fa-download"></i>Baixar</button></div><div class="transcript-list" data-transcript-list></div><p class="transcript-help">Os destaques acompanham o vídeo. A edição é salva na timeline e no render final.</p>`;
+        const transcriptList=card.querySelector('[data-transcript-list]');
+        cues.forEach(cue=>{
+            const row=document.createElement('button');
+            row.type='button';row.className='transcript-cue';
+            row.dataset.transcriptCue=String(cue.id);row.dataset.start=String(cue.start_ms);row.dataset.end=String(cue.end_ms);
+            row.innerHTML=`<span class="transcript-cue__time">${fmt(cue.start_ms)}</span><span class="transcript-cue__text">${esc(cue.text)}</span>`;
+            row.onclick=()=>{inspectorSelection={kind:'caption',id:cue.id,label:cue.text||''};selectedCaptionIds=new Set([String(cue.id)]);seek(Number(cue.start_ms),false);renderEditorTimeline()};
+            row.ondblclick=event=>{event.preventDefault();openSubtitleEditor(cue)};
+            transcriptList.append(row);
+        });
+        card.querySelector('[data-download-transcript]').onclick=()=>{
+            const text=[`Transcrição ${String(selected.language||'').toUpperCase()}`, '', ...cues.map(cue=>`[${fmt(cue.start_ms)} - ${fmt(cue.end_ms)}] ${cue.text}`)].join('\n');
+            const blob=new Blob([text],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+            link.href=url;link.download=`transcricao-${String(selected.language||'original').toLowerCase()}.txt`;document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);
+        };
+        list.append(card);
+        syncTranscriptPosition();
     }
     function renderList(){
         if(!inspectorSelectionStillValid())inspectorSelection=null;
@@ -1076,14 +1119,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             card.querySelector('[data-restore-auto-mix]').onclick=()=>queueAudioMix({restore_auto:true},card);
             list.append(card)
         }
-        if(inspectorSelection?.kind==='caption'){const cue=(timeline.captions||[]).find(item=>item.id===inspectorSelection.id);if(cue){const card=document.createElement('article');card.className='preview-decision';card.dataset.start=cue.start_ms;card.dataset.end=cue.end_ms;card.innerHTML=`<div class="flex items-start justify-between gap-2"><div><span class="preview-pill">Legenda · ${esc(String(cue.language||'').toUpperCase())}</span><p class="mt-2 text-sm">${esc(cue.text)}</p><small class="text-gray-500 block mt-2">${fmt(cue.start_ms)} — ${fmt(cue.end_ms)}</small><small class="text-gray-400 block mt-2">Arraste o centro na timeline para mover; arraste as pontas para ajustar a duração.</small></div></div><div class="grid grid-cols-2 gap-2 mt-3"><button type="button" class="media-btn media-primary !py-2" data-edit-caption><i class="fas fa-pen"></i>Editar</button><button type="button" class="media-btn !py-2 text-red-600" data-delete-caption><i class="fas fa-trash"></i>Remover</button></div>`;card.querySelector('[data-edit-caption]').onclick=()=>openSubtitleEditor(cue);card.querySelector('[data-delete-caption]').onclick=()=>deleteCaption(cue.id);list.append(card)}}
+        if(inspectorSelection?.kind==='caption')renderCaptionTranscript();
         if(!list.children.length){const empty=document.createElement('p');empty.className='text-sm text-gray-400 text-center py-10 px-4';empty.textContent=inspectorSelection?'Nenhum ajuste disponível para este item.':'Nenhuma pendência no momento. Clique em um item da timeline para ver seus ajustes.';list.append(empty)}
         renderAdjustmentTabs();
     }
     function renderAdjustmentTabs(){
         list.querySelector('.adjustment-tabs')?.remove();
         const labels={framing:'Enquadramento',color:'Cor',cuts:'Cortes',audio:'Áudio',elements:'Elementos',captions:'Legendas',details:'Detalhes'};
-        const categoryFor=card=>card.querySelector('[data-transform]')?'framing':card.querySelector('[data-color]')?'color':card.querySelector('[data-decision]')?'cuts':card.querySelector('[data-music-volume],audio,[data-play]')?'audio':card.querySelector('[data-broll-transform],[data-overlay-content]')?'elements':card.querySelector('[data-edit-caption]')?'captions':'details';
+        const categoryFor=card=>card.querySelector('[data-transform]')?'framing':card.querySelector('[data-color]')?'color':card.querySelector('[data-decision]')?'cuts':card.querySelector('[data-music-volume],audio,[data-play]')?'audio':card.querySelector('[data-broll-transform],[data-overlay-content]')?'elements':card.classList.contains('transcript-card')?'captions':'details';
         const cards=[...list.querySelectorAll('.preview-decision')];
         if(!cards.length)return;
         const categories=[];

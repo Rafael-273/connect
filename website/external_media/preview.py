@@ -456,11 +456,23 @@ class ProjectProxyService:
             ordered_boundaries = sorted(boundaries)
             for part_start_ms, part_end_ms in zip(ordered_boundaries, ordered_boundaries[1:]):
                 transform = transforms.get(source_id) or {}
-                for item in scoped:
-                    metadata = item.get('metadata') or {}
-                    if int(metadata.get('segment_start_ms') or 0) <= part_start_ms < int(metadata.get('segment_end_ms') or 0):
-                        transform = metadata.get('manual_transform') or {}
-                        break
+                # Several revisions can carry an inherited auto-reframe for
+                # the same blade range. The latest manual choice is the
+                # authority; selecting the first operation made later takes
+                # appear to revert as the number of cuts grew.
+                candidates = [
+                    item for item in scoped
+                    if int((item.get('metadata') or {}).get('segment_start_ms') or 0)
+                    <= part_start_ms
+                    < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
+                ]
+                selected = next(
+                    (item for item in reversed(candidates)
+                     if (item.get('metadata') or {}).get('manual_transform') is not None),
+                    candidates[-1] if candidates else None,
+                )
+                if selected:
+                    transform = (selected.get('metadata') or {}).get('manual_transform') or {}
                 scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
                 x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
                 y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
@@ -733,11 +745,20 @@ class PreviewCompositionService:
                 for part_start, part_end in zip(boundaries, boundaries[1:]):
                     local_start = part_start - global_start
                     duration = part_end - part_start
-                    matching_scope = next((
+                    scope_candidates = [
                         item for item in scoped_reframes.get(source_id, [])
                         if int((item.get('metadata') or {}).get('segment_start_ms') or 0) <= part_start
                         < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
-                    ), None)
+                    ]
+                    # The operation list is append-only across revisions. Use
+                    # the latest explicit/manual range for this take instead
+                    # of letting an inherited auto operation mask it.
+                    matching_scope = next(
+                        (item for item in reversed(scope_candidates)
+                         if not item.get('enabled', True)
+                         or (item.get('metadata') or {}).get('manual_transform') is not None),
+                        scope_candidates[-1] if scope_candidates else None,
+                    )
                     scoped_transform = (
                         (matching_scope.get('metadata') or {}).get('manual_transform')
                         if matching_scope and matching_scope.get('enabled', True)

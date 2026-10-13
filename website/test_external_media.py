@@ -1492,11 +1492,11 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(restored.timeline['clips'][1]['effects'][0]['scale'], 1.1)
         media.delete(force_policy=HARD_DELETE)
 
-    def test_each_of_three_video_takes_keeps_its_own_transform(self):
+    def test_each_of_many_video_takes_keeps_its_own_transform(self):
         project = self.make_project()
         media = ProjectBlockMedia.objects.create(
             project=project, block=self.block, position=1, original_filename='take.mov',
-            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=12_000,
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=20_000,
         )
         manifest = SourceManifestBuilder.build(project)
         source_id = manifest['sources'][0]['id']
@@ -1512,8 +1512,13 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         TimelineRevisionService.ensure_initial(project, self.member)
         TimelineRevisionService.create_video_split(project, self.member, 4_000)
         TimelineRevisionService.create_video_split(project, self.member, 8_000)
+        TimelineRevisionService.create_video_split(project, self.member, 12_000)
+        TimelineRevisionService.create_video_split(project, self.member, 16_000)
         revision = None
-        for start, end, scale in ((0, 4_000, 1.12), (4_000, 8_000, 1.28), (8_000, 12_000, 1.46)):
+        for start, end, scale in (
+            (0, 4_000, 1.12), (4_000, 8_000, 1.28), (8_000, 12_000, 1.46),
+            (12_000, 16_000, 1.61), (16_000, 20_000, 1.79),
+        ):
             revision = TimelineRevisionService.update_transform(project, self.member, 'base-reframe', {
                 'scale': scale, 'x': 0, 'y': 0,
                 'segment_start_ms': start, 'segment_end_ms': end,
@@ -1521,11 +1526,11 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
 
         self.assertEqual(
             [(clip['master_in_ms'], clip['master_out_ms']) for clip in revision.timeline['clips']],
-            [(0, 4_000), (4_000, 8_000), (8_000, 12_000)],
+            [(0, 4_000), (4_000, 8_000), (8_000, 12_000), (12_000, 16_000), (16_000, 20_000)],
         )
         self.assertEqual(
             [clip['effects'][0]['scale'] for clip in revision.timeline['clips']],
-            [1.12, 1.28, 1.46],
+            [1.12, 1.28, 1.46, 1.61, 1.79],
         )
         media.delete(force_policy=HARD_DELETE)
 
