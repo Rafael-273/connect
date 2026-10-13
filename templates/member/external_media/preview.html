@@ -499,7 +499,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         const outline=Math.max(0,Number(style?.outline_width||0))/sequenceWidth*width,outlineColor=style?.outline_color||'#000',shadow=Math.max(0,Number(style?.shadow||0)+Number(style?.shadow_size||0)),angle=Number(style?.shadow_angle??45)*Math.PI/180,shadowX=Math.cos(angle)*shadow/sequenceWidth*width,shadowY=Math.sin(angle)*shadow/sequenceHeight*height,shadowBlur=Math.max(0,Number(style?.shadow_blur||0))/sequenceWidth*width,outlineShadow=outline?`${-outline}px 0 ${outlineColor},${outline}px 0 ${outlineColor},0 ${-outline}px ${outlineColor},0 ${outline}px ${outlineColor}`:'';node.style.webkitTextStroke='';node.style.textShadow=[outlineShadow,shadow?`${shadowX}px ${shadowY}px ${shadowBlur}px ${rgba('#000',style?.shadow_opacity??80)}`:''].filter(Boolean).join(',');node.style.textRendering='optimizeLegibility';
     }
-    function configureMusic(){musicController.configure(timeline.music)}
+    function updateDialogueVolume(){
+        // Browser media cannot amplify cleanly above unity without an AudioContext,
+        // but it can faithfully preview attenuation. Final FFmpeg rendering applies
+        // the full configured voice gain (including positive values).
+        const gainDb=Number(timeline.music?.voice_gain_db||0);
+        if(video)video.volume=Math.max(0,Math.min(1,10**(Math.min(0,gainDb)/20)));
+    }
+    function configureMusic(){musicController.configure(timeline.music);updateDialogueVolume()}
     function syncMusicPosition(){musicController.sync(timeline.music,globalMs)}
     function updateMusicVolume(){musicController.updateVolume(timeline.music,timeline.sequence.duration_ms,globalMs,timeline.captions)}
     function holdPreviewFrame(){if(!video.videoWidth||!video.videoHeight)return;try{const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);previewStage.style.backgroundImage=`url("${canvas.toDataURL('image/jpeg',.82)}")`;previewStage.style.backgroundSize='cover';previewStage.style.backgroundPosition='center';video.style.opacity='0'}catch(_){}}
@@ -587,17 +594,21 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             ||candidates.find(item=>(item.metadata||{}).segment_start_ms===undefined)||null;
     }
     function activeTransformScope(){
-        // A blade creates visual sub-sections of a take, but a framing
-        // adjustment belongs to the actual timeline take. Persisting the
-        // blade-sized range made a zoom disappear as soon as playback crossed
-        // that tiny section (often about one second after the adjustment).
+        // A blade turns each visual section into an independently editable
+        // take. Prefer the exact segment selected in the timeline; using the
+        // underlying source clip here would leak its zoom into every section
+        // that still shares the same asset_id.
+        if(Number.isFinite(inspectorSelection?.masterStartMs)&&Number.isFinite(inspectorSelection?.masterEndMs)&&inspectorSelection.masterEndMs>inspectorSelection.masterStartMs)return {segment_start_ms:Math.round(inspectorSelection.masterStartMs),segment_end_ms:Math.round(inspectorSelection.masterEndMs)};
+        if(Number.isFinite(selectedSegment?.start)&&Number.isFinite(selectedSegment?.end)&&selectedSegment.end>selectedSegment.start){
+            const start=Number(editedToMaster(selectedSegment.start,'after')),end=Number(editedToMaster(selectedSegment.end,'before'));
+            if(Number.isFinite(start)&&Number.isFinite(end)&&end>start)return {segment_start_ms:Math.round(start),segment_end_ms:Math.round(end)};
+        }
         const clip=activeClip||clipAt(globalMs);
         if(clip){
             const start=Number(editedToMaster(Number(clip.timeline_in_ms||0),'after'));
             const end=Number(editedToMaster(Number(clip.timeline_out_ms||0),'before'));
             if(Number.isFinite(start)&&Number.isFinite(end)&&end>start)return {segment_start_ms:Math.round(start),segment_end_ms:Math.round(end)};
         }
-        if(Number.isFinite(inspectorSelection?.masterStartMs)&&Number.isFinite(inspectorSelection?.masterEndMs))return {segment_start_ms:Math.round(inspectorSelection.masterStartMs),segment_end_ms:Math.round(inspectorSelection.masterEndMs)};
         return {};
     }
     function selectedReframeDecision(){
@@ -715,7 +726,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function frameDurationMs(){return 1000/Math.max(1,Number(timeline.sequence.fps||30))}
     function minimumCutMs(){return Math.max(1,Math.floor(frameDurationMs()))}
     function snapToFrame(ms){return Math.round(ms/frameDurationMs())*frameDurationMs()}
-    function videoSegments(){const minimum=minimumCutMs();return timeline.clips.flatMap(clip=>{const points=[clip.timeline_in_ms,...bladePoints.filter(point=>point-clip.timeline_in_ms>=minimum&&clip.timeline_out_ms-point>=minimum),clip.timeline_out_ms].sort((a,b)=>a-b);return points.slice(0,-1).map((start,index)=>({start,end:points[index+1],label:clip.block?.name||asset(clip.asset_id)?.name||'Vídeo',assetId:clip.asset_id,sourceTimeMs:Number(clip.source_in_ms||0)+start-Number(clip.timeline_in_ms||0),masterStartMs:Number(editedToMaster(start)),masterEndMs:Number(editedToMaster(points[index+1]))}))})}
+    function videoSegments(){const minimum=minimumCutMs();return timeline.clips.flatMap(clip=>{const points=[clip.timeline_in_ms,...bladePoints.filter(point=>point-clip.timeline_in_ms>=minimum&&clip.timeline_out_ms-point>=minimum),clip.timeline_out_ms].sort((a,b)=>a-b);return points.slice(0,-1).map((start,index)=>({start,end:points[index+1],label:clip.block?.name||asset(clip.asset_id)?.name||'Vídeo',assetId:clip.asset_id,sourceTimeMs:Number(clip.source_in_ms||0)+start-Number(clip.timeline_in_ms||0),masterStartMs:Number(editedToMaster(start,'after')),masterEndMs:Number(editedToMaster(points[index+1],'before'))}))})}
     async function addBladeAt(point){point=Math.round(snapToFrame(point));const clip=clipAt(point),minimum=minimumCutMs();if(!clip||point-clip.timeline_in_ms<minimum||clip.timeline_out_ms-point<minimum||bladePoints.some(value=>Math.abs(value-point)<minimum))return;const previous=[...bladePoints];bladePoints=[...bladePoints,point].sort((a,b)=>a-b);renderEditorTimeline();try{applyTimeline(await api('{% url "external_media_project_preview_video_split" project.public_id %}',{master_ms:Math.round(editedToMaster(point))}),false,false)}catch(error){bladePoints=previous;renderEditorTimeline();alert(error.message)}}
     async function splitTimelineItem(kind,id,point){
         const cutAt=Math.round(snapToFrame(point));
@@ -1018,9 +1029,20 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(inspectorSelection?.kind==='music'&&timeline.music){
             const config=timeline.music,card=document.createElement('article'),volume=Math.round(Number(config.volume||0)*100);
             card.className='preview-decision';
-            card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Música</span><strong class="block mt-2">${esc(config.name||'Trilha de fundo')}</strong></div><i class="fas fa-music text-emerald-600"></i></div><div class="mt-4"><div class="flex items-center justify-between text-xs font-bold text-gray-400 uppercase"><span>Volume</span><output data-music-volume-output>${volume}%</output></div><input data-music-volume type="range" min="0" max="100" step="1" value="${volume}" class="preview-range w-full mt-2" aria-label="Volume da música"><small class="block mt-1 text-gray-400" data-music-volume-saved>Alterações salvas nesta edição e aplicadas no render final.</small></div><div class="grid grid-cols-2 gap-3 mt-3 text-xs text-gray-600"><div><span class="block text-gray-400 font-bold uppercase text-[.62rem]">Redução em fala</span>${config.ducking_enabled?`-${config.duck_db||0}dB`:'Desligada'}</div>${config.fade_in_seconds?`<div><span class="block text-gray-400 font-bold uppercase text-[.62rem]">Fade in</span>${config.fade_in_seconds}s</div>`:''}${config.fade_out_seconds?`<div><span class="block text-gray-400 font-bold uppercase text-[.62rem]">Fade out</span>${config.fade_out_seconds}s</div>`:''}</div><button type="button" class="media-btn media-primary !py-2 w-full mt-4" data-select-music><i class="fas fa-music"></i>Trocar música</button>`;
+            const mix=config.audio_mix||timeline.audio_mix||{}, duck=mix.ducking||{}, keyframes=mix.music_keyframes||[];
+            const keyframeRows=keyframes.map((point,index)=>`<div class="flex items-center gap-2 text-xs mt-2"><span class="text-gray-400 w-14">${fmt(point.time_ms||0)}</span><input data-music-keyframe-gain data-index="${index}" type="number" min="-60" max="12" step=".5" value="${Number(point.gain_db||0)}" class="preview-input !py-1 flex-1" aria-label="Ganho do keyframe em decibéis"><span>dB</span><button type="button" class="text-red-500" data-remove-music-keyframe data-index="${index}" aria-label="Remover keyframe"><i class="fas fa-trash"></i></button></div>`).join('');
+            card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Música</span><strong class="block mt-2">${esc(config.name||'Trilha de fundo')}</strong></div><i class="fas fa-music text-emerald-600"></i></div><div class="mt-4"><div class="flex items-center justify-between text-xs font-bold text-gray-400 uppercase"><span>Volume</span><output data-music-volume-output>${volume}%</output></div><input data-music-volume type="range" min="0" max="100" step="1" value="${volume}" class="preview-range w-full mt-2" aria-label="Volume da música"><small class="block mt-1 text-gray-400" data-music-volume-saved>Alterações salvas nesta edição e aplicadas no render final.</small></div><div class="grid grid-cols-2 gap-3 mt-3"><label class="text-xs text-gray-600"><span class="block text-gray-400 font-bold uppercase text-[.62rem]">Perfil</span><select data-mix-profile class="preview-input w-full mt-1"><option value="emotional" ${config.profile==='emotional'?'selected':''}>Suave / Emocional</option><option value="balanced" ${!config.profile||config.profile==='balanced'?'selected':''}>Equilibrado</option><option value="clarity" ${config.profile==='clarity'?'selected':''}>Intenso / Clareza</option></select></label><label class="text-xs text-gray-600"><span class="block text-gray-400 font-bold uppercase text-[.62rem]">Redução em fala</span><input data-mix-duck type="range" min="0" max="24" step=".5" value="${Number(config.duck_db??11)}" class="preview-range w-full mt-2"><output data-mix-duck-output>${Number(config.duck_db??11)} dB</output></label></div><div class="grid grid-cols-3 gap-3 mt-3 text-xs text-gray-600"><label><span class="block text-gray-400 font-bold uppercase text-[.62rem]">Attack</span><input data-mix-attack type="number" min="10" max="5000" value="${Number(config.attack_ms||140)}" class="preview-input w-full mt-1"></label><label><span class="block text-gray-400 font-bold uppercase text-[.62rem]">Release</span><input data-mix-release type="number" min="10" max="10000" value="${Number(config.release_ms||850)}" class="preview-input w-full mt-1"></label><label><span class="block text-gray-400 font-bold uppercase text-[.62rem]">Voz (dB)</span><input data-mix-voice type="number" min="-12" max="12" step=".5" value="${Number(config.voice_gain_db||0)}" class="preview-input w-full mt-1"></label></div><label class="flex items-center gap-2 text-xs mt-3"><input data-mix-ducking type="checkbox" ${config.ducking_enabled?'checked':''}> Ducking automático</label><div class="mt-4 border-t border-gray-100 pt-3"><div class="flex items-center justify-between"><strong class="text-xs text-gray-600">Curva manual da música</strong><button type="button" class="media-btn media-muted !py-1 !px-2 text-xs" data-add-music-keyframe><i class="fas fa-plus"></i> No cursor</button></div><p class="text-xs text-gray-400 mt-1">Ajustes manuais permanecem ao recalcular o ducking.</p>${keyframeRows||'<p class="text-xs text-gray-400 mt-2">Sem keyframes manuais.</p>'}</div><button type="button" class="media-btn media-muted !py-2 w-full mt-4" data-restore-auto-mix>Restaurar automático</button><button type="button" class="media-btn media-primary !py-2 w-full mt-2" data-select-music><i class="fas fa-music"></i>Trocar música</button>`;
             card.querySelector('[data-select-music]').onclick=openMusicSelector;
             card.querySelector('[data-music-volume]').oninput=event=>queueMusicVolume(Number(event.target.value),card);
+            card.querySelector('[data-mix-profile]').onchange=event=>queueAudioMix({profile:event.target.value,ducking:mixProfileValues(event.target.value)},card);
+            card.querySelector('[data-mix-duck]').oninput=event=>{card.querySelector('[data-mix-duck-output]').textContent=`${event.target.value} dB`;queueAudioMix({ducking:{base_duck_db:Number(event.target.value)}},card)};
+            ['attack','release'].forEach(kind=>card.querySelector(`[data-mix-${kind}]`).onchange=event=>queueAudioMix({ducking:{[`${kind}_ms`]:Number(event.target.value)}},card));
+            card.querySelector('[data-mix-voice]').onchange=event=>queueAudioMix({voice_gain_db:Number(event.target.value)},card);
+            card.querySelector('[data-mix-ducking]').onchange=event=>queueAudioMix({ducking:{enabled:event.target.checked}},card);
+            card.querySelector('[data-add-music-keyframe]').onclick=()=>queueAudioMix({add_keyframe:true},card);
+            card.querySelectorAll('[data-music-keyframe-gain]').forEach(input=>input.onchange=event=>queueAudioMix({keyframe_index:Number(event.target.dataset.index),keyframe_gain_db:Number(event.target.value)},card));
+            card.querySelectorAll('[data-remove-music-keyframe]').forEach(button=>button.onclick=()=>queueAudioMix({remove_keyframe:Number(button.dataset.index)},card));
+            card.querySelector('[data-restore-auto-mix]').onclick=()=>queueAudioMix({restore_auto:true},card);
             list.append(card)
         }
         if(inspectorSelection?.kind==='caption'){const cue=(timeline.captions||[]).find(item=>item.id===inspectorSelection.id);if(cue){const card=document.createElement('article');card.className='preview-decision';card.dataset.start=cue.start_ms;card.dataset.end=cue.end_ms;card.innerHTML=`<div class="flex items-start justify-between gap-2"><div><span class="preview-pill">Legenda · ${esc(String(cue.language||'').toUpperCase())}</span><p class="mt-2 text-sm">${esc(cue.text)}</p><small class="text-gray-500 block mt-2">${fmt(cue.start_ms)} — ${fmt(cue.end_ms)}</small><small class="text-gray-400 block mt-2">Arraste o centro na timeline para mover; arraste as pontas para ajustar a duração.</small></div></div><div class="grid grid-cols-2 gap-2 mt-3"><button type="button" class="media-btn media-primary !py-2" data-edit-caption><i class="fas fa-pen"></i>Editar</button><button type="button" class="media-btn !py-2 text-red-600" data-delete-caption><i class="fas fa-trash"></i>Remover</button></div>`;card.querySelector('[data-edit-caption]').onclick=()=>openSubtitleEditor(cue);card.querySelector('[data-delete-caption]').onclick=()=>deleteCaption(cue.id);list.append(card)}}
@@ -1241,6 +1263,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const musicSelectModal=document.getElementById('music-select-modal'),musicTrackList=document.getElementById('music-track-list'),musicSelectError=document.getElementById('music-select-error'),musicPreview=new Audio(),musicPreviewUrl='{% url "external_media_project_preview_music" project.public_id %}';
     let musicPreviewTrackId=null;
     let musicVolumeTimer=null;
+    let audioMixTimer=null;
+    const mixProfiles={emotional:{base_duck_db:6,attack_ms:260,release_ms:1400,speech_gap_hold_ms:2400},balanced:{base_duck_db:11,attack_ms:140,release_ms:850,speech_gap_hold_ms:1800},clarity:{base_duck_db:15,attack_ms:80,release_ms:550,speech_gap_hold_ms:1200}};
+    function mixProfileValues(profile){return {...(mixProfiles[profile]||mixProfiles.balanced)}}
+    function cloneAudioMix(){return JSON.parse(JSON.stringify(timeline.music?.audio_mix||timeline.audio_mix||{}))}
+    function queueAudioMix(change,card){
+        const saved=card.querySelector('[data-music-volume-saved]');
+        const mix=cloneAudioMix();mix.schema='connect.audio_mix.v1';mix.profile=change.profile||mix.profile||'balanced';mix.ducking={...(mix.ducking||{}),...(change.ducking||{})};if(change.voice_gain_db!==undefined)mix.voice_gain_db=Math.max(-12,Math.min(12,Number(change.voice_gain_db||0)));
+        if(change.add_keyframe){const items=[...(mix.music_keyframes||[])];items.push({time_ms:Math.round(globalMs),gain_db:0});items.sort((a,b)=>a.time_ms-b.time_ms);mix.music_keyframes=items}
+        if(Number.isInteger(change.keyframe_index)){mix.music_keyframes=[...(mix.music_keyframes||[])];if(mix.music_keyframes[change.keyframe_index])mix.music_keyframes[change.keyframe_index].gain_db=Math.max(-60,Math.min(12,Number(change.keyframe_gain_db||0)))}
+        if(Number.isInteger(change.remove_keyframe)){mix.music_keyframes=[...(mix.music_keyframes||[])];mix.music_keyframes.splice(change.remove_keyframe,1)}
+        if(change.restore_auto){mix.music_keyframes=[];mix.restore_auto=true}
+        if(saved)saved.textContent='Salvando mixagem…';clearTimeout(audioMixTimer);audioMixTimer=setTimeout(async()=>{try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{audio_mix:mix});applyTimeline(data,true,false);configureMusic();syncMusicPosition();updateMusicVolume();renderList()}catch(error){if(saved)saved.textContent=error.message}},200);
+    }
     function queueMusicVolume(percent,card){
         const volume=Math.max(0,Math.min(1,Number(percent||0)/100)),saved=card.querySelector('[data-music-volume-saved]'),output=card.querySelector('[data-music-volume-output]');
         if(!timeline.music)return;

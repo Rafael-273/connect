@@ -40,6 +40,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         if (fadeInMs) factor = Math.min(factor, nowMs / fadeInMs);
         if (fadeOutMs) factor = Math.min(factor, Math.max(0, (durationMs - nowMs) / fadeOutMs));
         if (config.ducking_enabled) factor *= this.duckingFactor(config, nowMs, captions);
+        factor *= this.manualAutomationFactor(config.audio_mix?.music_keyframes, nowMs);
         this.audio.volume = Math.max(0, Math.min(1, this.baseVolume(config) * factor));
     }
 
@@ -77,6 +78,23 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             if (nowMs <= bed.end + hold) return duck;
             return duck + (1 - duck) * ((nowMs - bed.end - hold) / release);
         }
-        return 1;
+        return Math.max(0, Number(config.between_speech_gain ?? 1));
+    }
+
+    manualAutomationFactor(keyframes, nowMs) {
+        const points = [...(keyframes || [])]
+            .map(point => ({time: Number(point.time_ms), gain: Math.pow(10, Number(point.gain_db || 0) / 20)}))
+            .filter(point => Number.isFinite(point.time) && Number.isFinite(point.gain))
+            .sort((left, right) => left.time - right.time);
+        if (!points.length) return 1;
+        if (nowMs <= points[0].time) return points[0].gain;
+        for (let index = 1; index < points.length; index += 1) {
+            const right = points[index], left = points[index - 1];
+            if (nowMs <= right.time) {
+                const progress = (nowMs - left.time) / Math.max(1, right.time - left.time);
+                return left.gain + (right.gain - left.gain) * progress;
+            }
+        }
+        return points.at(-1).gain;
     }
 };

@@ -306,6 +306,51 @@
                                 </div>
                             </label>
                         </div>
+                        <div id="ducking-profile-fields" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+                            <div class="xl:col-span-2">
+                                <label class="form-label">{{ form.audio_mixing_profile.label }}</label>
+                                {{ form.audio_mixing_profile }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.audio_mixing_profile.help_text }}</p>
+                                {% if form.audio_mixing_profile.errors %}<p class="text-xs text-red-600 mt-1">{{ form.audio_mixing_profile.errors.0 }}</p>{% endif %}
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.music_volume_percent.label }} (%)</label>
+                                {{ form.music_volume_percent }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.music_volume_percent.help_text }}</p>
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.voice_gain_db.label }}</label>
+                                {{ form.voice_gain_db }}
+                            </div>
+                        </div>
+                        <div id="ducking-controls" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-5">
+                            <div>
+                                <label class="form-label">{{ form.duck_base_db.label }}</label>
+                                {{ form.duck_base_db }}
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.duck_voice_activation_db.label }}</label>
+                                {{ form.duck_voice_activation_db }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.duck_voice_activation_db.help_text }}</p>
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.duck_between_speech_percent.label }} (%)</label>
+                                {{ form.duck_between_speech_percent }}
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.duck_attack_ms.label }}</label>
+                                {{ form.duck_attack_ms }}
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.duck_release_ms.label }}</label>
+                                {{ form.duck_release_ms }}
+                            </div>
+                            <div>
+                                <label class="form-label">{{ form.duck_gap_hold_ms.label }}</label>
+                                {{ form.duck_gap_hold_ms }}
+                                <p class="text-xs text-gray-500 mt-1">{{ form.duck_gap_hold_ms.help_text }}</p>
+                            </div>
+                        </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
                             <div id="mastering-profile-field" class="hidden xl:col-span-1">
                                 <label class="form-label">{{ form.mastering_profile.label }}</label>
@@ -2257,9 +2302,32 @@
         byId('dialogue-advanced-control')?.classList.toggle('hidden', !dialogueEnabled);
         byId('noise-advanced-control')?.classList.toggle('hidden', !noiseEnabled);
         byId('mastering-profile-field')?.classList.toggle('hidden', !masteringEnabled);
+        byId('ducking-profile-fields')?.classList.toggle('hidden', !mixingEnabled);
+        byId('ducking-controls')?.classList.toggle('hidden', !mixingEnabled);
         if (!mixingEnabled) setAdvancedFieldVisible('mixing', false);
         if (!dialogueEnabled) setAdvancedFieldVisible('dialogue', false);
         if (!noiseEnabled) setAdvancedFieldVisible('noise', false);
+    }
+    const duckingProfiles = {
+        emotional: { base_duck_db: 6, voice_activation_db: -96, attack_ms: 260, release_ms: 1400, speech_gap_hold_ms: 2400, between_speech_percent: 100 },
+        balanced: { base_duck_db: 11, voice_activation_db: -96, attack_ms: 140, release_ms: 850, speech_gap_hold_ms: 1800, between_speech_percent: 100 },
+        clarity: { base_duck_db: 15, voice_activation_db: -96, attack_ms: 80, release_ms: 550, speech_gap_hold_ms: 1200, between_speech_percent: 100 },
+    };
+    function applyDuckingProfile() {
+        const profile = duckingProfiles[byId('id_audio_mixing_profile')?.value];
+        if (!profile) return;
+        const fields = {
+            duck_base_db: profile.base_duck_db,
+            duck_voice_activation_db: profile.voice_activation_db,
+            duck_attack_ms: profile.attack_ms,
+            duck_release_ms: profile.release_ms,
+            duck_gap_hold_ms: profile.speech_gap_hold_ms,
+            duck_between_speech_percent: profile.between_speech_percent,
+        };
+        Object.entries(fields).forEach(([name, value]) => {
+            const field = byId(`id_${name}`);
+            if (field) field.value = value;
+        });
     }
     function enableDuckingForSelectedMusic() {
         // A background track needs room for dialogue.  When one is chosen,
@@ -2446,6 +2514,7 @@
     byId('id_language_mode')?.addEventListener('change', syncLanguageModeUI);
     byId('id_subtitles_enabled')?.addEventListener('change', syncLanguageModeUI);
     byId('id_audio_mixing_enabled')?.addEventListener('change', syncAudioIntelligentUI);
+    byId('id_audio_mixing_profile')?.addEventListener('change', applyDuckingProfile);
     byId('id_background_music')?.addEventListener('change', enableDuckingForSelectedMusic);
     byId('id_dialogue_processing_enabled')?.addEventListener('change', syncAudioIntelligentUI);
     byId('id_audio_noise_cleanup_enabled')?.addEventListener('change', syncAudioIntelligentUI);

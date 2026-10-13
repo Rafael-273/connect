@@ -3480,8 +3480,10 @@ class ExternalMediaProjectPipeline:
         """
         version = project.template_version
         revision = project.approved_timeline_revision or project.current_timeline_revision
+        revision_timeline = (revision.timeline if revision else {}) or {}
+        revision_mix = dict(revision_timeline.get('audio_mix') or {})
         music_volume = max(0.0, min(1.0, float(
-            ((revision.timeline if revision else {}) or {}).get('music_volume', version.music_volume)
+            revision_timeline.get('music_volume', revision_mix.get('music_volume', version.music_volume))
         )))
         final_path = video_path
         retained_temporary_names = []
@@ -3536,7 +3538,10 @@ class ExternalMediaProjectPipeline:
             speech_blocks = self._speech_blocks_for_job(job) if mixing_enabled else []
             protected_ranges = self._protected_ranges_ms(project, plan) if mixing_enabled else []
             duration_ms = SpeechEditService(self.assembly.runner).duration_ms(final_path)
-            ducking_settings = DuckingSettings.from_config(version.audio_mixing_config)
+            ducking_settings = DuckingSettings.from_config(
+                revision_mix or version.audio_mixing_config,
+            )
+            revision_ducking = revision_mix.get('ducking') or {}
             mixed_path = workdir / 'audio_mixed.mp4'
             with self.storage.staged_processing_input(
                 final_path, f'project-{project.public_id}-audio-mix',
@@ -3548,8 +3553,13 @@ class ExternalMediaProjectPipeline:
                     speech_blocks=speech_blocks,
                     protected_ranges=protected_ranges,
                     settings_=ducking_settings,
-                    ducking_enabled=mixing_enabled and version.audio_ducking_enabled,
-                    spectral_enabled=mixing_enabled and version.audio_spectral_ducking_enabled,
+                    ducking_enabled=mixing_enabled and bool(
+                        revision_ducking.get('enabled', version.audio_ducking_enabled)
+                    ),
+                    spectral_enabled=mixing_enabled and bool(
+                        revision_ducking.get('spectral_enabled', version.audio_spectral_ducking_enabled)
+                    ),
+                    music_keyframes=revision_mix.get('music_keyframes') or [],
                 )
             final_path = mix_result.path
             mix_metrics = mix_result.metrics

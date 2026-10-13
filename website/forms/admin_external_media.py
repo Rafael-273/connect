@@ -21,6 +21,12 @@ from ..models.external_media import (
     SpeechFillerTerm,
     SubtitleStyle,
 )
+from ..external_media.audio_mixing import (
+    DEFAULT_DUCKING_PROFILE,
+    DUCKING_PROFILES,
+    DuckingSettings,
+    resolved_ducking_config,
+)
 
 
 FIELD_CLASS = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[var(--color-primary)] bg-white text-sm'
@@ -136,6 +142,38 @@ class AdminMediaTemplateForm(forms.ModelForm):
 
 
 class AdminMediaTemplateVersionForm(forms.ModelForm):
+    audio_mixing_profile = forms.ChoiceField(
+        label='Perfil de ducking', required=False,
+        choices=[(key, profile['label']) for key, profile in DUCKING_PROFILES.items()],
+        help_text='Define um ponto de partida. Os ajustes abaixo personalizam este perfil.',
+    )
+    music_volume_percent = forms.DecimalField(
+        label='Volume base da música', min_value=0, max_value=100, decimal_places=0,
+        max_digits=3, required=False, help_text='Volume da trilha antes do ducking.',
+    )
+    duck_base_db = forms.DecimalField(
+        label='Redução durante a fala (dB)', min_value=0, max_value=30,
+        decimal_places=1, max_digits=4, required=False,
+    )
+    duck_voice_activation_db = forms.DecimalField(
+        label='Sensibilidade da voz (dB)', min_value=-96, max_value=0,
+        decimal_places=0, max_digits=3, required=False,
+        help_text='Falas abaixo deste nível não reduzem a música.',
+    )
+    duck_attack_ms = forms.IntegerField(label='Attack (ms)', min_value=10, max_value=5000, required=False)
+    duck_release_ms = forms.IntegerField(label='Release (ms)', min_value=10, max_value=10000, required=False)
+    duck_gap_hold_ms = forms.IntegerField(
+        label='Suavização entre falas (ms)', min_value=0, max_value=10000, required=False,
+        help_text='Mantém a música estável entre pausas curtas para evitar oscilações.',
+    )
+    duck_between_speech_percent = forms.DecimalField(
+        label='Música nos intervalos entre falas', min_value=0, max_value=150,
+        decimal_places=0, max_digits=3, required=False,
+    )
+    voice_gain_db = forms.DecimalField(
+        label='Volume da voz (dB)', min_value=-12, max_value=12,
+        decimal_places=1, max_digits=4, required=False,
+    )
     background_music = BackgroundMusicChoiceField(
         label='Trilha de fundo',
         queryset=BackgroundMusicTrack.objects.none(),
@@ -329,6 +367,16 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             initial.setdefault('default_settings_raw', json.dumps(instance.default_settings or {}, indent=2, ensure_ascii=False))
             initial.setdefault('allowed_overrides_raw', json.dumps(instance.allowed_overrides or [], indent=2, ensure_ascii=False))
             initial.setdefault('audio_mixing_config_raw', json.dumps(instance.audio_mixing_config or {}, indent=2, ensure_ascii=False))
+            mixing_config = resolved_ducking_config(instance.audio_mixing_config)
+            initial.setdefault('audio_mixing_profile', mixing_config.get('profile', DEFAULT_DUCKING_PROFILE))
+            initial.setdefault('music_volume_percent', round(float(instance.music_volume) * 100))
+            initial.setdefault('duck_base_db', mixing_config.get('base_duck_db'))
+            initial.setdefault('duck_voice_activation_db', mixing_config.get('voice_activation_db'))
+            initial.setdefault('duck_attack_ms', mixing_config.get('attack_ms'))
+            initial.setdefault('duck_release_ms', mixing_config.get('release_ms'))
+            initial.setdefault('duck_gap_hold_ms', mixing_config.get('speech_gap_hold_ms'))
+            initial.setdefault('duck_between_speech_percent', round(float(mixing_config.get('between_speech_gain', 1)) * 100))
+            initial.setdefault('voice_gain_db', mixing_config.get('voice_gain_db'))
             initial.setdefault(
                 'dialogue_processing_config_raw',
                 json.dumps(instance.dialogue_processing_config or {}, indent=2, ensure_ascii=False),
@@ -441,6 +489,16 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
             default_profile = MasteringProfile.objects.filter(is_active=True, is_default=True).first()
             if default_profile:
                 self.fields['mastering_profile'].initial = default_profile.pk
+            default_mixing = resolved_ducking_config({})
+            self.fields['audio_mixing_profile'].initial = DEFAULT_DUCKING_PROFILE
+            self.fields['music_volume_percent'].initial = 15
+            self.fields['duck_base_db'].initial = default_mixing['base_duck_db']
+            self.fields['duck_voice_activation_db'].initial = default_mixing['voice_activation_db']
+            self.fields['duck_attack_ms'].initial = default_mixing['attack_ms']
+            self.fields['duck_release_ms'].initial = default_mixing['release_ms']
+            self.fields['duck_gap_hold_ms'].initial = default_mixing['speech_gap_hold_ms']
+            self.fields['duck_between_speech_percent'].initial = 100
+            self.fields['voice_gain_db'].initial = 0
 
     def clean_default_settings_raw(self):
         return self._parse_json(self.cleaned_data.get('default_settings_raw'), {}, 'Configurações padrão')
@@ -459,6 +517,12 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         value = self._parse_json(self.cleaned_data.get('audio_mixing_config_raw'), {}, 'Configuração de mixagem')
         if not isinstance(value, dict):
             raise forms.ValidationError('Use um objeto JSON, por exemplo {"base_duck_db": 8}.')
+        return value
+
+    def clean_audio_mixing_profile(self):
+        value = self.cleaned_data.get('audio_mixing_profile') or DEFAULT_DUCKING_PROFILE
+        if value not in DUCKING_PROFILES:
+            raise forms.ValidationError('Selecione um perfil de ducking válido.')
         return value
 
     def clean_dialogue_processing_config_raw(self):
@@ -528,7 +592,22 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
         instance.output_languages = output_languages
         instance.default_settings = default_settings
         instance.allowed_overrides = self.cleaned_data.get('allowed_overrides_raw') or []
-        instance.audio_mixing_config = self.cleaned_data.get('audio_mixing_config_raw') or {}
+        # Keep unknown legacy/advanced keys, while making the friendly controls
+        # the explicit source of truth for the standard ducking parameters.
+        mixing_config = dict(self.cleaned_data.get('audio_mixing_config_raw') or {})
+        mixing_config.update({
+            'schema': 'connect.audio_mix.v1',
+            'profile': self.cleaned_data.get('audio_mixing_profile') or DEFAULT_DUCKING_PROFILE,
+            'base_duck_db': float(self.cleaned_data.get('duck_base_db') or 0),
+            'voice_activation_db': float(self.cleaned_data.get('duck_voice_activation_db') or -96),
+            'attack_ms': int(self.cleaned_data.get('duck_attack_ms') or 140),
+            'release_ms': int(self.cleaned_data.get('duck_release_ms') or 850),
+            'speech_gap_hold_ms': int(self.cleaned_data.get('duck_gap_hold_ms') or 1800),
+            'between_speech_gain': float(self.cleaned_data.get('duck_between_speech_percent') or 100) / 100,
+            'voice_gain_db': float(self.cleaned_data.get('voice_gain_db') or 0),
+        })
+        instance.music_volume = Decimal(self.cleaned_data.get('music_volume_percent') or 0) / Decimal('100')
+        instance.audio_mixing_config = mixing_config
         instance.dialogue_processing_config = self.cleaned_data.get('dialogue_processing_config_raw') or {}
         instance.audio_noise_cleanup_config = self.cleaned_data.get('audio_noise_cleanup_config_raw') or {}
         if commit:

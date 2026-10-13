@@ -24,6 +24,59 @@ MAX_SPECTRAL_BLOCKS = 40
 # timeline (which includes silence), but must stay bounded on long interviews.
 MAX_DYNAMIC_DUCK_BLOCKS = 32
 
+# These are deliberately configuration presets, not a second mixing engine.  The
+# renderer still uses DuckingSettings and the same FFmpeg envelope for every
+# profile; a profile only supplies a sensible starting point for a template.
+DUCKING_PROFILES = {
+    'emotional': {
+        'label': 'Suave / Emocional',
+        'base_duck_db': 6.0, 'min_duck_db': 4.0, 'max_duck_db': 9.0,
+        'target_voice_to_music_gap_db': 10.0,
+        'attack_ms': 260, 'hold_ms': 450, 'release_ms': 1400,
+        'speech_gap_hold_ms': 2400, 'between_speech_gain': 1.0,
+        'spectral_max_cut_db': 3.0,
+    },
+    'balanced': {
+        'label': 'Equilibrado',
+        'base_duck_db': 11.0, 'min_duck_db': 8.0, 'max_duck_db': 15.0,
+        'target_voice_to_music_gap_db': 14.0,
+        'attack_ms': 140, 'hold_ms': 300, 'release_ms': 850,
+        'speech_gap_hold_ms': 1800, 'between_speech_gain': 1.0,
+        'spectral_max_cut_db': 5.0,
+    },
+    'clarity': {
+        'label': 'Intenso / Clareza',
+        'base_duck_db': 15.0, 'min_duck_db': 11.0, 'max_duck_db': 20.0,
+        'target_voice_to_music_gap_db': 17.0,
+        'attack_ms': 80, 'hold_ms': 220, 'release_ms': 550,
+        'speech_gap_hold_ms': 1200, 'between_speech_gain': 1.0,
+        'spectral_max_cut_db': 7.0,
+    },
+}
+DEFAULT_DUCKING_PROFILE = 'balanced'
+
+
+def resolved_ducking_config(config=None):
+    """Return backwards-compatible flat settings from a template/revision config.
+
+    Older templates stored only flat JSON. Newer ones may use a profile and a
+    ``ducking`` object. Keeping this normalization at the audio boundary means
+    old projects render identically and all consumers share one interpretation.
+    """
+    config = dict(config or {})
+    nested = config.pop('ducking', {})
+    nested = dict(nested) if isinstance(nested, dict) else {}
+    profile = str(config.get('profile') or nested.get('profile') or DEFAULT_DUCKING_PROFILE)
+    if profile not in DUCKING_PROFILES:
+        profile = DEFAULT_DUCKING_PROFILE
+    resolved = dict(DUCKING_PROFILES[profile])
+    # Flat values have historically been accepted, and should win over the
+    # profile. Values inside ducking are the structured equivalent.
+    resolved.update(nested)
+    resolved.update({key: value for key, value in config.items() if key != 'profile'})
+    resolved['profile'] = profile
+    return resolved
+
 
 @dataclass(frozen=True)
 class SpeechBlock:
@@ -61,10 +114,19 @@ class DuckingSettings:
     spectral_max_cut_db: float = 5.0
     spectral_center_hz: int = 1200
     spectral_bandwidth_octaves: float = 2.2
+    # Gain outside speech.  It is relative to the template/project music volume,
+    # so 1.0 preserves legacy behaviour and 0.8 keeps the bed subtly restrained.
+    between_speech_gain: float = 1.0
+    # Quiet cue fragments (breaths, room tone) should not pull music down. This
+    # is opt-in by default to preserve existing subtitle-derived timing.
+    voice_activation_db: float = -96.0
+    # Applied before dialogue and music are combined. Useful for a small manual
+    # voice lift without introducing another compressor/mastering pass.
+    voice_gain_db: float = 0.0
 
     @classmethod
     def from_config(cls, config):
-        return settings_from_config(cls, config)
+        return settings_from_config(cls, resolved_ducking_config(config))
 
 
 @dataclass
@@ -136,7 +198,8 @@ def build_ducking_envelope(blocks, duration_ms, duck_gain, settings_):
     duration_s = max(0.001, duration_ms / 1000)
     attack_s = max(0.01, settings_.attack_ms / 1000)
     release_s = max(0.01, settings_.release_ms / 1000)
-    keyframes = [(0.0, 1.0)]
+    rest_gain = clamp(float(settings_.between_speech_gain), 0.0, 1.5)
+    keyframes = [(0.0, rest_gain)]
     ordered = sorted(blocks, key=lambda item: item.start_ms)
     for index, block in enumerate(ordered):
         start_s = max(0.0, block.start_ms / 1000)
@@ -150,14 +213,14 @@ def build_ducking_envelope(blocks, duration_ms, duck_gain, settings_):
         # audible music spikes between consecutive spoken phrases.
         continues_into_next_block = next_start_s - end_s <= release_s
         if index == 0 or ordered[index - 1].end_ms / 1000 + release_s < start_s:
-            keyframes.append((start_s, 1.0))
+            keyframes.append((start_s, rest_gain))
             keyframes.append((attack_end_s, duck_gain))
         else:
             keyframes.append((start_s, duck_gain))
         keyframes.append((end_s, duck_gain))
         if not continues_into_next_block and end_s < duration_s:
-            keyframes.append((min(end_s + release_s, duration_s), 1.0))
-    keyframes.append((duration_s, 1.0))
+            keyframes.append((min(end_s + release_s, duration_s), rest_gain))
+    keyframes.append((duration_s, rest_gain))
     deduped = []
     for point in keyframes:
         if deduped and abs(point[0] - deduped[-1][0]) < 0.0005:
@@ -170,14 +233,16 @@ def build_ducking_envelope(blocks, duration_ms, duck_gain, settings_):
 def build_dynamic_ducking_envelope(blocks, duration_ms, duck_gains, settings_):
     """Build a smooth ducking envelope with a gain chosen for each speech block."""
     if not blocks:
-        return [(0.0, 1.0), (max(0.001, duration_ms / 1000), 1.0)]
+        rest_gain = clamp(float(settings_.between_speech_gain), 0.0, 1.5)
+        return [(0.0, rest_gain), (max(0.001, duration_ms / 1000), rest_gain)]
     duration_s = max(0.001, duration_ms / 1000)
     attack_s = max(0.01, settings_.attack_ms / 1000)
     release_s = max(0.01, settings_.release_ms / 1000)
-    keyframes = [(0.0, 1.0)]
+    rest_gain = clamp(float(settings_.between_speech_gain), 0.0, 1.5)
+    keyframes = [(0.0, rest_gain)]
     ordered = list(zip(sorted(blocks, key=lambda item: item.start_ms), duck_gains))
     previous_end = None
-    previous_gain = 1.0
+    previous_gain = rest_gain
     for index, (block, duck_gain) in enumerate(ordered):
         start_s = max(0.0, block.start_ms / 1000)
         end_s = min(duration_s, block.end_ms / 1000)
@@ -186,7 +251,7 @@ def build_dynamic_ducking_envelope(blocks, duration_ms, duck_gains, settings_):
         next_start_s = ordered[index + 1][0].start_ms / 1000 if index + 1 < len(ordered) else duration_s
         previous_release_end = (previous_end + release_s) if previous_end is not None else -1
         if previous_end is None or start_s > previous_release_end:
-            keyframes.append((start_s, 1.0))
+            keyframes.append((start_s, rest_gain))
         else:
             # Keep the bed under speech across short pauses, transitioning to the
             # next block's measured target instead of briefly rising to full level.
@@ -194,10 +259,10 @@ def build_dynamic_ducking_envelope(blocks, duration_ms, duck_gains, settings_):
         keyframes.append((min(end_s, start_s + attack_s), duck_gain))
         keyframes.append((end_s, duck_gain))
         if next_start_s - end_s > release_s and end_s < duration_s:
-            keyframes.append((min(duration_s, end_s + release_s), 1.0))
+            keyframes.append((min(duration_s, end_s + release_s), rest_gain))
         previous_end = end_s
         previous_gain = duck_gain
-    keyframes.append((duration_s, 1.0))
+    keyframes.append((duration_s, rest_gain))
     deduped = []
     for point in keyframes:
         if deduped and abs(point[0] - deduped[-1][0]) < 0.0005:
@@ -213,6 +278,53 @@ def build_spectral_windows(blocks, cut_db):
         return []
     ordered = sorted(blocks, key=lambda item: item.start_ms)[:MAX_SPECTRAL_BLOCKS]
     return [(block.start_ms / 1000, block.end_ms / 1000) for block in ordered if block.duration_ms > 0]
+
+
+def normalize_volume_keyframes(keyframes, duration_ms):
+    """Normalize manual music automation as gain-dB points relative to base volume."""
+    duration_ms = max(1, int(duration_ms or 1))
+    points = []
+    for item in keyframes or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            time_ms = max(0, min(duration_ms, int(item.get('time_ms'))))
+            gain_db = clamp(float(item.get('gain_db')), -60.0, 12.0)
+        except (TypeError, ValueError):
+            continue
+        points.append((time_ms / 1000, linear_gain_from_db(gain_db)))
+    points.sort(key=lambda item: item[0])
+    deduped = []
+    for point in points:
+        if deduped and point[0] == deduped[-1][0]:
+            deduped[-1] = point
+        else:
+            deduped.append(point)
+    duration_s = duration_ms / 1000
+    if not deduped:
+        return [(0.0, 1.0), (duration_s, 1.0)]
+    if deduped[0][0] > 0:
+        deduped.insert(0, (0.0, deduped[0][1]))
+    if deduped[-1][0] < duration_s:
+        deduped.append((duration_s, deduped[-1][1]))
+    return deduped
+
+
+def _gain_at(keyframes, time_s):
+    for (start, value), (end, next_value) in zip(keyframes, keyframes[1:]):
+        if time_s <= end:
+            ratio = (time_s - start) / max(.001, end - start)
+            return value + (next_value - value) * ratio
+    return keyframes[-1][1]
+
+
+def combine_gain_envelopes(*envelopes):
+    """Multiply smooth automation envelopes without discarding manual choices."""
+    valid = [item for item in envelopes if item]
+    if not valid:
+        return []
+    times = sorted({time for envelope in valid for time, _ in envelope})
+    return [(time, math.prod(_gain_at(envelope, time) for envelope in valid)) for time in times]
 
 
 class AudioMixingService:
@@ -310,7 +422,8 @@ class AudioMixingService:
             for block in speech_blocks[:MAX_DYNAMIC_DUCK_BLOCKS]
         ]
         measured_dbs = [
-            self.estimate_block_duck_db(music_mean_db, voice_db, music_volume, settings_)
+            0.0 if voice_db is not None and voice_db < settings_.voice_activation_db
+            else self.estimate_block_duck_db(music_mean_db, voice_db, music_volume, settings_)
             for voice_db in measured
         ]
         fallback = (
@@ -323,6 +436,7 @@ class AudioMixingService:
         self, video_path: Path, music_path: Path, output_path: Path, *,
         music_volume: float, duration_ms: int, speech_blocks=None, protected_ranges=None,
         settings_: DuckingSettings = None, ducking_enabled: bool = True, spectral_enabled: bool = False,
+        music_keyframes=None,
     ) -> AudioMixResult:
         self._validate_music_input(music_path)
         settings_ = settings_ or DuckingSettings()
@@ -341,6 +455,7 @@ class AudioMixingService:
         if not ducking_enabled or not speech_blocks or duration_ms <= 0:
             loop_metrics = self._mix_flat(
                 video_path, music_path, output_path, music_volume, duration_ms=duration_ms,
+                settings_=settings_, music_keyframes=music_keyframes,
             )
             metrics['duck_db'] = 0.0
             metrics['mode'] = 'flat'
@@ -354,6 +469,8 @@ class AudioMixingService:
         )
         duck_gains = [linear_gain_from_db(-duck_db) for duck_db in duck_dbs]
         envelope = build_dynamic_ducking_envelope(speech_blocks, duration_ms, duck_gains, settings_)
+        manual_envelope = normalize_volume_keyframes(music_keyframes, duration_ms)
+        envelope = combine_gain_envelopes(envelope, manual_envelope)
         volume_expression = build_piecewise_expression(envelope)
 
         spectral_density = 0.0
@@ -372,7 +489,8 @@ class AudioMixingService:
             # Regenerate audio timestamps before padding.  Normalized source clips
             # can carry fractional timestamps; preserving them here can accumulate
             # into an audible lip-sync drift near the end of a long render.
-            f'[0:a]aresample=async=1:first_pts=0,apad=whole_dur={duration_s:.3f},'
+            f'[0:a]volume={linear_gain_from_db(settings_.voice_gain_db):.4f},'
+            f'aresample=async=1:first_pts=0,apad=whole_dur={duration_s:.3f},'
             f'atrim=duration={duration_s:.3f}[dialogue]',
             *loop_filters,
             f'{loop_label}volume={float(music_volume):.3f}[music_base]',
@@ -412,6 +530,10 @@ class AudioMixingService:
             'duck_db_by_block': [round(value, 2) for value in duck_dbs],
             'voice_block_levels_db': [round(value, 2) if value is not None else None for value in voice_block_levels],
             'target_voice_to_music_gap_db': settings_.target_voice_to_music_gap_db,
+            'between_speech_gain': settings_.between_speech_gain,
+            'voice_activation_db': settings_.voice_activation_db,
+            'voice_gain_db': settings_.voice_gain_db,
+            'manual_music_keyframe_count': len(music_keyframes or []),
             'spectral_applied': bool(spectral_windows),
             'spectral_density': round(spectral_density, 2) if spectral_enabled else None,
             **loop_metrics,
@@ -491,17 +613,25 @@ class AudioMixingService:
                 'Envie novamente um arquivo de áudio válido no template.'
             )
 
-    def _mix_flat(self, video_path, music_path, output_path, music_volume, *, duration_ms):
+    def _mix_flat(
+        self, video_path, music_path, output_path, music_volume, *, duration_ms,
+        settings_=None, music_keyframes=None,
+    ):
+        settings_ = settings_ or DuckingSettings()
         loop_filters, loop_label, loop_metrics = self._build_music_loop_filters(music_path, duration_ms)
         duration_s = max(0.001, duration_ms / 1000)
+        manual_expression = build_piecewise_expression(
+            normalize_volume_keyframes(music_keyframes, duration_ms),
+        )
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path),
             '-stream_loop', '-1', '-i', str(music_path), '-filter_complex',
             ';'.join([
-                f'[0:a]aresample=async=1:first_pts=0,apad=whole_dur={duration_s:.3f},'
+                f'[0:a]volume={linear_gain_from_db(settings_.voice_gain_db):.4f},'
+                f'aresample=async=1:first_pts=0,apad=whole_dur={duration_s:.3f},'
                 f'atrim=duration={duration_s:.3f}[dialogue]',
                 *loop_filters,
-                f'{loop_label}volume={float(music_volume):.3f}[music]',
+                f"{loop_label}volume={float(music_volume):.3f},volume=eval=frame:volume='{manual_expression}'[music]",
                 f'[dialogue][music]amix=inputs=2:duration=longest:dropout_transition=0,'
                 f'atrim=duration={duration_s:.3f}[a]',
             ]),

@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from django.utils import timezone
 
 from website.models.external_media import MediaTemplatePlugin
+from .audio_mixing import resolved_ducking_config
 from .speech_edit import SpeechEditPlan
 
 
@@ -398,11 +399,25 @@ class EditDecisionSetBuilder:
                 'metadata': {'lut_file': lut_file.name, 'intensity': version.lut_intensity},
             })
         if version.background_music_id or version.music_file:
+            mixing = resolved_ducking_config(version.audio_mixing_config)
             operations.append({
                 'id': f'audio-{len(operations) + 1}', 'type': 'audio_automation', 'source_id': 'project-master',
                 'origin': 'AUTO', 'producer': 'template', 'producer_version': 'legacy',
                 'reason': 'background_music', 'confidence': None,
-                'metadata': {'music_volume': version.music_volume, 'ducking': bool(version.audio_ducking_enabled)},
+                'metadata': {
+                    'schema': 'connect.audio_mix.v1',
+                    'profile': mixing['profile'],
+                    'music_volume': float(version.music_volume),
+                    'voice_gain_db': mixing['voice_gain_db'],
+                    'ducking': {
+                        **{key: value for key, value in mixing.items() if key != 'profile'},
+                        'enabled': bool(version.audio_ducking_enabled),
+                        'spectral_enabled': bool(version.audio_spectral_ducking_enabled),
+                    },
+                    # Manual automation is intentionally empty at creation. It
+                    # belongs to the project revision, never to the template.
+                    'music_keyframes': [], 'voice_keyframes': [],
+                },
             })
         for index, decision in enumerate(configuration.get('noise_reduction_decisions') or []):
             start_ms = _int(decision.get('start_ms'))

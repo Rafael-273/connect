@@ -637,6 +637,11 @@ class PreviewCompositionService:
             for item in project.source_proxies.filter(status=ProjectSourceProxy.Status.READY).select_related('profile')
         }
         operations = decisions.get('operations') or []
+        audio_operation = next(
+            (item for item in operations if item.get('type') == 'audio_automation' and item.get('enabled', True)),
+            None,
+        )
+        audio_mix = deepcopy((audio_operation or {}).get('metadata') or {})
         cuts = sorted(
             (
                 max(0, int(item.get('source_in_ms') or 0)),
@@ -853,6 +858,7 @@ class PreviewCompositionService:
             'has_music': bool(
                 project.template_version.background_music_id or project.template_version.music_file
             ),
+            'audio_mix': audio_mix,
             'clips': clips,
             # Visual blade points do not remove media by themselves, but must
             # survive a reload so the member can select either resulting take.
@@ -1108,11 +1114,9 @@ class TimelineRevisionService:
         if any(existing != point and abs(existing - point) < MIN_MANUAL_CUT_MS for existing in points):
             raise ValueError('Já existe um corte neste quadro.')
         decisions['video_splits_ms'] = points
-        # A blade is an editorial/timeline boundary, not a new render source.
-        # The final assembler normalizes one source at a time; cloning reframe
-        # operations here made it possible to approve different framing for
-        # each side of a blade even though the delivery renderer could only
-        # honour one of them. Keep one framing decision per source.
+        # A blade is an editorial boundary, not a duplicated source file. Its
+        # independent framing is added lazily when the member adjusts either
+        # side; the scoped decision keeps both render and preview deterministic.
         revision = cls._create(locked, current.source_manifest, decisions, 'Vídeo dividido', member, current)
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'SPLIT_VIDEO', {'master_ms': point}, {'master_ms': point}, member)
@@ -1359,6 +1363,54 @@ class TimelineRevisionService:
             session, current, revision, 'UPDATE_MUSIC_VOLUME',
             {'volume': requested}, {'volume': previous}, member,
         )
+        return revision
+
+    @classmethod
+    @transaction.atomic
+    def update_audio_mix(cls, project, member, payload):
+        """Persist manual mix choices in an immutable timeline revision.
+
+        This deliberately stores project choices on the revision instead of
+        mutating template defaults. Manual keyframes/configuration therefore
+        survive reload/undo and cannot be silently replaced by automation.
+        """
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        previous = deepcopy((current.timeline or {}).get('audio_mix') or {})
+        requested = deepcopy(payload or {})
+        if not isinstance(requested, dict):
+            raise ValueError('Configuração de mixagem inválida.')
+        if requested.pop('restore_auto', False):
+            template_operation = next(
+                (
+                    item for item in (current.edit_decision_set.get('operations') or [])
+                    if item.get('type') == 'audio_automation'
+                ),
+                {},
+            )
+            requested = deepcopy(template_operation.get('metadata') or {})
+        requested['schema'] = 'connect.audio_mix.v1'
+        for key in ('music_keyframes', 'voice_keyframes'):
+            points = []
+            for point in (requested.get(key) or [])[:250]:
+                if not isinstance(point, dict):
+                    continue
+                try:
+                    points.append({
+                        'time_ms': max(0, int(point.get('time_ms') or 0)),
+                        'gain_db': max(-60.0, min(12.0, float(point.get('gain_db') or 0))),
+                    })
+                except (TypeError, ValueError):
+                    continue
+            requested[key] = sorted(points, key=lambda item: item['time_ms'])
+        if requested == previous:
+            return current
+        revision = cls._create(
+            locked, current.source_manifest, current.edit_decision_set,
+            'Mixagem de áudio ajustada', member, current, audio_mix=requested,
+        )
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'UPDATE_AUDIO_MIX', requested, previous, member)
         return revision
 
     @classmethod
@@ -1627,7 +1679,7 @@ class TimelineRevisionService:
     @classmethod
     def _create(
         cls, project, manifest, decisions, reason, member, parent=None,
-        overlays=None, brolls=None, music_override_track_id=None, music_volume=None,
+        overlays=None, brolls=None, music_override_track_id=None, music_volume=None, audio_mix=None,
     ):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
@@ -1655,6 +1707,10 @@ class TimelineRevisionService:
             music_volume = (parent.timeline or {}).get('music_volume')
         if music_volume is not None:
             timeline['music_volume'] = max(0.0, min(1.0, float(music_volume)))
+        if audio_mix is None and parent:
+            audio_mix = deepcopy((parent.timeline or {}).get('audio_mix') or {})
+        if audio_mix:
+            timeline['audio_mix'] = deepcopy(audio_mix)
         revision = TimelineRevision.objects.create(
             project=project, revision=number, parent=parent, timeline=timeline,
             source_manifest=composition_manifest, edit_decision_set=decisions, reason=reason, created_by=member,

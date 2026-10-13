@@ -10,7 +10,8 @@ from django.conf import settings
 
 from .audio_mixing import (
     DuckingSettings, build_ducking_envelope, build_dynamic_ducking_envelope,
-    build_spectral_windows, group_speech_blocks,
+    build_spectral_windows, combine_gain_envelopes, group_speech_blocks,
+    normalize_volume_keyframes,
 )
 from .audio_noise import AudioCleanupService, NoiseCleanupSettings, NoiseReductionDecision
 from .audio_utils import build_piecewise_expression, linear_gain_from_db
@@ -743,6 +744,10 @@ class InternalTimelineBuilder:
 
     def _music(self, project, package_root, duration_ms):
         version = project.template_version
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        revision_timeline = (revision.timeline if revision else {}) or {}
+        revision_mix = dict(revision_timeline.get('audio_mix') or {})
+        revision_ducking = revision_mix.get('ducking') or {}
         track = version.background_music
         # The selected track is the source of truth. Older versions may not have a
         # persisted music plugin even though the platform render already uses it.
@@ -757,7 +762,7 @@ class InternalTimelineBuilder:
         if project.render_job_id:
             track_source = project.render_job.subtitle_tracks.filter(is_source=True).prefetch_related('cues').first()
             cues = [(cue.start_ms, cue.end_ms) for cue in track_source.cues.all()] if track_source else []
-        ducking_settings = DuckingSettings.from_config(version.audio_mixing_config)
+        ducking_settings = DuckingSettings.from_config(revision_mix or version.audio_mixing_config)
         # Use the same speech-gap hold configured for the platform render. This keeps
         # the Premiere A2 automation from rising during short breaths or pauses.
         blocks = group_speech_blocks(cues, gap_threshold_ms=ducking_settings.speech_gap_hold_ms)
@@ -766,10 +771,10 @@ class InternalTimelineBuilder:
         )
         duck_db = float(
             mixing_metrics.get('duck_db')
-            or (version.audio_mixing_config or {}).get('base_duck_db', 8)
+            or ducking_settings.base_duck_db
         )
         duck_dbs = [float(value) for value in (mixing_metrics.get('duck_db_by_block') or [])]
-        if version.audio_mixing_enabled and version.audio_ducking_enabled:
+        if version.audio_mixing_enabled and bool(revision_ducking.get('enabled', version.audio_ducking_enabled)):
             if blocks and len(duck_dbs) == len(blocks):
                 envelope = build_dynamic_ducking_envelope(
                     blocks, duration_ms,
@@ -781,7 +786,13 @@ class InternalTimelineBuilder:
                 )
         else:
             envelope = [(0, 1), (duration_ms / 1000, 1)]
-        base_volume = max(0.0001, float(version.music_volume))
+        manual_keyframes = revision_mix.get('music_keyframes') or []
+        envelope = combine_gain_envelopes(
+            envelope, normalize_volume_keyframes(manual_keyframes, duration_ms),
+        )
+        base_volume = max(0.0001, float(revision_timeline.get(
+            'music_volume', revision_mix.get('music_volume', version.music_volume),
+        )))
         automation = [
             {'time_ms': round(time_s * 1000), 'gain_db': round(20 * math.log10(max(0.0001, gain * base_volume)), 3)}
             for time_s, gain in envelope
@@ -800,7 +811,7 @@ class InternalTimelineBuilder:
         spectral_windows = []
         if (
             version.audio_mixing_enabled
-            and getattr(version, 'audio_spectral_ducking_enabled', False)
+            and bool(revision_ducking.get('spectral_enabled', getattr(version, 'audio_spectral_ducking_enabled', False)))
             and blocks
         ):
             density = float(mixing_metrics.get('spectral_density') or 0)
@@ -840,6 +851,7 @@ class InternalTimelineBuilder:
                 'dynamic_ducking_baked': bool(blocks and len(duck_dbs) == len(blocks)),
                 'spectral_ducking_baked': bool(spectral_windows),
                 'source_automation': automation,
+                'manual_keyframes': manual_keyframes,
             },
         }
 

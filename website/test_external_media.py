@@ -32,6 +32,9 @@ from website.external_media.audio_mixing import (
     DuckingSettings, build_dynamic_ducking_envelope,
     SpeechBlock,
     build_ducking_envelope,
+    combine_gain_envelopes,
+    normalize_volume_keyframes,
+    resolved_ducking_config,
     build_spectral_windows,
     clip_blocks_against_protected_ranges,
     group_speech_blocks,
@@ -1411,6 +1414,59 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         revision = TimelineRevisionService.create_video_split(project, self.member, 9500)
 
         self.assertEqual(revision.edit_decision_set['video_splits_ms'], [9500])
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_zoom_after_video_split_is_scoped_to_the_selected_take(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        manifest = SourceManifestBuilder.build(project)
+        source_id = manifest['sources'][0]['id']
+        project.configuration = {
+            'source_manifest': manifest,
+            'edit_decision_set': {
+                'schema': 'connect.edit_decisions.v1',
+                'operations': [{
+                    'id': 'base-reframe', 'type': 'reframe', 'source_id': source_id,
+                    'enabled': True, 'origin': 'AUTO', 'metadata': {},
+                }],
+            },
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        TimelineRevisionService.create_video_split(project, self.member, 5000)
+        first = TimelineRevisionService.update_transform(project, self.member, 'base-reframe', {
+            'scale': 1.35, 'x': -.2, 'y': .1,
+            'segment_start_ms': 0, 'segment_end_ms': 5000,
+        })
+
+        operations = first.edit_decision_set['operations']
+        base = next(item for item in operations if item['id'] == 'base-reframe')
+        scoped = [item for item in operations if item['id'].startswith('reframe-segment-')]
+        self.assertNotIn('manual_transform', base.get('metadata') or {})
+        self.assertEqual(len(scoped), 1)
+        self.assertEqual(
+            (scoped[0]['metadata']['segment_start_ms'], scoped[0]['metadata']['segment_end_ms']),
+            (0, 5000),
+        )
+        self.assertEqual(scoped[0]['metadata']['manual_transform']['scale'], 1.35)
+
+        second = TimelineRevisionService.update_transform(project, self.member, 'base-reframe', {
+            'scale': 1.1, 'x': .15, 'y': 0,
+            'segment_start_ms': 5000, 'segment_end_ms': 10_000,
+        })
+        scoped = sorted(
+            (
+                item for item in second.edit_decision_set['operations']
+                if item['id'].startswith('reframe-segment-')
+            ),
+            key=lambda item: item['metadata']['segment_start_ms'],
+        )
+        self.assertEqual(len(scoped), 2)
+        self.assertEqual([item['metadata']['manual_transform']['scale'] for item in scoped], [1.35, 1.1])
         media.delete(force_policy=HARD_DELETE)
 
     def test_legacy_preview_revision_uses_current_edited_caption_clock(self):
@@ -5360,6 +5416,29 @@ class AudioMixingUnitTests(SimpleTestCase):
         self.assertEqual(settings_.base_duck_db, 6.0)
         self.assertEqual(settings_.attack_ms, 300)
         self.assertEqual(settings_.hold_ms, DuckingSettings().hold_ms)
+
+    def test_emotional_profile_is_resolved_before_individual_overrides(self):
+        settings_ = DuckingSettings.from_config({
+            'profile': 'emotional', 'ducking': {'release_ms': 1750},
+        })
+        self.assertEqual(settings_.base_duck_db, 6.0)
+        self.assertEqual(settings_.attack_ms, 260)
+        self.assertEqual(settings_.release_ms, 1750)
+
+    def test_volume_keyframes_are_clamped_and_combined_with_ducking(self):
+        manual = normalize_volume_keyframes([
+            {'time_ms': 0, 'gain_db': -6}, {'time_ms': 1000, 'gain_db': 30},
+        ], 2000)
+        self.assertEqual(manual[0][1], 10 ** (-6 / 20))
+        self.assertAlmostEqual(manual[-1][1], 10 ** (12 / 20))
+        combined = combine_gain_envelopes([(0, 1), (2, 1)], manual)
+        self.assertAlmostEqual(combined[0][1], manual[0][1])
+        self.assertAlmostEqual(combined[-1][1], manual[-1][1])
+
+    def test_between_speech_gain_controls_the_music_bed(self):
+        settings_ = DuckingSettings(between_speech_gain=.7)
+        envelope = build_ducking_envelope([], duration_ms=1000, duck_gain=.4, settings_=settings_)
+        self.assertEqual(envelope, [(0.0, .7), (1.0, .7)])
 
 
 class AudioMixingSmokeTests(SimpleTestCase):

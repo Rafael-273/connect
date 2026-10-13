@@ -75,6 +75,7 @@ from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
 
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
+from ..external_media.audio_mixing import resolved_ducking_config
 from ..external_media.preview import (
     PreviewCompositionService, ProjectProxyService, REVIEW_MASTER_PROXY_ID, TimelineRevisionService,
 )
@@ -2243,6 +2244,14 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
+        if 'audio_mix' in payload:
+            try:
+                revision = TimelineRevisionService.update_audio_mix(
+                    project, self.member, payload['audio_mix'],
+                )
+            except (TypeError, ValueError):
+                return JsonResponse({'error': 'Configuração de mixagem inválida.'}, status=400)
+            return preview_revision_response(project, self.member, revision)
         if 'volume' in payload:
             try:
                 revision = TimelineRevisionService.update_music_volume(
@@ -2326,6 +2335,9 @@ def preview_timeline_with_music(project, timeline):
     music = override.audio_file if override else MusicService.selected_file(project.template_version)
     timeline['has_music'] = bool(music and ProjectService.file_exists(music))
     if timeline['has_music']:
+        audio_mix = dict(timeline.get('audio_mix') or {})
+        effective_mix = resolved_ducking_config(audio_mix or project.template_version.audio_mixing_config)
+        ducking = audio_mix.get('ducking') or {}
         music_url = reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id})
         # The browser uses this URL as the audio cache key. Include the track
         # id so replacing a song reloads the <audio> element immediately
@@ -2336,19 +2348,22 @@ def preview_timeline_with_music(project, timeline):
             'url': music_url,
             'name': override.name if override else '',
             'volume': max(0.0, min(1.0, float(timeline.get(
-                'music_volume', project.template_version.music_volume,
+                'music_volume', audio_mix.get('music_volume', project.template_version.music_volume),
             )))),
             'fade_in_seconds': float(project.template_version.fade_in_seconds),
             'fade_out_seconds': float(project.template_version.fade_out_seconds),
-            'ducking_enabled': bool(
-                project.template_version.audio_mixing_enabled
-                and project.template_version.audio_ducking_enabled
-            ),
-            'duck_db': float((project.template_version.audio_mixing_config or {}).get('base_duck_db', 14)),
-            'attack_ms': int((project.template_version.audio_mixing_config or {}).get('attack_ms', 140)),
-            'hold_ms': int((project.template_version.audio_mixing_config or {}).get('hold_ms', 300)),
-            'release_ms': int((project.template_version.audio_mixing_config or {}).get('release_ms', 850)),
-            'speech_gap_hold_ms': int((project.template_version.audio_mixing_config or {}).get('speech_gap_hold_ms', 1800)),
+            'audio_mix': audio_mix,
+            'profile': effective_mix['profile'],
+            'ducking_enabled': bool(ducking.get('enabled', project.template_version.audio_mixing_enabled and project.template_version.audio_ducking_enabled)),
+            'spectral_enabled': bool(ducking.get('spectral_enabled', project.template_version.audio_spectral_ducking_enabled)),
+            'duck_db': float(effective_mix['base_duck_db']),
+            'attack_ms': int(effective_mix['attack_ms']),
+            'hold_ms': int(effective_mix['hold_ms']),
+            'release_ms': int(effective_mix['release_ms']),
+            'speech_gap_hold_ms': int(effective_mix['speech_gap_hold_ms']),
+            'between_speech_gain': float(effective_mix['between_speech_gain']),
+            'voice_gain_db': float(effective_mix['voice_gain_db']),
+            'voice_activation_db': float(effective_mix['voice_activation_db']),
         }
     return timeline
 
