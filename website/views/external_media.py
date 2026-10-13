@@ -18,6 +18,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django.utils.datastructures import MultiValueDict
 from django.utils.http import content_disposition_header
 from django.views import View
 from safedelete.models import HARD_DELETE
@@ -890,53 +891,70 @@ class ExternalMediaProjectDirectUploadView(ExternalMediaProjectUploadView):
             return self._error_response(request, public_id, 'Os uploads ficam bloqueados após iniciar o pipeline.')
         if project.template_version.blocks.exists():
             return self._error_response(request, public_id, 'Este template organiza os vídeos por cenas.')
-        form = ProjectBlockMediaForm(request.POST, request.FILES)
-        if not form.is_valid():
-            return self._error_response(request, public_id, 'Não foi possível enviar o vídeo: ' + ' '.join(
-                error for errors in form.errors.values() for error in errors
-            ))
-        requested_camera_role = form.cleaned_data.get('camera_role') or ProjectBlockMedia.CameraRole.PRIMARY
+        uploads = request.FILES.getlist('file')
+        if not uploads:
+            return self._error_response(request, public_id, 'Escolha pelo menos um vídeo para enviar.')
+        forms = []
+        for upload in uploads:
+            form = ProjectBlockMediaForm(request.POST, MultiValueDict({'file': [upload]}))
+            if not form.is_valid():
+                return self._error_response(request, public_id, 'Não foi possível enviar o vídeo: ' + ' '.join(
+                    error for errors in form.errors.values() for error in errors
+                ))
+            forms.append(form)
+        requested_camera_role = forms[0].cleaned_data.get('camera_role') or ProjectBlockMedia.CameraRole.PRIMARY
         is_extra_camera = requested_camera_role == ProjectBlockMedia.CameraRole.SECONDARY
-        item = form.save(commit=False)
-        item.project = project
+        if is_extra_camera and len(forms) > 1:
+            return self._error_response(request, public_id, 'Envie uma câmera extra por vez para vinculá-la ao vídeo principal correto.')
         direct_media = ProjectBlockMedia.all_objects.filter(
             project=project, block__isnull=True, custom_block__isnull=True,
         )
+        next_position = (direct_media.aggregate(value=Max('position'))['value'] or 0) + 1
         if is_extra_camera:
             try:
-                item.position = int(request.POST.get('camera_position') or 0)
+                camera_position = int(request.POST.get('camera_position') or 0)
             except (TypeError, ValueError):
-                item.position = 0
+                camera_position = 0
             primary_exists = direct_media.filter(
-                position=item.position, camera_role=ProjectBlockMedia.CameraRole.PRIMARY,
+                position=camera_position, camera_role=ProjectBlockMedia.CameraRole.PRIMARY,
             ).exists()
             if not primary_exists:
                 return self._error_response(request, public_id, 'Escolha o vídeo principal ao qual esta câmera pertence.')
-            item.camera_role = ProjectBlockMedia.CameraRole.SECONDARY
-            item.camera_key = f'camera-{get_random_string(12).lower()}'
-            item.camera_order = (direct_media.filter(position=item.position).aggregate(value=Max('camera_order'))['value'] or 0) + 1
-            item.camera_label = (form.cleaned_data.get('camera_label') or '').strip() or 'Câmera extra'
-        else:
-            item.position = (direct_media.aggregate(value=Max('position'))['value'] or 0) + 1
-            item.camera_role = ProjectBlockMedia.CameraRole.PRIMARY
-            item.camera_key = 'primary'
-            item.camera_order = 1
-            item.camera_label = 'Vídeo principal'
-        item.camera_hint = form.cleaned_data.get('camera_hint') or ProjectBlockMedia.CameraHint.AUTO
-        item.original_filename = item.file.name
-        item.file_size = item.file.size
-        item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_start_seconds')) or 0
-        item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_end_seconds'))
-        item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
-        item.save()
-        self._enqueue_preview(item)
+        created = []
+        with transaction.atomic():
+            for index, form in enumerate(forms):
+                item = form.save(commit=False)
+                item.project = project
+                if is_extra_camera:
+                    item.position = camera_position
+                    item.camera_role = ProjectBlockMedia.CameraRole.SECONDARY
+                    item.camera_key = f'camera-{get_random_string(12).lower()}'
+                    item.camera_order = (direct_media.filter(position=camera_position).aggregate(value=Max('camera_order'))['value'] or 0) + 1
+                    item.camera_label = (form.cleaned_data.get('camera_label') or '').strip() or 'Câmera extra'
+                else:
+                    item.position = next_position + index
+                    item.camera_role = ProjectBlockMedia.CameraRole.PRIMARY
+                    item.camera_key = 'primary'
+                    item.camera_order = 1
+                    item.camera_label = 'Vídeo principal'
+                item.camera_hint = form.cleaned_data.get('camera_hint') or ProjectBlockMedia.CameraHint.AUTO
+                item.original_filename = item.file.name
+                item.file_size = item.file.size
+                item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_start_seconds')) or 0
+                item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_end_seconds'))
+                item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
+                item.save()
+                created.append(item)
+        for item in created:
+            self._enqueue_preview(item)
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({
+            payload = [{
                 'id': item.pk, 'name': item.original_filename, 'size': item.file_size,
                 'status_url': reverse('external_media_project_media_status', args=[project.public_id, item.pk]),
                 'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, item.pk]),
-            })
-        messages.success(request, 'Vídeo principal adicionado ao projeto.')
+            } for item in created]
+            return JsonResponse({'items': payload, **(payload[0] if len(payload) == 1 else {})})
+        messages.success(request, f'{len(created)} vídeo(s) adicionado(s) ao projeto.')
         return redirect('external_media_project_detail', public_id=public_id)
 
 

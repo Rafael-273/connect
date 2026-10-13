@@ -1965,6 +1965,24 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(detail, 'Vídeo principal')
         self.assertNotContains(detail, 'Adicionar cena personalizada')
 
+    def test_template_without_scenes_accepts_multiple_direct_project_videos(self):
+        self.block.delete()
+        project = self.make_project()
+
+        response = self.client.post(
+            reverse('external_media_project_direct_upload', args=[project.public_id]),
+            {'file': [
+                SimpleUploadedFile('parte-1.mp4', b'video-1', content_type='video/mp4'),
+                SimpleUploadedFile('parte-2.mp4', b'video-2', content_type='video/mp4'),
+            ]},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        uploads = list(ProjectBlockMedia.objects.filter(project=project).order_by('position'))
+        self.assertEqual([item.original_filename for item in uploads], ['parte-1.mp4', 'parte-2.mp4'])
+        self.assertEqual([item.position for item in uploads], [1, 2])
+        self.assertTrue(all(item.camera_role == ProjectBlockMedia.CameraRole.PRIMARY for item in uploads))
+
     def test_direct_project_video_accepts_elements_and_extra_cameras(self):
         self.block.delete()
         project = self.make_project()
