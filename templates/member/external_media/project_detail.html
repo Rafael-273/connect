@@ -294,7 +294,7 @@
         <form method="post" enctype="multipart/form-data" action="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload' project.public_id item.definition.pk %}{% endif %}" class="media-form media-upload-form space-y-3" data-reorder-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_media_reorder' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_media_reorder' project.public_id item.definition.pk %}{% endif %}"{% if use_s3 %} data-presign-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload_presign' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload_presign' project.public_id item.definition.pk %}{% endif %}"{% endif %}>
             {% csrf_token %}
             <div class="flex flex-col sm:flex-row gap-3">
-                <input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="project-upload-input flex-1" data-trim-file>
+                <input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" multiple required class="project-upload-input flex-1" data-trim-file>
                 <span class="hidden media-btn media-muted" data-upload-status><i class="fas fa-upload"></i><span data-upload-status-label>Enviando 0%</span></span>
             </div>
             <p class="text-xs text-gray-500">MP4, MOV, MKV, WEBM, AVI ou M4V · máx. {{ external_media_max_upload_mb }} MB por arquivo.</p>
@@ -554,6 +554,8 @@
         const durationLabel = form.querySelector('[data-trim-duration-label]');
         let objectUrl = '';
         let activeHandle = null;
+        let pendingFiles = [];
+        let isUploading = false;
 
         function duration() {
             return Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
@@ -657,16 +659,22 @@
             handlePointerMove(event);
         }
         function showUploadError(msg) {
+            pendingFiles = [];
+            isUploading = false;
             fileInput.disabled = false;
             uploadStatus?.classList.add('hidden');
             previewError?.classList.remove('hidden');
             if (previewError) previewError.textContent = msg;
         }
 
-        fileInput?.addEventListener('change', async () => {
+        const processNextFile = async () => {
             if (objectUrl) URL.revokeObjectURL(objectUrl);
-            const file = fileInput.files && fileInput.files[0];
+            const file = pendingFiles.shift();
             if (!file) {
+                isUploading = false;
+                fileInput.value = '';
+                fileInput.disabled = false;
+                uploadStatus?.classList.add('hidden');
                 panel?.classList.remove('is-visible');
                 previewError?.classList.add('hidden');
                 video.removeAttribute('src');
@@ -679,6 +687,8 @@
             const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
             // Disabled inputs are omitted from FormData — capture before disabling.
             const uploadData = new FormData(form);
+            uploadData.delete('file');
+            uploadData.append('file', file, file.name);
 
             uploadStatus?.classList.remove('hidden');
             fileInput.disabled = true;
@@ -744,9 +754,7 @@
                         return;
                     }
                     addUploadResult(form, await res.json());
-                    fileInput.value = '';
-                    fileInput.disabled = false;
-                    uploadStatus?.classList.add('hidden');
+                    processNextFile();
                 } catch (e) {
                     showUploadError('Vídeo enviado, mas não foi possível registrar. Recarregue a página.');
                 }
@@ -766,12 +774,9 @@
                 if (request.status >= 200 && request.status < 400) {
                     try {
                         addUploadResult(form, JSON.parse(request.responseText));
-                        fileInput.value = '';
-                        fileInput.disabled = false;
-                        uploadStatus?.classList.add('hidden');
+                        processNextFile();
                     } catch (error) {
-                        previewError?.classList.remove('hidden');
-                        if (previewError) previewError.textContent = 'O vídeo foi enviado, mas não foi possível atualizar esta lista.';
+                        showUploadError('O vídeo foi enviado, mas não foi possível atualizar esta lista.');
                     }
                     return;
                 }
@@ -801,6 +806,15 @@
             startInput.value = '0';
             endInput.value = '';
             syncHidden();
+        };
+        fileInput?.addEventListener('change', () => {
+            const selectedFiles = Array.from(fileInput.files || []);
+            if (!selectedFiles.length) return;
+            pendingFiles.push(...selectedFiles);
+            fileInput.value = '';
+            if (isUploading) return;
+            isUploading = true;
+            processNextFile();
         });
         video?.addEventListener('loadedmetadata', () => {
             syncHidden();
