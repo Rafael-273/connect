@@ -656,6 +656,17 @@ class PreviewCompositionService:
             if item.get('type') == 'reframe' and item.get('enabled', True)
             and 'segment_start_ms' not in (item.get('metadata') or {})
         }
+        scoped_reframes = {}
+        for item in operations:
+            metadata = item.get('metadata') or {}
+            if item.get('type') != 'reframe' or 'segment_start_ms' not in metadata:
+                continue
+            scoped_reframes.setdefault(str(item.get('source_id')), []).append(item)
+        for items in scoped_reframes.values():
+            items.sort(key=lambda item: int((item.get('metadata') or {}).get('segment_start_ms') or 0))
+        video_splits = sorted({
+            max(0, int(value)) for value in (decisions.get('video_splits_ms') or [])
+        })
         color_adjustments = {
             str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
             for item in operations
@@ -709,26 +720,56 @@ class PreviewCompositionService:
             assets.append(asset)
             marker_start = timeline_cursor
             for keep_start, keep_end in kept:
-                local_start = keep_start - global_start
-                duration = keep_end - keep_start
-                clips.append({
-                    'id': f'clip-{len(clips) + 1}',
-                    'asset_id': source['id'],
-                    'timeline_in_ms': timeline_cursor,
-                    'timeline_out_ms': timeline_cursor + duration,
-                    'source_in_ms': source_in + local_start,
-                    'source_out_ms': source_in + local_start + duration,
-                    'block': {
-                        'id': source.get('block_id'),
-                        'key': source.get('block_key'),
-                        'name': source.get('block_name'),
-                    },
-                    'skip_extra_processing': bool((source.get('metadata') or {}).get('skip_extra_processing')),
-                    'effects': ([{'type': 'transform', **transforms[source['id']]}]
-                                if transforms.get(source['id']) else []),
-                    'color_adjustment': color_adjustments.get(source_id),
-                })
-                timeline_cursor += duration
+                # A blade is a real editorial boundary. Persisting it only as a
+                # UI marker left both sides backed by the same clip object, so a
+                # transform response could make the browser fall back to the
+                # source-wide framing. Materialize every side as its own clip
+                # while preserving the original assembled-master coordinates.
+                boundaries = [
+                    keep_start,
+                    *(point for point in video_splits if keep_start < point < keep_end),
+                    keep_end,
+                ]
+                for part_start, part_end in zip(boundaries, boundaries[1:]):
+                    local_start = part_start - global_start
+                    duration = part_end - part_start
+                    matching_scope = next((
+                        item for item in scoped_reframes.get(source_id, [])
+                        if int((item.get('metadata') or {}).get('segment_start_ms') or 0) <= part_start
+                        < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
+                    ), None)
+                    scoped_transform = (
+                        (matching_scope.get('metadata') or {}).get('manual_transform')
+                        if matching_scope and matching_scope.get('enabled', True)
+                        else None
+                    )
+                    # A disabled scoped decision explicitly restores the source
+                    # framing for this segment and therefore blocks any
+                    # source-wide manual transform from leaking into it.
+                    transform = (
+                        scoped_transform
+                        if matching_scope
+                        else transforms.get(source['id'])
+                    )
+                    clips.append({
+                        'id': f'clip-{len(clips) + 1}',
+                        'asset_id': source['id'],
+                        'timeline_in_ms': timeline_cursor,
+                        'timeline_out_ms': timeline_cursor + duration,
+                        'source_in_ms': source_in + local_start,
+                        'source_out_ms': source_in + local_start + duration,
+                        'master_in_ms': part_start,
+                        'master_out_ms': part_end,
+                        'block': {
+                            'id': source.get('block_id'),
+                            'key': source.get('block_key'),
+                            'name': source.get('block_name'),
+                        },
+                        'skip_extra_processing': bool((source.get('metadata') or {}).get('skip_extra_processing')),
+                        'effects': ([{'type': 'transform', **transform}] if transform else []),
+                        'color_adjustment': color_adjustments.get(source_id),
+                    })
+                    timeline_cursor += duration
             markers.append({
                 'time_ms': marker_start,
                 'name': source.get('block_name') or source.get('filename') or source['id'],

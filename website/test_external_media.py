@@ -1415,6 +1415,14 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         revision = TimelineRevisionService.create_video_split(project, self.member, 9500)
 
         self.assertEqual(revision.edit_decision_set['video_splits_ms'], [9500])
+        self.assertEqual(
+            [(clip['master_in_ms'], clip['master_out_ms']) for clip in revision.timeline['clips']],
+            [(0, 2000), (3000, 9500), (9500, 10_000)],
+        )
+        self.assertEqual(
+            [(clip['timeline_in_ms'], clip['timeline_out_ms']) for clip in revision.timeline['clips']],
+            [(0, 2000), (2000, 8500), (8500, 9000)],
+        )
         media.delete(force_policy=HARD_DELETE)
 
     def test_zoom_after_video_split_is_scoped_to_the_selected_take(self):
@@ -1454,6 +1462,9 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             (0, 5000),
         )
         self.assertEqual(scoped[0]['metadata']['manual_transform']['scale'], 1.35)
+        self.assertEqual(len(first.timeline['clips']), 2)
+        self.assertEqual(first.timeline['clips'][0]['effects'][0]['scale'], 1.35)
+        self.assertEqual(first.timeline['clips'][1]['effects'], [])
 
         second = TimelineRevisionService.update_transform(project, self.member, 'base-reframe', {
             'scale': 1.1, 'x': .15, 'y': 0,
@@ -1468,6 +1479,17 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         )
         self.assertEqual(len(scoped), 2)
         self.assertEqual([item['metadata']['manual_transform']['scale'] for item in scoped], [1.35, 1.1])
+        self.assertEqual(
+            [clip['effects'][0]['scale'] for clip in second.timeline['clips']],
+            [1.35, 1.1],
+        )
+
+        restored = TimelineRevisionService.update_transform(project, self.member, scoped[0]['id'], {
+            'restore_original': True,
+            'segment_start_ms': 0, 'segment_end_ms': 5000,
+        })
+        self.assertEqual(restored.timeline['clips'][0]['effects'], [])
+        self.assertEqual(restored.timeline['clips'][1]['effects'][0]['scale'], 1.1)
         media.delete(force_policy=HARD_DELETE)
 
     def test_legacy_preview_revision_uses_current_edited_caption_clock(self):
