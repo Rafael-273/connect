@@ -9,9 +9,15 @@
 
 {% block media_header_actions %}
 {% if project.status == 'AWAITING_REVIEW' %}<a href="{% url 'external_media_project_preview' project.public_id %}" class="media-btn media-primary"><i class="fas fa-wand-magic-sparkles"></i>Revisar edição</a>{% endif %}
+{% if project.status == 'FINISHED' and project.render_job %}{% for asset in assets %}{% if asset.kind == 'VIDEO' %}<a href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}" class="media-btn media-primary"><i class="fas fa-download"></i>Baixar vídeo</a>{% endif %}{% endfor %}{% endif %}
 {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
-{% if project.render_job_id %}<a href="{% url 'external_media_project_subtitle_reviews' project.public_id %}" class="media-btn media-primary"><i class="fas fa-closed-captioning"></i>Revisar legendas{% if pending_subtitle_reviews %}<span class="rounded-full bg-white px-2 py-0.5 text-xs" style="color:#C90905">{{ pending_subtitle_reviews }}</span>{% endif %}</a>{% endif %}
-<button type="button" class="media-btn media-secondary" id="open-reprocess-options"><i class="fas fa-film"></i>Reprocessar vídeo</button>
+<details class="project-actions-menu project-header-actions-menu">
+    <summary class="media-btn media-secondary cursor-pointer" aria-label="Mais ações" title="Mais ações"><i class="fas fa-ellipsis"></i></summary>
+    <div class="project-actions-menu__list project-header-actions-menu__list">
+        <button type="button" class="project-actions-menu__item" id="open-reprocess-options"><i class="fas fa-film"></i>Reprocessar vídeo</button>
+        {% if project.status == 'FINISHED' and project.render_job %}<form method="post" action="{% url 'external_media_project_export_premiere' project.public_id %}">{% csrf_token %}<button type="submit" class="project-actions-menu__item"><i class="fas fa-file-export"></i>Exportar para Adobe Premiere Pro</button></form>{% endif %}
+    </div>
+</details>
 {% endif %}
 {% endblock %}
 
@@ -41,6 +47,7 @@
     .project-actions-menu { position:relative; }
     .project-actions-menu summary::-webkit-details-marker { display:none; }
     .project-actions-menu__list { position:absolute; z-index:20; top:calc(100% + .45rem); right:0; width:13rem; overflow:hidden; border:1px solid #e2e8f0; border-radius:.8rem; background:#fff; padding:.35rem; box-shadow:0 16px 36px rgba(15,23,42,.16); }
+    .project-header-actions-menu__list { width:18rem; }
     .project-actions-menu__item { display:flex; width:100%; align-items:center; gap:.65rem; border-radius:.55rem; padding:.65rem .7rem; color:#475467; font-size:.82rem; font-weight:700; text-align:left; }
     .project-actions-menu__item:hover { background:#f8fafc; color:#c90905; }
     .project-upload-input { width:100%; border:1px solid #e2e8f0; border-radius:.7rem; padding:.4rem; background:#fff; color:#475467; font-size:.82rem; cursor:pointer; }
@@ -49,6 +56,9 @@
     .project-media-action { width:2rem; height:2rem; display:inline-flex; align-items:center; justify-content:center; border:1px solid #e2e8f0; border-radius:.6rem; background:#fff; color:#64748b; }
     .project-media-action:hover { color:#C90905; border-color:#fecaca; background:#fff7f7; }
     .project-media-action.is-danger:hover { color:#dc2626; background:#fff1f2; }
+    .project-progress__result { margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid #f0e7e6; }
+    .project-result-video__player { display:flex; align-items:center; justify-content:center; margin-top:.8rem; max-height:min(62dvh,42rem); overflow:hidden; }
+    .project-result-video__player video { display:block; width:auto; height:auto; max-width:100%; max-height:min(62dvh,42rem); border-radius:1rem; background:#050505; box-shadow:0 6px 22px rgba(15,23,42,.12); object-fit:contain; }
     .project-progress { overflow:hidden; border-color:#f1d7d5; background:linear-gradient(135deg, #fff 0%, #fff9f8 100%); }
     .project-progress__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
     .project-progress__eyebrow { display:inline-flex; align-items:center; gap:.45rem; color:#a41310; font-size:.72rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
@@ -58,19 +68,21 @@
     .project-progress__bar { height:100%; min-width:.5rem; border-radius:inherit; background:linear-gradient(90deg, #b80704 0%, #e31a15 65%, #ff6b62 100%); box-shadow:0 0 18px rgba(201,9,5,.25); transition:width .7s cubic-bezier(.2,.8,.2,1); }
     .project-progress__elapsed { display:inline-flex; align-items:center; gap:.4rem; margin-top:.9rem; color:#8b8e98; font-size:.78rem; }
     .project-progress__elapsed i { color:#c90905; font-size:.72rem; }
-    .project-progress__steps { display:grid; grid-template-columns:repeat(1,minmax(0,1fr)); gap:.55rem; margin-top:1.35rem; padding-top:1.1rem; border-top:1px solid #f0e7e6; }
-    .project-progress__steps-title { color:#5d6572; font-size:.78rem; font-weight:900; letter-spacing:.09em; text-transform:uppercase; }
+    .project-progress__steps { display:grid; grid-template-columns:minmax(0,1fr); gap:0; margin-top:.7rem; padding:0; }
+    .project-progress__steps-title { margin-bottom:.25rem; color:#98a2b3; font-size:.67rem; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
     .project-progress__details { margin-top:1.35rem; border-top:1px solid #f0e7e6; }
-    .project-progress__details summary { cursor:pointer; padding-top:1rem; color:#5d6572; font-size:.82rem; font-weight:900; list-style:none; }
+    .project-progress__details summary { cursor:pointer; padding-top:1rem; color:#4b5563; font-size:.82rem; font-weight:900; list-style:none; }
     .project-progress__details summary::-webkit-details-marker { display:none; }
     .project-progress__details summary::after { content:'+'; float:right; color:#c90905; font-size:1.1rem; }
     .project-progress__details[open] summary::after { content:'−'; }
     .project-progress__details .project-progress__steps { margin-top:.8rem; }
-    .project-progress__step { display:flex; align-items:center; gap:.7rem; min-height:3.25rem; border:1px solid #eee7e6; border-radius:.85rem; padding:.7rem .8rem; background:rgba(255,255,255,.72); color:#667085; font-size:.86rem; }
-    .project-progress__step-icon { width:1.45rem; height:1.45rem; flex:none; display:grid; place-items:center; border-radius:999px; background:#f1f3f5; color:#98a2b3; font-size:.7rem; }
-    .project-progress__step.is-running { border-color:#f6b8b4; background:#fff8f7; color:#3f1d1a; font-weight:800; }
+    .project-progress__step { position:relative; display:flex; align-items:center; gap:.55rem; min-height:2.7rem; border-bottom:1px solid #f0e9e8; padding:.48rem 2rem .48rem 1.75rem; background:transparent; color:#667085; font-size:.8rem; line-height:1.3; }
+    .project-progress__step::before { content:attr(data-step-order); position:absolute; right:.1rem; color:#b4b7bf; font-size:.61rem; font-weight:800; letter-spacing:.04em; font-variant-numeric:tabular-nums; }
+    .project-progress__step::after { display:none; }
+    .project-progress__step-icon { position:absolute; z-index:1; top:50%; left:0; width:1.05rem; height:1.05rem; display:grid; place-items:center; border-radius:999px; background:#e7eaee; color:#98a2b3; font-size:.52rem; transform:translateY(-50%); }
+    .project-progress__step.is-running { color:#3f1d1a; font-weight:800; }
     .project-progress__step.is-running .project-progress__step-icon,.project-progress__step.is-finished .project-progress__step-icon { background:#c90905; color:#fff; }
-    .project-progress__step.is-error { border-color:#fecaca; color:#b42318; }
+    .project-progress__step.is-error { color:#b42318; }
     .project-progress__step.is-error .project-progress__step-icon { background:#fff1f2; color:#c90905; }
     .project-progress__step-message { display:block; margin-top:.1rem; color:#98a2b3; font-size:.72rem; font-weight:400; }
     .project-reprocess-modal { position:fixed; inset:0; z-index:90; display:none; align-items:center; justify-content:center; padding:1rem; background:rgba(15,23,42,.6); }
@@ -92,10 +104,25 @@
     body.project-submit-busy { overflow:hidden; }
     @keyframes project-progress-pulse { 50% { opacity:.45; transform:scale(.8); } }
     @keyframes project-submit-spin { to { transform:rotate(360deg); } }
+    @keyframes project-player-expand { from { opacity:.45; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
     @keyframes media-trim-sheet-in { from { transform:translateY(1.5rem); opacity:.6; } to { transform:translateY(0); opacity:1; } }
-    @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } }
-    @media (min-width:640px) { .project-progress__steps { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-    @media (min-width:1024px) { .project-progress__steps { grid-template-columns:repeat(3,minmax(0,1fr)); } }
+    @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } .project-progress.is-timeline-open .project-result-video__player video { animation:none; } }
+    @media (min-width:640px) {
+        .project-progress__steps { grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:1.15rem; row-gap:0; }
+        .project-progress__steps-title { grid-column:1 / -1; }
+        .project-progress__step:nth-of-type(odd)::after { content:''; display:block; position:absolute; top:50%; left:100%; width:1.15rem; height:1px; background:#efd9d7; transform:translateY(-50%); }
+    }
+    @media (min-width:1024px) {
+        .project-progress.is-portrait { display:grid; grid-template-columns:minmax(0,1fr) minmax(18rem,.72fr); column-gap:2rem; align-items:start; }
+        .project-progress.is-portrait > .project-progress__summary { grid-column:1; }
+        .project-progress.is-portrait > .project-progress__result { grid-column:2; grid-row:1; align-self:stretch; margin-top:0; border:0; border-left:1px solid #f0dfdd; border-radius:0; padding:0 0 0 2rem; background:transparent; box-shadow:none; }
+        .project-progress.is-portrait > .project-progress__result + p { grid-column:1; }
+        .project-progress.is-portrait .project-result-video__player { margin-top:0; max-height:min(52dvh,38rem); }
+        .project-progress.is-portrait .project-result-video__player video { max-height:min(52dvh,38rem); }
+        .project-progress.is-portrait.is-timeline-open > .project-progress__result { display:flex; align-items:center; overflow:hidden; }
+        .project-progress.is-portrait.is-timeline-open .project-result-video__player { height:100%; max-height:none; }
+        .project-progress.is-portrait.is-timeline-open .project-result-video__player video { width:auto; height:100%; max-height:none; animation:project-player-expand .32s ease-out both; }
+    }
     @media (max-width:900px), (hover:none) and (pointer:coarse) {
         .project-progress__top { align-items:center; }
         [data-media-trim-modal] { align-items:flex-end!important; padding:0!important; }
@@ -112,18 +139,29 @@
 {% block media_content %}
 {% if project.status != 'DRAFT' %}
 <section class="media-card project-progress p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'AWAITING_REVIEW' or project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}" data-elapsed="{{ project.duration_seconds|default:0 }}">
-    <div class="project-progress__top">
-        <div class="min-w-0">
-            <p class="project-progress__eyebrow"><i class="project-progress__live"></i><span id="status-label">{{ project.get_status_display }}</span></p>
-            <h2 class="mt-3 text-xl sm:text-2xl font-black text-gray-900" id="current-step">{{ project.current_step|default:"Preparando seu processamento" }}</h2>
-            <p class="mt-1 text-sm text-gray-500">{% if project.status == 'FINISHED' %}Seu vídeo já está pronto para visualizar e baixar.{% elif project.status == 'ERROR' or project.status == 'CANCELLED' %}Confira os detalhes abaixo para continuar.{% else %}Você pode continuar navegando. Atualizaremos este status automaticamente.{% endif %}</p>
+    <div class="project-progress__summary">
+        <div class="project-progress__top">
+            <div class="min-w-0">
+                <p class="project-progress__eyebrow"><i class="project-progress__live"></i><span id="status-label">{{ project.get_status_display }}</span></p>
+                <h2 class="mt-3 text-xl sm:text-2xl font-black text-gray-900" id="current-step">{{ project.current_step|default:"Preparando seu processamento" }}</h2>
+                <p class="mt-1 text-sm text-gray-500">{% if project.status == 'FINISHED' %}Seu vídeo já está pronto para visualizar e baixar.{% elif project.status == 'ERROR' or project.status == 'CANCELLED' %}Confira os detalhes abaixo para continuar.{% else %}Você pode continuar navegando. Atualizaremos este status automaticamente.{% endif %}</p>
+            </div>
+            <strong class="project-progress__percent" id="progress-value">{{ project.progress }}%</strong>
         </div>
-        <strong class="project-progress__percent" id="progress-value">{{ project.progress }}%</strong>
+        <div class="project-progress__track mt-5" aria-label="Progresso do processamento"><div id="progress-bar" class="project-progress__bar" style="width:{{ project.progress }}%"></div></div>
+        <p class="project-progress__elapsed"><i class="far fa-clock"></i>Tempo decorrido: <span id="duration-label">{{ project.duration_label|default:"Agora" }}</span></p>
+        <details class="project-progress__details"><summary>Ver linha do tempo</summary><div class="project-progress__steps" id="progress-steps"><p class="project-progress__steps-title">Linha do tempo do processamento</p>{% for step in steps %}<div class="project-progress__step {% if step.status == 'FINISHED' %}is-finished{% elif step.status == 'RUNNING' %}is-running{% elif step.status == 'ERROR' %}is-error{% endif %}" data-step-order="{{ forloop.counter|stringformat:'02d' }}"><span class="project-progress__step-icon"><i class="fas {% if step.status == 'FINISHED' %}fa-check{% elif step.status == 'ERROR' %}fa-xmark{% elif step.status == 'RUNNING' %}fa-spinner fa-spin{% elif step.status == 'SKIPPED' %}fa-minus{% else %}fa-circle{% endif %}"></i></span><span>{{ step.label }}{% if step.message %}<small class="project-progress__step-message">{{ step.message }}</small>{% endif %}</span></div>{% endfor %}</div></details>
     </div>
-    <div class="project-progress__track mt-5" aria-label="Progresso do processamento"><div id="progress-bar" class="project-progress__bar" style="width:{{ project.progress }}%"></div></div>
-    <p class="project-progress__elapsed"><i class="far fa-clock"></i>Tempo decorrido: <span id="duration-label">{{ project.duration_label|default:"Agora" }}</span></p>
+    {% if project.status == 'FINISHED' and project.render_job %}
+    {% for asset in assets %}{% if asset.kind == 'VIDEO' %}
+    <section class="project-progress__result">
+        <div class="project-result-video__player">
+            <video controls preload="metadata" playsinline webkit-playsinline src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1"></video>
+        </div>
+    </section>
+    {% endif %}{% endfor %}
+    {% endif %}
     {% if project.error_message %}<p class="mt-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm">{{ project.error_message }}</p>{% endif %}
-    <details class="project-progress__details"><summary>Ver etapas do processamento</summary><div class="project-progress__steps" id="progress-steps"><p class="project-progress__steps-title sm:col-span-2 lg:col-span-3">Etapas do processamento</p>{% for step in steps %}<div class="project-progress__step {% if step.status == 'FINISHED' %}is-finished{% elif step.status == 'RUNNING' %}is-running{% elif step.status == 'ERROR' %}is-error{% endif %}"><span class="project-progress__step-icon"><i class="fas {% if step.status == 'FINISHED' %}fa-check{% elif step.status == 'ERROR' %}fa-xmark{% elif step.status == 'RUNNING' %}fa-spinner fa-spin{% elif step.status == 'SKIPPED' %}fa-minus{% else %}fa-circle{% endif %}"></i></span><span>{{ step.label }}{% if step.message %}<small class="project-progress__step-message">{{ step.message }}</small>{% endif %}</span></div>{% endfor %}</div></details>
 </section>
 {% endif %}
 
@@ -901,19 +939,9 @@
 <section class="media-card p-5 sm:p-6 mb-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-            <h2 class="text-xl font-black">Exportar projeto</h2>
-            <p class="text-sm text-gray-500 mt-1">Exporte o vídeo já editado e reenquadrado, com legendas e faixas de áudio separadas para continuar a pós-produção no Premiere.</p>
+            <h2 class="text-xl font-black">Arquivos do projeto</h2>
+            <p class="text-sm text-gray-500 mt-1">Baixe as legendas e os arquivos gerados para continuar a pós-produção.</p>
         </div>
-        <div class="flex flex-wrap gap-2">
-            <a href="{% url 'external_media_editor' project.render_job.public_id %}" class="media-btn media-secondary"><i class="fas fa-pen"></i>Editar legendas</a>
-            <form method="post" action="{% url 'external_media_project_export_premiere' project.public_id %}">
-                {% csrf_token %}
-                <button class="media-btn media-primary"><i class="fas fa-file-export"></i>Exportar para Adobe Premiere Pro</button>
-            </form>
-        </div>
-    </div>
-    <div class="grid grid-cols-1 gap-5 mt-5">
-        {% for asset in assets %}{% if asset.kind == 'VIDEO' %}<div class="rounded-2xl border border-gray-100 bg-gray-50/60 p-3"><h3 class="font-black mb-3">Vídeo</h3><video controls preload="metadata" class="w-full rounded-xl bg-black" src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1"></video><a class="media-btn media-primary w-full mt-3" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-download"></i>Baixar vídeo</a></div>{% endif %}{% endfor %}
     </div>
     <div class="mt-4 pt-4 border-t border-gray-100">
         {% if assets %}<details class="text-sm"><summary class="cursor-pointer font-bold text-gray-600">Arquivos de legenda</summary><div class="flex flex-wrap gap-2 mt-3">{% for asset in assets %}{% if asset.kind == 'SRT' %}<a class="media-btn media-muted text-sm" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>SRT {{ asset.language|upper }}</a>{% endif %}{% endfor %}</div></details>{% endif %}
@@ -1027,13 +1055,14 @@
         if(!container||!Array.isArray(steps))return;
         container.replaceChildren();
         const title=document.createElement('p');
-        title.className='project-progress__steps-title sm:col-span-2 lg:col-span-3';
-        title.textContent='Etapas do processamento';
+        title.className='project-progress__steps-title';
+        title.textContent='Linha do tempo do processamento';
         container.append(title);
-        steps.forEach(step=>{
+        steps.forEach((step,index)=>{
             const presentation=stepPresentation(step.status);
             const item=document.createElement('div');
             item.className=`project-progress__step ${presentation.className}`;
+            item.dataset.stepOrder=String(index+1).padStart(2,'0');
             const icon=document.createElement('span');
             icon.className='project-progress__step-icon';
             icon.innerHTML=`<i class="fas ${presentation.icon}"></i>`;
@@ -1699,10 +1728,36 @@
     const modal = document.getElementById('reprocess-options-modal');
     if (!trigger || !modal) return;
     const close = () => { modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); };
-    trigger.addEventListener('click', () => { modal.classList.add('is-open'); modal.setAttribute('aria-hidden', 'false'); });
+    trigger.addEventListener('click', () => { trigger.closest('details')?.removeAttribute('open'); modal.classList.add('is-open'); modal.setAttribute('aria-hidden', 'false'); });
     modal.querySelectorAll('[data-close-reprocess-options]').forEach(button => button.addEventListener('click', close));
     modal.addEventListener('click', event => { if (event.target === modal) close(); });
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && modal.classList.contains('is-open')) close(); });
+})();
+</script>
+<script>
+(() => {
+    const progressCard = document.getElementById('progress-card');
+    const timelineDetails = progressCard?.querySelector('.project-progress__details');
+    const syncTimelineLayout = () => progressCard?.classList.toggle('is-timeline-open', Boolean(timelineDetails?.open));
+    timelineDetails?.addEventListener('toggle', syncTimelineLayout);
+    syncTimelineLayout();
+
+    const updateResultVideoLayout = (video) => {
+        if (!video.videoWidth || !video.videoHeight) return;
+        const card = video.closest('.project-progress');
+        const player = video.closest('.project-result-video__player');
+        if (!card || !player) return;
+        const isLandscape = video.videoWidth > video.videoHeight;
+        card.classList.toggle('is-landscape', isLandscape);
+        card.classList.toggle('is-portrait', !isLandscape);
+        player.classList.toggle('is-landscape', isLandscape);
+        player.classList.toggle('is-portrait', !isLandscape);
+    };
+
+    document.querySelectorAll('.project-result-video__player video').forEach((video) => {
+        video.addEventListener('loadedmetadata', () => updateResultVideoLayout(video));
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) updateResultVideoLayout(video);
+    });
 })();
 </script>
 <script>

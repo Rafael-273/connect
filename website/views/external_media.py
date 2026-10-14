@@ -546,7 +546,7 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             direct_media=direct_media,
             direct_brolls=direct_brolls,
             plugins=project.template_version.plugins.all(),
-            steps=project.pipeline_steps.all(),
+            steps=project.pipeline_steps.order_by('order', 'pk'),
             upload_form=ProjectBlockMediaForm(),
             custom_block_form=ProjectCustomBlockForm(),
             settings_form=ExternalMediaProjectSettingsForm(project=project),
@@ -558,12 +558,6 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             broll_config=BrollTimelineService.configuration(project),
             project_exports=project.exports.order_by('-created_at')[:10],
             processing_history=project.processing_history.select_related('preset').prefetch_related('assets'),
-            pending_subtitle_reviews=project.subtitle_review_sessions.filter(
-                status__in=[
-                    SubtitleReviewSession.Status.SUBMITTED,
-                    SubtitleReviewSession.Status.UNDER_REVIEW,
-                ],
-            ).count(),
         ))
 
 
