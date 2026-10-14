@@ -294,6 +294,14 @@ EXTERNAL_MEDIA_REMOTE_MATERIALIZE_MAX_MB = int(
 EXTERNAL_MEDIA_S3_URL_EXPIRATION_SECONDS = int(
     os.getenv('EXTERNAL_MEDIA_S3_URL_EXPIRATION_SECONDS', 86400)
 )
+# Keep Premiere source media streaming from S3.  A short retry budget handles
+# transient HTTP/TLS resets without materializing originals on Render disk.
+EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS = int(
+    os.getenv('EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS', 3)
+)
+EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS = float(
+    os.getenv('EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS', 2)
+)
 CELERY_BEAT_SCHEDULE = {
     'cleanup-external-media-workspaces': {
         'task': 'external_media.cleanup_workspaces',

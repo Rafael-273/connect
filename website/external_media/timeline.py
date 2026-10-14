@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import math
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -131,7 +132,7 @@ class InternalTimelineBuilder:
                 # FFprobe/FFmpeg consume the presigned URL, while the archive
                 # service streams the original object into Media/ later.
                 self.package_source_files[relative_path] = source.field_file
-                metadata = self._probe(ffmpeg_input)
+                metadata = self._probe_remote(media_input, ffmpeg_input)
             else:
                 self._copy_field(source.field_file, local_path)
                 metadata = self._probe(local_path)
@@ -1142,6 +1143,34 @@ class InternalTimelineBuilder:
         metadata.update({'width': width, 'height': height, 'fps': float(numerator) / max(1, float(denominator))})
         self._probe_cache[cache_key] = dict(metadata)
         return metadata
+
+    def _probe_remote(self, media_input, initial_input):
+        """Probe S3 media again with a fresh presigned URL after a network reset."""
+        attempts = max(1, int(settings.EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS))
+        delay_seconds = max(0.0, float(settings.EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS))
+        remote_input = initial_input
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._probe(remote_input)
+            except ExternalMediaError as exc:
+                if attempt >= attempts or not self._is_transient_remote_error(exc):
+                    raise
+                wait_seconds = delay_seconds * (2 ** (attempt - 1))
+                logger.warning(
+                    'premiere_s3_probe_retry storage_name=%s attempt=%s max_attempts=%s delay_seconds=%.1f',
+                    getattr(remote_input, 'storage_name', ''), attempt, attempts, wait_seconds,
+                )
+                if wait_seconds:
+                    time.sleep(wait_seconds)
+                remote_input = media_input.get_ffmpeg_input()
+
+    @staticmethod
+    def _is_transient_remote_error(exc):
+        detail = str(exc).lower()
+        return any(marker in detail for marker in (
+            'connection reset by peer', 'error in the pull function', 'io error',
+            'timed out', 'connection timed out', 'network is unreachable', 'connection refused',
+        ))
 
     def _has_audio(self, path):
         return bool(self.runner.run([

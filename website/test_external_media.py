@@ -2404,6 +2404,40 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertFalse(ExternalMediaJob.all_objects.filter(pk=job.pk).exists())
         self.assertFalse(ExternalMediaJob.all_objects.filter(pk=previous_job.pk).exists())
 
+    def test_deleting_project_removes_review_suggestions_and_premiere_archive(self):
+        project = self.make_project()
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(track=track, cue_index=1, start_ms=0, end_ms=1000, text='Teste')
+        session = SubtitleReviewSession.objects.create(
+            project=project, job=job, token_hash='a' * 64, token_prefix='teste', languages=['pt'],
+            base_revisions={'pt': 1}, expires_at=timezone.now() + timedelta(days=1), created_by=self.member,
+        )
+        suggestion = SubtitleSuggestion.objects.create(
+            session=session, cue=cue, language='pt', original_text='Teste', suggested_text='Revisado',
+        )
+        export = ExternalMediaProjectExport.objects.create(
+            project=project, created_by=self.member,
+            archive=SimpleUploadedFile('projeto-premiere.zip', b'premiere-package'),
+            timeline_json=SimpleUploadedFile('timeline.json', b'{}'),
+        )
+        archive_storage, archive_name = export.archive.storage, export.archive.name
+        timeline_storage, timeline_name = export.timeline_json.storage, export.timeline_json.name
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('external_media_project_delete', args=[project.public_id]))
+
+        self.assertRedirects(response, reverse('external_media_dashboard'))
+        self.assertFalse(SubtitleSuggestion.all_objects.filter(pk=suggestion.pk).exists())
+        self.assertFalse(ExternalMediaProjectExport.all_objects.filter(pk=export.pk).exists())
+        self.assertFalse(archive_storage.exists(archive_name))
+        self.assertFalse(timeline_storage.exists(timeline_name))
+
     def test_project_detail_hides_processing_diagnostics(self):
         project = self.make_project()
         previous_job = self.make_job()
@@ -5963,6 +5997,41 @@ class DialogueProcessingSmokeTests(SimpleTestCase):
 
 
 class EditableTimelineExportTests(SimpleTestCase):
+    @override_settings(
+        EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS=3,
+        EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS=0,
+    )
+    def test_remote_probe_retries_with_a_fresh_presigned_url_after_connection_reset(self):
+        initial_url = RemoteMediaSource('https://s3.example/first', storage_name='media/take.mov')
+        refreshed_url = RemoteMediaSource('https://s3.example/second', storage_name='media/take.mov')
+        media_input = Mock()
+        media_input.get_ffmpeg_input.return_value = refreshed_url
+        builder = InternalTimelineBuilder()
+        builder._probe = Mock(side_effect=[
+            ExternalMediaError(
+                'O FFmpeg não conseguiu processar este vídeo. Detalhe do FFmpeg: Connection reset by peer'
+            ),
+            {'duration_ms': 1000, 'width': 1920, 'height': 1080, 'fps': 30.0},
+        ])
+
+        metadata = builder._probe_remote(media_input, initial_url)
+
+        self.assertEqual(metadata['duration_ms'], 1000)
+        self.assertEqual(builder._probe.call_args_list[0].args[0], initial_url)
+        self.assertEqual(builder._probe.call_args_list[1].args[0], refreshed_url)
+        media_input.get_ffmpeg_input.assert_called_once_with()
+
+    def test_remote_probe_does_not_retry_invalid_media_errors(self):
+        remote_url = RemoteMediaSource('https://s3.example/file', storage_name='media/take.mov')
+        media_input = Mock()
+        builder = InternalTimelineBuilder()
+        builder._probe = Mock(side_effect=ExternalMediaError('Invalid data found when processing input'))
+
+        with self.assertRaisesRegex(ExternalMediaError, 'Invalid data'):
+            builder._probe_remote(media_input, remote_url)
+
+        media_input.get_ffmpeg_input.assert_not_called()
+
     def test_premiere_package_streams_virtual_s3_source_directly_to_zip(self):
         source_file = Mock()
         source_file.open.return_value = io.BytesIO(b'video-from-s3')

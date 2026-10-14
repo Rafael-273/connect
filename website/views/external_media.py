@@ -65,7 +65,9 @@ from ..models.external_media import (
     OverlayPreset,
     SubtitleCue,
     SubtitleReviewSession,
+    SubtitleSuggestion,
     SubtitleTrack,
+    TimelineMutation,
     VideoMasteringJob,
     external_media_broll_asset_path,
     external_media_project_upload_path,
@@ -725,17 +727,29 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
         )
 
         files = []
+        storages = {}
 
         def remember(field_file):
             if field_file and field_file.name:
                 files.append((field_file.storage, field_file.name))
+                storages[id(field_file.storage)] = field_file.storage
 
         for item in project.block_media.all():
             remember(item.file)
             remember(item.thumbnail)
+            remember(item.preview_file)
         for asset in project.broll_assets.all():
             remember(asset.file)
             remember(asset.preview_file)
+        for overlay in project.overlays.all():
+            remember(overlay.image_file)
+        for proxy in project.source_proxies.all():
+            remember(proxy.proxy_file)
+        for session in project.subtitle_review_sessions.all():
+            remember(session.preview_file)
+        for version in project.subtitle_video_versions.all():
+            for asset in version.assets.all():
+                remember(asset.file)
         for export in project.exports.all():
             remember(export.archive)
             remember(export.timeline_json)
@@ -750,6 +764,16 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
 
         project_name = project.name
         with transaction.atomic():
+            # Suggestions deliberately protect their cue.  Delete them before
+            # deleting jobs/tracks so the database collector cannot be blocked
+            # by a review suggestion that belongs to this same project.
+            for suggestion in SubtitleSuggestion.objects.filter(session__project=project):
+                suggestion.delete(force_policy=HARD_DELETE)
+            # Timeline mutations protect their source/target revisions.  They
+            # are project-scoped audit records and must go before the project's
+            # revisions are collected for hard deletion.
+            for mutation in TimelineMutation.objects.filter(project=project):
+                mutation.delete(force_policy=HARD_DELETE)
             # A remoção é feita antes do projeto porque o job atual é referenciado por
             # `render_job`; o banco então limpa esse ponteiro sem deixar histórico órfão.
             for job in processing_jobs:
@@ -757,7 +781,8 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
             project.delete(force_policy=HARD_DELETE)
 
             def remove_files():
-                for storage, name in files:
+                for storage, name in set((id(storage), name) for storage, name in files):
+                    storage = storages[storage]
                     try:
                         storage.delete(name)
                     except Exception:
@@ -765,9 +790,31 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
                         # não deve impedir a limpeza do projeto.
                         continue
 
+                # Direct browser uploads can leave an object in S3 before a
+                # database row is created.  Every project-owned object lives
+                # under this isolated prefix, so remove it as a final sweep.
+                prefix = f'external_media/projects/{project.public_id}'
+                for storage in list(storages.values()) or [get_external_media_storage()]:
+                    self._delete_storage_prefix(storage, prefix)
+
             transaction.on_commit(remove_files)
         messages.success(request, f'Projeto “{project_name}” excluído.')
         return redirect('external_media_dashboard')
+
+    @classmethod
+    def _delete_storage_prefix(cls, storage, prefix):
+        """Best-effort recursive cleanup for all project-owned storage objects."""
+        try:
+            directories, filenames = storage.listdir(prefix)
+        except Exception:
+            return
+        for filename in filenames:
+            try:
+                storage.delete(f'{prefix}/{filename}')
+            except Exception:
+                continue
+        for directory in directories:
+            cls._delete_storage_prefix(storage, f'{prefix}/{directory}')
 
 
 class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
