@@ -3070,7 +3070,15 @@ class ExternalMediaAssetDownloadView(ExternalMediaRequiredMixin, View):
         asset = get_object_or_404(MediaAsset, pk=asset_id, job__public_id=public_id)
         if request.GET.get('preview') != '1':
             MediaAsset.objects.filter(pk=asset.pk).update(download_count=F('download_count') + 1)
-        return protected_file_response(request, asset.file)
+        # A redirect to a signed S3 URL with Content-Disposition is interpreted
+        # as inline playback by some mobile browsers.  The explicit download
+        # variant keeps the response on this endpoint so Django sends the
+        # attachment header directly and the browser starts a download.
+        return protected_file_response(
+            request,
+            asset.file,
+            force_stream=request.GET.get('download') == '1',
+        )
 
 
 class ExternalMediaOriginalDownloadView(ExternalMediaRequiredMixin, View):

@@ -9,7 +9,7 @@
 
 {% block media_header_actions %}
 {% if project.status == 'AWAITING_REVIEW' %}<a href="{% url 'external_media_project_preview' project.public_id %}" class="media-btn media-primary"><i class="fas fa-wand-magic-sparkles"></i>Revisar edição</a>{% endif %}
-{% if project.status == 'FINISHED' and project.render_job %}{% for asset in assets %}{% if asset.kind == 'VIDEO' %}<a href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}" class="media-btn media-primary"><i class="fas fa-download"></i>Baixar vídeo</a>{% endif %}{% endfor %}{% endif %}
+{% if project.status == 'FINISHED' and project.render_job %}{% for asset in assets %}{% if asset.kind == 'VIDEO' %}<a href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?download=1" download class="media-btn media-primary"><i class="fas fa-download"></i>Baixar vídeo</a>{% endif %}{% endfor %}{% endif %}
 {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
 <details class="project-actions-menu project-header-actions-menu">
     <summary class="media-btn media-secondary cursor-pointer" aria-label="Mais ações" title="Mais ações"><i class="fas fa-ellipsis"></i></summary>
