@@ -163,6 +163,37 @@
     .media-confirm-delete { background: #C90905; color: #fff; }
     .media-confirm-delete:hover { background: #a60704; }
 
+    .project-delete-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 110;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(15, 23, 42, .66);
+        backdrop-filter: blur(4px);
+    }
+    .project-delete-loading.is-open { display: flex; animation: fadeIn .18s ease-out; }
+    .project-delete-loading__card {
+        width: min(25rem, 100%);
+        padding: 2rem;
+        border-radius: 1.25rem;
+        background: #fff;
+        text-align: center;
+        box-shadow: 0 24px 64px rgba(15, 23, 42, .28);
+    }
+    .project-delete-loading__spinner {
+        width: 3rem;
+        height: 3rem;
+        margin: 0 auto 1rem;
+        border: .3rem solid #fee2e2;
+        border-top-color: #C90905;
+        border-radius: 50%;
+        animation: project-delete-spin .8s linear infinite;
+    }
+    @keyframes project-delete-spin { to { transform: rotate(360deg); } }
+
     .media-project-card-body { padding: .875rem 1.125rem 1rem; }
 
     .media-info-grid {
@@ -546,6 +577,14 @@
     </div>
 </div>
 
+<div id="project-delete-loading" class="project-delete-loading" aria-hidden="true" role="status" aria-live="assertive">
+    <div class="project-delete-loading__card">
+        <div class="project-delete-loading__spinner" aria-hidden="true"></div>
+        <h2 class="text-xl font-black text-gray-900">Excluindo projeto…</h2>
+        <p class="mt-2 text-sm leading-relaxed text-gray-600">Removendo vídeos, arquivos e exportações vinculados. Isso pode levar alguns instantes.</p>
+    </div>
+</div>
+
 <script>
     const filterToggle = document.getElementById('filter-toggle');
     const filterPanel  = document.getElementById('filter-panel');
@@ -601,10 +640,13 @@
         const form = document.getElementById('delete-project-form');
         const name = document.getElementById('delete-project-name');
         const processingNote = document.getElementById('delete-project-processing-note');
+        const loading = document.getElementById('project-delete-loading');
+        const confirmButton = form.querySelector('.media-confirm-delete');
         const activeStatuses = new Set(['PENDING', 'ASSEMBLING', 'PROCESSING', 'AWAITING_REVIEW']);
         let trigger = null;
 
         function closeModal() {
+            if (form.dataset.submitting === 'true') return;
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             form.removeAttribute('action');
@@ -615,6 +657,8 @@
         document.querySelectorAll('[data-delete-project]').forEach((button) => {
             button.addEventListener('click', () => {
                 trigger = button;
+                delete form.dataset.submitting;
+                confirmButton.disabled = false;
                 name.textContent = `“${button.dataset.projectName}”`;
                 form.action = button.dataset.deleteUrl;
                 processingNote.classList.toggle('hidden', !activeStatuses.has(button.dataset.projectStatus || ''));
@@ -624,6 +668,26 @@
             });
         });
         modal.querySelector('[data-close-delete-modal]').addEventListener('click', closeModal);
+        form.addEventListener('submit', (event) => {
+            if (form.dataset.submitting === 'true') {
+                event.preventDefault();
+                return;
+            }
+            form.dataset.submitting = 'true';
+            confirmButton.disabled = true;
+            confirmButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Excluindo…';
+            modal.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+            loading.classList.add('is-open');
+            loading.setAttribute('aria-hidden', 'false');
+        });
+        window.addEventListener('pageshow', () => {
+            if (!loading.classList.contains('is-open')) return;
+            loading.classList.remove('is-open');
+            loading.setAttribute('aria-hidden', 'true');
+            delete form.dataset.submitting;
+            confirmButton.disabled = false;
+            confirmButton.innerHTML = '<i class="fas fa-trash mr-1"></i>Excluir projeto';
+        });
         modal.addEventListener('click', (event) => {
             if (event.target === modal) closeModal();
         });
