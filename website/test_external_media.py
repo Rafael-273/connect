@@ -5013,6 +5013,38 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
                              for index, value in enumerate(command) if value == '-i']
         self.assertEqual(first_pass_inputs, [str(path) for path in paths])
 
+    @override_settings(USE_S3=False, EXTERNAL_MEDIA_ASSEMBLY_WORKERS=1)
+    def test_scoped_vertical_framing_retains_source_until_final_crop(self):
+        service = VideoAssemblyService(runner=Mock())
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            service, '_effective_duration_ms', return_value=1000,
+        ), patch.object(service, '_video_dimensions', return_value=(1920, 1080)), patch.object(
+            service, '_normalize', return_value=None,
+        ) as normalize, patch.object(service, '_concat_normalized') as concat:
+            service.assemble(
+                [AssemblySource(Path('take.mp4'), label='take')],
+                Path(directory) / 'out.mp4', SimpleNamespace(width=1920, height=600), Path(directory),
+                source_intervals=[{
+                    'source_index': 0, 'start_ms': 0, 'end_ms': 1000,
+                    'manual_transform': {'scale': 1, 'x': 0, 'y': 1},
+                }],
+            )
+
+        # The old pipeline discarded 240px at the top before applying Y=1.
+        self.assertEqual((normalize.call_args.kwargs['width'], normalize.call_args.kwargs['height']),
+                         (1920, 1080))
+        interval = concat.call_args.kwargs['intervals'][0]
+        self.assertEqual((interval['framing_width'], interval['framing_height']), (1920, 600))
+        runner = Mock()
+        runner.input_arg.side_effect = FFmpegRunner.input_arg
+        service.runner = runner
+        service._concat_group([Path('normalized.mp4')], Path('out.mp4'), intervals=[interval])
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('crop=trunc(1920/1.00000/2)*2:trunc(600/1.00000/2)*2:', graph)
+        self.assertIn('(ih-oh)/2-(1.00000)*(ih-oh)/2', graph)
+        self.assertIn('scale=1920:600', graph)
+
     def test_reuses_one_normalization_for_multiple_ranges_of_the_same_source(self):
         service = VideoAssemblyService(runner=Mock())
         source_a = RemoteMediaSource('https://example.test/a', storage_name='projects/a.mov')

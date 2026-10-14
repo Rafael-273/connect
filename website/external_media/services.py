@@ -1758,6 +1758,16 @@ class VideoAssemblyService:
         analysis_sources = [source.path for source in analysis_source_items]
         reframe_plans = reframe_plans or []
         source_color_adjustments = source_color_adjustments or {}
+        manual_source_indexes = {
+            int(interval['source_index']) for interval in (source_intervals or [])
+            if interval.get('manual_transform')
+        }
+        if manual_source_indexes:
+            source_intervals = [
+                {**interval, 'framing_width': width, 'framing_height': height}
+                if int(interval['source_index']) in manual_source_indexes else dict(interval)
+                for interval in source_intervals
+            ]
         if (
             not reframe_plans
             and auto_reframe_config
@@ -1817,6 +1827,19 @@ class VideoAssemblyService:
                 'preserve_framing': source_item.skip_extra_processing,
                 'color_adjustment': source_color_adjustments.get(source_item.label),
             })
+            if index in manual_source_indexes:
+                # The browser positions the entire source before clipping it to
+                # the delivery canvas. Keep that same source area until concat;
+                # a centered cover crop here permanently discards headroom that
+                # the approved vertical slider may need later.
+                source_width, source_height = self._video_dimensions(source)
+                canvas_width, canvas_height = self._manual_framing_canvas(
+                    source_width, source_height, width, height,
+                )
+                normalize_jobs[-1].update(
+                    width=canvas_width, height=canvas_height,
+                    auto_reframe_config=None, reframe_plan_data={'disabled': True},
+                )
             normalized.append(destination)
 
         original_reframe_plans = [job['reframe_plan_data'] for job in normalize_jobs]
@@ -2127,6 +2150,14 @@ class VideoAssemblyService:
                 except OSError:
                     logger.warning('Não foi possível remover intermediário de concatenação %s.', path)
 
+    @staticmethod
+    def _manual_framing_canvas(source_width, source_height, width, height):
+        factor = max(width / source_width, height / source_height)
+        return (
+            math.ceil(source_width * factor / 2) * 2,
+            math.ceil(source_height * factor / 2) * 2,
+        )
+
     def _concat_group(self, paths, output_path, intervals=None):
         if not paths:
             raise ExternalMediaError('Não há trechos de vídeo para concatenar.')
@@ -2149,7 +2180,10 @@ class VideoAssemblyService:
                 bounds = f'start={start_ms / 1000:.3f}:end={end_ms / 1000:.3f}'
                 video_trim, audio_trim = f'trim={bounds},', f'atrim={bounds},'
                 transform = interval.get('manual_transform') if isinstance(interval, dict) else None
-                if transform:
+                framing_width = interval.get('framing_width') if isinstance(interval, dict) else None
+                framing_height = interval.get('framing_height') if isinstance(interval, dict) else None
+                if transform or (framing_width and framing_height):
+                    transform = transform or {}
                     scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
                     x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
                     y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
@@ -2158,9 +2192,14 @@ class VideoAssemblyService:
                     # canvas by one or two pixels (e.g. 1078 instead of
                     # 1080), which makes FFmpeg's concat reject the segment.
                     # Probe the normalized input and restore that exact canvas.
-                    target_width, target_height = self._video_dimensions(path)
+                    target_width, target_height = (
+                        (int(framing_width), int(framing_height))
+                        if framing_width and framing_height else self._video_dimensions(path)
+                    )
+                    crop_width = str(target_width) if framing_width else 'iw'
+                    crop_height = str(target_height) if framing_height else 'ih'
                     transform_filter = (
-                        f'crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
+                        f'crop=trunc({crop_width}/{scale:.5f}/2)*2:trunc({crop_height}/{scale:.5f}/2)*2:'
                         f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
                         f'scale={target_width}:{target_height}:flags=lanczos,setsar=1,format=yuv420p,'
                     )
