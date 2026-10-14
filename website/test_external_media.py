@@ -6121,6 +6121,8 @@ class EditableTimelineExportTests(SimpleTestCase):
             ),
             render_job_id=None,
             configuration={},
+            approved_timeline_revision=None,
+            current_timeline_revision=None,
         )
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, 'Audio').mkdir()
@@ -6133,6 +6135,36 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertEqual(track['clips'][0]['timeline_out_ms'], 2500)
         self.assertEqual(track['volume_automation'], [])
         self.assertEqual(track['role'], 'music')
+
+    def test_premiere_export_uses_music_selected_in_timeline_revision(self):
+        builder = InternalTimelineBuilder(runner=Mock())
+        builder._copy_field = Mock()
+        builder._probe = Mock(return_value={'duration_ms': 1000})
+        template_file = SimpleNamespace(name='background/template.mp3')
+        selected_file = SimpleNamespace(name='background/selected.mp3')
+        selected_track = SimpleNamespace(name='Trilha escolhida', audio_file=selected_file)
+        revision = SimpleNamespace(timeline={'music_override_track_id': 42})
+        project = SimpleNamespace(
+            template_version=SimpleNamespace(
+                background_music=SimpleNamespace(name='Trilha do template', audio_file=template_file),
+                music_file=None, audio_mixing_config={}, audio_mixing_enabled=False,
+                audio_ducking_enabled=False, music_volume=0.2,
+            ),
+            approved_timeline_revision=revision,
+            current_timeline_revision=revision,
+            render_job_id=None,
+            configuration={},
+        )
+
+        with patch('website.external_media.timeline.BackgroundMusicTrack.objects.filter') as tracks:
+            tracks.return_value.exclude.return_value.first.return_value = selected_track
+            with tempfile.TemporaryDirectory() as directory:
+                Path(directory, 'Audio').mkdir()
+                _asset, track = builder._music(project, Path(directory), 2500)
+
+        builder._copy_field.assert_called_once()
+        self.assertIs(builder._copy_field.call_args.args[0], selected_file)
+        self.assertEqual(track['clips'][0]['name'], 'Trilha_escolhida')
 
     def test_premiere_json_payload_converts_decimals_to_numbers(self):
         payload = json_compatible({
@@ -6361,8 +6393,8 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertEqual(xml.count('<pathurl>'), 2)
         self.assertIn('<mediatype>video</mediatype>', xml)
         self.assertIn('<mediatype>audio</mediatype>', xml)
-        self.assertIn('generatoritem', xml)
-        self.assertIn('Bem-vindos à Filadélfia', xml)
+        self.assertNotIn('generatoritem', xml)
+        self.assertNotIn('Bem-vindos à Filadélfia', xml)
         self.assertIn('Legendas estilizadas (visual final)', xml)
         self.assertIn('../Graphics/captions_pt_styled.mov', xml)
         self.assertIn('<alphatype>straight</alphatype>', xml)

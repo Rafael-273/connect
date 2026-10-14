@@ -207,9 +207,9 @@ class PremiereExporter:
                 )
 
         # FCP 7 XML has no portable native-caption representation that Premiere
-        # imports consistently. Generate editable legacy text/title clips in addition
-        # to the SRT files, preserving every cue and its timing in the sequence.
-        self._caption_tracks(video, timeline.get('captions') or [], timeline['sequence'])
+        # imports consistently. Captions therefore remain as SRT sidecars in
+        # Captions/; editors import them in Premiere to create native Caption
+        # tracks and apply a caption style there.
 
         audio = ET.SubElement(media, 'audio')
         audio_format = ET.SubElement(audio, 'format')
@@ -295,50 +295,6 @@ class PremiereExporter:
             self._text(link, 'mediatype', link_type)
             self._text(link, 'trackindex', linked_track)
             self._text(link, 'clipindex', 1)
-
-    def _caption_tracks(self, video, captions, sequence):
-        for caption_track_index, caption in enumerate(captions, start=1):
-            track = ET.SubElement(video, 'track')
-            language = (caption.get('language') or 'caption').upper()
-            self._text(track, 'name', f'Captions {language}')
-            self._text(track, 'enabled', 'TRUE')
-            self._text(track, 'locked', 'FALSE')
-            for cue_index, cue in enumerate(caption.get('cues') or [], start=1):
-                self._caption_generator(
-                    track, cue, sequence,
-                    item_id=f'caption-{language.lower()}-{cue_index}',
-                    name=f'Caption {language} {cue_index}',
-                    style=caption.get('style') or {},
-                )
-
-    def _caption_generator(self, parent, cue, sequence, item_id, name, style):
-        node = ET.SubElement(parent, 'generatoritem', id=item_id)
-        self._text(node, 'name', name)
-        duration = self._frames(sequence['duration_ms'], sequence['fps'])
-        self._text(node, 'duration', duration)
-        self._rate(node, sequence)
-        self._text(node, 'start', self._frames(cue['start_ms'], sequence['fps']))
-        self._text(node, 'end', self._frames(cue['end_ms'], sequence['fps']))
-        self._text(node, 'in', 0)
-        self._text(node, 'out', self._frames(cue['end_ms'] - cue['start_ms'], sequence['fps']))
-        effect = ET.SubElement(node, 'effect')
-        self._text(effect, 'name', 'Text')
-        self._text(effect, 'effectid', 'Text')
-        self._text(effect, 'effectcategory', 'Text')
-        self._text(effect, 'effecttype', 'generator')
-        self._text(effect, 'mediatype', 'video')
-        self._generator_parameter(effect, 'str', 'Text', cue.get('text') or '')
-        # These are advisory values for compatible importers. The complete style
-        # remains in timeline.json because legacy XML cannot faithfully carry all
-        # current platform caption styling.
-        self._generator_parameter(effect, 'font', 'Font', style.get('font') or 'Arial')
-        self._generator_parameter(effect, 'fontsize', 'Font Size', style.get('font_size') or 48)
-
-    def _generator_parameter(self, effect, parameter_id, name, value):
-        parameter = ET.SubElement(effect, 'parameter')
-        self._text(parameter, 'parameterid', parameter_id)
-        self._text(parameter, 'name', name)
-        self._text(parameter, 'value', value)
 
     def _file(self, clip_node, asset, sequence, media_type):
         file_id = f"file-{asset['id']}"
@@ -649,12 +605,13 @@ class PremierePackageService:
         caption_instructions = (
             'A trilha “Legendas estilizadas (visual final)” é um ProRes 4444 com transparência '
             'e reproduz o visual final das legendas. Ela vem bloqueada: mantenha-a visível para '
-            'fidelidade visual ou oculte-a para editar os títulos/SRT nativos.\n'
-            'Os SRTs ficam em Captions/. As trilhas de títulos PT/EN permanecem editáveis, mas o ProRes '
-            'é a referência fiel para fundo, opacidade, sombra, contorno e posicionamento.\n'
+            'fidelidade visual ou oculte-a após importar um SRT como faixa de legendas nativa.\n'
+            'Os SRTs ficam em Captions/. Importe o arquivo do idioma desejado no Premiere e aplique '
+            'o estilo de legenda no painel Texto; o ProRes é a referência fiel para fundo, opacidade, '
+            'sombra, contorno e posicionamento.\n'
             if caption_overlay_available else
             'A camada ProRes de referência visual das legendas não pôde ser gerada neste worker. '
-            'Os SRTs em Captions/ e os títulos PT/EN no XML continuam disponíveis para edição.\n'
+            'Importe o SRT desejado em Captions/ no Premiere para criar uma faixa de legenda nativa.\n'
         )
         (package_root / 'README.txt').write_text(
             'Abra Project/timeline.xml no Adobe Premiere Pro.\n'

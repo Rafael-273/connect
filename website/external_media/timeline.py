@@ -9,6 +9,7 @@ from pathlib import Path
 
 from django.conf import settings
 
+from ..models.external_media import BackgroundMusicTrack
 from .audio_mixing import (
     DuckingSettings, build_ducking_envelope, build_dynamic_ducking_envelope,
     build_spectral_windows, combine_gain_envelopes, group_speech_blocks,
@@ -31,7 +32,7 @@ CAPABILITY_MATRIX = {
     'music': {'exportable': True, 'strategy': 'processed_wav_stem'},
     'volume_automation': {'exportable': True, 'strategy': 'baked_into_music_stem'},
     'auto_reframe': {'exportable': True, 'strategy': 'consolidated_visual_master'},
-    'captions': {'exportable': True, 'strategy': 'srt_editable_titles_and_alpha_overlay'},
+    'captions': {'exportable': True, 'strategy': 'srt_native_caption_import_and_alpha_overlay'},
     'caption_style': {'exportable': True, 'strategy': 'pre_rendered_alpha_overlay'},
     'overlays': {'exportable': True, 'strategy': 'consolidated_visual_master'},
     'lut': {'exportable': 'partial', 'strategy': 'asset_and_metadata'},
@@ -763,7 +764,15 @@ class InternalTimelineBuilder:
         revision_timeline = (revision.timeline if revision else {}) or {}
         revision_mix = dict(revision_timeline.get('audio_mix') or {})
         revision_ducking = ducking_options(revision_mix)
-        track = version.background_music
+        override_id = revision_timeline.get('music_override_track_id')
+        override = None
+        if override_id:
+            override = BackgroundMusicTrack.objects.filter(
+                pk=override_id,
+            ).exclude(audio_file='').first()
+        # A selection in the editor revision overrides the template's default.
+        # Fall back gracefully if a legacy revision references a removed track.
+        track = override or version.background_music
         # The selected track is the source of truth. Older versions may not have a
         # persisted music plugin even though the platform render already uses it.
         field = track.audio_file if track and track.audio_file else version.music_file
@@ -899,9 +908,9 @@ class InternalTimelineBuilder:
 
         FCP 7 XML's legacy Text generator cannot represent the subtitle renderer's
         full design (background alpha/padding, shadow, outline and exact position).
-        The package therefore keeps editable title clips *and* includes this alpha
-        movie on a separate track. Editors can lock it for an exact visual result or
-        hide it when they want to rebuild the captions natively in Premiere.
+        The package includes this alpha movie on a separate track. Editors can lock
+        it for an exact visual result or hide it after importing the packaged SRT
+        as native captions in Premiere.
         """
         job = getattr(project, 'render_job', None)
         if not job or duration_ms <= 0:
@@ -952,12 +961,12 @@ class InternalTimelineBuilder:
         try:
             self._render_alpha_caption_movie(ass_path, movie_path, sequence, duration_ms)
         except ExternalMediaError:
-            # The ProRes layer is a visual convenience. The SRT and editable title
-            # clips are already included, so a worker built without libass or
+            # The ProRes layer is a visual convenience. The SRT files are already
+            # included, so a worker built without libass or
             # prores_ks must not make the whole Premiere package unavailable.
             logger.warning(
                 'Não foi possível gerar a camada ProRes de legendas para a exportação do Premiere; '
-                'o pacote seguirá com SRT e títulos editáveis.',
+                'o pacote seguirá com SRTs para importação no Premiere.',
                 exc_info=True,
             )
             # FFmpeg can leave a nearly complete ProRes file behind when the
@@ -1112,12 +1121,12 @@ class InternalTimelineBuilder:
         if caption_overlay_available:
             warnings.append(
                 'As legendas têm uma camada ProRes 4444 transparente com o visual final; '
-                'os títulos e SRT permanecem editáveis em trilhas separadas.'
+                'importe o SRT do pacote no Premiere para criar uma faixa de legendas nativa.'
             )
         else:
             warnings.append(
                 'A camada ProRes de referência visual das legendas não pôde ser gerada neste worker; '
-                'use os títulos e SRT editáveis incluídos no pacote.'
+                'importe o SRT incluído no pacote no Premiere.'
             )
         return {'warnings': warnings, 'matrix': CAPABILITY_MATRIX}
 
