@@ -21,6 +21,7 @@ from .ffmpeg_runner import FFmpegRunner
 from .exceptions import ExternalMediaError
 from .media_input import RemoteMediaSource, media_input_factory
 from .speech_edit import SpeechEditPlan
+from .workspace import DiskCapacityGuard
 
 
 CAPABILITY_MATRIX = {
@@ -958,6 +959,10 @@ class InternalTimelineBuilder:
                 'o pacote seguirá com SRT e títulos editáveis.',
                 exc_info=True,
             )
+            # FFmpeg can leave a nearly complete ProRes file behind when the
+            # scratch disk fills. This layer is optional; remove it before the
+            # package metadata is written so the fallback can actually finish.
+            movie_path.unlink(missing_ok=True)
             return None, None
         metadata = self._probe(movie_path)
         asset_id = f'caption_overlay_{suffix}'
@@ -998,6 +1003,14 @@ class InternalTimelineBuilder:
         else:
             ass_filter = f"ass='{escaped_ass_path}':alpha=1"
         duration_seconds = max(0.04, duration_ms / 1000)
+        estimated_bytes = self._caption_overlay_estimated_bytes(sequence, duration_seconds)
+        capacity = DiskCapacityGuard.inspect(root=movie_path.parent)
+        if estimated_bytes > capacity.available_for_job_bytes:
+            raise ExternalMediaError(
+                'Espaço temporário insuficiente para a camada ProRes transparente de legendas. '
+                f'Necessário aproximadamente {estimated_bytes / 1024 ** 3:.1f} GB; '
+                f'disponível com margem {capacity.available_for_job_bytes / 1024 ** 3:.1f} GB.'
+            )
         # ProRes 4444 is broadly supported by Premiere and preserves the alpha channel.
         # The transparent source makes the exported layer sit naturally over V1.
         source = (
@@ -1010,6 +1023,17 @@ class InternalTimelineBuilder:
             '-an', '-c:v', 'prores_ks', '-profile:v', '4', '-pix_fmt', 'yuva444p10le',
             '-movflags', '+faststart', str(movie_path),
         ])
+
+    @staticmethod
+    def _caption_overlay_estimated_bytes(sequence, duration_seconds):
+        """Estimate a transparent ProRes movie before it consumes the worker disk."""
+        width = max(1, int(sequence.get('width') or 1))
+        height = max(1, int(sequence.get('height') or 1))
+        fps = max(1.0, float(sequence.get('fps') or 30))
+        return math.ceil(
+            width * height * fps * duration_seconds
+            * float(settings.EXTERNAL_MEDIA_CAPTION_OVERLAY_ESTIMATED_BYTES_PER_PIXEL)
+        )
 
     def _lut(self, project, package_root):
         version = project.template_version

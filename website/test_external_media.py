@@ -19,7 +19,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, RequestFactory, SimpleTestCase, TestCase
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from safedelete.models import HARD_DELETE
@@ -4250,6 +4250,38 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         with self.assertRaisesMessage(ExternalMediaError, 'limites de um take mudaram'):
             ExternalMediaProjectPipeline._approved_source_intervals(revision, sources)
 
+    def test_approved_source_intervals_use_latest_vertical_transform_seen_in_editor(self):
+        source = AssemblySource(Path('take.mp4'), label='take', trim_start_ms=0, trim_end_ms=5000)
+        old_transform = {'scale': 1.25, 'x': 0, 'y': -1}
+        approved_transform = {'scale': 1.25, 'x': 0, 'y': 1}
+        revision = SimpleNamespace(
+            source_manifest={'sources': [{
+                'id': 'take', 'duration_ms': 5000,
+                'trim': {'start_ms': 0, 'end_ms': 5000},
+            }]},
+            timeline={'clips': [{
+                'asset_id': 'take', 'source_in_ms': 0, 'source_out_ms': 5000,
+            }]},
+            edit_decision_set={'operations': [{
+                'id': 'old', 'type': 'reframe', 'source_id': 'take', 'enabled': True,
+                'metadata': {
+                    'segment_start_ms': 0, 'segment_end_ms': 5000,
+                    'manual_transform': old_transform,
+                },
+            }, {
+                'id': 'approved', 'type': 'reframe', 'source_id': 'take', 'enabled': True,
+                'metadata': {
+                    'segment_start_ms': 0, 'segment_end_ms': 5000,
+                    'manual_transform': approved_transform,
+                },
+            }]},
+        )
+
+        intervals = ExternalMediaProjectPipeline._approved_source_intervals(revision, [source])
+
+        self.assertEqual(len(intervals), 1)
+        self.assertEqual(intervals[0]['manual_transform'], approved_transform)
+
     def test_approved_final_master_does_not_apply_global_cuts_again(self):
         revision = SimpleNamespace(pk=4, revision=2, edit_decision_set={'operations': []},
             source_manifest={'sources': [{'id': 'a', 'duration_ms': 1000}]},
@@ -6492,6 +6524,14 @@ class EditableTimelineExportTests(SimpleTestCase):
         command = runner.run.call_args.args[0]
         self.assertIn(':alpha=1', command[command.index('-vf') + 1])
         self.assertIn('yuva444p10le', command)
+
+    @override_settings(EXTERNAL_MEDIA_CAPTION_OVERLAY_ESTIMATED_BYTES_PER_PIXEL=0.25)
+    def test_caption_overlay_estimate_scales_with_frames_and_resolution(self):
+        estimated = InternalTimelineBuilder._caption_overlay_estimated_bytes(
+            {'width': 1920, 'height': 1080, 'fps': 30}, 2,
+        )
+
+        self.assertEqual(estimated, 1920 * 1080 * 30 * 2 * 0.25)
 
     def test_caption_overlay_movie_has_transparent_background_and_visible_text(self):
         ass = """[Script Info]

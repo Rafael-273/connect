@@ -3338,9 +3338,8 @@ class ExternalMediaProjectPipeline:
             source_master_starts[str(source.get('id'))] = (cursor, start)
             cursor += max(1, end - start)
         scoped_reframes = [
-            item for item in (revision.edit_decision_set.get('operations') or [])
+            item for item in ((getattr(revision, 'edit_decision_set', {}) or {}).get('operations') or [])
             if item.get('type') == 'reframe'
-            and item.get('enabled', True)
             and 'segment_start_ms' in (item.get('metadata') or {})
         ]
         result = []
@@ -3374,12 +3373,27 @@ class ExternalMediaProjectPipeline:
                     if boundary is not None and master_start < int(boundary) < master_end:
                         boundaries.add(int(boundary))
             for part_start, part_end in zip(sorted(boundaries), sorted(boundaries)[1:]):
-                transform = next((
-                    (item.get('metadata') or {}).get('manual_transform')
-                    for item in matching
+                candidates = [
+                    item for item in matching
                     if int((item.get('metadata') or {}).get('segment_start_ms') or 0) <= part_start
                     < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
-                ), None)
+                ]
+                # Revisions retain earlier operations for audit/undo. Match the
+                # editor: the latest explicit manual/disabled choice wins over
+                # an inherited auto-reframe covering the same range.
+                selected = next(
+                    (
+                        item for item in reversed(candidates)
+                        if not item.get('enabled', True)
+                        or (item.get('metadata') or {}).get('manual_transform') is not None
+                    ),
+                    candidates[-1] if candidates else None,
+                )
+                transform = (
+                    (selected.get('metadata') or {}).get('manual_transform')
+                    if selected and selected.get('enabled', True)
+                    else None
+                )
                 result.append({
                     'source_id': source_id, 'source_index': index,
                     'start_ms': start + part_start - master_start,
