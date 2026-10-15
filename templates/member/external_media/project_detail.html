@@ -180,7 +180,17 @@
     @keyframes project-progress-pulse { 50% { opacity:.45; transform:scale(.8); } }
     @keyframes project-submit-spin { to { transform:rotate(360deg); } }
     @keyframes project-player-expand { from { opacity:.45; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
+    @keyframes project-final-reveal { from { opacity:0; transform:translateY(.7rem); } to { opacity:1; transform:translateY(0); } }
+    @keyframes project-final-player-reveal { from { opacity:0; transform:translateY(1rem) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
     @keyframes media-trim-sheet-in { from { transform:translateY(1.5rem); opacity:.6; } to { transform:translateY(0); opacity:1; } }
+    @media (prefers-reduced-motion:no-preference) {
+        .project-final__eyebrow,.project-final__title,.project-final__description,.project-final__resources { opacity:0; animation:project-final-reveal .46s cubic-bezier(.2,.8,.2,1) forwards; }
+        .project-final__eyebrow { animation-delay:.06s; }
+        .project-final__title { animation-delay:.13s; }
+        .project-final__description { animation-delay:.2s; }
+        .project-final__player { opacity:0; animation:project-final-player-reveal .58s cubic-bezier(.2,.8,.2,1) .27s forwards; }
+        .project-final__resources { animation-delay:.4s; }
+    }
     @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } .project-progress.is-timeline-open .project-result-video__player video { animation:none; } .project-final__player video { transition:none; } }
     @media (hover:hover) and (pointer:fine) { .project-final__player video:hover { transform:scale(1.015); box-shadow:0 20px 46px rgba(46,14,12,.28); } }
     @media (min-width:640px) {
@@ -190,7 +200,7 @@
     }
     @media (min-width:1024px) {
         .project-final__body { grid-template-columns:minmax(0,1fr) minmax(15rem,.42fr); gap:2.5rem; padding:0 2.1rem 2rem; }
-        .project-final__resources { justify-self:stretch; border-top:0; border-left:1px solid #f0e7e6; padding:1rem 0 1rem 2rem; }
+        .project-final__resources { justify-self:stretch; border-top:0; border-left:1px solid #ead8d5; padding:1rem 0 1rem 2rem; }
         .project-progress.is-portrait { display:grid; grid-template-columns:minmax(0,1fr) minmax(18rem,.72fr); column-gap:2rem; align-items:start; }
         .project-progress.is-portrait > .project-progress__summary { grid-column:1; }
         .project-progress.is-portrait > .project-progress__result { grid-column:2; grid-row:1; align-self:stretch; margin-top:0; border:0; border-left:1px solid #f0dfdd; border-radius:0; padding:0 0 0 2rem; background:transparent; box-shadow:none; }
@@ -205,6 +215,10 @@
         .project-final__body { grid-template-columns:minmax(0,1fr) minmax(0,min(44rem,40vw)) minmax(0,1fr); gap:0; }
         .project-final__player { grid-column:2; width:100%; }
         .project-final__resources { grid-column:3; justify-self:center; width:min(100%,21rem); }
+    }
+    @media (min-width:1440px) {
+        .project-final.has-landscape-video .project-final__body { grid-template-columns:minmax(0,1fr) minmax(0,min(54rem,46vw)) minmax(0,1fr); gap:2rem; }
+        .project-final.has-landscape-video .project-final__player video { width:100%; height:auto; }
     }
     @media (max-width:900px), (hover:none) and (pointer:coarse) {
         .project-progress__top { align-items:center; }
@@ -1843,6 +1857,32 @@
         video.addEventListener('loadedmetadata', () => updateResultVideoLayout(video));
         if (video.readyState >= HTMLMediaElement.HAVE_METADATA) updateResultVideoLayout(video);
     });
+
+    const updateFinalVideoLayout = (video) => {
+        if (!video.videoWidth || !video.videoHeight) return;
+        video.closest('.project-final')?.classList.toggle(
+            'has-landscape-video', video.videoWidth > video.videoHeight,
+        );
+    };
+    document.querySelectorAll('.project-final__player video').forEach((video) => {
+        video.addEventListener('loadedmetadata', () => updateFinalVideoLayout(video));
+        if (video.readyState >= HTMLMediaElement.HAVE_METADATA) updateFinalVideoLayout(video);
+    });
+
+    const hoverControls = window.matchMedia('(hover: hover) and (pointer: fine)');
+    if (hoverControls.matches) {
+        document.querySelectorAll('.project-final__player').forEach((player) => {
+            const video = player.querySelector('video');
+            if (!video) return;
+            const showControls = () => { video.controls = true; };
+            const hideControls = () => { if (document.activeElement !== video) video.controls = false; };
+            video.controls = false;
+            player.addEventListener('pointerenter', showControls);
+            player.addEventListener('pointerleave', hideControls);
+            video.addEventListener('focus', showControls);
+            video.addEventListener('blur', hideControls);
+        });
+    }
 })();
 </script>
 <script>
