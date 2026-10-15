@@ -2773,6 +2773,11 @@ class ExternalMediaProjectPipeline:
                         project.render_job.original_video,
                         'video_final.mp4',
                     )
+                    ExternalMediaPipeline().create_dashboard_thumbnail(
+                        project.render_job,
+                        source,
+                        workspace.path,
+                    )
                 project.render_job.status = ExternalMediaJob.Status.FINISHED
                 project.render_job.progress = 100
                 project.render_job.current_step = 'Processamento finalizado'
@@ -3811,6 +3816,31 @@ class ExternalMediaPipeline:
         self.off_context_analyzer = OffContextAnalyzer()
         self.quality = MediaQualityService(self.audio.runner)
 
+    def create_dashboard_thumbnail(self, job, source, workdir):
+        """Persist a compact still from the final video for project cards.
+
+        A thumbnail is helpful metadata only, so an extraction failure must not
+        invalidate an otherwise successful render.
+        """
+        thumbnail_path = workdir / 'dashboard-thumbnail.jpg'
+        try:
+            self.audio.runner.run([
+                settings.FFMPEG_BINARY, '-y', '-ss', '1',
+                '-i', FFmpegRunner.input_arg(source), '-frames:v', '1',
+                '-vf', 'scale=640:-2', '-q:v', '3', str(thumbnail_path),
+            ])
+            if not thumbnail_path.exists() or not thumbnail_path.stat().st_size:
+                raise ExternalMediaError('O vídeo não possui um quadro disponível para a miniatura.')
+            self.storage.save_asset(
+                job,
+                MediaAsset.Kind.THUMBNAIL,
+                job.original_language,
+                thumbnail_path,
+                thumbnail_path.name,
+            )
+        except Exception:
+            logger.warning('dashboard_thumbnail_failed job=%s', job.pk, exc_info=True)
+
     def prepare_subtitle_tracks(self, job_id):
         job = self._get_job(job_id)
         try:
@@ -3945,6 +3975,13 @@ class ExternalMediaPipeline:
                             88 + round(((index + 1) / len(tracks)) * 11),
                             f'Vídeo {track.language.upper()} concluído',
                         )
+                output_asset = job.assets.filter(kind=MediaAsset.Kind.VIDEO).order_by('pk').first()
+                if output_asset:
+                    self.create_dashboard_thumbnail(
+                        job,
+                        media_input_factory(output_asset.file).get_ffmpeg_input(),
+                        workdir,
+                    )
             job.status = ExternalMediaJob.Status.FINISHED
             job.progress = 100
             job.current_step = 'Processamento finalizado'

@@ -587,6 +587,7 @@ class GlossaryTerm(BaseModel):
 class MediaAsset(BaseModel):
     class Kind(models.TextChoices):
         VIDEO = 'VIDEO', 'Vídeo renderizado'
+        THUMBNAIL = 'THUMBNAIL', 'Miniatura do vídeo'
         SRT = 'SRT', 'Legenda SRT'
         VTT = 'VTT', 'Legenda VTT'
 

@@ -2499,6 +2499,36 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertContains(detail, 'Exportar projeto')
         self.assertContains(detail, 'Adobe Premiere')
 
+    @patch('website.views.external_media.export_premiere_project.delay')
+    def test_failed_premiere_export_is_reused_on_retry(self, delay):
+        delay.return_value.id = 'premiere-export-retry-123'
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+        export = ExternalMediaProjectExport.objects.create(
+            project=project,
+            created_by=self.member,
+            status=ExternalMediaProjectExport.Status.ERROR,
+            progress=78,
+            current_step='Exportação interrompida',
+            error_message='Falha ao validar a exportação.',
+        )
+
+        response = self.client.post(
+            reverse('external_media_project_export_premiere', args=[project.public_id]),
+        )
+
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        self.assertEqual(ExternalMediaProjectExport.objects.filter(project=project).count(), 1)
+        export.refresh_from_db()
+        self.assertEqual(export.status, ExternalMediaProjectExport.Status.PREPARING)
+        self.assertEqual(export.progress, 2)
+        self.assertEqual(export.current_step, 'Nova tentativa adicionada à fila')
+        self.assertEqual(export.error_message, '')
+        self.assertEqual(export.celery_task_id, 'premiere-export-retry-123')
+
     def test_export_status_endpoint_returns_async_progress(self):
         project = self.make_project()
         export = ExternalMediaProjectExport.objects.create(
@@ -6552,6 +6582,15 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertEqual(audio_stream, '')
         self.assertFalse(asset['has_audio'])
         self.assertEqual(track['clips'][0]['effects'], [])
+
+    def test_consolidated_video_rate_becomes_sequence_rate(self):
+        sequence = {'fps': 30.0, 'timebase': 30, 'ntsc': False}
+
+        InternalTimelineBuilder._align_sequence_rate(sequence, {'fps': 29.97002997002997})
+
+        self.assertAlmostEqual(sequence['fps'], 29.97002997002997)
+        self.assertEqual(sequence['timebase'], 30)
+        self.assertTrue(sequence['ntsc'])
 
     def test_consolidated_layout_accepts_project_without_music_or_captions(self):
         timeline = {

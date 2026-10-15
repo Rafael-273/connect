@@ -177,6 +177,13 @@ class InternalTimelineBuilder:
         consolidated_asset, consolidated_track = self._consolidated_video(
             project, package_root, sequence, duration_ms,
         )
+        if consolidated_asset:
+            # The finished visual master is V1 in the editable package. It is the
+            # authoritative cadence for the Premiere sequence: source uploads can
+            # have a different (or variable) FPS from the rendered deliverable.
+            # Keeping the original source FPS here makes the generated XML invalid
+            # for a perfectly valid final master (for example 30 vs 29.97 fps).
+            self._align_sequence_rate(sequence, consolidated_asset)
         reference_mix_asset = self._reference_mix(project, package_root, duration_ms)
         if reference_mix_asset:
             assets.append(reference_mix_asset)
@@ -324,6 +331,19 @@ class InternalTimelineBuilder:
             'id': 'V1', 'name': 'Vídeo consolidado (cortes e enquadramento aprovados)',
             'role': 'main', 'clips': [clip], 'locked': True,
         }
+
+    @staticmethod
+    def _align_sequence_rate(sequence, asset):
+        """Uses the final master cadence for the XML sequence when available."""
+        try:
+            fps = float(asset.get('fps') or 0)
+        except (TypeError, ValueError):
+            return
+        if fps <= 0:
+            return
+        sequence['fps'] = fps
+        sequence['timebase'] = max(1, round(fps))
+        sequence['ntsc'] = abs(fps - round(fps)) > 0.01
 
     def _reference_mix(self, project, package_root, duration_ms):
         """Exports the approved stereo mix for A/B reference, without activating it."""

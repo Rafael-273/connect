@@ -37,7 +37,6 @@
         align-items: center;
         gap: 0.875rem;
         padding: 1rem 1.125rem;
-        border-bottom: 1px solid #eef1f5;
         background: linear-gradient(90deg, #fff9f9 0%, #fff 58%);
     }
 
@@ -55,18 +54,30 @@
         background: #C90905;
         box-shadow: 0 2px 8px rgba(201, 9, 5, 0.2);
     }
+    .media-project-preview {
+        flex-shrink: 0;
+        width: 4.75rem;
+        height: 3.25rem;
+        overflow: hidden;
+        border: 1px solid #f0e2e1;
+        border-radius: .75rem;
+        background: #fff5f5;
+        box-shadow: 0 3px 10px rgba(90, 20, 16, .08);
+    }
+    .media-project-preview img { width:100%; height:100%; object-fit:cover; }
+    .media-project-preview .media-project-avatar { width:100%; height:100%; border-radius:0; box-shadow:none; }
 
     .media-status-badge {
         display: inline-flex;
         align-items: center;
         gap: .42rem;
         flex-shrink: 0;
-        padding: .36rem .6rem;
+        padding: .4rem .65rem;
         border-radius: 9999px;
-        border: 0;
+        border: 1px solid transparent;
         font-size: .72rem;
-        font-weight: 700;
-        letter-spacing: .015em;
+        font-weight: 800;
+        letter-spacing: .02em;
         line-height: 1;
         white-space: nowrap;
     }
@@ -76,19 +87,43 @@
         height: .4rem;
         border-radius: 9999px;
         background: currentColor;
-        opacity: .85;
+        box-shadow: 0 0 0 3px currentColor;
+        opacity: .88;
     }
-    .media-status-badge.is-finished { background: #f0fdf4; color: #15803d; }
-    .media-status-badge.is-error { background: #fff1f2; color: #be123c; }
-    .media-status-badge.is-cancelled { background: #f1f5f9; color: #64748b; }
-    .media-status-badge.is-processing { background: #fff8e6; color: #b45309; }
+    .media-status-badge.is-finished { background:linear-gradient(135deg,#f0fdf4,#f7fef9); border-color:#d3f4dd; color:#16803d; }
+    .media-status-badge.is-error { background:linear-gradient(135deg,#fff1f2,#fff8f8); border-color:#fecdd3; color:#be123c; }
+    .media-status-badge.is-cancelled { background:#f8fafc; border-color:#e2e8f0; color:#64748b; }
+    .media-status-badge.is-processing { background:linear-gradient(135deg,#fff8e6,#fffdf5); border-color:#fce7b0; color:#b45309; }
 
     .media-project-actions {
         display: flex;
         align-items: center;
         gap: 0.4rem;
-        margin-left: auto;
     }
+    .media-project-open {
+        display: inline-flex;
+        align-items: center;
+        gap: .42rem;
+        flex-shrink: 0;
+        padding: .55rem .7rem;
+        border-radius: .65rem;
+        background: #C90905;
+        color: #fff;
+        font-size: .8rem;
+        font-weight: 800;
+        text-decoration: none;
+        transition: background .18s ease, transform .18s ease;
+    }
+    .media-project-open:hover { background:#ab0704; color:#fff; transform:translateY(-1px); }
+    .media-project-open i { font-size:.7rem; }
+    .media-project-header-status { margin-left: auto; }
+    .media-project-more { position:relative; flex-shrink:0; }
+    .media-project-more summary { list-style:none; }
+    .media-project-more summary::-webkit-details-marker { display:none; }
+    .media-project-more__list { position:absolute; z-index:30; top:calc(100% + .45rem); right:0; width:12.5rem; overflow:hidden; border:1px solid #e2e8f0; border-radius:.8rem; background:#fff; padding:.35rem; box-shadow:0 16px 36px rgba(15,23,42,.16); }
+    .media-project-more__item { display:flex; width:100%; align-items:center; gap:.65rem; border-radius:.55rem; padding:.65rem .7rem; color:#475467; font-size:.82rem; font-weight:700; text-align:left; text-decoration:none; }
+    .media-project-more__item:hover { background:#f8fafc; color:#C90905; }
+    .media-project-more__item.is-danger:hover { background:#fff1f2; color:#dc2626; }
     .media-project-action {
         width: 2rem;
         height: 2rem;
@@ -325,11 +360,11 @@
         .media-project-actions {
             order: initial;
             width: auto;
-            margin-left: auto;
             padding-top: 0;
             border-top: 0;
             align-self: center;
         }
+        .media-project-open { padding:.52rem .62rem; }
         .media-project-action { width: 2.2rem; height: 2.2rem; }
         .media-project-card-body { padding: .9rem; }
         .media-project-meta { display: grid; gap: .65rem; }
@@ -438,7 +473,17 @@
             {% for project in projects %}
             <article class="media-project-card">
                 <div class="media-project-card-header">
-                    <div class="media-project-avatar"><span class="mt-1">{{ project.name|slice:":1"|upper }}</span></div>
+                    <div class="media-project-preview">
+                        {% for asset in project.render_job.dashboard_thumbnails %}
+                        <img src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1" alt="Prévia de {{ project.name }}" loading="lazy">
+                        {% empty %}
+                        {% if project.dashboard_media %}
+                        <img src="{{ project.dashboard_media.0.thumbnail.url }}" alt="Prévia de {{ project.name }}" loading="lazy">
+                        {% else %}
+                        <div class="media-project-avatar"><span class="mt-1">{{ project.name|slice:":1"|upper }}</span></div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
                     <div class="flex-1 min-w-0">
                         <h3 class="text-base font-bold text-gray-900 truncate">{{ project.name }}</h3>
                         <p class="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
@@ -446,60 +491,18 @@
                             {{ project.template_version.template.name }}
                         </p>
                     </div>
-                    <div class="media-project-actions">
-                        <a href="{% url 'external_media_project_edit' project.public_id %}" class="media-project-action" title="Editar projeto" aria-label="Editar projeto {{ project.name }}">
-                            <i class="fas fa-pen"></i>
-                        </a>
-                        <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">
-                            {% csrf_token %}
-                            <button class="media-project-action" title="Clonar projeto" aria-label="Clonar projeto {{ project.name }}">
-                                <i class="fas fa-clone"></i>
-                            </button>
-                        </form>
-                        <button type="button" class="media-project-action is-danger" data-delete-project data-project-name="{{ project.name }}" data-project-status="{{ project.status }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}" title="Excluir projeto" aria-label="Excluir projeto {{ project.name }}">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="media-project-card-body">
-                    <div class="media-project-meta sm:hidden">
-                        <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
-                        <span><i class="fas fa-user"></i>{{ project.created_by.name }}</span>
-                        <span><i class="far fa-calendar-alt"></i>{{ project.created_at|date:'d/m/Y H:i' }}</span>
-                    </div>
-                    <div class="hidden sm:grid media-info-grid">
-                        <div class="media-info-item">
-                            <i class="fas fa-user"></i>
-                            <span class="mt-1">{{ project.created_by.name }}</span>
+                    <span class="media-status-badge media-project-header-status {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
+                    <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-project-open" aria-label="Abrir projeto {{ project.name }}">
+                        <span>Abrir</span><i class="fas fa-arrow-right"></i>
+                    </a>
+                    <details class="media-project-more">
+                        <summary class="media-project-action cursor-pointer" title="Mais ações" aria-label="Mais ações para {{ project.name }}"><i class="fas fa-ellipsis"></i></summary>
+                        <div class="media-project-more__list">
+                            <a href="{% url 'external_media_project_edit' project.public_id %}" class="media-project-more__item"><i class="fas fa-pen"></i>Editar projeto</a>
+                            <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">{% csrf_token %}<button type="submit" class="media-project-more__item"><i class="fas fa-clone"></i>Clonar projeto</button></form>
+                            <button type="button" class="media-project-more__item is-danger" data-delete-project data-project-name="{{ project.name }}" data-project-status="{{ project.status }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}"><i class="fas fa-trash"></i>Excluir projeto</button>
                         </div>
-                        <div class="media-info-item">
-                            <i class="far fa-calendar-alt"></i>
-                            <span class="mt-1">{{ project.created_at|date:'d/m/Y H:i' }}</span>
-                        </div>
-                        <div class="media-info-item">
-                            <i class="fas fa-stopwatch"></i>
-                            <span class="mt-1">{% if project.duration_minutes != None %}{{ project.duration_minutes }} min de processamento{% else %}Tempo indisponível{% endif %}</span>
-                        </div>
-                        <div class="media-info-item">
-                            <i class="fas fa-download"></i>
-                            {% with downloads=project.render_job.download_count|default:0 %}
-                            <span class="mt-1">{{ downloads }} download{{ downloads|pluralize }}</span>
-                            {% endwith %}
-                        </div>
-                        <div class="media-info-item span-full">
-                            <i class="fas fa-circle-info"></i>
-                            <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
-                        </div>
-                    </div>
-
-                    <div class="media-project-footer">
-                        <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-open-btn">
-                            <span class="media-open-btn-icon"><i class="fas fa-play"></i></span>
-                            <span>Abrir projeto</span>
-                            <i class="fas fa-arrow-right media-open-btn-arrow"></i>
-                        </a>
-                    </div>
+                    </details>
                 </div>
             </article>
             {% endfor %}
@@ -656,6 +659,7 @@
 
         document.querySelectorAll('[data-delete-project]').forEach((button) => {
             button.addEventListener('click', () => {
+                button.closest('details')?.removeAttribute('open');
                 trigger = button;
                 delete form.dataset.submitting;
                 confirmButton.disabled = false;

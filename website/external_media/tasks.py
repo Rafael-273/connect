@@ -1,5 +1,6 @@
 from decimal import Decimal
 from contextlib import contextmanager
+import logging
 from pathlib import Path
 
 from celery import shared_task
@@ -35,6 +36,9 @@ from .services import ExternalMediaPipeline, ExternalMediaProjectPipeline, Video
 from .subtitle_reviews import SubtitleReviewService
 from .timeline import InternalTimelineBuilder
 from .workspace import JobWorkspace, MediaWorkspaceGarbageCollector
+
+
+logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, autoretry_for=(), name='external_media.prepare_subtitles')
@@ -81,12 +85,27 @@ def create_project_preview(self, media_id):
             estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
         ) as workspace:
             preview = workspace.file('proxy', 'preview.mp4')
-            VideoAssemblyService().create_proxy(media_input.get_ffmpeg_input(), preview)
+            source = media_input.get_ffmpeg_input()
+            VideoAssemblyService().create_proxy(source, preview)
             with preview.open('rb') as handle:
                 item.preview_file.save('preview.mp4', File(handle), save=False)
+            thumbnail = workspace.file('thumbnail', 'dashboard.jpg')
+            try:
+                FFmpegRunner().run([
+                    settings.FFMPEG_BINARY, '-y', '-ss', '1',
+                    '-i', FFmpegRunner.input_arg(source), '-frames:v', '1',
+                    '-vf', 'scale=640:-2', '-q:v', '3', str(thumbnail),
+                ])
+                if thumbnail.exists() and thumbnail.stat().st_size:
+                    with thumbnail.open('rb') as handle:
+                        item.thumbnail.save('dashboard.jpg', File(handle), save=False)
+            except Exception:
+                # The upload preview itself is still useful if a short or
+                # malformed video has no frame available for the dashboard.
+                logger.warning('project_media_thumbnail_failed media=%s', item.pk, exc_info=True)
         item.preview_status = ProjectBlockMedia.PreviewStatus.READY
         item.preview_error = ''
-        item.save(update_fields=['preview_file', 'preview_status', 'preview_error', 'update_at'])
+        item.save(update_fields=['preview_file', 'thumbnail', 'preview_status', 'preview_error', 'update_at'])
     except Exception as exc:
         item.preview_status = ProjectBlockMedia.PreviewStatus.ERROR
         item.preview_error = str(exc)[:255]

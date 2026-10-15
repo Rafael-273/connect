@@ -1,15 +1,25 @@
 {% extends 'member/external_media/base.html' %}
 
+{% block media_header_icon %}
+<a href="{% url 'external_media_dashboard' %}" class="project-detail-header-icon{% if project_header_thumbnail %} has-preview{% endif %}" aria-label="Voltar para projetos">
+    {% if project_header_thumbnail %}
+    <img src="{% url 'external_media_asset' project.render_job.public_id project_header_thumbnail.pk %}?preview=1" alt="Prévia de {{ project.name }}">
+    {% else %}
+    <i class="fas fa-film"></i>
+    {% endif %}
+</a>
+{% endblock %}
+
 {% block media_header_title %}
-<a href="{% url 'external_media_dashboard' %}" class="block">
-    <strong class="block text-gray-900 text-lg truncate">{{ project.name }}</strong>
-    <small class="text-gray-500"><i class="fas fa-layer-group mr-1" style="color:#C90905"></i>{{ project.template_version.template.name }}</small>
+<a href="{% url 'external_media_dashboard' %}" class="project-detail-header-title">
+    <span class="project-detail-header-title__meta"><i class="fas fa-layer-group"></i>{{ project.template_version.template.name }}</span>
+    <strong>{{ project.name }}</strong>
 </a>
 {% endblock %}
 
 {% block media_header_actions %}
 {% if project.status == 'AWAITING_REVIEW' %}<a href="{% url 'external_media_project_preview' project.public_id %}" class="media-btn media-primary"><i class="fas fa-wand-magic-sparkles"></i>Revisar edição</a>{% endif %}
-{% if project.status == 'FINISHED' and project.render_job %}{% for asset in assets %}{% if asset.kind == 'VIDEO' %}<a href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?download=1" download class="media-btn media-primary"><i class="fas fa-download"></i>Baixar vídeo</a>{% endif %}{% endfor %}{% endif %}
+{% if project.status == 'FINISHED' and project.render_job %}{% for asset in assets %}{% if asset.kind == 'VIDEO' %}<a href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?download=1" download class="media-btn media-primary project-header-download" aria-label="Baixar vídeo" title="Baixar vídeo"><i class="fas fa-download"></i><span>Baixar vídeo</span></a>{% endif %}{% endfor %}{% endif %}
 {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
 <details class="project-actions-menu project-header-actions-menu">
     <summary class="media-btn media-secondary cursor-pointer" aria-label="Mais ações" title="Mais ações"><i class="fas fa-ellipsis"></i></summary>
@@ -25,6 +35,25 @@
 {{ block.super }}
 <style>
     .media-shell { padding-bottom: 1rem; }
+    header:has(~ .media-shell .project-final) { border-bottom-width:1px!important; border-color:#f1d7d5!important; background:linear-gradient(110deg,#fff 0%,#fffafa 100%); }
+    header:has(~ .media-shell .project-final) .media-header-inner { min-height:5.5rem; padding-top:1rem; padding-bottom:1rem; }
+    .project-detail-header-icon { display:grid; flex:none; width:2.85rem; height:2.85rem; place-items:center; border-radius:.9rem; background:linear-gradient(135deg,#d90905,#af0503); color:#fff; transition:transform .2s ease; }
+    .project-detail-header-icon:hover { color:#fff; transform:translateY(-1px); }
+    .project-detail-header-icon.has-preview { overflow:hidden; background:#1f2937; }
+    .project-detail-header-icon.has-preview img { width:100%; height:100%; object-fit:cover; }
+    .project-detail-header-title { display:grid; min-width:0; gap:.22rem; color:#111827; line-height:1.15; }
+    .project-detail-header-title:hover { color:#111827; }
+    .project-detail-header-title strong { overflow:hidden; font-size:1.08rem; font-weight:900; letter-spacing:-.025em; text-overflow:ellipsis; white-space:nowrap; }
+    .project-detail-header-title__meta { display:inline-flex; align-items:center; gap:.35rem; overflow:hidden; color:#8b8e98; font-size:.72rem; font-weight:700; text-overflow:ellipsis; white-space:nowrap; }
+    .project-detail-header-title__meta i { color:#c90905; font-size:.68rem; }
+    header:has(~ .media-shell .project-final) .media-header-actions { gap:.6rem; }
+    header:has(~ .media-shell .project-final) .media-header-actions > .media-btn { min-height:2.65rem; padding-left:1rem; padding-right:1rem; border-radius:.75rem; font-size:.84rem; }
+    header:has(~ .media-shell .project-final) .project-header-actions-menu > summary { width:2.65rem; min-height:2.65rem; justify-content:center; padding:0; border-radius:.75rem; }
+    @media (max-width:640px) {
+        header:has(~ .media-shell .project-final) .media-header-actions { gap:.45rem; }
+        header:has(~ .media-shell .project-final) .project-header-download { width:2.65rem; min-height:2.65rem; justify-content:center; padding:0; }
+        .project-header-download span { display:none; }
+    }
     .project-media-block { overflow:hidden; border-color:#e8edf3; box-shadow:0 5px 18px rgba(15,23,42,.045); }
     .project-media-block.is-ready { border-color:#bbf7d0; }
     .project-media-block.is-ready .project-media-block__header { background:linear-gradient(90deg,#f0fdf4 0%,#fff 72%); border-color:#dcfce7; }
@@ -59,6 +88,52 @@
     .project-progress__result { margin-top:1.25rem; padding-top:1.25rem; border-top:1px solid #f0e7e6; }
     .project-result-video__player { display:flex; align-items:center; justify-content:center; margin-top:.8rem; max-height:min(62dvh,42rem); overflow:hidden; }
     .project-result-video__player video { display:block; width:auto; height:auto; max-width:100%; max-height:min(62dvh,42rem); border-radius:1rem; background:#050505; box-shadow:0 6px 22px rgba(15,23,42,.12); object-fit:contain; }
+    .project-final { overflow:hidden; border-color:#f1d7d5; background:linear-gradient(145deg,#fff 0%,#fffafa 100%); }
+    .project-final__header { display:flex; align-items:center; justify-content:center; padding:2.75rem 1.5rem 1.8rem; text-align:center; }
+    .project-final__header > div { display:grid; justify-items:center; gap:.3rem; }
+    .project-final__eyebrow { display:inline-flex; align-items:center; gap:.45rem; margin:0; color:#a41310; font-size:.72rem; font-weight:900; letter-spacing:.12em; line-height:1.1; text-transform:uppercase; }
+    .project-final__eyebrow i { width:.5rem; height:.5rem; border-radius:999px; background:#d90905; box-shadow:0 0 0 4px rgba(201,9,5,.12); }
+    .project-final__title { margin:0; color:#111827; font-size:clamp(1.55rem,2.7vw,2.2rem); font-weight:500; letter-spacing:-.04em; line-height:1.1; }
+    .project-final__title strong { font-weight:900; }
+    .project-final__description { margin:0; color:#6b7280; font-size:.9rem; line-height:1.35; }
+    .project-final__body { display:grid; grid-template-columns:minmax(0,1fr); align-items:center; gap:1.25rem; padding:0 1.25rem 1.4rem; }
+    .project-final__player { display:flex; align-items:center; justify-content:center; min-height:14rem; }
+    .project-final__player video { display:block; width:auto; height:auto; max-width:100%; max-height:min(68dvh,44rem); border-radius:1rem; background:#050505; box-shadow:0 16px 38px rgba(46,14,12,.22); object-fit:contain; transition:transform .28s ease,box-shadow .28s ease; }
+    .project-final__resources { width:min(100%,21rem); justify-self:center; border-top:1px solid #f0e7e6; padding-top:1rem; }
+    .project-final__resources-details { margin:0; }
+    .project-final__resources-summary { display:flex; align-items:center; justify-content:space-between; gap:.75rem; cursor:pointer; list-style:none; color:#1f2937; font-size:.92rem; font-weight:900; }
+    .project-final__resources-summary::-webkit-details-marker { display:none; }
+    .project-final__resources-summary i { color:#9ca3af; font-size:.72rem; transition:transform .2s ease; }
+    .project-final__resources-details[open] .project-final__resources-summary i { color:#c90905; transform:rotate(180deg); }
+    .project-final__resources-content { padding-top:.75rem; }
+    .project-final__resources-description { margin:.2rem 0 .85rem; color:#8b8e98; font-size:.78rem; line-height:1.4; }
+    .project-final__resources-list { display:flex; flex-wrap:wrap; gap:.5rem; }
+    .project-final__resources-list .media-btn { min-height:2.3rem; }
+    .project-final__exports { margin-top:1.2rem; border-top:1px solid #f0e7e6; padding-top:1.1rem; }
+    .project-final__exports-summary { display:flex; align-items:center; justify-content:space-between; gap:.75rem; cursor:pointer; list-style:none; color:#1f2937; font-size:.86rem; font-weight:900; }
+    .project-final__exports-summary::-webkit-details-marker { display:none; }
+    .project-final__exports-summary > span:last-child { display:inline-flex; align-items:center; gap:.45rem; color:#8b8e98; font-size:.7rem; font-weight:800; }
+    .project-final__exports-summary.is-error > span:last-child { color:#b42318; }
+    .project-final__exports-summary.is-active > span:last-child { color:#c90905; }
+    .project-final__exports-summary i { color:#9ca3af; font-size:.68rem; transition:transform .2s ease; }
+    .project-final__exports[open] .project-final__exports-summary i { color:#c90905; transform:rotate(180deg); }
+    .project-final__exports-content { padding-top:.75rem; }
+    .project-final__exports-description { margin:0 0 .7rem; color:#8b8e98; font-size:.74rem; line-height:1.4; }
+    .project-final__export { border:1px solid #ece7e6; border-radius:.85rem; padding:.85rem; background:#fff; }
+    .project-final__export.is-error { border-color:#f6d3d0; background:linear-gradient(135deg,#fff 0%,#fffafa 100%); }
+    .project-final__export + .project-final__export { margin-top:.55rem; }
+    .project-final__export-head { display:flex; align-items:flex-start; justify-content:space-between; gap:.7rem; }
+    .project-final__export-label { display:block; color:#374151; font-size:.78rem; font-weight:900; line-height:1.3; }
+    .project-final__export-status { display:inline-flex; align-items:center; gap:.28rem; margin-top:.25rem; color:#b42318; font-size:.68rem; font-weight:800; }
+    .project-final__export-status::before { content:''; width:.38rem; height:.38rem; border-radius:999px; background:currentColor; }
+    .project-final__export-step { display:block; margin-top:.16rem; color:#8b8e98; font-size:.72rem; line-height:1.3; }
+    .project-final__export-progress { color:#c90905; font-size:.8rem; font-weight:900; }
+    .project-final__export-track { height:.32rem; margin-top:.65rem; overflow:hidden; border-radius:999px; background:#f1f2f4; }
+    .project-final__export-bar { height:100%; border-radius:inherit; background:#c90905; transition:width .4s ease; }
+    .project-final__export-error { margin:.65rem 0 0; color:#b42318; font-size:.72rem; line-height:1.4; }
+    .project-final__export-error:empty { display:none; }
+    .project-final__export-retry { display:inline-flex; align-items:center; gap:.45rem; min-height:2.15rem; margin-top:.8rem; border:0; border-radius:.6rem; background:#c90905; padding:0 .75rem; color:#fff; font-size:.76rem; font-weight:900; transition:background .2s ease,transform .2s ease; }
+    .project-final__export-retry:hover { background:#a90805; transform:translateY(-1px); }
     .project-progress { overflow:hidden; border-color:#f1d7d5; background:linear-gradient(135deg, #fff 0%, #fff9f8 100%); }
     .project-progress__top { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; }
     .project-progress__eyebrow { display:inline-flex; align-items:center; gap:.45rem; color:#a41310; font-size:.72rem; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
@@ -106,13 +181,16 @@
     @keyframes project-submit-spin { to { transform:rotate(360deg); } }
     @keyframes project-player-expand { from { opacity:.45; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
     @keyframes media-trim-sheet-in { from { transform:translateY(1.5rem); opacity:.6; } to { transform:translateY(0); opacity:1; } }
-    @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } .project-progress.is-timeline-open .project-result-video__player video { animation:none; } }
+    @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } .project-progress.is-timeline-open .project-result-video__player video { animation:none; } .project-final__player video { transition:none; } }
+    @media (hover:hover) and (pointer:fine) { .project-final__player video:hover { transform:scale(1.015); box-shadow:0 20px 46px rgba(46,14,12,.28); } }
     @media (min-width:640px) {
         .project-progress__steps { grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:1.15rem; row-gap:0; }
         .project-progress__steps-title { grid-column:1 / -1; }
         .project-progress__step:nth-of-type(odd)::after { content:''; display:block; position:absolute; top:50%; left:100%; width:1.15rem; height:1px; background:#efd9d7; transform:translateY(-50%); }
     }
     @media (min-width:1024px) {
+        .project-final__body { grid-template-columns:minmax(0,1fr) minmax(15rem,.42fr); gap:2.5rem; padding:0 2.1rem 2rem; }
+        .project-final__resources { justify-self:stretch; border-top:0; border-left:1px solid #f0e7e6; padding:1rem 0 1rem 2rem; }
         .project-progress.is-portrait { display:grid; grid-template-columns:minmax(0,1fr) minmax(18rem,.72fr); column-gap:2rem; align-items:start; }
         .project-progress.is-portrait > .project-progress__summary { grid-column:1; }
         .project-progress.is-portrait > .project-progress__result { grid-column:2; grid-row:1; align-self:stretch; margin-top:0; border:0; border-left:1px solid #f0dfdd; border-radius:0; padding:0 0 0 2rem; background:transparent; box-shadow:none; }
@@ -122,6 +200,11 @@
         .project-progress.is-portrait.is-timeline-open > .project-progress__result { display:flex; align-items:center; overflow:hidden; }
         .project-progress.is-portrait.is-timeline-open .project-result-video__player { height:100%; max-height:none; }
         .project-progress.is-portrait.is-timeline-open .project-result-video__player video { width:auto; height:100%; max-height:none; animation:project-player-expand .32s ease-out both; }
+    }
+    @media (min-width:1280px) {
+        .project-final__body { grid-template-columns:minmax(0,1fr) minmax(0,min(44rem,40vw)) minmax(0,1fr); gap:0; }
+        .project-final__player { grid-column:2; width:100%; }
+        .project-final__resources { grid-column:3; justify-self:center; width:min(100%,21rem); }
     }
     @media (max-width:900px), (hover:none) and (pointer:coarse) {
         .project-progress__top { align-items:center; }
@@ -138,6 +221,63 @@
 
 {% block media_content %}
 {% if project.status != 'DRAFT' %}
+{% if project.status == 'FINISHED' %}
+<section class="media-card project-final mb-7">
+    <div class="project-final__header">
+        <div>
+            <p class="project-final__eyebrow"><i></i>Finalizado</p>
+            <h2 class="project-final__title">Seu vídeo está <strong>pronto!</strong></h2>
+            <p class="project-final__description">Assista à prévia ou baixe o arquivo final.</p>
+        </div>
+    </div>
+    <div class="project-final__body">
+        {% if project.render_job %}
+        {% for asset in assets %}{% if asset.kind == 'VIDEO' %}
+        <div class="project-final__player">
+            <video controls preload="metadata" playsinline webkit-playsinline src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1"></video>
+        </div>
+        {% endif %}{% endfor %}
+        {% endif %}
+        <aside class="project-final__resources" aria-label="Arquivos do projeto">
+            <details class="project-final__resources-details">
+                <summary class="project-final__resources-summary"><span>Arquivos do projeto</span><i class="fas fa-chevron-down"></i></summary>
+                <div class="project-final__resources-content">
+                    <p class="project-final__resources-description">Legendas e arquivos gerados para a sua pós-produção.</p>
+                    <div class="project-final__resources-list">
+                        {% for asset in assets %}{% if asset.kind == 'SRT' %}<a class="media-btn media-muted text-sm" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>SRT {{ asset.language|upper }}</a>{% endif %}{% endfor %}
+                    </div>
+                </div>
+            </details>
+            {% if project_exports %}
+                {% for export in project_exports %}
+            <details class="project-final__exports"{% if export.status != 'FINISHED' %} open{% endif %}>
+                <summary class="project-final__exports-summary{% if export.status == 'ERROR' %} is-error{% elif export.status != 'FINISHED' %} is-active{% endif %}">
+                    <span>Adobe Premiere Pro</span>
+                    <span>{% if export.status == 'FINISHED' %}Pronto{% elif export.status == 'ERROR' %}Erro{% else %}{{ export.progress }}%{% endif %}<i class="fas fa-chevron-down"></i></span>
+                </summary>
+                <div class="project-final__exports-content">
+                    <p class="project-final__exports-description">Pacote editável para continuar a pós-produção.</p>
+                <article class="project-final__export{% if export.status == 'ERROR' %} is-error{% endif %}" data-export-card data-terminal="{% if export.status == 'FINISHED' or export.status == 'ERROR' %}1{% else %}0{% endif %}" data-status-url="{% url 'external_media_project_export_status' project.public_id export.public_id %}">
+                    <div class="project-final__export-head">
+                        <div>
+                            <strong class="project-final__export-label" data-export-label>{{ export.get_format_display }}</strong>
+                            {% if export.status == 'ERROR' %}<span class="project-final__export-status">Exportação interrompida</span>{% else %}<span class="project-final__export-step" data-export-step>{{ export.current_step }}</span>{% endif %}
+                        </div>
+                        <strong class="project-final__export-progress" data-export-progress>{{ export.progress }}%</strong>
+                    </div>
+                    <div class="project-final__export-track"><div class="project-final__export-bar" data-export-bar style="width:{{ export.progress }}%"></div></div>
+                    {% if export.status == 'FINISHED' %}<a class="media-btn media-primary text-sm mt-3" href="{% url 'external_media_project_export_download' project.public_id export.public_id %}"><i class="fas fa-download"></i>Baixar pacote</a>{% endif %}
+                    {% if export.error_message %}<p class="project-final__export-error" data-export-error>{{ export.error_message }}</p>{% else %}<p class="project-final__export-error" data-export-error></p>{% endif %}
+                    {% if export.status == 'ERROR' %}<form method="post" action="{% url 'external_media_project_export_premiere' project.public_id %}">{% csrf_token %}<button type="submit" class="project-final__export-retry"><i class="fas fa-rotate-right"></i>Tentar novamente</button></form>{% endif %}
+                </article>
+                </div>
+            </details>
+                {% endfor %}
+            {% endif %}
+        </aside>
+    </div>
+</section>
+{% else %}
 <section class="media-card project-progress p-5 sm:p-7 mb-7" id="progress-card" data-status-url="{% url 'external_media_project_status' project.public_id %}" data-terminal="{% if project.status == 'AWAITING_REVIEW' or project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}1{% else %}0{% endif %}" data-elapsed="{{ project.duration_seconds|default:0 }}">
     <div class="project-progress__summary">
         <div class="project-progress__top">
@@ -152,17 +292,9 @@
         <p class="project-progress__elapsed"><i class="far fa-clock"></i>Tempo decorrido: <span id="duration-label">{{ project.duration_label|default:"Agora" }}</span></p>
         <details class="project-progress__details"><summary>Ver linha do tempo</summary><div class="project-progress__steps" id="progress-steps"><p class="project-progress__steps-title">Linha do tempo do processamento</p>{% for step in steps %}<div class="project-progress__step {% if step.status == 'FINISHED' %}is-finished{% elif step.status == 'RUNNING' %}is-running{% elif step.status == 'ERROR' %}is-error{% endif %}" data-step-order="{{ forloop.counter|stringformat:'02d' }}"><span class="project-progress__step-icon"><i class="fas {% if step.status == 'FINISHED' %}fa-check{% elif step.status == 'ERROR' %}fa-xmark{% elif step.status == 'RUNNING' %}fa-spinner fa-spin{% elif step.status == 'SKIPPED' %}fa-minus{% else %}fa-circle{% endif %}"></i></span><span>{{ step.label }}{% if step.message %}<small class="project-progress__step-message">{{ step.message }}</small>{% endif %}</span></div>{% endfor %}</div></details>
     </div>
-    {% if project.status == 'FINISHED' and project.render_job %}
-    {% for asset in assets %}{% if asset.kind == 'VIDEO' %}
-    <section class="project-progress__result">
-        <div class="project-result-video__player">
-            <video controls preload="metadata" playsinline webkit-playsinline src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1"></video>
-        </div>
-    </section>
-    {% endif %}{% endfor %}
-    {% endif %}
     {% if project.error_message %}<p class="mt-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm">{{ project.error_message }}</p>{% endif %}
 </section>
+{% endif %}
 {% endif %}
 
 {% if project.status == 'FINISHED' or project.status == 'ERROR' or project.status == 'CANCELLED' %}
@@ -936,53 +1068,6 @@
 {% endif %}
 
 {% if project.render_job and project.status == 'FINISHED' %}
-<section class="media-card p-5 sm:p-6 mb-6">
-    <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-            <h2 class="text-xl font-black">Arquivos do projeto</h2>
-            <p class="text-sm text-gray-500 mt-1">Baixe as legendas e os arquivos gerados para continuar a pós-produção.</p>
-        </div>
-    </div>
-    <div class="mt-4 pt-4 border-t border-gray-100">
-        {% if assets %}<details class="text-sm"><summary class="cursor-pointer font-bold text-gray-600">Arquivos de legenda</summary><div class="flex flex-wrap gap-2 mt-3">{% for asset in assets %}{% if asset.kind == 'SRT' %}<a class="media-btn media-muted text-sm" href="{% url 'external_media_asset' project.render_job.public_id asset.pk %}"><i class="fas fa-file-lines"></i>SRT {{ asset.language|upper }}</a>{% endif %}{% endfor %}</div></details>{% endif %}
-        {% for export in project_exports %}{% if export.status == 'FINISHED' %}<a class="media-btn media-muted text-sm" href="{% url 'external_media_project_export_timeline' project.public_id export.public_id %}"><i class="fas fa-code"></i>Timeline JSON</a>{% endif %}{% endfor %}
-    </div>
-</section>
-
-{% if project_exports %}
-<section class="media-card p-5 sm:p-6 mb-6">
-    <h2 class="font-black text-lg">Exportações editáveis</h2>
-    <p class="text-sm text-gray-500 mb-4">Pacote completo com XML, originais, música, legendas, LUT e metadata.</p>
-    <div class="space-y-3">
-        {% for export in project_exports %}
-        <article class="rounded-xl border border-gray-200 p-4" data-export-card data-terminal="{% if export.status == 'FINISHED' or export.status == 'ERROR' %}1{% else %}0{% endif %}" data-status-url="{% url 'external_media_project_export_status' project.public_id export.public_id %}">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <strong class="block" data-export-label>{{ export.get_format_display }} · {{ export.get_status_display }}</strong>
-                    <span class="text-sm text-gray-500" data-export-step>{{ export.current_step }}</span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <strong style="color:#C90905" data-export-progress>{{ export.progress }}%</strong>
-                    {% if export.status == 'FINISHED' %}
-                    <a class="media-btn media-primary text-sm" href="{% url 'external_media_project_export_download' project.public_id export.public_id %}"><i class="fas fa-download"></i>Baixar pacote</a>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="h-2 rounded-full bg-gray-100 overflow-hidden mt-3"><div class="h-full" data-export-bar style="width:{{ export.progress }}%;background:#C90905"></div></div>
-            {% if export.error_message %}<p class="text-sm text-red-700 mt-3" data-export-error>{{ export.error_message }}</p>{% else %}<p data-export-error></p>{% endif %}
-            {% if export.status == 'FINISHED' and export.compatibility.warnings %}
-            <div class="mt-4 rounded-xl bg-amber-50 border border-amber-100 p-4">
-                <strong class="block text-amber-900 mb-2"><i class="fas fa-triangle-exclamation mr-1"></i>Compatibilidade da exportação</strong>
-                <div class="space-y-1">{% for warning in export.compatibility.warnings %}<p class="text-sm text-amber-800">⚠ {{ warning }}</p>{% endfor %}</div>
-                <p class="text-sm text-green-800 mt-2">✓ Cortes, in/out, originais, trilhas, markers e legendas foram preservados.</p>
-            </div>
-            {% endif %}
-        </article>
-        {% endfor %}
-    </div>
-</section>
-{% endif %}
-
 <script>
 (() => {
     const closestFromEvent = (event, selector) => event.target instanceof Element ? event.target.closest(selector) : null;

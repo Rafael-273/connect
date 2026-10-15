@@ -12,7 +12,7 @@ from PIL import Image, UnidentifiedImageError
 from django.conf import settings
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-from django.db.models import F, Max, Q, Sum
+from django.db.models import F, Max, Prefetch, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -241,6 +241,17 @@ class ExternalMediaDashboardView(ExternalMediaRequiredMixin, ExternalMediaContex
 
         projects = ExternalMediaProject.objects.select_related(
             'created_by', 'template_version__template', 'render_job',
+        ).prefetch_related(
+            Prefetch(
+                'render_job__assets',
+                queryset=MediaAsset.objects.filter(kind=MediaAsset.Kind.THUMBNAIL),
+                to_attr='dashboard_thumbnails',
+            ),
+            Prefetch(
+                'block_media',
+                queryset=ProjectBlockMedia.objects.exclude(thumbnail='').order_by('block__order', 'position', 'pk'),
+                to_attr='dashboard_media',
+            ),
         ).order_by('-created_at')
 
         if query:
@@ -551,12 +562,16 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
             custom_block_form=ProjectCustomBlockForm(),
             settings_form=ExternalMediaProjectSettingsForm(project=project),
             assets=project.render_job.assets.all() if project.render_job_id else [],
+            project_header_thumbnail=(
+                project.render_job.assets.filter(kind=MediaAsset.Kind.THUMBNAIL).first()
+                if project.render_job_id else None
+            ),
             validation_errors=ProjectService.validate_uploads(project),
             can_retry_render=self._can_retry_project_render(project),
             restore_processed_result=restore_job,
             use_s3=settings.USE_S3,
             broll_config=BrollTimelineService.configuration(project),
-            project_exports=project.exports.order_by('-created_at')[:10],
+            project_exports=project.exports.order_by('-created_at')[:1],
             processing_history=project.processing_history.select_related('preset').prefetch_related('assets'),
         ))
 
@@ -2833,13 +2848,30 @@ class ExternalMediaProjectPremiereExportView(ExternalMediaRequiredMixin, View):
         if active:
             messages.warning(request, 'Já existe uma exportação deste projeto em andamento.')
             return redirect('external_media_project_detail', public_id=public_id)
-        export = ExternalMediaProjectExport.objects.create(
-            project=project,
-            created_by=self.member,
-            status=ExternalMediaProjectExport.Status.PREPARING,
-            progress=2,
-            current_step='Exportação adicionada à fila',
-        )
+        previous = project.exports.order_by('-created_at').first()
+        if previous and previous.status == ExternalMediaProjectExport.Status.ERROR:
+            export = previous
+            export.status = ExternalMediaProjectExport.Status.PREPARING
+            export.progress = 2
+            export.current_step = 'Nova tentativa adicionada à fila'
+            export.error_message = ''
+            export.compatibility = {}
+            export.validation_report = {}
+            export.celery_task_id = ''
+            export.started_at = None
+            export.finished_at = None
+            export.save(update_fields=[
+                'status', 'progress', 'current_step', 'error_message', 'compatibility',
+                'validation_report', 'celery_task_id', 'started_at', 'finished_at', 'update_at',
+            ])
+        else:
+            export = ExternalMediaProjectExport.objects.create(
+                project=project,
+                created_by=self.member,
+                status=ExternalMediaProjectExport.Status.PREPARING,
+                progress=2,
+                current_step='Exportação adicionada à fila',
+            )
         try:
             task_id = (
                 enqueue_video_work('premiere-export', export.pk)
