@@ -181,15 +181,15 @@
     @keyframes project-submit-spin { to { transform:rotate(360deg); } }
     @keyframes project-player-expand { from { opacity:.45; transform:scale(.96); } to { opacity:1; transform:scale(1); } }
     @keyframes project-final-reveal { from { opacity:0; transform:translateY(.7rem); } to { opacity:1; transform:translateY(0); } }
-    @keyframes project-final-player-reveal { from { opacity:0; transform:translateY(1rem) scale(.985); } to { opacity:1; transform:translateY(0) scale(1); } }
+    @keyframes project-final-player-reveal { from { opacity:0; transform:translateY(1rem); } to { opacity:1; transform:translateY(0); } }
     @keyframes media-trim-sheet-in { from { transform:translateY(1.5rem); opacity:.6; } to { transform:translateY(0); opacity:1; } }
     @media (prefers-reduced-motion:no-preference) {
-        .project-final__eyebrow,.project-final__title,.project-final__description,.project-final__resources { opacity:0; animation:project-final-reveal .46s cubic-bezier(.2,.8,.2,1) forwards; }
+        .project-final__eyebrow,.project-final__title,.project-final__description,.project-final__resources > * { opacity:0; animation:project-final-reveal .46s cubic-bezier(.2,.8,.2,1) forwards; }
         .project-final__eyebrow { animation-delay:.06s; }
         .project-final__title { animation-delay:.13s; }
         .project-final__description { animation-delay:.2s; }
         .project-final__player { opacity:0; animation:project-final-player-reveal .58s cubic-bezier(.2,.8,.2,1) .27s forwards; }
-        .project-final__resources { animation-delay:.4s; }
+        .project-final__resources > * { animation-delay:.4s; }
     }
     @media (prefers-reduced-motion:reduce) { .project-submit-overlay__spinner i { animation-duration:1.5s; } .project-progress.is-timeline-open .project-result-video__player video { animation:none; } .project-final__player video { transition:none; } }
     @media (hover:hover) and (pointer:fine) { .project-final__player video:hover { transform:scale(1.015); box-shadow:0 20px 46px rgba(46,14,12,.28); } }
@@ -217,8 +217,13 @@
         .project-final__resources { grid-column:3; justify-self:center; width:min(100%,21rem); }
     }
     @media (min-width:1440px) {
-        .project-final.has-landscape-video .project-final__body { grid-template-columns:minmax(0,1fr) minmax(0,min(54rem,46vw)) minmax(0,1fr); gap:2rem; }
+        .project-final.has-landscape-video .project-final__body { grid-template-columns:minmax(0,1fr) minmax(0,min(54rem,46vw)) minmax(0,1fr); gap:2rem; transition:grid-template-columns 3s cubic-bezier(.2,.8,.2,1); }
         .project-final.has-landscape-video .project-final__player video { width:100%; height:auto; }
+    }
+    @media (min-width:1440px) and (prefers-reduced-motion:no-preference) {
+        .project-final.has-landscape-video.is-playing .project-final__body { grid-template-columns:minmax(0,1fr) minmax(0,min(64rem,55vw)) minmax(0,1fr); }
+        .project-final.has-landscape-video .project-final__resources { transform-origin:left center; transition:opacity 3s ease,transform 3s cubic-bezier(.2,.8,.2,1); }
+        .project-final.has-landscape-video.is-playing .project-final__resources { opacity:0; pointer-events:none; transform:translateX(1rem) scale(.9); }
     }
     @media (max-width:900px), (hover:none) and (pointer:coarse) {
         .project-progress__top { align-items:center; }
@@ -1868,6 +1873,21 @@
         video.addEventListener('loadedmetadata', () => updateFinalVideoLayout(video));
         if (video.readyState >= HTMLMediaElement.HAVE_METADATA) updateFinalVideoLayout(video);
     });
+
+    const playbackMotion = window.matchMedia('(prefers-reduced-motion: no-preference)');
+    if (playbackMotion.matches) {
+        document.querySelectorAll('.project-final__player video').forEach((video) => {
+            const card = video.closest('.project-final');
+            if (!card) return;
+            const syncPlaybackLayout = () => {
+                card.classList.toggle('is-playing', !video.paused && !video.ended);
+            };
+            video.addEventListener('play', syncPlaybackLayout);
+            video.addEventListener('pause', syncPlaybackLayout);
+            video.addEventListener('ended', syncPlaybackLayout);
+            syncPlaybackLayout();
+        });
+    }
 
     const hoverControls = window.matchMedia('(hover: hover) and (pointer: fine)');
     if (hoverControls.matches) {
