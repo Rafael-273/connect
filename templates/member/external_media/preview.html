@@ -302,6 +302,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 <div class="preview-modal" id="music-select-modal" role="dialog" aria-modal="true" aria-labelledby="music-select-title">
     <div class="preview-modal__card">
         <div class="flex items-start justify-between gap-4"><div><span class="preview-pill">Música</span><h2 class="text-xl font-black mt-3" id="music-select-title">Gerenciar trilhas da timeline</h2><p class="text-sm text-gray-500 mt-1">Adicione ou remova músicas da sequência. As alterações serão usadas no render final.</p></div><button type="button" class="media-btn media-muted !px-3" id="cancel-music-select" aria-label="Fechar"><i class="fas fa-xmark"></i></button></div>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-900/60 p-3"><div><strong class="block text-sm">Nova música</strong><small class="block mt-1 text-xs text-gray-400">Envie MP3, WAV, M4A, AAC, OGG, FLAC ou WEBM para o catálogo.</small></div><label class="media-btn media-muted cursor-pointer" for="music-upload-file" id="music-upload-button"><i class="fas fa-upload"></i>Enviar música</label><input id="music-upload-file" class="sr-only" type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/aac,audio/ogg,audio/flac,audio/webm,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm"></div>
         <div id="music-track-list" class="music-track-list" role="listbox" aria-label="Trilhas disponíveis"></div>
         <p id="music-select-error" class="hidden mt-3 text-sm font-semibold text-red-400" role="alert"></p>
         <div class="flex justify-end gap-2 mt-5"><button type="button" class="media-btn media-muted" id="cancel-music-select-footer">Cancelar</button></div>
@@ -1461,7 +1462,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     document.getElementById('cancel-add-element').onclick=closeAddElementModal;document.getElementById('cancel-add-element-footer').onclick=closeAddElementModal;addElementModal.addEventListener('click',event=>{if(event.target===addElementModal)closeAddElementModal()});confirmAddElement.onclick=async()=>{const file=addElementFile.files?.[0];if(!file||!addElementClip){addElementError.textContent='Selecione um arquivo para continuar.';return}confirmAddElement.disabled=true;confirmAddElement.innerHTML='<i class="fas fa-spinner fa-spin"></i> Enviando…';try{const data=new FormData();data.append('file',file);data.append('description',addElementDescription.value.trim());data.append('duration_seconds',addElementDuration.value||'5');data.append('start_ms',String(Math.round(globalMs)));data.append('block',String(addElementClip.block.key?.startsWith('custom-')?addElementClip.block.key:addElementClip.block.id));const response=await fetch('{% url "external_media_project_preview_broll_create" project.public_id %}',{method:'POST',body:data,credentials:'same-origin',headers:{'X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'}});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Não foi possível adicionar o elemento.');closeAddElementModal();applyTimeline(payload,true,false)}catch(error){addElementError.textContent=error.message;addElementError.classList.remove('hidden')}finally{confirmAddElement.disabled=false;confirmAddElement.innerHTML='<i class="fas fa-upload"></i>Adicionar elemento'}};
     function renameVisualMedia(){document.querySelectorAll('.editor-track__label').forEach(label=>{if(label.textContent.trim()==='B-roll')label.childNodes[label.childNodes.length-1].nodeValue=' Elementos'})}
     new MutationObserver(renameVisualMedia).observe(document.getElementById('editor-tracks'),{childList:true,subtree:true});
-    const musicSelectModal=document.getElementById('music-select-modal'),musicTrackList=document.getElementById('music-track-list'),musicSelectError=document.getElementById('music-select-error'),musicPreview=new Audio(),musicPreviewUrl='{% url "external_media_project_preview_music" project.public_id %}';
+    const musicSelectModal=document.getElementById('music-select-modal'),musicTrackList=document.getElementById('music-track-list'),musicSelectError=document.getElementById('music-select-error'),musicUploadInput=document.getElementById('music-upload-file'),musicUploadButton=document.getElementById('music-upload-button'),musicPreview=new Audio(),musicPreviewUrl='{% url "external_media_project_preview_music" project.public_id %}';
     let musicPreviewTrackId=null;
     let musicVolumeTimer=null;
     let audioMixTimer=null;
@@ -1496,6 +1497,18 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         musicSelectModal.classList.add('is-open');requestAnimationFrame(()=>musicTrackList.querySelector('.is-selected,button')?.focus());
     }
     document.getElementById('add-timeline-music').onclick=openMusicSelector;
+    musicUploadInput.onchange=async()=>{
+        const file=musicUploadInput.files?.[0];if(!file)return;
+        musicSelectError.classList.add('hidden');musicUploadInput.disabled=true;musicUploadButton.classList.add('pointer-events-none','opacity-60');musicUploadButton.innerHTML='<i class="fas fa-spinner fa-spin"></i>Enviando…';
+        try{
+            const body=new FormData();body.append('audio_file',file);
+            const response=await fetch(musicPreviewUrl,{method:'POST',body,credentials:'same-origin',headers:{'X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'}});
+            const data=await response.json();if(!response.ok)throw new Error(data.error||'Não foi possível enviar a música.');
+            if(data.music_track&&!musicTracks.some(track=>Number(track.id)===Number(data.music_track.id)))musicTracks.push(data.music_track);
+            applyTimeline(data,true);configureMusic();syncMusicPosition();updateMusicVolume();renderEditorTimeline();openMusicSelector();
+        }catch(error){musicSelectError.textContent=error.message;musicSelectError.classList.remove('hidden')}
+        finally{musicUploadInput.value='';musicUploadInput.disabled=false;musicUploadButton.classList.remove('pointer-events-none','opacity-60');musicUploadButton.innerHTML='<i class="fas fa-upload"></i>Enviar música'}
+    };
     async function toggleMusicSample(track,button){
         if(musicPreviewTrackId===Number(track.id)&&!musicPreview.paused){resetMusicSample();return}
         resetMusicSample();musicPreviewTrackId=Number(track.id);musicPreview.src=`${musicPreviewUrl}?track_id=${encodeURIComponent(track.id)}`;musicPreview.preload='metadata';button.classList.add('is-playing');button.innerHTML='<i class="fas fa-pause"></i>';button.setAttribute('aria-label',`Pausar prévia de ${track.name}`);

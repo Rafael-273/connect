@@ -2271,6 +2271,8 @@ class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, V
 class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
     """Streams the template music so it can be synchronized in the browser."""
 
+    upload_extensions = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.webm'}
+
     def get(self, request, public_id):
         project = get_object_or_404(
             ExternalMediaProject.objects.select_related(
@@ -2301,6 +2303,47 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
 
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        upload = request.FILES.get('audio_file')
+        if upload:
+            suffix = Path(upload.name).suffix.lower()
+            max_bytes = settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024
+            if suffix not in self.upload_extensions:
+                return JsonResponse({
+                    'error': 'Envie um arquivo MP3, WAV, M4A, AAC, OGG, FLAC ou WEBM.',
+                }, status=400)
+            if upload.size <= 0 or upload.size > max_bytes:
+                return JsonResponse({
+                    'error': f'A música deve ter até {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.',
+                }, status=400)
+            current_revision = project.current_timeline_revision
+            tracks = list(((current_revision.timeline if current_revision else {}) or {}).get('music_tracks') or [])
+            if len(tracks) >= 8:
+                return JsonResponse({'error': 'Escolha entre uma e oito músicas.'}, status=400)
+            name = Path(upload.name).stem.strip()[:200] or 'Nova música'
+            # Save once before assigning the file so the storage path contains
+            # this track's id instead of the shared "pending" placeholder.
+            track = BackgroundMusicTrack.objects.create(
+                name=name, category=BackgroundMusicTrack.Category.OTHER,
+            )
+            track.audio_file = upload
+            track.save(update_fields=['audio_file', 'update_at'])
+            tracks.append({
+                'track_id': track.pk,
+                'transition': 'CONSTANT_POWER',
+                'transition_duration_ms': 2000,
+            })
+            try:
+                revision = TimelineRevisionService.update_music_tracks(project, self.member, tracks)
+            except Exception:
+                track.audio_file.delete(save=False)
+                track.delete()
+                raise
+            return preview_revision_response(
+                project, self.member, revision,
+                music_track={
+                    'id': track.pk, 'name': track.name, 'category': track.category, 'tempo': track.tempo,
+                },
+            )
         payload = json.loads(request.body or '{}')
         if 'audio_mix' in payload:
             try:
