@@ -7,6 +7,11 @@
 window.ConnectPreviewAudio = class ConnectPreviewAudio {
     constructor(audio) {
         this.audio = audio;
+        this.channels = [audio];
+        this.tracks = [];
+        this.signature = '';
+        this.position = {index: 0, local: 0, overlap: 0};
+        this.isPlaying = false;
     }
 
     configure(config) {
@@ -16,22 +21,48 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             this.audio.dataset.source = '';
             return;
         }
-        if (this.audio.dataset.source !== config.url) {
-            this.audio.dataset.source = config.url;
-            this.audio.src = config.url;
-            this.audio.load();
+        const tracks = (config.tracks?.length ? config.tracks : [config])
+            .filter(track => track?.url);
+        const signature = JSON.stringify(tracks.map(track => [
+            track.id || track.url, track.url, track.transition, track.transition_duration_ms,
+        ]));
+        if (this.signature !== signature) {
+            this.pause();
+            this.signature = signature;
+            this.tracks = tracks;
+            this.channels = tracks.map((track, index) => index === 0 ? this.audio : new Audio());
+            this.channels.forEach((channel, index) => {
+                channel.loop = true;
+                channel.preload = 'auto';
+                channel.dataset.source = tracks[index].url;
+                channel.src = tracks[index].url;
+                channel.load();
+            });
         }
-        this.audio.volume = this.baseVolume(config);
+        this.applyVolumes(config, 0);
     }
 
     sync(config, globalMs) {
-        if (!config || !Number.isFinite(this.audio.duration) || this.audio.duration <= 0) return;
-        const target = (Math.max(0, Number(globalMs) || 0) / 1000) % this.audio.duration;
-        if (Math.abs(this.audio.currentTime - target) > .55) this.audio.currentTime = target;
+        if (!config || !this.channels.length) return;
+        const position = this.positionAt(globalMs);
+        if (!position) return;
+        this.position = position;
+        this.channels.forEach((channel, index) => {
+            const shouldBeActive = index === position.index || index === position.index + 1 && position.overlap > 0;
+            if (!shouldBeActive) {
+                channel.pause();
+                return;
+            }
+            const target = index === position.index ? position.local : Math.max(0, position.local - this.duration(index) + position.overlap);
+            if (Math.abs(channel.currentTime - target) > .55) channel.currentTime = target;
+            if (this.isPlaying && channel.paused) channel.play().catch(() => {});
+        });
+        this.applyVolumes(config, globalMs);
     }
 
     updateVolume(config, sequenceDurationMs, globalMs, captions) {
         if (!config) return;
+        this.sync(config, globalMs);
         const nowMs = Math.max(0, Number(globalMs) || 0);
         const durationMs = Math.max(1, Number(sequenceDurationMs) || 1);
         let factor = 1;
@@ -41,15 +72,69 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         if (fadeOutMs) factor = Math.min(factor, Math.max(0, (durationMs - nowMs) / fadeOutMs));
         if (config.ducking_enabled) factor *= this.duckingFactor(config, nowMs, captions);
         factor *= this.manualAutomationFactor(config.audio_mix?.music_keyframes, nowMs);
-        this.audio.volume = Math.max(0, Math.min(1, this.baseVolume(config) * factor));
+        this.applyVolumes(config, nowMs, factor);
     }
 
     pause() {
-        this.audio.pause();
+        this.isPlaying = false;
+        this.channels.forEach(channel => channel.pause());
     }
 
     play() {
-        return this.audio.play();
+        this.isPlaying = true;
+        const current = this.channels[this.position.index] || this.audio;
+        const next = this.channels[this.position.index + 1];
+        const promises = [current.play()];
+        if (next && this.position.overlap > 0) promises.push(next.play());
+        return Promise.all(promises).then(() => undefined);
+    }
+
+    duration(index) {
+        const duration = this.channels[index]?.duration;
+        return Number.isFinite(duration) && duration > 0 ? duration : 0;
+    }
+
+    positionAt(globalMs) {
+        if (!this.tracks.length || this.channels.some((_, index) => !this.duration(index))) return null;
+        const nowMs = Math.max(0, Number(globalMs) || 0);
+        const scheduled = this.tracks.every(track => Number.isFinite(Number(track.start_ms)) && Number.isFinite(Number(track.end_ms)) && Number(track.end_ms) > Number(track.start_ms));
+        if (scheduled) {
+            let index = this.tracks.findIndex(track => nowMs >= Number(track.start_ms) && nowMs < Number(track.end_ms));
+            if (index < 0) index = nowMs < Number(this.tracks[0].start_ms) ? 0 : this.tracks.length - 1;
+            const track = this.tracks[index];
+            const local = ((Math.max(0, nowMs - Number(track.start_ms)) / 1000) % this.duration(index));
+            return {index, local, overlap: 0};
+        }
+        const spans = this.channels.map((_, index) => this.duration(index));
+        const overlaps = spans.map((_, index) => index ? Math.min(
+            spans[index - 1] - .05, spans[index] - .05,
+            Math.max(0, Number(this.tracks[index].transition_duration_ms || 2000) / 1000),
+        ) : 0);
+        const playlistDuration = spans.reduce((total, value) => total + value, 0) - overlaps.reduce((total, value) => total + value, 0);
+        let target = (Math.max(0, Number(globalMs) || 0) / 1000) % Math.max(.01, playlistDuration);
+        for (let index = 0; index < spans.length; index += 1) {
+            const span = spans[index] - (index < spans.length - 1 ? overlaps[index + 1] : 0);
+            if (target < span || index === spans.length - 1) {
+                const overlap = index < spans.length - 1 && target > spans[index] - overlaps[index + 1]
+                    ? overlaps[index + 1] : 0;
+                return {index, local: target, overlap};
+            }
+            target -= span;
+        }
+        return {index: 0, local: 0, overlap: 0};
+    }
+
+    applyVolumes(config, globalMs, factor = 1) {
+        const base = this.baseVolume(config) * factor;
+        this.channels.forEach(channel => { channel.volume = 0; });
+        const current = this.channels[this.position.index];
+        if (!current) return;
+        if (this.position.overlap > 0) {
+            const progress = Math.max(0, Math.min(1, (this.position.local - (this.duration(this.position.index) - this.position.overlap)) / this.position.overlap));
+            current.volume = base * Math.cos(progress * Math.PI / 2);
+            const next = this.channels[this.position.index + 1];
+            if (next) next.volume = base * Math.sin(progress * Math.PI / 2);
+        } else current.volume = base;
     }
 
     baseVolume(config) {

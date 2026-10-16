@@ -1695,6 +1695,58 @@ class IntroOutroService:
 
 class MusicService:
     @staticmethod
+    def selected_tracks(version, timeline=None, configuration=None):
+        """Resolve the revision playlist, preserving its editorial order.
+
+        The returned dictionaries deliberately contain the file object instead
+        of a storage path so callers can use their existing materialization
+        strategy for local and remote storage alike.
+        """
+        timeline = timeline or {}
+        requested = timeline.get('music_tracks')
+        if isinstance(requested, list):
+            ids = []
+            transitions = {}
+            for item in requested:
+                try:
+                    track_id = int((item or {}).get('track_id'))
+                except (TypeError, ValueError):
+                    continue
+                if track_id > 0 and track_id not in ids:
+                    ids.append(track_id)
+                    try:
+                        transition_duration_ms = int((item or {}).get('transition_duration_ms') or 2000)
+                    except (TypeError, ValueError):
+                        transition_duration_ms = 2000
+                    transitions[track_id] = {
+                        'transition': str((item or {}).get('transition') or 'CONSTANT_POWER').upper(),
+                        'transition_duration_ms': max(0, min(10_000, transition_duration_ms)),
+                        'start_ms': (item or {}).get('start_ms'),
+                        'end_ms': (item or {}).get('end_ms'),
+                    }
+            available = {
+                item.pk: item for item in BackgroundMusicTrack.objects.filter(pk__in=ids).exclude(audio_file='')
+            }
+            resolved = []
+            for track_id in ids:
+                track = available.get(track_id)
+                if track:
+                    resolved.append({
+                        'id': track.pk, 'name': track.name, 'file': track.audio_file,
+                        **transitions[track_id],
+                    })
+            if resolved:
+                return resolved
+        override_id = timeline.get('music_override_track_id') or (configuration or {}).get('music_override_track_id')
+        override = BackgroundMusicTrack.objects.filter(pk=override_id).exclude(audio_file='').first() if override_id else None
+        if override:
+            return [{'id': override.pk, 'name': override.name, 'file': override.audio_file,
+                     'transition': 'CONSTANT_POWER', 'transition_duration_ms': 2000}]
+        field = MusicService.selected_file(version)
+        return ([{'id': None, 'name': '', 'file': field, 'transition': 'CONSTANT_POWER', 'transition_duration_ms': 2000}]
+                if field else [])
+
+    @staticmethod
     def selected_file(version, enabled_codes=None):
         """Return the template track.
 
@@ -2852,14 +2904,32 @@ class ExternalMediaProjectPipeline:
         # configuration fallback only preserves projects edited before music
         # became a revisioned setting.
         music_revision = project.approved_timeline_revision or project.current_timeline_revision
-        override_id = (
-            ((music_revision.timeline if music_revision else {}) or {}).get('music_override_track_id')
-            or (project.configuration or {}).get('music_override_track_id')
-        )
-        override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
-        music_field = override.audio_file if override else self.music.selected_file(version, codes)
+        music_timeline = (music_revision.timeline if music_revision else {}) or {}
+        music_tracks = self.music.selected_tracks(version, music_timeline, project.configuration or {})
         lut = materialize_small_asset(lut_field, 'template_lut') if lut_field else None
-        music = materialize_small_asset(music_field, 'template_music') if music_field else None
+        local_music_tracks = [
+            materialize_small_asset(item['file'], f'template_music_{index + 1}')
+            for index, item in enumerate(music_tracks) if item.get('file')
+        ]
+        if len(local_music_tracks) > 1:
+            music = AudioMixingService(self.assembly.runner).build_playlist(
+                local_music_tracks,
+                workdir / 'template_music_playlist.wav',
+                [item.get('transition') for item in music_tracks[1:]],
+                [item.get('transition_duration_ms') for item in music_tracks[1:]],
+                [
+                    max(0, int(item.get('end_ms') or 0) - int(item.get('start_ms') or 0))
+                    if item.get('end_ms') is not None and item.get('start_ms') is not None else None
+                    for item in music_tracks
+                ],
+                [
+                    (item.get('start_ms'), item.get('end_ms'))
+                    if item.get('start_ms') is not None and item.get('end_ms') is not None else None
+                    for item in music_tracks
+                ],
+            )
+        else:
+            music = local_music_tracks[0] if local_music_tracks else None
         available = {
             MediaTemplatePlugin.Code.INTRO: any(item['role'] == 'intro' for item in self._source_manifest['sources']),
             MediaTemplatePlugin.Code.OUTRO: any(item['role'] == 'outro' for item in self._source_manifest['sources']),

@@ -2009,19 +2009,10 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             messages.warning(request, 'O preview ficará disponível após a análise inicial.')
             return redirect('external_media_project_detail', public_id=public_id)
         revision = TimelineRevisionService.ensure_initial(project, self.member)
-        # An AWAITING_REVIEW project with an approved revision is a project that
-        # was reopened after rendering. Its approved snapshot is the source of
-        # truth for the final version, even if a stale session still points to
-        # another revision.
-        reopened_terminal_review = (
-            project.status == ExternalMediaProject.Status.AWAITING_REVIEW
-            and project.approved_timeline_revision_id
-        )
-        if reopened_terminal_review:
-            revision = project.approved_timeline_revision
-            if project.current_timeline_revision_id != revision.pk:
-                project.current_timeline_revision = revision
-                project.save(update_fields=['current_timeline_revision', 'update_at'])
+        # Reopening a finished project keeps its approved revision as the
+        # baseline, but any edit creates a child in ``current``. Never reset
+        # that pointer on page load: doing so silently discarded saved editor
+        # choices such as the music playlist and its timeline positions.
         session = TimelineRevisionService.session(project, self.member, revision)
         # Revisions are immutable snapshots. Older ones were created before the
         # normalized master was exposed to the browser, so enrich only this
@@ -2179,7 +2170,14 @@ class ExternalMediaProjectPreviewSourceView(ExternalMediaRequiredMixin, View):
             raise Http404('Proxy de preview não encontrado.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
-        return protected_file_response(request, proxy.proxy_file)
+        # A frame extracted by the editor is painted into a canvas.  Redirecting
+        # this request to a signed S3 URL makes that canvas cross-origin and
+        # browsers block ``toDataURL``. Keep only those small, sequential
+        # filmstrip requests same-origin; normal player playback can still use
+        # the efficient signed-storage redirect.
+        return protected_file_response(
+            request, proxy.proxy_file, force_stream=request.GET.get('filmstrip') == '1',
+        )
 
 
 class ExternalMediaProjectPreviewMasterView(ExternalMediaRequiredMixin, View):
@@ -2194,7 +2192,9 @@ class ExternalMediaProjectPreviewMasterView(ExternalMediaRequiredMixin, View):
             raise Http404('A prévia com enquadramento final ainda não está disponível.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
-        return protected_file_response(request, job.original_video)
+        return protected_file_response(
+            request, job.original_video, force_stream=request.GET.get('filmstrip') == '1',
+        )
 
 
 class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, View):
@@ -2280,17 +2280,19 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
         )
         requested_track_id = request.GET.get('track_id')
         revision = project.current_timeline_revision
-        override_id = ((revision.timeline if revision else {}) or {}).get('music_override_track_id')
-        override_id = override_id or (project.configuration or {}).get('music_override_track_id')
+        revision_timeline = (revision.timeline if revision else {}) or {}
         # A requested track is an audition only. It never alters the current
         # revision; the POST endpoint remains the sole save operation.
         if requested_track_id:
             override = get_object_or_404(
                 BackgroundMusicTrack, pk=requested_track_id, audio_file__isnull=False,
             )
+            music = override.audio_file
         else:
-            override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
-        music = override.audio_file if override else MusicService.selected_file(project.template_version)
+            selected_tracks = MusicService.selected_tracks(
+                project.template_version, revision_timeline, project.configuration or {},
+            )
+            music = selected_tracks[0]['file'] if selected_tracks else None
         if not music or not ProjectService.file_exists(music):
             raise Http404('A trilha deste template não está disponível.')
         request.GET = request.GET.copy()
@@ -2315,6 +2317,26 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
                 )
             except (TypeError, ValueError):
                 return JsonResponse({'error': 'Volume de música inválido.'}, status=400)
+            return preview_revision_response(project, self.member, revision)
+        if 'tracks' in payload:
+            tracks = payload.get('tracks')
+            if not isinstance(tracks, list) or len(tracks) > 8:
+                return JsonResponse({'error': 'Escolha entre uma e oito músicas.'}, status=400)
+            track_ids = []
+            for item in tracks:
+                try:
+                    track_id = int((item or {}).get('track_id'))
+                except (TypeError, ValueError):
+                    return JsonResponse({'error': 'Uma música selecionada é inválida.'}, status=400)
+                if track_id <= 0 or track_id in track_ids:
+                    return JsonResponse({'error': 'Não repita músicas na mesma sequência.'}, status=400)
+                track_ids.append(track_id)
+            available = set(BackgroundMusicTrack.objects.filter(
+                pk__in=track_ids,
+            ).exclude(audio_file='').values_list('pk', flat=True))
+            if set(track_ids) != available:
+                return JsonResponse({'error': 'Uma das músicas selecionadas não está disponível.'}, status=400)
+            revision = TimelineRevisionService.update_music_tracks(project, self.member, tracks)
             return preview_revision_response(project, self.member, revision)
         track = get_object_or_404(BackgroundMusicTrack, pk=payload.get('track_id'), audio_file__isnull=False)
         revision = TimelineRevisionService.update_music(project, self.member, track.pk)
@@ -2386,24 +2408,33 @@ def preview_revision_response(project, member, revision, **extra):
 def preview_timeline_with_music(project, timeline):
     """Add browser-only music metadata without mutating a stored revision."""
     timeline = deepcopy(timeline or {})
-    override_id = timeline.get('music_override_track_id') or (project.configuration or {}).get('music_override_track_id')
-    override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
-    music = override.audio_file if override else MusicService.selected_file(project.template_version)
-    timeline['has_music'] = bool(music and ProjectService.file_exists(music))
+    selected_tracks = MusicService.selected_tracks(
+        project.template_version, timeline, project.configuration or {},
+    )
+    selected_tracks = [item for item in selected_tracks if item.get('file') and ProjectService.file_exists(item['file'])]
+    music = selected_tracks[0]['file'] if selected_tracks else None
+    timeline['has_music'] = bool(selected_tracks)
     if timeline['has_music']:
         raw_audio_mix = timeline.get('audio_mix')
         audio_mix = dict(raw_audio_mix) if isinstance(raw_audio_mix, dict) else {}
         effective_mix = resolved_ducking_config(audio_mix or project.template_version.audio_mixing_config)
         ducking = ducking_options(audio_mix)
         music_url = reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id})
-        # The browser uses this URL as the audio cache key. Include the track
-        # id so replacing a song reloads the <audio> element immediately
-        # instead of retaining the prior source under the same endpoint.
-        if override:
-            music_url += f'?track_id={override.pk}'
+        browser_tracks = []
+        for item in selected_tracks:
+            url = music_url
+            if item.get('id'):
+                url += f'?track_id={item["id"]}'
+            browser_tracks.append({
+                'id': item.get('id'), 'name': item.get('name') or '', 'url': url,
+                'transition': item.get('transition') or 'CONSTANT_POWER',
+                'transition_duration_ms': int(item.get('transition_duration_ms') or 2000),
+                'start_ms': item.get('start_ms'), 'end_ms': item.get('end_ms'),
+            })
         timeline['music'] = {
-            'url': music_url,
-            'name': override.name if override else '',
+            'url': browser_tracks[0]['url'],
+            'name': browser_tracks[0]['name'],
+            'tracks': browser_tracks,
             'volume': max(0.0, min(1.0, float(timeline.get(
                 'music_volume', audio_mix.get('music_volume', project.template_version.music_volume),
             )))),
@@ -2689,7 +2720,11 @@ class ExternalMediaProjectPreviewBrollAssetView(ExternalMediaRequiredMixin, View
         selected = asset.preview_file if asset.media_type == ProjectBrollAsset.MediaType.VIDEO and asset.preview_status == ProjectBrollAsset.PreviewStatus.READY and asset.preview_file else asset.file
         if not ProjectService.file_exists(selected):
             raise Http404('O asset de B-roll não está mais disponível.')
-        return protected_file_response(request, selected)
+        request.GET = request.GET.copy()
+        request.GET['preview'] = '1'
+        return protected_file_response(
+            request, selected, force_stream=request.GET.get('filmstrip') == '1',
+        )
 
 
 class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, View):

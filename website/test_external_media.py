@@ -5647,6 +5647,45 @@ class AudioMixingUnitTests(SimpleTestCase):
         self.assertEqual(envelope, [(0.0, .7), (1.0, .7)])
 
 
+class AudioPlaylistTimelineTests(SimpleTestCase):
+    def test_playlist_honors_absolute_clip_positions_and_crossfade_overlap(self):
+        runner = Mock()
+        service = AudioMixingService(runner)
+
+        service.build_playlist(
+            [Path('/tmp/first.mp3'), Path('/tmp/second.mp3')],
+            Path('/tmp/playlist.wav'),
+            transitions=['CONSTANT_POWER'], durations_ms=[2000],
+            clip_positions_ms=[(0, 4000), (2000, 6000)],
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('adelay=0:all=1[scheduled_music0]', graph)
+        self.assertIn('adelay=2000:all=1[scheduled_music1]', graph)
+        self.assertIn('afade=t=out:st=2.000:d=2.000:curve=qsin', graph)
+        self.assertIn('afade=t=in:st=0.000:d=2.000:curve=qsin', graph)
+        self.assertIn('amix=inputs=2:duration=longest:dropout_transition=0:normalize=0', graph)
+        self.assertEqual(command.count('-stream_loop'), 2)
+
+    def test_playlist_keeps_a_manual_gap_instead_of_concatenating_tracks(self):
+        runner = Mock()
+        service = AudioMixingService(runner)
+
+        service.build_playlist(
+            [Path('/tmp/first.mp3'), Path('/tmp/second.mp3')],
+            Path('/tmp/playlist.wav'),
+            transitions=['CONSTANT_POWER'], durations_ms=[2000],
+            clip_positions_ms=[(0, 2000), (5000, 7000)],
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('adelay=5000:all=1[scheduled_music1]', graph)
+        self.assertNotIn('afade=', graph)
+        self.assertNotIn('acrossfade=', graph)
+
+
 class AudioMixingSmokeTests(SimpleTestCase):
     @staticmethod
     def _render_tone(path, frequency, duration_s, volume=1.0):
@@ -5673,6 +5712,26 @@ class AudioMixingSmokeTests(SimpleTestCase):
             )
             self.assertTrue(output.exists())
             self.assertEqual(result.metrics['mode'], 'flat')
+
+    def test_playlist_renders_tracks_at_their_timeline_positions(self):
+        service = AudioMixingService()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            first = workdir / 'first.mp4'
+            second = workdir / 'second.mp4'
+            playlist = workdir / 'playlist.wav'
+            self._render_tone(first, 220, 3)
+            self._render_tone(second, 440, 3)
+
+            service.build_playlist(
+                [first, second], playlist,
+                transitions=['CONSTANT_POWER'], durations_ms=[1000],
+                clip_positions_ms=[(0, 3000), (2000, 5000)],
+            )
+
+            self.assertTrue(playlist.exists())
+            self.assertGreater(playlist.stat().st_size, 0)
+            self.assertAlmostEqual(service._probe_duration_s(playlist), 5.0, delta=.15)
 
     def test_mix_adaptive_applies_ducking_and_reports_metrics(self):
         service = AudioMixingService()

@@ -376,6 +376,141 @@ class AudioMixingService:
     def __init__(self, runner=None):
         self.runner = runner or FFmpegRunner()
 
+    def build_playlist(
+        self, music_paths, output_path, transitions=None, durations_ms=None,
+        clip_durations_ms=None, clip_positions_ms=None,
+    ):
+        """Create one looping-ready music bed from an ordered playlist.
+
+        ``qsin`` curves form an equal-power (constant-power) crossfade, so the
+        perceived loudness stays steady while one song hands over to the next.
+        The resulting WAV is then consumed by the existing ducking/mixing path.
+        """
+        paths = [Path(path) for path in (music_paths or [])]
+        if not paths:
+            return None
+        if len(paths) == 1:
+            return paths[0]
+        transitions = list(transitions or [])
+        durations_ms = list(durations_ms or [])
+        clip_durations_ms = list(clip_durations_ms or [])
+        clip_positions_ms = list(clip_positions_ms or [])
+        scheduled_positions = []
+        for index in range(len(paths)):
+            position = clip_positions_ms[index] if index < len(clip_positions_ms) else None
+            try:
+                start_ms, end_ms = int(position[0]), int(position[1])
+            except (TypeError, ValueError, IndexError):
+                scheduled_positions = []
+                break
+            if start_ms < 0 or end_ms <= start_ms:
+                scheduled_positions = []
+                break
+            scheduled_positions.append((start_ms, end_ms))
+        if len(scheduled_positions) == len(paths):
+            return self._build_scheduled_playlist(
+                paths, output_path, transitions, durations_ms, scheduled_positions,
+            )
+        source_durations = [self._probe_duration_s(path) for path in paths]
+        filters = []
+        effective_durations = []
+        for index in range(len(paths)):
+            requested_clip = clip_durations_ms[index] if index < len(clip_durations_ms) else None
+            clip_duration = min(source_durations[index], max(.05, float(requested_clip) / 1000)) if requested_clip else source_durations[index]
+            effective_durations.append(clip_duration)
+            filters.append(
+                f'[{index}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=duration={clip_duration:.3f},asetpts=N/SR/TB[music{index}]'
+            )
+        current = '[music0]'
+        for index in range(1, len(paths)):
+            transition = str(transitions[index - 1] if index - 1 < len(transitions) else 'CONSTANT_POWER').upper()
+            requested_duration = max(0, min(10.0, float(
+                durations_ms[index - 1] if index - 1 < len(durations_ms) else 2000
+            ) / 1000))
+            duration = max(0, min(
+                requested_duration, effective_durations[index - 1] - .05, effective_durations[index] - .05,
+            ))
+            target = f'[music_mix{index}]'
+            if transition == 'NONE' or duration == 0:
+                filters.append(f'{current}[music{index}]concat=n=2:v=0:a=1{target}')
+            else:
+                filters.append(f'{current}[music{index}]acrossfade=d={duration:.3f}:c1=qsin:c2=qsin{target}')
+            current = target
+        self.runner.run([
+            settings.FFMPEG_BINARY, '-y',
+            *sum((['-i', str(path)] for path in paths), []),
+            '-filter_complex', ';'.join(filters), '-map', current,
+            '-c:a', 'pcm_s16le', str(output_path),
+        ])
+        return Path(output_path)
+
+    def _build_scheduled_playlist(self, paths, output_path, transitions, durations_ms, positions_ms):
+        """Mix a playlist at the exact editorial positions from the timeline.
+
+        A regular ``acrossfade`` concatenates inputs and therefore cannot
+        represent a gap or a manually repositioned clip. Here every track is
+        trimmed, delayed to its stored start and mixed on a common clock. For
+        a real overlap, ``qsin`` fade curves preserve the constant-power hand
+        off without changing the clips' absolute positions.
+        """
+        filters = []
+        fade_ins = {}
+        fade_outs = {}
+        for index in range(1, len(paths)):
+            if str(transitions[index - 1] if index - 1 < len(transitions) else 'CONSTANT_POWER').upper() != 'CONSTANT_POWER':
+                continue
+            previous_start, previous_end = positions_ms[index - 1]
+            current_start, current_end = positions_ms[index]
+            overlap_start, overlap_end = max(previous_start, current_start), min(previous_end, current_end)
+            overlap_ms = max(0, overlap_end - overlap_start)
+            try:
+                requested_ms = int(durations_ms[index - 1] if index - 1 < len(durations_ms) else 2000)
+            except (TypeError, ValueError):
+                requested_ms = 2000
+            fade_ms = min(max(0, requested_ms), overlap_ms)
+            if fade_ms <= 0:
+                continue
+            # The sequence is ordered, so a transition into ``index`` fades
+            # the preceding clip out exactly where their timeline overlap
+            # begins. A later transition may replace its previous fade-out;
+            # that is the least surprising behaviour for tightly packed clips.
+            fade_outs[index - 1] = ((overlap_start - previous_start) / 1000, fade_ms / 1000)
+            fade_ins[index] = ((overlap_start - current_start) / 1000, fade_ms / 1000)
+
+        output_labels = []
+        for index, _path in enumerate(paths):
+            start_ms, end_ms = positions_ms[index]
+            duration_s = max(.001, (end_ms - start_ms) / 1000)
+            chain = (
+                f'[{index}:a]aresample=48000,aformat=channel_layouts=stereo,'
+                f'atrim=duration={duration_s:.3f},asetpts=N/SR/TB'
+            )
+            if index in fade_ins:
+                fade_start, fade_duration = fade_ins[index]
+                chain += f',afade=t=in:st={fade_start:.3f}:d={fade_duration:.3f}:curve=qsin'
+            if index in fade_outs:
+                fade_start, fade_duration = fade_outs[index]
+                chain += f',afade=t=out:st={fade_start:.3f}:d={fade_duration:.3f}:curve=qsin'
+            label = f'[scheduled_music{index}]'
+            chain += f',adelay={start_ms}:all=1{label}'
+            filters.append(chain)
+            output_labels.append(label)
+        filters.append(
+            f'{"".join(output_labels)}amix=inputs={len(output_labels)}:duration=longest:'
+            'dropout_transition=0:normalize=0[music_playlist]'
+        )
+        command = [settings.FFMPEG_BINARY, '-y']
+        for path in paths:
+            # Make a resized clip long enough to fill its saved duration. The
+            # final atrim above remains the single source of truth.
+            command.extend(['-stream_loop', '-1', '-i', str(path)])
+        command.extend([
+            '-filter_complex', ';'.join(filters), '-map', '[music_playlist]',
+            '-c:a', 'pcm_s16le', str(output_path),
+        ])
+        self.runner.run(command)
+        return Path(output_path)
+
     def measure_mean_volume_db(self, path: Path) -> float | None:
         try:
             result = self.runner.run_capture([

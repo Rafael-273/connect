@@ -1379,27 +1379,95 @@ class TimelineRevisionService:
         timeline gives it exactly the same history semantics as captions,
         framing and B-roll.
         """
+        return cls.update_music_tracks(project, member, [{'track_id': track_id}])
+
+    @classmethod
+    @transaction.atomic
+    def update_music_tracks(cls, project, member, tracks):
+        """Persist an ordered soundtrack playlist in the editorial revision.
+
+        Each item carries the transition *into* that track.  Keeping this in the
+        revision makes multi-track choices deterministic for preview, undo/redo
+        and the final render.
+        """
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
-        previous = (current.timeline or {}).get('music_override_track_id')
-        track_id = int(track_id) if track_id else None
+        normalized = []
+        for item in (tracks or []):
+            try:
+                track_id = int((item or {}).get('track_id'))
+            except (TypeError, ValueError):
+                continue
+            if track_id <= 0 or any(row['track_id'] == track_id for row in normalized):
+                continue
+            transition = str((item or {}).get('transition') or 'CONSTANT_POWER').upper()
+            if transition not in {'CONSTANT_POWER', 'NONE'}:
+                transition = 'CONSTANT_POWER'
+            try:
+                duration_ms = int((item or {}).get('transition_duration_ms') or 2000)
+            except (TypeError, ValueError):
+                duration_ms = 2000
+            normalized_item = {
+                'track_id': track_id,
+                'transition': transition,
+                'transition_duration_ms': max(0, min(10_000, duration_ms)),
+            }
+            for key in ('start_ms', 'end_ms'):
+                if (item or {}).get(key) is None:
+                    continue
+                try:
+                    normalized_item[key] = max(0, int((item or {}).get(key)))
+                except (TypeError, ValueError):
+                    continue
+            if normalized_item.get('end_ms', 0) <= normalized_item.get('start_ms', -1):
+                normalized_item.pop('start_ms', None)
+                normalized_item.pop('end_ms', None)
+            normalized.append(normalized_item)
+        # New playlist entries are distributed over the sequence with their
+        # configured transitions already overlapping. This makes the visual
+        # schedule match the constant-power crossfade used by the renderer.
+        # The editor can then move/resize each clip, and subsequent saves
+        # preserve those explicit bounds instead of regenerating them on reload.
+        if normalized and any('start_ms' not in item or 'end_ms' not in item for item in normalized):
+            sequence_duration = max(1_000, int(((current.timeline or {}).get('sequence') or {}).get('duration_ms') or 0))
+            transition_durations = [
+                min(
+                    int(item.get('transition_duration_ms') or 0),
+                    sequence_duration / max(2 * len(normalized), 1),
+                ) if index and item.get('transition') == 'CONSTANT_POWER' else 0
+                for index, item in enumerate(normalized)
+            ]
+            slot = (sequence_duration + sum(transition_durations)) / len(normalized)
+            cursor = 0
+            for index, item in enumerate(normalized):
+                if index:
+                    cursor -= transition_durations[index]
+                item['start_ms'] = round(max(0, cursor))
+                cursor += slot
+                item['end_ms'] = round(min(sequence_duration, cursor))
+        previous = (current.timeline or {}).get('music_tracks')
+        if previous is None:
+            legacy_id = (current.timeline or {}).get('music_override_track_id')
+            previous = ([{'track_id': int(legacy_id), 'transition': 'CONSTANT_POWER', 'transition_duration_ms': 2000}]
+                        if legacy_id else [])
         # Once the project is edited again, do not let a pre-revision override
         # shadow an undo back to the template music.
         legacy_configuration = dict(locked.configuration or {})
         if legacy_configuration.pop('music_override_track_id', None) is not None:
             locked.configuration = legacy_configuration
             locked.save(update_fields=['configuration', 'update_at'])
-        if previous == track_id:
+        if previous == normalized:
             return current
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set,
             'Trilha sonora alterada', member, current,
-            music_override_track_id=track_id,
+            music_override_track_id=normalized[0]['track_id'] if normalized else '',
+            music_tracks=normalized,
         )
         session = cls.session(locked, member, revision)
         cls._record(
             session, current, revision, 'UPDATE_MUSIC',
-            {'track_id': track_id}, {'track_id': previous}, member,
+            {'tracks': normalized}, {'tracks': previous}, member,
         )
         return revision
 
@@ -1741,7 +1809,7 @@ class TimelineRevisionService:
     @classmethod
     def _create(
         cls, project, manifest, decisions, reason, member, parent=None,
-        overlays=None, brolls=None, music_override_track_id=None, music_volume=None, audio_mix=None,
+        overlays=None, brolls=None, music_override_track_id=None, music_tracks=None, music_volume=None, audio_mix=None,
     ):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
@@ -1765,6 +1833,10 @@ class TimelineRevisionService:
             music_override_track_id = (parent.timeline or {}).get('music_override_track_id')
         if music_override_track_id:
             timeline['music_override_track_id'] = int(music_override_track_id)
+        if music_tracks is None and parent:
+            music_tracks = deepcopy((parent.timeline or {}).get('music_tracks'))
+        if music_tracks is not None:
+            timeline['music_tracks'] = deepcopy(music_tracks)
         if music_volume is None and parent:
             music_volume = (parent.timeline or {}).get('music_volume')
         if music_volume is not None:
