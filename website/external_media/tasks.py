@@ -89,8 +89,8 @@ def create_project_preview(self, media_id):
             VideoAssemblyService().create_proxy(source, preview)
             with preview.open('rb') as handle:
                 item.preview_file.save('preview.mp4', File(handle), save=False)
-            thumbnail = workspace.file('thumbnail', 'dashboard.jpg')
             try:
+                thumbnail = workspace.file('frames', 'dashboard.jpg')
                 FFmpegRunner().run([
                     settings.FFMPEG_BINARY, '-y', '-ss', '1',
                     '-i', FFmpegRunner.input_arg(source), '-frames:v', '1',

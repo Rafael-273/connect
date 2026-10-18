@@ -217,7 +217,7 @@ class ProjectProxyService:
                         'continuous-review-preview',
                         estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
                     ) as workspace:
-                        output = workspace.file('review-master', 'proxy.mp4')
+                        output = workspace.file('proxy', 'review-master.mp4')
                         input_source = media_input.get_ffmpeg_input()
                         assembly.create_proxy(input_source, output, profile=profile)
                         if assembly._has_audio(input_source):
