@@ -15,15 +15,15 @@ class VisitorForm(forms.ModelForm):
 
     class Meta:
         model = Visitor
-        fields = ['name', 'phone', 'address', 'neighborhood', 'prayer_request', 'wants_home_prayer', 'wants_house_of_peace']
+        fields = ['name', 'phone', 'companion', 'address', 'neighborhood', 'prayer_request', 'wants_home_prayer']
         labels = {
             'name': 'Nome completo',
             'phone': 'Telefone',
+            'companion': 'Visitante veio com',
             'address': 'Endereço',
             'neighborhood': 'Bairro',
             'prayer_request': 'Pedido de oração',
             'wants_home_prayer': 'Deseja oração na sua casa?',
-            'wants_house_of_peace': 'Tenho interesse em participar de uma Casa de Paz',
         }
         widgets = {
             'name': forms.TextInput(attrs={
@@ -34,6 +34,9 @@ class VisitorForm(forms.ModelForm):
                 'id': 'id_telephone',
                 'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]',
                 'placeholder': '(DDD) 90000-0000'
+            }),
+            'companion': forms.Select(attrs={
+                'class': 'mt-1 block w-full rounded-xl border border-gray-300 shadow-sm p-2 text-gray-700 bg-white focus:ring-[var(--color-primary)] focus:border-[var(--color-primary)]'
             }),
             'address': forms.Textarea(attrs={
                 'rows': 2,
@@ -78,7 +81,7 @@ class VisitorAdminForm(forms.ModelForm):
     class Meta:
         model = Visitor
         fields = [
-            'name', 'email', 'phone', 'birth_date', 'gender', 'address', 'neighborhood',
+            'name', 'email', 'phone', 'birth_date', 'gender', 'companion', 'address', 'neighborhood',
             'decision_for_jesus', 'wants_home_prayer', 'wants_house_of_peace',
             'conversion', 'prayer_request', 'profile_notes',
         ]
@@ -86,6 +89,7 @@ class VisitorAdminForm(forms.ModelForm):
             'name':               'Nome Completo',
             'email':              'Email',
             'phone':              'Telefone',
+            'companion':          'Visitante veio com',
             'birth_date':         'Data de Nascimento',
             'gender':             'Gênero',
             'address':            'Endereço Completo',
@@ -115,6 +119,7 @@ class VisitorAdminForm(forms.ModelForm):
                 'type': 'date',
             }),
             'gender': forms.Select(attrs={'class': 'form-select'}),
+            'companion': forms.Select(attrs={'class': 'form-select'}),
             'address': forms.TextInput(attrs={
                 'class': 'form-input',
                 'placeholder': 'Rua, número, bairro, cidade',
@@ -158,11 +163,8 @@ class VisitorAdminForm(forms.ModelForm):
 
     def save(self, commit=True, visit_date=None):
         instance = super().save(commit=False)
+        if visit_date:
+            instance.visit_date = visit_date
         if commit:
             instance.save()
-            # auto_now_add=True substitui visit_date no INSERT;
-            # usamos UPDATE para persistir o valor informado.
-            if visit_date:
-                Visitor.objects.filter(pk=instance.pk).update(visit_date=visit_date)
-                instance.visit_date = visit_date
         return instance

@@ -3,15 +3,12 @@ from django.views.generic import ListView, TemplateView
 from django.views.generic.edit import CreateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
-from django.utils.dateparse import parse_date
-from django.utils.timezone import make_aware
-from datetime import timedelta, datetime
+from datetime import timedelta
 from django.urls import reverse_lazy
-from django.utils import timezone
 from django.core.cache import cache
 from django.http import HttpResponseForbidden, HttpResponse
 from django.contrib import messages
-from ..models.visitor import Visitor
+from ..models.visitor import Visitor, visitor_local_date
 from ..forms.visitor import VisitorForm
 from ..models.member import Member
 from ..models.ministry_membership import MinistryMembership
@@ -41,7 +38,7 @@ class VisitorCreateView(CreateView):
         if count >= RATE_LIMIT_MAX:
             return HttpResponseForbidden('Muitas submissões. Tente novamente mais tarde.')
         cache.set(cache_key, count + 1, RATE_LIMIT_WINDOW)
-        form.instance.visit_date = timezone.now()
+        form.instance.visit_date = visitor_local_date()
         return super().form_valid(form)
 
 
@@ -49,10 +46,10 @@ class MemberVisitorCreateView(MemberRequiredMixin, CreateView):
     model = Visitor
     form_class = VisitorForm
     template_name = 'member/visitor_create.html'
-    success_url = reverse_lazy('member_dashboard')
+    success_url = reverse_lazy('member_visitor_create')
 
     def form_valid(self, form):
-        form.instance.visit_date = timezone.now()
+        form.instance.visit_date = visitor_local_date()
         response = super().form_valid(form)
         messages.success(self.request, 'Visitante cadastrado com sucesso!')
         return response
@@ -89,18 +86,18 @@ class MemberVisitorListView(MemberRequiredMixin, ListView):
         return raw
 
     def get_queryset(self):
-        qs = Visitor.objects.order_by('-visit_date')
+        qs = Visitor.objects.order_by('-visit_date', '-created_at', '-id')
         q = self.request.GET.get('q', '').strip()
         period = self.request.GET.get('period', 'all')
         if q:
             qs = qs.filter(
                 Q(name__icontains=q) | Q(phone__icontains=q)
             )
-        now = make_aware(datetime.now())
+        today = visitor_local_date()
         if period == '7_days':
-            qs = qs.filter(visit_date__gte=now - timedelta(days=7))
+            qs = qs.filter(visit_date__gte=today - timedelta(days=6))
         elif period == '30_days':
-            qs = qs.filter(visit_date__gte=now - timedelta(days=30))
+            qs = qs.filter(visit_date__gte=today - timedelta(days=29))
         return qs
 
     def get_context_data(self, **kwargs):
@@ -153,7 +150,7 @@ class PastoralVisitorListView(LoginRequiredMixin, ListView):
         if query:
             qs = qs.filter(Q(name__icontains=query) | Q(phone__icontains=query) | Q(email__icontains=query))
 
-        today = timezone.localdate()
+        today = visitor_local_date()
         if period == '7_days':
             qs = qs.filter(visit_date__gte=today - timedelta(days=6))
         elif period == '30_days':
@@ -190,7 +187,7 @@ class PastoralVisitorReportView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        today = timezone.localdate()
+        today = visitor_local_date()
         visitors = Visitor.objects.all()
         total = visitors.count()
         month_names = ('Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez')

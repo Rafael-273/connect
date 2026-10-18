@@ -86,6 +86,7 @@
 
 {% block content %}
 <div class="min-h-screen" style="background: #ffffff;">
+    {% include 'parciais/messages.html' %}
 
     <!-- Header Moderno -->
     <div class="px-4 sm:px-6 md:px-8 py-6 border-b-2 animate-slide-down" style="border-color: rgba(201, 9, 5, 0.2);">
@@ -144,6 +145,17 @@
                     {% endif %}
                 </div>
 
+                <!-- Acompanhamento -->
+                <div class="mb-6">
+                    <label for="{{ form.companion.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
+                        <i class="fas fa-users mr-2" style="color: #C90905;"></i>{{ form.companion.label }}
+                    </label>
+                    {{ form.companion }}
+                    {% if form.companion.errors %}
+                        <p class="mt-2 text-sm font-bold" style="color: #C90905;">{{ form.companion.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
                 <!-- Endereço -->
                 <div class="mb-6">
                     <label for="{{ form.address.id_for_label }}" class="block text-sm font-bold mb-3" style="color: #991b1b;">
@@ -186,13 +198,6 @@
                     {% if form.wants_home_prayer.errors %}
                         <p class="text-sm font-bold" style="color: #C90905;">{{ form.wants_home_prayer.errors.0 }}</p>
                     {% endif %}
-                </div>
-
-                <div class="flex items-center gap-3 p-4 mt-3 rounded-xl" style="background: rgba(201, 9, 5, 0.04); border: 2px solid rgba(201, 9, 5, 0.12);">
-                    {{ form.wants_house_of_peace }}
-                    <label for="{{ form.wants_house_of_peace.id_for_label }}" class="text-sm font-medium text-gray-700 cursor-pointer">
-                        <i class="fas fa-house-user mr-2" style="color: #C90905;"></i>{{ form.wants_house_of_peace.label }}
-                    </label>
                 </div>
 
                 {% if form.non_field_errors %}

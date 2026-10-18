@@ -8,13 +8,12 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 from django.views import View
 
 from ..mixins import ModulePermissionMixin
 from ...forms.visitor import VisitorAdminForm
 from ...models.member import Member
-from ...models.visitor import Visitor
+from ...models.visitor import Visitor, visitor_local_date
 from .members import convert_visitor_to_member, should_convert_visitor_to_member
 
 User = get_user_model()
@@ -25,7 +24,7 @@ class VisitorsListView(LoginRequiredMixin, ModulePermissionMixin, View):
     module_name = 'visitors'
 
     def _get_queryset(self):
-        return Visitor.objects.select_related('neighborhood').order_by('-visit_date', '-id')
+        return Visitor.objects.select_related('neighborhood').order_by('-visit_date', '-created_at', '-id')
 
     def _apply_filters(self, qs, search, period_filter, conversion_filter):
         if search:
@@ -35,9 +34,9 @@ class VisitorsListView(LoginRequiredMixin, ModulePermissionMixin, View):
                 | Q(phone__icontains=search)
             )
         if period_filter == '7_days':
-            qs = qs.filter(visit_date__gte=timezone.now() - timedelta(days=7))
+            qs = qs.filter(visit_date__gte=visitor_local_date() - timedelta(days=6))
         elif period_filter == '30_days':
-            qs = qs.filter(visit_date__gte=timezone.now() - timedelta(days=30))
+            qs = qs.filter(visit_date__gte=visitor_local_date() - timedelta(days=29))
         if conversion_filter == 'converted':
             qs = qs.filter(decision_for_jesus=True)
         elif conversion_filter == 'not_converted':
@@ -51,12 +50,15 @@ class VisitorsListView(LoginRequiredMixin, ModulePermissionMixin, View):
 
         qs = self._apply_filters(self._get_queryset(), search, period_filter, conversion_filter)
         visitors = Paginator(qs, 20).get_page(request.GET.get('page'))
+        filters = request.GET.copy()
+        filters.pop('page', None)
 
         return {
             'visitors': visitors,
             'search': search,
             'period_filter': period_filter,
             'conversion_filter': conversion_filter,
+            'filter_query': filters.urlencode(),
         }
 
     def get(self, request):

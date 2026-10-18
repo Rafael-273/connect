@@ -200,6 +200,12 @@ window.Swal = Swal.mixin({
                         </div>
 
                         <div class="form-group">
+                            <label class="form-label" for="{{ form.companion.id_for_label }}">{{ form.companion.label }}</label>
+                            {{ form.companion }}
+                            {% for error in form.companion.errors %}<p class="text-red-500 text-xs mt-1">{{ error }}</p>{% endfor %}
+                        </div>
+
+                        <div class="form-group">
                             <label class="form-label" for="{{ form.neighborhood.id_for_label }}">{{ form.neighborhood.label }}</label>
                             {{ form.neighborhood }}
                             {% for error in form.neighborhood.errors %}<p class="text-red-500 text-xs mt-1">{{ error }}</p>{% endfor %}

@@ -388,7 +388,7 @@
                 </div>
                 <div class="flex items-center gap-1 order-1 sm:order-2 flex-wrap justify-center">
                     {% if visitors.has_previous %}
-                    <a href="?page={{ visitors.previous_page_number }}&{{ request.GET.urlencode }}"
+                    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ visitors.previous_page_number }}"
                        class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                         <span class="hidden sm:inline">Anterior</span>
@@ -398,14 +398,14 @@
                     {% if num == visitors.number %}
                     <span class="px-3 py-1.5 bg-[var(--color-primary)] text-white rounded-lg text-sm font-semibold min-w-[2rem] text-center">{{ num }}</span>
                     {% elif num > visitors.number|add:'-3' and num < visitors.number|add:'3' %}
-                    <a href="?page={{ num }}&{{ request.GET.urlencode }}"
+                    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ num }}"
                        class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition min-w-[2rem] text-center">
                         {{ num }}
                     </a>
                     {% endif %}
                     {% endfor %}
                     {% if visitors.has_next %}
-                    <a href="?page={{ visitors.next_page_number }}&{{ request.GET.urlencode }}"
+                    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ visitors.next_page_number }}"
                        class="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-300 transition">
                         <span class="hidden sm:inline">Próximo</span>
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
