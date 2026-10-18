@@ -54,7 +54,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
                 channel.pause();
                 return;
             }
-            const target = index === position.index ? position.local : Math.max(0, position.local - this.duration(index) + position.overlap);
+            const target = index === position.index ? position.local : (position.nextLocal ?? Math.max(0, position.local - this.duration(index) + position.overlap));
             if (Math.abs(channel.currentTime - target) > .55) channel.currentTime = target;
             if (this.isPlaying && channel.paused) channel.play().catch(() => {});
         });
@@ -83,6 +83,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
 
     play() {
         this.isPlaying = true;
+        if (this.position.index < 0) return Promise.resolve();
         const current = this.channels[this.position.index] || this.audio;
         const next = this.channels[this.position.index + 1];
         const promises = [current.play()];
@@ -100,12 +101,23 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         const nowMs = Math.max(0, Number(globalMs) || 0);
         const scheduled = this.tracks.every(track => Number.isFinite(Number(track.start_ms)) && Number.isFinite(Number(track.end_ms)) && Number(track.end_ms) > Number(track.start_ms));
         if (scheduled) {
-            let index = this.tracks.findIndex(track => nowMs >= Number(track.start_ms) && nowMs < Number(track.end_ms));
-            if (index < 0) index = nowMs < Number(this.tracks[0].start_ms) ? 0 : this.tracks.length - 1;
-            const track = this.tracks[index];
+            const active = this.tracks
+                .map((track, index) => ({track, index}))
+                .filter(({track}) => nowMs >= Number(track.start_ms) && nowMs < Number(track.end_ms));
+            // A gap in the music lane is intentional silence.
+            if (!active.length) return {index: -1, local: 0, overlap: 0};
+            const {track, index} = active[0];
+            const next = active.find(item => item.index === index + 1);
             const sourceIn = Math.max(0, Number(track.source_in_ms) || 0) / 1000;
             const local = (sourceIn + Math.max(0, nowMs - Number(track.start_ms)) / 1000) % this.duration(index);
-            return {index, local, overlap: 0};
+            if (!next || String(next.track.transition || 'CONSTANT_POWER').toUpperCase() !== 'CONSTANT_POWER') {
+                return {index, local, overlap: 0};
+            }
+            const overlapMs = Math.max(0, Math.min(Number(track.end_ms), Number(next.track.end_ms)) - Number(next.track.start_ms));
+            if (!overlapMs) return {index, local, overlap: 0};
+            const nextSourceIn = Math.max(0, Number(next.track.source_in_ms) || 0) / 1000;
+            const nextLocal = (nextSourceIn + Math.max(0, nowMs - Number(next.track.start_ms)) / 1000) % this.duration(next.index);
+            return {index, local, overlap: overlapMs / 1000, nextLocal, overlapProgress: Math.max(0, Math.min(1, (nowMs - Number(next.track.start_ms)) / overlapMs))};
         }
         const spans = this.channels.map((_, index) => this.duration(index));
         const overlaps = spans.map((_, index) => index ? Math.min(
@@ -132,7 +144,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         const current = this.channels[this.position.index];
         if (!current) return;
         if (this.position.overlap > 0) {
-            const progress = Math.max(0, Math.min(1, (this.position.local - (this.duration(this.position.index) - this.position.overlap)) / this.position.overlap));
+            const progress = this.position.overlapProgress ?? Math.max(0, Math.min(1, (this.position.local - (this.duration(this.position.index) - this.position.overlap)) / this.position.overlap));
             current.volume = base * Math.cos(progress * Math.PI / 2);
             const next = this.channels[this.position.index + 1];
             if (next) next.volume = base * Math.sin(progress * Math.PI / 2);
