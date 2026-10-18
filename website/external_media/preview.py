@@ -1412,7 +1412,7 @@ class TimelineRevisionService:
                 'transition': transition,
                 'transition_duration_ms': max(0, min(10_000, duration_ms)),
             }
-            for key in ('start_ms', 'end_ms'):
+            for key in ('start_ms', 'end_ms', 'source_in_ms'):
                 if (item or {}).get(key) is None:
                     continue
                 try:

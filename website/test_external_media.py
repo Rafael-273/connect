@@ -5685,6 +5685,34 @@ class AudioPlaylistTimelineTests(SimpleTestCase):
         self.assertNotIn('afade=', graph)
         self.assertNotIn('acrossfade=', graph)
 
+    def test_playlist_honors_a_trimmed_source_start(self):
+        runner = Mock()
+        service = AudioMixingService(runner)
+
+        service.build_playlist(
+            [Path('/tmp/trimmed.mp3'), Path('/tmp/second.mp3')],
+            Path('/tmp/playlist.wav'),
+            clip_positions_ms=[(1000, 4000), (5000, 7000)],
+            clip_source_in_ms=[2500, 0],
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('atrim=start=2.500:duration=3.000', graph)
+
+    def test_single_scheduled_track_is_rendered_as_a_trimmed_clip(self):
+        runner = Mock()
+        service = AudioMixingService(runner)
+
+        service.build_playlist(
+            [Path('/tmp/trimmed.mp3')], Path('/tmp/playlist.wav'),
+            clip_positions_ms=[(1000, 4000)], clip_source_in_ms=[2500],
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('atrim=start=2.500:duration=3.000', graph)
+
 
 class AudioMixingSmokeTests(SimpleTestCase):
     @staticmethod

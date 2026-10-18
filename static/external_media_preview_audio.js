@@ -25,6 +25,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             .filter(track => track?.url);
         const signature = JSON.stringify(tracks.map(track => [
             track.id || track.url, track.url, track.transition, track.transition_duration_ms,
+            track.start_ms, track.end_ms, track.source_in_ms,
         ]));
         if (this.signature !== signature) {
             this.pause();
@@ -102,7 +103,8 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             let index = this.tracks.findIndex(track => nowMs >= Number(track.start_ms) && nowMs < Number(track.end_ms));
             if (index < 0) index = nowMs < Number(this.tracks[0].start_ms) ? 0 : this.tracks.length - 1;
             const track = this.tracks[index];
-            const local = ((Math.max(0, nowMs - Number(track.start_ms)) / 1000) % this.duration(index));
+            const sourceIn = Math.max(0, Number(track.source_in_ms) || 0) / 1000;
+            const local = (sourceIn + Math.max(0, nowMs - Number(track.start_ms)) / 1000) % this.duration(index);
             return {index, local, overlap: 0};
         }
         const spans = this.channels.map((_, index) => this.duration(index));

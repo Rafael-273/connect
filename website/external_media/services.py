@@ -1723,6 +1723,7 @@ class MusicService:
                         'transition_duration_ms': max(0, min(10_000, transition_duration_ms)),
                         'start_ms': (item or {}).get('start_ms'),
                         'end_ms': (item or {}).get('end_ms'),
+                        'source_in_ms': (item or {}).get('source_in_ms'),
                     }
             available = {
                 item.pk: item for item in BackgroundMusicTrack.objects.filter(pk__in=ids).exclude(audio_file='')
@@ -2911,7 +2912,11 @@ class ExternalMediaProjectPipeline:
             materialize_small_asset(item['file'], f'template_music_{index + 1}')
             for index, item in enumerate(music_tracks) if item.get('file')
         ]
-        if len(local_music_tracks) > 1:
+        has_timeline_timing = any(
+            item.get('start_ms') is not None and item.get('end_ms') is not None
+            for item in music_tracks
+        )
+        if len(local_music_tracks) > 1 or has_timeline_timing:
             music = AudioMixingService(self.assembly.runner).build_playlist(
                 local_music_tracks,
                 workdir / 'template_music_playlist.wav',
@@ -2927,6 +2932,7 @@ class ExternalMediaProjectPipeline:
                     if item.get('start_ms') is not None and item.get('end_ms') is not None else None
                     for item in music_tracks
                 ],
+                [item.get('source_in_ms') for item in music_tracks],
             )
         else:
             music = local_music_tracks[0] if local_music_tracks else None

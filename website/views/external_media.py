@@ -2473,6 +2473,7 @@ def preview_timeline_with_music(project, timeline):
                 'transition': item.get('transition') or 'CONSTANT_POWER',
                 'transition_duration_ms': int(item.get('transition_duration_ms') or 2000),
                 'start_ms': item.get('start_ms'), 'end_ms': item.get('end_ms'),
+                'source_in_ms': item.get('source_in_ms'),
             })
         timeline['music'] = {
             'url': browser_tracks[0]['url'],

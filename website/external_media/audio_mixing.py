@@ -378,7 +378,7 @@ class AudioMixingService:
 
     def build_playlist(
         self, music_paths, output_path, transitions=None, durations_ms=None,
-        clip_durations_ms=None, clip_positions_ms=None,
+        clip_durations_ms=None, clip_positions_ms=None, clip_source_in_ms=None,
     ):
         """Create one looping-ready music bed from an ordered playlist.
 
@@ -389,12 +389,11 @@ class AudioMixingService:
         paths = [Path(path) for path in (music_paths or [])]
         if not paths:
             return None
-        if len(paths) == 1:
-            return paths[0]
         transitions = list(transitions or [])
         durations_ms = list(durations_ms or [])
         clip_durations_ms = list(clip_durations_ms or [])
         clip_positions_ms = list(clip_positions_ms or [])
+        clip_source_in_ms = list(clip_source_in_ms or [])
         scheduled_positions = []
         for index in range(len(paths)):
             position = clip_positions_ms[index] if index < len(clip_positions_ms) else None
@@ -409,8 +408,10 @@ class AudioMixingService:
             scheduled_positions.append((start_ms, end_ms))
         if len(scheduled_positions) == len(paths):
             return self._build_scheduled_playlist(
-                paths, output_path, transitions, durations_ms, scheduled_positions,
+                paths, output_path, transitions, durations_ms, scheduled_positions, clip_source_in_ms,
             )
+        if len(paths) == 1:
+            return paths[0]
         source_durations = [self._probe_duration_s(path) for path in paths]
         filters = []
         effective_durations = []
@@ -444,7 +445,7 @@ class AudioMixingService:
         ])
         return Path(output_path)
 
-    def _build_scheduled_playlist(self, paths, output_path, transitions, durations_ms, positions_ms):
+    def _build_scheduled_playlist(self, paths, output_path, transitions, durations_ms, positions_ms, source_in_ms=None):
         """Mix a playlist at the exact editorial positions from the timeline.
 
         A regular ``acrossfade`` concatenates inputs and therefore cannot
@@ -481,9 +482,13 @@ class AudioMixingService:
         for index, _path in enumerate(paths):
             start_ms, end_ms = positions_ms[index]
             duration_s = max(.001, (end_ms - start_ms) / 1000)
+            try:
+                source_start_s = max(0, float((source_in_ms or [])[index]) / 1000)
+            except (TypeError, ValueError, IndexError):
+                source_start_s = 0
             chain = (
                 f'[{index}:a]aresample=48000,aformat=channel_layouts=stereo,'
-                f'atrim=duration={duration_s:.3f},asetpts=N/SR/TB'
+                f'atrim=start={source_start_s:.3f}:duration={duration_s:.3f},asetpts=N/SR/TB'
             )
             if index in fade_ins:
                 fade_start, fade_duration = fade_ins[index]
