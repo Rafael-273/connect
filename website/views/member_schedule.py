@@ -3,6 +3,8 @@ from django.shortcuts import get_object_or_404, render
 from ..models.schedule import MonthlySchedule, ScheduleDay
 from .mixins import MemberRequiredMixin
 from django.views import View
+from django.utils import timezone
+from zoneinfo import ZoneInfo
 
 WEEKDAYS_PT = [
     'Segunda-feira',
@@ -17,6 +19,8 @@ WEEKDAYS_PT = [
 
 def _member_in_day(member, day):
     """Returns True if the member is assigned to a schedule day."""
+    if day.division_assignments.filter(member=member, division__is_active=True).exists():
+        return True
     if day.has_shifts:
         if day.members_morning.filter(id=member.id).exists():
             return True
@@ -42,11 +46,7 @@ class MemberScheduleDetailView(MemberRequiredMixin, View):
 
         days = (
             ScheduleDay.objects
-            .filter(
-                schedule=schedule,
-                date__month=schedule.month,
-                date__year=schedule.year,
-            )
+            .filter(schedule=schedule)
             .select_related('team')
             .prefetch_related(
                 'members',
@@ -59,6 +59,14 @@ class MemberScheduleDetailView(MemberRequiredMixin, View):
             )
             .order_by('date')
         )
+        if schedule.is_weekly:
+            days = days.filter(date__gte=timezone.localdate(timezone=ZoneInfo('America/Sao_Paulo')))
+            if schedule.start_date:
+                days = days.filter(date__gte=schedule.start_date)
+            if schedule.end_date:
+                days = days.filter(date__lte=schedule.end_date)
+        else:
+            days = days.filter(date__month=schedule.month, date__year=schedule.year)
 
         MONTH_NAMES = [
             'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -106,5 +114,5 @@ class MemberScheduleDetailView(MemberRequiredMixin, View):
             'schedule': schedule,
             'days': processed_days,
             'member_day_count': member_day_count,
-            'month_name': MONTH_NAMES[schedule.month - 1],
+            'month_name': MONTH_NAMES[schedule.month - 1] if schedule.month else '',
         })

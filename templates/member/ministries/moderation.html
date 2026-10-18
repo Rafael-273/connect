@@ -1,0 +1,7 @@
+{% extends "member/ministries/detail_base.html" %}
+
+{% block ministry_tools %}
+    {% if is_moderacao_member %}
+        {% include "member/ministries/tools/moderation.html" %}
+    {% endif %}
+{% endblock %}

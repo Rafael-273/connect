@@ -1,0 +1,7 @@
+{% extends "member/ministries/detail_base.html" %}
+
+{% block ministry_tools %}
+    {% if can_music_member %}
+        {% include "member/ministries/tools/worship.html" %}
+    {% endif %}
+{% endblock %}

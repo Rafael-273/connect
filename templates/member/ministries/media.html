@@ -1,0 +1,7 @@
+{% extends "member/ministries/detail_base.html" %}
+
+{% block ministry_tools %}
+    {% if is_external_media_member %}
+        {% include "member/ministries/tools/media.html" %}
+    {% endif %}
+{% endblock %}

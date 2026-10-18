@@ -1,0 +1,13 @@
+{% extends "member/personal_base.html" %}
+
+{% block title %}{{ ministry.name }} — Filadélfia Connect{% endblock %}
+
+{% block member_content %}
+    <a href="{% url 'member_dashboard' %}" class="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-gray-600">
+        <i class="fas fa-arrow-left" aria-hidden="true"></i> Início
+    </a>
+    {% block ministry_tools %}{% endblock %}
+    {% if member_schedules %}
+        {% include "member/ministries/tools/schedules.html" %}
+    {% endif %}
+{% endblock %}

@@ -93,6 +93,7 @@ from .views.member_auth import (
     RedirectAfterLoginView,
 )
 from .views.member_schedule import MemberScheduleDetailView
+from .views.member_ministries import MemberMinistriesView, MemberMinistryDetailView
 from .views.user_management import (
     UserManagementView,
     ResetUserPasswordView,
@@ -363,6 +364,8 @@ urlpatterns = [
     path('admin-login/', MemberLoginView.as_view(), name='admin_login'),  # Redirect old admin login to unified login
     path('redirect-after-login/', RedirectAfterLoginView.as_view(), name='redirect_after_login'),
     path('dashboard/', MemberDashboardView.as_view(), name='member_dashboard'),
+    path('my-ministries/', MemberMinistriesView.as_view(), name='member_ministries'),
+    path('my-ministries/<int:ministry_id>/', MemberMinistryDetailView.as_view(), name='member_ministry_detail'),
     path('member/media/', ExternalMediaDashboardView.as_view(), name='external_media_dashboard'),
     path('member/media/new/', ExternalMediaCreateView.as_view(), name='external_media_create'),
     path('member/media/projects/<uuid:public_id>/', ExternalMediaProjectDetailView.as_view(), name='external_media_project_detail'),

@@ -1,7 +1,7 @@
 {% extends "member_base.html" %}
 {% load static %}
 
-{% block title %}{{ schedule.title }} - {{ month_name }}/{{ schedule.year }}{% endblock %}
+{% block title %}{{ schedule.title }}{% if schedule.is_weekly %} - Semanal{% else %} - {{ month_name }}/{{ schedule.year }}{% endif %}{% endblock %}
 
 {% block head %}
 <style>
@@ -325,7 +325,7 @@
             <div class="flex-1 min-w-0">
                 <p class="text-[0.625rem] font-bold uppercase tracking-widest mb-0.5" style="color: #C90905;">{{ schedule.ministry.name }}</p>
                 <h1 class="text-xl sm:text-2xl font-extrabold leading-tight tracking-tight" style="color: #260200;">{{ schedule.title }}</h1>
-                <p class="text-xs text-gray-500 mt-0.5">{{ month_name }} / {{ schedule.year }}</p>
+                <p class="text-xs text-gray-500 mt-0.5">{% if schedule.is_weekly %}Escala semanal{% else %}{{ month_name }} / {{ schedule.year }}{% endif %}</p>
             </div>
         </div>
 

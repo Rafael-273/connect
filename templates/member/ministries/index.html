@@ -1,0 +1,23 @@
+{% extends "member/personal_base.html" %}
+
+{% block title %}Meus ministérios — Filadélfia Connect{% endblock %}
+
+{% block member_content %}
+<section aria-labelledby="ministries-title">
+    <h1 id="ministries-title" class="mb-4 text-xl font-bold text-gray-900">Meus ministérios</h1>
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {% for membership in member_ministries %}
+        <a href="{% url 'member_ministry_detail' membership.ministry_id %}" class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+            <i class="fas fa-users mb-3 text-[#C90905]" aria-hidden="true"></i>
+            <strong class="block text-sm text-gray-900">{{ membership.ministry.name }}</strong>
+            <span class="mt-1 block text-xs text-gray-500">{{ membership.get_role_display }}</span>
+        </a>
+        {% empty %}
+        <p class="col-span-full text-sm text-gray-500">Você ainda não possui vínculos ativos com ministérios.</p>
+        {% endfor %}
+    </div>
+</section>
+{% if member.church_role == 'pastor' %}
+    {% include "member/ministries/tools/pastoral.html" %}
+{% endif %}
+{% endblock %}

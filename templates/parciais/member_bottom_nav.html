@@ -1,152 +1,97 @@
-{% comment %}
-  Member bottom navigation bar.
+{% comment %}Shared navigation. nav_active and ministry_page determine the current section.{% endcomment %}
 
-  Required context:
-    - can_consolidate       : bool — show the "Consolidar" link
-    - is_ministration_member: bool — show the "Curas" link
-    - is_external_media_member: bool — show the "Vídeos" link
-    - nav_active            : str  — which item is active: 'home' | 'consolidation' | 'curas' | 'external_media' | 'profile'
-    - color_scheme          : str  — optional color scheme: 'default' | 'house_of_peace'
-
-  Color scheme: all buttons (active and inactive) use the current page's accent
-  color. Active = solid fill; inactive = translucent bg + border.
-    home          → red     #C90905  rgb(201,9,5)
-    consolidation → amber   #F59E0B  rgb(245,158,11)
-    curas         → red     #C90905  rgb(201,9,5)
-    media         → purple  #8B5CF6  rgb(139,92,246)
-    profile       → indigo  #6366F1  rgb(99,102,241)
-    house_of_peace → red     #C90905  rgb(201,9,5)
-{% endcomment %}
-
-<nav id="bottomNav"
-     class="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-2xl shadow-2xl border-2 px-2 py-2.5 flex items-center z-50 transition-all duration-500 ease-in-out
-            {% if can_consolidate or is_ministration_member or is_external_media_member %}w-[94%] max-w-2xl justify-around{% else %}w-auto gap-2 justify-center{% endif %}"
-     style="--accent: {% if color_scheme == 'house_of_peace' %}#6BA3D8{% elif nav_active == 'consolidation' %}#F59E0B{% elif nav_active == 'external_media' %}#C90905{% elif nav_active == 'profile' %}#6366F1{% else %}#C90905{% endif %};
-            --ar: {% if color_scheme == 'house_of_peace' %}107{% elif nav_active == 'consolidation' %}245{% elif nav_active == 'external_media' %}201{% elif nav_active == 'profile' %}99{% else %}201{% endif %};
-            --ag: {% if color_scheme == 'house_of_peace' %}163{% elif nav_active == 'consolidation' %}158{% elif nav_active == 'external_media' %}9{% elif nav_active == 'profile' %}102{% else %}9{% endif %};
-            --ab: {% if color_scheme == 'house_of_peace' %}216{% elif nav_active == 'consolidation' %}11{% elif nav_active == 'external_media' %}5{% elif nav_active == 'profile' %}241{% else %}5{% endif %};
-            background: linear-gradient(to bottom right, rgba(255,255,255,0.98), rgba(249,250,251,0.98));
-            backdrop-filter: blur(20px);
-            border-color: rgba(var(--ar),var(--ag),var(--ab),0.2);">
+<style>
+    :root { --member-nav-height: 82px; }
+    .member-bottom-nav {
+        box-sizing: border-box;
+        height: calc(var(--member-nav-height) + env(safe-area-inset-bottom));
+        padding: 10px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        background: rgba(255, 255, 255, .97);
+        border-top: 1px solid #eceef1;
+        box-shadow: 0 -6px 24px rgba(15, 23, 42, .035);
+    }
+    .member-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-height: 60px;
+        border-radius: 14px;
+        color: #727987;
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 15px;
+        -webkit-tap-highlight-color: transparent;
+        transition: color .18s ease;
+    }
+    .member-nav-item > i {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 56px;
+        height: 32px;
+        border-radius: 12px;
+        font-size: 21px;
+        transition: background-color .18s ease, transform .18s ease;
+    }
+    .member-nav-item.is-active { color: #C90905; font-weight: 700; }
+    .member-nav-item.is-active > i { background: #fff0ef; }
+    .member-nav-item:active > i { transform: scale(.94); }
+    .member-nav-item:focus-visible { outline: 2px solid #C90905; outline-offset: -2px; }
+    .member-nav-item[aria-expanded="true"] { color: #C90905; }
+    .member-nav-item[aria-expanded="true"] > i { background: #fff0ef; }
+    @media (hover: hover) { .member-nav-item:hover > i { background: #f5f6f8; } }
+    .member-more-menu { bottom: calc(var(--member-nav-height) + 8px + env(safe-area-inset-bottom)); }
+    .member-nav-spacer { height: calc(var(--member-nav-height) + env(safe-area-inset-bottom)); }
+    @media (prefers-reduced-motion: reduce) { .member-bottom-nav * { transition: none !important; } }
+</style>
+<nav id="bottomNav" class="member-bottom-nav fixed inset-x-0 bottom-0 z-50 backdrop-blur"
+     aria-label="Navegação principal">
 
     <!-- Home -->
     <a href="{% url 'member_dashboard' %}"
-       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
-              {% if nav_active == 'home' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
-        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300
-                    {% if nav_active == 'home' %}{% else %}border-2 shadow-md{% endif %}"
-             style="{% if nav_active == 'home' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
-            <i class="fas fa-home text-lg transition-transform group-hover:scale-110
-                      {% if nav_active == 'home' %}text-white{% endif %}"
-               {% if nav_active != 'home' %}style="color: var(--accent);"{% endif %}></i>
-        </div>
-        <span class="{% if nav_active == 'home' %}{% else %}group-hover:font-bold{% endif %} transition-all"
-              {% if nav_active == 'home' %}style="color: var(--accent);"{% endif %}>Home</span>
+       class="member-nav-item {% if nav_active == 'home' %}is-active{% endif %}" {% if nav_active == 'home' %}aria-current="page"{% endif %}>
+        <i class="fas fa-house" aria-hidden="true"></i><span>Início</span>
     </a>
 
-    <!-- Consolidação -->
-    {% if can_consolidate %}
-    <a href="{% url 'member_consolidation' %}"
-       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
-              {% if nav_active == 'consolidation' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
-        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300
-                    {% if nav_active == 'consolidation' %}{% else %}border-2 shadow-md{% endif %}"
-             style="{% if nav_active == 'consolidation' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
-            <i class="fas fa-user-graduate text-lg transition-transform group-hover:scale-110
-                      {% if nav_active == 'consolidation' %}text-white{% endif %}"
-               {% if nav_active != 'consolidation' %}style="color: var(--accent);"{% endif %}></i>
-        </div>
-        <span class="{% if nav_active == 'consolidation' %}{% else %}group-hover:font-bold{% endif %} transition-all"
-              {% if nav_active == 'consolidation' %}style="color: var(--accent);"{% endif %}>Consolidar</span>
-    </a>
-    {% endif %}
+    <a href="{% url 'member_dashboard' %}#my-ministries" class="member-nav-item {% if ministry_page or nav_active == 'consolidation' or nav_active == 'curas' or nav_active == 'external_media' or nav_active == 'house_of_peace' %}is-active{% endif %}"><i class="fas fa-users" aria-hidden="true"></i><span>Ministérios</span></a>
 
-    <!-- Curas -->
-    {% if is_ministration_member %}
-    <a href="{% url 'word_of_knowledge_list' %}"
-       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
-              {% if nav_active == 'curas' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
-        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300
-                    {% if nav_active == 'curas' %}{% else %}border-2 shadow-md{% endif %}"
-             style="{% if nav_active == 'curas' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
-            <i class="fas fa-heart-pulse text-lg transition-transform group-hover:scale-110
-                      {% if nav_active == 'curas' %}text-white{% endif %}"
-               {% if nav_active != 'curas' %}style="color: var(--accent);"{% endif %}></i>
-        </div>
-        <span class="{% if nav_active == 'curas' %}{% else %}group-hover:font-bold{% endif %} transition-all"
-              {% if nav_active == 'curas' %}style="color: var(--accent);"{% endif %}>Curas</span>
-    </a>
-    {% endif %}
-
-    <!-- Mídia Externa -->
-    {% if is_external_media_member %}
-    <a href="{% url 'external_media_dashboard' %}"
-       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
-               {% if nav_active == 'external_media' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
-        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300 {% if nav_active != 'external_media' %}border-2 shadow-md{% endif %}"
-             style="{% if nav_active == 'external_media' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
-            <i class="fas fa-closed-captioning text-lg {% if nav_active == 'external_media' %}text-white{% endif %}" {% if nav_active != 'external_media' %}style="color:var(--accent)"{% endif %}></i>
-        </div>
-        <span {% if nav_active == 'external_media' %}style="color:var(--accent)"{% endif %}>Vídeos</span>
-    </a>
-    {% endif %}
-
-    <!-- Perfil -->
-    <a href="{% url 'member_profile' %}"
-       class="flex flex-col items-center text-xs transition-all duration-300 hover:scale-105 p-2 px-3 group
-              {% if nav_active == 'profile' %}font-bold{% else %}font-medium text-gray-600{% endif %}">
-        <div class="py-2.5 px-4 rounded-xl mb-1.5 transition-all duration-300
-                    {% if nav_active == 'profile' %}{% else %}border-2 shadow-md{% endif %}"
-             style="{% if nav_active == 'profile' %}background-color: var(--accent);{% else %}background: rgba(var(--ar),var(--ag),var(--ab),0.05); border-color: rgba(var(--ar),var(--ag),var(--ab),0.15);{% endif %}">
-            <i class="fas fa-user-circle text-lg transition-transform group-hover:scale-110
-                      {% if nav_active == 'profile' %}text-white{% endif %}"
-               {% if nav_active != 'profile' %}style="color: var(--accent);"{% endif %}></i>
-        </div>
-        <span class="{% if nav_active == 'profile' %}{% else %}group-hover:font-bold{% endif %} transition-all"
-              {% if nav_active == 'profile' %}style="color: var(--accent);"{% endif %}>Perfil</span>
-    </a>
+    <button id="memberMoreButton" type="button" aria-expanded="false" aria-controls="memberMoreMenu"
+       class="member-nav-item {% if nav_active == 'profile' %}is-active{% endif %}">
+        <i class="fas fa-ellipsis" aria-hidden="true"></i><span>Mais</span>
+    </button>
 </nav>
-
+<div id="memberMoreMenu" class="member-more-menu fixed right-3 z-50 hidden w-56 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl" role="menu" aria-label="Mais opções">
+    <a href="{% url 'member_profile' %}" role="menuitem" class="flex min-h-12 items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+        <i class="fas fa-user-circle w-5 text-[#C90905]"></i>Perfil
+    </a>
+    {% if user.has_admin_access %}
+    <a href="{% url 'admin_dashboard' %}" role="menuitem" class="flex min-h-12 items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+        <i class="fas fa-shield-alt w-5 text-[#C90905]"></i>Painel administrativo
+    </a>
+    {% endif %}
+    <a href="{% url 'member_logout' %}" role="menuitem" class="flex min-h-12 items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-red-600 hover:bg-red-50">
+        <i class="fas fa-right-from-bracket w-5"></i>Sair
+    </a>
+</div>
+<div class="member-nav-spacer" aria-hidden="true"></div>
 <script>
     (function () {
-        let lastScrollTop = 0;
-        let isScrolling;
-        const nav = document.getElementById('bottomNav');
-        const scrollThreshold = 50;
-
-        window.addEventListener('scroll', function () {
-            clearTimeout(isScrolling);
-            const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-
-            if (scrollTop <= 100) {
-                nav.classList.remove('nav-hidden');
-                nav.classList.add('nav-visible');
-                lastScrollTop = scrollTop;
-                return;
-            }
-
-            if (Math.abs(scrollTop - lastScrollTop) > scrollThreshold) {
-                if (scrollTop > lastScrollTop) {
-                    nav.classList.add('nav-hidden');
-                    nav.classList.remove('nav-visible');
-                } else {
-                    nav.classList.remove('nav-hidden');
-                    nav.classList.add('nav-visible');
-                }
-                lastScrollTop = scrollTop;
-            }
-
-            isScrolling = setTimeout(function () {
-                nav.classList.remove('nav-hidden');
-                nav.classList.add('nav-visible');
-            }, 1000);
-        }, false);
-
-        document.addEventListener('mousemove', function (e) {
-            if (window.innerHeight - e.clientY < 150) {
-                nav.classList.remove('nav-hidden');
-                nav.classList.add('nav-visible');
-            }
+        const button = document.getElementById('memberMoreButton');
+        const menu = document.getElementById('memberMoreMenu');
+        if (!button || !menu) return;
+        const close = () => { menu.classList.add('hidden'); button.setAttribute('aria-expanded', 'false'); };
+        button.addEventListener('click', () => {
+            const isOpen = !menu.classList.contains('hidden');
+            menu.classList.toggle('hidden', isOpen);
+            button.setAttribute('aria-expanded', String(!isOpen));
         });
+        document.addEventListener('click', (event) => {
+            if (!menu.contains(event.target) && !button.contains(event.target)) close();
+        });
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
     })();
 </script>

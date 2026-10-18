@@ -1,0 +1,583 @@
+{% extends "member_base.html" %}
+{% load static %}
+
+{% block title %}Filadélfia Connect{% endblock %}
+
+{% block head %}
+<style>
+    /* Cores customizadas da igreja */
+    :root {
+        --church-red: #C90905;
+        --church-dark: #260200;
+        --church-danger: #8C0910;
+        --church-light: #F66F03;
+        --church-accent: #FDDEB9;
+        --church-red-light: #E63946;
+        --church-red-medium: #DC2626;
+        --church-cream: #FEF7ED;
+        --church-gold: #F59E0B;
+        --church-warm: #FED7AA;
+    }
+
+    /* Classes customizadas com cores da igreja */
+    .bg-church-red {
+        background-color: var(--church-red) !important;
+    }
+
+    .bg-church-dark {
+        background-color: var(--church-dark) !important;
+    }
+
+    .bg-church-red-light {
+        background-color: var(--church-red-light) !important;
+    }
+
+    .bg-church-cream {
+        background-color: var(--church-cream) !important;
+    }
+
+    .bg-church-warm {
+        background-color: var(--church-warm) !important;
+    }
+
+    .text-church-red {
+        color: var(--church-red) !important;
+    }
+
+    .text-church-dark {
+        color: var(--church-dark) !important;
+    }
+
+    .text-church-danger {
+        color: var(--church-danger) !important;
+    }
+
+    .text-church-gold {
+        color: var(--church-gold) !important;
+    }
+
+    .text-church-cream {
+        color: var(--church-cream) !important;
+    }
+
+    .border-church-red {
+        border-color: var(--church-red) !important;
+    }
+
+    .border-church-gold {
+        border-color: var(--church-gold) !important;
+    }
+
+    .bg-gradient-church {
+        background: linear-gradient(135deg, var(--church-red) 0%, var(--church-dark) 100%) !important;
+    }
+
+    .bg-gradient-warm {
+        background: linear-gradient(135deg, var(--church-red-light) 0%, var(--church-red) 100%) !important;
+    }
+
+    .hover-church-red:hover {
+        color: var(--church-red) !important;
+    }
+
+    .hover-church-dark:hover {
+        color: var(--church-dark) !important;
+    }
+
+    .hover-border-church-red:hover {
+        border-color: var(--church-red) !important;
+    }
+
+    /* Animações de entrada */
+    @keyframes slideDown {
+        from {
+            transform: translateY(-30px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes fadeInUp {
+        from {
+            transform: translateY(20px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes scaleIn {
+        from {
+            transform: scale(0.95);
+            opacity: 0;
+        }
+
+        to {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    .animate-slideDown {
+        animation: slideDown 0.6s ease-out;
+    }
+
+    .animate-fadeInUp {
+        animation: fadeInUp 0.8s ease-out;
+    }
+
+    .animate-scaleIn {
+        animation: scaleIn 0.5s ease-out;
+    }
+
+    .animate-delay-100 {
+        animation-delay: 0.1s;
+        animation-fill-mode: both;
+    }
+
+    .animate-delay-200 {
+        animation-delay: 0.2s;
+        animation-fill-mode: both;
+    }
+
+    .animate-delay-300 {
+        animation-delay: 0.3s;
+        animation-fill-mode: both;
+    }
+
+    .animate-delay-400 {
+        animation-delay: 0.4s;
+        animation-fill-mode: both;
+    }
+
+    /* Animações do menu inferior */
+    .nav-hidden {
+        transform: translate(-50%, 120%) !important;
+        opacity: 0 !important;
+    }
+
+    .nav-visible {
+        transform: translate(-50%, 0) !important;
+        opacity: 1 !important;
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .loading-overlay.active {
+        display: flex;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .spinner {
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top: 4px solid #C90905;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+    }
+
+    /* PWA SweetAlert2 Custom Styles */
+    .pwa-popup {
+        border-radius: 1rem !important;
+    }
+
+    .pwa-title {
+        padding: 0 !important;
+        margin-bottom: 1rem !important;
+    }
+
+    .pwa-html {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .pwa-button {
+        font-size: 1rem !important;
+        padding: 0.75rem 1.5rem !important;
+        border-radius: 0.625rem !important;
+        font-weight: 600 !important;
+        transition: all 0.2s ease !important;
+        border: none !important;
+    }
+
+    .pwa-button:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(201, 9, 5, 0.3) !important;
+    }
+
+    @media (max-width: 640px) {
+        .pwa-button {
+            font-size: 0.9rem !important;
+            padding: 0.65rem 1.25rem !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="text-center">
+        <div class="spinner mx-auto mb-4"></div>
+        <p class="text-white font-bold text-lg">Salvando palavra...</p>
+    </div>
+</div>
+
+<!-- Cabeçalho pessoal compacto -->
+<section class="relative overflow-hidden animate-slideDown px-4 py-3"
+    style="background: linear-gradient(to bottom right, #ffffff, #fdfafa, #ffffff);">
+    <!-- Elementos Decorativos -->
+    <div class="absolute top-0 right-0 w-64 h-64 rounded-full -mr-32 -mt-16 opacity-20"
+        style="background: radial-gradient(circle, rgba(201, 9, 5, 0.1), transparent);"></div>
+    <div class="absolute top-0 left-0 w-48 h-48 rounded-full -ml-24 -mt-16 opacity-20"
+        style="background: radial-gradient(circle, rgba(230, 57, 70, 0.1), transparent);"></div>
+
+    <div class="relative z-10">
+        <header class="mx-auto max-w-5xl py-2 sm:py-3">
+            <div class="flex items-center justify-between gap-4">
+                <!-- Info do Usuário -->
+                <div class="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                    <div class="relative flex-shrink-0">
+                        <a href="{% url 'member_profile' %}" aria-label="Abrir perfil" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center overflow-hidden ring-2 ring-red-50"
+                            style="background-color: #C90905;">
+                            {% if member.profile_picture %}
+                            <img src="{{ member.profile_picture.url }}" alt="{{ member.name }}"
+                                class="w-full h-full object-cover">
+                            {% else %}
+                            <i class="fas fa-user text-white text-lg sm:text-xl"></i>
+                            {% endif %}
+                        </a>
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs text-gray-500 tracking-wide">Olá,</p>
+                        <h2 class="font-black text-xl sm:text-2xl text-gray-900 truncate leading-tight">{{ member.first_name|default:member.name }}</h2>
+                        <p class="text-sm sm:text-sm text-gray-600 font-medium hidden sm:block">
+                            {% if member.church_role != 'member' %}
+                                {{ member.get_church_role_display }} · Família Filadélfia
+                            {% else %}
+                                Família Filadélfia
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex-shrink-0">
+                    <img src="{% static 'assets/red_icon.png' %}" alt="Igreja Filadélfia"
+                        class="h-11 w-11 object-contain sm:h-12 sm:w-12">
+                </div>
+            </div>
+        </header>
+    </div>
+</section>
+
+<!-- Messages -->
+{% if messages %}
+<div class="px-4 md:px-8 pt-2 max-w-4xl mx-auto">
+    {% for message in messages %}
+    <div class="message-alert px-4 py-3 rounded-xl mb-3 text-sm sm:text-sm font-bold border shadow-sm flex items-center gap-3
+            {% if message.tags == 'error' %}bg-red-50 border-red-100 text-red-600
+            {% elif message.tags == 'success' %}bg-green-50 border-green-100 text-green-700
+            {% elif message.tags == 'warning' %}bg-yellow-50 border-yellow-100 text-yellow-700
+            {% else %}bg-blue-50 border-blue-100 text-blue-600{% endif %}" data-message-id="{{ forloop.counter }}">
+        <i
+            class="fas fa-{% if message.tags == 'error' %}exclamation-circle{% elif message.tags == 'success' %}check-circle{% elif message.tags == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+        <span class="flex-1">{{ message }}</span>
+        <button onclick="closeMessage(this)" class="ml-2 hover:opacity-70">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<main class="mx-auto max-w-5xl px-4 md:px-8 pt-4 md:pb-12 pb-6 space-y-6 md:space-y-8 animate-fadeInUp animate-delay-400"
+    style="background: linear-gradient(to bottom left, #ffffff, #f9fafb, #ffffff);">
+{% block member_content %}{% endblock %}
+</main>
+
+{% include 'parciais/member_bottom_nav.html' with nav_active=member_nav_active %}
+
+<script>
+    // Flag para prevenir múltiplas submissões
+    let isSubmitting = false;
+
+    // Loading overlay function
+    function showLoadingOverlay(event) {
+        // Prevenir múltiplas submissões
+        if (isSubmitting) {
+            event.preventDefault();
+            return false;
+        }
+
+        const form = event.target;
+        if (form.checkValidity()) {
+            isSubmitting = true;
+            document.getElementById('loadingOverlay').classList.add('active');
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+            }
+        }
+    }
+
+    // Message handling
+    function closeMessage(btn) {
+        const alert = btn.closest('.message-alert');
+        alert.style.opacity = '0';
+        alert.style.transform = 'translateX(100%)';
+        setTimeout(() => alert.remove(), 300);
+    }
+
+    // Auto-dismiss messages after 5 seconds
+    document.addEventListener('DOMContentLoaded', function () {
+        const alerts = document.querySelectorAll('.message-alert');
+        alerts.forEach((alert, index) => {
+            setTimeout(() => {
+                alert.style.transition = 'all 0.3s ease-out';
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateX(100%)';
+                setTimeout(() => alert.remove(), 300);
+            }, 5000 + (index * 500));
+        });
+    });
+
+    // PWA Install Prompt (apenas mobile)
+    let deferredPrompt;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+
+    console.log('=== PWA Debug ===');
+    console.log('isIOS:', isIOS);
+    console.log('isMobile:', isMobile);
+    console.log('isStandalone:', isStandalone);
+    console.log('User Agent:', navigator.userAgent);
+    console.log('Swal disponível:', typeof Swal !== 'undefined');
+    console.log('localStorage pwa-install-prompted:', localStorage.getItem('pwa-install-prompted'));
+    console.log('Protocol:', window.location.protocol);
+    console.log('Is HTTPS:', window.location.protocol === 'https:');
+    console.log('Is localhost:', window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    // Verifica se está em HTTPS ou localhost
+    const isSecureContext = window.location.protocol === 'https:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+
+    if (!isSecureContext && isMobile) {
+        console.warn('PWA requer HTTPS para funcionar em produção!');
+    }
+
+    // Registra o service worker
+    if ('serviceWorker' in navigator && isSecureContext) {
+        navigator.serviceWorker.register('/static/sw.js', { updateViaCache: 'none' })
+            .then(registration => {
+                console.log('Service Worker registrado com sucesso:', registration);
+                // Força atualização do service worker
+                registration.update();
+            })
+            .catch(error => {
+                console.error('Falha ao registrar Service Worker:', error);
+            });
+    } else if (!isSecureContext) {
+        console.warn('Service Worker requer contexto seguro (HTTPS)');
+    }
+
+    // Função para mostrar o prompt de instalação
+    window.showInstallPrompt = function () {
+        console.log('showInstallPrompt chamado. isIOS:', isIOS, 'isMobile:', isMobile, 'deferredPrompt:', !!deferredPrompt, 'isStandalone:', isStandalone);
+
+        if (isIOS) {
+            // iOS - Instruções para adicionar à tela inicial
+            Swal.fire({
+                title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">📱 Instalar Filadélfia</div>',
+                html: `
+                        <div style="text-align: left; padding: 0.5rem;">
+                            <p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin-bottom: 1rem;">Adicione o <strong style="color: #C90905;">Filadélfia</strong> à sua tela inicial para acesso rápido!</p>
+                            <div style="background: #F9FAFB; border-left: 4px solid #C90905; border-radius: 0.5rem; padding: 1rem;">
+                                <p style="font-weight: 600; color: #1F2937; margin-bottom: 0.75rem; font-size: 0.95rem;">📋 Passo a passo:</p>
+                                <ol style="padding-left: 1.5rem; margin: 0; color: #4B5563; font-size: 0.95rem; line-height: 1.8;">
+                                    <li style="margin-bottom: 0.5rem;">Toque no botão <strong>Compartilhar</strong> <i class="fas fa-share" style="color: #3B82F6;"></i></li>
+                                    <li style="margin-bottom: 0.5rem;">Role e toque em <strong style="color: #C90905;">"Adicionar à Tela Inicial"</strong></li>
+                                    <li>Toque em <strong style="color: #10B981;">"Adicionar"</strong></li>
+                                </ol>
+                            </div>
+                        </div>
+                    `,
+                showCloseButton: true,
+                confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                confirmButtonColor: '#C90905',
+                width: '85%',
+                padding: '1.75rem 1rem',
+                customClass: {
+                    popup: 'pwa-popup',
+                    title: 'pwa-title',
+                    htmlContainer: 'pwa-html',
+                    confirmButton: 'pwa-button'
+                }
+            });
+        } else if (deferredPrompt) {
+            // Android/Chrome - Prompt nativo
+            console.log('Mostrando prompt nativo do Android/Chrome');
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult) => {
+                console.log('User choice:', choiceResult.outcome);
+                if (choiceResult.outcome === 'accepted') {
+                    Swal.fire({
+                        title: '<div style="color: #10B981; font-weight: 700; font-size: 1.25rem;">🎉 Instalado!</div>',
+                        html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> foi instalado com sucesso!</p>',
+                        confirmButtonColor: '#C90905',
+                        timer: 2500,
+                        showConfirmButton: false,
+                        width: '85%',
+                        padding: '1.75rem 1rem'
+                    });
+                }
+                deferredPrompt = null;
+            });
+        } else {
+            // Prompt visual para Android/Chrome quando não há deferredPrompt ainda
+            console.log('deferredPrompt não disponível ainda. isStandalone:', isStandalone);
+
+            if (isStandalone) {
+                Swal.fire({
+                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">✅ App Instalado</div>',
+                    html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> já está instalado no seu dispositivo!</p>',
+                    confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                    confirmButtonColor: '#C90905',
+                    width: '85%',
+                    padding: '1.75rem 1rem',
+                    customClass: {
+                        confirmButton: 'pwa-button'
+                    }
+                });
+            } else if (!isSecureContext) {
+                Swal.fire({
+                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">🔒 HTTPS Necessário</div>',
+                    html: '<p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin: 0;">A instalação do app requer uma <strong style="color: #C90905;">conexão segura (HTTPS)</strong>. Acesse via HTTPS para instalar.</p>',
+                    confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                    confirmButtonColor: '#C90905',
+                    width: '85%',
+                    padding: '1.75rem 1rem',
+                    customClass: {
+                        confirmButton: 'pwa-button'
+                    }
+                });
+            } else {
+                Swal.fire({
+                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">Instalação Indisponível</div>',
+                    html: `
+                            <div style="text-align: left;">
+                                <p style="color: #4B5563; font-size: 1rem; margin-bottom: 0.75rem;">A instalação não está disponível neste momento.</p>
+                                <div style="background: #F9FAFB; border-radius: 0.5rem; padding: 0.75rem;">
+                                    <p style="font-weight: 600; color: #1F2937; margin-bottom: 0.5rem; font-size: 0.9rem;">Possíveis motivos:</p>
+                                    <ul style="color: #6B7280; font-size: 0.9rem; margin: 0; padding-left: 1.25rem; line-height: 1.7;">
+                                        <li>O app já está instalado</li>
+                                        <li>O navegador não suporta PWA</li>
+                                        <li>Aguarde e tente novamente</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        `,
+                    confirmButtonText: '<i class="fas fa-check"></i> Entendi',
+                    confirmButtonColor: '#C90905',
+                    width: '85%',
+                    padding: '1.75rem 1rem',
+                    customClass: {
+                        confirmButton: 'pwa-button'
+                    }
+                });
+            }
+        }
+    };
+
+    // Captura o evento beforeinstallprompt (Android/Chrome)
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        console.log('beforeinstallprompt capturado');
+
+        // Se for mobile, não estiver instalado e não foi perguntado, mostra automaticamente
+        const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
+        if (isMobile && !isStandalone && !hasBeenPrompted) {
+            setTimeout(() => {
+                Swal.fire({
+                    title: '<div style="color: #C90905; font-weight: 700; font-size: 1.25rem;">📱 Instalar Filadélfia</div>',
+                    html: '<p style="color: #4B5563; font-size: 1rem; line-height: 1.6; margin: 0;">Instale o <strong style="color: #C90905;">Filadélfia</strong> na sua tela inicial para acesso rápido e experiência completa!</p>',
+                    showCancelButton: true,
+                    confirmButtonText: '<i class="fas fa-download"></i> Instalar',
+                    cancelButtonText: 'Agora Não',
+                    confirmButtonColor: '#C90905',
+                    cancelButtonColor: '#6B7280',
+                    reverseButtons: true,
+                    width: '85%',
+                    padding: '1.75rem 1rem',
+                    customClass: {
+                        confirmButton: 'pwa-button',
+                        cancelButton: 'pwa-button'
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed && deferredPrompt) {
+                        deferredPrompt.prompt();
+                        deferredPrompt.userChoice.then((choiceResult) => {
+                            if (choiceResult.outcome === 'accepted') {
+                                Swal.fire({
+                                    title: '<div style="color: #10B981; font-weight: 700; font-size: 1.25rem;">🎉 Instalado!</div>',
+                                    html: '<p style="color: #4B5563; font-size: 1rem; margin: 0;">O <strong style="color: #C90905;">Filadélfia</strong> foi instalado com sucesso!</p>',
+                                    confirmButtonColor: '#C90905',
+                                    timer: 2500,
+                                    showConfirmButton: false,
+                                    width: '85%',
+                                    padding: '1.75rem 1rem'
+                                });
+                            }
+                            deferredPrompt = null;
+                        });
+                    }
+                    localStorage.setItem('pwa-install-prompted', 'true');
+                });
+            }, 2000);
+        }
+    });
+
+    // Para iOS mobile - mostra prompt automaticamente se não foi perguntado
+    if (isIOS && isMobile && !isStandalone) {
+        const hasBeenPrompted = localStorage.getItem('pwa-install-prompted');
+        if (!hasBeenPrompted) {
+            setTimeout(() => {
+                showInstallPrompt();
+                localStorage.setItem('pwa-install-prompted', 'true');
+            }, 2000);
+        }
+    }
+</script>
+{% endblock %}

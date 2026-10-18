@@ -1,0 +1,7 @@
+{% extends "member/ministries/detail_base.html" %}
+
+{% block ministry_tools %}
+    {% if is_boas_vindas_member %}
+        {% include "member/ministries/tools/welcome.html" %}
+    {% endif %}
+{% endblock %}
