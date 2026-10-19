@@ -61,7 +61,9 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             create_mode = ''
 
         detail_page = detail_kind in ('event', 'free') and bool(detail_pk)
-        selected = f'{detail_kind}-{detail_pk}' if detail_page else request.GET.get('selected', '')
+        # A listagem não usa mais o antigo painel mestre-detalhe: cada item
+        # abre sua própria rota de detalhes.
+        selected = f'{detail_kind}-{detail_pk}' if detail_page else ''
         sidebar_months = build_sidebar_items(request)
         nav_context = self._nav_context()
 
@@ -95,7 +97,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
 
         # Keep the first visit useful, but do not rebuild a full detail panel just
         # because the user switched between list tabs.
-        if not detail_page and not create_mode and not selected and not request.GET.get('kind') and sidebar_months:
+        if detail_page and not create_mode and not selected and not request.GET.get('kind') and sidebar_months:
             first_month = sidebar_months[0]
             if first_month.get('items') and request.GET.get('auto_select', '1') != '0':
                 selected = first_month['items'][0]['key']
