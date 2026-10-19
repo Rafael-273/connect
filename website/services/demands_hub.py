@@ -227,17 +227,28 @@ def _task_offset_for_form(task, content):
     return decompress_assignment_offset(None)
 
 
-def _parse_assignment_date(value):
+def _parse_assignment_date(value, time_value=None):
+    """Converte a data e o horário do formulário em um prazo da etapa.
+
+    Mantém meio-dia como padrão para etapas antigas, criadas antes do campo de
+    horário existir.
+    """
     if not value:
         return None
+    selected_time = datetime.time(hour=12, minute=0)
+    if time_value:
+        try:
+            selected_time = datetime.time.fromisoformat(str(time_value))
+        except ValueError:
+            return None
     if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
-        naive = datetime.datetime.combine(value, datetime.time(hour=12, minute=0))
+        naive = datetime.datetime.combine(value, selected_time)
         return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
     if isinstance(value, str):
         try:
             parts = value.split('-')
             d = datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
-            naive = datetime.datetime.combine(d, datetime.time(hour=12, minute=0))
+            naive = datetime.datetime.combine(d, selected_time)
             return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
         except (ValueError, IndexError):
             return None
@@ -251,6 +262,7 @@ def parse_demand_assignments(post_data, prefix='demand', absolute_dates=False):
     due_days = post_data.getlist(f'{prefix}-assignment_due_days')
     due_relations = post_data.getlist(f'{prefix}-assignment_due_relation')
     due_dates = post_data.getlist(f'{prefix}-assignment_due_date')
+    due_times = post_data.getlist(f'{prefix}-assignment_due_time')
     descs = post_data.getlist(f'{prefix}-assignment_desc')
     ids = post_data.getlist(f'{prefix}-assignment_id')
     assignments = []
@@ -260,7 +272,10 @@ def parse_demand_assignments(post_data, prefix='demand', absolute_dates=False):
         days_raw = due_days[i].strip() if i < len(due_days) and due_days[i] is not None else ''
         relation = due_relations[i].strip() if i < len(due_relations) and due_relations[i] else 'before'
         offset = None if absolute_dates else compress_assignment_offset(days_raw, relation)
-        due_date = _parse_assignment_date(due_dates[i]) if absolute_dates and i < len(due_dates) else None
+        due_date = (
+            _parse_assignment_date(due_dates[i], due_times[i] if i < len(due_times) else None)
+            if absolute_dates and i < len(due_dates) else None
+        )
         desc = descs[i].strip() if i < len(descs) and descs[i] else ''
         task_id = ids[i].strip() if i < len(ids) and ids[i] else ''
         if not role and not user and offset is None and due_date is None and not desc:
@@ -438,6 +453,7 @@ def build_assignment_rows(content):
                 'due_days': offset_parts['due_days'],
                 'due_relation': offset_parts['due_relation'],
                 'due_date': t.due_date.date().isoformat() if t.due_date else '',
+                'due_time': t.due_date.strftime('%H:%M') if t.due_date else '',
                 'description': t.description or '',
                 'is_custom_role': t.title not in ASSIGNMENT_ROLE_PRESETS,
             })
@@ -639,6 +655,9 @@ def build_sidebar_items(request):
                 'date_label': _date_label_short(event.event_date),
                 'content_count': event.content_count,
                 'done_count': event.done_count,
+                # An event is complete only when it has productions and each
+                # one reached one of the existing terminal content states.
+                'is_done': bool(event.content_count and event.done_count == event.content_count),
                 'event_type': event.event_type.name if event.event_type_id else None,
                 'icon': 'calendar-alt',
             })
@@ -660,13 +679,24 @@ def build_sidebar_items(request):
                 'content_type': content.get_content_type_display(),
                 'icon': meta['icon'],
                 'status': content.status,
+                'is_done': content.status in DONE_STATUSES,
                 'responsible': _assignment_summary(content),
             })
 
     result = []
-    for key in sorted(months.keys()):
+    # Keep the active agenda at the top: current/upcoming months progress
+    # forward from now, then older months recede in reverse chronological order.
+    current_month = (today.year, today.month)
+    future_keys = sorted(key for key in months if key >= current_month)
+    past_keys = sorted((key for key in months if key < current_month), reverse=True)
+    for key in [*future_keys, *past_keys]:
         month = months[key]
-        month['items'].sort(key=lambda x: x['date'])
+        if key == current_month:
+            month['items'].sort(key=lambda x: (x['date'] < today, x['date']))
+        elif key < current_month:
+            month['items'].sort(key=lambda x: x['date'], reverse=True)
+        else:
+            month['items'].sort(key=lambda x: x['date'])
         result.append(month)
     return result
 
@@ -693,6 +723,10 @@ def build_event_detail(event_pk):
     attach_assignment_warnings(contents)
     total = len(contents)
     done = sum(1 for c in contents if c.status in DONE_STATUSES)
+    in_progress = sum(1 for c in contents if c.status == 'in_progress')
+    review = sum(1 for c in contents if c.status == 'review')
+    today = timezone.localdate()
+    overdue = sum(1 for c in contents if c.due_date and c.due_date.date() < today and c.status not in DONE_STATUSES)
     phases = group_contents_by_phase(contents, event.event_date)
 
     for _, phase_contents in phases:
@@ -708,6 +742,10 @@ def build_event_detail(event_pk):
         'phases': phases,
         'total': total,
         'done': done,
+        'pending': total - done,
+        'in_progress': in_progress,
+        'review': review,
+        'overdue': overdue,
         'progress': int(done / total * 100) if total else 0,
     }
 
@@ -716,8 +754,10 @@ def build_free_detail(content_pk):
     content = MediaContent.objects.select_related(
         'responsible__member', 'sub_team__ministry', 'assigned_role'
     ).prefetch_related(
-        Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member').order_by('sort_order', 'pk'))
-    ).get(pk=content_pk, event__isnull=True)
+        Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member').order_by('sort_order', 'pk')),
+        'attachments__uploaded_by__member',
+        'comments__author__member',
+    ).get(pk=content_pk)
     attach_assignment_warnings([content])
     content.type_meta = content_type_meta(content.content_type)
     content.responsible_name = _person_name(content.responsible)

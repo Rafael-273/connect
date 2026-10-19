@@ -1,6 +1,4 @@
 <div class="px-4 sm:px-6 pt-3 pb-3 space-y-3 w-full">
-    {% include 'parciais/demands_kind_chips.html' with active=filter_kind|default:'all' filter_q=filter_q filter_responsible=filter_responsible filter_team=filter_team filter_event_type=filter_event_type filter_period_from=filter_period_from filter_period_to=filter_period_to selected=selected %}
-
     <!-- Busca + botões -->
     <form method="get" id="demands-filter-form" class="space-y-3">
         <input type="hidden" name="kind" value="{{ filter_kind|default:'all' }}">
@@ -92,33 +90,6 @@
                             Aplicar
                         </button>
                     </div>
-                </div>
-            </div>
-
-            <div class="relative flex-shrink-0">
-                <button type="button"
-                        id="demands-create-toggle"
-                        class="media-btn-primary sm"
-                        aria-expanded="false"
-                        aria-controls="demands-create-menu">
-                    <i class="fas fa-plus"></i>
-                    <span class="hidden sm:inline">Criar novo</span>
-                </button>
-                <div id="demands-create-menu" class="media-create-menu" hidden>
-                    <a href="#" data-open-modal="demands-modal-demand">
-                        <i class="fas fa-film"></i>
-                        <span>
-                            <strong>Demanda</strong>
-                            <small>Conteúdo livre ou solicitação</small>
-                        </span>
-                    </a>
-                    <a href="#" data-open-modal="demands-modal-event">
-                        <i class="fas fa-calendar-plus"></i>
-                        <span>
-                            <strong>Evento</strong>
-                            <small>Produção vinculada a uma data</small>
-                        </span>
-                    </a>
                 </div>
             </div>
         </div>

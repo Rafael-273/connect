@@ -42,31 +42,24 @@
 {% endblock %}
 
 {% block content %}
-<div class="org-media min-h-screen pb-28 bg-gray-50">
+<div class="org-media min-h-screen pb-8 bg-gray-50">
     {% include 'parciais/messages.html' %}
 
     {% url 'media_content_list' as back_url %}
-    {% include 'parciais/org_media_header.html' with back_url=back_url title='Tipos de' accent='eventos' subtitle='Templates e demandas padrão da equipe' %}
-
-    <div class="px-4 sm:px-6 pt-3 pb-1">
-        {% include 'parciais/demands_kind_chips.html' with active='event_types' %}
+    <div class="relative">
+        {% include 'parciais/org_media_header.html' with back_url=back_url title='Tipos de' accent='eventos' subtitle='Templates e demandas padrão da equipe' %}
+        {% include 'parciais/demands_header_navigation.html' with active='event_types' create_label='Novo tipo' create_href='?create=1' %}
     </div>
 
     <div class="px-4 sm:px-6 pb-4 w-full">
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2 mb-4">
-            <form method="get" class="flex items-center gap-2 flex-1 min-w-0 order-2 sm:order-1">
+        <div class="flex items-center gap-2 mb-4">
+            <form method="get" class="flex items-center gap-2 flex-1 min-w-0">
                 <input type="search" name="search" value="{{ search }}" placeholder="Buscar tipo de evento..."
                        class="w-full min-w-0 h-10 px-4 border border-gray-200 rounded-xl focus:outline-none focus:border-red-400 bg-white text-sm">
                 <button type="submit" class="flex-shrink-0 w-10 h-10 text-white rounded-xl flex items-center justify-center org-btn-primary !p-0 !w-10 !h-10" title="Buscar">
                     <i class="fas fa-search text-sm"></i>
                 </button>
             </form>
-            <a href="?create=1{% if search %}&search={{ search|urlencode }}{% endif %}"
-               class="order-1 sm:order-2 flex-shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm text-white"
-               style="background:#C90905;">
-                <i class="fas fa-plus"></i>
-                <span>Novo tipo</span>
-            </a>
         </div>
 
         <div class="block md:hidden space-y-3">
@@ -257,5 +250,4 @@
     });
 }());
 </script>
-{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
 {% endblock %}

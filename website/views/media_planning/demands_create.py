@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views import View
 
@@ -59,6 +60,7 @@ def _invalid_demand_response(view, request, form, assignments):
             'due_days': offset_parts['due_days'],
             'due_relation': offset_parts['due_relation'],
             'due_date': row.get('due_date').date().isoformat() if row.get('due_date') else '',
+            'due_time': row.get('due_date').strftime('%H:%M') if row.get('due_date') else '',
             'is_custom_role': row.get('role') not in ASSIGNMENT_ROLE_PRESETS,
         })
     request.failed_demand_assignments = failed_rows
@@ -111,7 +113,6 @@ class MediaDemandQuickCreateView(MediaMemberRequiredMixin, View):
                 content.priority = 'medium'
                 content.event = event
                 content.responsible = None
-                content.due_date = None
                 content.publication_date = None
                 content.save()
                 sync_content_assignments(content, assignments)
@@ -131,10 +132,12 @@ class MediaDemandQuickUpdateView(MediaMemberRequiredMixin, View):
 
     def post(self, request, pk):
         content = get_object_or_404(MediaContent, pk=pk)
-        form = MediaDemandQuickForm(request.POST, instance=content, prefix='edit')
+        form_prefix = request.POST.get('form_prefix', 'edit')
+        assignment_prefix = request.POST.get('assignment_prefix', '')
+        form = MediaDemandQuickForm(request.POST, instance=content, prefix=form_prefix)
         assignments = parse_demand_assignments(
             request.POST,
-            prefix='edit',
+            prefix=assignment_prefix or 'edit',
             absolute_dates=True,
         )
         if not form.is_valid():
@@ -142,13 +145,27 @@ class MediaDemandQuickUpdateView(MediaMemberRequiredMixin, View):
         try:
             with transaction.atomic():
                 content = form.save(commit=False)
+                if form_prefix == 'inline-status':
+                    valid_statuses = {value for value, _label in content._meta.get_field('status').choices}
+                    requested_status = request.POST.get('status', '')
+                    if requested_status in valid_statuses:
+                        content.status = requested_status
                 content.save()
-                sync_content_assignments(content, assignments)
+                # Edições pontuais da tela não devem apagar etapas existentes.
+                if assignment_prefix:
+                    sync_content_assignments(content, assignments)
         except ValidationError as exc:
             form.add_error(None, ' '.join(exc.messages))
             return _invalid_demand_response(self, request, form, assignments)
 
         messages.success(request, f'Demanda "{content.title}" atualizada!')
+        next_url = request.POST.get('next', '')
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
         if content.event_id:
             return redirect(hub_redirect_url(request, selected=f'event-{content.event_id}'))
         return redirect(hub_redirect_url(request, selected=f'free-{content.pk}'))
@@ -188,7 +205,7 @@ class MediaEventQuickCreateView(MediaMemberRequiredMixin, View):
             event_time=data.get('event_time'),
             end_date=span_end if len(all_dates) > 1 else data.get('end_date'),
             end_time=data.get('end_time'),
-            location='',
+            location=data.get('location') or '',
             display_start=span_start,
             display_end=span_end,
             event_type=data.get('event_type'),

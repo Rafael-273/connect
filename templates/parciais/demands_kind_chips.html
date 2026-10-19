@@ -6,27 +6,29 @@
 <style>
     .demands-kind-chips {
         display: flex;
-        gap: 0.5rem;
-        overflow-x: auto;
-        padding-bottom: 0.125rem;
-        margin: 0 -0.25rem;
-        padding-left: 0.25rem;
-        padding-right: 0.25rem;
-        -webkit-overflow-scrolling: touch;
+        gap: .125rem;
+        overflow: hidden;
+        width: fit-content;
+        max-width: 100%;
+        padding: .25rem;
+        border: 1px solid #e5e7eb;
+        border-radius: .9rem;
+        background: #fff;
+        box-shadow: 0 1px 2px rgba(17, 24, 39, .03);
     }
     .demands-kind-chips .media-chip {
         display: inline-flex;
-        align-items: center;
+        align-items: center; justify-content: center; gap: .5rem;
         flex-shrink: 0;
         white-space: nowrap;
-        padding: 0.4375rem 0.875rem;
-        border-radius: 9999px;
-        font-size: 0.75rem;
+        padding: .6rem .9rem;
+        border-radius: .65rem;
+        font-size: .8125rem;
         font-weight: 700;
         line-height: 1.25;
-        border: 1px solid #d1d5db;
+        border: 1px solid transparent;
         color: #6B7280;
-        background: #fff;
+        background: transparent;
         text-decoration: none;
         transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
     }
@@ -35,20 +37,27 @@
         color: #C90905;
     }
     .demands-kind-chips .media-chip.active {
-        border-color: #C90905;
-        background: #C90905;
-        color: #fff;
+        border-color: rgba(201, 9, 5, .08);
+        background: rgba(201, 9, 5, .08);
+        color: #C90905;
+        box-shadow: 0 1px 2px rgba(201, 9, 5, .07);
+    }
+    .demands-kind-chips .media-chip i { font-size: .9rem; }
+    @media (max-width: 520px) {
+        .demands-kind-chips { width: 100%; }
+        .demands-kind-chips .media-chip { padding: .58rem .7rem; font-size: .75rem; }
+        .demands-kind-chips .media-chip span { display: none; }
     }
 </style>
 <div class="demands-kind-chips">
     <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=all{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
-       class="media-chip {% if active == 'all' %}active{% endif %}">Todos</a>
+       class="media-chip {% if active == 'all' %}active{% endif %}"><i class="fas fa-list"></i><span>Todos</span></a>
     <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=events{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
-       class="media-chip {% if active == 'events' %}active{% endif %}">Eventos</a>
+       class="media-chip {% if active == 'events' %}active{% endif %}"><i class="fas fa-calendar-alt"></i><span>Eventos</span></a>
     <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=free{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
-       class="media-chip {% if active == 'free' %}active{% endif %}">Demandas livres</a>
+       class="media-chip {% if active == 'free' %}active{% endif %}"><i class="fas fa-clipboard-list"></i><span>Demandas</span></a>
     <a href="{% url 'media_event_type_list' %}"
-       class="media-chip {% if active == 'event_types' %}active{% endif %}">Tipos de eventos</a>
+       class="media-chip {% if active == 'event_types' %}active{% endif %}"><i class="fas fa-tags"></i><span>Tipos</span></a>
     <a href="{% url 'media_dashboard' %}"
-       class="media-chip {% if active == 'calendar' %}active{% endif %}">Calendário</a>
+       class="media-chip {% if active == 'calendar' %}active{% endif %}"><i class="fas fa-calendar"></i><span>Calendário</span></a>
 </div>

@@ -1,8 +1,9 @@
 <div class="h-full overflow-y-auto">
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 lg:px-6 lg:py-4">
+        {% if not detail_page %}
         <a href="{% url 'media_content_list' %}?kind={{ filter_kind|default:'all' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
            id="demands-mobile-back"
-           class="lg:hidden inline-flex items-center gap-1.5 text-xs font-semibold mb-3" style="color: var(--media-color);">
+           class="{% if detail_page %}hidden{% else %}lg:hidden inline-flex{% endif %} items-center gap-1.5 text-xs font-semibold mb-3" style="color: var(--media-color);">
             <i class="fas fa-arrow-left"></i> Voltar
         </a>
 
@@ -21,7 +22,6 @@
                     {% endif %}
                 </div>
                 {% if detail.event.description and detail.event.description != detail.event.title %}<p class="text-sm text-gray-500 mt-2">{{ detail.event.description|linebreaksbr }}</p>{% endif %}
-                <p class="text-sm font-semibold text-gray-700 mt-2">{{ detail.total }} conteúdo{{ detail.total|pluralize }} planejado{{ detail.total|pluralize }}</p>
             </div>
             {% if is_media_leader %}
             <div class="flex items-center gap-2 flex-shrink-0 self-start">
@@ -54,15 +54,23 @@
             </div>
             {% endif %}
         </div>
+        {% endif %}
 
         {% if detail.total > 0 %}
         <div class="mt-4">
             <div class="flex justify-between text-xs text-gray-500 mb-1">
-                <span>{{ detail.done }} prontos</span>
+                <span class="font-semibold">Progresso da produção · {{ detail.done }} de {{ detail.total }} concluídas</span>
                 <span class="font-bold {% if detail.progress == 100 %}text-emerald-600{% endif %}">{{ detail.progress }}%</span>
             </div>
             <div class="progress-bar-bg">
                 <div class="progress-bar-fill{% if detail.progress == 100 %} done{% endif %}" style="width: {{ detail.progress }}%;"></div>
+            </div>
+            <div class="event-progress-grid" aria-label="Resumo das produções">
+                <div><strong>{{ detail.total }}</strong><span>Produções</span></div>
+                <div><strong>{{ detail.done }}</strong><span>Concluídas</span></div>
+                <div><strong>{{ detail.in_progress }}</strong><span>Em andamento</span></div>
+                <div><strong>{{ detail.review }}</strong><span>Em revisão</span></div>
+                <div><strong>{{ detail.overdue }}</strong><span>Atrasadas</span></div>
             </div>
         </div>
         {% endif %}
@@ -80,7 +88,7 @@
         {% if detail.phases %}
         {% for phase_label, phase_contents in detail.phases %}
         <section>
-            <p class="phase-label mb-3">{{ phase_label }}</p>
+            <div class="flex items-center justify-between gap-3 mb-3"><p class="phase-label">{{ phase_label }}</p><span class="text-[11px] font-semibold text-gray-400">{{ phase_contents|length }} item{{ phase_contents|length|pluralize:"s" }}</span></div>
             <div class="space-y-3">
                 {% for content in phase_contents %}
                 {% include 'member/media_planning/partials/demands_content_card.html' with content=content expanded=False %}

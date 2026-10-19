@@ -1,0 +1,24 @@
+<div id="demands-modal-task-edit" class="demands-modal" role="dialog" aria-modal="true" aria-labelledby="demands-modal-task-edit-title">
+    <div class="demands-modal-backdrop" data-close-modal></div>
+    <div class="demands-modal-card">
+        <div class="demands-modal-header-accent demands-modal-header">
+            <div class="flex items-start gap-3 min-w-0">
+                <div class="demands-modal-icon"><i class="fas fa-list-check"></i></div>
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-red-600">Etapa de produção</p>
+                    <h2 id="demands-modal-task-edit-title" class="text-lg font-black text-gray-900 leading-tight">Editar etapa</h2>
+                </div>
+            </div>
+            <button type="button" class="demands-modal-close" data-close-modal aria-label="Fechar"><i class="fas fa-times"></i></button>
+        </div>
+        <form id="demand-task-edit-form" method="post" action="#" class="demands-modal-body">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="">
+            <div class="modal-section"><label class="modal-field-label" for="task-edit-title">Etapa</label><input id="task-edit-title" name="title" class="media-field-input" required></div>
+            <div class="modal-section"><label class="modal-field-label" for="task-edit-assigned">Responsável</label><select id="task-edit-assigned" name="assigned_to" class="media-field-select"><option value="">— Sem responsável —</option>{% for user in responsible_options %}<option value="{{ user.pk }}">{{ user.member.name|default:user.email }}</option>{% endfor %}</select></div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 modal-section"><div><label class="modal-field-label" for="task-edit-date">Data</label><input id="task-edit-date" type="date" name="due_date_date" class="media-field-input"></div><div><label class="modal-field-label" for="task-edit-time">Hora</label><input id="task-edit-time" type="time" name="due_date_time" class="media-field-input"></div><div><label class="modal-field-label" for="task-edit-status">Status</label><select id="task-edit-status" name="status" class="media-field-select"><option value="pending">Pendente</option><option value="in_progress">Em andamento</option><option value="completed">Concluída</option></select></div></div>
+            <div class="modal-section"><label class="modal-field-label" for="task-edit-description">Observações ou link</label><textarea id="task-edit-description" name="description" class="media-field-input" rows="4" placeholder="Inclua orientações, referências ou links..."></textarea></div>
+            <div class="demands-modal-footer"><button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button><button id="demand-task-edit-submit" type="submit" class="media-btn-primary sm flex-1 justify-center"><i class="fas fa-check"></i> Salvar etapa</button></div>
+        </form>
+    </div>
+</div>

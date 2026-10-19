@@ -44,18 +44,26 @@
             </div>
 
             <div class="modal-section">
-                <label class="modal-field-label" for="id_demand-description">Descrição</label>
+                <label class="modal-field-label" for="id_demand-description">Briefing <span class="font-normal text-gray-400">(opcional)</span></label>
                 {{ demand_form.description }}
             </div>
 
             <div class="modal-section">
-                <p class="modal-section-title">Equipe e prazos</p>
-                <p class="text-xs text-gray-500 mb-3">Defina quem faz cada parte e a data de prazo — ex: Filmmaker, Editor, Publicador.</p>
+                <p class="modal-section-title">Organização da produção</p>
                 <label class="modal-field-label" for="id_demand-sub_team">Equipe responsável (opcional)</label>
                 {{ demand_form.sub_team }}{{ demand_form.sub_team.errors }}
+                <div class="mt-3">
+                    <label class="modal-field-label" for="id_demand-due_date">Prazo geral <span class="font-normal text-gray-400">(opcional)</span></label>
+                    {{ demand_form.due_date }}{{ demand_form.due_date.errors }}
+                </div>
                 <p class="team-assignment-help text-xs text-gray-500 my-2" role="status"></p>
-                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='demand' assignments=demand_assignments blank_assignment=blank_assignment use_absolute_dates=True %}
             </div>
+            <details class="demand-steps-config modal-section">
+                <summary><span><strong>Configurar etapas agora</strong><small>Organize quem faz cada parte e quando ela precisa ficar pronta.</small></span><i class="fas fa-chevron-down"></i></summary>
+                <div class="pt-3">
+                {% include 'member/media_planning/partials/demands_assignments_section.html' with prefix='demand' assignments=demand_assignments blank_assignment=blank_assignment use_absolute_dates=True %}
+                </div>
+            </details>
 
             <div class="demands-modal-footer">
                 <button type="button" class="media-btn-secondary sm flex-1 justify-center" data-close-modal>Cancelar</button>
@@ -101,15 +109,20 @@
             </div>
 
             <div class="modal-section">
+                <p class="modal-section-title">Informações do evento</p>
                 <label class="modal-field-label" for="id_event-event_type">Tipo de evento</label>
                 {% include 'member/media_planning/partials/demands_event_type_select.html' with prefix='event' event_types=event_types selected_value=event_form.event_type.value %}
+                <div class="mt-3">
+                    <label class="modal-field-label" for="id_event-location">Local <span class="font-normal text-gray-400">(opcional)</span></label>
+                    {{ event_form.location }}
+                </div>
             </div>
 
             <div class="modal-section">
                 <p class="modal-section-title">Datas do evento</p>
                 {% include 'member/media_planning/partials/demands_event_dates_section.html' with prefix='event' extra_event_dates=extra_event_dates %}
                 <div class="mt-3">
-                    <label class="modal-field-label" for="id_event-description">Descrição <span class="font-normal text-gray-400">(opcional)</span></label>
+                <label class="modal-field-label" for="id_event-description">Descrição / orientações <span class="font-normal text-gray-400">(opcional)</span></label>
                     {{ event_form.description }}
                 </div>
             </div>

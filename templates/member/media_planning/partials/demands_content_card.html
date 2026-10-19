@@ -21,6 +21,9 @@
                 <i class="fas fa-ellipsis-v"></i>
             </button>
             <div class="demands-kebab-menu" hidden>
+                <a class="demands-kebab-item" href="{% url 'media_demand_detail_page' content.pk %}">
+                    <i class="fas fa-arrow-up-right-from-square"></i> Abrir detalhes
+                </a>
                 <button type="button" class="demands-kebab-item"
                         data-open-edit-modal
                         data-pk="{{ content.pk }}"
@@ -28,6 +31,7 @@
                         data-sub-team="{{ content.sub_team_id|default:'' }}"
                         data-content-type="{{ content.content_type }}"
                         data-description="{{ content.description|default:'' }}"
+                        data-due-date="{{ content.due_date|date:'Y-m-d\\TH:i'|default:'' }}"
                         data-assignments='{{ content.assignments_json|default:"[]" }}'>
                     <i class="fas fa-pen"></i> Editar
                 </button>

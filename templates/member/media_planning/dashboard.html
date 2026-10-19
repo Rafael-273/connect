@@ -425,14 +425,13 @@
 {% endblock %}
 
 {% block content %}
-<div class="org-media media-calendar-page min-h-screen pb-28">
+<div class="org-media media-calendar-page min-h-screen pb-8">
     {% include 'parciais/messages.html' %}
 
     {% url 'member_dashboard' as back_url %}
-    {% include 'parciais/org_media_header.html' with back_url=back_url title='Calendário' accent='de mídia' subtitle='Etapas e prazos das demandas' %}
-
-    <div class="px-4 sm:px-6 pt-3 pb-1">
-        {% include 'parciais/demands_kind_chips.html' with active='calendar' %}
+    <div class="relative">
+        {% include 'parciais/org_media_header.html' with back_url=back_url title='Calendário' accent='de mídia' subtitle='Etapas e prazos das demandas' %}
+        {% include 'parciais/demands_header_navigation.html' with active='calendar' %}
     </div>
 
     <div class="px-4 sm:px-6 pb-6 pt-2">
@@ -655,5 +654,4 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
 {% endblock %}

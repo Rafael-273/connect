@@ -142,7 +142,7 @@ class MediaDemandQuickForm(forms.ModelForm):
 
     class Meta:
         model = MediaContent
-        fields = ['title', 'description', 'content_type', 'sub_team']
+        fields = ['title', 'description', 'content_type', 'sub_team', 'due_date']
         widgets = {
             'sub_team': forms.Select(attrs={'class': _MEDIA_SELECT, 'data-demand-team': 'true'}),
             'title': forms.TextInput(attrs={
@@ -152,8 +152,9 @@ class MediaDemandQuickForm(forms.ModelForm):
             'description': forms.Textarea(attrs={
                 'class': _MEDIA_INPUT,
                 'rows': 3,
-                'placeholder': 'Detalhes, referências ou contexto da demanda',
+                'placeholder': 'Descreva o que precisa ser produzido, orientações, objetivos e informações importantes...',
             }),
+            'due_date': forms.DateTimeInput(attrs={'class': _MEDIA_INPUT, 'type': 'datetime-local'}),
             'content_type': forms.Select(attrs={'class': _MEDIA_SELECT}),
         }
 
@@ -187,6 +188,10 @@ class MediaDemandQuickForm(forms.ModelForm):
             f'id_{self.prefix}-content_type' if self.prefix else 'id_demand-content_type'
         )
         self.fields['description'].required = False
+        self.fields['due_date'].required = False
+        self.fields['due_date'].label = 'Prazo geral'
+        self.fields['due_date'].input_formats = ['%Y-%m-%dT%H:%M']
+        self.fields['due_date'].widget.format = '%Y-%m-%dT%H:%M'
         self.fields['sub_team'].queryset = media_teams().filter(is_active=True)
         self.fields['sub_team'].empty_label = '— Sem equipe —'
 

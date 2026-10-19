@@ -1,0 +1,68 @@
+<style>
+    .demands-page-nav { position: absolute; top: 1.7rem; right: 2rem; z-index: 20; display: flex; align-items: center; gap: 0; }
+    .demands-page-nav-menu { max-width: 0; opacity: 0; overflow: hidden; filter: blur(2px); transform: translateX(1rem) scale(.94); transform-origin: right center; transition: max-width .38s cubic-bezier(.16, 1, .3, 1), opacity .2s ease, transform .38s cubic-bezier(.16, 1, .3, 1), filter .2s ease, margin .38s cubic-bezier(.16, 1, .3, 1); }
+    .demands-page-nav.is-open .demands-page-nav-menu { max-width: 34rem; margin-right: .5rem; opacity: 1; filter: blur(0); transform: translateX(0) scale(1); }
+    .demands-page-nav-toggle { width: 2.75rem; height: 2.75rem; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e5e7eb; border-radius: 0 .8rem .8rem 0; background: #fff; color: #4b5563; box-shadow: 1px 1px 2px rgba(17, 24, 39, .04); cursor: pointer; transition: color .2s ease, border-color .2s ease, background .2s ease, transform .32s cubic-bezier(.16, 1, .3, 1), box-shadow .2s ease, border-radius .2s ease; }
+    .demands-page-nav-toggle:hover, .demands-page-nav.is-open .demands-page-nav-toggle { color: #C90905; border-color: rgba(201, 9, 5, .28); background: rgba(201, 9, 5, .05); }
+    .demands-page-nav.is-open .demands-page-nav-toggle { transform: rotate(90deg); box-shadow: 0 3px 10px rgba(201, 9, 5, .12); }
+    .demands-page-active { height: 2.75rem; min-width: 0; max-width: 9rem; display: inline-flex; align-items: center; gap: .5rem; overflow: hidden; padding: 0 .85rem; border: 1px solid rgba(201, 9, 5, .12); border-right: 0; border-radius: .8rem 0 0 .8rem; background: rgba(201, 9, 5, .06); color: #C90905; font-size: .8125rem; font-weight: 800; white-space: nowrap; transition: max-width .28s cubic-bezier(.16, 1, .3, 1), padding .28s ease, opacity .16s ease, border-color .16s ease; }
+    .demands-page-nav.is-open .demands-page-active { max-width: 0; padding-left: 0; padding-right: 0; border-color: transparent; opacity: 0; }
+    .demands-page-nav.is-open .demands-page-nav-toggle { border-radius: .8rem; }
+    .demands-page-create { height: 2.75rem; margin-left: .5rem; padding: 0 .95rem; border-radius: .8rem; display: inline-flex; align-items: center; justify-content: center; gap: .5rem; background: #C90905; color: #fff; font-size: .8125rem; font-weight: 800; }
+    .demands-page-create:hover { opacity: .9; }
+    @media (max-width: 1100px) {
+        .demands-page-nav { position: static; justify-content: flex-end; padding: .5rem 1rem .75rem; border-bottom: 1px solid rgba(201, 9, 5, .1); }
+        .demands-page-nav.is-open .demands-page-nav-menu { max-width: calc(100vw - {% if create_label %}10rem{% else %}5.5rem{% endif %}); }
+        .demands-page-active span { display: none; }
+        .demands-page-active { width: 2.75rem; max-width: 2.75rem; justify-content: center; padding: 0; }
+        .demands-page-create span { display: none; }
+        .demands-page-create { width: 2.75rem; padding: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .demands-page-nav-menu, .demands-page-nav-toggle { transition: none; }
+    }
+</style>
+<nav class="demands-page-nav" aria-label="Navegação de demandas e eventos">
+    <div class="demands-page-nav-menu">
+        {% include 'parciais/demands_kind_chips.html' with active=active %}
+    </div>
+    <span class="demands-page-active" aria-label="Visualização atual">
+        {% if active == 'event_types' %}
+        <i class="fas fa-tags" aria-hidden="true"></i><span>Tipos</span>
+        {% elif active == 'calendar' %}
+        <i class="fas fa-calendar" aria-hidden="true"></i><span>Calendário</span>
+        {% elif active == 'events' %}
+        <i class="fas fa-calendar-alt" aria-hidden="true"></i><span>Eventos</span>
+        {% elif active == 'free' %}
+        <i class="fas fa-clipboard-list" aria-hidden="true"></i><span>Demandas</span>
+        {% else %}
+        <i class="fas fa-list" aria-hidden="true"></i><span>Todos</span>
+        {% endif %}
+    </span>
+    <button type="button" class="demands-page-nav-toggle" aria-label="Abrir opções de visualização" aria-expanded="false">
+        <i class="fas fa-sliders-h" aria-hidden="true"></i>
+    </button>
+    {% if create_label %}
+    <a href="{{ create_href }}{% if search %}&search={{ search|urlencode }}{% endif %}" class="demands-page-create"><i class="fas fa-plus"></i><span>{{ create_label }}</span></a>
+    {% endif %}
+</nav>
+<script>
+(function () {
+    var nav = document.currentScript.previousElementSibling;
+    if (!nav) return;
+    var toggle = nav.querySelector('.demands-page-nav-toggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', function (event) {
+        event.stopPropagation();
+        var open = !nav.classList.contains('is-open');
+        nav.classList.toggle('is-open', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', function (event) {
+        if (!nav.contains(event.target)) {
+            nav.classList.remove('is-open');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+})();
+</script>

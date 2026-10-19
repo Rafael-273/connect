@@ -1,5 +1,6 @@
 {% load pt_date %}
 <div class="demand-task-step {% if task.status == 'completed' %}is-done{% endif %}" data-task-id="{{ task.pk }}">
+    <span class="demand-task-order">{{ forloop.counter }}</span>
     <button type="button"
             class="demand-task-check"
             data-task-toggle="{{ task.pk }}"
@@ -11,7 +12,18 @@
     <div class="demand-task-body min-w-0 flex-1">
         <div class="demand-task-header">
             <p class="demand-task-role">{{ task.title }}</p>
-            <span class="demand-task-status task-status-{{ task.status }}">{{ task.get_status_display }}</span>
+            <div class="flex items-center gap-2">
+                <button type="button" class="demand-task-edit" data-open-task-edit
+                        data-task-id="{{ task.pk }}"
+                        data-title="{{ task.title }}"
+                        data-description="{{ task.description|default:'' }}"
+                        data-assigned-to="{{ task.assigned_to_id|default:'' }}"
+                        data-due-date="{{ task.due_date|date:'Y-m-d\\TH:i'|default:'' }}"
+                        data-status="{{ task.status }}" aria-label="Editar etapa {{ task.title }}" title="Editar etapa">
+                    <i class="fas fa-pen"></i>
+                </button>
+                <span class="demand-task-status task-status-{{ task.status }}">{{ task.get_status_display }}</span>
+            </div>
         </div>
 
         <div class="demand-task-meta">
