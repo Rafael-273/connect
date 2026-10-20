@@ -449,6 +449,19 @@
         color: #374151;
     }
 
+    .cal-task-modal-btn-check {
+        flex: 0 0 3.125rem;
+        width: 3.125rem;
+        padding: 0;
+        border: 1px solid #bbf7d0;
+        background: #ecfdf5;
+        color: #059669;
+    }
+
+    .cal-task-modal-btn-check:hover { background: #d1fae5; }
+    .cal-task-modal-btn-check.is-completed { border-color: #d1d5db; background: #f3f4f6; color: #6b7280; }
+    .cal-task-modal-btn-check:disabled { cursor: wait; opacity: 0.6; }
+
     #media-task-calendar .fc-daygrid-more-link {
         font-size: 0.625rem;
         font-weight: 700;
@@ -468,6 +481,9 @@
     #media-task-calendar .fc-timegrid-axis,
     #media-task-calendar .fc-timegrid-slot { border-color: #f3f4f6 !important; }
 
+    /* Grade compacta; o restante do dia rola dentro do calendário. */
+    #media-task-calendar .fc-timegrid-slot { height: 2.625rem; }
+
     #media-task-calendar .fc-timegrid-col.fc-day-today { background: rgba(201, 9, 5, 0.035); }
     #media-task-calendar .fc-timegrid-event {
         border: 0 !important;
@@ -478,15 +494,34 @@
     }
 
     #media-task-calendar .fc-timegrid-event .cal-task-pill {
+        position: relative;
+        overflow: hidden;
         height: 100%;
-        min-height: 2.65rem;
+        min-height: 2.45rem;
         align-items: flex-start;
-        padding: 0.375rem 0.4375rem;
+        padding: 0.4rem 0.5rem 0.4rem 0.625rem;
+        border: 1px solid transparent;
+        border-radius: 0.625rem;
+        box-shadow: 0 2px 7px rgba(17, 24, 39, 0.05);
     }
 
-    #media-task-calendar .fc-timegrid-event .cal-task-dot { margin-top: 0.25rem; }
-    #media-task-calendar .fc-timegrid-event .cal-task-role { font-size: 0.6875rem; white-space: normal; }
-    #media-task-calendar .fc-timegrid-event .cal-task-demand { font-size: 0.625rem; }
+    #media-task-calendar .fc-timegrid-event .cal-task-pill[data-status="pending"] { border-color: #fde68a; color: #b45309; }
+    #media-task-calendar .fc-timegrid-event .cal-task-pill[data-status="in_progress"] { border-color: #fecaca; color: #c90905; }
+    #media-task-calendar .fc-timegrid-event .cal-task-pill[data-status="completed"] { border-color: #a7f3d0; color: #059669; }
+    #media-task-calendar .fc-timegrid-event .cal-task-pill[data-status="overdue"] { border-color: #fecaca; color: #dc2626; }
+    #media-task-calendar .fc-timegrid-event .cal-task-dot { width: 7px; height: 7px; margin-top: 0.3rem; }
+    #media-task-calendar .fc-timegrid-event .cal-task-role { font-size: 0.6875rem; white-space: normal; color: #374151; }
+    #media-task-calendar .fc-timegrid-event .cal-task-demand { font-size: 0.6rem; color: #9ca3af; }
+    #media-task-calendar .cal-task-time {
+        display: block;
+        margin-bottom: 0.125rem;
+        font-size: 0.5625rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        line-height: 1;
+        color: currentColor;
+    }
+    #media-task-calendar .fc-daygrid-event .cal-task-time { display: none; }
 
     @media (max-width: 639px) {
         .cal-calendar-toolbar { align-items: flex-start; flex-direction: column; }
@@ -580,9 +615,8 @@
             <div id="cal-task-modal-desc" class="cal-task-modal-desc hidden"></div>
         </div>
         <div class="cal-task-modal-footer">
-            <button type="button" class="cal-task-modal-btn cal-task-modal-btn-secondary" data-cal-modal-close>Fechar</button>
-            <button type="button" id="cal-task-modal-toggle" class="cal-task-modal-btn cal-task-modal-btn-secondary">
-                <i class="fas fa-check"></i> <span>Concluir</span>
+            <button type="button" id="cal-task-modal-toggle" class="cal-task-modal-btn cal-task-modal-btn-check" aria-label="Concluir etapa" title="Concluir etapa">
+                <i class="fas fa-check" aria-hidden="true"></i>
             </button>
             <a id="cal-task-modal-link" href="#" class="cal-task-modal-btn cal-task-modal-btn-primary">
                 <i class="fas fa-external-link-alt"></i> Abrir demanda
@@ -651,8 +685,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var toggle = document.getElementById('cal-task-modal-toggle');
         var isCompleted = props.status === 'completed';
         toggle.dataset.taskPk = props.pk || '';
-        toggle.querySelector('span').textContent = isCompleted ? 'Reabrir' : 'Concluir';
         toggle.querySelector('i').className = isCompleted ? 'fas fa-undo' : 'fas fa-check';
+        toggle.classList.toggle('is-completed', isCompleted);
+        toggle.setAttribute('aria-label', isCompleted ? 'Reabrir etapa' : 'Concluir etapa');
+        toggle.title = isCompleted ? 'Reabrir etapa' : 'Concluir etapa';
         toggle.disabled = !props.pk;
         modal.hidden = false;
         modal.classList.add('active');
@@ -674,6 +710,18 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && modal && modal.classList.contains('active')) closeTaskModal();
     });
+
+    function weeklyCalendarHeight() {
+        // Reserva espaço para a legenda e a margem inferior, evitando que a
+        // página toda precise rolar para alcançar o fim do dia.
+        var spaceBelow = window.innerHeight - calendarEl.getBoundingClientRect().top - 110;
+        return Math.max(430, Math.min(720, spaceBelow));
+    }
+
+    function syncCalendarHeight() {
+        if (!calendar) return;
+        calendar.setOption('height', calendar.view.type === 'timeGridWeek' ? weeklyCalendarHeight() : 'auto');
+    }
 
     document.getElementById('cal-task-modal-toggle').addEventListener('click', function () {
         var button = this;
@@ -699,8 +747,10 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('cal-task-modal-status').textContent = data.label;
             document.getElementById('cal-task-modal-status').dataset.status = data.status;
             document.getElementById('cal-task-modal-content-status').textContent = data.content_label || '—';
-            button.querySelector('span').textContent = data.status === 'completed' ? 'Reabrir' : 'Concluir';
             button.querySelector('i').className = data.status === 'completed' ? 'fas fa-undo' : 'fas fa-check';
+            button.classList.toggle('is-completed', data.status === 'completed');
+            button.setAttribute('aria-label', data.status === 'completed' ? 'Reabrir etapa' : 'Concluir etapa');
+            button.title = data.status === 'completed' ? 'Reabrir etapa' : 'Concluir etapa';
             calendar.refetchEvents();
         }).catch(function () {
             alert('Não foi possível atualizar a etapa. Tente novamente.');
@@ -713,7 +763,7 @@ document.addEventListener('DOMContentLoaded', function () {
         initialView: 'timeGridWeek',
         locale: 'pt-br',
         firstDay: 0,
-        height: 'auto',
+        height: weeklyCalendarHeight(),
         slotMinTime: '07:00:00',
         slotMaxTime: '22:00:00',
         scrollTime: '08:00:00',
@@ -741,6 +791,12 @@ document.addEventListener('DOMContentLoaded', function () {
             dot.style.background = statusColors[status] || arg.event.backgroundColor || '#C90905';
             var body = document.createElement('span');
             body.className = 'cal-task-body';
+            if (arg.timeText) {
+                var time = document.createElement('span');
+                time.className = 'cal-task-time';
+                time.textContent = arg.timeText;
+                body.appendChild(time);
+            }
             var role = document.createElement('span');
             role.className = 'cal-task-role';
             role.textContent = props.taskTitle || arg.event.title;
@@ -770,6 +826,7 @@ document.addEventListener('DOMContentLoaded', function () {
             url.searchParams.set('year', String(center.getFullYear()));
             url.searchParams.set('month', String(center.getMonth() + 1));
             history.replaceState({}, '', url.toString());
+            syncCalendarHeight();
         },
     });
 
@@ -780,6 +837,7 @@ document.addEventListener('DOMContentLoaded', function () {
         button.addEventListener('click', function () {
             var view = button.dataset.calView;
             calendar.changeView(view);
+            syncCalendarHeight();
             document.querySelectorAll('[data-cal-view]').forEach(function (item) {
                 var active = item.dataset.calView === view;
                 item.classList.toggle('is-active', active);
@@ -796,6 +854,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     calendar.render();
+    syncCalendarHeight();
+    window.addEventListener('resize', function () {
+        syncCalendarHeight();
+    });
 });
 </script>
 

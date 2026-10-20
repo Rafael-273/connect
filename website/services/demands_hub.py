@@ -858,4 +858,9 @@ def content_hub_selected(content):
 
 def content_hub_url(content):
     from django.urls import reverse
-    return f"{reverse('media_content_list')}?selected={content_hub_selected(content)}"
+    # O hub deixou de usar o painel mestre-detalhe acionado por ``selected``.
+    # Use a rota de detalhe para que links vindos do calendário, alertas e
+    # ações pós-edição abram efetivamente a demanda correspondente.
+    if getattr(content, 'event_id', None):
+        return reverse('media_event_detail_page', args=[content.event_id])
+    return reverse('media_demand_detail_page', args=[content.pk])
