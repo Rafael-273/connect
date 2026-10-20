@@ -66,6 +66,42 @@
         padding: 0 0.25rem;
     }
 
+    .cal-calendar-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 0.875rem;
+        padding: 0 0.25rem;
+    }
+
+    .cal-calendar-toolbar .cal-month-nav { margin-bottom: 0; }
+    .cal-calendar-toolbar .cal-month-title { min-width: 12rem; }
+
+    .cal-view-switcher {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.1875rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        background: #f9fafb;
+    }
+
+    .cal-view-btn {
+        border: 0;
+        border-radius: 0.5625rem;
+        padding: 0.4375rem 0.625rem;
+        background: transparent;
+        color: #6b7280;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .cal-view-btn:hover { color: #C90905; }
+    .cal-view-btn.is-active { background: #fff; color: #C90905; box-shadow: 0 1px 3px rgba(17, 24, 39, 0.12); }
+
     .cal-month-nav-btn {
         display: inline-flex;
         align-items: center;
@@ -421,6 +457,42 @@
     }
 
     #media-task-calendar .fc-day-other .fc-daygrid-day-number { opacity: 0.35; }
+
+    /* Semana: agenda por horário, sem perder a leitura visual dos status. */
+    #media-task-calendar .fc-timegrid-slot-label-cushion {
+        color: #9CA3AF;
+        font-size: 0.625rem;
+        font-weight: 700;
+    }
+
+    #media-task-calendar .fc-timegrid-axis,
+    #media-task-calendar .fc-timegrid-slot { border-color: #f3f4f6 !important; }
+
+    #media-task-calendar .fc-timegrid-col.fc-day-today { background: rgba(201, 9, 5, 0.035); }
+    #media-task-calendar .fc-timegrid-event {
+        border: 0 !important;
+        border-radius: 0.5rem !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        margin: 1px 2px !important;
+    }
+
+    #media-task-calendar .fc-timegrid-event .cal-task-pill {
+        height: 100%;
+        min-height: 2.65rem;
+        align-items: flex-start;
+        padding: 0.375rem 0.4375rem;
+    }
+
+    #media-task-calendar .fc-timegrid-event .cal-task-dot { margin-top: 0.25rem; }
+    #media-task-calendar .fc-timegrid-event .cal-task-role { font-size: 0.6875rem; white-space: normal; }
+    #media-task-calendar .fc-timegrid-event .cal-task-demand { font-size: 0.625rem; }
+
+    @media (max-width: 639px) {
+        .cal-calendar-toolbar { align-items: flex-start; flex-direction: column; }
+        #media-task-calendar .fc-timegrid { min-width: 38rem; }
+        #media-task-calendar .fc-scroller-harness { overflow-x: auto; }
+    }
 </style>
 {% endblock %}
 
@@ -437,14 +509,20 @@
     <div class="px-4 sm:px-6 pb-6 pt-2">
         <div class="calendar-card">
             <div class="calendar-body">
-                <div class="cal-month-nav">
-                    <button type="button" id="cal-nav-prev" class="cal-month-nav-btn" aria-label="Mês anterior">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <h2 id="cal-month-title" class="cal-month-title"></h2>
-                    <button type="button" id="cal-nav-next" class="cal-month-nav-btn" aria-label="Próximo mês">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
+                <div class="cal-calendar-toolbar">
+                    <div class="cal-view-switcher" role="group" aria-label="Visualização do calendário">
+                        <button type="button" class="cal-view-btn is-active" data-cal-view="timeGridWeek" aria-pressed="true">Semana</button>
+                        <button type="button" class="cal-view-btn" data-cal-view="dayGridMonth" aria-pressed="false">Mês</button>
+                    </div>
+                    <div class="cal-month-nav">
+                        <button type="button" id="cal-nav-prev" class="cal-month-nav-btn" aria-label="Período anterior">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <h2 id="cal-month-title" class="cal-month-title"></h2>
+                        <button type="button" id="cal-nav-next" class="cal-month-nav-btn" aria-label="Próximo período">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
                 </div>
                 <div id="media-task-calendar"></div>
             </div>
@@ -503,6 +581,9 @@
         </div>
         <div class="cal-task-modal-footer">
             <button type="button" class="cal-task-modal-btn cal-task-modal-btn-secondary" data-cal-modal-close>Fechar</button>
+            <button type="button" id="cal-task-modal-toggle" class="cal-task-modal-btn cal-task-modal-btn-secondary">
+                <i class="fas fa-check"></i> <span>Concluir</span>
+            </button>
             <a id="cal-task-modal-link" href="#" class="cal-task-modal-btn cal-task-modal-btn-primary">
                 <i class="fas fa-external-link-alt"></i> Abrir demanda
             </a>
@@ -522,9 +603,16 @@ document.addEventListener('DOMContentLoaded', function () {
         completed: '#10B981',
         overdue: '#DC2626',
     };
+    var activeTaskProps = null;
+
+    function getCsrfToken() {
+        var match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : '';
+    }
 
     function openTaskModal(props) {
         if (!modal || !props) return;
+        activeTaskProps = props;
         document.getElementById('cal-task-modal-step').textContent = props.taskTitle || 'Etapa';
         document.getElementById('cal-task-modal-title').textContent = props.contentTitle || '';
         document.getElementById('cal-task-modal-subtitle').textContent = props.eventTitle
@@ -560,6 +648,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         var link = document.getElementById('cal-task-modal-link');
         link.href = props.contentUrl || '#';
+        var toggle = document.getElementById('cal-task-modal-toggle');
+        var isCompleted = props.status === 'completed';
+        toggle.dataset.taskPk = props.pk || '';
+        toggle.querySelector('span').textContent = isCompleted ? 'Reabrir' : 'Concluir';
+        toggle.querySelector('i').className = isCompleted ? 'fas fa-undo' : 'fas fa-check';
+        toggle.disabled = !props.pk;
         modal.hidden = false;
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
@@ -570,6 +664,7 @@ document.addEventListener('DOMContentLoaded', function () {
         modal.classList.remove('active');
         modal.hidden = true;
         document.body.style.overflow = '';
+        activeTaskProps = null;
     }
 
     modal.querySelectorAll('[data-cal-modal-close]').forEach(function (el) {
@@ -580,11 +675,49 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.key === 'Escape' && modal && modal.classList.contains('active')) closeTaskModal();
     });
 
+    document.getElementById('cal-task-modal-toggle').addEventListener('click', function () {
+        var button = this;
+        var pk = button.dataset.taskPk;
+        if (!pk || !activeTaskProps) return;
+        var nextStatus = activeTaskProps.status === 'completed' ? 'pending' : 'completed';
+        button.disabled = true;
+        fetch('{% url "media_task_update_status" 999999 %}'.replace('999999', pk), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': getCsrfToken(),
+            },
+            body: 'status=' + encodeURIComponent(nextStatus),
+        }).then(function (response) {
+            if (!response.ok) throw new Error('Não foi possível atualizar a etapa.');
+            return response.json();
+        }).then(function (data) {
+            activeTaskProps.status = data.status;
+            activeTaskProps.statusLabel = data.label;
+            activeTaskProps.contentStatus = data.content_label || activeTaskProps.contentStatus;
+            document.getElementById('cal-task-modal-status').textContent = data.label;
+            document.getElementById('cal-task-modal-status').dataset.status = data.status;
+            document.getElementById('cal-task-modal-content-status').textContent = data.content_label || '—';
+            button.querySelector('span').textContent = data.status === 'completed' ? 'Reabrir' : 'Concluir';
+            button.querySelector('i').className = data.status === 'completed' ? 'fas fa-undo' : 'fas fa-check';
+            calendar.refetchEvents();
+        }).catch(function () {
+            alert('Não foi possível atualizar a etapa. Tente novamente.');
+        }).finally(function () {
+            button.disabled = false;
+        });
+    });
+
     var calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
+        initialView: 'timeGridWeek',
         locale: 'pt-br',
         firstDay: 0,
         height: 'auto',
+        slotMinTime: '07:00:00',
+        slotMaxTime: '22:00:00',
+        scrollTime: '08:00:00',
+        allDaySlot: false,
         fixedWeekCount: false,
         dayMaxEvents: 3,
         moreLinkText: function (n) { return '+' + n + ' etapas'; },
@@ -642,6 +775,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('cal-nav-prev').addEventListener('click', function () { calendar.prev(); });
     document.getElementById('cal-nav-next').addEventListener('click', function () { calendar.next(); });
+
+    document.querySelectorAll('[data-cal-view]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var view = button.dataset.calView;
+            calendar.changeView(view);
+            document.querySelectorAll('[data-cal-view]').forEach(function (item) {
+                var active = item.dataset.calView === view;
+                item.classList.toggle('is-active', active);
+                item.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+        });
+    });
 
     var params = new URLSearchParams(window.location.search);
     var year = params.get('year');
