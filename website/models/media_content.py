@@ -24,7 +24,7 @@ STATUS_CHOICES = [
     ('pending', 'Pendente'),
     ('in_progress', 'Em Produção'),
     ('review', 'Em Revisão'),
-    ('approved', 'Aprovado'),
+    ('approved', 'Finalizado'),
     ('scheduled', 'Agendado'),
     ('published', 'Publicado'),
 ]

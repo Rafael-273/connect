@@ -12,16 +12,27 @@
                 <i class="fas fa-calendar-alt"></i>
             </div>
             <div class="flex-1 min-w-0">
+                <p class="detail-kicker">Evento</p>
+                {% if is_media_leader %}
+                <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="event-title-editor" data-auto-submit>
+                    {% csrf_token %}
+                    <input type="hidden" name="event-event_type" value="{{ detail.event.event_type_id|default:'' }}">
+                    <input type="hidden" name="event-event_date" value="{{ detail.event.event_date|date:'Y-m-d' }}">
+                    <input type="hidden" name="event-event_time" value="{{ detail.event.event_time|time:'H:i' }}">
+                    <input type="hidden" name="event-end_date" value="{{ detail.event.end_date|date:'Y-m-d' }}">
+                    <input type="hidden" name="event-end_time" value="{{ detail.event.end_time|time:'H:i' }}">
+                    <input type="hidden" name="event-location" value="{{ detail.event.location|default:'' }}">
+                    <input type="hidden" name="event-description" value="{{ detail.event.description|default:'' }}">
+                    <input name="event-title" value="{{ detail.event.title }}" class="demand-title-input event-title-input" aria-label="Título do evento" required>
+                </form>
+                {% else %}
                 <h2 class="text-lg lg:text-xl font-bold text-gray-900">{{ detail.event.title }}</h2>
+                {% endif %}
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
-                    <span><i class="fas fa-calendar-alt mr-1"></i>{{ detail.event.event_date|date:"d \d\e F" }}{% if detail.event.end_date %} até {{ detail.event.end_date|date:"d \d\e F" }}{% endif %}</span>
-                    {% if detail.event.event_time %}<span>{{ detail.event.event_time|time:"H:i" }}</span>{% endif %}
-                    {% if detail.event.location %}<span><i class="fas fa-map-marker-alt mr-1"></i>{{ detail.event.location }}</span>{% endif %}
                     {% if detail.event.event_type %}
                     <span class="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-semibold">{{ detail.event.event_type.name }}</span>
                     {% endif %}
                 </div>
-                {% if detail.event.description and detail.event.description != detail.event.title %}<p class="text-sm text-gray-500 mt-2">{{ detail.event.description|linebreaksbr }}</p>{% endif %}
             </div>
             {% if is_media_leader %}
             <div class="flex items-center gap-2 flex-shrink-0 self-start">
@@ -37,9 +48,6 @@
                         <i class="fas fa-ellipsis-v"></i>
                     </button>
                     <div class="demands-kebab-menu" hidden>
-                        <button type="button" class="demands-kebab-item" data-open-modal="demands-modal-event-edit">
-                            <i class="fas fa-pen"></i> Editar evento
-                        </button>
                         <form id="remove-media-event-{{ detail.event.pk }}" method="post"
                               action="{% url 'media_event_remove_from_media' detail.event.pk %}">
                             {% csrf_token %}
@@ -65,13 +73,6 @@
             <div class="progress-bar-bg">
                 <div class="progress-bar-fill{% if detail.progress == 100 %} done{% endif %}" style="width: {{ detail.progress }}%;"></div>
             </div>
-            <div class="event-progress-grid" aria-label="Resumo das produções">
-                <div><strong>{{ detail.total }}</strong><span>Produções</span></div>
-                <div><strong>{{ detail.done }}</strong><span>Concluídas</span></div>
-                <div><strong>{{ detail.in_progress }}</strong><span>Em andamento</span></div>
-                <div><strong>{{ detail.review }}</strong><span>Em revisão</span></div>
-                <div><strong>{{ detail.overdue }}</strong><span>Atrasadas</span></div>
-            </div>
         </div>
         {% endif %}
 
@@ -84,14 +85,26 @@
         {% endif %}
     </div>
 
-    <div class="px-4 py-4 lg:px-6 lg:py-6 space-y-6">
+    <div class="px-4 py-4 lg:px-6 lg:py-6 event-detail-grid">
+        <div class="space-y-6">
+        {% if is_media_leader %}
+        <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="content-card event-description-card" data-auto-submit>
+            {% csrf_token %}<input type="hidden" name="event-title" value="{{ detail.event.title }}"><input type="hidden" name="event-event_type" value="{{ detail.event.event_type_id|default:'' }}"><input type="hidden" name="event-event_date" value="{{ detail.event.event_date|date:'Y-m-d' }}"><input type="hidden" name="event-event_time" value="{{ detail.event.event_time|time:'H:i' }}"><input type="hidden" name="event-end_date" value="{{ detail.event.end_date|date:'Y-m-d' }}"><input type="hidden" name="event-end_time" value="{{ detail.event.end_time|time:'H:i' }}"><input type="hidden" name="event-location" value="{{ detail.event.location|default:'' }}">
+            <div class="event-inline-fact event-inline-wide">
+                <button type="button" class="event-inline-display event-inline-description" data-event-inline-toggle><span>Descrição</span><strong>{{ detail.event.description|default:'Adicionar orientações ou informações do evento' }}</strong><i class="fas fa-pen"></i></button>
+                <div class="event-inline-editor" hidden><textarea name="event-description" rows="4" class="media-field-input" placeholder="Adicione orientações ou informações do evento">{{ detail.event.description|default:'' }}</textarea></div>
+            </div>
+        </form>
+        {% elif detail.event.description %}
+        <section class="content-card event-description-card"><p class="phase-label mb-2">Descrição</p><p class="text-sm text-gray-600 whitespace-pre-line">{{ detail.event.description }}</p></section>
+        {% endif %}
         {% if detail.phases %}
         {% for phase_label, phase_contents in detail.phases %}
         <section>
             <div class="flex items-center justify-between gap-3 mb-3"><p class="phase-label">{{ phase_label }}</p><span class="text-[11px] font-semibold text-gray-400">{{ phase_contents|length }} item{{ phase_contents|length|pluralize:"s" }}</span></div>
             <div class="space-y-3">
                 {% for content in phase_contents %}
-                {% include 'member/media_planning/partials/demands_content_card.html' with content=content expanded=False %}
+                {% include 'member/media_planning/partials/demands_content_card.html' with content=content expanded=False event_context=True %}
                 {% endfor %}
             </div>
         </section>
@@ -111,6 +124,25 @@
             </button>
             {% endif %}
         </div>
+        {% endif %}
+        </div>
+
+        {% if is_media_leader %}
+        <aside class="demand-aside" aria-label="Informações do evento">
+            <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="demand-fact-card" data-auto-submit>
+                {% csrf_token %}<input type="hidden" name="event-title" value="{{ detail.event.title }}"><input type="hidden" name="event-event_date" value="{{ detail.event.event_date|date:'Y-m-d' }}"><input type="hidden" name="event-event_time" value="{{ detail.event.event_time|time:'H:i' }}"><input type="hidden" name="event-end_date" value="{{ detail.event.end_date|date:'Y-m-d' }}"><input type="hidden" name="event-end_time" value="{{ detail.event.end_time|time:'H:i' }}"><input type="hidden" name="event-location" value="{{ detail.event.location|default:'' }}"><input type="hidden" name="event-description" value="{{ detail.event.description|default:'' }}">
+                <dt>Tipo</dt><select name="event-event_type" class="media-field-select"><option value="">Sem tipo</option>{% for event_type in event_types %}<option value="{{ event_type.pk }}" {% if detail.event.event_type_id == event_type.pk %}selected{% endif %}>{{ event_type.name }}</option>{% endfor %}</select>
+            </form>
+            <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="demand-fact-card event-dates-card" data-auto-submit>
+                {% csrf_token %}<input type="hidden" name="event-title" value="{{ detail.event.title }}"><input type="hidden" name="event-event_type" value="{{ detail.event.event_type_id|default:'' }}"><input type="hidden" name="event-location" value="{{ detail.event.location|default:'' }}"><input type="hidden" name="event-description" value="{{ detail.event.description|default:'' }}"><input type="hidden" name="event-extra_dates_present" value="1">
+                <dt>Datas do evento</dt>
+                {% include 'member/media_planning/partials/demands_event_dates_section.html' with prefix='event' extra_event_dates=extra_event_dates %}
+            </form>
+            <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="demand-fact-card" data-auto-submit>
+                {% csrf_token %}<input type="hidden" name="event-title" value="{{ detail.event.title }}"><input type="hidden" name="event-event_type" value="{{ detail.event.event_type_id|default:'' }}"><input type="hidden" name="event-event_date" value="{{ detail.event.event_date|date:'Y-m-d' }}"><input type="hidden" name="event-event_time" value="{{ detail.event.event_time|time:'H:i' }}"><input type="hidden" name="event-end_date" value="{{ detail.event.end_date|date:'Y-m-d' }}"><input type="hidden" name="event-end_time" value="{{ detail.event.end_time|time:'H:i' }}"><input type="hidden" name="event-description" value="{{ detail.event.description|default:'' }}">
+                <dt>Local</dt><input name="event-location" value="{{ detail.event.location|default:'' }}" class="media-field-input" placeholder="Informe o local">
+            </form>
+        </aside>
         {% endif %}
     </div>
 </div>

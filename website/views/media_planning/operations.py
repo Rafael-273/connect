@@ -72,9 +72,8 @@ class MediaDemandsView(MediaMemberRequiredMixin, View):
 
 class MediaEventUpdateView(MediaLeaderRequiredMixin, View):
     def get_form(self, event, data=None, prefix='event'):
-        fields = ('title', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description')
+        fields = ('title', 'event_type', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description')
         form = MediaEventQuickForm(data, initial={field: getattr(event, field) for field in fields}, prefix=prefix)
-        del form.fields['event_type']
         return form
 
     def response(self, request, event, form, status=200):
@@ -98,10 +97,12 @@ class MediaEventUpdateView(MediaLeaderRequiredMixin, View):
                 return redirect(f"{reverse('media_content_list')}?selected=event-{event.pk}")
             return self.response(request, event, form, status=400)
         extra_dates = []
-        if modal_edit:
+        date_prefix = 'event-edit' if modal_edit else 'event'
+        should_update_extra_dates = modal_edit or f'{date_prefix}-extra_dates_present' in request.POST
+        if should_update_extra_dates:
             for raw_date, raw_time in zip(
-                request.POST.getlist('event-edit-extra_event_date'),
-                request.POST.getlist('event-edit-extra_event_time'),
+                request.POST.getlist(f'{date_prefix}-extra_event_date'),
+                request.POST.getlist(f'{date_prefix}-extra_event_time'),
             ):
                 if not raw_date:
                     continue
@@ -115,11 +116,16 @@ class MediaEventUpdateView(MediaLeaderRequiredMixin, View):
                 })
         for field, value in form.cleaned_data.items():
             setattr(event, field, value)
-        if modal_edit and extra_dates:
-            event.end_date = max([event.event_date, *[row['event_date'] for row in extra_dates]])
+        if should_update_extra_dates:
+            all_dates = [event.event_date, *[row['event_date'] for row in extra_dates]]
+            event.end_date = max(all_dates) if len(all_dates) > 1 else None
+            event.end_time = None
         try:
-            event.save(update_fields=[*form.cleaned_data, 'update_at'])
-            if modal_edit:
+            update_fields = [*form.cleaned_data, 'update_at']
+            if should_update_extra_dates:
+                update_fields.extend(['end_date', 'end_time'])
+            event.save(update_fields=list(dict.fromkeys(update_fields)))
+            if should_update_extra_dates:
                 EventDate.objects.filter(event=event).delete()
                 EventDate.objects.bulk_create([
                     EventDate(event=event, event_date=row['event_date'], event_time=row['event_time'])
@@ -129,6 +135,8 @@ class MediaEventUpdateView(MediaLeaderRequiredMixin, View):
             form.add_error(None, ' '.join(exc.messages))
             return self.response(request, event, form, status=400)
         messages.success(request, 'Evento atualizado. Datas automáticas foram recalculadas; datas manuais foram preservadas.')
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return redirect(reverse('media_event_detail_page', args=[event.pk]))
         return redirect(f"{reverse('media_content_list')}?selected=event-{event.pk}")
 
 

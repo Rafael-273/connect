@@ -693,6 +693,18 @@
     }
     .sidebar-item.is-complete .sidebar-item-title { color: #166534; }
     .sidebar-item.is-complete .type-icon-box { background: #d1fae5; color: #047857; }
+    .sidebar-kind-tag {
+        display: inline-flex; align-items: center; justify-content: center; gap: .35rem;
+        align-self: center; flex-shrink: 0; min-width: 5.4rem; padding: .34rem .62rem;
+        border: 1px solid transparent; border-radius: 9999px;
+        font-size: .625rem; font-weight: 800; letter-spacing: .035em; line-height: 1;
+        text-transform: uppercase;
+    }
+    .sidebar-kind-tag i { font-size: .65rem; }
+    .sidebar-kind-tag-demand { color: #667085; background: #f7f8fa; border-color: #eaecf0; }
+    .sidebar-kind-tag-event { color: #7c3aed; background: #f5f3ff; border-color: #ddd6fe; }
+    .sidebar-item:hover .sidebar-kind-tag-demand { color: #475467; background: #f2f4f7; }
+    .sidebar-item:hover .sidebar-kind-tag-event { color: #6d28d9; background: #ede9fe; }
 
     .phase-label { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #9CA3AF; }
     .content-card { border: 2px solid rgba(var(--media-rgb), 0.1); border-radius: 1rem; background: #fff; }
@@ -714,11 +726,55 @@
     .event-progress-grid div { padding: .65rem .7rem; border: 1px solid #f0f1f3; border-radius: .65rem; background: #fafafa; }
     .event-progress-grid strong { display: block; font-size: .9rem; color: #111827; }
     .event-progress-grid span { display: block; margin-top: .1rem; font-size: .65rem; font-weight: 700; color: #6b7280; }
+    .event-info-card { padding: .35rem 0; }
+    .event-inline-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #edf0f2; border-radius: .9rem; overflow: hidden; }
+    .event-inline-fact { min-width: 0; border-bottom: 1px solid #edf0f2; }
+    .event-inline-fact:nth-last-child(-n + 2) { border-bottom: 0; }
+    .event-inline-fact:nth-child(odd):not(.event-inline-wide) { border-right: 1px solid #edf0f2; }
+    .event-inline-wide { grid-column: 1 / -1; }
+    .event-inline-wide + .event-inline-fact { border-right: 1px solid #edf0f2; }
+    .event-inline-display { position: relative; display: grid; width: 100%; gap: .22rem; padding: .8rem 1rem; text-align: left; background: #fff; border: 0; cursor: pointer; }
+    .event-inline-display:hover { background: #fffafa; }
+    .event-inline-display > span { font-size: .625rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #9ca3af; }
+    .event-inline-display > strong { overflow: hidden; padding-right: 1.4rem; color: #374151; font-size: .8125rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .event-inline-description > strong { white-space: normal; line-height: 1.45; }
+    .event-inline-display > i { position: absolute; right: .9rem; bottom: .92rem; color: #d1d5db; font-size: .68rem; }
+    .event-inline-display:hover > i { color: #C90905; }
+    .event-inline-editor { padding: .65rem .8rem; background: #fffafa; }
+    .event-inline-editor textarea.media-field-input { min-height: 5rem; resize: vertical; }
+    @media (max-width: 639px) {
+        .event-inline-grid { grid-template-columns: 1fr; }
+        .event-inline-fact, .event-inline-fact:nth-last-child(-n + 2), .event-inline-fact:nth-child(odd):not(.event-inline-wide) { border-right: 0; border-bottom: 1px solid #edf0f2; }
+        .event-inline-fact:last-child { border-bottom: 0; }
+    }
     .demand-detail-grid { display: grid; gap: 1rem; }
+    .event-detail-grid { display: grid; gap: 1rem; align-items: start; }
+    .event-title-editor { min-width: 0; }
+    .event-title-input { font-size: 1.25rem; font-weight: 800; }
+    .event-dates-card .event-dates-section { margin-top: .6rem; }
+    .event-dates-card .event-dates-section > p { display: none; }
+    .event-dates-card .event-date-row { padding: .55rem; }
+    .event-dates-card .event-add-date { margin-top: .6rem; }
+    .event-description-card { overflow: hidden; }
+    .event-description-card .event-inline-display { padding: 1rem 1.1rem; }
     .demand-aside { display: grid; gap: .75rem; align-content: start; }
     .demand-fact-card { padding: .9rem 1rem; border: 1px solid #eceef1; border-radius: .75rem; background: #fafafa; }
     .demand-fact-card dt { font-size: .65rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #9ca3af; }
     .demand-fact-card dd { margin-top: .25rem; font-size: .8125rem; font-weight: 600; color: #374151; }
+    .demand-title-editor { min-width: 0; }
+    .demand-title-input {
+        width: 100%; max-width: 100%; margin: 0; padding: 0.1rem 0.4rem;
+        border: 1px solid transparent; border-radius: 0.5rem; background: transparent;
+        color: #111827; font-size: 1.5rem; font-weight: 900; line-height: 1.2;
+        text-overflow: ellipsis; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    }
+    .demand-title-input:hover { border-color: rgba(201, 9, 5, .18); background: rgba(201, 9, 5, .025); }
+    .demand-title-input:focus { outline: none; border-color: rgba(201, 9, 5, .45); background: #fff; box-shadow: 0 0 0 3px rgba(201, 9, 5, .08); }
+    @media (min-width: 1024px) { .demand-title-input { font-size: 1.875rem; } }
+    @media (min-width: 1024px) {
+        .event-detail-grid { grid-template-columns: minmax(0, 1fr) 18rem; }
+        .event-title-input { font-size: 1.875rem; }
+    }
     .demand-status-card { transition: background .2s ease, border-color .2s ease; }
     .demand-status-card dd { font-size: .9rem; font-weight: 800; }
     .demand-status-card.is-status-pending { background: #FFFBEB; border-color: #FDE68A; }
@@ -795,7 +851,8 @@
         transition: opacity 0.2s ease;
     }
     .demands-modal.active {
-        pointer-events: auto; opacity: 1;
+        /* Modais acionados a partir do detalhe precisam ficar acima dele. */
+        z-index: 100; pointer-events: auto; opacity: 1;
     }
     .demands-modal-backdrop {
         position: absolute; inset: 0;
@@ -865,7 +922,7 @@
     }
 
     @media (min-width: 1024px) {
-        .demands-layout { display: grid; grid-template-columns: minmax(0, 1fr); min-height: calc(100vh - 310px); }
+        .demands-layout { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; }
         .demands-layout.has-selection { grid-template-columns: minmax(360px, .78fr) minmax(460px, 1.22fr); }
         .demands-sidebar { border-right: 2px solid rgba(var(--media-rgb), 0.08); }
         .demands-layout:not(.has-selection) .demands-sidebar { border-right: 0; }
@@ -875,12 +932,123 @@
         .demands-detail-panel.mobile-hidden { display: none; }
         .demands-sidebar.mobile-hidden { display: none; }
     }
+
+    /* A listagem ocupa todo o espaço restante, sem uma faixa vazia abaixo. */
+    #demands-hub { min-height: 100dvh; display: flex; flex-direction: column; padding-bottom: 0; }
+    .demands-workspace { display: flex; flex: 1; flex-direction: column; min-height: 0; padding-bottom: 1rem; }
+    .demands-workspace .demands-layout { flex: 1; min-height: 0; }
+    .demands-sidebar { min-height: 0; }
+    .demands-sidebar-list { height: 100%; min-height: 0; overflow-y: auto; }
+    .demands-sidebar-list .demands-month + .demands-month { margin-top: 1rem; }
+    @media (min-width: 1024px) {
+        /* Cabeçalho e filtros permanecem visíveis; somente a lista rola. */
+        #demands-hub.demands-hub--listing { height: 100dvh; min-height: 0; overflow: hidden; }
+        #demands-hub.demands-hub--listing .demands-workspace,
+        #demands-hub.demands-hub--listing .demands-layout,
+        #demands-hub.demands-hub--listing .demands-sidebar { overflow: hidden; }
+        #demands-hub.demands-hub--listing .demands-sidebar { display: flex; flex-direction: column; }
+        #demands-hub.demands-hub--listing .demands-sidebar-list { height: auto; flex: 1 1 auto; }
+    }
+
+    /* Detalhe em sobreposição: a lista segue como contexto, no estilo de cards do Trello. */
+    .demands-detail-modal {
+        position: fixed; inset: 0; z-index: 80; display: none;
+        align-items: center; justify-content: center; padding: 1rem;
+    }
+    .demands-detail-modal.is-open { display: flex; }
+    .demands-detail-modal-backdrop { position: absolute; inset: 0; background: rgba(17, 24, 39, .5); backdrop-filter: blur(4px); }
+    .demands-detail-modal-card {
+        position: relative; z-index: 1; width: min(100%, 72rem); max-height: min(92dvh, 58rem);
+        overflow: hidden; border: 1px solid rgba(201, 9, 5, .13); border-radius: 1.25rem;
+        background: #fff; box-shadow: 0 24px 70px rgba(17, 24, 39, .25);
+        animation: demandModalIn .2s ease-out;
+    }
+    .demands-detail-modal-content { max-height: min(92dvh, 58rem); overflow-y: auto; }
+    .demands-detail-modal-content .demands-detail-page { max-width: none; margin: 0; padding: 0; }
+    .demands-detail-modal-content .demands-detail-page > main { border: 0; border-radius: 0; }
+    .demands-detail-modal-content > section { position: relative; z-index: 30; overflow: visible !important; background: #fff; }
+    .demands-detail-modal-content > section > div { padding: .7rem 1.15rem; }
+    .demands-detail-modal-content > section .type-icon-box { width: 3.5rem; height: 3.5rem; border-radius: 1rem; }
+    .demands-detail-modal-content > section .detail-kicker {
+        margin-bottom: .28rem; color: #9ca3af; font-size: .65rem; letter-spacing: .1em;
+    }
+    .demands-detail-modal-content .content-card {
+        border: 1px solid #edf0f2; border-radius: .9rem; box-shadow: none;
+    }
+    .demands-detail-modal-content .content-card > .phase-label { color: #a1a8b3; }
+    .demands-detail-modal-content .demand-detail-grid { gap: 1.25rem; }
+    .demands-detail-modal-content .demand-aside {
+        gap: 0; padding-left: 1rem; border-left: 1px solid #edf0f2;
+    }
+    .demands-detail-modal-content .demand-fact-card {
+        padding: .85rem 1rem; border: 0; border-bottom: 1px solid #edf0f2;
+        border-radius: 0; background: transparent;
+    }
+    .demands-detail-modal-content .demand-fact-card:first-child { padding-top: .15rem; }
+    .demands-detail-modal-content .demand-fact-card:last-child { border-bottom: 0; }
+    .demands-detail-modal-content .demand-status-card {
+        display: block; margin: 0; padding: .85rem 1rem;
+        border: 0; border-bottom: 1px solid #edf0f2; border-radius: 0; background: transparent;
+    }
+    .demands-detail-modal-content .demand-status-card dt {
+        display: block; margin: 0; color: #9ca3af;
+    }
+    .demands-detail-modal-content .demand-status-card dt::before { display: none; }
+    .demands-detail-modal-content .demand-status-card dd {
+        display: inline-flex; align-items: center; gap: .42rem; margin: .28rem 0 0; font-size: .8125rem;
+    }
+    .demands-detail-modal-content .demand-status-card dd::before {
+        content: ''; width: .45rem; height: .45rem; border-radius: 9999px; background: currentColor;
+    }
+    .demands-detail-modal-content .demand-status-card.is-status-pending { color: #b45309; }
+    .demands-detail-modal-content .demand-status-card.is-status-in_progress { color: #1d4ed8; }
+    .demands-detail-modal-content .demand-status-card.is-status-review { color: #7e22ce; }
+    .demands-detail-modal-content .demand-status-card.is-status-approved { color: #047857; }
+    .demands-detail-modal-content .demand-status-card.is-status-scheduled { color: #0f766e; }
+    .demands-detail-modal-content .demand-status-card.is-status-published { color: #166534; }
+    .demands-detail-modal-content .demand-task-step {
+        border-color: #edf0f2; border-radius: .7rem; box-shadow: none;
+    }
+    .demands-detail-modal-content .demand-add-assignment {
+        border-style: dashed; background: #fcfcfd; border-color: #e5e7eb;
+    }
+    .demands-detail-modal-content .demand-title-input {
+        margin-left: 0 !important; padding-left: 0 !important; text-indent: 0 !important;
+        padding-right: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important;
+        font-size: 2.55rem; font-weight: 800; letter-spacing: -.04em; line-height: 1.12;
+    }
+    .demands-detail-modal-content .demand-title-input:hover { background: transparent !important; }
+    .demands-detail-modal-content .demand-title-input:focus { outline: 0; box-shadow: 0 2px 0 rgba(201, 9, 5, .35) !important; }
+    .detail-modal-actions { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+    .detail-modal-menu { position: relative; }
+    .detail-modal-menu-trigger, .detail-modal-close {
+        width: 2.5rem; height: 2.5rem; display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid #e5e7eb; border-radius: .7rem; background: #fff; color: #6b7280; cursor: pointer;
+        transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .detail-modal-menu-trigger:hover, .detail-modal-close:hover { color: #C90905; border-color: rgba(201, 9, 5, .28); background: #fffafa; }
+    .detail-modal-menu-panel {
+        position: absolute; top: calc(100% + .5rem); right: 0; z-index: 40; min-width: 9rem;
+        padding: .35rem; border: 1px solid #e5e7eb; border-radius: .75rem; background: #fff;
+        box-shadow: 0 10px 28px rgba(17, 24, 39, .12);
+    }
+    .detail-modal-menu-panel[hidden] { display: none; }
+    .detail-modal-menu-panel form { margin: 0; }
+    .detail-modal-menu-panel .media-btn-secondary { width: 100%; justify-content: flex-start; border: 0 !important; border-radius: .5rem; }
+    @keyframes demandModalIn { from { transform: translateY(1rem) scale(.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+    @media (max-width: 639px) {
+        .demands-detail-modal { align-items: flex-end; padding: 0; }
+        .demands-detail-modal-card { max-height: 94dvh; border-radius: 1.25rem 1.25rem 0 0; border-bottom: 0; }
+        .demands-detail-modal-content { max-height: 94dvh; }
+        .demands-detail-modal-content .demand-aside { padding-left: 0; border-left: 0; }
+        .demands-detail-modal-content .demand-title-input { font-size: 1.7rem; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 {% include 'parciais/messages.html' %}
-<div class="org-media min-h-screen pb-8 bg-gray-50" id="demands-hub">
+<div class="org-media min-h-screen pb-8 bg-gray-50{% if not detail_page %} demands-hub--listing{% endif %}" id="demands-hub">
 
     {% if detail_page %}
     <section class="relative overflow-hidden px-4 py-4 border-b" style="border-color: rgba(201, 9, 5, .1);">
@@ -888,9 +1056,17 @@
             <a href="{{ hub_url }}" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1 flex-shrink-0" style="background-color:#fff; border-color:rgba(201,9,5,.15); color:#C90905;" aria-label="Voltar para demandas e eventos"><i class="fas fa-arrow-left"></i></a>
             {% if detail_type == 'event' %}
             <div class="type-icon-box flex-shrink-0"><i class="fas fa-calendar-alt"></i></div>
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
                 <p class="detail-kicker">Evento</p>
+                {% if is_media_leader %}
+                <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="event-title-editor" data-auto-submit>
+                    {% csrf_token %}
+                    <input type="hidden" name="event-event_type" value="{{ detail.event.event_type_id|default:'' }}"><input type="hidden" name="event-event_date" value="{{ detail.event.event_date|date:'Y-m-d' }}"><input type="hidden" name="event-event_time" value="{{ detail.event.event_time|time:'H:i' }}"><input type="hidden" name="event-end_date" value="{{ detail.event.end_date|date:'Y-m-d' }}"><input type="hidden" name="event-end_time" value="{{ detail.event.end_time|time:'H:i' }}"><input type="hidden" name="event-location" value="{{ detail.event.location|default:'' }}"><input type="hidden" name="event-description" value="{{ detail.event.description|default:'' }}">
+                    <input name="event-title" value="{{ detail.event.title }}" class="demand-title-input event-title-input" aria-label="Título do evento" title="Clique para editar o título" required>
+                </form>
+                {% else %}
                 <h1 class="text-2xl font-black text-gray-900 truncate">{{ detail.event.title }}</h1>
+                {% endif %}
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-600">
                     <span><i class="fas fa-calendar-alt mr-1"></i>{{ detail.event.event_date|date:"d/m/Y" }}{% if detail.event.end_date %} até {{ detail.event.end_date|date:"d/m/Y" }}{% endif %}</span>
                     {% if detail.event.event_time %}<span><i class="fas fa-clock mr-1"></i>{{ detail.event.event_time|time:"H:i" }}</span>{% endif %}
@@ -902,13 +1078,45 @@
             <div class="type-icon-box flex-shrink-0"><i class="fas fa-{{ content.type_meta.icon|default:'file' }}"></i></div>
             <div class="min-w-0 flex-1">
                 <p class="detail-kicker">{% if content.event %}Demanda do evento{% else %}Demanda livre{% endif %}</p>
-                <h1 class="text-2xl font-black text-gray-900 truncate">{{ content.title }}</h1>
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-600">
-                    {% if content.sub_team %}<span><i class="fas fa-users mr-1"></i>{{ content.sub_team }}</span>{% endif %}
-                    {% if content.due_date %}<span><i class="fas fa-clock mr-1"></i>Entrega {{ content.due_date|pt_date_short }}</span>{% endif %}
-                </div>
+                <form method="post" action="{% url 'media_demand_quick_update' content.pk %}" class="demand-title-editor" data-auto-submit>
+                    {% csrf_token %}
+                    <input type="hidden" name="form_prefix" value="inline-title">
+                    <input type="hidden" name="next" value="{% url 'media_demand_detail_page' content.pk %}">
+                    <input type="hidden" name="inline-title-description" value="{{ content.description|default:'' }}">
+                    <input type="hidden" name="inline-title-content_type" value="{{ content.content_type }}">
+                    <input type="hidden" name="inline-title-sub_team" value="{{ content.sub_team_id|default:'' }}">
+                    <input type="hidden" name="inline-title-due_date" value="{{ content.due_date|date:'Y-m-d\\TH:i'|default:'' }}">
+                    <input name="inline-title-title" value="{{ content.title }}" class="demand-title-input" aria-label="Título da demanda" title="Clique para editar o título">
+                </form>
+                {% if content.sub_team %}<p class="mt-1 text-sm text-gray-500"><i class="fas fa-users mr-1"></i>{{ content.sub_team }}</p>{% endif %}
             </div>
             {% endwith %}
+            {% endif %}
+            {% if is_media_leader %}
+            <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+                {% if detail_type == 'event' %}
+                <form id="remove-media-event-detail-{{ detail.event.pk }}" method="post"
+                      action="{% url 'media_event_remove_from_media' detail.event.pk %}">
+                    {% csrf_token %}
+                    <button type="button" class="media-btn-secondary sm" style="border-color:#fecaca;color:#dc2626;"
+                            data-confirm-remove-media-event data-event-name="{{ detail.event.title|escapejs }}"
+                            data-remove-form="remove-media-event-detail-{{ detail.event.pk }}">
+                        <i class="fas fa-trash-alt"></i><span class="hidden sm:inline">Excluir</span>
+                    </button>
+                </form>
+                {% else %}
+                {% with content=detail.content %}
+                <form method="post" action="{% url 'media_content_delete' content.pk %}" class="demand-delete-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ hub_url }}">
+                    <button type="button" class="media-btn-secondary sm" style="border-color:#fecaca;color:#dc2626;"
+                            data-confirm-delete data-item-name="{{ content.title|escapejs }}">
+                        <i class="fas fa-trash-alt"></i><span class="hidden sm:inline">Excluir</span>
+                    </button>
+                </form>
+                {% endwith %}
+                {% endif %}
+            </div>
             {% endif %}
         </div>
     </section>
@@ -969,7 +1177,7 @@
 
     {% include 'member/media_planning/partials/demands_filters.html' %}
 
-    <div class="px-4 sm:px-6 pb-4 w-full">
+    <div class="demands-workspace px-4 sm:px-6 w-full">
         <div class="demands-layout media-panel {% if selected %}has-selection{% endif %}">
             <aside class="demands-sidebar bg-gray-50/60 {% if selected %}mobile-hidden{% endif %}" id="demands-sidebar">
                 {% include 'member/media_planning/partials/demands_sidebar.html' %}
@@ -993,8 +1201,16 @@
     {% include 'member/media_planning/partials/demands_edit_modal.html' %}
     {% include 'member/media_planning/partials/demands_task_edit_modal.html' %}
     {% if detail_type == 'event' and is_media_leader %}
+    {# Mantido no DOM para compatibilidade com edições legadas; não há mais ação para abri-lo. #}
     {% include 'member/media_planning/partials/demands_event_edit_modal.html' %}
     {% endif %}
+
+    <div id="demands-detail-modal" class="demands-detail-modal" role="dialog" aria-modal="true" aria-label="Detalhes da demanda" aria-hidden="true">
+        <div class="demands-detail-modal-backdrop" data-detail-modal-close></div>
+        <div class="demands-detail-modal-card">
+            <div id="demands-detail-modal-content" class="demands-detail-modal-content"></div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -1009,8 +1225,202 @@
     var viewsToggle = document.getElementById('demands-view-toggle');
     var headerNav = document.getElementById('demands-header-nav');
     var isDetailPage = {% if detail_page %}true{% else %}false{% endif %};
+    var detailModal = document.getElementById('demands-detail-modal');
+    var detailModalContent = document.getElementById('demands-detail-modal-content');
 
     function isMobile() { return window.innerWidth < 1024; }
+
+    function closeDetailModal() {
+        if (!detailModal) return;
+        detailModal.classList.remove('is-open');
+        detailModal.setAttribute('aria-hidden', 'true');
+        detailModalContent.replaceChildren();
+        document.body.style.overflow = '';
+    }
+
+    function mountDetailModal(documentHtml) {
+        var parsed = new DOMParser().parseFromString(documentHtml, 'text/html');
+        var pageHub = parsed.getElementById('demands-hub');
+        var pageDetail = parsed.querySelector('.demands-detail-page');
+        if (!pageHub || !pageDetail || !detailModalContent) return false;
+        var header = Array.prototype.slice.call(pageHub.children).find(function (child) {
+            return child.tagName === 'SECTION';
+        });
+        detailModalContent.replaceChildren();
+        if (header) {
+            var back = header.querySelector('[aria-label="Voltar para demandas e eventos"]');
+            if (back) {
+                back.setAttribute('data-detail-modal-close', '');
+                back.setAttribute('aria-label', 'Fechar detalhes');
+                back.className = 'detail-modal-close';
+                back.innerHTML = '<i class="fas fa-times"></i>';
+            }
+            var sourceActions = header.querySelector('.ml-auto');
+            if (sourceActions && back) {
+                var actionItems = Array.prototype.slice.call(sourceActions.children);
+                var actions = document.createElement('div');
+                actions.className = 'detail-modal-actions';
+                var menu = document.createElement('div');
+                menu.className = 'detail-modal-menu';
+                var trigger = document.createElement('button');
+                trigger.type = 'button';
+                trigger.className = 'detail-modal-menu-trigger';
+                trigger.setAttribute('data-detail-modal-menu-toggle', '');
+                trigger.setAttribute('aria-label', 'Mais ações');
+                trigger.innerHTML = '<i class="fas fa-ellipsis-h"></i>';
+                var panel = document.createElement('div');
+                panel.className = 'detail-modal-menu-panel';
+                panel.hidden = true;
+                actionItems.forEach(function (item) { panel.appendChild(item); });
+                menu.appendChild(trigger);
+                menu.appendChild(panel);
+                actions.appendChild(menu);
+                actions.appendChild(back);
+                sourceActions.replaceWith(actions);
+            }
+            detailModalContent.appendChild(header);
+        }
+        detailModalContent.appendChild(pageDetail);
+        var eventEditModal = parsed.getElementById('demands-modal-event-edit');
+        if (eventEditModal) detailModalContent.appendChild(eventEditModal);
+        detailModal.classList.add('is-open');
+        detailModal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        if (typeof initDemandTaskSteps === 'function') initDemandTaskSteps();
+        if (typeof initDemandDeleteConfirm === 'function') initDemandDeleteConfirm();
+        if (typeof initMediaEventDeleteConfirm === 'function') initMediaEventDeleteConfirm();
+        if (typeof initEventDateSections === 'function') initEventDateSections();
+        return true;
+    }
+
+    function openDetailModal(url) {
+        if (!detailModal || !window.fetch) { window.location.href = url; return; }
+        detailModalContent.innerHTML = '<div class="p-10 text-center text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Carregando detalhes…</div>';
+        detailModal.classList.add('is-open');
+        detailModal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function (response) { if (!response.ok) throw new Error('Não foi possível abrir os detalhes.'); return response.text(); })
+            .then(function (html) { if (!mountDetailModal(html)) throw new Error('Detalhe indisponível.'); })
+            .catch(function () { window.location.href = url; });
+    }
+
+    if (detailModal) {
+        detailModal.addEventListener('click', function (event) {
+            var inlineToggle = event.target.closest('[data-event-inline-toggle]');
+            if (inlineToggle) {
+                event.preventDefault();
+                var inlineFact = inlineToggle.closest('.event-inline-fact');
+                var inlineEditor = inlineFact && inlineFact.querySelector('.event-inline-editor');
+                if (!inlineFact || !inlineEditor) return;
+
+                detailModal.querySelectorAll('.event-inline-editor:not([hidden])').forEach(function (editor) {
+                    if (editor === inlineEditor) return;
+                    editor.hidden = true;
+                    var fact = editor.closest('.event-inline-fact');
+                    var display = fact && fact.querySelector('.event-inline-display');
+                    if (display) display.hidden = false;
+                });
+
+                inlineToggle.hidden = true;
+                inlineEditor.hidden = false;
+                var field = inlineEditor.querySelector('input, select, textarea');
+                if (field) field.focus();
+                return;
+            }
+            var menuToggle = event.target.closest('[data-detail-modal-menu-toggle]');
+            if (menuToggle) {
+                event.preventDefault();
+                event.stopPropagation();
+                var menuPanel = menuToggle.parentElement.querySelector('.detail-modal-menu-panel');
+                if (menuPanel) menuPanel.hidden = !menuPanel.hidden;
+                return;
+            }
+            if (event.target.closest('[data-detail-modal-close]')) {
+                event.preventDefault();
+                closeDetailModal();
+                return;
+            }
+            var modalClose = event.target.closest('[data-close-modal]');
+            if (modalClose) {
+                event.preventDefault();
+                closeModalEl(modalClose.closest('.demands-modal'));
+                return;
+            }
+            var deleteButton = event.target.closest('[data-confirm-delete], [data-confirm-remove-media-event]');
+            if (!deleteButton) return;
+            event.preventDefault();
+            event.stopPropagation();
+            var form = deleteButton.closest('form') || document.getElementById(deleteButton.getAttribute('data-remove-form'));
+            if (!form || typeof Swal === 'undefined') return;
+            var isEvent = deleteButton.hasAttribute('data-confirm-remove-media-event');
+            var name = deleteButton.getAttribute(isEvent ? 'data-event-name' : 'data-item-name') || (isEvent ? 'este evento' : 'esta demanda');
+            var safeName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            Swal.fire({
+                title: isEvent ? 'Remover da Mídia?' : 'Excluir demanda?',
+                html: isEvent
+                    ? 'As demandas e os vínculos de planejamento de <strong>' + safeName + '</strong> serão removidos.<br><span style="color:#6B7280;font-size:.875rem;">O evento institucional continuará preservado.</span>'
+                    : 'Tem certeza que deseja excluir <strong>' + safeName + '</strong>?<br><span style="color:#6B7280;font-size:.875rem;">Esta ação não pode ser desfeita.</span>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> Sim, excluir',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#DC2626',
+                cancelButtonColor: '#6B7280',
+                reverseButtons: true,
+                customClass: {
+                    popup: 'rounded-2xl',
+                    confirmButton: 'rounded-xl px-5 py-2.5 font-bold',
+                    cancelButton: 'rounded-xl px-5 py-2.5 font-bold',
+                },
+            }).then(function (result) {
+                if (result.isConfirmed) form.requestSubmit();
+            });
+        });
+        detailModal.addEventListener('keydown', function (event) {
+            if (event.key !== 'Escape') return;
+            var inlineEditor = event.target.closest('.event-inline-editor');
+            if (!inlineEditor) return;
+            event.preventDefault();
+            event.stopPropagation();
+            inlineEditor.hidden = true;
+            var inlineFact = inlineEditor.closest('.event-inline-fact');
+            var inlineDisplay = inlineFact && inlineFact.querySelector('.event-inline-display');
+            if (inlineDisplay) inlineDisplay.hidden = false;
+        });
+        detailModal.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (form.tagName !== 'FORM' || (form.method || 'get').toLowerCase() !== 'post') return;
+            event.preventDefault();
+            fetch(form.action, {
+                method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'},
+            }).then(function (response) { return response.text(); }).then(function (html) {
+                if (!mountDetailModal(html)) {
+                    closeDetailModal();
+                    window.location.reload();
+                }
+            }).catch(function () { form.submit(); });
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        var item = event.target.closest('[data-demands-select]');
+        if (!item || isDetailPage || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        event.preventDefault();
+        openDetailModal(item.href);
+    });
+
+    document.addEventListener('click', function (event) {
+        var trigger = event.target.closest('[data-open-demand-detail]');
+        if (!trigger || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        openDetailModal(trigger.getAttribute('data-open-demand-detail'));
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && detailModal && detailModal.classList.contains('is-open')) closeDetailModal();
+    });
 
     function updateActiveView(tab) {
         var activeView = document.querySelector('.demands-active-view');
@@ -1113,7 +1523,7 @@
         if (!modal) return;
         if (modal.id === 'demands-modal-demand') resetDemandModalEvent();
         modal.classList.remove('active');
-        if (!document.querySelector('.demands-modal.active')) {
+        if (!document.querySelector('.demands-modal.active') && !(detailModal && detailModal.classList.contains('is-open'))) {
             document.body.style.overflow = '';
             var url = new URL(window.location.href);
             if (url.searchParams.has('create')) {
@@ -1154,6 +1564,10 @@
 
     document.addEventListener('change', function (e) {
         var form = e.target.closest('form[data-auto-submit]');
+        if (form && form.classList.contains('event-dates-card') && e.target.classList.contains('event-extra-time')) {
+            var row = e.target.closest('.event-date-row');
+            if (row && !row.querySelector('.event-extra-date').value) return;
+        }
         if (form) form.requestSubmit();
     });
 
@@ -1161,7 +1575,7 @@
         document.querySelectorAll('.demands-modal.active').forEach(function (m) {
             m.classList.remove('active');
         });
-        document.body.style.overflow = '';
+        if (!(detailModal && detailModal.classList.contains('is-open'))) document.body.style.overflow = '';
         var url = new URL(window.location.href);
         if (url.searchParams.has('create')) {
             url.searchParams.delete('create');
@@ -1255,6 +1669,7 @@
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('.demands-content-toggle');
         if (!btn) return;
+        if (btn.hasAttribute('data-open-demand-detail')) return;
         var card = btn.closest('.content-card');
         if (!card) return;
         var body = card.querySelector('.demands-content-body');
@@ -1427,6 +1842,8 @@
                 var row = removeButton.closest('.event-date-row');
                 if (row) row.remove();
                 updateBadges();
+                var form = section.closest('form[data-auto-submit]');
+                if (form) form.requestSubmit();
             });
             updateBadges();
         });

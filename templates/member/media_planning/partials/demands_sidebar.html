@@ -1,9 +1,9 @@
-<div class="p-3 lg:p-4 overflow-y-auto max-h-[calc(100vh-310px)]">
+<div class="demands-sidebar-list p-3 lg:p-4">
     {% if sidebar_months %}
     {% for month in sidebar_months %}
-    <div class="mb-4">
+    <div class="demands-month">
         <p class="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 px-1">{{ month.label }}</p>
-        <div class="space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0 {% if selected %}lg:grid-cols-1{% endif %}">
+        <div class="demands-month-grid space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0 {% if selected %}lg:grid-cols-1{% endif %}">
             {% for item in month.items %}
             {% if item.type == 'event' %}{% url 'media_event_detail_page' item.pk as item_detail_url %}{% else %}{% url 'media_demand_detail_page' item.pk as item_detail_url %}{% endif %}
             <a href="{{ item_detail_url }}?kind={{ filter_kind|default:'all' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
@@ -24,6 +24,11 @@
                             {% endif %}
                         </p>
                     </div>
+                    {% if item.type == 'event' %}
+                    <span class="sidebar-kind-tag sidebar-kind-tag-event"><i class="fas fa-calendar-alt"></i><span>Evento</span></span>
+                    {% else %}
+                    <span class="sidebar-kind-tag sidebar-kind-tag-demand"><i class="fas fa-list-check"></i><span>Demanda</span></span>
+                    {% endif %}
                     <i class="fas fa-chevron-right text-[10px] flex-shrink-0" style="color: rgba(201, 9, 5,0.4);"></i>
                 </div>
             </a>

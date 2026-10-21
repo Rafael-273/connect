@@ -122,10 +122,9 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 event_edit_form = MediaEventQuickForm(
                     prefix='event-edit',
                     initial={field: getattr(event, field) for field in (
-                        'title', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
+                        'title', 'event_type', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
                     )},
                 )
-                del event_edit_form.fields['event_type']
             except Exception:
                 selected = ''
                 detail = None
@@ -139,6 +138,22 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
 
         demand_form = MediaDemandQuickForm(prefix='demand')
         event_form = MediaEventQuickForm(prefix='event')
+        extra_event_dates = []
+        if detail_type == 'event' and detail:
+            event = detail['event']
+            event_form = MediaEventQuickForm(
+                prefix='event',
+                initial={field: getattr(event, field) for field in (
+                    'title', 'event_type', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
+                )},
+            )
+            extra_event_dates = [
+                {
+                    'date': event_date.event_date.strftime('%Y-%m-%d'),
+                    'time': event_date.event_time.strftime('%H:%M') if event_date.event_time else '',
+                }
+                for event_date in detail['event'].dates.all()
+            ]
         event_types = list(event_form.fields['event_type'].queryset)
         edit_form = MediaDemandQuickForm(prefix='edit')
         inline_general_form = MediaDemandQuickForm(prefix='inline-general')
@@ -174,7 +189,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             'demand_form': demand_form,
             'event_form': event_form,
             'event_types': event_types,
-            'extra_event_dates': [],
+            'extra_event_dates': extra_event_dates,
             'edit_form': edit_form,
             'inline_general_form': inline_general_form,
             'edit_assignments': edit_assignments,
@@ -229,6 +244,13 @@ class MediaDemandsPanelView(MediaMemberRequiredMixin, View):
 
         if kind == 'event' and pk:
             detail = build_event_detail(pk)
+            event = detail['event']
+            event_form = MediaEventQuickForm(
+                prefix='event',
+                initial={field: getattr(event, field) for field in (
+                    'title', 'event_type', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
+                )},
+            )
             event_template = get_template_for_event(detail['event'])
             available_template_count = get_available_template_items(detail['event']).count()
             return render(request, 'member/media_planning/partials/demands_detail_event.html', {
@@ -236,6 +258,15 @@ class MediaDemandsPanelView(MediaMemberRequiredMixin, View):
                 'detail': detail,
                 'event_template': event_template,
                 'available_template_count': available_template_count,
+                'event_form': event_form,
+                'event_types': list(event_form.fields['event_type'].queryset),
+                'extra_event_dates': [
+                    {
+                        'date': event_date.event_date.strftime('%Y-%m-%d'),
+                        'time': event_date.event_time.strftime('%H:%M') if event_date.event_time else '',
+                    }
+                    for event_date in detail['event'].dates.all()
+                ],
                 'selected': request.GET.get('selected'),
             })
         if kind == 'free' and pk:

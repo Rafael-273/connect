@@ -3,6 +3,7 @@
     <div class="flex items-center gap-2 p-4 {% if expanded %}pb-0{% endif %}">
         <button type="button"
                 class="flex-1 min-w-0 text-left flex items-center gap-3 demands-content-toggle"
+                {% if event_context %}data-open-demand-detail="{% url 'media_demand_detail_page' content.pk %}" aria-label="Abrir detalhes de {{ content.title }}"{% endif %}
                 aria-expanded="{% if expanded %}true{% else %}false{% endif %}">
             <span class="type-icon-box type-icon-box-sm flex-shrink-0">
                 <i class="fas fa-{{ content.type_meta.icon|default:'file' }}"></i>
@@ -13,9 +14,16 @@
                     {{ content.get_content_type_display }}{% if content.sub_team %} · {{ content.sub_team }}{% endif %}
                 </p>
             </div>
+            {% if not event_context %}
             <i class="fas fa-chevron-down text-gray-400 text-xs transition-transform demands-chevron flex-shrink-0 {% if expanded %}rotate-180{% endif %}"></i>
+            {% endif %}
         </button>
         <span class="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 badge-{{ content.status }}" data-content-status-badge>{{ content.get_status_display }}</span>
+        {% if event_context %}
+        <span class="w-9 h-9 rounded-xl inline-flex items-center justify-center flex-shrink-0 border border-red-100 bg-red-50 text-red-700" title="Abrir demanda" aria-label="Abrir demanda">
+            <i class="fas fa-arrow-up-right-from-square text-sm" aria-hidden="true"></i>
+        </span>
+        {% else %}
         <div class="demands-kebab-wrap relative flex-shrink-0">
             <button type="button" class="demands-kebab-btn" aria-label="Ações da demanda" aria-haspopup="true" aria-expanded="false">
                 <i class="fas fa-ellipsis-v"></i>
@@ -47,6 +55,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
     </div>
 
     <div class="demands-content-body px-4 pb-4 pt-3 {% if not expanded %}hidden{% endif %} border-t border-gray-100 mx-4 mt-3">

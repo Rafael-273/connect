@@ -128,6 +128,7 @@
             {% endif %}
         </div>
         <aside class="demand-aside" aria-label="Informações da demanda">
+            <dl class="demand-fact-card demand-status-card is-status-{{ content.status }}"><dt>Status</dt><dd data-content-status-badge>{{ content.get_status_display }}</dd></dl>
             <form method="post" action="{% url 'media_demand_quick_update' content.pk %}" class="demand-fact-card" data-auto-submit>
                     {% csrf_token %}<input type="hidden" name="form_prefix" value="inline-general"><input type="hidden" name="next" value="{% url 'media_demand_detail_page' content.pk %}"><input type="hidden" name="inline-general-title" value="{{ content.title }}"><input type="hidden" name="inline-general-description" value="{{ content.description|default:'' }}"><input type="hidden" name="inline-general-sub_team" value="{{ content.sub_team_id|default:'' }}"><input type="hidden" name="inline-general-due_date" value="{{ content.due_date|date:'Y-m-d\\TH:i'|default:'' }}">
                     <dt>Tipo</dt>{% include 'member/media_planning/partials/demands_type_select.html' with prefix='inline-general' selected_value=content.content_type hint_id='inline-type-hint' %}
@@ -141,7 +142,6 @@
                     <dt>Prazo principal</dt>{{ inline_general_form.due_date }}
             </form>
             {% if content.event %}<dl class="demand-fact-card"><dt>Evento relacionado</dt><dd><a href="{% url 'media_event_detail_page' content.event.pk %}" style="color:var(--media-color);">{{ content.event.title }}</a></dd></dl>{% endif %}
-            <dl class="demand-fact-card demand-status-card is-status-{{ content.status }}"><dt>Status</dt><dd data-content-status-badge>{{ content.get_status_display }}</dd></dl>
             {% if content.attachments.all %}
             <section class="demand-fact-card"><p class="phase-label">Entregas e arquivos</p><div class="mt-2 space-y-2">{% for attachment in content.attachments.all %}<a href="{{ attachment.file.url }}" target="_blank" rel="noopener" class="block text-xs font-semibold text-gray-600 hover:text-red-700 truncate"><i class="fas fa-paperclip mr-1 text-gray-400"></i>{{ attachment.name }}</a>{% endfor %}</div></section>
             {% endif %}
