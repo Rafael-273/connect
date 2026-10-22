@@ -95,3 +95,47 @@ P2 permanecem como a terceira etapa.
 
 A terceira etapa está documentada em
 [Precisão e experiência profissional (P2)](external_media_editor_precision.md).
+
+## Trilha sincronizada com carregamento e buffering
+
+A trilha agora segue os frames apresentados pelo vídeo. O evento `play` apenas
+registra a intenção de reproduzir; a música aguarda `playing` e o avanço de um
+frame, com o decoder pronto e o carregamento da fonte concluído. `waiting`,
+`seeking`, pausa, erro e troca de fonte interrompem todos os canais da playlist.
+Um download `stalled` com frames ainda disponíveis não interrompe um vídeo que
+continua reproduzindo normalmente.
+
+Se o decoder deixar de avançar sem emitir `waiting`, um watchdog pausa a trilha
+após 400 ms sem progresso. Repetir o mesmo timestamp no fallback de RAF não
+reativa a música. Na recuperação, os canais ativos, incluindo os de crossfade,
+são reposicionados no relógio atual do vídeo antes de tocar. Esse reposicionamento
+também corrige diferenças inferiores ao limiar normal de 550 ms usado durante
+reprodução contínua.
+
+Os testes incluem início com os bytes do vídeo bloqueados e áudio carregado,
+espera/retomada, atraso real da próxima fonte, eventos de decoders antigos,
+travamento sem evento de espera e conclusão tardia de `audio.play()`. A validação
+no Chrome usa vídeo e áudio gerados por MediaRecorder. Publicar o template e
+`external_media_preview_audio.js` juntos e executar `collectstatic` no deploy.
+
+## Remoção imediata de um take
+
+Excluir um trecho do vídeo principal agora remove o intervalo do estado local
+antes de aguardar o POST. A timeline fecha o espaço, reposiciona os takes e o
+áudio original, atualiza duração, playhead, marcadores e pontos da lâmina, e
+remove/recorta/desloca as legendas com as mesmas regras do servidor. Os demais
+elementos e a música mantêm seus tempos absolutos, como nas revisões do backend.
+Os recortes de origem e as coordenadas do master são preservados para que duas
+exclusões consecutivas enviem os intervalos corretos mesmo antes do primeiro ACK.
+
+Debounces de propriedades são enfileirados antes da alteração estrutural, ainda
+no relógio anterior ao corte. As respostas intermediárias continuam protegidas
+pela fila do P0. Em erro de rede, a remoção permanece local e pendente, com o
+indicador de erro/retry existente; não há rollback automático porque o servidor
+pode já ter confirmado a operação. Desfazer aguarda a barreira de salvamento.
+
+O teste Chrome cobre dois cortes sucessivos, perda da resposta depois do commit,
+retry com a mesma operação, resposta antiga enquanto o segundo corte aguarda,
+recarga, legendas, undo/redo e remoção do último take. Os testes JavaScript
+cobrem os recortes de origem e todas as interseções de legendas. Publicar também
+`external_media_editor_timeline.js` junto ao template e executar `collectstatic`.

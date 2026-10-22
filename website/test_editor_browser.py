@@ -45,3 +45,8 @@ class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
         self.assertFalse(any(item['type'] == 'reframe' for item in self.project.current_timeline_revision.timeline['decisions']))
         TimelineRevisionService.create_video_split(self.project, self.member, 5000)
         self.browser_check('editor_framing.browser.cjs')
+
+    def test_optimistic_cut_deletion_and_retry(self):
+        for point in (2000, 4000, 6000):
+            TimelineRevisionService.create_video_split(self.project, self.member, point)
+        self.browser_check('editor_cut.browser.cjs')

@@ -48,7 +48,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         this.applyVolumes(config, 0);
     }
 
-    sync(config, globalMs) {
+    sync(config, globalMs, {force = false} = {}) {
         if (!config || !this.channels.length) return;
         const position = this.positionAt(globalMs);
         if (!position) return;
@@ -60,7 +60,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
                 return;
             }
             const target = index === position.index ? position.local : (position.nextLocal ?? Math.max(0, position.local - this.duration(index) + position.overlap));
-            if (Math.abs(channel.currentTime - target) > .55) channel.currentTime = target;
+            if (Math.abs(channel.currentTime - target) > (force ? .025 : .55)) channel.currentTime = target;
             if (this.isPlaying && channel.paused) channel.play().catch(() => {});
         });
         this.applyVolumes(config, globalMs);
@@ -219,5 +219,77 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             return left.gain + (right.gain - left.gain) * progress;
         }
         return points.at(-1).gain;
+    }
+};
+
+/* The soundtrack follows decoded video frames, not the user's play intent.
+ * A watchdog also covers decoder freezes that emit no waiting event. */
+window.ConnectPreviewSoundtrackClock = class ConnectPreviewSoundtrackClock {
+    constructor(controller, {sync, setTimer = (callback, delay) => setTimeout(callback, delay), clearTimer = timer => clearTimeout(timer), timeoutMs = 400} = {}) {
+        this.controller = controller;
+        this.sync = sync;
+        this.setTimer = setTimer;
+        this.clearTimer = clearTimer;
+        this.timeoutMs = timeoutMs;
+        this.bound = new WeakSet();
+        this.video = null;
+        this.loading = false;
+        this.playing = false;
+        this.advancing = false;
+        this.lastTime = null;
+        this.timer = null;
+    }
+
+    stop({retainTime = false} = {}) {
+        this.advancing = false;
+        if (!retainTime) this.lastTime = null;
+        this.clearTimer(this.timer);
+        this.timer = null;
+        this.controller.pause();
+    }
+
+    setVideo(video) {
+        this.stop();
+        this.video = video;
+        this.playing = false;
+        if (this.bound.has(video)) return;
+        this.bound.add(video);
+        const block = () => {
+            if (video !== this.video) return;
+            this.playing = false;
+            this.stop();
+        };
+        for (const name of ['play', 'pause', 'waiting', 'seeking', 'loadstart', 'emptied', 'error', 'ended']) video.addEventListener(name, block);
+        for (const name of ['playing', 'seeked']) video.addEventListener(name, () => {
+            if (video === this.video && !video.paused && !video.seeking && !video.error) this.playing = true;
+        });
+        // A stalled download does not necessarily stop playback while buffered
+        // frames remain. Only block here when the decoder lacks future data.
+        video.addEventListener('stalled', () => { if (video.readyState < 3) block(); });
+    }
+
+    setLoading(value) {
+        this.loading = value;
+        if (value) this.stop();
+    }
+
+    canPlay() {
+        return this.playing && this.advancing && !this.loading && this.video
+            && !this.video.paused && !this.video.seeking && !this.video.error && this.video.readyState >= 3;
+    }
+
+    frame(video, time) {
+        if (video !== this.video || !this.playing || this.loading || video.paused || video.seeking || video.error || video.readyState < 3) return;
+        if (!Number.isFinite(time) || time === this.lastTime) return;
+        this.lastTime = time;
+        this.advancing = true;
+        this.clearTimer(this.timer);
+        this.timer = this.setTimer(() => this.stop({retainTime:true}), this.timeoutMs);
+        if (!this.controller.isPlaying) {
+            this.sync();
+            this.controller.play().then(() => {
+                if (!this.canPlay()) this.controller.pause();
+            }).catch(() => {});
+        }
     }
 };

@@ -20,7 +20,12 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
   });bytes=Buffer.from(encoded,'base64');
  }
  await recorder.close();const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.addInitScript(()=>{window.qaAudio=[];const NativeAudio=window.Audio;window.Audio=class extends NativeAudio{constructor(...args){super(...args);window.qaAudio.push(this)}}});
+ let releaseVideo;const videoGate=new Promise(resolve=>releaseVideo=resolve);
+ let releaseSecond;const secondGate=new Promise(resolve=>releaseSecond=resolve);
  await page.route('**/qa-p1-media.webm*',async route=>{
+  if(route.request().url().includes('take='))await videoGate;
+  if(route.request().url().includes('take=2'))await secondGate;
   const range=route.request().headers().range;if(range){const match=/bytes=(\d+)-(\d*)/.exec(range),start=Number(match[1]),end=match[2]?Math.min(bytes.length-1,Number(match[2])):bytes.length-1;return route.fulfill({status:206,headers:{'Content-Type':'video/webm','Accept-Ranges':'bytes','Content-Range':`bytes ${start}-${end}/${bytes.length}`},body:bytes.subarray(start,end+1)})}
   return route.fulfill({status:200,headers:{'Content-Type':'video/webm','Accept-Ranges':'bytes'},body:bytes});
  });
@@ -32,7 +37,20 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
    return a+JSON.stringify(t)+b;
   });return route.fulfill({response,body:html});
  });
- await page.goto(url);await page.waitForFunction(()=>document.querySelector('video.preview-source-buffer')?.readyState>=2);await page.waitForTimeout(300);
+ await page.goto(url,{waitUntil:'domcontentloaded'});
+ await page.waitForFunction(()=>window.qaAudio.some(audio=>audio.dataset.source?.includes('music=1')&&audio.readyState>=2),null,{timeout:5000}).catch(async error=>{throw new Error(error.message+JSON.stringify({errors,audio:await page.evaluate(()=>window.qaAudio.map(audio=>({src:audio.src,dataset:audio.dataset,ready:audio.readyState,error:audio.error?.message})))}))});
+ await page.locator('#preview-play').click();await page.waitForTimeout(250);
+ assert.equal(await page.evaluate(()=>window.qaAudio.find(audio=>audio.dataset.source?.includes('music=1')).paused),true,'music must wait while video bytes are blocked');
+ releaseVideo();await page.waitForFunction(()=>window.qaAudio.some(audio=>audio.dataset.source?.includes('music=1')&&!audio.paused));
+ await page.evaluate(()=>{const video=[...document.querySelectorAll('video.preview-source-buffer')].find(video=>!video.paused&&getComputedStyle(video).opacity==='1');window.qaActiveVideo=video;video.dispatchEvent(new Event('waiting'))});
+ await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>window.qaAudio.find(audio=>audio.dataset.source?.includes('music=1')).paused),true,'waiting must pause soundtrack even if paused property remains false');
+ await page.evaluate(()=>qaActiveVideo.dispatchEvent(new Event('playing')));
+ await page.waitForFunction(()=>window.qaAudio.some(audio=>audio.dataset.source?.includes('music=1')&&!audio.paused));
+ const drift=await page.evaluate(()=>Math.abs(window.qaAudio.find(audio=>audio.dataset.source?.includes('music=1')).currentTime-Number(document.getElementById('preview-range').value)/1000));
+ assert.ok(drift<.15,`soundtrack drift after recovery: ${drift}`);
+ await page.locator('#preview-play').click();
+ console.log('PASS blocked video startup keeps music paused; waiting pauses music; recovery resyncs to video',JSON.stringify({drift}));
+ await page.waitForFunction(()=>document.querySelector('video.preview-source-buffer')?.readyState>=2);await page.waitForTimeout(300);
  const scale=page.locator('.editor-ruler__scale');const box=await scale.boundingBox();
  await page.mouse.move(box.x+box.width*.1,box.y+box.height/2);await page.mouse.down();
  for(const point of [.8,.2,.7,.1,.6,.4]){await page.mouse.move(box.x+box.width*point,box.y+box.height/2);await page.waitForTimeout(30)}await page.mouse.up();await page.waitForTimeout(700);
@@ -41,6 +59,10 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  await page.locator('#preview-play').click();const positions=[];
  for(let i=0;i<28;i++){await page.waitForTimeout(40);positions.push(await page.locator('#preview-range').inputValue())}
  const updates=new Set(positions).size;assert.ok(updates>15,JSON.stringify(positions));console.log('PASS playback clock',JSON.stringify({updates,samples:positions.length,start:positions[0],end:positions.at(-1)}));
+ await page.waitForFunction(()=>Number(document.getElementById('preview-range').value)>=4990&&window.qaAudio.find(audio=>audio.dataset.source?.includes('music=1')).paused);
+ releaseSecond();
+ await page.waitForFunction(()=>Number(document.getElementById('preview-range').value)>=5000&&!window.qaAudio.find(audio=>audio.dataset.source?.includes('music=1')).paused);
+ console.log('PASS real network delay at the next take pauses soundtrack and resumes it with the incoming decoder');
  await page.locator('#preview-play').click();
  await page.locator('#timeline-zoom-range').evaluate(input=>{input.value=16;input.dispatchEvent(new Event('input',{bubbles:true}))});await page.waitForTimeout(500);
  const waves=await page.locator('.editor-source-waveform,.editor-music-waveform').evaluateAll(nodes=>nodes.map(n=>({pixels:n.width,width:n.getBoundingClientRect().width,connected:n.isConnected})));assert.ok(waves.some(w=>w.pixels>300),JSON.stringify(waves));assert.ok(waves.every(w=>w.pixels<2000),JSON.stringify(waves));

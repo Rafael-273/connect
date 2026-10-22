@@ -348,6 +348,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 </form></dialog>
 
 <script src="{% static 'external_media_editor_view.js' %}"></script>
+<script src="{% static 'external_media_editor_timeline.js' %}"></script>
 <script src="{% static 'external_media_editor_precision.js' %}"></script>
 <script src="{% static 'external_media_editor_state.js' %}"></script>
 <script src="{% static 'external_media_preview_audio.js' %}"></script>
@@ -626,10 +627,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function updateMusicVolume(){musicController.updateVolume(timeline.music,timeline.sequence.duration_ms,globalMs,timeline.captions)}
     function holdPreviewFrame(){if(!video.videoWidth||!video.videoHeight)return;try{const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);previewStage.style.backgroundImage=`url("${canvas.toDataURL('image/jpeg',.82)}")`;previewStage.style.backgroundSize='cover';previewStage.style.backgroundPosition='center';video.style.opacity='0'}catch(_){}}
     function releasePreviewFrame(){video.style.opacity='1';previewStage.style.backgroundImage=''}
-    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{if(loading===value)return;loading=value;if(!value)requestPreviewRender()},onVideoChange:next=>{stopPlaybackClock();video=next;bindVideoEvents(next)},play:requestVideoPlay});
+    const soundtrackClock=new window.ConnectPreviewSoundtrackClock(musicController,{sync:()=>musicController.sync(timeline.music,globalMs,{force:true})});
+    soundtrackClock.setVideo(video);
+    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(!value)requestPreviewRender()},onVideoChange:next=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next);bindVideoEvents(next)},play:requestVideoPlay});
     function warmNextClip(clip){if(useReviewMaster())return;const next=nextClipAfter(clip);if(next)sourcePlayer.warm(sourceFor(next),Number(next.source_in_ms||0)/1000)}
     function seek(ms, autoplay=false){
-        globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs); if(!clip)return;
+        globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs);
+        if(!clip){activeClip=null;video.pause();sourcePlayer.seek('',0,{autoplay:false});video.removeAttribute('src');video.load();renderPosition();syncMusicPosition();return}
         if(useReviewMaster()){
             const source=timeline.review_master_url, masterTime=editedToPlayback(globalMs)/1000;
             activeClip=clip;
@@ -867,7 +871,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const clock={video:playerVideo,native:typeof playerVideo.requestVideoFrameCallback==='function',id:0};playbackClock=clock;
         const tick=(now,frame)=>{
             if(playbackClock!==clock||playerVideo!==video||playerVideo.paused)return;
-            if(!playerVideo.seeking)syncPlaybackPosition(playerVideo,frame?.mediaTime??playerVideo.currentTime);
+            if(!playerVideo.seeking){const presentedTime=frame?.mediaTime??playerVideo.currentTime;syncPlaybackPosition(playerVideo,presentedTime);soundtrackClock.frame(playerVideo,presentedTime)}
             if(playbackClock!==clock||playerVideo.paused)return;
             clock.id=clock.native?playerVideo.requestVideoFrameCallback(tick):requestAnimationFrame(tick);
         };
@@ -910,7 +914,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const next=nextClipAfter(activeClip);
             if(next)seek(next.timeline_in_ms,true);
         });
-        playerVideo.addEventListener('play',()=>{if(playerVideo!==video)return;play.innerHTML='<i class="fas fa-pause"></i>';play.setAttribute('aria-label','Pausar');configureMusic();syncMusicPosition();updateMusicVolume();musicController.play().catch(()=>{});startPlaybackClock(playerVideo)});
+        playerVideo.addEventListener('play',()=>{if(playerVideo!==video)return;play.innerHTML='<i class="fas fa-pause"></i>';play.setAttribute('aria-label','Pausar');configureMusic();syncMusicPosition();updateMusicVolume();startPlaybackClock(playerVideo)});
         playerVideo.addEventListener('pause',()=>{if(playerVideo===video){play.innerHTML='<i class="fas fa-play"></i>';play.setAttribute('aria-label','Reproduzir');stopPlaybackClock();musicController.pause()}});
     }
     // Bind the initial decoder through the same guarded path used after a
@@ -1483,7 +1487,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const decisions=inspectorSelection
             ? (isVideoSelection ? timeline.decisions.filter(item=>item.type==='remove_segment'&&decisionSourceId(item)===inspectorSelection.id) : [])
             : timeline.decisions.filter(item=>item.type==='remove_segment'&&(flagged.has(item.id)||item.origin==='USER'));
-        decisions.forEach(item=>{const restored=item.enabled===false,isSuggestion=item.metadata?.kind==='off_context',card=document.createElement('article');card.className=`preview-decision ${restored?'is-restored':''}`;card.dataset.start=decisionStart(item);card.dataset.end=Number(item.source_out_ms||item.source_in_ms||0);const pill=item.origin==='USER'?'Corte manual':item.metadata?.kind==='filler'?'Vício de fala':isSuggestion?'Sugestão da IA':'Pausa';const restoreLabel=isSuggestion?'Ignorar sugestão':'Restaurar';const keepLabel=isSuggestion?'Cortar este trecho':'Manter corte';card.innerHTML=`<button type="button" class="w-full text-left" data-jump><div class="flex items-start justify-between gap-2"><div><span class="preview-pill">${pill}</span><strong class="block mt-2">${item.reason||'Ajuste sugerido'}</strong><small class="text-gray-500">${fmt(item.source_in_ms)} — ${fmt(item.source_out_ms)}</small></div><i class="fas ${restored?'fa-eye':'fa-scissors'} text-red-600 mt-1"></i></div></button><div class="flex gap-2 mt-3"><button class="media-btn media-muted !py-2 flex-1" data-decision="false">${restoreLabel}</button><button class="media-btn media-primary !py-2 flex-1" data-decision="true">${keepLabel}</button></div>`;card.querySelector('[data-jump]').onclick=()=>seek(decisionStart(item));card.querySelectorAll('[data-decision]').forEach(btn=>btn.onclick=()=>mutateDecision(item.id,btn.dataset.decision==='true'));list.append(card)});
+        decisions.filter(item=>!item._pending).forEach(item=>{const restored=item.enabled===false,isSuggestion=item.metadata?.kind==='off_context',card=document.createElement('article');card.className=`preview-decision ${restored?'is-restored':''}`;card.dataset.start=decisionStart(item);card.dataset.end=Number(item.source_out_ms||item.source_in_ms||0);const pill=item.origin==='USER'?'Corte manual':item.metadata?.kind==='filler'?'Vício de fala':isSuggestion?'Sugestão da IA':'Pausa';const restoreLabel=isSuggestion?'Ignorar sugestão':'Restaurar';const keepLabel=isSuggestion?'Cortar este trecho':'Manter corte';card.innerHTML=`<button type="button" class="w-full text-left" data-jump><div class="flex items-start justify-between gap-2"><div><span class="preview-pill">${pill}</span><strong class="block mt-2">${item.reason||'Ajuste sugerido'}</strong><small class="text-gray-500">${fmt(item.source_in_ms)} — ${fmt(item.source_out_ms)}</small></div><i class="fas ${restored?'fa-eye':'fa-scissors'} text-red-600 mt-1"></i></div></button><div class="flex gap-2 mt-3"><button class="media-btn media-muted !py-2 flex-1" data-decision="false">${restoreLabel}</button><button class="media-btn media-primary !py-2 flex-1" data-decision="true">${keepLabel}</button></div>`;card.querySelector('[data-jump]').onclick=()=>seek(decisionStart(item));card.querySelectorAll('[data-decision]').forEach(btn=>btn.onclick=()=>mutateDecision(item.id,btn.dataset.decision==='true'));list.append(card)});
         const reframeDecisions=inspectorSelection
             ? (isVideoSelection ? [selectedReframeDecision()].filter(Boolean) : [])
             : timeline.decisions.filter(item=>item.type==='reframe'&&flagged.has(item.id));
@@ -1635,17 +1639,18 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(item?.kind==='broll'){await deleteBroll(item.id);return}
         if(item?.kind==='overlay'){await deleteOverlay(item.id);return}
         if(!selectedSegment)return;
-        const segment={...selectedSegment},button=document.getElementById('delete-segment');
-        button.disabled=true;
+        const segment={...selectedSegment},wasPlaying=!video.paused;
         try{
-            const data=await api('{% url "external_media_project_preview_cut_create" project.public_id %}',{
-                start_ms:Math.round(editedToMaster(segment.start,'after')),end_ms:Math.round(editedToMaster(segment.end,'before')),
-            });
-            applyTimeline(data);
-            // `applyTimeline` updates the data and player. The track DOM is
-            // separate, so redraw it immediately instead of waiting for the
-            // next playback event or an unrelated click.
-            renderEditorTimeline();
+            const payload={start_ms:Math.round(segment.masterStartMs??editedToMaster(segment.start,'after')),end_ms:Math.round(segment.masterEndMs??editedToMaster(segment.end,'before'))};
+            const local=window.ConnectEditorTimeline.removeVideoRange({...timeline,video_splits_ms:bladePoints},{start:Math.round(segment.start),end:Math.round(segment.end),masterStart:payload.start_ms,masterEnd:payload.end_ms,id:`pending-cut-${window.ConnectEditorPersistence.operationId()}`,masterAt:editedToMaster});
+            // Drain old-clock property debounces before this structural edit.
+            // Enqueue first so earlier responses cannot reconcile over it.
+            editorPersistence.flushScheduled();
+            const saving=api('{% url "external_media_project_preview_cut_create" project.public_id %}',payload);
+            timeline=local.timeline;bladePoints=[...timeline.video_splits_ms];
+            globalMs=local.mapTime(globalMs);selectedSegment=null;inspectorSelection=null;selectedCaptionIds.clear();
+            invalidatePreviewIndexes();renderEditorTimeline();renderList();updateEditControls();renderReviewProxyStatus();seek(globalMs,wasPlaying);
+            applyTimeline(await saving);
         }catch(error){
             alert(error.message);
             updateEditControls();
@@ -1867,7 +1872,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     async function selectMusicTrack(track,button){
         resetMusicSample();musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=true);button.innerHTML='<span class="music-track-option__icon"><i class="fas fa-spinner fa-spin"></i></span><strong>Salvando sequência…</strong>';
         const current=currentMusicTracks(),exists=current.some(item=>item.track_id===Number(track.id)),tracks=exists?current.filter(item=>item.track_id!==Number(track.id)):[...current,{track_id:Number(track.id),transition:'CONSTANT_POWER',transition_duration_ms:2000}];
-        applyLocalMusicTracks(tracks);try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});applyTimeline(data,true);configureMusic();syncMusicPosition();updateMusicVolume();if(!video.paused)musicController.play().catch(()=>{});closeMusicSelector()}catch(error){musicSelectError.textContent=error.message;musicSelectError.classList.remove('hidden');musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=false)}
+        applyLocalMusicTracks(tracks);try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});applyTimeline(data,true);configureMusic();syncMusicPosition();updateMusicVolume();closeMusicSelector()}catch(error){musicSelectError.textContent=error.message;musicSelectError.classList.remove('hidden');musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=false)}
     }
     document.getElementById('cancel-music-select').onclick=closeMusicSelector;document.getElementById('cancel-music-select-footer').onclick=closeMusicSelector;musicSelectModal.addEventListener('click',event=>{if(event.target===musicSelectModal)closeMusicSelector()});
     document.addEventListener('dblclick',event=>{if(event.target.closest('.editor-track--music'))openMusicSelector()});
