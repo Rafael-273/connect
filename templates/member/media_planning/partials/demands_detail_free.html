@@ -16,7 +16,7 @@
             </div>
             <div class="flex-1 min-w-0">
                 <p class="detail-kicker">{% if content.event %}Demanda do evento{% else %}Demanda livre{% endif %}</p>
-                <h2 class="text-lg lg:text-xl font-bold text-gray-900">{{ content.title }}</h2>
+                <h2 class="demand-detail-title text-gray-900">{{ content.title }}</h2>
                 <div class="flex flex-wrap items-center gap-2 mt-1">
                     <span class="text-xs text-gray-500">{{ content.get_content_type_display }}</span>
                     <span class="text-xs font-semibold px-2 py-0.5 rounded-full badge-{{ content.status }}">{{ content.get_status_display }}</span>

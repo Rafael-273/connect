@@ -1,4 +1,4 @@
-<div class="h-full overflow-y-auto">
+<div class="event-detail-content h-full overflow-y-auto">
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 lg:px-6 lg:py-4">
         {% if not detail_page %}
         <a href="{% url 'media_content_list' %}?kind={{ filter_kind|default:'all' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
@@ -86,7 +86,7 @@
     </div>
 
     <div class="px-4 py-4 lg:px-6 lg:py-6 event-detail-grid">
-        <div class="space-y-6">
+        <div class="event-detail-main">
         {% if is_media_leader %}
         <form method="post" action="{% url 'media_event_update' detail.event.pk %}" class="content-card event-description-card" data-auto-submit>
             {% csrf_token %}<input type="hidden" name="event-title" value="{{ detail.event.title }}"><input type="hidden" name="event-event_type" value="{{ detail.event.event_type_id|default:'' }}"><input type="hidden" name="event-event_date" value="{{ detail.event.event_date|date:'Y-m-d' }}"><input type="hidden" name="event-event_time" value="{{ detail.event.event_time|time:'H:i' }}"><input type="hidden" name="event-end_date" value="{{ detail.event.end_date|date:'Y-m-d' }}"><input type="hidden" name="event-end_time" value="{{ detail.event.end_time|time:'H:i' }}"><input type="hidden" name="event-location" value="{{ detail.event.location|default:'' }}">
@@ -98,33 +98,37 @@
         {% elif detail.event.description %}
         <section class="content-card event-description-card"><p class="phase-label mb-2">Descrição</p><p class="text-sm text-gray-600 whitespace-pre-line">{{ detail.event.description }}</p></section>
         {% endif %}
-        {% if detail.phases %}
-        {% for phase_label, phase_contents in detail.phases %}
-        <section>
-            <div class="flex items-center justify-between gap-3 mb-3"><p class="phase-label">{{ phase_label }}</p><span class="text-[11px] font-semibold text-gray-400">{{ phase_contents|length }} item{{ phase_contents|length|pluralize:"s" }}</span></div>
-            <div class="space-y-3">
-                {% for content in phase_contents %}
-                {% include 'member/media_planning/partials/demands_content_card.html' with content=content expanded=False event_context=True %}
-                {% endfor %}
+        <div class="event-phases-scroll">
+            <div class="space-y-6">
+            {% if detail.phases %}
+            {% for phase_label, phase_contents in detail.phases %}
+            <section>
+                <div class="flex items-center justify-between gap-3 mb-3"><p class="phase-label">{{ phase_label }}</p><span class="text-[11px] font-semibold text-gray-400">{{ phase_contents|length }} item{{ phase_contents|length|pluralize:"s" }}</span></div>
+                <div class="space-y-3">
+                    {% for content in phase_contents %}
+                    {% include 'member/media_planning/partials/demands_content_card.html' with content=content expanded=False event_context=True %}
+                    {% endfor %}
+                </div>
+            </section>
+            {% endfor %}
+            {% else %}
+            <div class="text-center py-12 text-gray-400">
+                <i class="fas fa-film text-3xl mb-3 opacity-50"></i>
+                <p class="text-sm">Nenhum conteúdo planejado para este evento.</p>
+                {% if is_media_leader %}
+                <button type="button"
+                        class="inline-block mt-3 text-sm font-semibold"
+                        style="color: var(--media-color);"
+                        data-open-modal="demands-modal-demand"
+                        data-demand-event="{{ detail.event.pk }}"
+                        data-demand-event-title="{{ detail.event.title }}">
+                    Criar nova demanda
+                </button>
+                {% endif %}
             </div>
-        </section>
-        {% endfor %}
-        {% else %}
-        <div class="text-center py-12 text-gray-400">
-            <i class="fas fa-film text-3xl mb-3 opacity-50"></i>
-            <p class="text-sm">Nenhum conteúdo planejado para este evento.</p>
-            {% if is_media_leader %}
-            <button type="button"
-                    class="inline-block mt-3 text-sm font-semibold"
-                    style="color: var(--media-color);"
-                    data-open-modal="demands-modal-demand"
-                    data-demand-event="{{ detail.event.pk }}"
-                    data-demand-event-title="{{ detail.event.title }}">
-                Criar nova demanda
-            </button>
             {% endif %}
+            </div>
         </div>
-        {% endif %}
         </div>
 
         {% if is_media_leader %}

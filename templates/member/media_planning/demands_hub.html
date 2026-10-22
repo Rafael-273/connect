@@ -6,7 +6,7 @@
 
 {% block head %}
 <link rel="stylesheet" href="{% static 'org_media.css' %}">
-<style>
+<style id="demands-hub-styles">
     :root { --media-color: #C90905; --media-rgb: 201, 9, 5; }
 
     .action-btn {
@@ -749,11 +749,21 @@
     }
     .demand-detail-grid { display: grid; gap: 1rem; }
     .event-detail-grid { display: grid; gap: 1rem; align-items: start; }
+    .event-detail-main { min-width: 0; }
+    .event-description-card + .event-phases-scroll { margin-top: 1.5rem; }
     .event-title-editor { min-width: 0; }
-    .event-title-input { font-size: 1.25rem; font-weight: 800; }
+    .event-title-input, .event-detail-title, .demand-detail-title { font-size: 1.375rem; font-weight: 900; line-height: 1.15; }
+    .demand-title-input.event-title-input:hover,
+    .demand-title-input.event-title-input:focus {
+        border-color: transparent;
+        background: transparent;
+        box-shadow: none;
+    }
     .event-dates-card .event-dates-section { margin-top: .6rem; }
     .event-dates-card .event-dates-section > p { display: none; }
-    .event-dates-card .event-date-row { padding: .55rem; }
+    .event-dates-card .event-date-row { padding: .55rem 0; }
+    .event-dates-card .event-date-badge-wrap { display: none; }
+    .event-dates-card .event-date-inputs { grid-template-columns: minmax(0, 1.35fr) minmax(0, .85fr); }
     .event-dates-card .event-add-date { margin-top: .6rem; }
     .event-description-card { overflow: hidden; }
     .event-description-card .event-inline-display { padding: 1rem 1.1rem; }
@@ -762,18 +772,18 @@
     .demand-fact-card dt { font-size: .65rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #9ca3af; }
     .demand-fact-card dd { margin-top: .25rem; font-size: .8125rem; font-weight: 600; color: #374151; }
     .demand-title-editor { min-width: 0; }
-    .demand-title-input {
+    .org-media input.demand-title-input {
         width: 100%; max-width: 100%; margin: 0; padding: 0.1rem 0.4rem;
         border: 1px solid transparent; border-radius: 0.5rem; background: transparent;
-        color: #111827; font-size: 1.5rem; font-weight: 900; line-height: 1.2;
+        color: #111827; font-size: 1.375rem; font-weight: 900; line-height: 1.2;
         text-overflow: ellipsis; transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
     }
     .demand-title-input:hover { border-color: rgba(201, 9, 5, .18); background: rgba(201, 9, 5, .025); }
-    .demand-title-input:focus { outline: none; border-color: rgba(201, 9, 5, .45); background: #fff; box-shadow: 0 0 0 3px rgba(201, 9, 5, .08); }
-    @media (min-width: 1024px) { .demand-title-input { font-size: 1.875rem; } }
+    .demand-title-input:focus { outline: none; border-color: transparent; background: transparent; box-shadow: none; }
+    @media (min-width: 1024px) { .org-media input.demand-title-input { font-size: 1.5rem; } }
     @media (min-width: 1024px) {
         .event-detail-grid { grid-template-columns: minmax(0, 1fr) 18rem; }
-        .event-title-input { font-size: 1.875rem; }
+        .event-title-input, .event-detail-title, .demand-detail-title { font-size: 1.5rem; }
     }
     .demand-status-card { transition: background .2s ease, border-color .2s ease; }
     .demand-status-card dd { font-size: .9rem; font-weight: 800; }
@@ -963,20 +973,28 @@
         background: #fff; box-shadow: 0 24px 70px rgba(17, 24, 39, .25);
         animation: demandModalIn .2s ease-out;
     }
-    .demands-detail-modal-content { max-height: min(92dvh, 58rem); overflow-y: auto; }
-    .demands-detail-modal-content .demands-detail-page { max-width: none; margin: 0; padding: 0; }
-    .demands-detail-modal-content .demands-detail-page > main { border: 0; border-radius: 0; }
+    .demands-detail-modal-content { display: flex; flex-direction: column; max-height: min(92dvh, 58rem); overflow: hidden; }
+    .demands-detail-modal-content .demands-detail-page { display: flex; flex: 1; flex-direction: column; min-height: 0; max-width: none; margin: 0; padding: 0; }
+    .demands-detail-modal-content .demands-detail-page > main { display: flex; flex: 1; flex-direction: column; min-height: 0; border: 0; border-radius: 0; }
     .demands-detail-modal-content > section { position: relative; z-index: 30; overflow: visible !important; background: #fff; }
     .demands-detail-modal-content > section > div { padding: .7rem 1.15rem; }
     .demands-detail-modal-content > section .type-icon-box { width: 3.5rem; height: 3.5rem; border-radius: 1rem; }
     .demands-detail-modal-content > section .detail-kicker {
-        margin-bottom: .28rem; color: #9ca3af; font-size: .65rem; letter-spacing: .1em;
+        margin-bottom: 0; color: #9ca3af; font-size: .65rem; letter-spacing: .1em;
     }
     .demands-detail-modal-content .content-card {
         border: 1px solid #edf0f2; border-radius: .9rem; box-shadow: none;
     }
     .demands-detail-modal-content .content-card > .phase-label { color: #a1a8b3; }
     .demands-detail-modal-content .demand-detail-grid { gap: 1.25rem; }
+    .demands-detail-modal-content .event-detail-content { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+    .demands-detail-modal-content .event-detail-content > .sticky { flex-shrink: 0; }
+    .demands-detail-modal-content .event-detail-grid {
+        flex: 1; min-height: 0; overflow: hidden;
+        grid-template-rows: minmax(0, 1fr); align-items: stretch;
+    }
+    .demands-detail-modal-content .event-detail-main { display: flex; flex-direction: column; min-height: 0; }
+    .demands-detail-modal-content .event-phases-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-right: .25rem; }
     .demands-detail-modal-content .demand-aside {
         gap: 0; padding-left: 1rem; border-left: 1px solid #edf0f2;
     }
@@ -1012,13 +1030,16 @@
     .demands-detail-modal-content .demand-add-assignment {
         border-style: dashed; background: #fcfcfd; border-color: #e5e7eb;
     }
-    .demands-detail-modal-content .demand-title-input {
+    .demands-detail-modal-content input.demand-title-input {
         margin-left: 0 !important; padding-left: 0 !important; text-indent: 0 !important;
-        padding-right: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important;
-        font-size: 2.55rem; font-weight: 800; letter-spacing: -.04em; line-height: 1.12;
+        padding-right: 0 !important; padding-top: 0 !important; padding-bottom: 0 !important;
+        border: 0 !important; background: transparent !important; box-shadow: none !important;
+        font-size: 1.5rem; font-weight: 900; letter-spacing: -.02em; line-height: 1.15;
     }
+    .demands-detail-modal-content .demand-title-input.event-title-input,
+    .demands-detail-modal-content .event-detail-title { font-size: 1.5rem; }
     .demands-detail-modal-content .demand-title-input:hover { background: transparent !important; }
-    .demands-detail-modal-content .demand-title-input:focus { outline: 0; box-shadow: 0 2px 0 rgba(201, 9, 5, .35) !important; }
+    .demands-detail-modal-content .demand-title-input:focus { outline: 0; box-shadow: none !important; }
     .detail-modal-actions { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
     .detail-modal-menu { position: relative; }
     .detail-modal-menu-trigger, .detail-modal-close {
@@ -1041,7 +1062,9 @@
         .demands-detail-modal-card { max-height: 94dvh; border-radius: 1.25rem 1.25rem 0 0; border-bottom: 0; }
         .demands-detail-modal-content { max-height: 94dvh; }
         .demands-detail-modal-content .demand-aside { padding-left: 0; border-left: 0; }
-        .demands-detail-modal-content .demand-title-input { font-size: 1.7rem; }
+        .demands-detail-modal-content input.demand-title-input { font-size: 1.375rem; }
+        .demands-detail-modal-content .demand-title-input.event-title-input,
+        .demands-detail-modal-content .event-detail-title { font-size: 1.375rem; }
     }
 </style>
 {% endblock %}
@@ -1065,10 +1088,9 @@
                     <input name="event-title" value="{{ detail.event.title }}" class="demand-title-input event-title-input" aria-label="Título do evento" title="Clique para editar o título" required>
                 </form>
                 {% else %}
-                <h1 class="text-2xl font-black text-gray-900 truncate">{{ detail.event.title }}</h1>
+                <h1 class="event-detail-title text-gray-900 truncate">{{ detail.event.title }}</h1>
                 {% endif %}
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-sm text-gray-600">
-                    <span><i class="fas fa-calendar-alt mr-1"></i>{{ detail.event.event_date|date:"d/m/Y" }}{% if detail.event.end_date %} até {{ detail.event.end_date|date:"d/m/Y" }}{% endif %}</span>
                     {% if detail.event.event_time %}<span><i class="fas fa-clock mr-1"></i>{{ detail.event.event_time|time:"H:i" }}</span>{% endif %}
                     {% if detail.event.location %}<span><i class="fas fa-map-marker-alt mr-1"></i>{{ detail.event.location }}</span>{% endif %}
                 </div>
@@ -1138,7 +1160,7 @@
         {% include 'parciais/org_media_header.html' with back_url=dashboard_url title='Demandas e' accent='eventos' subtitle='Organização da produção da mídia' %}
         <nav class="demands-header-nav" id="demands-header-nav" aria-label="Navegação de demandas e eventos">
             <div class="demands-view-menu" id="demands-view-menu">
-                {% include 'parciais/demands_kind_chips.html' with active=filter_kind|default:'all' filter_q=filter_q filter_responsible=filter_responsible filter_team=filter_team filter_event_type=filter_event_type filter_period_from=filter_period_from filter_period_to=filter_period_to selected=selected %}
+                {% include 'parciais/demands_kind_chips.html' with active=filter_kind|default:'all' filter_q=filter_q filter_responsible=filter_responsible filter_team=filter_team filter_event_type=filter_event_type filter_period_from=filter_period_from filter_period_to=filter_period_to selected=selected hide_content_kinds=True %}
             </div>
             <span class="demands-active-view" aria-label="Visualização atual">
                 {% if filter_kind == 'events' %}

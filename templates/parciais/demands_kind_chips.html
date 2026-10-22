@@ -52,10 +52,12 @@
 <div class="demands-kind-chips">
     <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=all{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
        class="media-chip {% if active == 'all' %}active{% endif %}"><i class="fas fa-list"></i><span>Todos</span></a>
+    {% if not hide_content_kinds %}
     <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=events{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
        class="media-chip {% if active == 'events' %}active{% endif %}"><i class="fas fa-calendar-alt"></i><span>Eventos</span></a>
     <a data-demands-kind-tab href="{% url 'media_content_list' %}?kind=free{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
        class="media-chip {% if active == 'free' %}active{% endif %}"><i class="fas fa-clipboard-list"></i><span>Demandas</span></a>
+    {% endif %}
     <a href="{% url 'media_event_type_list' %}"
        class="media-chip {% if active == 'event_types' %}active{% endif %}"><i class="fas fa-tags"></i><span>Tipos</span></a>
     <a href="{% url 'media_dashboard' %}"

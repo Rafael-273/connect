@@ -24,7 +24,7 @@
 </style>
 <nav class="demands-page-nav" aria-label="Navegação de demandas e eventos">
     <div class="demands-page-nav-menu">
-        {% include 'parciais/demands_kind_chips.html' with active=active %}
+        {% include 'parciais/demands_kind_chips.html' with active=active hide_content_kinds=True %}
     </div>
     <span class="demands-page-active" aria-label="Visualização atual">
         {% if active == 'event_types' %}

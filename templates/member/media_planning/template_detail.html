@@ -43,7 +43,7 @@
     {% include 'parciais/org_media_header.html' with back_url=back_url title=event_type.name subtitle='Demandas padrão deste tipo de evento' %}
 
     <div class="px-4 sm:px-6 pt-3 pb-1">
-        {% include 'parciais/demands_kind_chips.html' with active='event_types' %}
+        {% include 'parciais/demands_kind_chips.html' with active='event_types' hide_content_kinds=True %}
     </div>
 
     <div class="px-4 sm:px-6 pb-4 w-full">

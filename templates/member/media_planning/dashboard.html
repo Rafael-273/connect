@@ -341,22 +341,6 @@
 
     .cal-task-modal-body { padding: 1rem 1.25rem 1.25rem; }
 
-    .cal-task-modal-status {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.375rem;
-        font-size: 0.6875rem;
-        font-weight: 700;
-        padding: 0.25rem 0.625rem;
-        border-radius: 9999px;
-        margin-bottom: 0.5rem;
-    }
-
-    .cal-task-modal-status[data-status="pending"] { background: #FEF3C7; color: #92400E; }
-    .cal-task-modal-status[data-status="in_progress"] { background: #FEE2E2; color: #991B1B; }
-    .cal-task-modal-status[data-status="completed"] { background: #D1FAE5; color: #065F46; }
-    .cal-task-modal-status[data-status="overdue"] { background: #FEE2E2; color: #991B1B; }
-
     .cal-task-modal-title {
         font-size: 1.125rem;
         font-weight: 800;
@@ -364,6 +348,33 @@
         line-height: 1.3;
         margin: 0 0 0.25rem;
     }
+
+    .cal-task-modal-title-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.625rem;
+    }
+
+    .cal-task-complete-toggle {
+        width: 1.875rem;
+        height: 1.875rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 1.875rem;
+        margin-top: 0.1rem;
+        padding: 0;
+        border: 1.5px solid #d1d5db;
+        border-radius: 9999px;
+        background: #fff;
+        color: transparent;
+        cursor: pointer;
+        transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+    }
+
+    .cal-task-complete-toggle:hover { border-color: #10B981; background: #ecfdf5; }
+    .cal-task-complete-toggle.is-completed { border-color: #10B981; background: #10B981; color: #fff; }
+    .cal-task-complete-toggle:disabled { cursor: wait; opacity: .6; }
 
     .cal-task-modal-subtitle {
         font-size: 0.8125rem;
@@ -449,18 +460,18 @@
         color: #374151;
     }
 
-    .cal-task-modal-btn-check {
-        flex: 0 0 3.125rem;
-        width: 3.125rem;
-        padding: 0;
-        border: 1px solid #bbf7d0;
-        background: #ecfdf5;
-        color: #059669;
+    #cal-demand-modal.demands-detail-modal {
+        position: fixed; inset: 0; z-index: 210; display: none;
+        align-items: center; justify-content: center; padding: 1rem;
     }
-
-    .cal-task-modal-btn-check:hover { background: #d1fae5; }
-    .cal-task-modal-btn-check.is-completed { border-color: #d1d5db; background: #f3f4f6; color: #6b7280; }
-    .cal-task-modal-btn-check:disabled { cursor: wait; opacity: 0.6; }
+    #cal-demand-modal.demands-detail-modal.is-open { display: flex; }
+    #cal-demand-modal .demands-detail-modal-backdrop { position: absolute; inset: 0; background: rgba(17, 24, 39, .5); backdrop-filter: blur(4px); }
+    #cal-demand-modal .demands-detail-modal-card {
+        position: relative; z-index: 1; width: min(100%, 72rem); max-height: min(92dvh, 58rem);
+        overflow: hidden; border: 1px solid rgba(201, 9, 5, .13); border-radius: 1.25rem;
+        background: #fff; box-shadow: 0 24px 70px rgba(17, 24, 39, .25);
+    }
+    #cal-demand-modal .demands-modal.active { z-index: 220; }
 
     #media-task-calendar .fc-daygrid-more-link {
         font-size: 0.625rem;
@@ -576,9 +587,13 @@
     <div class="cal-task-modal-card">
         <div class="cal-task-modal-header">
             <div class="min-w-0">
-                <span id="cal-task-modal-status" class="cal-task-modal-status" data-status="pending"></span>
                 <p id="cal-task-modal-step" class="text-[10px] font-bold uppercase tracking-wider text-red-600 mb-0.5"></p>
-                <h2 id="cal-task-modal-title" class="cal-task-modal-title"></h2>
+                <div class="cal-task-modal-title-row">
+                    <button type="button" id="cal-task-modal-toggle" class="cal-task-complete-toggle" aria-label="Concluir etapa" title="Concluir etapa">
+                        <i class="fas fa-check" aria-hidden="true"></i>
+                    </button>
+                    <h2 id="cal-task-modal-title" class="cal-task-modal-title"></h2>
+                </div>
                 <p id="cal-task-modal-subtitle" class="cal-task-modal-subtitle"></p>
             </div>
             <button type="button" class="cal-task-modal-close" data-cal-modal-close aria-label="Fechar">
@@ -615,14 +630,19 @@
             <div id="cal-task-modal-desc" class="cal-task-modal-desc hidden"></div>
         </div>
         <div class="cal-task-modal-footer">
-            <button type="button" id="cal-task-modal-toggle" class="cal-task-modal-btn cal-task-modal-btn-check" aria-label="Concluir etapa" title="Concluir etapa">
-                <i class="fas fa-check" aria-hidden="true"></i>
-            </button>
-            <a id="cal-task-modal-link" href="#" class="cal-task-modal-btn cal-task-modal-btn-primary">
+            <button type="button" id="cal-task-modal-link" class="cal-task-modal-btn cal-task-modal-btn-primary">
                 <i class="fas fa-external-link-alt"></i> Abrir demanda
-            </a>
+            </button>
         </div>
     </div>
+</div>
+
+<div id="cal-demand-modal" class="demands-detail-modal" role="dialog" aria-modal="true" aria-label="Detalhes da demanda" aria-hidden="true">
+    <div class="demands-detail-modal-backdrop" data-cal-demand-close></div>
+    <div class="demands-detail-modal-card">
+        <div id="cal-demand-modal-content" class="demands-detail-modal-content org-media"></div>
+    </div>
+    <div id="cal-demand-support"></div>
 </div>
 
 <script>
@@ -631,6 +651,11 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!calendarEl || typeof FullCalendar === 'undefined') return;
 
     var modal = document.getElementById('cal-task-modal');
+    var demandModal = document.getElementById('cal-demand-modal');
+    var demandModalContent = document.getElementById('cal-demand-modal-content');
+    var demandSupport = document.getElementById('cal-demand-support');
+    var demandRequestId = 0;
+    var currentDemandUrl = '';
     var statusColors = {
         pending: '#F59E0B',
         in_progress: '#C90905',
@@ -644,6 +669,14 @@ document.addEventListener('DOMContentLoaded', function () {
         return match ? decodeURIComponent(match[1]) : '';
     }
 
+    function syncTaskToggle(toggle, status) {
+        var isCompleted = status === 'completed';
+        toggle.querySelector('i').className = 'fas fa-check';
+        toggle.classList.toggle('is-completed', isCompleted);
+        toggle.setAttribute('aria-label', isCompleted ? 'Reabrir etapa' : 'Concluir etapa');
+        toggle.title = isCompleted ? 'Reabrir etapa' : 'Concluir etapa';
+    }
+
     function openTaskModal(props) {
         if (!modal || !props) return;
         activeTaskProps = props;
@@ -652,9 +685,6 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('cal-task-modal-subtitle').textContent = props.eventTitle
             ? ('Evento · ' + props.eventTitle)
             : (props.team ? ('Equipe · ' + props.team) : (props.contentType || ''));
-        var statusEl = document.getElementById('cal-task-modal-status');
-        statusEl.textContent = props.statusLabel || '';
-        statusEl.dataset.status = props.status || 'pending';
         document.getElementById('cal-task-modal-due').textContent = props.dueLabel || '—';
         document.getElementById('cal-task-modal-assignee').textContent = props.assignee || '—';
         document.getElementById('cal-task-modal-type').textContent = props.contentType || '—';
@@ -681,14 +711,10 @@ document.addEventListener('DOMContentLoaded', function () {
             descEl.classList.add('hidden');
         }
         var link = document.getElementById('cal-task-modal-link');
-        link.href = props.contentUrl || '#';
+        link.dataset.contentUrl = props.detailPageUrl || '';
         var toggle = document.getElementById('cal-task-modal-toggle');
-        var isCompleted = props.status === 'completed';
         toggle.dataset.taskPk = props.pk || '';
-        toggle.querySelector('i').className = isCompleted ? 'fas fa-undo' : 'fas fa-check';
-        toggle.classList.toggle('is-completed', isCompleted);
-        toggle.setAttribute('aria-label', isCompleted ? 'Reabrir etapa' : 'Concluir etapa');
-        toggle.title = isCompleted ? 'Reabrir etapa' : 'Concluir etapa';
+        syncTaskToggle(toggle, props.status);
         toggle.disabled = !props.pk;
         modal.hidden = false;
         modal.classList.add('active');
@@ -703,12 +729,233 @@ document.addEventListener('DOMContentLoaded', function () {
         activeTaskProps = null;
     }
 
+    function mountDemandDetail(html) {
+        var parsed = new DOMParser().parseFromString(html, 'text/html');
+        var hub = parsed.getElementById('demands-hub');
+        var page = parsed.querySelector('.demands-detail-page');
+        var styles = parsed.getElementById('demands-hub-styles');
+        if (!hub || !page || !styles) return false;
+        if (!document.getElementById('calendar-demands-hub-styles')) {
+            var sharedStyles = document.createElement('style');
+            sharedStyles.id = 'calendar-demands-hub-styles';
+            sharedStyles.textContent = styles.textContent;
+            document.head.appendChild(sharedStyles);
+        }
+        var header = Array.prototype.find.call(hub.children, function (child) { return child.tagName === 'SECTION'; });
+        if (!header) return false;
+        var back = header.querySelector('[aria-label="Voltar para demandas e eventos"]');
+        if (back) {
+            back.setAttribute('data-cal-demand-close', '');
+            back.setAttribute('aria-label', 'Fechar detalhes');
+            back.className = 'detail-modal-close';
+            back.innerHTML = '<i class="fas fa-times"></i>';
+        }
+        var sourceActions = header.querySelector('.ml-auto');
+        if (sourceActions && back) {
+            var actions = document.createElement('div');
+            actions.className = 'detail-modal-actions';
+            var menu = document.createElement('div');
+            menu.className = 'detail-modal-menu';
+            var trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'detail-modal-menu-trigger';
+            trigger.setAttribute('data-detail-modal-menu-toggle', '');
+            trigger.setAttribute('aria-label', 'Mais ações');
+            trigger.innerHTML = '<i class="fas fa-ellipsis-h"></i>';
+            var panel = document.createElement('div');
+            panel.className = 'detail-modal-menu-panel';
+            panel.hidden = true;
+            Array.prototype.forEach.call(sourceActions.children, function (item) { panel.appendChild(item); });
+            menu.appendChild(trigger);
+            menu.appendChild(panel);
+            actions.appendChild(menu);
+            actions.appendChild(back);
+            sourceActions.replaceWith(actions);
+        }
+        demandModalContent.replaceChildren(header, page);
+        demandSupport.replaceChildren();
+        parsed.querySelectorAll('#demands-hub > .demands-modal').forEach(function (supportModal) {
+            demandSupport.appendChild(supportModal);
+        });
+        return true;
+    }
+
+    function loadDemandDetail(url) {
+        var requestId = ++demandRequestId;
+        fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function (response) {
+                if (!response.ok) throw new Error('Não foi possível carregar a demanda.');
+                return response.text();
+            })
+            .then(function (html) {
+                if (requestId !== demandRequestId || !demandModal.classList.contains('is-open')) return;
+                if (!mountDemandDetail(html)) throw new Error('Detalhe indisponível.');
+                currentDemandUrl = url;
+            })
+            .catch(function () {
+                if (requestId === demandRequestId && demandModal.classList.contains('is-open')) {
+                    demandModalContent.innerHTML = '<div class="p-10 text-center text-sm text-gray-500">Não foi possível carregar os detalhes da demanda.</div>';
+                }
+            });
+    }
+
+    function openDemandModal(url) {
+        if (!demandModal || !demandModalContent || !url) return;
+        closeTaskModal();
+        demandModalContent.innerHTML = '<div class="p-10 text-center text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Carregando detalhes…</div>';
+        demandModal.classList.add('is-open');
+        demandModal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        loadDemandDetail(url);
+    }
+
+    function closeDemandModal() {
+        if (!demandModal) return;
+        demandModal.classList.remove('is-open');
+        demandModal.setAttribute('aria-hidden', 'true');
+        demandRequestId += 1;
+        currentDemandUrl = '';
+        if (demandModalContent) demandModalContent.replaceChildren();
+        if (demandSupport) demandSupport.replaceChildren();
+        document.body.style.overflow = '';
+    }
+
     modal.querySelectorAll('[data-cal-modal-close]').forEach(function (el) {
         el.addEventListener('click', closeTaskModal);
     });
 
+    document.getElementById('cal-task-modal-link').addEventListener('click', function () {
+        openDemandModal(this.dataset.contentUrl);
+    });
+
+    demandModal.addEventListener('click', function (event) {
+        if (event.target.closest('[data-cal-demand-close]')) {
+            event.preventDefault();
+            closeDemandModal();
+            return;
+        }
+        var nestedClose = event.target.closest('[data-close-modal]');
+        if (nestedClose) {
+            event.preventDefault();
+            nestedClose.closest('.demands-modal').classList.remove('active');
+            return;
+        }
+        var menuToggle = event.target.closest('[data-detail-modal-menu-toggle]');
+        if (menuToggle) {
+            var menuPanel = menuToggle.parentElement.querySelector('.detail-modal-menu-panel');
+            if (menuPanel) menuPanel.hidden = !menuPanel.hidden;
+            return;
+        }
+        var inlineToggle = event.target.closest('[data-inline-toggle], [data-event-inline-toggle]');
+        if (inlineToggle) {
+            var editor = inlineToggle.hasAttribute('data-event-inline-toggle')
+                ? inlineToggle.closest('.event-inline-fact').querySelector('.event-inline-editor')
+                : demandModalContent.querySelector('#demand-inline-' + inlineToggle.dataset.inlineToggle + '-editor');
+            if (editor) {
+                editor.hidden = !editor.hidden;
+                if (inlineToggle.hasAttribute('data-event-inline-toggle')) inlineToggle.hidden = !editor.hidden;
+                else demandModalContent.querySelectorAll('[data-inline-display="' + inlineToggle.dataset.inlineToggle + '"]').forEach(function (display) { display.hidden = !editor.hidden; });
+            }
+            return;
+        }
+        var inlineCancel = event.target.closest('[data-inline-cancel]');
+        if (inlineCancel) {
+            var cancelEditor = demandModalContent.querySelector('#demand-inline-' + inlineCancel.dataset.inlineCancel + '-editor');
+            if (cancelEditor) cancelEditor.hidden = true;
+            demandModalContent.querySelectorAll('[data-inline-display="' + inlineCancel.dataset.inlineCancel + '"]').forEach(function (display) { display.hidden = false; });
+            return;
+        }
+        var taskToggle = event.target.closest('[data-task-toggle]');
+        if (taskToggle) {
+            taskToggle.disabled = true;
+            fetch('{% url "media_task_update_status" 999999 %}'.replace('999999', taskToggle.dataset.taskToggle), {
+                method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrfToken()}, body: 'status=toggle',
+            }).then(function (response) { if (!response.ok) throw new Error(); return response.json(); })
+                .then(function () { if (currentDemandUrl) loadDemandDetail(currentDemandUrl); calendar.refetchEvents(); })
+                .catch(function () { taskToggle.disabled = false; });
+            return;
+        }
+        var editTask = event.target.closest('[data-open-task-edit], [data-open-task-create]');
+        if (editTask) {
+            var taskModal = demandSupport.querySelector('#demands-modal-task-edit');
+            var form = taskModal && taskModal.querySelector('form');
+            if (!form) return;
+            var create = editTask.hasAttribute('data-open-task-create');
+            form.action = create ? editTask.dataset.createUrl : '{% url "media_task_update" 999999 %}'.replace('999999', editTask.dataset.taskId);
+            form.elements.title.value = create ? '' : editTask.dataset.title || '';
+            form.elements.description.value = create ? '' : editTask.dataset.description || '';
+            form.elements.assigned_to.value = create ? '' : editTask.dataset.assignedTo || '';
+            form.elements.due_date_date.value = create ? '' : (editTask.dataset.dueDate || '').slice(0, 10);
+            form.elements.due_date_time.value = create ? '' : (editTask.dataset.dueDate || '').slice(11, 16);
+            form.elements.status.value = create ? 'pending' : editTask.dataset.status || 'pending';
+            form.elements.next.value = currentDemandUrl;
+            taskModal.querySelector('h2').textContent = create ? 'Adicionar nova etapa' : 'Editar etapa';
+            taskModal.classList.add('active');
+            return;
+        }
+        var descriptionButton = event.target.closest('[data-task-desc-edit], [data-task-desc-cancel], [data-task-desc-save]');
+        if (descriptionButton) {
+            var taskId = descriptionButton.dataset.taskDescEdit || descriptionButton.dataset.taskDescCancel || descriptionButton.dataset.taskDescSave;
+            var descWrap = demandModalContent.querySelector('[data-task-desc-wrap="' + taskId + '"]');
+            if (!descWrap) return;
+            var descForm = descWrap.querySelector('[data-task-desc-form]');
+            if (descriptionButton.hasAttribute('data-task-desc-save')) {
+                var description = descWrap.querySelector('textarea').value.trim();
+                descriptionButton.disabled = true;
+                fetch('{% url "media_task_update_description" 999999 %}'.replace('999999', taskId), {
+                    method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrfToken()},
+                    body: 'description=' + encodeURIComponent(description),
+                }).then(function (response) { if (!response.ok) throw new Error(); return response.json(); })
+                    .then(function () { if (currentDemandUrl) loadDemandDetail(currentDemandUrl); })
+                    .catch(function () { descriptionButton.disabled = false; });
+            } else {
+                descForm.classList.toggle('hidden', descriptionButton.hasAttribute('data-task-desc-cancel'));
+                var view = descWrap.querySelector('[data-task-desc-view], [data-task-desc-add]');
+                if (view) view.classList.toggle('hidden', descriptionButton.hasAttribute('data-task-desc-edit'));
+            }
+            return;
+        }
+        var deleteButton = event.target.closest('[data-confirm-delete]');
+        if (deleteButton) {
+            event.preventDefault();
+            if (window.confirm('Excluir esta demanda?')) deleteButton.closest('form').requestSubmit();
+            return;
+        }
+        var demandLink = event.target.closest('[data-open-demand-detail]');
+        if (demandLink) {
+            event.preventDefault();
+            loadDemandDetail(demandLink.getAttribute('data-open-demand-detail'));
+        }
+    });
+
+    demandModal.addEventListener('change', function (event) {
+        var form = event.target.closest('form[data-auto-submit]');
+        if (form) form.requestSubmit();
+    });
+
+    demandModal.addEventListener('submit', function (event) {
+        var form = event.target;
+        if (form.tagName !== 'FORM' || form.method.toLowerCase() !== 'post') return;
+        event.preventDefault();
+        fetch(form.action, {method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'}})
+            .then(function (response) { if (!response.ok) throw new Error(); return response.text(); })
+            .then(function (html) {
+                if (!mountDemandDetail(html)) {
+                    closeDemandModal();
+                    calendar.refetchEvents();
+                    return;
+                }
+                calendar.refetchEvents();
+            }).catch(function () { alert('Não foi possível salvar a demanda. Tente novamente.'); });
+    });
+
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && modal && modal.classList.contains('active')) closeTaskModal();
+        if (e.key === 'Escape' && demandModal && demandModal.classList.contains('is-open')) {
+            var nested = demandModal.querySelector('.demands-modal.active');
+            if (nested) nested.classList.remove('active');
+            else closeDemandModal();
+        }
     });
 
     function weeklyCalendarHeight() {
@@ -727,7 +974,6 @@ document.addEventListener('DOMContentLoaded', function () {
         var button = this;
         var pk = button.dataset.taskPk;
         if (!pk || !activeTaskProps) return;
-        var nextStatus = activeTaskProps.status === 'completed' ? 'pending' : 'completed';
         button.disabled = true;
         fetch('{% url "media_task_update_status" 999999 %}'.replace('999999', pk), {
             method: 'POST',
@@ -736,7 +982,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRFToken': getCsrfToken(),
             },
-            body: 'status=' + encodeURIComponent(nextStatus),
+            body: 'status=toggle',
         }).then(function (response) {
             if (!response.ok) throw new Error('Não foi possível atualizar a etapa.');
             return response.json();
@@ -744,13 +990,8 @@ document.addEventListener('DOMContentLoaded', function () {
             activeTaskProps.status = data.status;
             activeTaskProps.statusLabel = data.label;
             activeTaskProps.contentStatus = data.content_label || activeTaskProps.contentStatus;
-            document.getElementById('cal-task-modal-status').textContent = data.label;
-            document.getElementById('cal-task-modal-status').dataset.status = data.status;
             document.getElementById('cal-task-modal-content-status').textContent = data.content_label || '—';
-            button.querySelector('i').className = data.status === 'completed' ? 'fas fa-undo' : 'fas fa-check';
-            button.classList.toggle('is-completed', data.status === 'completed');
-            button.setAttribute('aria-label', data.status === 'completed' ? 'Reabrir etapa' : 'Concluir etapa');
-            button.title = data.status === 'completed' ? 'Reabrir etapa' : 'Concluir etapa';
+            syncTaskToggle(button, data.status);
             calendar.refetchEvents();
         }).catch(function () {
             alert('Não foi possível atualizar a etapa. Tente novamente.');
@@ -821,11 +1062,6 @@ document.addEventListener('DOMContentLoaded', function () {
         datesSet: function (info) {
             var titleEl = document.getElementById('cal-month-title');
             if (titleEl) titleEl.textContent = info.view.title;
-            var center = info.view.currentStart;
-            var url = new URL(window.location.href);
-            url.searchParams.set('year', String(center.getFullYear()));
-            url.searchParams.set('month', String(center.getMonth() + 1));
-            history.replaceState({}, '', url.toString());
             syncCalendarHeight();
         },
     });
@@ -845,13 +1081,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     });
-
-    var params = new URLSearchParams(window.location.search);
-    var year = params.get('year');
-    var month = params.get('month');
-    if (year && month) {
-        calendar.gotoDate(year + '-' + String(month).padStart(2, '0') + '-01');
-    }
 
     calendar.render();
     syncCalendarHeight();

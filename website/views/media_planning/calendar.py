@@ -1,5 +1,6 @@
 import datetime
 import json
+from zoneinfo import ZoneInfo
 
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
@@ -21,9 +22,24 @@ _TASK_STATUS_COLORS = {
     'completed': '#10B981',
 }
 
+_BRAZIL_TIME_ZONE = ZoneInfo('America/Sao_Paulo')
+
+
+def _brazil_datetime(value):
+    """Return an aware datetime in the media team's local time zone."""
+    return timezone.localtime(value, _BRAZIL_TIME_ZONE) if value else None
+
+
+def _brazil_day_bounds(start, end):
+    return (
+        datetime.datetime.combine(start, datetime.time.min, tzinfo=_BRAZIL_TIME_ZONE),
+        datetime.datetime.combine(end, datetime.time.min, tzinfo=_BRAZIL_TIME_ZONE),
+    )
+
 
 def _task_calendar_color(task, today):
-    if task.status != 'completed' and task.due_date and task.due_date.date() < today:
+    due_local = _brazil_datetime(task.due_date)
+    if task.status != 'completed' and due_local and due_local.date() < today:
         return '#DC2626'
     return _TASK_STATUS_COLORS.get(task.status, '#F59E0B')
 
@@ -39,12 +55,13 @@ def _task_assignee_name(task):
 
 
 def build_task_calendar_rows(contents, start, end, *, open_only=False):
-    today = timezone.localdate()
+    today = timezone.localdate(timezone=_BRAZIL_TIME_ZONE)
+    start_at, end_at = _brazil_day_bounds(start, end)
     tasks = MediaTask.objects.filter(
         content__in=contents,
         due_date__isnull=False,
-        due_date__date__gte=start,
-        due_date__date__lt=end,
+        due_date__gte=start_at,
+        due_date__lt=end_at,
     )
     if open_only:
         tasks = tasks.exclude(status='completed')
@@ -56,13 +73,13 @@ def build_task_calendar_rows(contents, start, end, *, open_only=False):
         assignee = _task_assignee_name(task)
         content = task.content
         event = content.event
-        is_overdue = task.status != 'completed' and task.due_date and task.due_date.date() < today
-        due_local = timezone.localtime(task.due_date) if task.due_date else None
+        due_local = _brazil_datetime(task.due_date)
+        is_overdue = task.status != 'completed' and due_local and due_local.date() < today
         type_meta = content_type_meta(content.content_type)
         rows.append({
             'id': f'task-{task.pk}',
             'title': task.title,
-            'start': task.due_date.isoformat(),
+            'start': due_local.isoformat(),
             'color': _task_calendar_color(task, today),
             'extendedProps': {
                 'type': 'task',
@@ -80,6 +97,7 @@ def build_task_calendar_rows(contents, start, end, *, open_only=False):
                 'description': task.description or '',
                 'dueLabel': due_local.strftime('%d %b · %H:%M') if due_local else '',
                 'contentUrl': content_hub_url(content),
+                'detailPageUrl': reverse('media_demand_detail_page', args=[content.pk]),
                 'contentStatus': content.get_status_display(),
             },
         })
@@ -99,7 +117,7 @@ class MediaCalendarEventsAPIView(MediaMemberRequiredMixin, View):
         if not form.is_valid():
             return JsonResponse({'errors': form.errors}, status=400)
         try:
-            start = datetime.date.fromisoformat(request.GET['start'][:10]) if request.GET.get('start') else timezone.localdate().replace(day=1)
+            start = datetime.date.fromisoformat(request.GET['start'][:10]) if request.GET.get('start') else timezone.localdate(timezone=_BRAZIL_TIME_ZONE).replace(day=1)
             end = datetime.date.fromisoformat(request.GET['end'][:10]) if request.GET.get('end') else start + datetime.timedelta(days=42)
             if end <= start or (end - start).days > 366:
                 raise ValueError
@@ -120,14 +138,16 @@ class MediaCalendarEventsAPIView(MediaMemberRequiredMixin, View):
             rows.append({'id': f'event-{event.pk}', 'title': event.title, 'start': event.event_date.isoformat(),
                          'end': (event.end_date + datetime.timedelta(days=1)).isoformat() if event.end_date and event.end_date < datetime.date.max else None,
                          'allDay': True, 'color': '#3B82F6', 'url': f"{reverse('media_content_list')}?selected=event-{event.pk}", 'extendedProps': {'type': 'event'}})
+        range_start, range_end = _brazil_day_bounds(start, end)
         for field, kind, label, color in (
             ('start_date', 'start', 'Iniciar', '#64748B'),
             ('due_date', 'deadline', 'Prazo', '#DC2626'),
             ('publication_date', 'publication', 'Publicar', '#10B981'),
         ):
-            for content in contents.filter(**{field + '__date__gte': start, field + '__date__lt': end}):
+            for content in contents.filter(**{field + '__gte': range_start, field + '__lt': range_end}):
+                scheduled_for = _brazil_datetime(getattr(content, field))
                 rows.append({'id': f'{kind}-{content.pk}', 'title': f'{label}: {content.title}',
-                             'start': getattr(content, field).isoformat(), 'url': content_hub_url(content), 'color': color,
+                             'start': scheduled_for.isoformat(), 'url': content_hub_url(content), 'color': color,
                              'extendedProps': {'type': kind, 'pk': content.pk, 'automatic': getattr(content, field + '_auto')}})
         rows.extend(build_task_calendar_rows(contents, start, end, open_only=True))
         return JsonResponse(rows, safe=False)
@@ -146,7 +166,7 @@ class MediaCalendarUpdateView(MediaMemberRequiredMixin, View):
             content = MediaContent.objects.get(pk=pk)
             value = MediaContent._meta.get_field('publication_date').to_python(data['publication_date'])
             if value is not None and timezone.is_naive(value):
-                value = timezone.make_aware(value)
+                value = timezone.make_aware(value, _BRAZIL_TIME_ZONE)
             content.publication_date = value
             content.save(update_fields=['publication_date', 'update_at'])
             return JsonResponse({'ok': True})
