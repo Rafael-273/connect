@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
@@ -13,6 +14,7 @@ from ...services.demands_hub import (
     DEMAND_TYPES_ORGANIZATIONAL,
     DEMAND_TYPES_TECHNICAL,
     ASSIGNMENT_ROLE_PRESETS,
+    CONTENT_STATUS_PROTECTED,
     build_assignment_rows,
     build_event_detail,
     build_free_detail,
@@ -444,6 +446,28 @@ class MediaTaskUpdateView(MediaMemberRequiredMixin, View):
         ):
             return redirect(next_url)
         return redirect(content_hub_url(task.content))
+
+
+class MediaTaskDeleteView(MediaLeaderRequiredMixin, View):
+    """Remove uma etapa e recalcula o status da demanda."""
+
+    def post(self, request, pk):
+        task = get_object_or_404(MediaTask.objects.select_related('content'), pk=pk)
+        content = task.content
+        title = task.title
+        task.delete()
+        if content.tasks.exists():
+            sync_content_status_from_tasks(content)
+        elif content.status not in CONTENT_STATUS_PROTECTED and content.status != 'pending':
+            MediaContent.objects.filter(pk=content.pk).update(status='pending', update_at=timezone.now())
+        messages.success(request, f'Etapa "{title}" excluída.')
+
+        next_url = request.POST.get('next', '')
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
+        return redirect(content_hub_url(content))
 
 
 class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):

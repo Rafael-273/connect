@@ -915,6 +915,27 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             return;
         }
+        var deleteTaskButton = event.target.closest('[data-confirm-delete-task]');
+        if (deleteTaskButton) {
+            event.preventDefault();
+            var deleteTaskForm = deleteTaskButton.closest('form');
+            var taskTitle = deleteTaskButton.dataset.taskTitle || 'esta etapa';
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Excluir etapa?',
+                    text: 'A etapa "' + taskTitle + '" será removida da demanda.',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Sim, excluir',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#DC2626',
+                    cancelButtonColor: '#6B7280',
+                }).then(function (result) { if (result.isConfirmed) deleteTaskForm.requestSubmit(); });
+            } else if (window.confirm('Excluir a etapa "' + taskTitle + '"?')) {
+                deleteTaskForm.requestSubmit();
+            }
+            return;
+        }
         var deleteButton = event.target.closest('[data-confirm-delete]');
         if (deleteButton) {
             event.preventDefault();

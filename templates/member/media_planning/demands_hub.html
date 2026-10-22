@@ -528,6 +528,13 @@
         font-size: .6875rem; transition: all .15s ease;
     }
     .demand-task-edit:hover { color: #C90905; border-color: rgba(201, 9, 5, .3); background: #fff8f8; }
+    .demand-task-delete-form { margin: 0; }
+    .demand-task-delete {
+        width: 1.75rem; height: 1.75rem; display: inline-flex; align-items: center; justify-content: center;
+        border: 1px solid #fee2e2; border-radius: .5rem; color: #dc2626; background: #fff;
+        font-size: .6875rem; cursor: pointer; transition: all .15s ease;
+    }
+    .demand-task-delete:hover { color: #b91c1c; border-color: #fca5a5; background: #fef2f2; }
     .demand-task-meta {
         display: flex;
         flex-wrap: wrap;
@@ -564,18 +571,6 @@
         color: #6B7280;
     }
     .demand-task-date i { font-size: 0.625rem; opacity: 0.6; }
-    .demand-task-status {
-        font-size: 0.625rem; font-weight: 700; padding: 0.1875rem 0.5rem;
-        border-radius: 9999px; flex-shrink: 0; white-space: nowrap;
-        background: #f3f4f6; color: #6B7280;
-        border: 1px solid #e5e7eb;
-    }
-    .demand-task-status.task-status-completed {
-        background: #ecfdf5; color: #047857; border-color: #bbf7d0;
-    }
-    .demand-task-status.task-status-in_progress {
-        background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;
-    }
     .demand-task-desc {
         margin-top: 0.5rem;
         padding-top: 0.5rem;
@@ -2172,6 +2167,29 @@
         return m ? decodeURIComponent(m[1]) : '';
     }
 
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-confirm-delete-task]');
+        if (!button) return;
+        event.preventDefault();
+        var form = button.closest('form');
+        if (!form) return;
+        var title = button.getAttribute('data-task-title') || 'esta etapa';
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Excluir etapa?',
+                text: 'A etapa "' + title + '" será removida da demanda.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, excluir',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#DC2626',
+                cancelButtonColor: '#6B7280',
+            }).then(function (result) { if (result.isConfirmed) form.requestSubmit(); });
+        } else if (window.confirm('Excluir a etapa "' + title + '"?')) {
+            form.requestSubmit();
+        }
+    });
+
     function initDemandTaskSteps() {
         document.querySelectorAll('[data-task-toggle]').forEach(function (btn) {
             if (btn.dataset.bound) return;
@@ -2195,11 +2213,6 @@
                     btn.setAttribute('data-status', data.status);
                     var done = data.status === 'completed';
                     if (step) step.classList.toggle('is-done', done);
-                    var badge = step && step.querySelector('.demand-task-status');
-                    if (badge) {
-                        badge.textContent = data.label;
-                        badge.className = 'demand-task-status task-status-' + data.status;
-                    }
                     btn.setAttribute('aria-label', done ? 'Marcar como pendente' : 'Marcar como concluída');
                     if (data.content_status && data.content_label) {
                         document.querySelectorAll('[data-content-status-badge]').forEach(function (contentBadge) {

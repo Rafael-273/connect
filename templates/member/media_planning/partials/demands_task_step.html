@@ -22,7 +22,15 @@
                         data-status="{{ task.status }}" aria-label="Editar etapa {{ task.title }}" title="Editar etapa">
                     <i class="fas fa-pen"></i>
                 </button>
-                <span class="demand-task-status task-status-{{ task.status }}">{{ task.get_status_display }}</span>
+                {% if is_media_leader %}
+                <form method="post" action="{% url 'media_task_delete' task.pk %}" class="demand-task-delete-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{% if event_context %}{% url 'media_event_detail_page' task.content.event_id %}{% else %}{% url 'media_demand_detail_page' task.content_id %}{% endif %}">
+                    <button type="submit" class="demand-task-delete" data-confirm-delete-task data-task-title="{{ task.title }}" aria-label="Excluir etapa {{ task.title }}" title="Excluir etapa">
+                        <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                    </button>
+                </form>
+                {% endif %}
             </div>
         </div>
 
