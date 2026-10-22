@@ -68,6 +68,7 @@ from .external_media import (
     SubtitleTrack,
     SubtitleVideoVersion,
     SubtitleVideoVersionAsset,
+    PreviewOperation,
     TimelineMutation,
     TimelineRevision,
     VideoMasteringJob,

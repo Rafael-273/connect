@@ -1089,6 +1089,8 @@ class ExternalMediaProject(BaseModel):
     )
     preview_dirty = models.BooleanField(default=False)
     final_render_outdated = models.BooleanField(default=False)
+    # Unlike revision numbers, this also increases when history moves backwards.
+    editorial_version = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         ordering = ['-created_at']
@@ -1402,6 +1404,20 @@ class PreviewSession(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=['project', 'member'], name='unique_project_member_preview_session'),
         ]
+
+
+class PreviewOperation(models.Model):
+    """A committed HTTP operation, used to replay an uncertain save safely."""
+
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='preview_operations')
+    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    operation_id = models.UUIDField()
+    request_hash = models.CharField(max_length=64)
+    response = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['project', 'operation_id'], name='unique_preview_operation')]
 
 
 class TimelineMutation(BaseModel):

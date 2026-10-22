@@ -56,15 +56,17 @@
     }
     .media-project-preview {
         flex-shrink: 0;
-        width: 4.75rem;
-        height: 3.25rem;
+        /* Keep the list preview in the same landscape format used by the
+           rendered project (1920 × 1080), without reserving full-size space. */
+        width: clamp(9rem, 15vw, 12rem);
+        aspect-ratio: 16 / 9;
         overflow: hidden;
         border: 1px solid #f0e2e1;
         border-radius: .75rem;
         background: #fff5f5;
         box-shadow: 0 3px 10px rgba(90, 20, 16, .08);
     }
-    .media-project-preview img { width:100%; height:100%; object-fit:cover; }
+    .media-project-preview img { display:block; width:100%; height:100%; object-fit:cover; }
     .media-project-preview .media-project-avatar { width:100%; height:100%; border-radius:0; box-shadow:none; }
 
     .media-status-badge {
@@ -348,15 +350,33 @@
 
         .media-filter-bar { margin-bottom: 1rem; }
         .media-project-card-header {
-            flex-wrap: wrap;
-            align-items: flex-start;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            align-items: start;
             gap: .75rem;
             padding: .9rem;
         }
-        .media-project-card-header > .flex-1 {
-            min-width: 0;
-            padding-top: .1rem;
+        .media-project-preview {
+            grid-column: 1 / -1;
+            grid-row: 1;
+            width: 100%;
+            border-radius: .9rem;
         }
+        .media-project-card-header > .flex-1 {
+            grid-column: 1;
+            grid-row: 2;
+            min-width: 0;
+            padding-top: .15rem;
+        }
+        .media-project-header-status { grid-column: 2; grid-row: 2; margin-left: 0; }
+        .media-project-open {
+            grid-column: 1 / -1;
+            grid-row: 3;
+            width: 100%;
+            justify-content: center;
+            min-height: 2.75rem;
+        }
+        .media-project-more { grid-column: 3; grid-row: 2; align-self: center; }
         .media-project-actions {
             order: initial;
             width: auto;

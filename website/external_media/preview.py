@@ -9,7 +9,7 @@ import uuid
 from django.core.files import File
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import F, Max
 from django.urls import reverse
 from django.utils import timezone
 
@@ -1248,6 +1248,19 @@ class TimelineRevisionService:
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
         decisions = deepcopy(current.edit_decision_set)
         target = next((item for item in decisions.get('operations', []) if item.get('id') == decision_id), None)
+        if target is None:
+            # A take does not need an automatic reframe plan to support manual
+            # framing. Resolve the neutral UI handle against this revision's
+            # own source manifest before creating an editorial operation.
+            source = next((item for item in (current.source_manifest or {}).get('sources', [])
+                           if decision_id == f"reframe-source-{item.get('id')}"
+                           and (item.get('metadata') or {}).get('render_enabled', True)), None)
+            if source is not None:
+                target = {
+                    'id': decision_id, 'type': 'reframe', 'source_id': str(source['id']),
+                    'enabled': True, 'origin': 'USER', 'metadata': {},
+                }
+                decisions.setdefault('operations', []).append(target)
         if not target or target.get('type') != 'reframe':
             raise ValueError('Enquadramento não encontrado nesta timeline.')
         try:
@@ -1603,7 +1616,7 @@ class TimelineRevisionService:
             allowed = set(target.get('allowed_overrides') or [])
             for key in ('content', 'position', 'style', 'animation'):
                 if key in payload and (key == 'content' or key in allowed):
-                    target[key] = deepcopy(payload[key])
+                    target[key] = {**(target.get(key) or {}), **deepcopy(payload[key])}
             if 'timing' in allowed:
                 if 'start_ms' in payload:
                     target['start_ms'] = max(0, int(payload['start_ms']))
@@ -1685,7 +1698,8 @@ class TimelineRevisionService:
                 target['media_type'] = asset.media_type
             for key in ('transform', 'motion', 'entry', 'exit', 'fit', 'crop_mode'):
                 if key in payload:
-                    target[key] = deepcopy(payload[key])
+                    value = deepcopy(payload[key])
+                    target[key] = {**(target.get(key) or {}), **value} if isinstance(value, dict) else value
             target['source'] = 'USER'
             reason, operation = 'B-roll ajustado', 'UPDATE_BROLL'
         revision = cls._create(
@@ -1776,6 +1790,7 @@ class TimelineRevisionService:
         locked.final_render_outdated = True
         locked.save(update_fields=['current_timeline_revision', 'preview_dirty', 'final_render_outdated', 'update_at'])
         cls._sync_cues_from_revision(locked, target)
+        ExternalMediaProject.objects.filter(pk=locked.pk).update(editorial_version=F('editorial_version') + 1)
         return target
 
     @classmethod
@@ -1855,6 +1870,7 @@ class TimelineRevisionService:
         project.save(update_fields=[
             'current_timeline_revision', 'preview_dirty', 'final_render_outdated', 'update_at',
         ])
+        ExternalMediaProject.objects.filter(pk=project.pk).update(editorial_version=F('editorial_version') + 1)
         # A manual framing decision is previewed from the source take, not
         # from the assembled master. A continuous revision proxy would be
         # discarded by the editor in that case (it may already contain an

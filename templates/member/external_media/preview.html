@@ -11,6 +11,7 @@
 {% endblock %}
 
 {% block media_header_actions %}
+<div class="editor-save-feedback flex flex-col items-end gap-1 max-w-xs"><span id="editor-save-status" role="status" aria-live="polite" class="text-xs text-gray-500">Salvo</span> <button type="button" id="editor-save-retry" class="hidden text-xs underline">Tentar salvar novamente</button> <button type="button" id="editor-save-export" class="hidden text-xs underline">Baixar alterações pendentes</button> <button type="button" id="editor-save-reload" class="hidden text-xs underline">Recarregar versão salva</button> </div>
 <div class="editor-header-history" aria-label="Histórico de alterações">
     <button type="button" class="media-btn media-muted disabled:opacity-40" data-history="undo" {% if not session.undo_stack %}disabled{% endif %} title="Desfazer"><i class="fas fa-rotate-left"></i><span class="sr-only">Desfazer</span></button>
     <button type="button" class="media-btn media-muted disabled:opacity-40" data-history="redo" {% if not session.redo_stack %}disabled{% endif %} title="Refazer"><i class="fas fa-rotate-right"></i><span class="sr-only">Refazer</span></button>
@@ -236,6 +237,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     }
     .adjustment-tabs{position:sticky;top:0;z-index:3;display:flex;gap:.2rem;overflow-x:auto;padding:.7rem 1rem;background:#111923;border-bottom:1px solid #273547;scrollbar-width:none}.adjustment-tabs::-webkit-scrollbar{display:none}.adjustment-tab{flex:0 0 auto;border:1px solid transparent;border-radius:.38rem;background:transparent;color:#95a4b8;padding:.48rem .7rem;font-size:.72rem;font-weight:800;transition:background .16s,border-color .16s,color .16s}.adjustment-tab:hover{background:#1b2736;color:#eef2f7}.adjustment-tab.is-active{border-color:#8d302f;background:rgba(201,9,5,.16);color:#fff;box-shadow:inset 0 -2px #f04438}.preview-decision[data-adjustment-category][hidden]{display:none!important}
     .transcript-card{padding:0!important;overflow:hidden}.transcript-card__toolbar{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:1rem;border-bottom:1px solid #293546}.transcript-card__toolbar strong{color:#f5f7fb}.transcript-card__toolbar small{color:#9aa8ba}.transcript-download{flex:0 0 auto;display:inline-flex;align-items:center;gap:.4rem;border:1px solid #3d4c61;border-radius:.45rem;padding:.48rem .62rem;color:#dce7f4;font-size:.72rem;font-weight:800}.transcript-download:hover{border-color:#7588a2;background:#202c3b;color:#fff}.transcript-list{max-height:25rem;overflow:auto;padding:.45rem}.transcript-cue{display:grid;grid-template-columns:3.65rem minmax(0,1fr);gap:.65rem;width:100%;border:1px solid transparent;border-radius:.55rem;padding:.65rem;text-align:left;color:#dce5ef;transition:.15s}.transcript-cue:hover{background:#1c2736}.transcript-cue.is-current{border-color:#a93635;background:rgba(201,9,5,.16);box-shadow:inset 3px 0 #ed4b45}.transcript-cue__time{color:#8fa0b5;font-size:.68rem;font-variant-numeric:tabular-nums;font-weight:800}.transcript-cue__text{font-size:.8rem;line-height:1.4}.transcript-help{padding:.55rem 1rem .8rem;color:#8fa0b5;font-size:.7rem}.transcript-empty{padding:1.2rem;color:#9aa8ba;text-align:center;font-size:.8rem}
+
+    @media(min-width:761px){.editor-timeline__bar{min-height:0;height:100%;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:#46536a transparent}}
+    .editor-track__label{position:sticky;left:0;z-index:12;background:#0b0e14;padding:.35rem 0}
+    .editor-snap-guide{position:absolute;top:0;bottom:0;width:1px;background:#56e0db;z-index:11;pointer-events:none}
+    .editor-drag-feedback{position:sticky;left:6.5rem;bottom:0;display:block;width:max-content;max-width:90%;padding:.25rem .5rem;background:#182c36;color:#a8fff4;border-radius:.3rem;font:12px monospace;z-index:13;pointer-events:none}
+    .editor-snap-guide[hidden],.editor-drag-feedback[hidden]{display:none}
+    #shortcuts-dialog::backdrop,#precision-dialog::backdrop{background:#0009}#shortcuts-dialog,#precision-dialog{border:1px solid #394454;border-radius:1rem;padding:1.4rem;background:#151b25;color:#fff;max-width:30rem;width:calc(100% - 2rem)}
+    #precision-dialog input{width:100%;background:#0d1118;color:#fff;border:1px solid #46536a;border-radius:.4rem;padding:.5rem}
+
 </style>
 {% endblock %}
 
@@ -259,7 +269,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     </aside>
     </div>
     <div class="editor-timeline__transport preview-controls"><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time">00:00 / 00:00</span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
-    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Ferramenta lâmina (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
+    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Ferramenta lâmina (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" class="editor-tool is-active" id="timeline-snap" aria-pressed="true" title="Encaixe magnético (S); Alt suspende durante o arraste" aria-label="Encaixe magnético"><i class="fas fa-magnet"></i></button><button type="button" class="editor-tool" id="timeline-precision" title="Ajustar início e fim por quadro (T)" aria-label="Ajustar tempos por quadro"><i class="fas fa-stopwatch"></i></button><button type="button" class="editor-tool" id="timeline-shortcuts" title="Atalhos (?)" aria-label="Ver atalhos"><i class="fas fa-keyboard"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
 </div>
 
 <div class="preview-modal" id="back-to-blocks-modal" role="dialog" aria-modal="true" aria-labelledby="back-to-blocks-title">
@@ -327,6 +337,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     </div>
 </div>
 
+<dialog id="shortcuts-dialog" aria-labelledby="shortcuts-title"><h2 id="shortcuts-title" class="text-xl font-bold">Atalhos da timeline</h2><dl class="text-sm my-4 space-y-2">
+<div><dt class="font-bold">Espaço</dt><dd>Reproduzir / pausar</dd></div><div><dt class="font-bold">← / → · Shift · Ctrl/Cmd</dt><dd>Um quadro · 1 segundo · 5 segundos</dd></div><div><dt class="font-bold">↑ / ↓ · Home / End</dt><dd>Take anterior / próximo · início / fim</dd></div><div><dt class="font-bold">V · B · C ou Ctrl/Cmd K</dt><dd>Seleção · lâmina · cortar</dd></div><div><dt class="font-bold">S · Alt durante arraste · T</dt><dd>Magnetismo · suspender encaixe · ajustar tempos por quadro</dd></div><div><dt class="font-bold">+ / − · Del</dt><dd>Zoom · remover seleção</dd></div><div><dt class="font-bold">Ctrl/Cmd Z · Shift Ctrl/Cmd Z ou Ctrl/Cmd Y</dt><dd>Desfazer · refazer</dd></div></dl><form method="dialog"><button class="media-btn media-muted">Fechar</button></form></dialog>
+<dialog id="precision-dialog" aria-labelledby="precision-title"><form id="precision-form">
+<h2 id="precision-title" class="text-xl font-bold">Ajustar tempos por quadro</h2><p id="precision-rate" class="text-sm my-3"></p>
+<label class="block my-3">Quadro inicial (a partir de 0)<input id="precision-start" type="number" min="0" step="1" required></label>
+<label class="block my-3">Quadro final (exclusivo)<input id="precision-end" type="number" min="1" step="1" required></label>
+<output id="precision-timecode" class="block text-sm my-3"></output><p id="precision-error" role="alert" class="text-sm text-red-400"></p>
+<div class="flex gap-2 mt-4"><button type="button" id="precision-cancel" class="media-btn media-muted">Cancelar</button><button class="media-btn media-primary">Aplicar</button></div>
+</form></dialog>
+
+<script src="{% static 'external_media_editor_view.js' %}"></script>
+<script src="{% static 'external_media_editor_precision.js' %}"></script>
+<script src="{% static 'external_media_editor_state.js' %}"></script>
 <script src="{% static 'external_media_preview_audio.js' %}"></script>
 <script src="{% static 'external_media_preview_source.js' %}"></script>
 <script>
@@ -335,6 +358,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const musicTracks = JSON.parse(document.getElementById('music-tracks').textContent);
     let video = document.getElementById('preview-video'); const range = document.getElementById('preview-range'), temperatureMatrix=document.getElementById('preview-temperature-matrix');
     const sourceCaption = document.getElementById('preview-caption-source'), translatedCaption = document.getElementById('preview-caption-translated'), time = document.getElementById('preview-time');
+    let previewStyleRevision=0;
     const overlayLayer = document.getElementById('preview-overlay-layer'), brollLayer = document.getElementById('preview-broll-layer'), transformBox = document.getElementById('preview-transform-box');
     const list = document.getElementById('review-list'), play = document.getElementById('preview-play');
     const reviewPanel = document.getElementById('review-panel');
@@ -386,7 +410,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(!window.matchMedia('(min-width:900px)').matches)return previewShell.style.removeProperty('--preview-inspector-height');
         previewShell.style.setProperty('--preview-inspector-height',`${Math.ceil(previewStage.getBoundingClientRect().height)}px`);
     }
-    new ResizeObserver(syncInspectorHeight).observe(previewStage);
+    new ResizeObserver(()=>{previewStyleRevision++;syncInspectorHeight();requestPreviewRender()}).observe(previewStage);
     window.addEventListener('resize',()=>{fitPreviewStage();syncInspectorHeight()});
     fitPreviewStage();
     syncInspectorHeight();
@@ -401,11 +425,86 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     let colorSettingsClipboard = null;
     try { const stored = sessionStorage.getItem(BROLL_CLIPBOARD_KEY); if (stored) brollSettingsClipboard = JSON.parse(stored); } catch (_) {}
     try { const stored = sessionStorage.getItem(COLOR_CLIPBOARD_KEY); if (stored) colorSettingsClipboard = JSON.parse(stored); } catch (_) {}
-    const api = (url, body={}) => fetch(url, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'}, body:JSON.stringify(body)}).then(async r => {const data=await r.json(); if(!r.ok) throw new Error(data.error || 'Não foi possível salvar.'); return data;});
+    let allowEditorUnload=false;
+    let deferredTimeline = null, appliedEditorialVersion = {{ project.editorial_version|default:0 }};
+    const saveStatus = document.getElementById('editor-save-status'), saveRetry = document.getElementById('editor-save-retry');
+    const editorPersistence = new window.ConnectEditorPersistence({
+        version: appliedEditorialVersion,
+        send: async (operation, version) => {
+            const multipart = operation.body instanceof FormData;
+            const headers = {'X-CSRFToken':csrf, 'X-Requested-With':'XMLHttpRequest', 'X-Editor-Operation':operation.id, 'X-Editor-Version':String(version)};
+            if (!multipart) headers['Content-Type']='application/json';
+            const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),30000);
+            let response;
+            try{response=await fetch(operation.url,{method:'POST',credentials:'same-origin',headers,signal:controller.signal,body:multipart?operation.body:JSON.stringify(operation.body)})}finally{clearTimeout(timeout)}
+            let data;
+            try { data = await response.json(); } catch (_) { throw new Error('Não foi possível confirmar o salvamento. Tente novamente.'); }
+            if (!response.ok) { const error = new Error(data.error || 'Não foi possível salvar.'); error.status=response.status; throw error; }
+            return data;
+        },
+        onState: ({busy,error}) => {
+            saveStatus.textContent=error?error.message:busy?'Salvando alterações…':'Salvo';
+            saveRetry.classList.toggle('hidden',!error||error.status===409);
+            document.getElementById('editor-save-export').classList.toggle('hidden',!error);
+            document.getElementById('editor-save-reload').classList.toggle('hidden',!error);
+        },
+        onMetrics: detail=>window.dispatchEvent(new CustomEvent('connect:editor-save',{detail})),
+        onIdle: () => { if(deferredTimeline){const data=deferredTimeline;deferredTimeline=null;applyTimeline(data,true,true)}if(timelineResizePending){timelineResizePending=false;layoutTimelineZoom(null)} }
+    });
+    let editorBarrierActive=false;
+    async function withEditorBarrier(action){
+        if(editorBarrierActive)return;
+        editorBarrierActive=true;const shell=document.querySelector('.preview-shell'),history=document.querySelector('.editor-header-history');
+        shell.inert=true;history.inert=true;
+        try{await editorPersistence.flush();return await action()}finally{shell.inert=false;history.inert=false;editorBarrierActive=false}
+    }
+    document.addEventListener('keydown',event=>{if(editorBarrierActive){event.preventDefault();event.stopImmediatePropagation()}},true);
+    saveRetry.onclick=()=>editorPersistence.retry();
+    document.getElementById('editor-save-export').onclick=()=>{
+        const pending=editorPersistence.queue.map(({url,body,id,base})=>({url,body:body instanceof FormData?{fields:[...body.entries()].map(([key,value])=>[key,value instanceof File?{file:value.name}:value])}:body,id,base}));
+        const url=URL.createObjectURL(new Blob([JSON.stringify({schema:'connect.pending_edits.v1',timeline,pending},null,2)],{type:'application/json'}));
+        const link=document.createElement('a');link.href=url;link.download='filadelfia-alteracoes-pendentes.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    };
+    document.getElementById('editor-save-reload').onclick=()=>{if(confirm('Descartar as alterações pendentes e carregar a última versão salva? Você pode baixar suas alterações antes de continuar.')){allowEditorUnload=true;location.reload()}};
+    window.addEventListener('beforeunload',event=>{if(!allowEditorUnload&&editorPersistence.busy){event.preventDefault();event.returnValue=''}});
+    const api = (url, body={}) => {
+        if(url==='{% url "external_media_project_preview_session" project.public_id %}'||url==='{% url "external_media_project_preview_revision_proxy" project.public_id %}')
+            return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(body)}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||'Não foi possível salvar.');return data});
+        const payload=body instanceof FormData?body:JSON.parse(JSON.stringify(body));
+        const patchKey=!(body instanceof FormData)&&/\/(brolls|subtitles|overlays|transforms|colors)\/[^/]+\/$/.test(url)&&!['delete','split_at_ms','restore','restore_original','restore_auto','reset'].some(key=>key in body)?`${url}:${body.segment_start_ms??''}:${body.segment_end_ms??''}`:null;
+        return editorPersistence.enqueue(url,payload,patchKey);
+    };
+    const frameLatest=window.ConnectEditorPersistence.frameLatest;
+    let timelineResizePending=false;
+    const requestPreviewRender=frameLatest(()=>renderPosition());
+    const requestTimelineRender=frameLatest(()=>renderEditorTimeline());
     const fmt = ms => {const s=Math.max(0,Math.floor(ms/1000)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`};
-    const minFromMs = ms => Number((Number(ms || 0) / 60000).toFixed(3));
+    const minFromMs = ms => Number(ms || 0) / 60000;
     const msFromMin = min => Math.round(Number(min) * 60000);
-    const asset = id => timeline.assets.find(item => item.id === id);
+    let assetArray=null,assetsById=new Map(),previewIndexes=null;
+    const EMPTY_STYLE={};
+    const asset=id=>{if(assetArray!==timeline.assets){assetArray=timeline.assets;assetsById=new Map((assetArray||[]).map(item=>[String(item.id),item]))}return assetsById.get(String(id))};
+    function invalidatePreviewIndexes(){previewIndexes=null;musicController.invalidateTiming()}
+    function indexedPreview(){
+        if(!previewIndexes){const Index=window.ConnectEditorView.IntervalIndex;previewIndexes={
+            captions:new Index(timeline.captions||[]),
+            overlays:new Index(timeline.overlays||[],item=>Number(item.start_ms)+Math.max(0,Number(item.animation?.delay||0)*1000)),
+            brolls:new Index(timeline.brolls||[])
+        }}return previewIndexes;
+    }
+    let inspectorIntervals=null,transcriptIntervals=null,currentInspectorCards=new Set(),currentTranscriptNode=null,transcriptNeedsScroll=false;
+    function refreshInspectorTiming(){
+        const Index=window.ConnectEditorView.IntervalIndex;
+        inspectorIntervals=new Index([...list.querySelectorAll('[data-start]:not([data-transcript-cue])')],node=>node.dataset.start,node=>node.dataset.end);
+        transcriptIntervals=new Index([...list.querySelectorAll('[data-transcript-cue]')],node=>node.dataset.start,node=>node.dataset.end);
+        currentInspectorCards=new Set();currentTranscriptNode=null;
+    }
+    function syncCurrentInspectorCards(){
+        const current=new Set(inspectorIntervals?.at(globalMs)||[]);
+        for(const node of currentInspectorCards)if(!current.has(node))node.classList.remove('is-current');
+        for(const node of current)if(!currentInspectorCards.has(node))node.classList.add('is-current');
+        currentInspectorCards=current;
+    }
     const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
     const overlayAssetPattern = "{% url 'external_media_project_preview_overlay_asset' project.public_id '__overlay__' %}";
     const clipAt = ms => timeline.clips.find(item => ms >= item.timeline_in_ms && ms < item.timeline_out_ms) || timeline.clips.at(-1);
@@ -503,7 +602,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         return {source,translated};
     }
     function applyCaptionStyle(node, style, marginBottom){
-        const stage=document.querySelector('.preview-stage'),width=stage.clientWidth,height=stage.clientHeight,sequenceWidth=Math.max(1,Number(timeline.sequence.width||1920)),sequenceHeight=Math.max(1,Number(timeline.sequence.height||1080)),alignment=Math.max(1,Math.min(9,Number(style?.alignment||2))),vertical=alignment>=7?'top':alignment>=4?'middle':'bottom',horizontal=(alignment-1)%3===0?'left':(alignment-1)%3===2?'right':'center',margin=Math.max(0,Number(marginBottom??style?.margin_bottom??60))/sequenceHeight*height,side=40/sequenceWidth*width,maxLines=Math.max(1,Number(style?.max_lines||2)),baseFontSize=Math.max(.1,Number(style?.font_size||48)/sequenceWidth*width),paddingX=style?.background_enabled?Math.max(0,Number(style?.background_padding_x||0))/sequenceWidth*width:0;
+        const previous=node._captionStyle;
+        if(previous&&previous.style===style&&previous.margin===marginBottom&&previous.text===node.textContent&&previous.revision===previewStyleRevision&&previous.sequence===timeline.sequence)return;
+        node._captionStyle={style,margin:marginBottom,text:node.textContent,revision:previewStyleRevision,sequence:timeline.sequence};
+        const stage=previewStage,width=stage.clientWidth,height=stage.clientHeight,sequenceWidth=Math.max(1,Number(timeline.sequence.width||1920)),sequenceHeight=Math.max(1,Number(timeline.sequence.height||1080)),alignment=Math.max(1,Math.min(9,Number(style?.alignment||2))),vertical=alignment>=7?'top':alignment>=4?'middle':'bottom',horizontal=(alignment-1)%3===0?'left':(alignment-1)%3===2?'right':'center',margin=Math.max(0,Number(marginBottom??style?.margin_bottom??60))/sequenceHeight*height,side=40/sequenceWidth*width,maxLines=Math.max(1,Number(style?.max_lines||2)),baseFontSize=Math.max(.1,Number(style?.font_size||48)/sequenceWidth*width),paddingX=style?.background_enabled?Math.max(0,Number(style?.background_padding_x||0))/sequenceWidth*width:0;
         const backgroundEnabled=Boolean(style?.background_enabled),backgroundHeight=Math.max(40,Math.min(100,Number(style?.background_height_percent??100)));
         node.style.left=horizontal==='left'?`${side}px`:horizontal==='right'?'auto':'50%';node.style.right=horizontal==='right'?`${side}px`:'auto';node.style.top=vertical==='top'?`${margin}px`:vertical==='middle'?'50%':'auto';node.style.bottom=vertical==='bottom'?`${margin}px`:'auto';node.style.transform=`translate(${horizontal==='center'?'-50%':'0'},${vertical==='middle'?'-50%':'0'})`;node.style.textAlign=horizontal;node.style.fontFamily=style?.font||'Arial';node.style.fontWeight=style?.font_weight||800;node.style.fontSize=`${baseFontSize}px`;node.style.lineHeight='1';node.style.whiteSpace=maxLines===1?'nowrap':'pre-line';node.style.wordBreak='normal';node.style.overflowWrap='normal';node.style.maxWidth=`calc(100% - ${side*2}px)`;node.style.color=style?.color||'#ffffff';node.style.opacity=Math.max(0,Math.min(1,Number(style?.primary_opacity??100)/100));node.style.padding=backgroundEnabled?`${Math.max(0,Number(style?.background_padding_y||0))/sequenceHeight*height}px ${paddingX}px`:'0';node.style.background=backgroundEnabled?'transparent':'transparent';node.style.backgroundImage=backgroundEnabled?`linear-gradient(${rgba(style.background_color,style.background_opacity)},${rgba(style.background_color,style.background_opacity)})`:'none';node.style.backgroundRepeat='no-repeat';node.style.backgroundPosition='center';node.style.backgroundSize=backgroundEnabled?`100% ${backgroundHeight}%`:'auto';node.style.borderRadius=`${Number(style?.background_radius||0)/sequenceWidth*width}px`;
         if(maxLines===1&&node.textContent){
@@ -524,7 +626,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function updateMusicVolume(){musicController.updateVolume(timeline.music,timeline.sequence.duration_ms,globalMs,timeline.captions)}
     function holdPreviewFrame(){if(!video.videoWidth||!video.videoHeight)return;try{const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext('2d').drawImage(video,0,0);previewStage.style.backgroundImage=`url("${canvas.toDataURL('image/jpeg',.82)}")`;previewStage.style.backgroundSize='cover';previewStage.style.backgroundPosition='center';video.style.opacity='0'}catch(_){}}
     function releasePreviewFrame(){video.style.opacity='1';previewStage.style.backgroundImage=''}
-    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{loading=value;if(!value)requestAnimationFrame(renderEditorTimeline)},onVideoChange:next=>{video=next;bindVideoEvents(next)},play:requestVideoPlay});
+    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{if(loading===value)return;loading=value;if(!value)requestPreviewRender()},onVideoChange:next=>{stopPlaybackClock();video=next;bindVideoEvents(next)},play:requestVideoPlay});
     function warmNextClip(clip){if(useReviewMaster())return;const next=nextClipAfter(clip);if(next)sourcePlayer.warm(sourceFor(next),Number(next.source_in_ms||0)/1000)}
     function seek(ms, autoplay=false){
         globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs); if(!clip)return;
@@ -542,9 +644,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         renderPosition(); syncMusicPosition();
     }
     function renderPosition(){
-        range.max=timeline.sequence.duration_ms||1; range.value=globalMs; time.textContent=`${fmt(globalMs)} / ${fmt(timeline.sequence.duration_ms)}`;
-        const styles=timeline.caption_styles||{},sourceStyle=styles.source||{},translatedStyle=styles.translated||sourceStyle,sourceLanguage=styles.source_language||'pt',activeCues=timeline.captions.filter(item=>globalMs>=item.start_ms&&globalMs<item.end_ms),sourceCue=activeCues.find(item=>item.is_source||item.language===sourceLanguage),translatedCue=activeCues.find(item=>!(item.is_source||item.language===sourceLanguage)),isBilingual=Boolean(sourceCue&&translatedCue),captionMargins=resolvedCaptionMargins(sourceStyle,translatedStyle);
-        if(reviewRenders('CAPTIONS')){sourceCaption.hidden=true;translatedCaption.hidden=true}else{sourceCaption.textContent=sourceCue?(isBilingual?singleLineCaptionText(sourceCue.text):wrapCaptionText(sourceCue.text,sourceStyle)):'';translatedCaption.textContent=translatedCue?(isBilingual?singleLineCaptionText(translatedCue.text):wrapCaptionText(translatedCue.text,translatedStyle)):'';sourceCaption.hidden=!sourceCue;translatedCaption.hidden=!translatedCue;applyCaptionStyle(sourceCaption,sourceStyle,captionMargins.source);applyCaptionStyle(translatedCaption,translatedStyle,captionMargins.translated)}
+        range.max=timeline.sequence.duration_ms||1; range.value=globalMs;const clock=`${ConnectEditorPrecision.timecode(globalMs,timeline.sequence.fps)} / ${ConnectEditorPrecision.timecode(timeline.sequence.duration_ms,timeline.sequence.fps)}`;if(time.textContent!==clock)time.textContent=clock;
+        const styles=timeline.caption_styles||EMPTY_STYLE,sourceStyle=styles.source||EMPTY_STYLE,translatedStyle=styles.translated||sourceStyle,sourceLanguage=styles.source_language||'pt',activeCues=indexedPreview().captions.at(globalMs),sourceCue=activeCues.find(item=>item.is_source||item.language===sourceLanguage),translatedCue=activeCues.find(item=>!(item.is_source||item.language===sourceLanguage)),isBilingual=Boolean(sourceCue&&translatedCue),captionMargins=resolvedCaptionMargins(sourceStyle,translatedStyle);
+        if(reviewRenders('CAPTIONS')){sourceCaption.hidden=true;translatedCaption.hidden=true}else{const sourceText=sourceCue?(isBilingual?singleLineCaptionText(sourceCue.text):wrapCaptionText(sourceCue.text,sourceStyle)):'',translatedText=translatedCue?(isBilingual?singleLineCaptionText(translatedCue.text):wrapCaptionText(translatedCue.text,translatedStyle)):'';if(sourceCaption.textContent!==sourceText)sourceCaption.textContent=sourceText;if(translatedCaption.textContent!==translatedText)translatedCaption.textContent=translatedText;sourceCaption.hidden=!sourceCue;translatedCaption.hidden=!translatedCue;applyCaptionStyle(sourceCaption,sourceStyle,captionMargins.source);applyCaptionStyle(translatedCaption,translatedStyle,captionMargins.translated)}
         const masterPosition=activeClip?.master_in_ms!==undefined
             ? Number(activeClip.master_in_ms)+Math.max(0,globalMs-Number(activeClip.timeline_in_ms||0))
             : Number(editedToMaster(globalMs));
@@ -558,37 +660,34 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const grade=useReviewMaster()?null:activeClip?.color_adjustment,temperature=Math.max(-1,Math.min(1,Number(grade?.temperature||0)/100)),red=Math.max(-1,Math.min(1,(Number(grade?.red||0)+Number(grade?.yellow||0)+Number(grade?.magenta||0))/300+temperature)),green=Math.max(-1,Math.min(1,(Number(grade?.green||0)+Number(grade?.yellow||0)+Number(grade?.cyan||0))/300)),blue=Math.max(-1,Math.min(1,(Number(grade?.blue||0)+Number(grade?.cyan||0)+Number(grade?.magenta||0))/300-temperature));
         if(temperatureMatrix)temperatureMatrix.setAttribute('values',`${1+red*.28} 0 0 0 0 0 ${1+green*.28} 0 0 0 0 0 ${1+blue*.28} 0 0 0 0 0 1 0`);
         video.style.filter=grade?`url(#preview-temperature-filter) brightness(${1+Number(grade.brightness||0)/200}) contrast(${Number(grade.contrast??100)/100}) saturate(${Number(grade.saturation??100)/100})`:'';
-        document.getElementById('preview-block').textContent=activeClip?.block?.name || asset(activeClip?.asset_id)?.name || 'Vídeo';
-        document.querySelectorAll('[data-start]').forEach(card=>card.classList.toggle('is-current',globalMs>=Number(card.dataset.start)&&globalMs<Number(card.dataset.end)));
+        const block=document.getElementById('preview-block'),name=activeClip?.block?.name||asset(activeClip?.asset_id)?.name||'Vídeo';if(block.textContent!==name)block.textContent=name;
+        syncCurrentInspectorCards();
         syncTranscriptPosition();
         renderOverlays();
         renderBrolls();
         renderDirectTransformControl();
         renderTimelinePlayhead();
         updateMusicVolume();
-        updateEditControls();
     }
     function syncTranscriptPosition(){
-        const cues=[...document.querySelectorAll('[data-transcript-cue]')];
-        if(!cues.length)return;
-        const current=cues.find(node=>globalMs>=Number(node.dataset.start)&&globalMs<Number(node.dataset.end))||null;
-        cues.forEach(node=>node.classList.toggle('is-current',node===current));
-        if(current&&current.dataset.transcriptCue!==activeTranscriptCueId){
+        const current=transcriptIntervals?.at(globalMs)[0]||null;
+        if(currentTranscriptNode!==current){currentTranscriptNode?.classList.remove('is-current');current?.classList.add('is-current');currentTranscriptNode=current}
+        if(current&&(current.dataset.transcriptCue!==activeTranscriptCueId||transcriptNeedsScroll)){
             activeTranscriptCueId=current.dataset.transcriptCue;
-            current.scrollIntoView({block:'nearest',behavior:'smooth'});
+            transcriptNeedsScroll=draggingTimelineNeedle;if(!transcriptNeedsScroll)current.scrollIntoView({block:'nearest',behavior:'smooth'});
         }else if(!current)activeTranscriptCueId=null;
     }
     function renderOverlays(){
         if(reviewRenders('OVERLAYS')){overlayLayer.replaceChildren();return}
         const active=new Set();
-        (timeline.overlays||[]).forEach(item=>{const visibleStart=item.start_ms+Math.max(0,Number(item.animation?.delay||0)*1000);if(globalMs<visibleStart||globalMs>=item.end_ms)return;active.add(item.id);let node=overlayLayer.querySelector(`[data-overlay-id="${CSS.escape(item.id)}"]`);const entering=!node||node.hidden;if(!node){node=document.createElement('div');node.className='preview-overlay-item';node.dataset.overlayId=item.id;overlayLayer.append(node)}const pos=item.position||{},style=item.style||{},configuredWidth=Number(pos.width??style.max_width??.24);node.style.left=`${Number(pos.x??.5)*100}%`;node.style.top=`${Number(pos.y??.82)*100}%`;node.style.width=configuredWidth<=1?`${configuredWidth*100}%`:`${configuredWidth}px`;if(item.type==='TEXT'){node.classList.add('preview-overlay-text');node.textContent=item.content?.text||Object.values(item.content||{})[0]||'';node.style.color=style.color||'#fff';node.style.background=`color-mix(in srgb, ${style.background||'#000'} ${Number(style.background_opacity??.72)*100}%, transparent)`;node.style.fontFamily=style.font||'Arial';node.style.fontWeight=style.font_weight||700;node.style.textAlign=['left','right','center'].includes(style.alignment)?style.alignment:'center';node.style.borderRadius=`${style.border_radius||10}px`;node.style.fontSize=`clamp(12px,${Math.max(1,Number(style.font_size||48)/18)}vw,${style.font_size||48}px)`}else{node.classList.remove('preview-overlay-text');let img=node.querySelector('img');if(!img){img=document.createElement('img');node.replaceChildren(img)}const src=overlayAssetPattern.replace('__overlay__',encodeURIComponent(item.id))+`?r=${timeline.timeline_revision}`;if(img.dataset.src!==src){img.src=src;img.dataset.src=src}}node.hidden=false;if(entering){const kind=item.animation?.type||'NONE',from={opacity:kind==='NONE'?1:0,transform:'translate(-50%,-50%)'};if(kind==='SLIDE_UP')from.transform='translate(-50%,20%)';if(kind==='SLIDE_DOWN')from.transform='translate(-50%,-120%)';if(kind==='SLIDE_LEFT')from.transform='translate(20%,-50%)';if(kind==='SLIDE_RIGHT')from.transform='translate(-120%,-50%)';if(kind==='POP')from.transform='translate(-50%,-50%) scale(.82)';node.animate([from,{opacity:1,transform:'translate(-50%,-50%) scale(1)'}],{duration:Number(item.animation?.duration||.35)*1000,easing:item.animation?.easing||'ease-out'})}});overlayLayer.querySelectorAll('[data-overlay-id]').forEach(node=>{node.hidden=!active.has(node.dataset.overlayId)})
+        indexedPreview().overlays.at(globalMs).forEach(item=>{const visibleStart=item.start_ms+Math.max(0,Number(item.animation?.delay||0)*1000);if(globalMs<visibleStart||globalMs>=item.end_ms)return;active.add(item.id);let node=overlayLayer.querySelector(`[data-overlay-id="${CSS.escape(item.id)}"]`);const entering=!node||node.hidden;if(!node){node=document.createElement('div');node.className='preview-overlay-item';node.dataset.overlayId=item.id;overlayLayer.append(node)}const pos=item.position||{},style=item.style||{},configuredWidth=Number(pos.width??style.max_width??.24);node.style.left=`${Number(pos.x??.5)*100}%`;node.style.top=`${Number(pos.y??.82)*100}%`;node.style.width=configuredWidth<=1?`${configuredWidth*100}%`:`${configuredWidth}px`;if(item.type==='TEXT'){node.classList.add('preview-overlay-text');node.textContent=item.content?.text||Object.values(item.content||{})[0]||'';node.style.color=style.color||'#fff';node.style.background=`color-mix(in srgb, ${style.background||'#000'} ${Number(style.background_opacity??.72)*100}%, transparent)`;node.style.fontFamily=style.font||'Arial';node.style.fontWeight=style.font_weight||700;node.style.textAlign=['left','right','center'].includes(style.alignment)?style.alignment:'center';node.style.borderRadius=`${style.border_radius||10}px`;node.style.fontSize=`clamp(12px,${Math.max(1,Number(style.font_size||48)/18)}vw,${style.font_size||48}px)`}else{node.classList.remove('preview-overlay-text');let img=node.querySelector('img');if(!img){img=document.createElement('img');node.replaceChildren(img)}const src=overlayAssetPattern.replace('__overlay__',encodeURIComponent(item.id))+`?r=${timeline.timeline_revision}`;if(img.dataset.src!==src){img.src=src;img.dataset.src=src}}node.hidden=false;if(entering){const kind=item.animation?.type||'NONE',from={opacity:kind==='NONE'?1:0,transform:'translate(-50%,-50%)'};if(kind==='SLIDE_UP')from.transform='translate(-50%,20%)';if(kind==='SLIDE_DOWN')from.transform='translate(-50%,-120%)';if(kind==='SLIDE_LEFT')from.transform='translate(20%,-50%)';if(kind==='SLIDE_RIGHT')from.transform='translate(-120%,-50%)';if(kind==='POP')from.transform='translate(-50%,-50%) scale(.82)';node.animate([from,{opacity:1,transform:'translate(-50%,-50%) scale(1)'}],{duration:Number(item.animation?.duration||.35)*1000,easing:item.animation?.easing||'ease-out'})}});overlayLayer.querySelectorAll('[data-overlay-id]').forEach(node=>{node.hidden=!active.has(node.dataset.overlayId)})
     }
     function renderBrolls(){
         if(reviewRenders('BROLL')){brollLayer.replaceChildren();return}
-        const active=new Set(),assets=new Map((timeline.assets||[]).filter(item=>item.asset_id).map(item=>[String(item.asset_id),item]));
-        (timeline.brolls||[]).filter(item=>item.enabled!==false).forEach(item=>{
+        const active=new Set();
+        indexedPreview().brolls.at(globalMs).filter(item=>item.enabled!==false).forEach(item=>{
             if(globalMs<item.start_ms||globalMs>=item.end_ms)return;
-            const media=assets.get(String(item.asset_id));if(!media?.url)return;
+            const media=asset(`broll-asset-${item.asset_id}`);if(!media?.url)return;
             active.add(item.id);let node=brollLayer.querySelector(`[data-broll-id="${CSS.escape(item.id)}"]`);
             const expectedTag=item.media_type==='VIDEO'?'VIDEO':'IMG';
             if(node&&node.tagName!==expectedTag){node.remove();node=null}
@@ -650,7 +749,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         // A disabled decision still belongs to the selected take and must stay
         // available in the inspector so the member can restore Auto Reframe.
         const scope=activeTransformScope();
-        return reframeDecisionAt(inspectorSelection.id,Number(scope.segment_start_ms??editedToMaster(selectedSegment?.start??globalMs)),true);
+        const existing=reframeDecisionAt(inspectorSelection.id,Number(scope.segment_start_ms??editedToMaster(selectedSegment?.start??globalMs)),true);
+        if(existing)return existing;
+        // Framing is available even when the pipeline produced no automatic
+        // reframe decision. This neutral descriptor is persisted only on edit.
+        return {id:`reframe-source-${inspectorSelection.id}`,type:'reframe',source_id:String(inspectorSelection.id),enabled:true,origin:'USER',metadata:{...scope}};
     }
     function focusSelectedTakeForTransform(scope=activeTransformScope()){
         if(inspectorSelection?.kind!=='video'||!Number.isFinite(scope.segment_start_ms)||!Number.isFinite(scope.segment_end_ms))return scope;
@@ -689,7 +792,23 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function applyDirectTransform(target,values){
         if(target.kind==='broll')target.item.transform={...target.item.transform,...values};
         else {
-            target.item.metadata=target.item.metadata||{};target.item.metadata.manual_transform=values;target.item.enabled=true;
+            // Cards can outlive the snapshot that supplied their item. Resolve
+            // the current canonical decision by source AND selected take on
+            // every edit; mutating the captured object leaves renderPosition
+            // reading the previous server-confirmed transform instead.
+            const scope=target.scope||activeTransformScope(),sourceId=String(decisionSourceId(target.item));
+            let current=[...timeline.decisions].reverse().find(item=>item.type==='reframe'
+                &&String(decisionSourceId(item))===sourceId
+                &&Number(item.metadata?.segment_start_ms)===Number(scope.segment_start_ms)
+                &&Number(item.metadata?.segment_end_ms)===Number(scope.segment_end_ms));
+            if(!current){
+                // Keep the parent handle for the existing scoped-save API,
+                // while isolating the optimistic change to this take as well.
+                current={...target.item,metadata:{...target.item.metadata,...scope}};
+                timeline.decisions.push(current);
+            }
+            current.metadata={...current.metadata,manual_transform:{...values}};current.enabled=true;
+            target.item=current;
             const effect=activeClip?.effects?.find(item=>item.type==='transform');
             if(effect)Object.assign(effect,values);else if(activeClip)activeClip.effects=[...(activeClip.effects||[]),{type:'transform',...values}];
             // The continuous master can contain an older crop and intentionally
@@ -701,7 +820,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 renderReviewProxyStatus();seek(globalMs,!video.paused);return;
             }
         }
-        renderPosition();
+        requestPreviewRender();
     }
     async function persistDirectTransform(target,values,previous,scope=target.scope||activeTransformScope()){
         try{
@@ -715,12 +834,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     transformBox.addEventListener('pointerdown',event=>{
         if(event.button!==0)return;const target=directTransformTarget();if(!target)return;
         if(target.kind==='video')target.scope=focusSelectedTakeForTransform();
-        event.preventDefault();event.stopPropagation();const stage=previewStage.getBoundingClientRect(),start={x:event.clientX,y:event.clientY},previous={...target.values},resizing=Boolean(event.target.closest('[data-transform-handle]'));
-        transformBox.setPointerCapture?.(event.pointerId);transformBox.classList.add('is-dragging');
-        const move=pointerEvent=>{
+        event.preventDefault();event.stopPropagation();const stage=previewStage.getBoundingClientRect(),initialTransformBox=transformBox.getBoundingClientRect(),start={x:event.clientX,y:event.clientY},previous={...target.values},resizing=Boolean(event.target.closest('[data-transform-handle]'));
+        editorPersistence.beginGesture();transformBox.setPointerCapture?.(event.pointerId);transformBox.classList.add('is-dragging');
+        const move=frameLatest(pointerEvent=>{
             const dx=pointerEvent.clientX-start.x,dy=pointerEvent.clientY-start.y;let next={...previous};
             if(resizing){
-                const box=transformBox.getBoundingClientRect(),centerX=box.left+box.width/2,centerY=box.top+box.height/2;
+                const box=initialTransformBox,centerX=box.left+box.width/2,centerY=box.top+box.height/2;
                 const startDistance=Math.max(12,Math.hypot(start.x-centerX,start.y-centerY)),distance=Math.max(8,Math.hypot(pointerEvent.clientX-centerX,pointerEvent.clientY-centerY));
                 const minimum=target.kind==='video'||target.item.display_mode!=='OVERLAY'?1:.08,maximum=target.kind==='video'||target.item.display_mode!=='OVERLAY'?2:.9;
                 next.scale=Math.max(minimum,Math.min(maximum,previous.scale*(distance/startDistance)));
@@ -730,34 +849,55 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 next.x=Math.max(-1,Math.min(1,previous.x+dx/(stage.width*.1)));next.y=Math.max(-1,Math.min(1,previous.y+dy/(stage.height*.1)));
             }
             target.values=next;applyDirectTransform(target,next);
-        };
-        const finish=pointerEvent=>{
+        });
+        const finish=pointerEvent=>{move.flush();
             transformBox.removeEventListener('pointermove',move);transformBox.removeEventListener('pointerup',finish);transformBox.removeEventListener('pointercancel',finish);
             if(transformBox.hasPointerCapture?.(pointerEvent.pointerId))transformBox.releasePointerCapture(pointerEvent.pointerId);transformBox.classList.remove('is-dragging');
-            if(JSON.stringify(previous)!==JSON.stringify(target.values))persistDirectTransform(target,target.values,previous,target.scope);
+            if(JSON.stringify(previous)!==JSON.stringify(target.values))persistDirectTransform(target,target.values,previous,target.scope);editorPersistence.endGesture();
         };
         transformBox.addEventListener('pointermove',move);transformBox.addEventListener('pointerup',finish);transformBox.addEventListener('pointercancel',finish);
     });
-    const sourceEventBound=new WeakSet();
-    function bindVideoEvents(playerVideo){
-        if(sourceEventBound.has(playerVideo))return;
-        sourceEventBound.add(playerVideo);
-        playerVideo.addEventListener('timeupdate',()=>{
-            if(playerVideo!==video||loading||!activeClip)return;
+    let playbackClock=null;
+    function stopPlaybackClock(){
+        const previous=playbackClock;playbackClock=null;if(!previous)return;
+        if(previous.native)previous.video.cancelVideoFrameCallback?.(previous.id);else cancelAnimationFrame(previous.id);
+    }
+    function startPlaybackClock(playerVideo){
+        stopPlaybackClock();if(playerVideo!==video||playerVideo.paused)return;
+        const clock={video:playerVideo,native:typeof playerVideo.requestVideoFrameCallback==='function',id:0};playbackClock=clock;
+        const tick=(now,frame)=>{
+            if(playbackClock!==clock||playerVideo!==video||playerVideo.paused)return;
+            if(!playerVideo.seeking)syncPlaybackPosition(playerVideo,frame?.mediaTime??playerVideo.currentTime);
+            if(playbackClock!==clock||playerVideo.paused)return;
+            clock.id=clock.native?playerVideo.requestVideoFrameCallback(tick):requestAnimationFrame(tick);
+        };
+        clock.id=clock.native?playerVideo.requestVideoFrameCallback(tick):requestAnimationFrame(tick);
+    }
+    function syncPlaybackPosition(playerVideo,presentedTime=playerVideo.currentTime){
+            if(playerVideo!==video||loading||draggingTimelineNeedle||!activeClip)return;
             if(useReviewMaster()){
-                const edited=playbackToEdited(playerVideo.currentTime*1000);
-                if(edited===null){const cut=removedSegments().find(([start,end])=>playerVideo.currentTime*1000>start&&playerVideo.currentTime*1000<end);if(cut){playerVideo.currentTime=cut[1]/1000;return}}
+                const edited=playbackToEdited(presentedTime*1000);
+                if(edited===null){const cut=removedSegments().find(([start,end])=>presentedTime*1000>start&&presentedTime*1000<end);if(cut){playerVideo.currentTime=cut[1]/1000;return}}
                 globalMs=Math.max(0,Math.min(edited??0,timeline.sequence.duration_ms));activeClip=clipAt(globalMs);
             }else{
-                const eventClip=activeClip,currentSourceMs=playerVideo.currentTime*1000;
+                const eventClip=activeClip,currentSourceMs=presentedTime*1000;
                 globalMs=Math.max(Number(eventClip.timeline_in_ms),Math.min(Number(eventClip.timeline_out_ms),Number(eventClip.timeline_in_ms)+Math.max(0,currentSourceMs-Number(eventClip.source_in_ms))));
-                if(currentSourceMs>=Number(eventClip.source_out_ms)-40){
+                if(!playerVideo.paused&&currentSourceMs>=Number(eventClip.source_out_ms)-40){
                     const next=nextClipAfter(eventClip);
                     if(next){seek(next.timeline_in_ms,true);return}
                     playerVideo.pause();
                 }
             }
-            renderPosition();clearTimeout(saveTimer);saveTimer=setTimeout(()=>api('{% url "external_media_project_preview_session" project.public_id %}',{position_ms:Math.round(globalMs),ui_state:{edit_tool:editTool}}),700);
+            renderPosition();
+    }
+    const sourceEventBound=new WeakSet();
+    function bindVideoEvents(playerVideo){
+        if(sourceEventBound.has(playerVideo))return;
+        sourceEventBound.add(playerVideo);
+        playerVideo.addEventListener('timeupdate',()=>{
+            if(!playbackClock||playerVideo.paused)syncPlaybackPosition(playerVideo);
+            if(playerVideo!==video||loading||draggingTimelineNeedle)return;
+            clearTimeout(saveTimer);saveTimer=setTimeout(()=>api('{% url "external_media_project_preview_session" project.public_id %}',{position_ms:Math.round(globalMs),ui_state:{edit_tool:editTool}}),700);
         });
         playerVideo.addEventListener('ended',()=>{
             if(playerVideo!==video)return;
@@ -770,8 +910,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const next=nextClipAfter(activeClip);
             if(next)seek(next.timeline_in_ms,true);
         });
-        playerVideo.addEventListener('play',()=>{if(playerVideo!==video)return;configureMusic();syncMusicPosition();updateMusicVolume();musicController.play().catch(()=>{})});
-        playerVideo.addEventListener('pause',()=>{if(playerVideo===video)musicController.pause()});
+        playerVideo.addEventListener('play',()=>{if(playerVideo!==video)return;play.innerHTML='<i class="fas fa-pause"></i>';play.setAttribute('aria-label','Pausar');configureMusic();syncMusicPosition();updateMusicVolume();musicController.play().catch(()=>{});startPlaybackClock(playerVideo)});
+        playerVideo.addEventListener('pause',()=>{if(playerVideo===video){play.innerHTML='<i class="fas fa-play"></i>';play.setAttribute('aria-label','Reproduzir');stopPlaybackClock();musicController.pause()}});
     }
     // Bind the initial decoder through the same guarded path used after a
     // source swap. Old, hidden decoder buffers can still emit a final media
@@ -779,8 +919,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // after the next take had already become active.
     bindVideoEvents(video);
     function togglePreviewPlayback(){
-        if(video.paused){requestVideoPlay();play.innerHTML='<i class="fas fa-pause"></i>'}
-        else{video.pause();play.innerHTML='<i class="fas fa-play"></i>'}
+        if(video.paused)requestVideoPlay();else video.pause();
     }
     play.addEventListener('click',togglePreviewPlayback);
     previewStage.addEventListener('click',event=>{
@@ -789,11 +928,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(event.defaultPrevented||transformBox.classList.contains('is-active')||event.target.closest('button,input,select,textarea,a'))return;
         togglePreviewPlayback();
     });
-    document.getElementById('preview-previous').onclick=()=>seek(globalMs-frameDurationMs(),false);document.getElementById('preview-next').onclick=()=>seek(globalMs+frameDurationMs(),false);
+    document.getElementById('preview-previous').onclick=()=>seek(ConnectEditorPrecision.frameMs(ConnectEditorPrecision.frameAt(globalMs,timeline.sequence.fps)-1,timeline.sequence.fps),false);document.getElementById('preview-next').onclick=()=>seek(ConnectEditorPrecision.frameMs(ConnectEditorPrecision.frameAt(globalMs,timeline.sequence.fps)+1,timeline.sequence.fps),false);
     range.addEventListener('input',()=>seek(Number(range.value),!video.paused));
     function frameDurationMs(){return 1000/Math.max(1,Number(timeline.sequence.fps||30))}
     function minimumCutMs(){return Math.max(1,Math.floor(frameDurationMs()))}
-    function snapToFrame(ms){return Math.round(ms/frameDurationMs())*frameDurationMs()}
+    function snapToFrame(ms){return ConnectEditorPrecision.quantize(ms,timeline.sequence.fps)}
     function videoSegments(){const minimum=minimumCutMs();return timeline.clips.flatMap(clip=>{const points=[clip.timeline_in_ms,...bladePoints.filter(point=>point-clip.timeline_in_ms>=minimum&&clip.timeline_out_ms-point>=minimum),clip.timeline_out_ms].sort((a,b)=>a-b);return points.slice(0,-1).map((start,index)=>{const end=points[index+1],offsetStart=start-Number(clip.timeline_in_ms||0),offsetEnd=end-Number(clip.timeline_in_ms||0);return {start,end,label:clip.block?.name||asset(clip.asset_id)?.name||'Vídeo',assetId:clip.asset_id,sourceTimeMs:Number(clip.source_in_ms||0)+offsetStart,masterStartMs:Number(clip.master_in_ms??editedToMaster(clip.timeline_in_ms,'after'))+offsetStart,masterEndMs:Number(clip.master_in_ms??editedToMaster(clip.timeline_in_ms,'after'))+offsetEnd}})})}
     async function addBladeAt(point){point=Math.round(snapToFrame(point));const clip=clipAt(point),minimum=minimumCutMs();if(!clip||point-clip.timeline_in_ms<minimum||clip.timeline_out_ms-point<minimum||bladePoints.some(value=>Math.abs(value-point)<minimum))return;const previous=[...bladePoints];bladePoints=[...bladePoints,point].sort((a,b)=>a-b);renderEditorTimeline();try{applyTimeline(await api('{% url "external_media_project_preview_video_split" project.public_id %}',{master_ms:Math.round(editedToMaster(point))}),false,false)}catch(error){bladePoints=previous;renderEditorTimeline();alert(error.message)}}
     async function splitTimelineItem(kind,id,point){
@@ -803,9 +942,49 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             : `{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`;
         try{applyTimeline(await api(endpoint,{split_at_ms:cutAt}))}catch(error){alert(error.message)}
     }
-    function timelinePoint(event,lane,duration){const rect=lane.getBoundingClientRect();return Math.max(0,Math.min(duration,(event.clientX-rect.left)/rect.width*duration))}
-    const pendingTimelineMoves=[];
-    let savingTimelineMove=false;
+    let magneticSnapping=true;
+    const snapButton=document.getElementById('timeline-snap');
+    function toggleMagneticSnapping(){magneticSnapping=!magneticSnapping;snapButton.classList.toggle('is-active',magneticSnapping);snapButton.setAttribute('aria-pressed',String(magneticSnapping))}
+    snapButton.onclick=toggleMagneticSnapping;
+    function beginMagneticGesture(clip,lane,duration,excluded=[]){
+        const values=[0,duration,globalMs,...(timeline.markers||[]).map(marker=>Number(marker.time_ms))],excludedIds=new Set(excluded.map(String));
+        document.querySelectorAll('#editor-tracks [data-clip-key]').forEach(node=>{const descriptor=node._timeline;if(node===clip||(descriptor.kind==='caption'&&excludedIds.has(String(descriptor.item.id))))return;values.push(Number(descriptor.item.start),Number(descriptor.item.end))});
+        const points=ConnectEditorPrecision.targets(values,timeline.sequence.fps),geometry=timelineLaneGeometry(lane),guideLeft=geometry.left-editorCanvas.getBoundingClientRect().left;
+        const guide=document.createElement('i'),feedback=document.createElement('output');guide.className='editor-snap-guide';feedback.className='editor-drag-feedback';guide.hidden=true;feedback.hidden=true;editorCanvas.append(guide,feedback);
+        return {align(start,end,mode,event,minimum=minimumCutMs()){
+            const result=ConnectEditorPrecision.align({start,end,mode,points,tolerance:8/geometry.width*duration,fps:timeline.sequence.fps,duration,minimum,enabled:magneticSnapping&&!event.altKey});
+            guide.hidden=result.guide===null;
+            if(result.guide!==null)guide.style.left=`${guideLeft+result.guide/duration*geometry.width}px`;
+            feedback.hidden=false;feedback.textContent=`${ConnectEditorPrecision.timecode(result.start,timeline.sequence.fps)} → ${ConnectEditorPrecision.timecode(result.end,timeline.sequence.fps)}${result.guide===null?'':' · Encaixe'}`;
+            return result;
+        },finish(){guide.remove();feedback.remove()}};
+    }
+    function selectedTimingClip(){return [...document.querySelectorAll('#editor-tracks .is-selected')].find(node=>['caption','overlay','broll','music'].includes(node._timeline?.kind))}
+    const precisionDialog=document.getElementById('precision-dialog'),precisionStart=document.getElementById('precision-start'),precisionEnd=document.getElementById('precision-end'),precisionError=document.getElementById('precision-error');
+    let precisionTarget=null;
+    function precisionFeedback(){precisionError.textContent='';document.getElementById('precision-timecode').textContent=`${ConnectEditorPrecision.timecode(ConnectEditorPrecision.frameMs(precisionStart.value,timeline.sequence.fps),timeline.sequence.fps)} → ${ConnectEditorPrecision.timecode(ConnectEditorPrecision.frameMs(precisionEnd.value,timeline.sequence.fps),timeline.sequence.fps)}`}
+    function openPrecisionEditor(){
+        const clip=selectedTimingClip();if(!clip){alert('Selecione uma legenda, elemento visual ou música na timeline.');return}
+        if(selectedCaptionIds.size>1){alert('Selecione apenas uma legenda para ajustar seus tempos.');return}
+        precisionTarget={kind:clip._timeline.kind,item:{...clip._timeline.item}};
+        precisionStart.value=ConnectEditorPrecision.frameAt(precisionTarget.item.start,timeline.sequence.fps);precisionEnd.value=ConnectEditorPrecision.frameAt(precisionTarget.item.end,timeline.sequence.fps);
+        document.getElementById('precision-rate').textContent=`${timeline.sequence.fps||30} quadros/s · HH:MM:SS:QQ`;precisionError.textContent='';precisionFeedback();precisionDialog.showModal();precisionStart.focus();
+    }
+    precisionStart.oninput=precisionEnd.oninput=precisionFeedback;
+    document.getElementById('timeline-precision').onclick=openPrecisionEditor;
+    document.getElementById('precision-cancel').onclick=()=>precisionDialog.close();
+    document.getElementById('precision-form').onsubmit=async event=>{
+        event.preventDefault();const {kind,item}=precisionTarget,start=ConnectEditorPrecision.frameMs(precisionStart.value,timeline.sequence.fps),end=ConnectEditorPrecision.frameMs(precisionEnd.value,timeline.sequence.fps);
+        if(!Number.isInteger(Number(precisionStart.value))||!Number.isInteger(Number(precisionEnd.value))||start<0||end>timeline.sequence.duration_ms||end-start<(kind==='music'?1000:minimumCutMs())){precisionError.textContent='Informe um intervalo válido dentro da sequência'+(kind==='music'?' com pelo menos 1 segundo.':'.');return}
+        if(kind==='caption'&&captionTimingOverlaps([{id:item.id,start,end}])){precisionError.textContent='As legendas da mesma faixa não podem se sobrepor.';return}
+        precisionDialog.close();
+        if(kind==='music'){const tracks=currentMusicTracks();if(!tracks[item.trackIndex])return;tracks[item.trackIndex]={...tracks[item.trackIndex],start_ms:start,end_ms:end,source_in_ms:Math.max(0,Number(item.sourceInMs||0)+(end-item.end===start-item.start?0:start-item.start))};applyLocalMusicTracks(tracks);api('{% url "external_media_project_preview_music" project.public_id %}',{tracks}).then(data=>applyTimeline(data));}
+        else{const model=(kind==='caption'?timeline.captions:kind==='broll'?timeline.brolls:timeline.overlays).find(value=>String(value.id)===String(item.id));if(!model)return;model.start_ms=start;model.end_ms=end;queueTimelineMove(kind,item.id,start,end);editableLocalPreview();requestPreviewRender();requestTimelineRender();renderList()}
+    };
+    document.getElementById('timeline-shortcuts').onclick=()=>document.getElementById('shortcuts-dialog').showModal();
+    function editorTyping(){return Boolean(document.activeElement?.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])'))||Boolean(document.querySelector('dialog[open],.preview-modal.is-open'))}
+    function timelineLaneGeometry(lane){const rect=lane.getBoundingClientRect();return {left:rect.left,width:rect.width,scrollLeft:editorScroller.scrollLeft}}
+    function timelinePoint(event,lane,duration,rect=lane.getBoundingClientRect()){const scroll=rect.scrollLeft===undefined?0:editorScroller.scrollLeft-rect.scrollLeft;return Math.max(0,Math.min(duration,(event.clientX-rect.left+scroll)/rect.width*duration))}
     function captionTimingOverlaps(changes){
         const changedIds=new Set(changes.map(change=>String(change.id)));
         return changes.some(change=>{
@@ -819,41 +998,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         });
     }
     function queueTimelineMove(kind,id,startMs,endMs,layer=null){
-        const key=`${kind}:${id}`;
-        // Coalesce repeated drags of the same item while a prior save is in
-        // flight. The editor stays optimistic and only the latest dropped
-        // position is sent after the active request completes.
-        const queued=pendingTimelineMoves.find(item=>item.key===key);
-        const move={key,kind,id,startMs:Math.round(startMs),endMs:Math.round(endMs),layer};
-        if(queued)Object.assign(queued,move);else pendingTimelineMoves.push(move);
-        flushTimelineMoveQueue();
-    }
-    async function flushTimelineMoveQueue(){
-        if(savingTimelineMove||!pendingTimelineMoves.length)return;
-        savingTimelineMove=true;
-        const move=pendingTimelineMoves.shift();
-        const endpoint=move.kind==='broll'
-            ? `{% url 'external_media_project_preview' project.public_id %}brolls/${move.id}/`
-            : move.kind==='caption'
-                ? `{% url 'external_media_project_preview' project.public_id %}subtitles/${move.id}/`
-                : `{% url 'external_media_project_preview' project.public_id %}overlays/${move.id}/`;
-        try{
-            const data=await api(endpoint,{
-                start_ms:move.startMs,end_ms:move.endMs,...(move.layer===null?{}:{layer:move.layer}),
-            });
-            // Do not redraw an older server response over a newer optimistic
-            // drag. The final queue response contains every saved movement.
-            if(!pendingTimelineMoves.length){applyTimeline(data,false,true);renderEditorTimeline()}
-        }catch(error){
-            alert(error.message);
-            // Never repaint while another local movement is queued: doing so
-            // would visually undo a drag the user has already made. A later
-            // successful queued response will refresh the authoritative view.
-            if(!pendingTimelineMoves.length)renderEditorTimeline();
-        }finally{
-            savingTimelineMove=false;
-            flushTimelineMoveQueue();
-        }
+        invalidatePreviewIndexes();
+        const endpoint=kind==='broll'?`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`:kind==='caption'?`{% url 'external_media_project_preview' project.public_id %}subtitles/${id}/`:`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`;
+        api(endpoint,{start_ms:Math.round(startMs),end_ms:Math.round(endMs),...(layer===null?{}:{layer})}).then(data=>{applyTimeline(data,false,true)});
     }
     function makeMusicTimelineItemDraggable(clip,lane,item,duration){
         clip.classList.add('is-timeline-draggable');
@@ -861,14 +1008,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         clip.addEventListener('pointermove',event=>{if(clip.classList.contains('is-timeline-dragging'))return;const box=clip.getBoundingClientRect(),edge=Math.min(14,Math.max(6,box.width*.2)),atStart=event.clientX-box.left<=edge,atEnd=box.right-event.clientX<=edge;clip.classList.toggle('is-resize-start',atStart);clip.classList.toggle('is-resize-end',!atStart&&atEnd);clip.style.cursor=atStart||atEnd?'ew-resize':'grab'});
         clip.addEventListener('pointerleave',()=>{if(!clip.classList.contains('is-timeline-dragging'))clip.classList.remove('is-resize-start','is-resize-end')});
         clip.addEventListener('pointerdown',event=>{
+            item=clip._timeline.item;duration=clip._timeline.duration;lane=clip.parentElement;
             if(event.button!==0||editTool==='blade')return;
             event.preventDefault();event.stopPropagation();
-            const originalStart=Number(item.start),originalEnd=Number(item.end),length=Math.max(1000,originalEnd-originalStart),box=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,box.width*.22)),mode=event.clientX-box.left<=edge?'start':box.right-event.clientX<=edge?'end':'move',pointerStart=timelinePoint(event,lane,duration);
-            const originalSourceIn=Math.max(0,Number(item.sourceInMs||0));
+            const originalStart=Number(item.start),originalEnd=Number(item.end),length=Math.max(1000,originalEnd-originalStart),box=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,box.width*.22)),mode=event.clientX-box.left<=edge?'start':box.right-event.clientX<=edge?'end':'move',laneRect=timelineLaneGeometry(lane),pointerStart=timelinePoint(event,lane,duration,laneRect);
+            const originalSourceIn=Math.max(0,Number(item.sourceInMs||0)),magnetic=beginMagneticGesture(clip,lane,duration);
             let nextStart=originalStart,nextEnd=originalEnd,nextSourceIn=originalSourceIn,moved=false;
-            clip.setPointerCapture?.(event.pointerId);clip.classList.add('is-timeline-dragging');
-            const move=pointerEvent=>{const delta=timelinePoint(pointerEvent,lane,duration)-pointerStart;if(mode==='start'){nextStart=Math.max(0,Math.min(originalEnd-1000,snapToFrame(originalStart+delta)));nextSourceIn=Math.max(0,originalSourceIn+(nextStart-originalStart))}else if(mode==='end')nextEnd=Math.max(originalStart+1000,Math.min(duration,snapToFrame(originalEnd+delta)));else{nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta)));nextEnd=nextStart+length}moved=moved||Math.abs(nextStart-originalStart)>=minimumCutMs()||Math.abs(nextEnd-originalEnd)>=minimumCutMs();clip.style.left=`${nextStart/duration*100}%`;clip.style.width=`${Math.max(.02,(nextEnd-nextStart)/duration*100)}%`};
-            const finish=async pointerEvent=>{clip.removeEventListener('pointermove',move);clip.removeEventListener('pointerup',finish);clip.removeEventListener('pointercancel',finish);if(clip.hasPointerCapture?.(pointerEvent.pointerId))clip.releasePointerCapture(pointerEvent.pointerId);clip.classList.remove('is-timeline-dragging');if(!moved)return;clip.dataset.timelineDrag='1';const tracks=currentMusicTracks();if(!tracks[item.trackIndex])return;tracks[item.trackIndex]={...tracks[item.trackIndex],start_ms:Math.round(nextStart),end_ms:Math.round(nextEnd),source_in_ms:Math.round(nextSourceIn)};try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});applyTimeline(data,true,false);renderEditorTimeline()}catch(error){alert(error.message);renderEditorTimeline()}};
+            editorPersistence.beginGesture();clip.setPointerCapture?.(event.pointerId);clip.classList.add('is-timeline-dragging');
+            const move=frameLatest(pointerEvent=>{const delta=timelinePoint(pointerEvent,lane,duration,laneRect)-pointerStart;if(mode==='start'){nextStart=Math.max(0,Math.min(originalEnd-1000,snapToFrame(originalStart+delta)));nextSourceIn=Math.max(0,originalSourceIn+(nextStart-originalStart))}else if(mode==='end')nextEnd=Math.max(originalStart+1000,Math.min(duration,snapToFrame(originalEnd+delta)));else{nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta)));nextEnd=nextStart+length}const aligned=magnetic.align(nextStart,nextEnd,mode,pointerEvent,1000);nextStart=aligned.start;nextEnd=aligned.end;if(mode==='start')nextSourceIn=Math.max(0,originalSourceIn+nextStart-originalStart);moved=moved||Math.abs(nextStart-originalStart)>=minimumCutMs()||Math.abs(nextEnd-originalEnd)>=minimumCutMs();clip.style.left=`${nextStart/duration*100}%`;clip.style.width=`${Math.max(.02,(nextEnd-nextStart)/duration*100)}%`});
+            const finish=async pointerEvent=>{move.flush();clip.removeEventListener('pointermove',move);clip.removeEventListener('pointerup',finish);clip.removeEventListener('pointercancel',finish);if(clip.hasPointerCapture?.(pointerEvent.pointerId))clip.releasePointerCapture(pointerEvent.pointerId);clip.classList.remove('is-timeline-dragging');magnetic.finish();editorPersistence.endGesture();if(pointerEvent.type==='pointercancel'){renderEditorTimeline();return}if(!moved)return;clip.dataset.timelineDrag='1';const tracks=currentMusicTracks();if(!tracks[item.trackIndex])return;tracks[item.trackIndex]={...tracks[item.trackIndex],start_ms:Math.round(nextStart),end_ms:Math.round(nextEnd),source_in_ms:Math.round(nextSourceIn)};applyLocalMusicTracks(tracks);try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});applyTimeline(data,true,false);renderEditorTimeline()}catch(error){alert(error.message);renderEditorTimeline()}};
             clip.addEventListener('pointermove',move);clip.addEventListener('pointerup',finish);clip.addEventListener('pointercancel',finish);
         });
     }
@@ -880,6 +1028,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             : ' · arraste o centro para reposicionar ou as extremidades para ajustar a duração';
         clip.addEventListener('pointermove',event=>{if(clip.classList.contains('is-timeline-dragging'))return;const box=clip.getBoundingClientRect(),edge=Math.min(12,Math.max(5,box.width*.22));clip.style.cursor=event.clientX-box.left<=edge||box.right-event.clientX<=edge?'ew-resize':'grab'});
         clip.addEventListener('pointerdown',event=>{
+            item=clip._timeline.item;duration=clip._timeline.duration;lane=clip.parentElement;kind=clip._timeline.kind;
             if(event.button!==0)return;
             // The blade click belongs to this clip, not to the drag handler.
             if(editTool==='blade')return;
@@ -893,25 +1042,31 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(kind==='caption'&&resizeMode==='move'&&!groupOriginal.length)groupOriginal.push({id:item.id,start:originalStart,end:originalEnd});
             const groupStart=groupOriginal.length?Math.min(...groupOriginal.map(cue=>cue.start)):originalStart;
             const groupEnd=groupOriginal.length?Math.max(...groupOriginal.map(cue=>cue.end)):originalEnd;
-            const pointerStart=timelinePoint(event,lane,duration),wasPlaying=!video.paused;
+            const groupNodes=groupOriginal.length>1?[...document.querySelectorAll('#editor-tracks [data-clip-key]')].filter(node=>node._timeline.kind==='caption').map(node=>({node,cue:groupOriginal.find(cue=>String(cue.id)===String(node._timeline.item.id))})).filter(entry=>entry.cue):[];
+            const laneRect=timelineLaneGeometry(lane),pointerStart=timelinePoint(event,lane,duration,laneRect),wasPlaying=!video.paused;
+            const magnetic=beginMagneticGesture(clip,lane,duration,groupOriginal.map(cue=>cue.id));
             let nextStart=originalStart,nextEnd=originalEnd,nextLayer=Number(item.layer||0),moved=false;
-            clip.setPointerCapture?.(event.pointerId);
+            editorPersistence.beginGesture();clip.setPointerCapture?.(event.pointerId);
             clip.classList.add('is-timeline-dragging');
-            const move=pointerEvent=>{
-                const delta=timelinePoint(pointerEvent,lane,duration)-pointerStart;
+            const move=frameLatest(pointerEvent=>{
+                const delta=timelinePoint(pointerEvent,lane,duration,laneRect)-pointerStart;
                 if(resizeMode==='start')nextStart=Math.max(0,Math.min(originalEnd-minimumCutMs(),snapToFrame(originalStart+delta)));
                 else if(resizeMode==='end')nextEnd=Math.max(originalStart+minimumCutMs(),Math.min(duration,snapToFrame(originalEnd+delta)));
                 else if(groupOriginal.length>1){const groupDelta=Math.max(-groupStart,Math.min(duration-groupEnd,snapToFrame(delta)));nextStart=originalStart+groupDelta;nextEnd=originalEnd+groupDelta}
                 else nextStart=Math.max(0,Math.min(duration-length,snapToFrame(originalStart+delta))),nextEnd=nextStart+length;
+                if(groupOriginal.length>1&&resizeMode==='move'){const delta=nextStart-originalStart,result=magnetic.align(groupStart+delta,groupEnd+delta,'move',pointerEvent),shift=result.start-groupStart;nextStart=originalStart+shift;nextEnd=originalEnd+shift}
+                else{const result=magnetic.align(nextStart,nextEnd,resizeMode,pointerEvent);nextStart=result.start;nextEnd=result.end}
                 if(kind==='broll'){const targetLane=document.elementFromPoint(pointerEvent.clientX,pointerEvent.clientY)?.closest('[data-broll-layer]');if(targetLane)nextLayer=Number(targetLane.dataset.brollLayer||0)}
                 moved=moved||(resizeMode==='end'?Math.abs(nextEnd-originalEnd):Math.abs(nextStart-originalStart))>=minimumCutMs()||nextLayer!==Number(item.layer||0);
+                for(const {node,cue} of groupNodes)node.style.left=`${(cue.start+nextStart-originalStart)/duration*100}%`;
                 clip.style.left=`${Math.max(0,nextStart/duration*100)}%`;
                 clip.style.width=`${Math.max(.02,(nextEnd-nextStart)/duration*100)}%`;
-            };
-            const finish=pointerEvent=>{
+            });
+            const finish=pointerEvent=>{move.flush();
                 clip.removeEventListener('pointermove',move);clip.removeEventListener('pointerup',finish);clip.removeEventListener('pointercancel',finish);
                 if(clip.hasPointerCapture?.(pointerEvent.pointerId))clip.releasePointerCapture(pointerEvent.pointerId);
-                clip.classList.remove('is-timeline-dragging');
+                clip.classList.remove('is-timeline-dragging');magnetic.finish();editorPersistence.endGesture();
+                if(pointerEvent.type==='pointercancel'){renderEditorTimeline();return}
                 if(!moved)return;
                 clip.dataset.timelineDrag='1';
                 const captionChanges=kind==='caption'
@@ -927,18 +1082,20 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 if(kind==='caption'&&groupOriginal.length>1&&resizeMode==='move'){
                     const groupDelta=nextStart-originalStart;
                     groupOriginal.forEach(cue=>{const start=cue.start+groupDelta,end=cue.end+groupDelta,model=(timeline.captions||[]).find(value=>String(value.id)===String(cue.id));if(model){model.start_ms=start;model.end_ms=end}queueTimelineMove('caption',cue.id,start,end)});
-                    renderEditorTimeline();
+                    editableLocalPreview();renderPosition();renderEditorTimeline();
                     return;
                 }
                 // Keep the client model in sync with the visual position, so
                 // the next drag begins from where the user just dropped it,
                 // even before the asynchronous save has finished.
                 item.start=nextStart;item.end=nextEnd;if(kind==='broll')item.layer=nextLayer;
+                if(kind==='broll'||kind==='overlay'){const model=(kind==='broll'?timeline.brolls:timeline.overlays||[]).find(value=>String(value.id)===String(item.id));if(model){model.start_ms=nextStart;model.end_ms=nextEnd;if(kind==='broll')model.layer=nextLayer}}
                 if(kind==='caption'){
                     const cue=(timeline.captions||[]).find(value=>String(value.id)===String(item.id));
                     if(cue){cue.start_ms=nextStart;cue.end_ms=nextEnd}
                 }
                 queueTimelineMove(kind,item.id,nextStart,nextEnd,kind==='broll'?nextLayer:null);
+                editableLocalPreview();requestPreviewRender();
                 // Moving a timeline item is an edit, not a seek. Keeping the
                 // playhead stable makes caption and element adjustments feel
                 // predictable while the preview keeps playing.
@@ -957,13 +1114,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const AudioContextClass=window.AudioContext||window.webkitAudioContext;
             if(!AudioContextClass)throw new Error('Web Audio não é suportado neste navegador.');
             musicWaveformContext||=new AudioContextClass();
-            const buffer=await musicWaveformContext.decodeAudioData(bytes.slice(0));
-            const samples=buffer.getChannelData(0),buckets=4096,step=Math.max(1,Math.floor(samples.length/buckets));
-            const peaks=Array.from({length:buckets},(_,bucket)=>{
+            const buffer=await musicWaveformContext.decodeAudioData(bytes);
+            const samples=buffer.getChannelData(0),buckets=4096,step=Math.max(1,Math.ceil(samples.length/buckets)),peaks=new Float32Array(buckets);
+            let started=performance.now();
+            for(let bucket=0;bucket<buckets;bucket++){
                 const from=bucket*step,to=Math.min(samples.length,from+step);let peak=0;
-                for(let index=from;index<to;index+=1)peak=Math.max(peak,Math.abs(samples[index]||0));
-                return peak;
-            });
+                for(let index=from;index<to;index++)peak=Math.max(peak,Math.abs(samples[index]||0));
+                peaks[bucket]=peak;
+                if(performance.now()-started>4){await new Promise(resolve=>setTimeout(resolve,0));started=performance.now()}
+            }
             return {durationMs:buffer.duration*1000,peaks};
         })());
         return musicWaveformCache.get(source);
@@ -978,46 +1137,76 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             return peak;
         });
     }
-    function drawMusicWaveform(canvas,waveform){
-        const bounds=canvas.getBoundingClientRect();if(!bounds.width||!bounds.height||!waveform?.length)return;
-        const ratio=window.devicePixelRatio||1,width=Math.max(1,Math.round(bounds.width*ratio)),height=Math.max(1,Math.round(bounds.height*ratio));
-        if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height}
-        const context=canvas.getContext('2d');context.setTransform(ratio,0,0,ratio,0,0);context.clearRect(0,0,bounds.width,bounds.height);
-        const center=bounds.height/2,columns=Math.max(1,Math.ceil(bounds.width)),step=waveform.length/columns;
+    function drawMusicWaveform(canvas,waveform,view,height){
+        if(!waveform?.length||!view.width||!height)return;
+        const ratio=window.devicePixelRatio||1,width=Math.max(1,Math.round(view.width*ratio)),pixelsHigh=Math.max(1,Math.round(height*ratio));
+        canvas.style.left=`${view.offset}px`;canvas.style.right='auto';canvas.style.width=`${view.width}px`;
+        if(canvas.width!==width||canvas.height!==pixelsHigh){canvas.width=width;canvas.height=pixelsHigh}
+        const context=canvas.getContext('2d');context.setTransform(ratio,0,0,ratio,0,0);context.clearRect(0,0,view.width,height);
+        const center=height/2,columns=Math.max(1,Math.ceil(view.width)),first=view.from*waveform.length,step=(view.to-view.from)*waveform.length/columns;
         context.lineWidth=1;context.strokeStyle='rgba(204,255,234,.68)';context.beginPath();
-        for(let column=0;column<columns;column+=1){
-            const start=Math.floor(column*step),end=Math.min(waveform.length,Math.ceil((column+1)*step));let peak=0;
-            for(let index=start;index<end;index+=1)peak=Math.max(peak,waveform[index]||0);
-            const amplitude=Math.max(1,peak*(bounds.height*.43));context.moveTo(column+.5,center-amplitude);context.lineTo(column+.5,center+amplitude);
+        for(let column=0;column<columns;column++){
+            const start=Math.floor(first+column*step),end=Math.min(waveform.length,Math.ceil(first+(column+1)*step));let peak=0;
+            for(let index=start;index<end;index++)peak=Math.max(peak,waveform[index]||0);
+            const amplitude=Math.max(1,peak*(height*.43));context.moveTo(column+.5,center-amplitude);context.lineTo(column+.5,center+amplitude);
         }
         context.stroke();
     }
+    const observedWaveforms=new Set(),visibleWaveforms=new Set();let waveformObserver=null;
+    const requestWaveformPaint=frameLatest(()=>paintVisibleWaveforms());
+    function observeWaveform(clip,source,start=0,end=null){
+        const canvas=clip.querySelector('canvas');if(!canvas||!source)return;
+        const key=JSON.stringify([source,start,end]);
+        if(clip._waveform?.key!==key||clip._waveform?.canvas!==canvas)clip._waveform={key,source,start,end,canvas,audio:null,pending:false,failed:false,peaks:null,drawn:null};
+        if(!observedWaveforms.has(clip)){
+            observedWaveforms.add(clip);
+            if('IntersectionObserver' in window){
+                waveformObserver||=new IntersectionObserver(entries=>{for(const entry of entries){if(entry.isIntersecting)visibleWaveforms.add(entry.target);else visibleWaveforms.delete(entry.target)}requestWaveformPaint()},{root:document.getElementById('editor-scroller'),rootMargin:'80px'});
+                waveformObserver.observe(clip);
+            }else visibleWaveforms.add(clip);
+        }
+    }
+    function paintVisibleWaveforms(){
+        const viewport=document.getElementById('editor-scroller').getBoundingClientRect();let painted=0,more=false;
+        for(const clip of visibleWaveforms){
+            if(!clip.isConnected){visibleWaveforms.delete(clip);continue}
+            const item=clip._waveform;if(!item||item.failed)continue;
+            const bounds=clip.getBoundingClientRect(),view=window.ConnectEditorView.waveformWindow(bounds,viewport);
+            if(!view)continue;
+            if(!item.audio){
+                if(!item.pending){item.pending=true;loadMusicWaveform(item.source).then(audio=>{if(clip._waveform!==item||!clip.isConnected)return;item.audio=audio;item.peaks=waveformRange(audio,item.start,item.end);item.pending=false;requestWaveformPaint()}).catch(()=>{item.failed=true;clip.classList.remove('has-real-waveform')})}
+                continue;
+            }
+            const key=[view.offset,view.width,bounds.height,window.devicePixelRatio||1].join(':');
+            if(item.drawn===key)continue;
+            if(painted>=2){more=true;continue}
+            drawMusicWaveform(item.canvas,item.peaks,view,bounds.height);item.drawn=key;painted++;
+        }
+        if(more)requestWaveformPaint();
+    }
+    function cleanWaveformObservers(){
+        for(const clip of observedWaveforms)if(!clip.isConnected){waveformObserver?.unobserve(clip);observedWaveforms.delete(clip);visibleWaveforms.delete(clip)}
+    }
     function queueMusicWaveforms(){
-        document.querySelectorAll('.editor-track--music .editor-track__clip[data-music-waveform-source]').forEach(clip=>{
-            const canvas=clip.querySelector('.editor-music-waveform'),source=clip.dataset.musicWaveformSource;
-            if(!canvas||!source)return;
-            loadMusicWaveform(source).then(audio=>requestAnimationFrame(()=>drawMusicWaveform(canvas,waveformRange(audio)))).catch(()=>clip.classList.remove('has-real-waveform'));
-        });
+        cleanWaveformObservers();document.querySelectorAll('.editor-track--music .editor-track__clip[data-music-waveform-source]').forEach(clip=>observeWaveform(clip,clip.dataset.musicWaveformSource));requestWaveformPaint();
     }
     function queueSourceAudioWaveforms(){
-        document.querySelectorAll('.editor-track--audio .editor-track__clip[data-source-waveform-source]').forEach(clip=>{
-            const canvas=clip.querySelector('.editor-source-waveform'),source=clip.dataset.sourceWaveformSource;
-            if(!canvas||!source)return;
-            loadMusicWaveform(source).then(audio=>requestAnimationFrame(()=>drawMusicWaveform(canvas,waveformRange(audio,Number(clip.dataset.sourceWaveformStart||0),Number(clip.dataset.sourceWaveformEnd||audio.durationMs))))).catch(()=>clip.classList.remove('has-real-waveform'));
-        });
+        cleanWaveformObservers();document.querySelectorAll('.editor-track--audio .editor-track__clip[data-source-waveform-source]').forEach(clip=>observeWaveform(clip,clip.dataset.sourceWaveformSource,Number(clip.dataset.sourceWaveformStart||0),Number(clip.dataset.sourceWaveformEnd)||null));requestWaveformPaint();
     }
-    let timelinePlayheadFrame=0;
+    let timelinePlayheadFrame=0,playheadFollowTarget=null;
     function followTimelinePlayhead(head){
         if(video.paused||draggingTimelineNeedle)return;
         const maximumScroll=Math.max(0,editorScroller.scrollWidth-editorScroller.clientWidth);
         if(!maximumScroll)return;
-        const scrollerBox=editorScroller.getBoundingClientRect(),headBox=head.getBoundingClientRect(),viewportX=headBox.left-scrollerBox.left;
+        const viewportWidth=editorScroller.clientWidth,needleLeft=parseFloat(head.style.left)||0,viewportX=needleLeft-editorScroller.scrollLeft;
         // Leave room ahead of the running frame. This only moves when the
         // needle approaches an edge, so manual navigation is not constantly
         // overridden while playback is in progress.
-        const guard=Math.max(48,Math.min(140,scrollerBox.width*.16));
-        if(viewportX>=guard&&viewportX<=scrollerBox.width-guard)return;
-        const target=clampTimelineValue(head.offsetLeft-editorScroller.clientWidth*.42,0,maximumScroll);
+        const guard=Math.max(48,Math.min(140,viewportWidth*.16));
+        if(viewportX>=guard&&viewportX<=viewportWidth-guard){playheadFollowTarget=null;return}
+        const target=clampTimelineValue(needleLeft-viewportWidth*.42,0,maximumScroll);
+        if(playheadFollowTarget!==null&&Math.abs(target-playheadFollowTarget)<viewportWidth*.15)return;
+        playheadFollowTarget=target;
         editorScroller.scrollTo({left:target,behavior:'smooth'});
     }
     function renderTimelinePlayhead(){
@@ -1026,12 +1215,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             timelinePlayheadFrame=0;
             const duration=Math.max(1,Number(timeline.sequence.duration_ms||1)),canvas=document.getElementById('editor-canvas'),head=canvas?.querySelector('.editor-playhead'),lane=canvas?.querySelector('.editor-track__lane');
             if(!head||!lane)return;
-            const canvasBox=canvas.getBoundingClientRect(),laneBox=lane.getBoundingClientRect();
+            const canvasBox=canvas.getBoundingClientRect(),laneBox=lane.getBoundingClientRect(),lastLane=canvas.querySelector('.editor-track:last-child .editor-track__lane');
+            head.style.top=`${laneBox.top-canvasBox.top-8}px`;if(lastLane)head.style.height=`${lastLane.getBoundingClientRect().bottom-laneBox.top+16}px`;
             head.style.left=`${laneBox.left-canvasBox.left+laneBox.width*Math.min(1,globalMs/duration)}px`;
             followTimelinePlayhead(head);
         });
     }
     function renderEditorTimeline(){
+        if(editorPersistence.gestures)return;
         const duration=Math.max(1,Number(timeline.sequence.duration_ms||1)), tracks=document.getElementById('editor-tracks');
         // A percentage canvas inside this grid can be resolved against a
         // shrink-to-fit width. Use pixels from the visible timeline instead,
@@ -1040,10 +1231,75 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const viewportWidth=timelineViewportWidth();
         timelineCanvas.style.setProperty('width',`${Math.max(viewportWidth,Math.round(viewportWidth*timelineZoom))}px`,'important');
         document.getElementById('timeline-middle').textContent=fmt(duration/2);document.getElementById('timeline-end').textContent=fmt(duration);
-        const makeTrack=(label,items,kind='',isVideo=false,isCaption=false,selectKind=null,canBlade=false)=>{const row=document.createElement('div');row.className=`editor-track editor-track--${selectKind||'base'}`;const lane=document.createElement('div');lane.className=`editor-track__lane ${(isVideo||canBlade)&&editTool==='blade'?'is-blade':''}`;items.forEach(item=>{const clip=document.createElement('button'),rawWidth=(item.end-item.start)/duration*100,isSourceSegment=isVideo||kind.includes('source-audio'),tiny=isSourceSegment&&rawWidth<.35,isBroll=kind.includes('editor-track__broll'),isFilmstrip=(kind.includes('editor-video-clip')||isBroll)&&!tiny,isInspectorSelected=inspectorSelection?.kind===selectKind&&String(inspectorSelection.id)===String(item.id);const selectSourceSegment=()=>{selectedSegment={start:item.start,end:item.end,assetId:item.assetId,masterStartMs:item.masterStartMs,masterEndMs:item.masterEndMs};updateEditControls()};clip.type='button';clip.className=`editor-track__clip ${kind} ${tiny?'is-tiny':''} ${selectedSegment&&selectedSegment.start===item.start&&selectedSegment.end===item.end||isInspectorSelected?'is-selected':''}`;clip.style.left=`${Math.max(0,item.start/duration*100)}%`;clip.style.width=`${Math.max(.02,rawWidth)}%`;if(isFilmstrip){const assetSource=isBroll?item.assetUrl:asset(item.assetId)?.url,usingMaster=!isBroll&&!assetSource&&Boolean(timeline.review_master_url),source=assetSource||(usingMaster?timeline.review_master_url:''),thumbnailTime=usingMaster?editedToMaster(item.start):Number(item.sourceTimeMs||0);if(source){const key=`${isBroll?'broll-'+item.id:item.assetId}:${Math.round(thumbnailTime)}`;clip.classList.add('editor-filmstrip');clip.dataset.filmstripKey=key;clip.innerHTML=`<span class="editor-filmstrip__label">${esc(item.label)}</span>`;if(String(item.mediaType||'').toUpperCase()==='IMAGE'){clip.style.backgroundImage=`url("${source}")`;clip.classList.add('has-thumbnail')}else{clip.dataset.filmstripSource=filmstripSourceFor(source);clip.dataset.filmstripTime=String(Math.max(0,thumbnailTime/1000))}}else clip.textContent=item.label}else if(kind.includes('source-audio')){clip.classList.add('editor-waveform');clip.innerHTML=`<span class="editor-waveform__bars"></span><span class="editor-waveform__label">Áudio original</span>`}else clip.textContent=tiny?'':item.label;clip.title=`${item.label} · ${fmt(item.start)} — ${fmt(item.end)}${tiny?' · trecho curto: clique para selecionar e pressione Del para remover':''}${isCaption?' · arraste para mover ou redimensionar; clique duplo para editar':''}`;clip.addEventListener('pointerdown',event=>{if(event.button===0&&editTool!=='blade'&&isSourceSegment)selectSourceSegment()});clip.onclick=event=>{event.stopPropagation();if(clip.dataset.timelineDrag){delete clip.dataset.timelineDrag;return}const point=timelinePoint(event,lane,duration);if(editTool==='blade'&&(isVideo||canBlade)){if(isVideo)addBladeAt(point);else splitTimelineItem(selectKind,item.id,point);return}if(isSourceSegment){selectSourceSegment();if(isVideo&&selectKind)selectInspector(selectKind,item.inspectorId??item.assetId,item.label,item);renderEditorTimeline();requestAnimationFrame(updateEditControls);return}if(selectKind){selectInspector(selectKind,item.inspectorId??item.id,item.label,null);renderEditorTimeline();return}if(isCaption)return;seek(item.start,!video.paused)};if(isCaption)clip.ondblclick=event=>{event.preventDefault();event.stopPropagation();const cue=timeline.captions.find(value=>value.id===item.id);if(cue)openSubtitleEditor(cue)};if(selectKind==='music')makeMusicTimelineItemDraggable(clip,lane,item,duration);else makeTimelineItemDraggable(clip,lane,item,selectKind,duration);lane.append(clip)});if(isVideo)lane.onclick=event=>{if(editTool==='blade')addBladeAt(timelinePoint(event,lane,duration))};row.innerHTML=`<span class="editor-track__label">${label}</span>`;row.append(lane);tracks.append(row)};
-        tracks.replaceChildren();
+        const {reconcileChildren}=window.ConnectEditorView;
+        const rowsByKey=new Map([...tracks.children].map(row=>[row.dataset.trackKey,row]));
+        const clipsByKey=new Map([...tracks.querySelectorAll('[data-clip-key]')].map(clip=>[clip.dataset.clipKey,clip]));
+        const nextRows=[];let lastRenderedTrack=null;
+        const makeTrack=(label,items,kind='',isVideo=false,isCaption=false,selectKind=null,canBlade=false,trackKey=null)=>{
+            const key=trackKey||`${selectKind||'base'}:${label}`;
+            let row=rowsByKey.get(key);
+            if(!row){row=document.createElement('div');row.dataset.trackKey=key;const title=document.createElement('span');title.className='editor-track__label';row.append(title,document.createElement('div'))}
+            row.className=`editor-track editor-track--${selectKind||'base'}`;
+            const title=row.firstElementChild,lane=row.lastElementChild;
+            if(title.textContent!==label)title.textContent=label;
+            lane.className=`editor-track__lane ${(isVideo||canBlade)&&editTool==='blade'?'is-blade':''}`;
+            const nextClips=items.map((item,index)=>{
+                const clipKey=`${selectKind}:${item.id??`${item.assetId}:${item.masterStartMs}:${item.masterEndMs}:${index}`}`;
+                let clip=clipsByKey.get(clipKey);const created=!clip;
+                if(!clip){clip=document.createElement('button');clip.type='button';clip.dataset.clipKey=clipKey}
+                clip._timeline={item,kind:selectKind,duration,isSourceSegment:isVideo||kind.includes('source-audio'),canBlade:isVideo||canBlade};
+                const rawWidth=(item.end-item.start)/duration*100,isSourceSegment=clip._timeline.isSourceSegment;
+                const tiny=isSourceSegment&&rawWidth<.35,isBroll=kind.includes('editor-track__broll'),isFilmstrip=(kind.includes('editor-video-clip')||isBroll)&&!tiny;
+                const decorated=clip.classList.contains('has-thumbnail')?'has-thumbnail':'';
+                clip.className=`editor-track__clip ${kind} ${tiny?'is-tiny':''} ${decorated}`;
+                clip.style.left=`${Math.max(0,item.start/duration*100)}%`;clip.style.width=`${Math.max(.02,rawWidth)}%`;
+                const assetSource=isFilmstrip?(isBroll?item.assetUrl:asset(item.assetId)?.url):'';
+                const usingMaster=isFilmstrip&&!isBroll&&!assetSource&&Boolean(timeline.review_master_url);
+                const source=assetSource||(usingMaster?timeline.review_master_url:''),thumbnailTime=usingMaster?editedToMaster(item.start):Number(item.sourceTimeMs||0);
+                const contentKey=JSON.stringify([kind,item.label,tiny,source,thumbnailTime,item.mediaType]);
+                if(clip._contentKey!==contentKey){
+                    clip._contentKey=contentKey;clip.style.backgroundImage='';clip.classList.remove('has-thumbnail');
+                    delete clip.dataset.filmstripKey;delete clip.dataset.filmstripSource;delete clip.dataset.filmstripTime;
+                    if(isFilmstrip&&source){
+                        clip.dataset.filmstripKey=`${isBroll?'broll-'+item.id:item.assetId}:${Math.round(thumbnailTime)}`;
+                        clip.innerHTML=`<span class="editor-filmstrip__label">${esc(item.label)}</span>`;
+                        if(String(item.mediaType||'').toUpperCase()==='IMAGE'){clip.style.backgroundImage=`url("${source}")`;clip.classList.add('has-thumbnail')}
+                        else{clip.dataset.filmstripSource=filmstripSourceFor(source);clip.dataset.filmstripTime=String(Math.max(0,thumbnailTime/1000))}
+                    }else if(kind.includes('source-audio'))clip.innerHTML='<span class="editor-waveform__bars"></span><span class="editor-waveform__label">Áudio original</span>';
+                    else clip.textContent=tiny?'':item.label;
+                }
+                if(isFilmstrip&&source)clip.classList.add('editor-filmstrip');
+                if(kind.includes('source-audio'))clip.classList.add('editor-waveform');
+                if(['caption','broll','overlay','music'].includes(selectKind))clip.classList.add('is-timeline-draggable');
+                clip.title=`${item.label} · ${fmt(item.start)} — ${fmt(item.end)}${tiny?' · trecho curto: clique para selecionar e pressione Del para remover':''}${isCaption?' · arraste para mover ou redimensionar; clique duplo para editar':''}`;
+                const selectSourceSegment=(openInspector=false)=>{
+                    selectedSegment={start:item.start,end:item.end,assetId:item.assetId,masterStartMs:item.masterStartMs,masterEndMs:item.masterEndMs};
+                    if(openInspector&&isVideo&&selectKind)selectInspector(selectKind,item.inspectorId??item.assetId,item.label,item);
+                    else updateEditControls();
+                };
+                // Source takes are selectable on pointerdown. Opening their
+                // inspector here keeps the framing controls and the preview
+                // bounding box in sync even when the click does not move the
+                // playhead (for example, on the take already under it).
+                clip.onpointerdown=event=>{if(event.button===0&&editTool!=='blade'&&isSourceSegment)selectSourceSegment(isVideo&&Boolean(selectKind))};
+                clip.onclick=event=>{
+                    event.stopPropagation();if(clip.dataset.timelineDrag){delete clip.dataset.timelineDrag;return}
+                    const point=timelinePoint(event,lane,duration);
+                    if(editTool==='blade'&&(isVideo||canBlade)){if(isVideo)addBladeAt(point);else splitTimelineItem(selectKind,item.id,point);return}
+                    if(isSourceSegment){selectSourceSegment();if(isVideo&&selectKind)selectInspector(selectKind,item.inspectorId??item.assetId,item.label,item);renderTimelineSelection();return}
+                    if(selectKind){selectInspector(selectKind,item.inspectorId??item.id,item.label,null);renderTimelineSelection();return}
+                    if(!isCaption)seek(item.start,!video.paused);
+                };
+                if(isCaption)clip.ondblclick=event=>{event.preventDefault();event.stopPropagation();const cue=timeline.captions.find(value=>value.id===item.id);if(cue)openSubtitleEditor(cue)};
+                if(created){if(selectKind==='music')makeMusicTimelineItemDraggable(clip,lane,item,duration);else makeTimelineItemDraggable(clip,lane,item,selectKind,duration)}
+                return clip;
+            });
+            reconcileChildren(lane,nextClips);
+            lane.onclick=isVideo?event=>{if(editTool==='blade')addBladeAt(timelinePoint(event,lane,duration))}:null;
+            nextRows.push(row);lastRenderedTrack=row;
+        };
         const captions=timeline.captions||[], captionItems=items=>items.map(item=>({id:item.id,start:item.start_ms,end:item.end_ms,label:item.text||'Legenda'})), usedCaptions=new Set();
-        const wireCaptionSelection=items=>{[...tracks.lastElementChild.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{const cue=items[index];if(!cue)return;clip.classList.toggle('is-selected',selectedCaptionIds.has(String(cue.id)));clip.addEventListener('click',event=>{if(!event.shiftKey)return;event.preventDefault();event.stopImmediatePropagation();toggleCaptionSelection(cue)},true)})};
+        const wireCaptionSelection=items=>{[...lastRenderedTrack.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{const cue=items[index];if(!cue)return;clip.classList.toggle('is-selected',selectedCaptionIds.has(String(cue.id)));if(!clip._captionSelectionBound){clip._captionSelectionBound=true;clip.addEventListener('click',event=>{if(!event.shiftKey)return;event.preventDefault();event.stopImmediatePropagation();const current=timeline.captions.find(value=>String(value.id)===String(clip._timeline.item.id));if(current)toggleCaptionSelection(current)},true)}})};
         const addCaptionTrack=(label,language,kind)=>{const items=captions.filter(item=>String(item.language||'').toLowerCase().startsWith(language));if(!items.length)return;items.forEach(item=>usedCaptions.add(item));makeTrack(label,captionItems(items),kind,false,true,'caption');wireCaptionSelection(items)};
         // Put simultaneous visual elements on independent lanes so both clips
         // remain visible and selectable instead of occupying the same space.
@@ -1068,19 +1324,18 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const elements=timeline.brolls.map(item=>{const media=asset(`broll-asset-${item.asset_id}`);return {start:item.start_ms,end:item.end_ms,label:media?.name||item.media_type,id:item.id,assetUrl:media?.url,mediaType:item.media_type,sourceTimeMs:item.source_in_ms,layer:item.layer}});
             const automatic=stackElementLayers(elements),automaticLayer=new Map();automatic.forEach((items,index)=>items.forEach(item=>automaticLayer.set(item.id,index)));
             const byLayer=new Map();elements.forEach(item=>{const hasManualLayer=item.layer!==null&&item.layer!==undefined&&item.layer!==''&&Number.isFinite(Number(item.layer));const layer=hasManualLayer?Number(item.layer):automaticLayer.get(item.id)||0;item.layer=layer;if(!byLayer.has(layer))byLayer.set(layer,[]);byLayer.get(layer).push(item)});
-            [...byLayer.keys()].sort((a,b)=>a-b).forEach(layer=>{makeTrack('Elementos',byLayer.get(layer),'editor-track__broll',false,false,'broll',true);tracks.lastElementChild.querySelector('.editor-track__lane').dataset.brollLayer=String(layer)})
+            [...byLayer.keys()].sort((a,b)=>a-b).forEach(layer=>{makeTrack('Elementos',byLayer.get(layer),'editor-track__broll',false,false,'broll',true,`broll:${layer}`);lastRenderedTrack.querySelector('.editor-track__lane').dataset.brollLayer=String(layer)})
         }
         const sourceVideoSegments=videoSegments();
         makeTrack('Vídeo',sourceVideoSegments,'editor-video-clip',true,false,'video');
         // The source audio follows the exact editorial cuts of each video take.
         const sourceAudioItems=sourceVideoSegments.map(item=>({...item,inspectorId:item.assetId,label:'Áudio original',audioUrl:asset(item.assetId)?.url||'',sourceEndMs:Number(item.sourceTimeMs||0)+(Number(item.end)-Number(item.start))}));
         makeTrack('Áudio',sourceAudioItems,'editor-track__source-audio',false,false,'audio');
-        [...tracks.lastElementChild.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{
+        [...lastRenderedTrack.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{
             const item=sourceAudioItems[index];if(!item?.audioUrl)return;
             clip.classList.add('has-real-waveform');clip.dataset.sourceWaveformSource=item.audioUrl;clip.dataset.sourceWaveformStart=String(item.sourceTimeMs||0);clip.dataset.sourceWaveformEnd=String(item.sourceEndMs||0);
-            clip.innerHTML=`<canvas class="editor-source-waveform" aria-hidden="true"></canvas><span class="editor-waveform__label">Áudio original</span>`;
+            if(!clip.querySelector('.editor-source-waveform'))clip.innerHTML='<canvas class="editor-source-waveform" aria-hidden="true"></canvas><span class="editor-waveform__label">Áudio original</span>';
         });
-        queueSourceAudioWaveforms();
         // Show every item in the selected soundtrack sequence. Consecutive
         // clips overlap by their crossfade duration, matching the constant-
         // power transition baked into the final render.
@@ -1093,11 +1348,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 return {id:`music-${track.id||index}`,trackIndex:index,start,end:Math.max(start+1000,end),sourceInMs:Math.max(0,Number(track.source_in_ms||0)),transition:String(track.transition||'CONSTANT_POWER').toUpperCase(),audioUrl:track.url||'',label:`${index+1}. ${track.name||'Trilha de fundo'}${index?' · Potência constante':''}`};
             });
             makeTrack('Música',musicItems,'editor-track__music',false,false,'music');
-            const musicLane=tracks.lastElementChild.querySelector('.editor-track__lane');
+            const musicLane=lastRenderedTrack.querySelector('.editor-track__lane');
             [...musicLane.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{
                 const item=musicItems[index];if(!item?.audioUrl)return;
                 clip.classList.add('has-real-waveform');clip.dataset.musicWaveformSource=item.audioUrl;
-                clip.innerHTML=`<canvas class="editor-music-waveform" aria-hidden="true"></canvas><span class="editor-music-waveform__label">${esc(item.label)}</span>`;
+                if(!clip.querySelector('.editor-music-waveform'))clip.innerHTML=`<canvas class="editor-music-waveform" aria-hidden="true"></canvas><span class="editor-music-waveform__label">${esc(item.label)}</span>`;
             });
             musicItems.slice(0,-1).forEach((item,index)=>{
                 const next=musicItems[index+1],start=Math.max(item.start,next.start),end=Math.min(item.end,next.end);
@@ -1106,25 +1361,37 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 transition.className='editor-music-transition';transition.style.left=`${start/duration*100}%`;transition.style.width=`${Math.max(.02,(end-start)/duration*100)}%`;
                 transition.title=`Crossfade de potência constante · ${seconds}s`;transition.textContent=`↔ ${seconds}s`;musicLane.append(transition);
             });
-            queueMusicWaveforms();
         }
-        queueFilmstripThumbnails();
-        const canvas=document.getElementById('editor-canvas'),lanes=[...tracks.querySelectorAll('.editor-track__lane')],lane=lanes[0],lastLane=lanes.at(-1);canvas.querySelectorAll('.editor-playhead').forEach(item=>item.remove());const head=document.createElement('i');head.className='editor-playhead';canvas.append(head);requestAnimationFrame(()=>{const canvasBox=canvas.getBoundingClientRect(),laneBox=lane.getBoundingClientRect(),lastLaneBox=lastLane.getBoundingClientRect(),left=laneBox.left-canvasBox.left,top=laneBox.top-canvasBox.top-8;head.style.left=`${left+laneBox.width*Math.min(1,globalMs/duration)}px`;head.style.top=`${top}px`;head.style.height=`${lastLaneBox.bottom-canvasBox.top+8}px`});
+        reconcileChildren(tracks,nextRows);renderTimelineSelection();
+        queueSourceAudioWaveforms();queueMusicWaveforms();queueFilmstripThumbnails();
+        let head=timelineCanvas.querySelector('.editor-playhead');
+        if(!head){head=document.createElement('i');head.className='editor-playhead';timelineCanvas.append(head)}
+        renderTimelinePlayhead();
+    }
+    function renderTimelineSelection(){
+        document.querySelectorAll('#editor-tracks [data-clip-key]').forEach(clip=>{
+            const descriptor=clip._timeline,item=descriptor.item;
+            const selected=descriptor.kind==='caption'?selectedCaptionIds.has(String(item.id))
+                :descriptor.isSourceSegment?Boolean(selectedSegment&&selectedSegment.start===item.start&&selectedSegment.end===item.end&&String(selectedSegment.assetId)===String(item.assetId))
+                :inspectorSelection?.kind===descriptor.kind&&String(inspectorSelection.id)===String(item.id);
+            clip.classList.toggle('is-selected',selected);
+            clip.parentElement.classList.toggle('is-blade',descriptor.canBlade&&editTool==='blade');
+        });
     }
     function decisionStart(item){return Number(item.source_in_ms||0)}
     // remove_segment/audio_noise_reduction decisions are recorded against the
     // virtual 'project-master' timeline; the backend resolves which real take
     // produced each one into related_source_id so clicking a take can filter them.
     function decisionSourceId(item){return item.related_source_id||item.source_id}
-    function selectInspector(kind,id,label,segment=null){if(kind!=='video')selectedSegment=null;if(kind==='caption')selectedCaptionIds=new Set([String(id)]);else selectedCaptionIds.clear();inspectorSelection={kind,id:id??null,label:label||'',masterStartMs:segment?.masterStartMs,masterEndMs:segment?.masterEndMs};if(kind==='video'&&segment&&(globalMs<segment.start||globalMs>=segment.end))seek(segment.start,!video.paused);setReviewPanel(true);renderList();updateEditControls()}
+    function selectInspector(kind,id,label,segment=null){if(kind!=='video')selectedSegment=null;if(kind==='caption')selectedCaptionIds=new Set([String(id)]);else selectedCaptionIds.clear();inspectorSelection={kind,id:id??null,label:label||'',masterStartMs:segment?.masterStartMs,masterEndMs:segment?.masterEndMs};if(kind==='video'&&segment&&(globalMs<segment.start||globalMs>=segment.end))seek(segment.start,!video.paused);setReviewPanel(true);renderList();renderDirectTransformControl();updateEditControls()}
     function toggleCaptionSelection(cue){
         const id=String(cue.id);
         if(selectedCaptionIds.has(id))selectedCaptionIds.delete(id);else selectedCaptionIds.add(id);
         selectedSegment=null;
         if(selectedCaptionIds.size){inspectorSelection={kind:'caption',id:cue.id,label:cue.text||'Legenda'};setReviewPanel(true)}else{inspectorSelection=null;setReviewPanel(false)}
-        renderList();updateEditControls();renderEditorTimeline();
+        renderList();updateEditControls();renderTimelineSelection();
     }
-    function clearInspectorSelection(){inspectorSelection=null;selectedCaptionIds.clear();setReviewPanel(false);renderList();renderEditorTimeline()}
+    function clearInspectorSelection(){inspectorSelection=null;selectedCaptionIds.clear();setReviewPanel(false);renderList();renderTimelineSelection()}
     function inspectorSelectionStillValid(){
         if(!inspectorSelection)return true;
         switch(inspectorSelection.kind){
@@ -1190,7 +1457,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             row.type='button';row.className='transcript-cue';
             row.dataset.transcriptCue=String(cue.id);row.dataset.start=String(cue.start_ms);row.dataset.end=String(cue.end_ms);
             row.innerHTML=`<span class="transcript-cue__time">${fmt(cue.start_ms)}</span><span class="transcript-cue__text">${esc(cue.text)}</span>`;
-            row.onclick=()=>{inspectorSelection={kind:'caption',id:cue.id,label:cue.text||''};selectedCaptionIds=new Set([String(cue.id)]);seek(Number(cue.start_ms),false);renderEditorTimeline()};
+            row.onclick=()=>{inspectorSelection={kind:'caption',id:cue.id,label:cue.text||''};selectedCaptionIds=new Set([String(cue.id)]);seek(Number(cue.start_ms),false);renderTimelineSelection()};
             row.ondblclick=event=>{event.preventDefault();openSubtitleEditor(cue)};
             transcriptList.append(row);
         });
@@ -1203,6 +1470,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         syncTranscriptPosition();
     }
     function renderList(){
+        const identity=JSON.stringify([inspectorSelection?.kind,inspectorSelection?.id,inspectorSelection?.masterStartMs,inspectorSelection?.masterEndMs]);
+        window.ConnectEditorView.preserveFocus(list,identity,renderInspectorCards);
+        refreshInspectorTiming();syncCurrentInspectorCards();syncTranscriptPosition();
+    }
+    function renderInspectorCards(){
+        if(editorPersistence.timers.size)editorPersistence.flushScheduled();
         if(!inspectorSelectionStillValid())inspectorSelection=null;
         inspectorHeader();
         list.innerHTML=''; const flagged=new Set(timeline.review_items||[]); const pendingNoise=timeline.decisions.filter(item=>item.type==='audio_noise_reduction'&&!item.enabled);const applyAllNoise=document.getElementById('apply-all-noise');const canApplyNoise=!inspectorSelection||inspectorSelection.kind==='audio';applyAllNoise.classList.toggle('hidden',!pendingNoise.length||!canApplyNoise);applyAllNoise.disabled=!pendingNoise.length||!canApplyNoise;
@@ -1214,8 +1487,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const reframeDecisions=inspectorSelection
             ? (isVideoSelection ? [selectedReframeDecision()].filter(Boolean) : [])
             : timeline.decisions.filter(item=>item.type==='reframe'&&flagged.has(item.id));
-        reframeDecisions.forEach(item=>{const current=item.metadata?.manual_transform||{scale:1,x:0,y:0},isOriginal=item.enabled===false,card=document.createElement('article');card.className='preview-decision';card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Enquadramento</span><strong class="block mt-2">${isOriginal?'Enquadramento original':'Ajuste fino'}</strong></div><i class="fas fa-crop-simple text-red-600"></i></div>${isOriginal?'<p class="text-xs text-gray-400 mt-2">Sem o zoom automático para este take. Ajuste manualmente ou restaure a IA.</p>':''}<label class="block text-xs font-bold text-gray-500 mt-3">Zoom <input class="preview-range mt-1" data-transform="scale" type="range" min="1" max="2" step=".01" value="${current.scale}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Horizontal <input class="preview-range mt-1" data-transform="x" type="range" min="-1" max="1" step=".01" value="${current.x}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Vertical <input class="preview-range mt-1" data-transform="y" type="range" min="-1" max="1" step=".01" value="${current.y}"></label><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-reframe-original ${isOriginal?'disabled':''}>Voltar ao original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-reframe-auto ${isOriginal?'':'disabled'}>Restaurar IA</button></div><small class="text-gray-400 block mt-2" data-saved>Salvo</small>`;const queueTransformSave=()=>{const values=Object.fromEntries([...card.querySelectorAll('[data-transform]')].map(field=>[field.dataset.transform,Number(field.value)])),scope=focusSelectedTakeForTransform();applyDirectTransform({kind:'video',item,values},values);card.querySelector('[data-saved]').textContent='Salvando…';const version=(card._transformSaveVersion||0)+1;card._transformSaveVersion=version;clearTimeout(card._timer);card._timer=setTimeout(()=>saveTransform(item.id,values,card,version,scope),220)};card.querySelectorAll('[data-transform]').forEach(input=>{input.oninput=queueTransformSave;input.onchange=queueTransformSave});card.querySelector('[data-reframe-original]').onclick=()=>saveTransform(item.id,{restore_original:true},card,null,focusSelectedTakeForTransform());card.querySelector('[data-reframe-auto]').onclick=()=>saveTransform(item.id,{restore_auto:true},card,null,focusSelectedTakeForTransform());list.append(card)});
-        if(isVideoSelection){const sourceId=String(inspectorSelection.id),defaults={brightness:0,contrast:100,saturation:100,temperature:0,red:0,yellow:0,green:0,cyan:0,blue:0,magenta:0},current={...defaults,...((timeline.decisions||[]).find(item=>item.type==='color_adjustment'&&String(item.source_id)===sourceId)?.metadata?.adjustment||{})},card=document.createElement('article'),basic=[['Brilho','brightness',-100,100],['Contraste','contrast',0,200],['Saturação','saturation',0,200],['Temperatura','temperature',-100,100]],mixer=[['Vermelho','red'],['Amarelo','yellow'],['Verde','green'],['Ciano','cyan'],['Azul','blue'],['Magenta','magenta']];card.className='preview-decision';const slider=([label,key,min=-100,max=100])=>`<label class="block text-xs font-bold text-gray-500 mt-3">${label}<input data-color="${key}" class="preview-range mt-1" type="range" min="${min}" max="${max}" step="1" value="${current[key]}"></label>`;card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Cor</span><strong class="block mt-2">Correção básica</strong><small class="text-gray-500 block mt-1">Aplicada somente neste take e no render final.</small></div><i class="fas fa-sliders text-amber-400"></i></div>${basic.map(slider).join('')}<div class="mt-5 pt-4 border-t border-slate-700"><strong class="text-sm">Misturador de cores</strong><small class="block text-xs text-gray-400 mt-1">Ajuste a presença de cada família de cor.</small>${mixer.map(slider).join('')}</div><div class="flex justify-between items-center mt-3"><button type="button" class="text-xs font-bold text-gray-400" data-reset-color>Restaurar cor</button><small class="text-gray-400" data-color-saved>Salvo</small></div>`;const valuesFromCard=()=>Object.fromEntries([...card.querySelectorAll('[data-color]')].map(field=>[field.dataset.color,Number(field.value)]));const preview=values=>{const wasUsingMaster=useReviewMaster(),clip=(timeline.clips||[]).find(item=>String(item.asset_id)===sourceId&&globalMs>=item.timeline_in_ms&&globalMs<item.timeline_out_ms);if(clip){clip.color_adjustment={...defaults,...values};activeClip=clip;if(wasUsingMaster){timeline.review_master_url=null;seek(globalMs,!video.paused)}else renderPosition()}};const save=()=>{const values=valuesFromCard(),saved=card.querySelector('[data-color-saved]');preview(values);saved.textContent='Salvando…';clearTimeout(card._colorTimer);card._colorTimer=setTimeout(async()=>{try{applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}colors/${sourceId}/`,values),false,true);saved.textContent='Salvo'}catch(error){saved.textContent=error.message}},220)};card.querySelectorAll('[data-color]').forEach(input=>input.oninput=save);card.querySelector('[data-reset-color]').onclick=async()=>{preview(defaults);try{applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}colors/${sourceId}/`,{reset:true}),true,true)}catch(error){alert(error.message)}};list.append(card)}
+        reframeDecisions.forEach(item=>{const current=item.metadata?.manual_transform||{scale:1,x:0,y:0},isOriginal=item.enabled===false,card=document.createElement('article');card.className='preview-decision';card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Enquadramento</span><strong class="block mt-2">${isOriginal?'Enquadramento original':'Ajuste fino'}</strong></div><i class="fas fa-crop-simple text-red-600"></i></div>${isOriginal?'<p class="text-xs text-gray-400 mt-2">Sem o zoom automático para este take. Ajuste manualmente ou restaure a IA.</p>':''}<label class="block text-xs font-bold text-gray-500 mt-3">Zoom <input class="preview-range mt-1" data-transform="scale" type="range" min="1" max="2" step=".01" value="${current.scale}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Horizontal <input class="preview-range mt-1" data-transform="x" type="range" min="-1" max="1" step=".01" value="${current.x}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Vertical <input class="preview-range mt-1" data-transform="y" type="range" min="-1" max="1" step=".01" value="${current.y}"></label><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-reframe-original ${isOriginal?'disabled':''}>Voltar ao original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-reframe-auto ${isOriginal?'':'disabled'}>Restaurar IA</button></div><small class="text-gray-400 block mt-2" data-saved>Salvo</small>`;const queueTransformSave=()=>{const values=Object.fromEntries([...card.querySelectorAll('[data-transform]')].map(field=>[field.dataset.transform,Number(field.value)])),scope=focusSelectedTakeForTransform();applyDirectTransform({kind:'video',item,values},values);card.querySelector('[data-saved]').textContent='Salvando…';const version=(card._transformSaveVersion||0)+1;card._transformSaveVersion=version;editorPersistence.schedule(`transform:${item.id}:${scope.segment_start_ms}:${scope.segment_end_ms}`,()=>saveTransform(item.id,values,card,version,scope),220)};card.querySelectorAll('[data-transform]').forEach(input=>{input.oninput=queueTransformSave;input.onchange=queueTransformSave});card.querySelector('[data-reframe-original]').onclick=()=>saveTransform(item.id,{restore_original:true},card,null,focusSelectedTakeForTransform());card.querySelector('[data-reframe-auto]').onclick=()=>saveTransform(item.id,{restore_auto:true},card,null,focusSelectedTakeForTransform());list.append(card)});
+        if(isVideoSelection){const sourceId=String(inspectorSelection.id),defaults={brightness:0,contrast:100,saturation:100,temperature:0,red:0,yellow:0,green:0,cyan:0,blue:0,magenta:0},current={...defaults,...((timeline.decisions||[]).find(item=>item.type==='color_adjustment'&&String(item.source_id)===sourceId)?.metadata?.adjustment||{})},card=document.createElement('article'),basic=[['Brilho','brightness',-100,100],['Contraste','contrast',0,200],['Saturação','saturation',0,200],['Temperatura','temperature',-100,100]],mixer=[['Vermelho','red'],['Amarelo','yellow'],['Verde','green'],['Ciano','cyan'],['Azul','blue'],['Magenta','magenta']];card.className='preview-decision';const slider=([label,key,min=-100,max=100])=>`<label class="block text-xs font-bold text-gray-500 mt-3">${label}<input data-color="${key}" class="preview-range mt-1" type="range" min="${min}" max="${max}" step="1" value="${current[key]}"></label>`;card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Cor</span><strong class="block mt-2">Correção básica</strong><small class="text-gray-500 block mt-1">Aplicada somente neste take e no render final.</small></div><i class="fas fa-sliders text-amber-400"></i></div>${basic.map(slider).join('')}<div class="mt-5 pt-4 border-t border-slate-700"><strong class="text-sm">Misturador de cores</strong><small class="block text-xs text-gray-400 mt-1">Ajuste a presença de cada família de cor.</small>${mixer.map(slider).join('')}</div><div class="flex justify-between items-center mt-3"><button type="button" class="text-xs font-bold text-gray-400" data-reset-color>Restaurar cor</button><small class="text-gray-400" data-color-saved>Salvo</small></div>`;const valuesFromCard=()=>Object.fromEntries([...card.querySelectorAll('[data-color]')].map(field=>[field.dataset.color,Number(field.value)]));const preview=values=>{let decision=timeline.decisions.find(item=>item.type==='color_adjustment'&&String(item.source_id)===sourceId);if(!decision){decision={id:`local-color-${sourceId}`,type:'color_adjustment',source_id:sourceId,metadata:{}};timeline.decisions.push(decision)}decision.metadata={...decision.metadata,adjustment:{...defaults,...values}};for(const sourceClip of timeline.clips.filter(item=>String(item.asset_id)===sourceId))sourceClip.color_adjustment={...defaults,...values};const wasUsingMaster=useReviewMaster(),clip=(timeline.clips||[]).find(item=>String(item.asset_id)===sourceId&&globalMs>=item.timeline_in_ms&&globalMs<item.timeline_out_ms);if(clip){clip.color_adjustment={...defaults,...values};activeClip=clip;if(wasUsingMaster){timeline.review_master_url=null;seek(globalMs,!video.paused)}else requestPreviewRender()}};const save=()=>{const values=valuesFromCard(),saved=card.querySelector('[data-color-saved]');preview(values);saved.textContent='Salvando…';editorPersistence.schedule(`color:${sourceId}`,async()=>{try{applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}colors/${sourceId}/`,values),false,true);saved.textContent='Salvo'}catch(error){saved.textContent=error.message}},220)};card.querySelectorAll('[data-color]').forEach(input=>input.oninput=save);card.querySelector('[data-reset-color]').onclick=async()=>{preview(defaults);try{applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}colors/${sourceId}/`,{reset:true}),true,true)}catch(error){alert(error.message)}};list.append(card)}
         const colorSaved=list.querySelector('[data-color-saved]'),colorCard=colorSaved?.closest('.preview-decision');
         if(colorCard&&!colorCard.dataset.colorClipboard){colorCard.dataset.colorClipboard='true';const actions=document.createElement('div');actions.className='grid grid-cols-2 gap-2 mt-3';actions.innerHTML=`<button type="button" class="media-btn media-muted !py-2" data-copy-color><i class="fas fa-copy"></i> Copiar cor</button><button type="button" class="media-btn media-muted !py-2" data-paste-color ${colorSettingsClipboard?'':'disabled'}><i class="fas fa-paste"></i> Colar cor</button>`;colorSaved.closest('div').before(actions);const copy=actions.querySelector('[data-copy-color]'),paste=actions.querySelector('[data-paste-color]');copy.onclick=()=>{colorSettingsClipboard=Object.fromEntries([...colorCard.querySelectorAll('[data-color]')].map(field=>[field.dataset.color,Number(field.value)]));try{sessionStorage.setItem(COLOR_CLIPBOARD_KEY,JSON.stringify(colorSettingsClipboard))}catch(_){}paste.disabled=false;copy.innerHTML='<i class="fas fa-check"></i> Cor copiada'};paste.onclick=()=>{if(!colorSettingsClipboard)return;colorCard.querySelectorAll('[data-color]').forEach(field=>{if(Object.hasOwn(colorSettingsClipboard,field.dataset.color))field.value=colorSettingsClipboard[field.dataset.color]});const first=colorCard.querySelector('[data-color]');first?.dispatchEvent(new Event('input',{bubbles:true}));paste.innerHTML='<i class="fas fa-check"></i> Cor colada'}}
         if(isAudioSelection){const source=asset(inspectorSelection.id)||{},card=document.createElement('article');card.className='preview-decision';card.innerHTML=`<div class="flex items-center justify-between gap-2"><div><span class="preview-pill">Áudio original</span><strong class="block mt-2 truncate">${esc(source.name||inspectorSelection.label||'Take de vídeo')}</strong><small class="text-gray-500 block mt-1">As correções detectadas abaixo são aplicadas somente a este áudio.</small></div><i class="fas fa-volume-high text-blue-400"></i></div>`;list.append(card)}
@@ -1224,12 +1497,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             : timeline.decisions.filter(item=>item.type==='audio_noise_reduction');
         noiseDecisions.forEach(item=>{const restored=item.enabled===false,start=Number(item.source_in_ms||0),end=Number(item.source_out_ms||start),card=document.createElement('article');card.className=`preview-decision ${restored?'is-restored':''}`;card.dataset.start=start;card.dataset.end=end;card.innerHTML=`<button type="button" class="w-full text-left" data-jump><div class="flex items-start justify-between gap-2"><div><span class="preview-pill">Ruído</span><strong class="block mt-2">${item.metadata?.label||item.reason||'Ruído detectado'}</strong><small class="text-gray-500">${fmt(start)} — ${fmt(end)}</small></div><i class="fas fa-wave-square text-red-600 mt-1"></i></div></button><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="original"><i class="fas fa-play"></i> Original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="treated"><i class="fas fa-play"></i> Tratado</button></div><div class="flex gap-2 mt-2"><button class="media-btn media-muted !py-2 flex-1" data-decision="false">Usar original</button><button class="media-btn media-primary !py-2 flex-1" data-decision="true">${restored?'Aplicar redução':'Redução aplicada'}</button></div><audio class="hidden" preload="none"></audio>`;card.querySelector('[data-jump]').onclick=()=>seek(start);card.querySelectorAll('[data-play]').forEach(btn=>btn.onclick=async()=>{const audio=card.querySelector('audio');const url=btn.dataset.play==='treated'?item.metadata?.preview_treated_url:item.metadata?.preview_original_url;if(!url)return;try{audio.pause();if(audio.dataset.source!==url){audio.dataset.source=url;audio.src=url;audio.load()}audio.classList.remove('hidden');await audio.play()}catch(error){if(error.name!=='AbortError')alert('Não foi possível reproduzir esta comparação de áudio.')}});card.querySelectorAll('[data-decision]').forEach(btn=>btn.onclick=()=>mutateDecision(item.id,btn.dataset.decision==='true'));list.append(card)});
         const brollItems=inspectorSelection?.kind==='broll'?(timeline.brolls||[]).filter(item=>item.id===inspectorSelection.id):[];
-        brollItems.forEach(item=>{const media=asset(`broll-asset-${item.asset_id}`)||{},tx=item.transform||{},card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const transformField=(label,key,min,max,step,value)=>`<label class="text-xs font-bold text-gray-500">${label}<span class="flex items-center gap-2 mt-1"><input data-broll-transform-range="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" class="preview-range flex-1"><input data-broll-transform="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${value}" class="w-16 shrink-0 rounded-lg border px-2 py-1 text-xs tabular-nums"></span></label>`;card.innerHTML=`<div class="flex items-center justify-between gap-2"><div class="min-w-0"><span class="preview-pill">B-roll · ${esc(item.media_type)}</span><strong class="block mt-2 truncate">${esc(media.name||'Asset visual')}</strong><small class="text-gray-500">${item.source==='AI'?'Posicionado pela IA':'Ajustado pelo usuário'}${item.confidence!=null?` · ${Math.round(Number(item.confidence)*100)}%`:''}</small></div><button data-jump class="text-violet-700"><i class="fas fa-eye"></i></button></div><div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (min)<input data-broll-number="start_ms" type="number" min="0" step="0.001" value="${minFromMs(item.start_ms)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label><label class="text-xs font-bold text-gray-500">Fim (min)<input data-broll-number="end_ms" type="number" min="0.001" step="0.001" value="${minFromMs(item.end_ms)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label>${item.media_type==='VIDEO'?`<label class="text-xs font-bold text-gray-500">Trecho inicial (min)<input data-broll-number="source_in_ms" type="number" min="0" step="0.001" value="${minFromMs(item.source_in_ms||0)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label><label class="text-xs font-bold text-gray-500">Trecho final (min)<input data-broll-number="source_out_ms" type="number" min="0.001" step="0.001" value="${minFromMs(item.source_out_ms||0)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label>`:''}</div><label class="block text-xs font-bold text-gray-500 mt-2">Exibição<select data-broll-mode class="mt-1 w-full rounded-lg border px-2 py-1"><option>FULLSCREEN</option><option>OVERLAY</option></select></label>${item.media_type==='IMAGE'?`<label class="block text-xs font-bold text-gray-500 mt-2">Movimento<select data-broll-motion class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>ZOOM_IN</option><option>ZOOM_OUT</option><option>PAN_LEFT</option><option>PAN_RIGHT</option></select></label>`:''}<div class="grid grid-cols-1 gap-2 mt-2">${transformField('X','x',0,1,'0.01',tx.x??.5)}${transformField('Y','y',0,1,'0.01',tx.y??.5)}${transformField('Escala','scale',0.08,1,'0.01',tx.scale??1)}</div><div class="flex items-center justify-between gap-2 mt-3"><small class="text-gray-400" data-saved>Salvo</small><div class="flex flex-wrap justify-end gap-x-3 gap-y-1"><button type="button" class="text-xs font-bold text-violet-700" data-copy-broll-settings title="Copiar exibição, posição, animações e trecho"><i class="fas fa-copy"></i> Copiar</button><button type="button" class="text-xs font-bold text-violet-700 ${brollSettingsClipboard?'':'hidden'}" data-paste-broll-settings ${brollSettingsClipboard?'':'disabled'} title="Colar ajustes copiados de outro B-roll"><i class="fas fa-paste"></i> Colar</button><button type="button" class="text-xs font-bold text-gray-600" data-restore-broll>Restaurar IA</button><button type="button" class="text-xs font-bold text-red-600" data-delete-broll>Remover</button></div></div>`;const assetField=document.createElement('label');assetField.className='block text-xs font-bold text-gray-500 mt-2';assetField.innerHTML=`Asset<select data-broll-asset class="mt-1 w-full rounded-lg border px-2 py-1">${(timeline.assets||[]).filter(value=>value.asset_id).map(value=>`<option value="${esc(value.asset_id)}">${esc(value.name)}</option>`).join('')}</select>`;card.firstElementChild.after(assetField);card.querySelector('[data-broll-asset]').value=String(item.asset_id);card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);card.querySelector('[data-broll-mode]').value=item.display_mode||'FULLSCREEN';if(card.querySelector('[data-broll-motion]'))card.querySelector('[data-broll-motion]').value=item.motion?.type||'NONE';const queue=()=>{card.querySelector('[data-saved]').textContent='Salvando…';clearTimeout(card._timer);card._timer=setTimeout(()=>saveBroll(item.id,card),450)};card.querySelectorAll('[data-broll-transform-range]').forEach(range=>{const num=card.querySelector(`[data-broll-transform="${range.dataset.brollTransformRange}"]`);if(!num)return;range.oninput=()=>{num.value=range.value;queue()};num.oninput=()=>{const lo=Number(range.min),hi=Number(range.max),v=Math.max(lo,Math.min(hi,Number(num.value)||lo));num.value=String(v);range.value=v;queue()}});card.querySelectorAll('[data-broll-number], select, [data-broll-asset]').forEach(field=>field.oninput=queue);card.querySelector('[data-copy-broll-settings]').onclick=()=>copyBrollSettings(card);card.querySelector('[data-paste-broll-settings]').onclick=()=>pasteBrollSettings(item.id,card);card.querySelector('[data-delete-broll]').onclick=()=>deleteBroll(item.id);card.querySelector('[data-restore-broll]').onclick=()=>restoreBroll(item.id);list.append(card)});
+        brollItems.forEach(item=>{const media=asset(`broll-asset-${item.asset_id}`)||{},tx=item.transform||{},card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const transformField=(label,key,min,max,step,value)=>`<label class="text-xs font-bold text-gray-500">${label}<span class="flex items-center gap-2 mt-1"><input data-broll-transform-range="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" class="preview-range flex-1"><input data-broll-transform="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${value}" class="w-16 shrink-0 rounded-lg border px-2 py-1 text-xs tabular-nums"></span></label>`;card.innerHTML=`<div class="flex items-center justify-between gap-2"><div class="min-w-0"><span class="preview-pill">B-roll · ${esc(item.media_type)}</span><strong class="block mt-2 truncate">${esc(media.name||'Asset visual')}</strong><small class="text-gray-500">${item.source==='AI'?'Posicionado pela IA':'Ajustado pelo usuário'}${item.confidence!=null?` · ${Math.round(Number(item.confidence)*100)}%`:''}</small></div><button data-jump class="text-violet-700"><i class="fas fa-eye"></i></button></div><div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (min)<input data-broll-number="start_ms" type="number" min="0" step="0.001" value="${minFromMs(item.start_ms)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label><label class="text-xs font-bold text-gray-500">Fim (min)<input data-broll-number="end_ms" type="number" min="0.001" step="0.001" value="${minFromMs(item.end_ms)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label>${item.media_type==='VIDEO'?`<label class="text-xs font-bold text-gray-500">Trecho inicial (min)<input data-broll-number="source_in_ms" type="number" min="0" step="0.001" value="${minFromMs(item.source_in_ms||0)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label><label class="text-xs font-bold text-gray-500">Trecho final (min)<input data-broll-number="source_out_ms" type="number" min="0.001" step="0.001" value="${minFromMs(item.source_out_ms||0)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label>`:''}</div><label class="block text-xs font-bold text-gray-500 mt-2">Exibição<select data-broll-mode class="mt-1 w-full rounded-lg border px-2 py-1"><option>FULLSCREEN</option><option>OVERLAY</option></select></label>${item.media_type==='IMAGE'?`<label class="block text-xs font-bold text-gray-500 mt-2">Movimento<select data-broll-motion class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>ZOOM_IN</option><option>ZOOM_OUT</option><option>PAN_LEFT</option><option>PAN_RIGHT</option></select></label>`:''}<div class="grid grid-cols-1 gap-2 mt-2">${transformField('X','x',0,1,'0.01',tx.x??.5)}${transformField('Y','y',0,1,'0.01',tx.y??.5)}${transformField('Escala','scale',0.08,1,'0.01',tx.scale??1)}</div><div class="flex items-center justify-between gap-2 mt-3"><small class="text-gray-400" data-saved>Salvo</small><div class="flex flex-wrap justify-end gap-x-3 gap-y-1"><button type="button" class="text-xs font-bold text-violet-700" data-copy-broll-settings title="Copiar exibição, posição, animações e trecho"><i class="fas fa-copy"></i> Copiar</button><button type="button" class="text-xs font-bold text-violet-700 ${brollSettingsClipboard?'':'hidden'}" data-paste-broll-settings ${brollSettingsClipboard?'':'disabled'} title="Colar ajustes copiados de outro B-roll"><i class="fas fa-paste"></i> Colar</button><button type="button" class="text-xs font-bold text-gray-600" data-restore-broll>Restaurar IA</button><button type="button" class="text-xs font-bold text-red-600" data-delete-broll>Remover</button></div></div>`;const assetField=document.createElement('label');assetField.className='block text-xs font-bold text-gray-500 mt-2';assetField.innerHTML=`Asset<select data-broll-asset class="mt-1 w-full rounded-lg border px-2 py-1">${(timeline.assets||[]).filter(value=>value.asset_id).map(value=>`<option value="${esc(value.asset_id)}">${esc(value.name)}</option>`).join('')}</select>`;card.firstElementChild.after(assetField);card.querySelector('[data-broll-asset]').value=String(item.asset_id);card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);card.querySelector('[data-broll-mode]').value=item.display_mode||'FULLSCREEN';if(card.querySelector('[data-broll-motion]'))card.querySelector('[data-broll-motion]').value=item.motion?.type||'NONE';const queue=event=>{card.querySelector('[data-saved]').textContent='Salvando…';queueBrollSave(item,card,event?.target||event)};card.querySelectorAll('[data-broll-transform-range]').forEach(range=>{const num=card.querySelector(`[data-broll-transform="${range.dataset.brollTransformRange}"]`);if(!num)return;range.oninput=()=>{num.value=range.value;queue(range)};num.oninput=()=>{const lo=Number(range.min),hi=Number(range.max),v=Math.max(lo,Math.min(hi,Number(num.value)||lo));num.value=String(v);range.value=v;queue(num)}});card.querySelectorAll('[data-broll-number], select, [data-broll-asset]').forEach(field=>field.oninput=queue);card.querySelector('[data-copy-broll-settings]').onclick=()=>copyBrollSettings(card);card.querySelector('[data-paste-broll-settings]').onclick=()=>pasteBrollSettings(item.id,card);card.querySelector('[data-delete-broll]').onclick=()=>deleteBroll(item.id);card.querySelector('[data-restore-broll]').onclick=()=>restoreBroll(item.id);list.append(card)});
         list.querySelectorAll('[data-copy-broll-settings]').forEach(button=>{const actions=button.parentElement,card=button.closest('article');if(!actions||!card)return;actions.classList.add('broll-card-actions');card.firstElementChild.after(actions);card.querySelector('[data-saved]')?.remove()});
         [...list.querySelectorAll('[data-broll-mode]')].forEach((modeField,index)=>{const item=brollItems[index],card=modeField.closest('article');if(!item||!card)return;modeField.closest('label').insertAdjacentHTML('afterend',`<div class="grid grid-cols-2 gap-2 mt-2"><label class="text-xs font-bold text-gray-500">Entrada<select data-broll-entry class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE</option><option>SCALE</option></select></label><label class="text-xs font-bold text-gray-500">Saída<select data-broll-exit class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE</option><option>SCALE</option></select></label></div>`);const entry=card.querySelector('[data-broll-entry]'),exit=card.querySelector('[data-broll-exit]');entry.value=item.entry?.type||'NONE';exit.value=item.exit?.type||'NONE';entry.oninput=modeField.oninput;exit.oninput=modeField.oninput;compactBrollInspector(card)});
         list.querySelectorAll('[data-broll-mode]').forEach(modeField=>{const card=modeField.closest('article'),fullscreen=modeField.value!=='OVERLAY',scale=card?.querySelector('[data-broll-transform="scale"]'),range=card?.querySelector('[data-broll-transform-range="scale"]');if(scale)scale.max=fullscreen?'2':'.9';if(range)range.max=fullscreen?'2':'.9'});
         const overlayItems=inspectorSelection?.kind==='overlay'?(timeline.overlays||[]).filter(item=>item.id===inspectorSelection.id):[];
-        overlayItems.forEach(item=>{const card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const contentFields=Object.entries(item.content_schema||{});const fields=(contentFields.length?contentFields:Object.entries(item.content||{}).map(([key])=>[key,{label:key}])).map(([key,options])=>`<label class="block text-xs font-bold text-gray-500 mt-2">${esc(options.label||key)}<input data-overlay-content="${esc(key)}" value="${esc(item.content?.[key]||'')}" maxlength="${Number(options.max_length||2048)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-normal"></label>`).join('');card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">${item.type==='TEXT'?'Texto':'QR Code'}</span><strong class="block mt-2">${esc(item.purpose||item.preset||'Elemento visual')}</strong></div><button data-jump class="text-red-600"><i class="fas fa-eye"></i></button></div>${fields}<div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (s)<input data-overlay-number="start_ms" type="number" min="0" step=".1" value="${item.start_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Fim (s)<input data-overlay-number="end_ms" type="number" min=".1" step=".1" value="${item.end_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Horizontal<input data-overlay-position="x" type="range" min="0" max="1" step=".01" value="${item.position?.x??.5}" class="preview-range"></label><label class="text-xs font-bold text-gray-500">Vertical<input data-overlay-position="y" type="range" min="0" max="1" step=".01" value="${item.position?.y??.82}" class="preview-range"></label></div><label class="block text-xs font-bold text-gray-500 mt-2">Animação<select data-overlay-animation class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE_UP</option><option>SLIDE_DOWN</option><option>SLIDE_LEFT</option><option>SLIDE_RIGHT</option><option>POP</option></select></label><div class="flex items-center justify-between mt-3"><small class="text-gray-400" data-saved>Salvo</small>${item.source==='MANUAL'?'<button class="text-xs font-bold text-red-600" data-delete-overlay>Remover</button>':''}</div>`;card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);card.querySelector('[data-overlay-animation]').value=item.animation?.type||'NONE';const queue=()=>{card.querySelector('[data-saved]').textContent='Salvando…';clearTimeout(card._timer);card._timer=setTimeout(()=>saveOverlay(item.id,card),450)};card.querySelectorAll('input,select').forEach(field=>field.oninput=queue);card.querySelector('[data-delete-overlay]')?.addEventListener('click',()=>deleteOverlay(item.id));list.append(card)});
+        overlayItems.forEach(item=>{const card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const contentFields=Object.entries(item.content_schema||{});const fields=(contentFields.length?contentFields:Object.entries(item.content||{}).map(([key])=>[key,{label:key}])).map(([key,options])=>`<label class="block text-xs font-bold text-gray-500 mt-2">${esc(options.label||key)}<input data-overlay-content="${esc(key)}" value="${esc(item.content?.[key]||'')}" maxlength="${Number(options.max_length||2048)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-normal"></label>`).join('');card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">${item.type==='TEXT'?'Texto':'QR Code'}</span><strong class="block mt-2">${esc(item.purpose||item.preset||'Elemento visual')}</strong></div><button data-jump class="text-red-600"><i class="fas fa-eye"></i></button></div>${fields}<div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (s)<input data-overlay-number="start_ms" type="number" min="0" step=".1" value="${item.start_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Fim (s)<input data-overlay-number="end_ms" type="number" min=".1" step=".1" value="${item.end_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Horizontal<input data-overlay-position="x" type="range" min="0" max="1" step=".01" value="${item.position?.x??.5}" class="preview-range"></label><label class="text-xs font-bold text-gray-500">Vertical<input data-overlay-position="y" type="range" min="0" max="1" step=".01" value="${item.position?.y??.82}" class="preview-range"></label></div><label class="block text-xs font-bold text-gray-500 mt-2">Animação<select data-overlay-animation class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE_UP</option><option>SLIDE_DOWN</option><option>SLIDE_LEFT</option><option>SLIDE_RIGHT</option><option>POP</option></select></label><div class="flex items-center justify-between mt-3"><small class="text-gray-400" data-saved>Salvo</small>${item.source==='MANUAL'?'<button class="text-xs font-bold text-red-600" data-delete-overlay>Remover</button>':''}</div>`;card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);card.querySelector('[data-overlay-animation]').value=item.animation?.type||'NONE';const queue=event=>{card.querySelector('[data-saved]').textContent='Salvando…';queueOverlaySave(item,card,event.target)};card.querySelectorAll('input,select').forEach(field=>field.oninput=queue);card.querySelector('[data-delete-overlay]')?.addEventListener('click',()=>deleteOverlay(item.id));list.append(card)});
         if(inspectorSelection?.kind==='music'&&timeline.music){
             const config=timeline.music,card=document.createElement('article'),volume=Math.round(Number(config.volume||0)*100);
             card.className='preview-decision';
@@ -1280,7 +1553,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const subtitleEditModal=document.getElementById('subtitle-edit-modal'), subtitleEditInput=document.getElementById('subtitle-edit-input'), saveSubtitleEdit=document.getElementById('save-subtitle-edit');
     function closeSubtitleEditor(){subtitleEditModal.classList.remove('is-open');editingSubtitleCue=null}
     function openSubtitleEditor(cue){editingSubtitleCue=cue;document.getElementById('subtitle-edit-language').textContent=String(cue.language||'').toUpperCase();document.getElementById('subtitle-edit-time').textContent=`${fmt(cue.start_ms)} — ${fmt(cue.end_ms)}`;subtitleEditInput.value=cue.text;subtitleEditModal.classList.add('is-open');requestAnimationFrame(()=>subtitleEditInput.focus())}
-    async function saveOpenSubtitleEditor(){if(!editingSubtitleCue)return;const text=subtitleEditInput.value.trim();if(!text){alert('A legenda não pode ficar vazia.');return}saveSubtitleEdit.disabled=true;try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}subtitles/${editingSubtitleCue.id}/`,{text});applyTimeline(data);closeSubtitleEditor()}catch(error){alert(error.message)}finally{saveSubtitleEdit.disabled=false}}
+    async function saveOpenSubtitleEditor(){if(!editingSubtitleCue)return;const text=subtitleEditInput.value.trim();if(!text){alert('A legenda não pode ficar vazia.');return}const localCue=timeline.captions.find(cue=>String(cue.id)===String(editingSubtitleCue.id));if(localCue)localCue.text=text;editableLocalPreview();renderPosition();saveSubtitleEdit.disabled=true;try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}subtitles/${editingSubtitleCue.id}/`,{text});applyTimeline(data);closeSubtitleEditor()}catch(error){alert(error.message)}finally{saveSubtitleEdit.disabled=false}}
     async function deleteCaption(id){
         if(!confirm('Remover esta legenda? Você poderá desfazer a ação.'))return;
         const data=await api(`{% url 'external_media_project_preview' project.public_id %}subtitles/${id}/`,{delete:true});
@@ -1289,13 +1562,54 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         renderEditorTimeline();
     }
     async function saveTransform(id,values,card,version=null,frozenScope=null){try{const wasUsingReviewMaster=useReviewMaster(),showChangedTake=Boolean(values.restore_original||values.restore_auto),changedTakeStart=showChangedTake?selectedSegment?.start:null,scope=frozenScope||(inspectorSelection?.kind==='video'?activeTransformScope():{}),data=await api(`{% url 'external_media_project_preview' project.public_id %}transforms/${id}/`,{...values,...scope});if(version!==null&&card._transformSaveVersion!==version)return;card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,wasUsingReviewMaster!==Boolean(data.timeline.review_master_url));if(Number.isFinite(changedTakeStart))seek(changedTakeStart,!video.paused)}catch(error){if(version!==null&&card._transformSaveVersion!==version)return;card.querySelector('[data-saved]').textContent=error.message}}
-    async function saveOverlay(id,card){const content=Object.fromEntries([...card.querySelectorAll('[data-overlay-content]')].map(field=>[field.dataset.overlayContent,field.value]));const position=Object.fromEntries([...card.querySelectorAll('[data-overlay-position]')].map(field=>[field.dataset.overlayPosition,Number(field.value)]));const numbers=Object.fromEntries([...card.querySelectorAll('[data-overlay-number]')].map(field=>[field.dataset.overlayNumber,Math.round(Number(field.value)*1000)]));try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`,{content,position,animation:{type:card.querySelector('[data-overlay-animation]').value,duration:.35,easing:'ease-out'},...numbers});card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
+    const pendingPropertyEdits=new Map();
+    function mergePropertyPatch(target,patch){
+        for(const [key,value] of Object.entries(patch))target[key]=value&&typeof value==='object'&&!Array.isArray(value)?{...(target[key]||{}),...value}:value;
+        return target;
+    }
+    function editableLocalPreview(){
+        if(!useReviewMaster())return;
+        timeline.review_master_url=null;timeline.review_master_is_edited=false;timeline.review_rendered_layers=[];timeline.review_proxy_status='SOURCE';
+        renderReviewProxyStatus();seek(globalMs,!video.paused);
+    }
+    function queuePropertySave(kind,item,card,patch){
+        const model=(kind==='broll'?timeline.brolls:timeline.overlays).find(value=>String(value.id)===String(item.id));
+        if(model)mergePropertyPatch(model,patch);
+        invalidatePreviewIndexes();if('start_ms' in patch)card.dataset.start=patch.start_ms;if('end_ms' in patch)card.dataset.end=patch.end_ms;refreshInspectorTiming();
+        editableLocalPreview();requestPreviewRender();
+        const key=`${kind}:${item.id}`,pending=mergePropertyPatch(pendingPropertyEdits.get(key)||{},patch);
+        pendingPropertyEdits.set(key,pending);
+        editorPersistence.schedule(key,()=>{
+            const payload=JSON.parse(JSON.stringify(pendingPropertyEdits.get(key)));pendingPropertyEdits.delete(key);
+            return (kind==='broll'?saveBroll:saveOverlay)(item.id,card,payload);
+        },450);
+    }
+    function queueBrollSave(item,card,field){
+        if(!field)return;
+        let patch={};
+        const transform=field.dataset.brollTransformRange||field.dataset.brollTransform;
+        if(transform)patch={transform:{[transform]:Number(field.value)}};
+        else if(field.dataset.brollNumber)patch={[field.dataset.brollNumber]:msFromMin(field.value)};
+        else if(field.hasAttribute('data-broll-asset'))patch={asset_id:field.value};
+        else if(field.hasAttribute('data-broll-mode'))patch={display_mode:field.value};
+        else if(field.hasAttribute('data-broll-motion'))patch={motion:{type:field.value}};
+        queuePropertySave('broll',item,card,patch);
+    }
+    function queueOverlaySave(item,card,field){
+        let patch={};
+        if(field.dataset.overlayContent)patch={content:{[field.dataset.overlayContent]:field.value}};
+        else if(field.dataset.overlayPosition)patch={position:{[field.dataset.overlayPosition]:Number(field.value)}};
+        else if(field.dataset.overlayNumber)patch={[field.dataset.overlayNumber]:Math.round(Number(field.value)*1000)};
+        else if(field.hasAttribute('data-overlay-animation'))patch={animation:{type:field.value}};
+        queuePropertySave('overlay',item,card,patch);
+    }
+    async function saveOverlay(id,card,payload){try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`,payload);card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
     async function deleteOverlay(id){if(!confirm('Remover este elemento deste projeto?'))return;applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`,{delete:true}),true,false)}
     function readBrollStyleFromCard(card){const transform=Object.fromEntries([...card.querySelectorAll('[data-broll-transform]')].map(field=>[field.dataset.brollTransform,Number(field.value)])),motion=card.querySelector('[data-broll-motion]')?.value,payload={display_mode:card.querySelector('[data-broll-mode]').value,transform,entry:{type:card.querySelector('[data-broll-entry]')?.value||'NONE',duration_ms:300,easing:'ease-out'},exit:{type:card.querySelector('[data-broll-exit]')?.value||'NONE',duration_ms:250,easing:'ease-in'}};if(motion)payload.motion={type:motion,from_scale:1,to_scale:1.06,easing:'EASE_IN_OUT'};const sourceIn=card.querySelector('[data-broll-number="source_in_ms"]'),sourceOut=card.querySelector('[data-broll-number="source_out_ms"]');if(sourceIn)payload.source_in_ms=msFromMin(sourceIn.value);if(sourceOut)payload.source_out_ms=msFromMin(sourceOut.value);return payload}
     function updateBrollPasteButtons(){document.querySelectorAll('[data-paste-broll-settings]').forEach(btn=>{btn.classList.toggle('hidden',!brollSettingsClipboard);btn.disabled=!brollSettingsClipboard})}
     function copyBrollSettings(card){brollSettingsClipboard=readBrollStyleFromCard(card);try{sessionStorage.setItem(BROLL_CLIPBOARD_KEY,JSON.stringify(brollSettingsClipboard))}catch(_){}updateBrollPasteButtons();const saved=card.querySelector('[data-saved]');if(saved)saved.textContent='Ajustes copiados'}
     async function pasteBrollSettings(targetId,card){if(!brollSettingsClipboard)return;const saved=card.querySelector('[data-saved]');if(saved)saved.textContent='Colando…';try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${targetId}/`,{...brollSettingsClipboard});if(saved)saved.textContent='Ajustes colados';applyTimeline(data,true,false)}catch(error){if(saved)saved.textContent=error.message;alert(error.message)}}
-    async function saveBroll(id,card){const numbers=Object.fromEntries([...card.querySelectorAll('[data-broll-number]')].map(field=>[field.dataset.brollNumber,msFromMin(field.value)])),timingChanged=Number(card.dataset.start)!==Number(numbers.start_ms)||Number(card.dataset.end)!==Number(numbers.end_ms);try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,{...numbers,asset_id:card.querySelector('[data-broll-asset]').value,...readBrollStyleFromCard(card)});card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,timingChanged,timingChanged)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
+    async function saveBroll(id,card,payload){try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,payload);card.querySelector('[data-saved]').textContent='Salvo';applyTimeline(data,false,false)}catch(error){card.querySelector('[data-saved]').textContent=error.message}}
     async function deleteBroll(id){if(!confirm('Remover este B-roll da edição?'))return;applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,{delete:true}),true,false)}
     async function restoreBroll(id){applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,{restore:true}),true,false)}
     function selectedTimelineItemForDeletion(){
@@ -1342,21 +1656,28 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function renderReviewProxyStatus(){const status=timeline.review_proxy_status,labels={PENDING:'Atualizando preview contínuo…',READY:'Preview contínuo pronto',SOURCE:'Preview fiel do take original',DEFERRED:'Preview por trechos enquanto o contínuo é preparado',STALE:'Há uma revisão mais nova. Atualize a página.',ERROR:'Preview contínuo indisponível'};reviewProxyStatus.textContent=labels[status]||'';reviewProxyStatus.title=status==='ERROR'?(timeline.review_proxy_error||'Falha temporária ao gerar o preview contínuo.') : '';reviewProxyStatus.className=`preview-proxy-status ${status==='PENDING'?'is-pending':status==='READY'||status==='SOURCE'?'is-ready':status==='DEFERRED'||status==='STALE'?'is-fallback':status==='ERROR'?'is-error':''}`;reviewProxyStatus.classList.toggle('hidden',!labels[status]);reviewProxyRetry.classList.toggle('hidden',status!=='ERROR')}
     reviewProxyRetry.onclick=async()=>{reviewProxyRetry.disabled=true;try{const data=await api('{% url "external_media_project_preview_revision_proxy" project.public_id %}');timeline.review_proxy_status=data.status||'PENDING';timeline.review_proxy_error='';revisionProxyAttempts=0;renderReviewProxyStatus();scheduleRevisionProxyPoll()}catch(error){alert(error.message)}finally{reviewProxyRetry.disabled=false}};
     let revisionProxyTimer=null,revisionProxyAttempts=0;
-    function pollRevisionProxy(){if(!['PENDING','DEFERRED'].includes(timeline.review_proxy_status))return;fetch('{% url "external_media_project_preview_revision_proxy" project.public_id %}',{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(response=>response.json()).then(data=>{if(data.revision&&Number(data.revision)!==activePreviewRevision){timeline.review_proxy_status='STALE';renderReviewProxyStatus();return}if(data.status==='SOURCE'){timeline.review_master_url=null;timeline.review_rendered_layers=[];timeline.review_proxy_status='SOURCE';timeline.review_proxy_error='';renderReviewProxyStatus();seek(globalMs,!video.paused);return}if(data.status==='READY'){timeline.review_master_url=data.url;timeline.review_master_is_edited=true;timeline.review_rendered_layers=data.rendered_layers||[];timeline.review_proxy_status='READY';timeline.review_proxy_error='';revisionProxyAttempts=0;renderReviewProxyStatus();seek(globalMs,!video.paused);return}if(data.status==='ERROR'){timeline.review_proxy_status='ERROR';timeline.review_proxy_error=data.error||'';renderReviewProxyStatus();return}revisionProxyAttempts+=1;if(revisionProxyAttempts>=40){timeline.review_proxy_status='DEFERRED';renderReviewProxyStatus()}revisionProxyTimer=setTimeout(pollRevisionProxy,timeline.review_proxy_status==='DEFERRED'?10000:2500)}).catch(()=>{revisionProxyAttempts+=1;if(revisionProxyAttempts>=40){timeline.review_proxy_status='DEFERRED';renderReviewProxyStatus()}revisionProxyTimer=setTimeout(pollRevisionProxy,timeline.review_proxy_status==='DEFERRED'?10000:4000)})}
+    function pollRevisionProxy(){if(!['PENDING','DEFERRED'].includes(timeline.review_proxy_status))return;fetch('{% url "external_media_project_preview_revision_proxy" project.public_id %}',{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(response=>response.json()).then(data=>{if(editorPersistence.busy){revisionProxyTimer=setTimeout(pollRevisionProxy,2500);return}if(data.revision&&Number(data.revision)!==activePreviewRevision){timeline.review_proxy_status='STALE';renderReviewProxyStatus();return}if(data.status==='SOURCE'){timeline.review_master_url=null;timeline.review_rendered_layers=[];timeline.review_proxy_status='SOURCE';timeline.review_proxy_error='';renderReviewProxyStatus();seek(globalMs,!video.paused);return}if(data.status==='READY'){timeline.review_master_url=data.url;timeline.review_master_is_edited=true;timeline.review_rendered_layers=data.rendered_layers||[];timeline.review_proxy_status='READY';timeline.review_proxy_error='';revisionProxyAttempts=0;renderReviewProxyStatus();seek(globalMs,!video.paused);return}if(data.status==='ERROR'){timeline.review_proxy_status='ERROR';timeline.review_proxy_error=data.error||'';renderReviewProxyStatus();return}revisionProxyAttempts+=1;if(revisionProxyAttempts>=40){timeline.review_proxy_status='DEFERRED';renderReviewProxyStatus()}revisionProxyTimer=setTimeout(pollRevisionProxy,timeline.review_proxy_status==='DEFERRED'?10000:2500)}).catch(()=>{revisionProxyAttempts+=1;if(revisionProxyAttempts>=40){timeline.review_proxy_status='DEFERRED';renderReviewProxyStatus()}revisionProxyTimer=setTimeout(pollRevisionProxy,timeline.review_proxy_status==='DEFERRED'?10000:4000)})}
     function scheduleRevisionProxyPoll(){clearTimeout(revisionProxyTimer);revisionProxyAttempts=0;if(timeline.review_proxy_status==='PENDING')revisionProxyTimer=setTimeout(pollRevisionProxy,1500)}
-    function applyTimeline(data,rebuild=true,refreshPreview=true){const incomingRevision=Number(data.revision||0);if(incomingRevision&&incomingRevision<activePreviewRevision)return false;const runtimeMusic=timeline.music,previousSelection=selectedSegment?{...selectedSegment}:null;timeline=data.timeline;if(!timeline.music&&runtimeMusic)timeline.music=runtimeMusic;activePreviewRevision=Number(data.revision||activePreviewRevision);bladePoints=[...(timeline.video_splits_ms||[])];const segments=videoSegments();selectedSegment=previousSelection?segments.find(item=>String(item.assetId)===String(previousSelection.assetId)&&Number(item.masterStartMs)===Number(previousSelection.masterStartMs)&&Number(item.masterEndMs)===Number(previousSelection.masterEndMs))||null:null;if(!selectedSegment&&inspectorSelection?.kind==='video')selectedSegment=segments.find(item=>String(item.assetId)===String(inspectorSelection.id)&&Number(item.masterStartMs)===Number(inspectorSelection.masterStartMs)&&Number(item.masterEndMs)===Number(inspectorSelection.masterEndMs))||null;activeClip=clipAt(Math.min(globalMs,timeline.sequence.duration_ms));configureMusic();renderReviewProxyStatus();document.getElementById('preview-state').textContent=`Revisão ${data.revision} · alterações não renderizadas`;if(rebuild)renderList();if(refreshPreview)seek(Math.min(globalMs,timeline.sequence.duration_ms));else renderPosition();scheduleRevisionProxyPoll();updateEditControls();updateHistoryControls(data.history);return true;}
-    document.querySelectorAll('[data-history]').forEach(btn=>btn.onclick=async()=>{if(btn.disabled)return;const previous={can_undo:!document.querySelector('[data-history="undo"]').disabled,can_redo:!document.querySelector('[data-history="redo"]').disabled};btn.disabled=true;try{applyTimeline(await api(btn.dataset.history==='undo'?'{% url "external_media_project_preview_undo" project.public_id %}':'{% url "external_media_project_preview_redo" project.public_id %}'))}catch(error){updateHistoryControls(previous);alert(error.message)}});
+    function applyTimeline(data,rebuild=true,refreshPreview=true){if(!data.timeline)return false;const version=Number(data.editorial_version??appliedEditorialVersion);if(version<appliedEditorialVersion)return false;if(editorPersistence.busy){if(!deferredTimeline||version>=Number(deferredTimeline.editorial_version??0))deferredTimeline=data;return false}appliedEditorialVersion=version;const runtimeMusic=timeline.music,previousSelection=selectedSegment?{...selectedSegment}:null;timeline=data.timeline;invalidatePreviewIndexes();if(!timeline.music&&runtimeMusic)timeline.music=runtimeMusic;activePreviewRevision=Number(data.revision||activePreviewRevision);bladePoints=[...(timeline.video_splits_ms||[])];const segments=videoSegments();selectedSegment=previousSelection?segments.find(item=>String(item.assetId)===String(previousSelection.assetId)&&Number(item.masterStartMs)===Number(previousSelection.masterStartMs)&&Number(item.masterEndMs)===Number(previousSelection.masterEndMs))||null:null;if(!selectedSegment&&inspectorSelection?.kind==='video')selectedSegment=segments.find(item=>String(item.assetId)===String(inspectorSelection.id)&&Number(item.masterStartMs)===Number(inspectorSelection.masterStartMs)&&Number(item.masterEndMs)===Number(inspectorSelection.masterEndMs))||null;activeClip=clipAt(Math.min(globalMs,timeline.sequence.duration_ms));configureMusic();renderReviewProxyStatus();document.getElementById('preview-state').textContent=`Revisão ${data.revision} · alterações não renderizadas`;if(rebuild)renderList();if(refreshPreview)seek(Math.min(globalMs,timeline.sequence.duration_ms));else renderPosition();scheduleRevisionProxyPoll();updateEditControls();updateHistoryControls(data.history);requestTimelineRender();return true;}
+    document.querySelectorAll('[data-history]').forEach(btn=>btn.onclick=async()=>{
+        if(btn.disabled||editorBarrierActive)return;
+        const previous={can_undo:!document.querySelector('[data-history="undo"]').disabled,can_redo:!document.querySelector('[data-history="redo"]').disabled};
+        btn.disabled=true;
+        try{await withEditorBarrier(async()=>applyTimeline(await api(btn.dataset.history==='undo'?'{% url "external_media_project_preview_undo" project.public_id %}':'{% url "external_media_project_preview_redo" project.public_id %}')))}
+        catch(error){updateHistoryControls(previous);alert(error.message)}
+    });
     // The ruler and playhead are direct scrubbing controls. Keeping the pointer
     // capture on the static canvas makes dragging work even while the playhead
     // itself is redrawn as the video position changes.
     let draggingTimelineNeedle=false, needleWasPlaying=false;
-    function seekFromTimelinePointer(event){const lane=document.querySelector('#editor-tracks .editor-track__lane');if(!lane)return;seek(timelinePoint(event,lane,Math.max(1,Number(timeline.sequence.duration_ms||1))),needleWasPlaying)}
+    const seekFromTimelinePointer=frameLatest(event=>{const lane=document.querySelector('#editor-tracks .editor-track__lane');if(!lane)return;seek(timelinePoint(event,lane,Math.max(1,Number(timeline.sequence.duration_ms||1))),false)});
     const editorCanvas=document.getElementById('editor-canvas');
-    editorCanvas.addEventListener('pointerdown',event=>{if(event.button!==0)return;const target=event.target;if(!target.closest('.editor-ruler')&&!target.closest('.editor-playhead'))return;event.preventDefault();draggingTimelineNeedle=true;needleWasPlaying=!video.paused;editorCanvas.setPointerCapture?.(event.pointerId);seekFromTimelinePointer(event)});
+    editorCanvas.addEventListener('pointerdown',event=>{if(event.button!==0)return;const target=event.target;if(!target.closest('.editor-ruler')&&!target.closest('.editor-playhead'))return;event.preventDefault();draggingTimelineNeedle=true;needleWasPlaying=!video.paused;video.pause();editorPersistence.beginGesture();editorCanvas.setPointerCapture?.(event.pointerId);seekFromTimelinePointer(event)});
     editorCanvas.addEventListener('pointermove',event=>{if(!draggingTimelineNeedle)return;event.preventDefault();seekFromTimelinePointer(event)});
-    const stopTimelineNeedleDrag=event=>{if(!draggingTimelineNeedle)return;draggingTimelineNeedle=false;if(editorCanvas.hasPointerCapture?.(event.pointerId))editorCanvas.releasePointerCapture(event.pointerId)};
+    const stopTimelineNeedleDrag=event=>{if(!draggingTimelineNeedle)return;seekFromTimelinePointer.flush();draggingTimelineNeedle=false;syncTranscriptPosition();if(event.type!=='pointercancel'&&needleWasPlaying)seek(globalMs,true);editorPersistence.endGesture();if(editorCanvas.hasPointerCapture?.(event.pointerId))editorCanvas.releasePointerCapture(event.pointerId)};
     editorCanvas.addEventListener('pointerup',stopTimelineNeedleDrag);editorCanvas.addEventListener('pointercancel',stopTimelineNeedleDrag);
     const editorScroller=document.getElementById('editor-scroller');
+    editorScroller.addEventListener('scroll',()=>requestWaveformPaint(),{passive:true});
     editorScroller.title='Use a roda do mouse ou o trackpad para navegar horizontalmente pela timeline';
     const timelineZoomLimits={min:1,max:16};
     const clampTimelineValue=(value,min,max)=>Math.max(min,Math.min(max,value));
@@ -1375,29 +1696,21 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const maximumScroll=Math.max(0,editorScroller.scrollWidth-editorScroller.clientWidth);
         editorScroller.scrollLeft=clampTimelineValue(needle.offsetLeft-targetViewportX,0,maximumScroll);
     }
+    const layoutTimelineZoom=frameLatest(viewportX=>{
+        if(editorPersistence.gestures){timelineResizePending=true;return}
+        const width=timelineViewportWidth();
+        editorCanvas.style.setProperty('width',`${Math.max(width,Math.round(width*timelineZoom))}px`,'important');
+        renderTimelinePlayhead();
+        requestAnimationFrame(()=>{keepTimelinePlayheadInView(viewportX);queueSourceAudioWaveforms();queueMusicWaveforms()});
+    });
+    let observedTimelineWidth=0;
+    new ResizeObserver(entries=>{const width=Math.round(entries[0].contentRect.width);if(width===observedTimelineWidth)return;observedTimelineWidth=width;layoutTimelineZoom(null)}).observe(editorScroller);
     function changeTimelineZoom(multiplier){
-        const currentNeedle=editorCanvas.querySelector('.editor-playhead');
-        const scrollerBox=editorScroller.getBoundingClientRect();
-        const currentViewportX=currentNeedle
-            ? currentNeedle.getBoundingClientRect().left-scrollerBox.left
-            : null;
-        const next=clampTimelineValue(
-            timelineZoom*multiplier,
-            timelineZoomLimits.min,timelineZoomLimits.max,
-        );
-        if(Math.abs(next-timelineZoom)<.01){
-            updateTimelineZoomControls();
-            renderEditorTimeline();
-            requestAnimationFrame(()=>keepTimelinePlayheadInView(currentViewportX));
-            return;
-        }
-        timelineZoom=next;
-        updateTimelineZoomControls();
-        renderEditorTimeline();
-        // The canvas is rebuilt on every zoom. Anchor it to the current
-        // playhead (or center it when it was outside the visible viewport)
-        // instead of carrying a stale scroll delta into the new canvas.
-        requestAnimationFrame(()=>keepTimelinePlayheadInView(currentViewportX));
+        if(editorPersistence.gestures)return;
+        const needle=editorCanvas.querySelector('.editor-playhead'),scrollerBox=editorScroller.getBoundingClientRect();
+        const viewportX=needle?needle.getBoundingClientRect().left-scrollerBox.left:null;
+        timelineZoom=clampTimelineValue(timelineZoom*multiplier,timelineZoomLimits.min,timelineZoomLimits.max);
+        updateTimelineZoomControls();layoutTimelineZoom(viewportX);
     }
     function updateTimelineZoomControls(){
         const value=document.getElementById('timeline-zoom-value');
@@ -1435,8 +1748,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     });
     updateTimelineZoomControls();
     document.addEventListener('keydown',event=>{
-        const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
-        if(typing||!event.metaKey)return;
+        const typing=editorTyping();
+        if(typing||!(event.metaKey||event.ctrlKey))return;
         const key=event.key.toLowerCase();
         const historyAction=key==='z'?(event.shiftKey?'redo':'undo'):key==='y'?'redo':null;
         if(!historyAction)return;
@@ -1444,17 +1757,40 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         document.querySelector(`[data-history="${historyAction}"]`)?.click();
     });
     document.addEventListener('keydown',event=>{
-        if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))return;
+        if(editorTyping())return;
         if(event.key!=='ArrowUp'&&event.key!=='ArrowDown')return;
         event.preventDefault();
         navigateVideoTake(event.key==='ArrowUp'?-1:1);
     });
     document.getElementById('cancel-subtitle-edit').onclick=closeSubtitleEditor;document.getElementById('cancel-subtitle-edit-footer').onclick=closeSubtitleEditor;saveSubtitleEdit.onclick=saveOpenSubtitleEditor;
-    document.querySelectorAll('[data-tool]').forEach(button=>button.onclick=()=>{editTool=button.dataset.tool;updateEditControls();renderEditorTimeline()});document.getElementById('delete-segment').onclick=deleteSelectedSegment;document.addEventListener('keydown',event=>{const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);if(event.key==='Escape'&&reviewPanel.classList.contains('is-open')){setReviewPanel(false);return}if(typing)return;const key=event.key.toLowerCase(),frame=1000/Math.max(1,Number(timeline.sequence.fps||30)),step=event.metaKey||event.ctrlKey?5000:event.shiftKey?1000:frame;if((event.ctrlKey||event.metaKey)&&key==='k'){event.preventDefault();addBladeAt(globalMs);return}if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();seek(globalMs+(event.key==='ArrowLeft'?-step:step),false);return}if(key==='v'){editTool='select';updateEditControls();renderEditorTimeline()}if(key==='b'){editTool='blade';updateEditControls();renderEditorTimeline()}if(key==='c'){event.preventDefault();addBladeAt(globalMs)}if((event.key==='Delete'||event.key==='Backspace')&&selectedSegment){event.preventDefault();deleteSelectedSegment()}});
+    document.querySelectorAll('[data-tool]').forEach(button=>button.onclick=()=>{editTool=button.dataset.tool;updateEditControls();renderTimelineSelection()});
+    document.getElementById('delete-segment').onclick=deleteSelectedSegment;
+    document.addEventListener('keydown',event=>{
+        if(event.key==='Escape'&&reviewPanel.classList.contains('is-open')&&!editorTyping()){setReviewPanel(false);return}
+        if(editorTyping())return;
+        const key=event.key.toLowerCase(),modified=event.ctrlKey||event.metaKey;
+        if(modified&&key!=='k'&&!['ArrowLeft','ArrowRight'].includes(event.key))return;
+        if(key==='s'){event.preventDefault();toggleMagneticSnapping();return}
+        if(key==='t'){event.preventDefault();openPrecisionEditor();return}
+        if(key==='?'){document.getElementById('timeline-shortcuts').click();return}
+        if(event.code==='Space'){event.preventDefault();togglePreviewPlayback();return}
+        if(key==='home'||key==='end'){event.preventDefault();seek(key==='home'?0:timeline.sequence.duration_ms,false);return}
+        if(['+','=','-'].includes(key)){event.preventDefault();changeTimelineZoom(key==='-'?.5:2);return}
+        if(modified&&key==='k'){event.preventDefault();addBladeAt(globalMs);return}
+        if(event.key==='ArrowLeft'||event.key==='ArrowRight'){
+            event.preventDefault();const direction=event.key==='ArrowLeft'?-1:1;
+            const point=modified?globalMs+direction*5000:event.shiftKey?globalMs+direction*1000
+                :ConnectEditorPrecision.frameMs(ConnectEditorPrecision.frameAt(globalMs,timeline.sequence.fps)+direction,timeline.sequence.fps);
+            seek(point,false);return;
+        }
+        if(key==='v'||key==='b'){editTool=key==='v'?'select':'blade';updateEditControls();renderTimelineSelection()}
+        if(key==='c'){event.preventDefault();addBladeAt(globalMs)}
+        if((event.key==='Delete'||event.key==='Backspace')&&selectedSegment){event.preventDefault();deleteSelectedSegment()}
+    });
     document.getElementById('apply-all-noise').onclick=applyAllNoise;
     document.getElementById('add-timeline-element').onclick=addBrollAtPlayhead;
     document.getElementById('add-timeline-text').onclick=addOverlayAtPlayhead;
-    const modal=document.getElementById('approve-modal');document.getElementById('approve-preview').onclick=()=>modal.classList.add('is-open');document.getElementById('cancel-approve').onclick=()=>modal.classList.remove('is-open');document.getElementById('confirm-approve').onclick=async event=>{const button=event.currentTarget;button.disabled=true;button.textContent='Enviando…';try{const data=await api('{% url "external_media_project_preview_approve" project.public_id %}');location.href=data.redirect_url}catch(error){button.disabled=false;button.textContent='Aprovar e renderizar';alert(error.message)}};
+    const modal=document.getElementById('approve-modal');document.getElementById('approve-preview').onclick=()=>modal.classList.add('is-open');document.getElementById('cancel-approve').onclick=()=>modal.classList.remove('is-open');document.getElementById('confirm-approve').onclick=async event=>{const button=event.currentTarget;button.disabled=true;button.textContent='Enviando…';try{await withEditorBarrier(async()=>{const data=await api('{% url "external_media_project_preview_approve" project.public_id %}');location.href=data.redirect_url})}catch(error){button.disabled=false;button.textContent='Aprovar e renderizar';alert(error.message)}};
     const reprocessModal=document.getElementById('reprocess-modal');
     document.getElementById('btn-reprocess').onclick=()=>reprocessModal.classList.add('is-open');
     document.getElementById('cancel-reprocess').onclick=()=>reprocessModal.classList.remove('is-open');
@@ -1469,13 +1805,11 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const addElementModal=document.getElementById('add-element-modal'),addElementFile=document.getElementById('add-element-file'),addElementDescription=document.getElementById('add-element-description'),addElementDuration=document.getElementById('add-element-duration'),addElementError=document.getElementById('add-element-error'),confirmAddElement=document.getElementById('confirm-add-element');let addElementClip=null;
     function closeAddElementModal(){addElementModal.classList.remove('is-open');addElementClip=null;addElementError.classList.add('hidden');addElementError.textContent=''}
     function addBrollAtPlayhead(){const clip=clipAt(globalMs);if(!clip?.block?.id){alert('Posicione o cursor dentro de um bloco antes de adicionar um elemento.');return}addElementClip=clip;addElementFile.value='';addElementDescription.value='';addElementDuration.value='5';addElementError.classList.add('hidden');addElementModal.classList.add('is-open');requestAnimationFrame(()=>addElementFile.focus())}
-    document.getElementById('cancel-add-element').onclick=closeAddElementModal;document.getElementById('cancel-add-element-footer').onclick=closeAddElementModal;addElementModal.addEventListener('click',event=>{if(event.target===addElementModal)closeAddElementModal()});confirmAddElement.onclick=async()=>{const file=addElementFile.files?.[0];if(!file||!addElementClip){addElementError.textContent='Selecione um arquivo para continuar.';return}confirmAddElement.disabled=true;confirmAddElement.innerHTML='<i class="fas fa-spinner fa-spin"></i> Enviando…';try{const data=new FormData();data.append('file',file);data.append('description',addElementDescription.value.trim());data.append('duration_seconds',addElementDuration.value||'5');data.append('start_ms',String(Math.round(globalMs)));data.append('block',String(addElementClip.block.key?.startsWith('custom-')?addElementClip.block.key:addElementClip.block.id));const response=await fetch('{% url "external_media_project_preview_broll_create" project.public_id %}',{method:'POST',body:data,credentials:'same-origin',headers:{'X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'}});const payload=await response.json();if(!response.ok)throw new Error(payload.error||'Não foi possível adicionar o elemento.');closeAddElementModal();applyTimeline(payload,true,false)}catch(error){addElementError.textContent=error.message;addElementError.classList.remove('hidden')}finally{confirmAddElement.disabled=false;confirmAddElement.innerHTML='<i class="fas fa-upload"></i>Adicionar elemento'}};
+    document.getElementById('cancel-add-element').onclick=closeAddElementModal;document.getElementById('cancel-add-element-footer').onclick=closeAddElementModal;addElementModal.addEventListener('click',event=>{if(event.target===addElementModal)closeAddElementModal()});confirmAddElement.onclick=async()=>{const file=addElementFile.files?.[0];if(!file||!addElementClip){addElementError.textContent='Selecione um arquivo para continuar.';return}confirmAddElement.disabled=true;confirmAddElement.innerHTML='<i class="fas fa-spinner fa-spin"></i> Enviando…';try{const data=new FormData();data.append('file',file);data.append('description',addElementDescription.value.trim());data.append('duration_seconds',addElementDuration.value||'5');data.append('start_ms',String(Math.round(globalMs)));data.append('block',String(addElementClip.block.key?.startsWith('custom-')?addElementClip.block.key:addElementClip.block.id));const payload=await api('{% url "external_media_project_preview_broll_create" project.public_id %}',data);closeAddElementModal();applyTimeline(payload,true,false)}catch(error){addElementError.textContent=error.message;addElementError.classList.remove('hidden')}finally{confirmAddElement.disabled=false;confirmAddElement.innerHTML='<i class="fas fa-upload"></i>Adicionar elemento'}};
     function renameVisualMedia(){document.querySelectorAll('.editor-track__label').forEach(label=>{if(label.textContent.trim()==='B-roll')label.childNodes[label.childNodes.length-1].nodeValue=' Elementos'})}
     new MutationObserver(renameVisualMedia).observe(document.getElementById('editor-tracks'),{childList:true,subtree:true});
     const musicSelectModal=document.getElementById('music-select-modal'),musicTrackList=document.getElementById('music-track-list'),musicSelectError=document.getElementById('music-select-error'),musicUploadInput=document.getElementById('music-upload-file'),musicUploadButton=document.getElementById('music-upload-button'),musicPreview=new Audio(),musicPreviewUrl='{% url "external_media_project_preview_music" project.public_id %}';
     let musicPreviewTrackId=null;
-    let musicVolumeTimer=null;
-    let audioMixTimer=null;
     const mixProfiles={emotional:{base_duck_db:6,attack_ms:260,release_ms:1400,speech_gap_hold_ms:2400},balanced:{base_duck_db:11,attack_ms:140,release_ms:850,speech_gap_hold_ms:1800},clarity:{base_duck_db:15,attack_ms:80,release_ms:550,speech_gap_hold_ms:1200}};
     function mixProfileValues(profile){return {...(mixProfiles[profile]||mixProfiles.balanced)}}
     function cloneAudioMix(){return JSON.parse(JSON.stringify(timeline.music?.audio_mix||timeline.audio_mix||{}))}
@@ -1486,7 +1820,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(Number.isInteger(change.keyframe_index)){mix.music_keyframes=[...(mix.music_keyframes||[])];if(mix.music_keyframes[change.keyframe_index])mix.music_keyframes[change.keyframe_index].gain_db=Math.max(-60,Math.min(12,Number(change.keyframe_gain_db||0)))}
         if(Number.isInteger(change.remove_keyframe)){mix.music_keyframes=[...(mix.music_keyframes||[])];mix.music_keyframes.splice(change.remove_keyframe,1)}
         if(change.restore_auto){mix.music_keyframes=[];mix.restore_auto=true}
-        if(saved)saved.textContent='Salvando mixagem…';clearTimeout(audioMixTimer);audioMixTimer=setTimeout(async()=>{try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{audio_mix:mix});applyTimeline(data,true,false);configureMusic();syncMusicPosition();updateMusicVolume();renderList()}catch(error){if(saved)saved.textContent=error.message}},200);
+        const localMix={...mix};delete localMix.restore_auto;timeline.audio_mix=localMix;if(timeline.music)timeline.music.audio_mix=localMix;configureMusic();syncMusicPosition();updateMusicVolume();if(saved)saved.textContent='Salvando mixagem…';editorPersistence.schedule('audio-mix',async()=>{try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{audio_mix:mix});applyTimeline(data,true,false);configureMusic();syncMusicPosition();updateMusicVolume();renderList()}catch(error){if(saved)saved.textContent=error.message}},200);
     }
     function queueMusicVolume(percent,card){
         const volume=Math.max(0,Math.min(1,Number(percent||0)/100)),saved=card.querySelector('[data-music-volume-saved]'),output=card.querySelector('[data-music-volume-output]');
@@ -1495,11 +1829,17 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(output)output.textContent=`${Math.round(volume*100)}%`;
         if(saved)saved.textContent='Salvando…';
         updateMusicVolume();
-        clearTimeout(musicVolumeTimer);
-        musicVolumeTimer=setTimeout(async()=>{try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{volume});applyTimeline(data,true,false)}catch(error){if(saved)saved.textContent=error.message}},350);
+        timeline.music_volume=volume;
+        editorPersistence.schedule('music-volume',async()=>{try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{volume});applyTimeline(data,true,false)}catch(error){if(saved)saved.textContent=error.message}},350);
     }
     function resetMusicSample(){musicPreview.pause();musicPreview.removeAttribute('src');musicPreviewTrackId=null;musicTrackList.querySelectorAll('[data-music-sample]').forEach(button=>{button.classList.remove('is-playing');button.innerHTML='<i class="fas fa-play"></i>';button.setAttribute('aria-label','Ouvir prévia')})}
     function closeMusicSelector(){resetMusicSample();musicSelectModal.classList.remove('is-open');musicSelectError.classList.add('hidden');musicSelectError.textContent=''}
+    function applyLocalMusicTracks(tracks){
+        if(!timeline.music)return;
+        const existing=timeline.music.tracks||[];
+        timeline.music.tracks=tracks.map(track=>({...existing.find(item=>Number(item.id)===Number(track.track_id)),...musicTracks.find(item=>Number(item.id)===Number(track.track_id)),...track,id:Number(track.track_id)}));
+        timeline.music_tracks=tracks;
+    }
     function currentMusicTracks(){return (timeline.music?.tracks||[]).map(track=>({track_id:Number(track.id),transition:track.transition||'CONSTANT_POWER',transition_duration_ms:Number(track.transition_duration_ms||2000),...(track.start_ms!=null?{start_ms:Number(track.start_ms)}:{}),...(track.end_ms!=null?{end_ms:Number(track.end_ms)}:{}),...(track.source_in_ms!=null?{source_in_ms:Number(track.source_in_ms)}:{})})).filter(track=>track.track_id>0)}
     function openMusicSelector(){
         const currentIds=new Set(currentMusicTracks().map(track=>track.track_id));musicSelectError.classList.add('hidden');musicTrackList.replaceChildren();
@@ -1512,8 +1852,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         musicSelectError.classList.add('hidden');musicUploadInput.disabled=true;musicUploadButton.classList.add('pointer-events-none','opacity-60');musicUploadButton.innerHTML='<i class="fas fa-spinner fa-spin"></i>Enviando…';
         try{
             const body=new FormData();body.append('audio_file',file);
-            const response=await fetch(musicPreviewUrl,{method:'POST',body,credentials:'same-origin',headers:{'X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'}});
-            const data=await response.json();if(!response.ok)throw new Error(data.error||'Não foi possível enviar a música.');
+            const data=await api(musicPreviewUrl,body);
             if(data.music_track&&!musicTracks.some(track=>Number(track.id)===Number(data.music_track.id)))musicTracks.push(data.music_track);
             applyTimeline(data,true);configureMusic();syncMusicPosition();updateMusicVolume();renderEditorTimeline();openMusicSelector();
         }catch(error){musicSelectError.textContent=error.message;musicSelectError.classList.remove('hidden')}
@@ -1528,7 +1867,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     async function selectMusicTrack(track,button){
         resetMusicSample();musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=true);button.innerHTML='<span class="music-track-option__icon"><i class="fas fa-spinner fa-spin"></i></span><strong>Salvando sequência…</strong>';
         const current=currentMusicTracks(),exists=current.some(item=>item.track_id===Number(track.id)),tracks=exists?current.filter(item=>item.track_id!==Number(track.id)):[...current,{track_id:Number(track.id),transition:'CONSTANT_POWER',transition_duration_ms:2000}];
-        try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});applyTimeline(data,true);configureMusic();syncMusicPosition();updateMusicVolume();if(!video.paused)musicController.play().catch(()=>{});closeMusicSelector()}catch(error){musicSelectError.textContent=error.message;musicSelectError.classList.remove('hidden');musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=false)}
+        applyLocalMusicTracks(tracks);try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});applyTimeline(data,true);configureMusic();syncMusicPosition();updateMusicVolume();if(!video.paused)musicController.play().catch(()=>{});closeMusicSelector()}catch(error){musicSelectError.textContent=error.message;musicSelectError.classList.remove('hidden');musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=false)}
     }
     document.getElementById('cancel-music-select').onclick=closeMusicSelector;document.getElementById('cancel-music-select-footer').onclick=closeMusicSelector;musicSelectModal.addEventListener('click',event=>{if(event.target===musicSelectModal)closeMusicSelector()});
     document.addEventListener('dblclick',event=>{if(event.target.closest('.editor-track--music'))openMusicSelector()});

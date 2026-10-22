@@ -12,9 +12,14 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         this.signature = '';
         this.position = {index: 0, local: 0, overlap: 0};
         this.isPlaying = false;
+        this.bedCache = null;
+        this.automationCache = new WeakMap();
     }
 
+    invalidateTiming() { this.bedCache=null; this.automationCache=new WeakMap(); }
+
     configure(config) {
+        this.invalidateTiming();
         if (!config) {
             this.audio.pause();
             this.audio.removeAttribute('src');
@@ -161,18 +166,28 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         const release = Math.max(1, Number(config.release_ms) || 850);
         const gap = Math.max(0, Number(config.speech_gap_hold_ms) || 1800);
         const duck = Math.pow(10, -Math.max(0, Number(config.duck_db) || 14) / 20);
-        const beds = [];
-        [...(captions || [])]
-            .sort((left, right) => Number(left.start_ms) - Number(right.start_ms))
-            .forEach(cue => {
-                const start = Number(cue.start_ms), end = Number(cue.end_ms);
-                if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
-                const previous = beds.at(-1);
-                if (previous && start - previous.end <= gap) previous.end = Math.max(previous.end, end);
-                else beds.push({start, end});
-            });
-        for (const bed of beds) {
-            if (nowMs < bed.start || nowMs > bed.end + hold + release) continue;
+        let beds = this.bedCache?.captions === captions && this.bedCache.gap === gap ? this.bedCache.beds : null;
+        if (!beds) {
+            beds = [];
+            [...(captions || [])]
+                .sort((left, right) => Number(left.start_ms) - Number(right.start_ms))
+                .forEach(cue => {
+                    const start = Number(cue.start_ms), end = Number(cue.end_ms);
+                    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return;
+                    const previous = beds.at(-1);
+                    if (previous && start - previous.end <= gap) previous.end = Math.max(previous.end, end);
+                    else beds.push({start, end});
+                });
+            this.bedCache = {captions, gap, beds};
+        }
+        let low = 0, high = beds.length;
+        while (low < high) {
+            const middle = (low + high) >>> 1;
+            if (beds[middle].end + hold + release < nowMs) low = middle + 1;
+            else high = middle;
+        }
+        const bed = beds[low];
+        if (bed && nowMs >= bed.start) {
             if (nowMs < bed.start + attack) return 1 - (1 - duck) * ((nowMs - bed.start) / attack);
             if (nowMs <= bed.end + hold) return duck;
             return duck + (1 - duck) * ((nowMs - bed.end - hold) / release);
@@ -181,18 +196,27 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
     }
 
     manualAutomationFactor(keyframes, nowMs) {
-        const points = [...(keyframes || [])]
-            .map(point => ({time: Number(point.time_ms), gain: Math.pow(10, Number(point.gain_db || 0) / 20)}))
-            .filter(point => Number.isFinite(point.time) && Number.isFinite(point.gain))
-            .sort((left, right) => left.time - right.time);
+        if (!Array.isArray(keyframes) || !keyframes.length) return 1;
+        let points = this.automationCache.get(keyframes);
+        if (!points) {
+            points = [...keyframes]
+                .map(point => ({time: Number(point.time_ms), gain: Math.pow(10, Number(point.gain_db || 0) / 20)}))
+                .filter(point => Number.isFinite(point.time) && Number.isFinite(point.gain))
+                .sort((left, right) => left.time - right.time);
+            this.automationCache.set(keyframes, points);
+        }
         if (!points.length) return 1;
         if (nowMs <= points[0].time) return points[0].gain;
-        for (let index = 1; index < points.length; index += 1) {
-            const right = points[index], left = points[index - 1];
-            if (nowMs <= right.time) {
-                const progress = (nowMs - left.time) / Math.max(1, right.time - left.time);
-                return left.gain + (right.gain - left.gain) * progress;
-            }
+        let low = 1, high = points.length;
+        while (low < high) {
+            const middle = (low + high) >>> 1;
+            if (points[middle].time < nowMs) low = middle + 1;
+            else high = middle;
+        }
+        if (low < points.length) {
+            const right = points[low], left = points[low - 1];
+            const progress = (nowMs - left.time) / Math.max(1, right.time - left.time);
+            return left.gain + (right.gain - left.gain) * progress;
         }
         return points.at(-1).gain;
     }

@@ -76,6 +76,7 @@ from ..models.external_media import (
 from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
 
+from ..external_media.editor_persistence import PreviewMutationMixin
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
 from ..external_media.audio_mixing import ducking_options, resolved_ducking_config
 from ..external_media.preview import (
@@ -679,10 +680,11 @@ class ExternalMediaProjectReopenReviewView(ExternalMediaRequiredMixin, View):
             project.error_message = ''
             project.finished_at = None
             project.current_timeline_revision = revision
+            project.editorial_version = F('editorial_version') + 1
             project.configuration = configuration
             project.save(update_fields=[
                 'status', 'progress', 'current_step', 'error_message', 'finished_at',
-                'current_timeline_revision', 'configuration', 'update_at',
+                'current_timeline_revision', 'editorial_version', 'configuration', 'update_at',
             ])
             project.preview_sessions.update(current_revision=revision, undo_stack=[], redo_stack=[])
         messages.success(request, 'Edição reaberta. O resultado anterior continua preservado até uma nova aprovação.')
@@ -1895,6 +1897,7 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             project.started_at = None
             project.finished_at = None
             project.current_timeline_revision = None
+            project.editorial_version = F('editorial_version') + 1
             project.approved_timeline_revision = None
             project.preview_dirty = False
             project.final_render_outdated = False
@@ -1904,7 +1907,7 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             project.save(update_fields=[
                 'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at',
                 'current_timeline_revision', 'approved_timeline_revision',
-                'preview_dirty', 'final_render_outdated', 'configuration', 'update_at',
+                'preview_dirty', 'final_render_outdated', 'configuration', 'editorial_version', 'update_at',
             ])
             project.preview_sessions.update(current_revision=None, undo_stack=[], redo_stack=[])
             transaction.on_commit(lambda: self._enqueue(project.pk))
@@ -2009,6 +2012,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             messages.warning(request, 'O preview ficará disponível após a análise inicial.')
             return redirect('external_media_project_detail', public_id=public_id)
         revision = TimelineRevisionService.ensure_initial(project, self.member)
+        project.refresh_from_db(fields=['editorial_version'])
         # Reopening a finished project keeps its approved revision as the
         # baseline, but any edit creates a child in ``current``. Never reset
         # that pointer on page load: doing so silently discarded saved editor
@@ -2268,7 +2272,7 @@ class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, V
         return JsonResponse({'status': 'PENDING', 'revision': revision.revision})
 
 
-class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     """Streams the template music so it can be synchronized in the browser."""
 
     upload_extensions = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.webm'}
@@ -2500,7 +2504,7 @@ def preview_timeline_with_music(project, timeline):
     return timeline
 
 
-class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, decision_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2513,14 +2517,14 @@ class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewApplyAllNoiseView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewApplyAllNoiseView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         revision = TimelineRevisionService.apply_all_noise_reductions(project, self.member)
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2533,7 +2537,7 @@ class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewVideoSplitView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewVideoSplitView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2598,7 +2602,7 @@ class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View)
             return response
 
 
-class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, cue_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2616,7 +2620,7 @@ class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, View):
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, decision_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2629,7 +2633,7 @@ class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View)
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewColorView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewColorView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, source_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         try:
@@ -2685,7 +2689,7 @@ class ExternalMediaProjectOverlayDataView(ExternalMediaRequiredMixin, View):
         return redirect('external_media_project_detail', public_id=public_id)
 
 
-class ExternalMediaProjectPreviewOverlayView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewOverlayView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, overlay_id=None):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2714,7 +2718,7 @@ class ExternalMediaProjectPreviewOverlayView(ExternalMediaRequiredMixin, View):
                 )
                 if target and 'content' in payload:
                     payload['content'] = OverlayTimelineService.validate_content(
-                        target.get('type'), target.get('content_schema') or {}, payload['content'],
+                        target.get('type'), target.get('content_schema') or {}, {**(target.get('content') or {}), **payload['content']},
                         target.get('image_storage_name'),
                     )
             revision = TimelineRevisionService.mutate_overlay(
@@ -2744,7 +2748,7 @@ class ExternalMediaProjectPreviewOverlayAssetView(ExternalMediaRequiredMixin, Vi
             return HttpResponse(output.read_bytes(), content_type='image/png')
 
 
-class ExternalMediaProjectPreviewBrollView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewBrollView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, broll_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2771,7 +2775,7 @@ class ExternalMediaProjectPreviewBrollAssetView(ExternalMediaRequiredMixin, View
         )
 
 
-class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         form = ProjectBrollAssetForm(request.POST, request.FILES)
@@ -2828,7 +2832,7 @@ class ExternalMediaProjectPreviewSessionView(ExternalMediaRequiredMixin, View):
         return JsonResponse({'saved': True})
 
 
-class ExternalMediaProjectPreviewHistoryView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewHistoryView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     direction = 'undo'
 
     def post(self, request, public_id):
@@ -2841,7 +2845,7 @@ class ExternalMediaProjectPreviewRedoView(ExternalMediaProjectPreviewHistoryView
     direction = 'redo'
 
 
-class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         with transaction.atomic():
             project = get_object_or_404(
