@@ -66,7 +66,10 @@
         background: #fff5f5;
         box-shadow: 0 3px 10px rgba(90, 20, 16, .08);
     }
-    .media-project-preview img { display:block; width:100%; height:100%; object-fit:cover; }
+    .media-project-preview img { display:block; width:100%; height:100%; object-fit:cover; object-position:center; }
+    /* Portrait videos are cropped from the top, preserving faces and titles
+       that would otherwise be lost by a centered landscape preview. */
+    .media-project-preview img.is-portrait { object-position:center top; }
     .media-project-preview .media-project-avatar { width:100%; height:100%; border-radius:0; box-shadow:none; }
 
     .media-status-badge {
@@ -495,10 +498,10 @@
                 <div class="media-project-card-header">
                     <div class="media-project-preview">
                         {% for asset in project.render_job.dashboard_thumbnails %}
-                        <img src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1" alt="Prévia de {{ project.name }}" loading="lazy">
+                        <img class="media-project-preview-image" src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1" alt="Prévia de {{ project.name }}" loading="lazy">
                         {% empty %}
                         {% if project.dashboard_media %}
-                        <img src="{{ project.dashboard_media.0.thumbnail.url }}" alt="Prévia de {{ project.name }}" loading="lazy">
+                        <img class="media-project-preview-image" src="{{ project.dashboard_media.0.thumbnail.url }}" alt="Prévia de {{ project.name }}" loading="lazy">
                         {% else %}
                         <div class="media-project-avatar"><span class="mt-1">{{ project.name|slice:":1"|upper }}</span></div>
                         {% endif %}
@@ -609,6 +612,20 @@
 </div>
 
 <script>
+    (function() {
+        function setPreviewCrop(image) {
+            image.classList.toggle(
+                'is-portrait',
+                image.naturalWidth > 0 && image.naturalHeight > image.naturalWidth,
+            );
+        }
+
+        document.querySelectorAll('.media-project-preview-image').forEach((image) => {
+            if (image.complete) setPreviewCrop(image);
+            else image.addEventListener('load', () => setPreviewCrop(image), { once: true });
+        });
+    })();
+
     const filterToggle = document.getElementById('filter-toggle');
     const filterPanel  = document.getElementById('filter-panel');
 

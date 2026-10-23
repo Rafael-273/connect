@@ -13,6 +13,9 @@
 
     <main class="px-4 sm:px-6 py-4 space-y-2 w-full">
 
+        {% url 'media_my_work' as media_my_work_url %}
+        {% include 'parciais/org_link_card.html' with url=media_my_work_url icon='list-check' title='Meu trabalho' subtitle='Suas atividades, organizadas por prazo' %}
+
         <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pb-1">Estrutura da equipe</p>
 
         {% url 'media_subteam_list' as media_subteam_list_url %}

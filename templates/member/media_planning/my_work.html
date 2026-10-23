@@ -1,0 +1,54 @@
+{% extends 'member/media_planning/my_work_base.html' %}
+{% load static %}
+{% block work_header %}
+{% url 'member_dashboard' as back_url %}
+{% include 'parciais/org_media_header.html' with back_url=back_url title='Meu' accent='trabalho' subtitle='Suas atividades, organizadas por prazo' %}
+{% endblock %}
+{% block work_content %}
+{% include 'member/media_planning/partials/my_work_filters.html' %}
+{% for activity in activities %}
+    {% ifchanged activity.deadline.group %}<h2 class="media-work-group">{{ activity.deadline.group }}</h2>{% endifchanged %}
+    <article class="media-work-card {% if activity.status == 'completed' %}is-completed{% endif %}">
+        <form method="post" action="{% url 'media_my_work_status' activity.id %}" class="media-work-card-action">
+            {% csrf_token %}<input type="hidden" name="status" value="{% if activity.status == 'completed' %}pending{% else %}completed{% endif %}"><input type="hidden" name="return_to" value="list">
+            <button class="work-complete-button {% if activity.status == 'completed' %}is-completed{% endif %}" type="submit" aria-label="{% if activity.status == 'completed' %}Marcar {{ activity.title }} como pendente{% else %}Concluir {{ activity.title }}{% endif %}" title="{% if activity.status == 'completed' %}Marcar como pendente{% else %}Concluir{% endif %}"><i class="fas fa-check" aria-hidden="true"></i></button>
+        </form>
+        <a class="media-work-open" href="{% url 'media_my_work_detail' activity.id %}" data-work-detail aria-haspopup="dialog">
+            <span class="media-work-type-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
+            <span class="media-work-copy">
+                <h3>{{ activity.demand_title }}</h3>
+                <span>{{ activity.title }} · {{ activity.event_title|default:'Demanda avulsa' }}</span>
+            </span>
+            <span class="media-work-deadline {% if activity.deadline.overdue and activity.status != 'completed' %}is-overdue{% endif %}">
+                {% if activity.due_date %}<time datetime="{{ activity.due_date|date:'c' }}">{{ activity.deadline.label }} · {{ activity.due_date|date:'d/m' }}</time>{% else %}Sem prazo{% endif %}
+            </span>
+            {% if activity.status != 'completed' %}<span class="media-work-status-tag {% if activity.status == 'in_progress' %}is-in-progress{% endif %}">{{ activity.status_label }}</span>{% endif %}
+            <i class="fas fa-chevron-right media-work-chevron" aria-hidden="true"></i>
+        </a>
+    </article>
+{% empty %}
+    <div class="media-work-empty">
+        <i class="fas fa-check-circle text-3xl text-gray-400 mb-4" aria-hidden="true"></i>
+        <h2 class="text-lg font-bold text-gray-900">{% if has_search %}Nenhuma atividade encontrada.{% elif tab == 'completed' %}Nenhuma atividade concluída recentemente.{% elif tab == 'archived' %}Nenhuma atividade arquivada.{% else %}Tudo certo por aqui.{% endif %}</h2>
+        <p class="text-sm text-gray-500 mt-2">{% if has_search %}Experimente outra pesquisa ou limpe os filtros.{% elif tab == 'completed' %}As atividades concluídas nos últimos 30 dias aparecerão aqui.{% elif tab == 'archived' %}Atividades concluídas há mais de 30 dias aparecerão aqui.{% else %}Você não possui nenhuma atividade em aberto ou concluída recentemente.{% endif %}</p>
+    </div>
+{% endfor %}
+{% if page.has_other_pages %}
+<nav class="media-work-pagination mt-6" aria-label="Páginas de atividades">
+    {% if page.has_previous %}<a class="org-btn-secondary" href="?{{ pagination_query }}&amp;page={{ page.previous_page_number }}">Anterior</a>{% endif %}
+    <span class="text-sm text-gray-500">{{ page.number }} de {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a class="org-btn-secondary" href="?{{ pagination_query }}&amp;page={{ page.next_page_number }}">Próxima</a>{% endif %}
+</nav>
+{% endif %}
+<dialog id="work-detail-dialog" class="work-detail-dialog" aria-labelledby="work-detail-title">
+    <header class="work-detail-header">
+        <div class="flex items-center gap-3">
+            <span class="work-detail-icon"><i class="fas fa-list-check" aria-hidden="true"></i></span>
+            <div><p id="work-detail-stage" class="text-xs text-red-700 font-bold uppercase">Etapa</p><h2 id="work-detail-title" class="text-lg font-bold text-gray-900">Atividade</h2></div>
+        </div>
+        <button type="button" class="work-detail-close" aria-label="Fechar atividade"><i class="fas fa-times" aria-hidden="true"></i></button>
+    </header>
+    <div id="work-detail-body" class="work-detail-body" aria-live="polite"></div>
+</dialog>
+<script src="{% static 'media_my_work.js' %}" defer></script>
+{% endblock %}

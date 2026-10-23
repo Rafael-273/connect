@@ -505,6 +505,8 @@
             </button>
             <div class="accordion-content">
                 <div class="px-4 pb-4 pt-1 sm:px-5 sm:pb-5 flex flex-col gap-3">
+                    {% url 'media_my_work' as media_my_work_url %}
+                    {% include 'parciais/media_link_card.html' with url=media_my_work_url icon='list-check' title='Meu trabalho' subtitle='Suas atividades, organizadas por prazo' %}
                     <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-1">Produção de vídeos</p>
                     <a href="{% url 'external_media_dashboard' %}" class="group flex items-center justify-between bg-white rounded-xl p-4 border-2 transition-all duration-300 hover:-translate-y-1" style="border-color:rgba(201,9,5,.3)">
                         <div class="flex items-center gap-3 min-w-0">

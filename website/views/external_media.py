@@ -2103,7 +2103,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # already resolves each source independently (including trim-range
         # aliases), therefore keep source playback whenever a manual frame is
         # present.
-        use_editable_source_proxies = has_reframe_override
+        use_editable_source_proxies = has_reframe_override or bool(timeline.get('cameras'))
         revision_proxy = ready_proxies.get(ProjectProxyService.timeline_review_proxy_id(revision))
         if not ProjectProxyService.has_usable_timeline_review_proxy(revision_proxy, revision):
             revision_proxy = None
@@ -2125,7 +2125,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             rendered_layers = (revision_proxy.metadata or {}).get('rendered_layers') or []
             timeline['review_rendered_layers'] = rendered_layers
             for capability, layer in {
-                'SUBTITLES': 'CAPTIONS', 'BROLL': 'BROLL', 'GRAPHICS': 'OVERLAYS',
+                'SUBTITLES': 'CAPTIONS', 'BROLL': 'BROLL', 'GRAPHICS': 'OVERLAYS', 'CAMERA_SWITCHES': 'MULTICAM',
             }.items():
                 if layer in rendered_layers and capability in (timeline.get('fidelity') or {}):
                     timeline['fidelity'][capability] = 'EXACT'
@@ -2333,7 +2333,7 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, PreviewMu
             track.save(update_fields=['audio_file', 'update_at'])
             tracks.append({
                 'track_id': track.pk,
-                'transition': 'CONSTANT_POWER',
+                'transition': 'NONE',
                 'transition_duration_ms': 2000,
             })
             try:
@@ -2475,9 +2475,10 @@ def preview_timeline_with_music(project, timeline):
             browser_tracks.append({
                 'id': item.get('id'), 'name': item.get('name') or '', 'url': url,
                 'transition': item.get('transition') or 'CONSTANT_POWER',
-                'transition_duration_ms': int(item.get('transition_duration_ms') or 2000),
+                'transition_duration_ms': int(item.get('transition_duration_ms', 2000)),
                 'start_ms': item.get('start_ms'), 'end_ms': item.get('end_ms'),
                 'source_in_ms': item.get('source_in_ms'),
+                'audio_transition': item.get('audio_transition'),
             })
         timeline['music'] = {
             'url': browser_tracks[0]['url'],
@@ -2746,6 +2747,19 @@ class ExternalMediaProjectPreviewOverlayAssetView(ExternalMediaRequiredMixin, Vi
             output = Path(temp) / 'overlay.png'
             OverlayAssetRenderer().render(overlay, width, height, output)
             return HttpResponse(output.read_bytes(), content_type='image/png')
+
+
+class ExternalMediaProjectPreviewCameraView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        try:
+            payload = json.loads(request.body or '{}')
+            if not isinstance(payload, dict):
+                raise ValueError('Dados de câmera inválidos.')
+            revision = TimelineRevisionService.update_camera(project, self.member, payload)
+        except (ValueError, TypeError, KeyError, OverflowError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision)
 
 
 class ExternalMediaProjectPreviewBrollView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):

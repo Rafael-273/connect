@@ -361,7 +361,7 @@
             <div class="space-y-2 p-2" data-broll-assets-items>{% for broll in direct_brolls %}<div class="flex items-center justify-between gap-3 rounded-lg border border-violet-100 bg-white p-3"><div class="min-w-0"><strong class="block truncate"><i class="fas {% if broll.media_type == 'VIDEO' %}fa-video{% else %}fa-image{% endif %} mr-1 text-violet-600"></i>{{ broll.original_filename }}</strong><span class="text-xs text-gray-500">{{ broll.get_media_type_display }}</span></div><form method="post" action="{% url 'external_media_project_broll_delete' project.public_id broll.public_id %}">{% csrf_token %}<button class="text-red-600 p-2" title="Remover elemento"><i class="fas fa-trash"></i></button></form></div>{% endfor %}</div>
             <details id="direct-elements-panel" class="project-add-more p-2"><summary class="media-btn media-muted cursor-pointer text-sm"><i class="fas fa-plus"></i>Adicionar elemento</summary><div class="mt-3" data-broll-upload-list><form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_direct_broll_upload' project.public_id %}" class="grid gap-3 rounded-lg border border-violet-100 bg-white p-3 sm:grid-cols-[1fr_10rem]" data-broll-upload-form>{% csrf_token %}<span class="hidden" data-broll-form-title>Novo elemento</span><label class="text-xs font-bold text-gray-600">Arquivo do elemento<input type="file" name="file" accept=".mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp" required class="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-normal" data-broll-file></label><label class="text-xs font-bold text-gray-600">Duração (s)<input type="number" name="duration_seconds" min=".1" max="3600" step=".1" value="5" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 font-normal"></label><p class="text-xs text-gray-500 sm:col-span-2">Envie uma imagem, QR Code ou vídeo. O envio começa ao escolher o arquivo.</p><p class="hidden text-xs font-semibold text-violet-700 sm:col-span-2" data-broll-upload-status></p></form></div></details>
         </section>
-        <details id="direct-camera-panel" class="relative hidden mt-4 rounded-xl border border-sky-100 bg-sky-50/30 p-3"><summary class="cursor-pointer text-sm font-semibold text-gray-700"><i class="fas fa-camera mr-2 text-sky-600"></i>Adicionar câmera extra</summary><button type="button" class="project-media-action absolute right-3 top-3" aria-label="Fechar câmera extra" onclick="const panel=this.closest('details');panel.open=false;panel.classList.add('hidden')"><i class="fas fa-xmark"></i></button><form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_direct_upload' project.public_id %}" class="mt-3 grid gap-3 md:grid-cols-2">{% csrf_token %}<input type="hidden" name="camera_role" value="SECONDARY"><div><label class="text-xs font-semibold text-gray-600">Vídeo principal</label><select name="camera_position" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">{% for media in direct_media %}{% if media.camera_role == 'PRIMARY' %}<option value="{{ media.position }}">{{ media.original_filename }}</option>{% endif %}{% endfor %}</select></div><div><label class="text-xs font-semibold text-gray-600">Nome da câmera</label><input name="camera_label" maxlength="80" placeholder="Ex.: Câmera lateral" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"></div><div class="md:col-span-2"><label class="text-xs font-semibold text-gray-600">Arquivo da câmera</label><input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="mt-1 w-full text-sm"></div><div class="md:col-span-2"><button class="media-btn media-muted text-sm"><i class="fas fa-plus"></i>Adicionar câmera</button></div></form></details>
+        <details id="direct-camera-panel" class="project-upload-slot relative hidden mt-4 rounded-xl p-3"><summary class="cursor-pointer text-sm font-semibold text-gray-700"><i class="fas fa-camera mr-2" style="color:#C90905"></i>Adicionar câmera extra</summary><button type="button" class="project-media-action absolute right-3 top-3" aria-label="Fechar câmera extra" onclick="const panel=this.closest('details');panel.open=false;panel.classList.add('hidden')"><i class="fas fa-xmark"></i></button><form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_direct_upload' project.public_id %}" class="camera-upload-form mt-3 grid gap-3 md:grid-cols-2">{% csrf_token %}<input type="hidden" name="camera_role" value="SECONDARY"><div><label class="text-xs font-semibold text-gray-600">Vídeo principal</label><select name="camera_position" required class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">{% for media in direct_media %}{% if media.camera_role == 'PRIMARY' %}<option value="{{ media.position }}">{{ media.original_filename }}</option>{% endif %}{% endfor %}</select></div><div><label class="text-xs font-semibold text-gray-600">Nome da câmera</label><input name="camera_label" maxlength="80" placeholder="Ex.: Câmera lateral" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"></div><div class="md:col-span-2"><label class="text-xs font-semibold text-gray-600">Arquivo da câmera</label><input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="project-upload-input mt-1" data-camera-upload-file></div><p class="text-xs text-gray-500 md:col-span-2">MP4, MOV, MKV, WEBM, AVI ou M4V · máx. {{ external_media_max_upload_mb }} MB por arquivo. O envio começa ao escolher o arquivo.</p><p class="hidden text-xs font-semibold text-red-700 md:col-span-2" data-camera-upload-status></p></form></details>
         {% endif %}
         {% if direct_media %}<details class="project-add-more mt-4"><summary class="media-btn media-muted cursor-pointer text-sm"><i class="fas fa-plus"></i>Adicionar outro vídeo</summary>{% endif %}
         <section class="project-upload-slot {% if direct_media %}mt-3{% endif %} rounded-xl p-3"><div class="mb-3 flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-red-600 text-xs text-white"><i class="fas fa-upload"></i></span><div><strong class="block text-sm text-gray-900">{% if direct_media %}Adicionar outro vídeo{% else %}Enviar vídeos do projeto{% endif %}</strong><span class="block text-xs text-gray-500">Selecione um ou mais vídeos. O envio começa automaticamente; cada vídeo poderá ser cortado depois que o preview estiver pronto.</span></div></div><form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_direct_upload' project.public_id %}" class="space-y-2">{% csrf_token %}<input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" multiple required class="project-upload-input" onchange="if (this.files.length) this.form.requestSubmit()"><p class="text-xs text-gray-500">MP4, MOV, MKV, WEBM, AVI ou M4V · máx. {{ external_media_max_upload_mb }} MB por arquivo.</p></form></section>
@@ -374,7 +374,7 @@
     <section class="media-card project-media-block {% if item.primary_media %}is-ready{% endif %}" data-project-block-id="{% if item.is_custom %}c-{{ item.definition.pk }}{% else %}t-{{ item.definition.pk }}{% endif %}" {% if item.is_custom %}data-custom-block{% endif %}>
         <div class="project-media-block__header">
             <div class="project-media-block__identity">{% if item.is_custom %}<button type="button" draggable="true" class="project-media-action cursor-grab active:cursor-grabbing" data-custom-block-drag-handle title="Arraste para mudar a posição"><i class="fas fa-grip-vertical"></i></button>{% endif %}<span class="project-media-block__number">{{ forloop.counter }}</span><div class="min-w-0"><h3 class="project-media-block__title truncate">{{ item.definition.name }}</h3>{% if item.definition.description %}<p class="text-sm text-gray-500 mt-0.5 truncate">{{ item.definition.description }}</p>{% endif %}</div></div>
-            <div class="flex items-center gap-2">{% if item.primary_media %}<span class="project-media-block__state is-ready"><i class="fas fa-check"></i>Vídeo adicionado</span>{% else %}<span class="project-media-block__state is-empty"><i class="fas fa-arrow-up"></i>Enviar vídeo</span>{% endif %}{% if item.definition.is_required %}<span class="project-media-block__required">Obrigatório</span>{% else %}<span class="project-media-block__optional">{% if item.is_custom %}Personalizado{% else %}Opcional{% endif %}</span>{% endif %}{% if broll_config.enabled or item.primary_media and not item.has_default_video and item.definition.max_occurrences == 0 or broll_config.enabled or item.primary_media and not item.has_default_video and item.media|length < item.definition.max_occurrences %}<details class="project-actions-menu"><summary class="project-media-action cursor-pointer" aria-label="Mais opções"><i class="fas fa-ellipsis"></i></summary><div class="project-actions-menu__list">{% if broll_config.enabled %}<button type="button" class="project-actions-menu__item" onclick="const card=document.getElementById('scene-elements-card-{{ forloop.counter }}');const panel=document.getElementById('scene-elements-panel-{{ forloop.counter }}');card.classList.remove('hidden');panel.open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-photo-film text-violet-600"></i>Adicionar elemento</button>{% endif %}{% if item.primary_media and not item.has_default_video and item.definition.max_occurrences == 0 or item.primary_media and not item.has_default_video and item.media|length < item.definition.max_occurrences %}<button type="button" class="project-actions-menu__item" onclick="const panel=document.getElementById('scene-camera-panel-{{ forloop.counter }}');panel.classList.remove('hidden');panel.open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-camera text-sky-600"></i>Adicionar câmera extra</button>{% endif %}</div></details>{% endif %}{% if item.is_custom %}<button type="button" class="project-media-action" data-custom-block-edit data-name="{{ item.definition.name }}" data-description="{{ item.definition.description }}" data-url="{% url 'external_media_project_custom_block_edit' project.public_id item.definition.pk %}" title="Editar bloco"><i class="fas fa-pen"></i></button><button type="button" class="project-media-action is-danger" data-custom-block-delete data-name="{{ item.definition.name }}" data-url="{% url 'external_media_project_custom_block_delete' project.public_id item.definition.pk %}" title="Excluir bloco"><i class="fas fa-trash"></i></button>{% endif %}</div>
+            <div class="flex items-center gap-2">{% if item.primary_media %}<span class="project-media-block__state is-ready"><i class="fas fa-check"></i>Vídeo adicionado</span>{% else %}<span class="project-media-block__state is-empty"><i class="fas fa-arrow-up"></i>Enviar vídeo</span>{% endif %}{% if item.definition.is_required %}<span class="project-media-block__required">Obrigatório</span>{% else %}<span class="project-media-block__optional">{% if item.is_custom %}Personalizado{% else %}Opcional{% endif %}</span>{% endif %}{% if broll_config.enabled or item.primary_media and not item.has_default_video %}<details class="project-actions-menu"><summary class="project-media-action cursor-pointer" aria-label="Mais opções"><i class="fas fa-ellipsis"></i></summary><div class="project-actions-menu__list">{% if broll_config.enabled %}<button type="button" class="project-actions-menu__item" onclick="const card=document.getElementById('scene-elements-card-{{ forloop.counter }}');const panel=document.getElementById('scene-elements-panel-{{ forloop.counter }}');card.classList.remove('hidden');panel.open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-photo-film text-violet-600"></i>Adicionar elemento</button>{% endif %}{% if item.primary_media and not item.has_default_video %}<button type="button" class="project-actions-menu__item" onclick="const panel=document.getElementById('scene-camera-panel-{{ forloop.counter }}');panel.classList.remove('hidden');panel.open=true;this.closest('details').removeAttribute('open')"><i class="fas fa-camera text-sky-600"></i>Adicionar câmera extra</button>{% endif %}</div></details>{% endif %}{% if item.is_custom %}<button type="button" class="project-media-action" data-custom-block-edit data-name="{{ item.definition.name }}" data-description="{{ item.definition.description }}" data-url="{% url 'external_media_project_custom_block_edit' project.public_id item.definition.pk %}" title="Editar bloco"><i class="fas fa-pen"></i></button><button type="button" class="project-media-action is-danger" data-custom-block-delete data-name="{{ item.definition.name }}" data-url="{% url 'external_media_project_custom_block_delete' project.public_id item.definition.pk %}" title="Excluir bloco"><i class="fas fa-trash"></i></button>{% endif %}</div>
         </div>
         <div class="project-media-block__body flex flex-col">
         {% if item.primary_media %}
@@ -550,17 +550,18 @@
         </section>
         {% if item.primary_media %}</details>{% endif %}
         {% if item.media %}
-        <details id="scene-camera-panel-{{ forloop.counter }}" class="relative order-6 mt-4 hidden rounded-xl border border-sky-100 bg-sky-50/30 p-3">
-            <summary class="cursor-pointer text-sm font-semibold text-gray-700"><i class="fas fa-camera mr-2 text-sky-600"></i>Adicionar câmera extra</summary>
+        <details id="scene-camera-panel-{{ forloop.counter }}" class="project-upload-slot relative order-6 mt-4 hidden rounded-xl p-3">
+            <summary class="cursor-pointer text-sm font-semibold text-gray-700"><i class="fas fa-camera mr-2" style="color:#C90905"></i>Adicionar câmera extra</summary>
             <button type="button" class="project-media-action absolute right-3 top-3" aria-label="Fechar câmera extra" onclick="const panel=this.closest('details');panel.open=false;panel.classList.add('hidden')"><i class="fas fa-xmark"></i></button>
-            <form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_upload' project.public_id item.definition.pk %}" class="mt-3 grid gap-3 md:grid-cols-2">
+            <form method="post" enctype="multipart/form-data" action="{% url 'external_media_project_upload' project.public_id item.definition.pk %}" class="camera-upload-form mt-3 grid gap-3 md:grid-cols-2"{% if use_s3 %} data-presign-url="{% if item.is_custom %}{% url 'external_media_project_custom_block_upload_presign' project.public_id item.definition.pk %}{% else %}{% url 'external_media_project_upload_presign' project.public_id item.definition.pk %}{% endif %}"{% endif %}>
                 {% csrf_token %}
                 <input type="hidden" name="camera_role" value="SECONDARY">
-                <div><label class="text-xs font-semibold text-gray-600">Vídeo principal desta cena</label><select name="camera_position" required class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">{% for media in item.media %}{% if media.camera_role == 'PRIMARY' %}<option value="{{ media.position }}">{{ media.camera_label|default:media.original_filename }}</option>{% endif %}{% endfor %}</select></div>
-                <div><label class="text-xs font-semibold text-gray-600">Nome da câmera</label><input name="camera_label" maxlength="80" placeholder="Ex.: Convidada" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"></div>
-                <div><label class="text-xs font-semibold text-gray-600">Enquadramento (opcional)</label><select name="camera_hint" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="AUTO">Automático</option><option value="SPEAKER_A">Participante 1</option><option value="SPEAKER_B">Participante 2</option><option value="WIDE">Plano geral</option><option value="OTHER">Outro</option></select></div>
-                <div><label class="text-xs font-semibold text-gray-600">Arquivo da câmera</label><input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="mt-1 w-full text-sm"></div>
-                <div class="md:col-span-2"><button class="media-btn media-muted text-sm"><i class="fas fa-plus"></i> Adicionar câmera</button></div>
+                <div><label class="text-xs font-semibold text-gray-600">Vídeo principal desta cena</label><select name="camera_position" required class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm">{% for media in item.media %}{% if media.camera_role == 'PRIMARY' %}<option value="{{ media.position }}">{{ media.camera_label|default:media.original_filename }}</option>{% endif %}{% endfor %}</select></div>
+                <div><label class="text-xs font-semibold text-gray-600">Nome da câmera</label><input name="camera_label" maxlength="80" placeholder="Ex.: Convidada" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"></div>
+                <div><label class="text-xs font-semibold text-gray-600">Enquadramento (opcional)</label><select name="camera_hint" class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"><option value="AUTO">Automático</option><option value="SPEAKER_A">Participante 1</option><option value="SPEAKER_B">Participante 2</option><option value="WIDE">Plano geral</option><option value="OTHER">Outro</option></select></div>
+                <div><label class="text-xs font-semibold text-gray-600">Arquivo da câmera</label><input type="file" name="file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" required class="project-upload-input mt-1" data-camera-upload-file></div>
+                <p class="text-xs text-gray-500 md:col-span-2">MP4, MOV, MKV, WEBM, AVI ou M4V · máx. {{ external_media_max_upload_mb }} MB por arquivo. O envio começa ao escolher o arquivo.</p>
+                <p class="hidden text-xs font-semibold text-red-700 md:col-span-2" data-camera-upload-status></p>
             </form>
         </details>
         {% endif %}
@@ -730,6 +731,79 @@
     function fmt(value) {
         return Number.isFinite(value) ? value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '') : '';
     }
+    document.querySelectorAll('.camera-upload-form').forEach((form) => {
+        const fileInput = form.querySelector('[data-camera-upload-file]');
+        const status = form.querySelector('[data-camera-upload-status]');
+        let uploading = false;
+
+        function setStatus(message, isError = false) {
+            if (!status) return;
+            status.textContent = message;
+            status.classList.remove('hidden', 'text-red-700', 'text-red-600');
+            status.classList.add(isError ? 'text-red-600' : 'text-red-700');
+        }
+
+        async function uploadToS3(file) {
+            const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+            const field = (name) => form.querySelector(`[name="${name}"]`)?.value || '';
+            setStatus('Preparando envio…');
+            const presignResponse = await fetch(form.dataset.presignUrl, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                body: JSON.stringify({
+                    filename: file.name,
+                    size: file.size,
+                    content_type: file.type || 'video/mp4',
+                    camera_role: 'SECONDARY',
+                    camera_position: field('camera_position'),
+                    camera_label: field('camera_label'),
+                    camera_hint: field('camera_hint'),
+                }),
+            });
+            const presign = await presignResponse.json().catch(() => ({}));
+            if (!presignResponse.ok) throw new Error(presign.detail || 'Não foi possível iniciar o envio.');
+
+            await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('PUT', presign.upload_url);
+                xhr.setRequestHeader('Content-Type', presign.content_type || file.type || 'video/mp4');
+                xhr.upload.addEventListener('progress', (event) => {
+                    if (event.lengthComputable) setStatus(`Enviando ${Math.round((event.loaded / event.total) * 100)}%`);
+                });
+                xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('Não foi possível enviar o arquivo.'));
+                xhr.onerror = () => reject(new Error('Não foi possível enviar o arquivo.'));
+                xhr.send(file);
+            });
+
+            setStatus('Salvando câmera…');
+            const completeResponse = await fetch(presign.complete_url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+                body: JSON.stringify({allocation: presign.allocation, allocation_sig: presign.allocation_sig}),
+            });
+            const completed = await completeResponse.json().catch(() => ({}));
+            if (!completeResponse.ok) throw new Error(completed.detail || 'Não foi possível salvar a câmera.');
+        }
+
+        fileInput?.addEventListener('change', async () => {
+            const file = fileInput.files?.[0];
+            if (!file || uploading) return;
+            if (!form.dataset.presignUrl) {
+                form.requestSubmit();
+                return;
+            }
+            uploading = true;
+            fileInput.disabled = true;
+            try {
+                await uploadToS3(file);
+                window.location.reload();
+            } catch (error) {
+                setStatus(error.message || 'Não foi possível enviar a câmera.', true);
+                fileInput.disabled = false;
+                uploading = false;
+            }
+        });
+    });
     document.querySelectorAll('.media-upload-form').forEach((form) => {
         const fileInput = form.querySelector('[data-trim-file]');
         const panel = form.querySelector('[data-trim-panel]');

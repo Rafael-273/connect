@@ -1,0 +1,54 @@
+<form method="get" class="media-work-filters mb-5 space-y-3">
+    <div class="flex items-center gap-2">
+        <div class="relative flex-1 min-w-0">
+            <input type="search" name="q" value="{{ filter_q }}" placeholder="Buscar evento, demanda, etapa ou responsável..." aria-label="Buscar evento, demanda, etapa ou responsável" class="media-search-input" autocomplete="off">
+        </div>
+        <button type="submit" class="flex-shrink-0 p-2.5 text-white rounded-lg hover:opacity-90 transition-opacity duration-200 flex items-center justify-center" style="background-color:#C90905" aria-label="Buscar">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        </button>
+        <div class="relative flex-shrink-0">
+            <button type="button" id="work-filter-toggle" aria-expanded="false" aria-controls="work-filter-panel" class="px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm" aria-label="Filtros">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg><span class="hidden sm:inline">Filtros</span>
+                {% if has_filters %}<span class="w-2 h-2 rounded-full" style="background:#C90905" aria-label="Filtros ativos"></span>{% endif %}
+            </button>
+            <div id="work-filter-panel" class="hidden absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl z-50 p-4">
+                <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                <div class="space-y-3">
+                    <div><label for="work-filter-tab">Exibir</label>
+                    <select id="work-filter-tab" name="tab">
+                        <option value="all" {% if tab == 'all' %}selected{% endif %}>Todos</option>
+                        <option value="pending" {% if tab == 'pending' %}selected{% endif %}>Pendentes</option>
+                        <option value="completed" {% if tab == 'completed' %}selected{% endif %}>Concluídas recentes</option>
+                        <option value="archived" {% if tab == 'archived' %}selected{% endif %}>Arquivadas</option>
+                    </select></div>
+                    {% if tab == 'all' or tab == 'pending' %}<div><label for="work-filter-status">Status</label>
+                    <select id="work-filter-status" name="status">
+                        <option value="">Todos os pendentes</option>
+                        <option value="pending" {% if filter_status == 'pending' %}selected{% endif %}>Pendente</option>
+                        <option value="in_progress" {% if filter_status == 'in_progress' %}selected{% endif %}>Em andamento</option>
+                    </select></div>{% endif %}
+                    <div><label for="work-filter-from">Prazo — de</label><input type="date" id="work-filter-from" name="period_from" value="{{ period_from }}"></div>
+                    <div><label for="work-filter-to">Prazo — até</label><input type="date" id="work-filter-to" name="period_to" value="{{ period_to }}"></div>
+                </div>
+                <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                    <a href="{% url 'media_my_work' %}" class="flex-1 text-center px-3 py-2 text-sm text-gray-600 rounded-lg hover:bg-gray-50">Limpar filtros</a>
+                    <button type="submit" class="flex-1 px-3 py-2 text-sm text-white rounded-lg" style="background:#C90905">Aplicar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+<script>
+(() => {
+    const toggle = document.getElementById('work-filter-toggle');
+    const panel = document.getElementById('work-filter-panel');
+    function close() { panel.classList.add('hidden'); toggle.setAttribute('aria-expanded', 'false'); }
+    toggle.addEventListener('click', () => {
+        const opening = panel.classList.contains('hidden');
+        panel.classList.toggle('hidden', !opening);
+        toggle.setAttribute('aria-expanded', String(opening));
+    });
+    document.addEventListener('click', event => { if (!toggle.parentElement.contains(event.target)) close(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && !panel.classList.contains('hidden')) { close(); toggle.focus(); } });
+})();
+</script>

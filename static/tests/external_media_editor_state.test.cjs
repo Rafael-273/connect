@@ -7,6 +7,15 @@ const EditorPersistence = require('../external_media_editor_state.js');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => {resolve=yes; reject=no}); return {promise,resolve,reject}; };
 
+test('clicking source audio opens and keeps the audio inspector selected',()=>{
+    const editor=fs.readFileSync(path.join(__dirname,'../../templates/member/external_media/preview.html'),'utf8');
+    assert.match(editor,/if\(openInspector&&selectKind\)selectInspector\(selectKind/);
+    assert.match(editor,/selectSourceSegment\(Boolean\(selectKind\)\)/);
+    assert.match(editor,/if\(selectKind\)selectInspector\(selectKind/);
+    assert.match(editor,/if\(!\['video','audio'\]\.includes\(kind\)\)selectedSegment=null/);
+    assert.match(editor,/inspectorSelection\?\.kind==='audio'/);
+});
+
 test('operation IDs work on HTTP LAN hosts without crypto.randomUUID',()=>{
     const context=vm.createContext({crypto:{getRandomValues:values=>{values.fill(7);return values}}});
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../external_media_editor_state.js'),'utf8'),context);
@@ -112,7 +121,7 @@ const template=fs.readFileSync(path.join(__dirname,'../../templates/member/exter
 function timelineHarness(){
     const apply=template.match(/    function applyTimeline\(data[^\n]+/)[0];
     const context=vm.createContext({});
-    vm.runInContext(`let timeline={sequence:{duration_ms:10000},captions:[],music:null},appliedEditorialVersion=5,deferredTimeline=null,activePreviewRevision=5,selectedSegment=null,inspectorSelection=null,bladePoints=[],activeClip=null,globalMs=0;const editorPersistence={busy:false};const video={paused:true};const videoSegments=()=>[],clipAt=()=>null,configureMusic=()=>{},renderReviewProxyStatus=()=>{},renderList=()=>{},seek=()=>{},renderPosition=()=>{},scheduleRevisionProxyPoll=()=>{},updateEditControls=()=>{},updateHistoryControls=()=>{},requestTimelineRender=()=>{},invalidatePreviewIndexes=()=>{};const document={getElementById:()=>({textContent:''})};${apply}`,context);
+    vm.runInContext(`let timeline={sequence:{duration_ms:10000},captions:[],music:null},appliedEditorialVersion=5,deferredTimeline=null,activePreviewRevision=5,selectedSegment=null,inspectorSelection=null,bladePoints=[],activeClip=null,globalMs=0,multicamEditor=null;const editorPersistence={busy:false};const video={paused:true};const videoSegments=()=>[],clipAt=()=>null,configureMusic=()=>{},renderReviewProxyStatus=()=>{},renderList=()=>{},seek=()=>{},renderPosition=()=>{},scheduleRevisionProxyPoll=()=>{},updateEditControls=()=>{},updateHistoryControls=()=>{},requestTimelineRender=()=>{},invalidatePreviewIndexes=()=>{};const document={getElementById:()=>({textContent:''})};${apply}`,context);
     return context;
 }
 

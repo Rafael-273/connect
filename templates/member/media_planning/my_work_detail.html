@@ -1,0 +1,9 @@
+{% extends 'member/media_planning/my_work_base.html' %}
+{% block title %}{{ activity.title }} · Meu trabalho{% endblock %}
+{% block work_header %}
+{% url 'media_my_work' as back_url %}
+{% include 'parciais/org_media_header.html' with back_url=back_url title=activity.header_title subtitle=activity.title %}
+{% endblock %}
+{% block work_content %}
+{% include 'member/media_planning/partials/my_work_detail_content.html' %}
+{% endblock %}

@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 # Persist the timing implementation independently of framing/geometry. Existing
 # review assets keep their original clock until explicitly rebuilt; a new final
 # render must not be mistaken for proof that those old assets were regenerated.
-ASSEMBLY_TIMING_VERSION = 2
+ASSEMBLY_TIMING_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -1715,7 +1715,7 @@ class MusicService:
                 if track_id > 0 and track_id not in ids:
                     ids.append(track_id)
                     try:
-                        transition_duration_ms = int((item or {}).get('transition_duration_ms') or 2000)
+                        transition_duration_ms = int((item or {}).get('transition_duration_ms', 2000))
                     except (TypeError, ValueError):
                         transition_duration_ms = 2000
                     transitions[track_id] = {
@@ -1724,6 +1724,7 @@ class MusicService:
                         'start_ms': (item or {}).get('start_ms'),
                         'end_ms': (item or {}).get('end_ms'),
                         'source_in_ms': (item or {}).get('source_in_ms'),
+                        'audio_transition': (item or {}).get('audio_transition'),
                     }
             available = {
                 item.pk: item for item in BackgroundMusicTrack.objects.filter(pk__in=ids).exclude(audio_file='')
@@ -1736,8 +1737,9 @@ class MusicService:
                         'id': track.pk, 'name': track.name, 'file': track.audio_file,
                         **transitions[track_id],
                     })
-            if resolved:
-                return resolved
+            if resolved and all(item.get('start_ms') is not None for item in resolved):
+                resolved.sort(key=lambda item: int(item['start_ms']))
+            return resolved
         override_id = timeline.get('music_override_track_id') or (configuration or {}).get('music_override_track_id')
         override = BackgroundMusicTrack.objects.filter(pk=override_id).exclude(audio_file='').first() if override_id else None
         if override:
@@ -2262,7 +2264,7 @@ class VideoAssemblyService:
             ])
             concat_inputs.append(f'[v{index}][a{index}]')
         concat_filters.append(
-            f"{''.join(concat_inputs)}concat=n={len(paths)}:v=1:a=1[vout][aout]"
+            f"{''.join(concat_inputs)}concat=n={len(paths)}:v=1:a=1[vjoined][aout];[vjoined]fps=30[vout]"
         )
         command.extend([
             '-filter_complex', ';'.join(concat_filters), '-map', '[vout]', '-map', '[aout]',
@@ -2291,6 +2293,10 @@ class VideoAssemblyService:
         audio_filters = [
             *self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'atrim'),
             'aresample=async=1000:first_pts=0',
+            # Keep video authoritative for -shortest. Without padding, AAC
+            # packet cadence can drop a video frame or truncate audio again
+            # on the extra proxy encode, accumulating drift across takes.
+            'apad',
         ]
         command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source)]
         command.extend([
@@ -2425,7 +2431,7 @@ class VideoAssemblyService:
             # to 30 fps otherwise retains timestamps that make speech drift.
             '-af', ','.join([
                 *self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'atrim'),
-                'aresample=async=1000:first_pts=0',
+                'aresample=async=1000:first_pts=0', 'apad',
             ]),
             '-ar', '48000', '-ac', '2', '-colorspace', 'bt709', '-color_primaries', 'bt709',
             '-color_trc', 'bt709', '-shortest', '-avoid_negative_ts', 'disabled', str(destination),
@@ -2648,6 +2654,13 @@ class ExternalMediaProjectPipeline:
                 MediaTemplatePlugin.Code.SUBTITLE_PT,
                 MediaTemplatePlugin.Code.TRANSLATION_EN,
             } & plugin_codes)
+            # A multicamera edit needs the same word-level timing used by
+            # subtitles, even when the template does not display captions.
+            # Without it, the cameras can be aligned but there is no editorial
+            # context from which to create automatic timeline decisions.
+            needs_editorial_transcript = wants_subtitles or project.block_media.filter(
+                camera_role='SECONDARY',
+            ).exists()
             self.projects.initialize_steps(project, plugins)
             self._step(project, 'upload', ProjectPipelineStep.Status.FINISHED, 'Uploads conferidos')
             self._update(project, ExternalMediaProject.Status.ASSEMBLING, 8, 'Organizando seus vídeos')
@@ -2728,7 +2741,7 @@ class ExternalMediaProjectPipeline:
                 project.save(update_fields=['configuration', 'update_at'])
                 self._persist_canonical_state(project, job.pk, self._source_manifest)
             self._update(project, ExternalMediaProject.Status.PROCESSING, 22, 'Preparando seu projeto')
-            if wants_subtitles:
+            if needs_editorial_transcript:
                 media_pipeline = ExternalMediaPipeline()
                 media_pipeline.prepare_subtitle_tracks(job.pk)
                 for code in (MediaTemplatePlugin.Code.SUBTITLE_PT, MediaTemplatePlugin.Code.TRANSLATION_EN):
@@ -2748,10 +2761,17 @@ class ExternalMediaProjectPipeline:
                     )
             # The AI only proposes editorial placement. The resulting structured
             # decisions are frozen into the initial InternalTimeline revision.
+            project.refresh_from_db(fields=['configuration'])
+            if project.block_media.filter(camera_role='SECONDARY').exists():
+                from .multicam import MulticamService
+                with JobWorkspace(project.public_id, 'multicam-sync', estimated_bytes=8 * 1024 * 1024) as workspace:
+                    MulticamService.prepare(project, self.storage, self.assembly.runner, workspace.path)
+                MulticamService.review_candidates(project)
+                self._persist_canonical_state(project, job.pk)
             BrollTimelineService.ensure_auto_decisions(project)
             if MediaTemplatePlugin.Code.BROLL in plugin_codes:
                 self._step(project, MediaTemplatePlugin.Code.BROLL, ProjectPipelineStep.Status.FINISHED)
-            if not project.template_version.interactive_preview_enabled:
+            if not project.template_version.interactive_preview_enabled and not (project.configuration or {}).get('multicam_alignments'):
                 self.render(project_id)
                 return
             from .preview import ProjectProxyService, TimelineRevisionService
@@ -2759,6 +2779,9 @@ class ExternalMediaProjectPipeline:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 64, 'Preparando a revisão')
             ProjectProxyService.prepare(project)
             TimelineRevisionService.ensure_initial(project)
+            if not project.template_version.interactive_preview_enabled:
+                self.render(project_id)
+                return
             job.status = ExternalMediaJob.Status.AWAITING_REVIEW
             job.progress = 66
             job.current_step = 'Aguardando sua revisão'
@@ -2933,6 +2956,9 @@ class ExternalMediaProjectPipeline:
                     for item in music_tracks
                 ],
                 [item.get('source_in_ms') for item in music_tracks],
+                [item.get('audio_transition') for item in music_tracks],
+                [item.get('id') for item in music_tracks],
+                sequence_duration_ms=(music_timeline.get('sequence') or {}).get('duration_ms'),
             )
         else:
             music = local_music_tracks[0] if local_music_tracks else None
@@ -3197,6 +3223,13 @@ class ExternalMediaProjectPipeline:
             else max(1, original_duration_ms - combined_plan.saved_ms)
         )
         revision = project.approved_timeline_revision or project.current_timeline_revision
+        if revision and (revision.timeline or {}).get('camera_segments'):
+            from .multicam import MulticamRenderService
+            metadata = RenderService(self.assembly.runner).probe_video(final_path)
+            final_path = MulticamRenderService(self.assembly.runner, self.storage).apply(
+                project, revision, final_path, workdir / 'project_master_multicam.mp4',
+                version.preset.width or metadata.width, version.preset.height or metadata.height,
+            )
         brolls = list((revision.timeline if revision else {}).get('brolls') or [])
         if brolls:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 88, 'Aplicando B-rolls')
@@ -3952,6 +3985,12 @@ class ExternalMediaPipeline:
                     detailed,
                     (project.configuration or {}).get('protected_block_ranges') if project else [],
                 )
+                if project and project.block_media.filter(camera_role='SECONDARY').exists():
+                    project.configuration = {**(project.configuration or {}), 'multicam_words': [
+                        {'start_ms': item.start_ms, 'end_ms': item.end_ms, 'text': item.text}
+                        for item in detailed if item.granularity == 'word'
+                    ]}
+                    project.save(update_fields=['configuration', 'update_at'])
                 boundaries = self._block_boundaries_ms(job)
                 segments = self.transcription.group_for_subtitles(detailed, boundaries)
                 self._update(job, ExternalMediaJob.Status.GENERATING_SUBTITLES, 52, 'Sincronizando as legendas')

@@ -1,4 +1,7 @@
 from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventRemoveFromMediaView, MediaEventUpdateView
+from website.views.media_planning.my_work import (
+    MediaMyWorkView, MediaMyWorkDetailView, MediaMyWorkStatusView, MediaMyWorkAttachmentView,
+)
 from .views import ministry_organization as ministry_org
 from django.urls import path
 from django.views.generic import RedirectView
@@ -246,6 +249,7 @@ from .views.external_media import (
     ExternalMediaProjectPreviewColorView,
     ExternalMediaProjectPreviewOverlayView,
     ExternalMediaProjectPreviewOverlayAssetView,
+    ExternalMediaProjectPreviewCameraView,
     ExternalMediaProjectPreviewBrollView,
     ExternalMediaProjectPreviewBrollAssetView,
     ExternalMediaProjectPreviewBrollUploadView,
@@ -384,6 +388,7 @@ urlpatterns = [
     path('member/media/projects/<uuid:public_id>/preview/music/', ExternalMediaProjectPreviewMusicView.as_view(), name='external_media_project_preview_music'),
     path('member/media/projects/<uuid:public_id>/preview/decisions/<str:decision_id>/', ExternalMediaProjectPreviewDecisionView.as_view(), name='external_media_project_preview_decision'),
     path('member/media/projects/<uuid:public_id>/preview/noise/apply-all/', ExternalMediaProjectPreviewApplyAllNoiseView.as_view(), name='external_media_project_preview_noise_apply_all'),
+    path('member/media/projects/<uuid:public_id>/preview/cameras/', ExternalMediaProjectPreviewCameraView.as_view(), name='external_media_project_preview_camera'),
     path('member/media/projects/<uuid:public_id>/preview/cuts/', ExternalMediaProjectPreviewCutView.as_view(), name='external_media_project_preview_cut_create'),
     path('member/media/projects/<uuid:public_id>/preview/video-splits/', ExternalMediaProjectPreviewVideoSplitView.as_view(), name='external_media_project_preview_video_split'),
     path('member/media/projects/<uuid:public_id>/preview/noise/<str:decision_id>/', ExternalMediaProjectPreviewNoiseClipView.as_view(), name='external_media_project_preview_noise_clip'),
@@ -744,6 +749,10 @@ urlpatterns = [
     path('media/events/<int:event_pk>/tipo/', MediaEventSetTypeView.as_view(), name='media_event_set_type'),
     path('media/events/<int:event_pk>/aplicar-template/', MediaApplyTemplateView.as_view(), name='media_apply_template'),
     # Organization
+    path('media/meu-trabalho/', MediaMyWorkView.as_view(), name='media_my_work'),
+    path('media/meu-trabalho/<int:pk>/', MediaMyWorkDetailView.as_view(), name='media_my_work_detail'),
+    path('media/meu-trabalho/<int:pk>/status/', MediaMyWorkStatusView.as_view(), name='media_my_work_status'),
+    path('media/meu-trabalho/<int:pk>/anexos/<int:attachment_pk>/', MediaMyWorkAttachmentView.as_view(), name='media_my_work_attachment'),
     path('media/organizacao/', MediaOrganizationDashboardView.as_view(), name='media_organization'),
     path('media/organizacao/equipes/', MediaSubTeamListView.as_view(), name='media_subteam_list'),
     path('media/organizacao/equipes/nova/', MediaSubTeamCreateView.as_view(), name='media_subteam_create'),

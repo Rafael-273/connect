@@ -1,0 +1,15 @@
+{% extends 'member_base.html' %}
+{% load static %}
+{% block title %}Meu trabalho · Mídia{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'org_media.css' %}">
+<link rel="stylesheet" href="{% static 'media_my_work.css' %}?v=13">
+{% endblock %}
+{% block content %}
+<div class="org-media min-h-screen pb-28 bg-gray-50">
+    {% include 'parciais/messages.html' %}
+    {% block work_header %}{% endblock %}
+    <main class="media-work px-4 sm:px-6 py-6">{% block work_content %}{% endblock %}</main>
+</div>
+{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+{% endblock %}

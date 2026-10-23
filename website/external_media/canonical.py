@@ -228,6 +228,7 @@ class SourceManifestBuilder:
                     'camera_role': getattr(media, 'camera_role', 'PRIMARY'),
                     'camera_label': getattr(media, 'camera_label', '') or '',
                     'camera_hint': getattr(media, 'camera_hint', 'AUTO'),
+                    'multicam_alignment': (project.configuration or {}).get('multicam_alignments', {}).get(source_id),
                     'take_position': getattr(media, 'position', None),
                     # Until a camera-selection decision exists, only the primary
                     # source enters the legacy sequential renderer.
@@ -295,10 +296,13 @@ class SourceManifestBuilder:
         multicam_groups = {}
         for source in sources:
             metadata = source.get('metadata') or {}
-            if metadata.get('media_role') != 'CAMERA' or not source.get('block_id'):
+            alignment = (project.configuration or {}).get('multicam_alignments', {}).get(source['id'])
+            if alignment is not None:
+                source['metadata'] = metadata = {**metadata, 'multicam_alignment': alignment}
+            if metadata.get('media_role') != 'CAMERA' or source.get('kind') not in {'upload', 'custom_upload', 'project_upload'}:
                 continue
             group_id = (
-                f"{source['block_type']}-{source['block_id']}-take-"
+                f"{source['block_type'] or 'project'}-{source['block_id'] or 'main'}-take-"
                 f"{metadata.get('take_position') or source['position']}"
             )
             group = multicam_groups.setdefault(group_id, {
@@ -306,11 +310,14 @@ class SourceManifestBuilder:
                 'block_id': source['block_id'],
                 'block_type': source['block_type'],
                 'reference_source_id': None,
+                'reference_source_ids': [],
                 'source_ids': [],
             })
             group['source_ids'].append(source['id'])
             if metadata.get('camera_role') == 'PRIMARY':
-                group['reference_source_id'] = source['id']
+                group['reference_source_ids'].append(source['id'])
+                if group['reference_source_id'] is None:
+                    group['reference_source_id'] = source['id']
         return {
             'schema': SOURCE_MANIFEST_SCHEMA,
             'project_id': str(project.public_id),
@@ -319,7 +326,10 @@ class SourceManifestBuilder:
             'created_at': timezone.now().isoformat(),
             'sources': sources,
             'multicam_groups': [
-                group for group in multicam_groups.values() if len(group['source_ids']) > 1
+                group for group in multicam_groups.values()
+                if group['reference_source_id'] and any(
+                    source_id not in group['reference_source_ids'] for source_id in group['source_ids']
+                )
             ],
         }
 

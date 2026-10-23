@@ -11,6 +11,7 @@ from .audio_utils import (
     build_piecewise_expression, clamp, linear_gain_from_db, parse_mean_volume_db,
     settings_from_config,
 )
+from .music_transitions import transition_window
 from .exceptions import ExternalMediaError
 from .ffmpeg_runner import FFmpegRunner
 
@@ -379,6 +380,7 @@ class AudioMixingService:
     def build_playlist(
         self, music_paths, output_path, transitions=None, durations_ms=None,
         clip_durations_ms=None, clip_positions_ms=None, clip_source_in_ms=None,
+        clip_transitions=None, clip_ids=None, sequence_duration_ms=None,
     ):
         """Create one looping-ready music bed from an ordered playlist.
 
@@ -409,6 +411,7 @@ class AudioMixingService:
         if len(scheduled_positions) == len(paths):
             return self._build_scheduled_playlist(
                 paths, output_path, transitions, durations_ms, scheduled_positions, clip_source_in_ms,
+                clip_transitions, clip_ids, sequence_duration_ms,
             )
         if len(paths) == 1:
             return paths[0]
@@ -445,7 +448,7 @@ class AudioMixingService:
         ])
         return Path(output_path)
 
-    def _build_scheduled_playlist(self, paths, output_path, transitions, durations_ms, positions_ms, source_in_ms=None):
+    def _build_scheduled_playlist(self, paths, output_path, transitions, durations_ms, positions_ms, source_in_ms=None, clip_transitions=None, clip_ids=None, sequence_duration_ms=None):
         """Mix a playlist at the exact editorial positions from the timeline.
 
         A regular ``acrossfade`` concatenates inputs and therefore cannot
@@ -457,7 +460,40 @@ class AudioMixingService:
         filters = []
         fade_ins = {}
         fade_outs = {}
+        audible_positions = list(positions_ms)
+        clip_transitions = (list(clip_transitions or []) + [None] * len(paths))[:len(paths)]
+        clip_ids = (list(clip_ids or []) + list(range(len(paths))))[:len(paths)]
+        source_offsets = []
+        for index in range(len(paths)):
+            try:
+                source_offsets.append(max(0, int((source_in_ms or [])[index] or 0)))
+            except (TypeError, ValueError, IndexError):
+                source_offsets.append(0)
+        original_offsets = list(source_offsets)
         for index in range(1, len(paths)):
+            spec = clip_transitions[index]
+            if not spec:
+                continue
+            left_start, left_end = positions_ms[index - 1]
+            right_start, right_end = positions_ms[index]
+            window = transition_window(
+                {'track_id': clip_ids[index - 1],
+                 'start_ms': left_start, 'end_ms': left_end, 'source_in_ms': original_offsets[index - 1]},
+                {'start_ms': right_start, 'end_ms': right_end, 'source_in_ms': source_offsets[index], 'audio_transition': spec},
+                round(self._probe_duration_s(paths[index - 1]) * 1000),
+                round(self._probe_duration_s(paths[index]) * 1000),
+            )
+            if not window:
+                continue
+            audible_positions[index - 1] = (audible_positions[index - 1][0], window['end_ms'])
+            audible_positions[index] = (window['start_ms'], right_end)
+            source_offsets[index] -= right_start - window['start_ms']
+            fade_outs[index - 1] = (window['start_ms'], window['duration_ms'])
+            fade_ins[index] = (window['start_ms'], window['duration_ms'])
+        # Legacy projects can retain their visually overlapping transitions.
+        for index in range(1, len(paths)):
+            if clip_transitions[index]:
+                continue
             if str(transitions[index - 1] if index - 1 < len(transitions) else 'CONSTANT_POWER').upper() != 'CONSTANT_POWER':
                 continue
             previous_start, previous_end = positions_ms[index - 1]
@@ -475,15 +511,15 @@ class AudioMixingService:
             # the preceding clip out exactly where their timeline overlap
             # begins. A later transition may replace its previous fade-out;
             # that is the least surprising behaviour for tightly packed clips.
-            fade_outs[index - 1] = ((overlap_start - previous_start) / 1000, fade_ms / 1000)
-            fade_ins[index] = ((overlap_start - current_start) / 1000, fade_ms / 1000)
+            fade_outs[index - 1] = (overlap_start, fade_ms)
+            fade_ins[index] = (overlap_start, fade_ms)
 
         output_labels = []
         for index, _path in enumerate(paths):
-            start_ms, end_ms = positions_ms[index]
+            start_ms, end_ms = audible_positions[index]
             duration_s = max(.001, (end_ms - start_ms) / 1000)
             try:
-                source_start_s = max(0, float((source_in_ms or [])[index]) / 1000)
+                source_start_s = source_offsets[index] / 1000
             except (TypeError, ValueError, IndexError):
                 source_start_s = 0
             chain = (
@@ -492,18 +528,29 @@ class AudioMixingService:
             )
             if index in fade_ins:
                 fade_start, fade_duration = fade_ins[index]
+                fade_start, fade_duration = (fade_start - start_ms) / 1000, fade_duration / 1000
                 chain += f',afade=t=in:st={fade_start:.3f}:d={fade_duration:.3f}:curve=qsin'
             if index in fade_outs:
                 fade_start, fade_duration = fade_outs[index]
+                fade_start, fade_duration = (fade_start - start_ms) / 1000, fade_duration / 1000
                 chain += f',afade=t=out:st={fade_start:.3f}:d={fade_duration:.3f}:curve=qsin'
             label = f'[scheduled_music{index}]'
             chain += f',adelay={start_ms}:all=1{label}'
             filters.append(chain)
             output_labels.append(label)
+        mix_label = '[music_timeline_mix]' if sequence_duration_ms else '[music_playlist]'
         filters.append(
             f'{"".join(output_labels)}amix=inputs={len(output_labels)}:duration=longest:'
-            'dropout_transition=0:normalize=0[music_playlist]'
+            f'dropout_transition=0:normalize=0{mix_label}'
         )
+        if sequence_duration_ms:
+            # The downstream music mixer loops its input. Include intentional
+            # trailing silence so a scheduled lane cannot restart before the
+            # sequence ends (the browser already treats this range as silence).
+            sequence_s = max(.001, int(sequence_duration_ms) / 1000)
+            filters.append(
+                f'{mix_label}apad=whole_dur={sequence_s:.3f},atrim=duration={sequence_s:.3f}[music_playlist]'
+            )
         command = [settings.FFMPEG_BINARY, '-y']
         for path in paths:
             # Make a resized clip long enough to fill its saved duration. The

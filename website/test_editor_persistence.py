@@ -56,6 +56,22 @@ class EditorFixture(ExternalMediaFixtureMixin):
 
 
 class EditorPersistenceTests(EditorFixture, TestCase):
+    def test_soundtrack_changes_reuse_video_proxy_without_enqueuing_video_render(self):
+        from unittest.mock import patch
+        from website.external_media.preview import ProjectProxyService
+        current = self.project.current_timeline_revision
+        with patch.object(TimelineRevisionService, '_enqueue_timeline_review_proxy') as enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                revision = TimelineRevisionService.update_music_tracks(self.project, self.member, [
+                    {'track_id': 123, 'start_ms': 0, 'end_ms': 5000},
+                    {'track_id': 124, 'start_ms': 5000, 'end_ms': 10000,
+                     'audio_transition': {'type': 'CONSTANT_POWER', 'from_track_id': 123, 'duration_ms': 2000}},
+                ])
+            enqueue.assert_not_called()
+        self.assertEqual(ProjectProxyService.timeline_review_proxy_id(revision), ProjectProxyService.timeline_review_proxy_id(current))
+        changed = TimelineRevisionService.update_music_tracks(self.project, self.member, [])
+        self.assertEqual(changed.timeline['review_video_revision_id'], current.pk)
+
     def test_manual_framing_can_start_without_an_automatic_decision(self):
         current = self.project.current_timeline_revision
         source_id = current.source_manifest['sources'][0]['id']

@@ -1654,6 +1654,48 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(restored.pk, initial.pk)
         self.assertNotIn('music_override_track_id', restored.timeline)
 
+    def test_explicit_music_transition_persists_and_supports_undo_redo_removal(self):
+        project = self.make_project()
+        initial = TimelineRevisionService.ensure_initial(project, self.member)
+        tracks = [
+            {'track_id': 123, 'start_ms': 0, 'end_ms': 4000},
+            {'track_id': 124, 'start_ms': 4000, 'end_ms': 8000, 'source_in_ms': 1000,
+             'audio_transition': {'id': 'join', 'type': 'CONSTANT_POWER', 'from_track_id': 123, 'duration_ms': 2000}},
+        ]
+        revision = TimelineRevisionService.update_music_tracks(project, self.member, tracks)
+        self.assertEqual(revision.timeline['music_tracks'][1]['audio_transition'], tracks[1]['audio_transition'])
+        self.assertEqual(revision.timeline['music_tracks'][1]['start_ms'], 4000)
+        self.assertTrue(all(track['transition'] == 'NONE' for track in revision.timeline['music_tracks']))
+        self.assertEqual(TimelineRevisionService.navigate_history(project, self.member, 'undo').pk, initial.pk)
+        self.assertEqual(TimelineRevisionService.navigate_history(project, self.member, 'redo').pk, revision.pk)
+        tracks[1]['audio_transition'] = None
+        removed = TimelineRevisionService.update_music_tracks(project, self.member, tracks)
+        self.assertIsNone(removed.timeline['music_tracks'][1]['audio_transition'])
+        restored = TimelineRevisionService.navigate_history(project, self.member, 'undo')
+        self.assertEqual(restored.timeline['music_tracks'][1]['audio_transition']['duration_ms'], 2000)
+
+    def test_music_joins_follow_timeline_order_after_repositioning(self):
+        project = self.make_project()
+        TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.update_music_tracks(project, self.member, [
+            {'track_id': 124, 'start_ms': 4000, 'end_ms': 8000, 'source_in_ms': 1000,
+             'audio_transition': {'type': 'CONSTANT_POWER', 'from_track_id': 123, 'duration_ms': 2000}},
+            {'track_id': 123, 'start_ms': 0, 'end_ms': 4000},
+        ])
+        self.assertEqual([track['track_id'] for track in revision.timeline['music_tracks']], [123, 124])
+        self.assertEqual(revision.timeline['music_tracks'][1]['audio_transition']['from_track_id'], 123)
+
+    def test_new_music_defaults_to_no_transition_and_invalid_specs_are_safe(self):
+        project = self.make_project()
+        TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.update_music_tracks(project, self.member, [
+            {'track_id': 123}, {'track_id': 124, 'audio_transition': {'type': 'CONSTANT_POWER', 'duration_ms': 'bad'}},
+        ])
+        left, right = revision.timeline['music_tracks']
+        self.assertEqual(left['end_ms'], right['start_ms'])
+        self.assertEqual(right['transition'], 'NONE')
+        self.assertIsNone(right['audio_transition'])
+
     def test_interactive_preview_page_uses_the_persisted_timeline(self):
         project = self.make_project()
         project.status = ExternalMediaProject.Status.AWAITING_REVIEW

@@ -1,0 +1,39 @@
+<section class="work-detail-card work-detail-overview" data-work-header-title="{{ activity.header_title }}" data-work-stage-title="{{ activity.title }}">
+    <div class="work-detail-activity">
+        {% if activity.briefing %}<div class="work-detail-section-heading"><p class="work-detail-kicker">Briefing</p></div><div class="media-work-text">{{ activity.briefing|urlize|linebreaksbr }}</div>{% endif %}
+        {% if activity.observations %}<div class="work-detail-section-heading {% if activity.briefing %}mt-5 pt-5 border-t border-gray-100{% endif %}"><p class="work-detail-kicker">Observações</p></div><div class="media-work-text">{{ activity.observations|urlize|linebreaksbr }}</div>{% endif %}
+        {% if activity.description %}<div class="work-detail-section-heading {% if activity.briefing or activity.observations %}mt-5 pt-5 border-t border-gray-100{% endif %}"><p class="work-detail-kicker">Detalhes da etapa</p></div><div class="media-work-text">{{ activity.description|urlize|linebreaksbr }}</div>{% endif %}
+    </div>
+    <dl class="work-detail-facts">
+        <div><dt>Status</dt><dd><span class="work-detail-status text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 {% if activity.status == 'completed' %}is-completed{% else %}is-pending{% endif %}">{% if activity.status == 'completed' %}Concluída{% else %}Pendente{% endif %}</span></dd></div>
+        <div><dt>Prazo da etapa</dt><dd class="{% if activity.deadline.overdue and activity.status != 'completed' %}work-detail-fact-overdue{% endif %}">{% if activity.due_date %}<time datetime="{{ activity.due_date|date:'c' }}">{{ activity.due_date|date:'d/m/Y H:i' }}</time>{% if activity.status != 'completed' %} · {{ activity.deadline.label }}{% endif %}{% else %}Sem prazo definido{% endif %}</dd></div>
+        <div><dt>Demanda</dt><dd>{{ activity.demand_title }}</dd></div>
+        <div><dt>Evento</dt><dd>{{ activity.event_title|default:'Demanda avulsa' }}</dd></div>
+    </dl>
+</section>
+<section class="work-detail-card mt-4">
+    <form method="post" action="{% url 'media_my_work_status' activity.id %}" class="work-detail-status-form">
+        {% csrf_token %}
+        <div class="work-detail-actions">
+            {% if activity.status == 'completed' %}<button class="org-btn-secondary" type="submit" name="status" value="pending">Marcar como pendente</button>
+            {% else %}<button class="org-btn-primary" type="submit" name="status" value="completed">Marcar como concluída</button>{% endif %}
+        </div>
+    </form>
+</section>
+{% if attachments %}
+<section class="work-detail-card mt-4">
+    <div class="work-detail-section-heading"><p class="work-detail-kicker">Arquivos e referências</p></div>
+    <ul class="space-y-2">{% for attachment in attachments %}<li><a class="media-work-attachment" href="{% url 'media_my_work_attachment' activity.id attachment.pk %}"><i class="fas fa-paperclip" aria-hidden="true"></i>{{ attachment.name }}</a></li>{% endfor %}</ul>
+</section>
+{% endif %}
+{% if not activity.briefing and not activity.observations and not activity.description %}
+<section class="work-detail-card mt-4">
+    <form method="post" action="{% url 'media_my_work_status' activity.id %}" class="work-detail-status-form">
+        {% csrf_token %}
+        <div class="work-detail-actions">
+            {% if activity.status == 'completed' %}<button class="org-btn-secondary" type="submit" name="status" value="pending">Marcar como pendente</button>
+            {% else %}<button class="org-btn-primary" type="submit" name="status" value="completed">Marcar como concluída</button>{% endif %}
+        </div>
+    </form>
+</section>
+{% endif %}

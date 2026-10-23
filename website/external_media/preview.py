@@ -47,7 +47,9 @@ MIN_MANUAL_CUT_MS = 33
 # after the fix transparently get one correctly shaped source proxy.
 # Version 3 also rebuilds phone MOV proxies with their audio timestamps rebased
 # to the video clock. Older cached proxies can retain a delayed AAC start PTS.
-SOURCE_PROXY_GEOMETRY_VERSION = 4
+# Version 5 preserves the last video frame and audio tail through AAC proxy
+# encodes; v4 proxies can accumulate per-take timing drift.
+SOURCE_PROXY_GEOMETRY_VERSION = 5
 REVIEW_MASTER_PROXY_ID = '__review-master__'
 TIMELINE_REVIEW_PROXY_PREFIX = '__timeline-review-r'
 TIMELINE_REVIEW_PROXY_LEASE = timedelta(minutes=15)
@@ -56,7 +58,8 @@ TIMELINE_REVIEW_PROXY_LEASE = timedelta(minutes=15)
 class ProjectProxyService:
     @staticmethod
     def timeline_review_proxy_id(revision):
-        return f'{TIMELINE_REVIEW_PROXY_PREFIX}{revision.pk}__'
+        video_revision_id = (revision.timeline or {}).get('review_video_revision_id') or revision.pk
+        return f'{TIMELINE_REVIEW_PROXY_PREFIX}{video_revision_id}__'
 
     @classmethod
     def has_usable_timeline_review_proxy(cls, proxy, revision):
@@ -65,7 +68,7 @@ class ProjectProxyService:
             proxy
             and proxy.status == ProjectSourceProxy.Status.READY
             and proxy.proxy_file
-            and metadata.get('timeline_revision_id') == revision.pk
+            and metadata.get('timeline_revision_id') == ((revision.timeline or {}).get('review_video_revision_id') or revision.pk)
         )
 
     @classmethod
@@ -261,6 +264,9 @@ class ProjectProxyService:
             'template_version__preset', 'template_version__preview_proxy_profile', 'render_job',
         ).get(pk=project_id)
         revision = TimelineRevision.objects.get(pk=revision_id, project=project)
+        video_revision_id = (revision.timeline or {}).get('review_video_revision_id')
+        if video_revision_id:
+            revision = TimelineRevision.objects.get(pk=video_revision_id, project=project)
         job = project.render_job
         if not job or not job.original_video:
             return None
@@ -272,7 +278,20 @@ class ProjectProxyService:
         assembly = VideoAssemblyService(storage=storage)
         quality = MediaQualityService(assembly.runner)
         try:
-            source = storage.input(job.original_video).get_ffmpeg_input()
+            source_field = job.original_video
+            if (revision.timeline or {}).get('cameras'):
+                # Delivery replaces job.original_video with the baked final cut.
+                # The cached initial review master is the immutable, primary-only
+                # clock; using a prior delivery would bake old switches twice
+                # and make removing a camera after completion ineffective.
+                clean_master = project.source_proxies.filter(
+                    source_id=REVIEW_MASTER_PROXY_ID, status=ProjectSourceProxy.Status.READY,
+                ).exclude(proxy_file='').first()
+                if clean_master:
+                    source_field = clean_master.proxy_file
+                elif job.rendered_from_timeline_revision:
+                    raise ExternalMediaError('A base original do preview não está disponível. Reprocesse o projeto para revisar as câmeras.')
+            source = storage.input(source_field).get_ffmpeg_input()
             source_width, source_height = assembly._video_dimensions(source)
             # A manual crop uses even rounding. Without restoring every part
             # to one canvas before concat, adjacent pieces can differ by a few
@@ -307,6 +326,13 @@ class ProjectProxyService:
                 rendered_layers = []
                 output = main_output
                 duration_ms = cls._timeline_review_duration_ms(revision)
+                if (revision.timeline or {}).get('camera_segments'):
+                    from .multicam import MulticamRenderService
+                    output = MulticamRenderService(assembly.runner, storage).apply(
+                        project, revision, output, workspace.file('output', 'timeline-review-multicam.mp4'),
+                        proxy_width, proxy_height,
+                    )
+                    rendered_layers.append('MULTICAM')
                 brolls = list((revision.timeline or {}).get('brolls') or [])
                 if brolls:
                     from .broll import BrollRenderService
@@ -559,15 +585,20 @@ class PreviewCapabilityRegistry:
             available.add(cls.AUDIO_NOISE_CLEANUP)
         if MediaTemplatePlugin.Code.LUT in plugin_codes:
             available.add(cls.COLOR)
+        has_cameras = project.block_media.filter(camera_role='SECONDARY').exists()
+        if has_cameras:
+            available.add(cls.CAMERA_SWITCHES)
         available.update(declared)
         if project.template_version.blocks.exclude(overlay_definitions=[]).exists() or project.overlays.exists():
             available.add(cls.GRAPHICS)
-        implemented_editable = {cls.CUTS, cls.SUBTITLES, cls.TRANSFORMS, cls.GRAPHICS, cls.BROLL}
+        implemented_editable = {cls.CUTS, cls.SUBTITLES, cls.TRANSFORMS, cls.GRAPHICS, cls.BROLL, cls.CAMERA_SWITCHES}
         editable = [item for item in configured if item in available and item in implemented_editable]
         if cls.GRAPHICS in available and cls.GRAPHICS not in editable:
             editable.append(cls.GRAPHICS)
         if cls.BROLL in available and cls.BROLL not in editable:
             editable.append(cls.BROLL)
+        if has_cameras and cls.CAMERA_SWITCHES not in editable:
+            editable.append(cls.CAMERA_SWITCHES)
         return {
             'available': sorted(available),
             'editable': editable,
@@ -585,7 +616,7 @@ class PreviewCompositionService:
         # for wrapping, glyph metrics or ASS-only background/shadow behavior.
         'SUBTITLES': 'APPROXIMATE',
         'TRANSFORMS': 'APPROXIMATE',
-        'CAMERA_SWITCHES': 'NOT_AVAILABLE',
+        'CAMERA_SWITCHES': 'APPROXIMATE',
         'LAYOUTS': 'NOT_AVAILABLE',
         'GRAPHICS': 'APPROXIMATE',
         'BROLL': 'APPROXIMATE',
@@ -896,6 +927,10 @@ class PreviewCompositionService:
         # previous crop and would show a different zoom from the final render.
         if has_reframe_override or has_color_adjustment:
             review_master_url = None
+        from .multicam import MulticamService
+        cameras, camera_segments = MulticamService.compose(source_manifest, operations, clips, project.public_id)
+        if cameras:
+            review_master_url = None
         fidelity = {key: cls.FIDELITY[key] for key in capabilities['available']}
         if review_master_url and not has_reframe_override and 'TRANSFORMS' in fidelity:
             fidelity['TRANSFORMS'] = 'EXACT'
@@ -922,6 +957,8 @@ class PreviewCompositionService:
             ),
             'audio_mix': audio_mix,
             'clips': clips,
+            'cameras': cameras,
+            'camera_segments': camera_segments,
             # Visual blade points do not remove media by themselves, but must
             # survive a reload so the member can select either resulting take.
             'video_splits_ms': sorted({
@@ -1186,6 +1223,46 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def update_camera(cls, project, member, payload):
+        from .multicam import MulticamService
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        decisions = deepcopy(current.edit_decision_set)
+        operations = decisions.setdefault('operations', [])
+        selection_id = str(payload.get('id') or '')
+        existing = next((o for o in operations if o.get('id') == selection_id and o.get('type') == 'camera_selection'), None)
+        if selection_id and not existing:
+            raise ValueError('Alternância não encontrada.')
+        if payload.get('delete'):
+            if not existing:
+                raise ValueError('Alternância não encontrada.')
+            operations.remove(existing)
+        else:
+            start, end = int(payload['start_ms']), int(payload['end_ms'])
+            # The UI uses the edited clock. Persist source coordinates so later
+            # speech cuts and blades cannot move camera pictures out of sync.
+            parts = [c for c in current.timeline['clips'] if c['timeline_in_ms'] < end and start < c['timeline_out_ms']]
+            if (not parts or start < parts[0]['timeline_in_ms'] or end > parts[-1]['timeline_out_ms']
+                or any(c['asset_id'] != parts[0]['asset_id'] for c in parts)):
+                raise ValueError('O intervalo deve pertencer à mesma gravação principal.')
+            first, last = parts[0], parts[-1]
+            operation = MulticamService.selection(
+                current.source_manifest, reference_id=first['asset_id'], camera_id=str(payload['camera_source_id']),
+                start=first['source_in_ms'] + start - first['timeline_in_ms'],
+                end=last['source_in_ms'] + end - last['timeline_in_ms'],
+                offset=payload.get('offset_ms'), rate=payload.get('rate'), selection_id=selection_id or None,
+            )
+            if existing:
+                operations.remove(existing)
+            operations.append(operation)
+        # Compose validates camera coverage and overlapping ranges before save.
+        revision = cls._create(locked, current.source_manifest, decisions, 'Ajuste de câmera', member, parent=current)
+        session = cls.session(locked, member, current)
+        cls._record(session, current, revision, 'camera_selection', payload, {}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
     def update_subtitle(cls, project, member, cue_id, text=None, start_ms=None, end_ms=None, delete=False):
         """Update one cue without losing the revision/undo contract.
 
@@ -1413,11 +1490,11 @@ class TimelineRevisionService:
                 continue
             if track_id <= 0 or any(row['track_id'] == track_id for row in normalized):
                 continue
-            transition = str((item or {}).get('transition') or 'CONSTANT_POWER').upper()
+            transition = str((item or {}).get('transition') or 'NONE').upper()
             if transition not in {'CONSTANT_POWER', 'NONE'}:
-                transition = 'CONSTANT_POWER'
+                transition = 'NONE'
             try:
-                duration_ms = int((item or {}).get('transition_duration_ms') or 2000)
+                duration_ms = int((item or {}).get('transition_duration_ms', 2000))
             except (TypeError, ValueError):
                 duration_ms = 2000
             normalized_item = {
@@ -1425,6 +1502,22 @@ class TimelineRevisionService:
                 'transition': transition,
                 'transition_duration_ms': max(0, min(10_000, duration_ms)),
             }
+            # Structured transitions are explicit and tied to a neighbour. A null
+            # value is a deliberate removal, never a legacy automatic fade.
+            if 'audio_transition' in item:
+                spec = item.get('audio_transition')
+                normalized_item['audio_transition'] = None
+                if isinstance(spec, dict) and spec.get('type') == 'CONSTANT_POWER':
+                    try:
+                        normalized_item['audio_transition'] = {
+                            'id': str(spec.get('id') or f'music-join-{track_id}')[:100],
+                            'type': 'CONSTANT_POWER',
+                            'from_track_id': int(spec['from_track_id']),
+                            'duration_ms': max(0, min(10000, int(spec['duration_ms']))),
+                        }
+                    except (KeyError, TypeError, ValueError):
+                        pass
+                normalized_item['transition'] = 'NONE'
             for key in ('start_ms', 'end_ms', 'source_in_ms'):
                 if (item or {}).get(key) is None:
                     continue
@@ -1458,6 +1551,7 @@ class TimelineRevisionService:
                 item['start_ms'] = round(max(0, cursor))
                 cursor += slot
                 item['end_ms'] = round(min(sequence_duration, cursor))
+        normalized.sort(key=lambda item: item.get('start_ms', 0))
         previous = (current.timeline or {}).get('music_tracks')
         if previous is None:
             legacy_id = (current.timeline or {}).get('music_override_track_id')
@@ -1475,7 +1569,7 @@ class TimelineRevisionService:
             locked, current.source_manifest, current.edit_decision_set,
             'Trilha sonora alterada', member, current,
             music_override_track_id=normalized[0]['track_id'] if normalized else '',
-            music_tracks=normalized,
+            music_tracks=normalized, reuse_review_video=True,
         )
         session = cls.session(locked, member, revision)
         cls._record(
@@ -1825,6 +1919,7 @@ class TimelineRevisionService:
     def _create(
         cls, project, manifest, decisions, reason, member, parent=None,
         overlays=None, brolls=None, music_override_track_id=None, music_tracks=None, music_volume=None, audio_mix=None,
+        reuse_review_video=False,
     ):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
@@ -1837,10 +1932,23 @@ class TimelineRevisionService:
         composition_manifest = cls.manifest_with_reference_durations(
             manifest, cls.source_duration_reference(project, parent),
         )
+        durations = dict(project.source_proxies.filter(status=ProjectSourceProxy.Status.READY).values_list('source_id', 'duration_ms'))
+        for source in composition_manifest.get('sources', []):
+            if not source.get('duration_ms'):
+                source['duration_ms'] = durations.get(source['id'])
         timeline = PreviewCompositionService.compose(
             project, composition_manifest, decisions, number,
             overlays_override=overlays, brolls_override=brolls,
         )
+        if parent is None:
+            from .multicam import MulticamService
+            proposals = MulticamService.propose(project, composition_manifest, timeline)
+            if proposals:
+                decisions = {**decisions, 'operations': [*(decisions.get('operations') or []), *proposals]}
+                timeline = PreviewCompositionService.compose(
+                    project, composition_manifest, decisions, number,
+                    overlays_override=overlays, brolls_override=brolls,
+                )
         # Keep the selected track through every unrelated mutation.  ``None``
         # means inherit the parent; callers changing music pass an explicit
         # id (or the empty-string sentinel when clearing it in the future).
@@ -1860,6 +1968,9 @@ class TimelineRevisionService:
             audio_mix = deepcopy((parent.timeline or {}).get('audio_mix') or {})
         if audio_mix:
             timeline['audio_mix'] = deepcopy(audio_mix)
+        if reuse_review_video and parent:
+            # Soundtrack edits do not alter the proxy's video or original take audio.
+            timeline['review_video_revision_id'] = (parent.timeline or {}).get('review_video_revision_id') or parent.pk
         revision = TimelineRevision.objects.create(
             project=project, revision=number, parent=parent, timeline=timeline,
             source_manifest=composition_manifest, edit_decision_set=decisions, reason=reason, created_by=member,
@@ -1889,7 +2000,8 @@ class TimelineRevisionService:
         # worker is temporarily unavailable. The editor continues on source
         # proxies until the continuous revision proxy is ready.
         if (
-            not has_manual_framing
+            not reuse_review_video
+            and not has_manual_framing
             and project.render_job_id
             and project.render_job
             and project.render_job.original_video

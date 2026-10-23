@@ -50,3 +50,25 @@ class EditorBrowserTests(EditorFixture, StaticLiveServerTestCase):
         for point in (2000, 4000, 6000):
             TimelineRevisionService.create_video_split(self.project, self.member, point)
         self.browser_check('editor_cut.browser.cjs')
+
+    def test_soundtrack_transitions_and_optimistic_saves(self):
+        import io
+        import math
+        import struct
+        import wave
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from website.models.external_media import BackgroundMusicTrack
+        tracks = []
+        for frequency in (240, 480):
+            data = io.BytesIO()
+            with wave.open(data, 'wb') as output:
+                output.setnchannels(1)
+                output.setsampwidth(2)
+                output.setframerate(8000)
+                output.writeframes(b''.join(struct.pack('<h', round(4000 * math.sin(2 * math.pi * frequency * i / 8000))) for i in range(96000)))
+            tracks.append(BackgroundMusicTrack.objects.create(name=f'Música {frequency}', audio_file=SimpleUploadedFile(f'music-{frequency}.wav', data.getvalue())))
+        TimelineRevisionService.update_music_tracks(self.project, self.member, [
+            {'track_id': tracks[0].pk, 'start_ms': 0, 'end_ms': 5000},
+            {'track_id': tracks[1].pk, 'start_ms': 5000, 'end_ms': 10000, 'source_in_ms': 1000},
+        ])
+        self.browser_check('editor_music_transitions.browser.cjs')
