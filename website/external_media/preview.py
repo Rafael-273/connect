@@ -1488,7 +1488,9 @@ class TimelineRevisionService:
                 track_id = int((item or {}).get('track_id'))
             except (TypeError, ValueError):
                 continue
-            if track_id <= 0 or any(row['track_id'] == track_id for row in normalized):
+            # A music source may occur more than once after the editor splits
+            # it into independently adjustable clips.
+            if track_id <= 0:
                 continue
             transition = str((item or {}).get('transition') or 'NONE').upper()
             if transition not in {'CONSTANT_POWER', 'NONE'}:
@@ -1498,10 +1500,15 @@ class TimelineRevisionService:
             except (TypeError, ValueError):
                 duration_ms = 2000
             normalized_item = {
+                'clip_id': str((item or {}).get('clip_id') or uuid.uuid4()),
                 'track_id': track_id,
                 'transition': transition,
                 'transition_duration_ms': max(0, min(10_000, duration_ms)),
             }
+            try:
+                normalized_item['volume'] = max(0.0, min(1.0, float((item or {}).get('volume', 1))))
+            except (TypeError, ValueError):
+                normalized_item['volume'] = 1.0
             # Structured transitions are explicit and tied to a neighbour. A null
             # value is a deliberate removal, never a legacy automatic fade.
             if 'audio_transition' in item:
@@ -1510,9 +1517,9 @@ class TimelineRevisionService:
                 if isinstance(spec, dict) and spec.get('type') == 'CONSTANT_POWER':
                     try:
                         normalized_item['audio_transition'] = {
-                            'id': str(spec.get('id') or f'music-join-{track_id}')[:100],
+                            'id': str(spec.get('id') or f'music-join-{normalized_item["clip_id"]}')[:100],
                             'type': 'CONSTANT_POWER',
-                            'from_track_id': int(spec['from_track_id']),
+                            'from_clip_id': str(spec.get('from_clip_id') or spec.get('from_track_id') or '')[:100],
                             'duration_ms': max(0, min(10000, int(spec['duration_ms']))),
                         }
                     except (KeyError, TypeError, ValueError):

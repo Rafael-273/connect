@@ -380,7 +380,7 @@ class AudioMixingService:
     def build_playlist(
         self, music_paths, output_path, transitions=None, durations_ms=None,
         clip_durations_ms=None, clip_positions_ms=None, clip_source_in_ms=None,
-        clip_transitions=None, clip_ids=None, sequence_duration_ms=None,
+        clip_transitions=None, clip_ids=None, sequence_duration_ms=None, clip_volumes=None,
     ):
         """Create one looping-ready music bed from an ordered playlist.
 
@@ -411,7 +411,7 @@ class AudioMixingService:
         if len(scheduled_positions) == len(paths):
             return self._build_scheduled_playlist(
                 paths, output_path, transitions, durations_ms, scheduled_positions, clip_source_in_ms,
-                clip_transitions, clip_ids, sequence_duration_ms,
+                clip_transitions, clip_ids, sequence_duration_ms, clip_volumes,
             )
         if len(paths) == 1:
             return paths[0]
@@ -448,7 +448,7 @@ class AudioMixingService:
         ])
         return Path(output_path)
 
-    def _build_scheduled_playlist(self, paths, output_path, transitions, durations_ms, positions_ms, source_in_ms=None, clip_transitions=None, clip_ids=None, sequence_duration_ms=None):
+    def _build_scheduled_playlist(self, paths, output_path, transitions, durations_ms, positions_ms, source_in_ms=None, clip_transitions=None, clip_ids=None, sequence_duration_ms=None, clip_volumes=None):
         """Mix a playlist at the exact editorial positions from the timeline.
 
         A regular ``acrossfade`` concatenates inputs and therefore cannot
@@ -470,6 +470,7 @@ class AudioMixingService:
             except (TypeError, ValueError, IndexError):
                 source_offsets.append(0)
         original_offsets = list(source_offsets)
+        clip_volumes = list(clip_volumes or [])
         for index in range(1, len(paths)):
             spec = clip_transitions[index]
             if not spec:
@@ -526,6 +527,11 @@ class AudioMixingService:
                 f'[{index}:a]aresample=48000,aformat=channel_layouts=stereo,'
                 f'atrim=start={source_start_s:.3f}:duration={duration_s:.3f},asetpts=N/SR/TB'
             )
+            try:
+                clip_volume = max(0.0, min(1.0, float(clip_volumes[index])))
+            except (TypeError, ValueError, IndexError):
+                clip_volume = 1.0
+            chain += f',volume={clip_volume:.4f}'
             if index in fade_ins:
                 fade_start, fade_duration = fade_ins[index]
                 fade_start, fade_duration = (fade_start - start_ms) / 1000, fade_duration / 1000

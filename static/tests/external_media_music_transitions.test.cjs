@@ -97,3 +97,12 @@ test('crossfade gains are written directly with fades and automation already app
         assert.ok(Math.abs(channelWrites[0]-expected)<1e-10);
     }
 });
+
+test('a split music source uses clip identities for its constant-power join',()=>{
+    const window=transitions.windowFor(
+        {clip_id:'music-a',start_ms:0,end_ms:5000,source_in_ms:0},
+        {clip_id:'music-b',start_ms:5000,end_ms:10000,source_in_ms:5000,audio_transition:{type:'CONSTANT_POWER',from_clip_id:'music-a',duration_ms:2000}},
+        20000,20000,
+    );
+    assert.deepEqual(window,{start_ms:4000,end_ms:6000,duration_ms:2000});
+});

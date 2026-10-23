@@ -2367,16 +2367,16 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, PreviewMu
             return preview_revision_response(project, self.member, revision)
         if 'tracks' in payload:
             tracks = payload.get('tracks')
-            if not isinstance(tracks, list) or len(tracks) > 8:
-                return JsonResponse({'error': 'Escolha entre uma e oito músicas.'}, status=400)
+            if not isinstance(tracks, list) or len(tracks) > 32:
+                return JsonResponse({'error': 'A timeline suporta até 32 clipes de música.'}, status=400)
             track_ids = []
             for item in tracks:
                 try:
                     track_id = int((item or {}).get('track_id'))
                 except (TypeError, ValueError):
                     return JsonResponse({'error': 'Uma música selecionada é inválida.'}, status=400)
-                if track_id <= 0 or track_id in track_ids:
-                    return JsonResponse({'error': 'Não repita músicas na mesma sequência.'}, status=400)
+                if track_id <= 0:
+                    return JsonResponse({'error': 'Uma música selecionada é inválida.'}, status=400)
                 track_ids.append(track_id)
             available = set(BackgroundMusicTrack.objects.filter(
                 pk__in=track_ids,
@@ -2473,12 +2473,13 @@ def preview_timeline_with_music(project, timeline):
             if item.get('id'):
                 url += f'?track_id={item["id"]}'
             browser_tracks.append({
-                'id': item.get('id'), 'name': item.get('name') or '', 'url': url,
+                'id': item.get('id'), 'clip_id': item.get('clip_id'), 'name': item.get('name') or '', 'url': url,
                 'transition': item.get('transition') or 'CONSTANT_POWER',
                 'transition_duration_ms': int(item.get('transition_duration_ms', 2000)),
                 'start_ms': item.get('start_ms'), 'end_ms': item.get('end_ms'),
                 'source_in_ms': item.get('source_in_ms'),
                 'audio_transition': item.get('audio_transition'),
+                'volume': item.get('volume', 1),
             })
         timeline['music'] = {
             'url': browser_tracks[0]['url'],

@@ -55,3 +55,21 @@ test('a missing proxy cancels pending metadata from the previous source',()=>{
     const h=harness();h.player.seek('a.mp4',3,{autoplay:true});h.player.seek('',0);
     h.video.metadata();h.video.frame();h.flush();assert.equal(h.plays,0);assert.equal(h.video.currentTime,0);assert.equal(h.loading.at(-1),false);
 });
+
+test('a next take starting at zero becomes ready without a seeked event',()=>{
+    const h=harness();h.video.dataset.source='a.mp4';
+    h.player.warm('b.mp4',0);const incoming=h.player.preloader;
+    incoming.metadata();assert.equal(incoming.seeking,false);
+    incoming.readyState=2;incoming.dispatchEvent(new Event('loadeddata'));
+    assert.equal(h.player.preloadedSource,'b.mp4');
+    h.player.seek('b.mp4',0,{autoplay:true});
+    assert.equal(h.player.video,incoming);assert.equal(h.player.waitingForPreload,null);
+});
+
+test('preloading a trimmed take waits for its target frame',()=>{
+    const h=harness();h.video.dataset.source='a.mp4';h.player.warm('b.mp4',3);
+    const incoming=h.player.preloader;incoming.metadata();
+    incoming.readyState=2;incoming.dispatchEvent(new Event('canplay'));
+    assert.equal(h.player.preloadedSource,'');
+    incoming.frame();assert.equal(h.player.preloadedSource,'b.mp4');
+});

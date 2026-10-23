@@ -1706,36 +1706,40 @@ class MusicService:
         requested = timeline.get('music_tracks')
         if isinstance(requested, list):
             ids = []
-            transitions = {}
+            requested_clips = []
             for item in requested:
                 try:
                     track_id = int((item or {}).get('track_id'))
                 except (TypeError, ValueError):
                     continue
-                if track_id > 0 and track_id not in ids:
-                    ids.append(track_id)
+                if track_id > 0:
+                    if track_id not in ids:
+                        ids.append(track_id)
                     try:
                         transition_duration_ms = int((item or {}).get('transition_duration_ms', 2000))
                     except (TypeError, ValueError):
                         transition_duration_ms = 2000
-                    transitions[track_id] = {
+                    requested_clips.append({
+                        'clip_id': str((item or {}).get('clip_id') or f'legacy-{len(requested_clips)}'),
+                        'track_id': track_id,
                         'transition': str((item or {}).get('transition') or 'CONSTANT_POWER').upper(),
                         'transition_duration_ms': max(0, min(10_000, transition_duration_ms)),
                         'start_ms': (item or {}).get('start_ms'),
                         'end_ms': (item or {}).get('end_ms'),
                         'source_in_ms': (item or {}).get('source_in_ms'),
                         'audio_transition': (item or {}).get('audio_transition'),
-                    }
+                        'volume': (item or {}).get('volume', 1),
+                    })
             available = {
                 item.pk: item for item in BackgroundMusicTrack.objects.filter(pk__in=ids).exclude(audio_file='')
             }
             resolved = []
-            for track_id in ids:
-                track = available.get(track_id)
+            for clip in requested_clips:
+                track = available.get(clip['track_id'])
                 if track:
                     resolved.append({
                         'id': track.pk, 'name': track.name, 'file': track.audio_file,
-                        **transitions[track_id],
+                        **clip,
                     })
             if resolved and all(item.get('start_ms') is not None for item in resolved):
                 resolved.sort(key=lambda item: int(item['start_ms']))
@@ -2957,8 +2961,9 @@ class ExternalMediaProjectPipeline:
                 ],
                 [item.get('source_in_ms') for item in music_tracks],
                 [item.get('audio_transition') for item in music_tracks],
-                [item.get('id') for item in music_tracks],
+                [item.get('clip_id') or item.get('id') for item in music_tracks],
                 sequence_duration_ms=(music_timeline.get('sequence') or {}).get('duration_ms'),
+                clip_volumes=[item.get('volume', 1) for item in music_tracks],
             )
         else:
             music = local_music_tracks[0] if local_music_tracks else None

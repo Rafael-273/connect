@@ -3,7 +3,7 @@
     'use strict';
     function windowFor(left,right,sourceDurationMs,incomingDurationMs=null){
         const spec=right.audio_transition;
-        if(!spec||spec.type!=='CONSTANT_POWER'||String(spec.from_track_id)!==String(left.track_id??left.id))return null;
+        if(!spec||spec.type!=='CONSTANT_POWER'||String(spec.from_clip_id??spec.from_track_id)!==String(left.clip_id??left.track_id??left.id))return null;
         const cut=Number(right.start_ms);
         if(Number(left.end_ms)!==cut)return null;
         const requested=Math.max(0,Math.min(10000,Number(spec.duration_ms)||0));

@@ -921,6 +921,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 globalMs=Math.max(Number(eventClip.timeline_in_ms),Math.min(Number(eventClip.timeline_out_ms),Number(eventClip.timeline_in_ms)+Math.max(0,currentSourceMs-Number(eventClip.source_in_ms))));
                 if(!playerVideo.paused&&currentSourceMs>=Number(eventClip.source_out_ms)-40){
                     const next=nextClipAfter(eventClip);
+                    if(next&&sourceFor(next)===sourceFor(eventClip)&&Math.abs(Number(next.source_in_ms)-Number(eventClip.source_out_ms))<1){
+                        if(currentSourceMs<Number(eventClip.source_out_ms))return;
+                        activeClip=next;
+                        globalMs=Number(next.timeline_in_ms)+Math.max(0,currentSourceMs-Number(next.source_in_ms));
+                        warmNextClip(next);renderPosition();return;
+                    }
                     if(next){seek(next.timeline_in_ms,true);return}
                     playerVideo.pause();
                 }
@@ -973,11 +979,20 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function videoSegments(){const minimum=minimumCutMs();return timeline.clips.flatMap(clip=>{const points=[clip.timeline_in_ms,...bladePoints.filter(point=>point-clip.timeline_in_ms>=minimum&&clip.timeline_out_ms-point>=minimum),clip.timeline_out_ms].sort((a,b)=>a-b);return points.slice(0,-1).map((start,index)=>{const end=points[index+1],offsetStart=start-Number(clip.timeline_in_ms||0),offsetEnd=end-Number(clip.timeline_in_ms||0);return {start,end,label:clip.block?.name||asset(clip.asset_id)?.name||'Vídeo',assetId:clip.asset_id,sourceTimeMs:Number(clip.source_in_ms||0)+offsetStart,masterStartMs:Number(clip.master_in_ms??editedToMaster(clip.timeline_in_ms,'after'))+offsetStart,masterEndMs:Number(clip.master_in_ms??editedToMaster(clip.timeline_in_ms,'after'))+offsetEnd}})})}
     async function addBladeAt(point){point=Math.round(snapToFrame(point));const clip=clipAt(point),minimum=minimumCutMs();if(!clip||point-clip.timeline_in_ms<minimum||clip.timeline_out_ms-point<minimum||bladePoints.some(value=>Math.abs(value-point)<minimum))return;const previous=[...bladePoints];bladePoints=[...bladePoints,point].sort((a,b)=>a-b);renderEditorTimeline();try{applyTimeline(await api('{% url "external_media_project_preview_video_split" project.public_id %}',{master_ms:Math.round(editedToMaster(point))}),false,false)}catch(error){bladePoints=previous;renderEditorTimeline();alert(error.message)}}
     async function splitTimelineItem(kind,id,point){
+        if(kind==='music')return splitMusicClip(id,point);
         const cutAt=Math.round(snapToFrame(point));
         const endpoint=kind==='broll'
             ? `{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`
             : `{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`;
         try{applyTimeline(await api(endpoint,{split_at_ms:cutAt}))}catch(error){alert(error.message)}
+    }
+    async function splitMusicClip(clipId,point){
+        const cutAt=Math.round(snapToFrame(point)),tracks=currentMusicTracks(),index=tracks.findIndex(track=>String(track.clip_id)===String(clipId)),clip=tracks[index];
+        if(!clip||cutAt-Number(clip.start_ms)<1000||Number(clip.end_ms)-cutAt<1000)return;
+        const left={...clip,end_ms:cutAt};
+        const right={...clip,clip_id:`music-${Date.now()}-${Math.random().toString(16).slice(2)}`,start_ms:cutAt,source_in_ms:Number(clip.source_in_ms||0)+(cutAt-Number(clip.start_ms)),audio_transition:null,transition:'NONE'};
+        tracks.splice(index,1,left,right);applyLocalMusicTracks(tracks);
+        try{applyTimeline(await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks}),true,false)}catch(error){alert(error.message);renderEditorTimeline()}
     }
     let magneticSnapping=true;
     const snapButton=document.getElementById('timeline-snap');
@@ -1326,7 +1341,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 clip.onclick=event=>{
                     event.stopPropagation();if(clip.dataset.timelineDrag){delete clip.dataset.timelineDrag;return}
                     const point=timelinePoint(event,lane,duration);
-                    if(editTool==='blade'&&(isVideo||canBlade)){if(isVideo)addBladeAt(point);else splitTimelineItem(selectKind,item.id,point);return}
+                    if(editTool==='blade'&&(isVideo||canBlade)){if(isVideo)addBladeAt(point);else splitTimelineItem(selectKind,item.clipId||item.id,point);return}
                     if(isSourceSegment){selectSourceSegment();if(selectKind)selectInspector(selectKind,item.inspectorId??item.assetId,item.label,item);renderTimelineSelection();return}
                     if(selectKind){selectInspector(selectKind,item.inspectorId??item.id,item.label,null);renderTimelineSelection();return}
                     if(!isCaption)seek(item.start,!video.paused);
@@ -1402,9 +1417,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 const fade=index&&track.transition==='CONSTANT_POWER'?Math.min(Number(track.transition_duration_ms??2000),slot*.45):0;
                 const defaultStart=Math.max(0,index*slot-fade),defaultEnd=Math.min(duration,(index+1)*slot+(index<musicTracks.length-1&&musicTracks[index+1].transition==='CONSTANT_POWER'?Math.min(Number(musicTracks[index+1].transition_duration_ms||2000),slot*.45):0));
                 const start=track.start_ms!=null?Math.max(0,Number(track.start_ms)):defaultStart,end=track.end_ms!=null?Math.min(duration,Number(track.end_ms)):defaultEnd;
-                return {id:`music-${track.id||index}`,trackIndex:index,start,end:Math.max(start+1000,end),sourceInMs:Math.max(0,Number(track.source_in_ms||0)),transition:String(track.transition||'CONSTANT_POWER').toUpperCase(),audioUrl:track.url||'',label:`${index+1}. ${track.name||'Trilha de fundo'}`};
+                return {id:`music-${track.clip_id||track.id||index}`,clipId:track.clip_id||String(track.id||index),trackIndex:index,start,end:Math.max(start+1000,end),sourceInMs:Math.max(0,Number(track.source_in_ms||0)),transition:String(track.transition||'CONSTANT_POWER').toUpperCase(),audioUrl:track.url||'',label:`${index+1}. ${track.name||'Trilha de fundo'}`};
             });
-            makeTrack('Música',musicItems,'editor-track__music',false,false,'music');
+            makeTrack('Música',musicItems,'editor-track__music',false,false,'music',true);
             const musicLane=lastRenderedTrack.querySelector('.editor-track__lane');
             [...musicLane.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{
                 const item=musicItems[index];if(!item?.audioUrl)return;
@@ -1629,6 +1644,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             card.querySelectorAll('[data-music-keyframe-gain]').forEach(input=>input.onchange=event=>queueAudioMix({keyframe_index:Number(event.target.dataset.index),keyframe_gain_db:Number(event.target.value)},card));
             card.querySelectorAll('[data-remove-music-keyframe]').forEach(button=>button.onclick=()=>queueAudioMix({remove_keyframe:Number(button.dataset.index)},card));
             card.querySelector('[data-restore-auto-mix]').onclick=()=>queueAudioMix({restore_auto:true},card);
+            const selectedMusicClip=(config.tracks||[]).find(track=>String(`music-${track.clip_id}`)===String(inspectorSelection.id));
+            if(selectedMusicClip){const clipGain=document.createElement('div'),clipVolume=Math.round(Math.max(0,Math.min(1,Number(selectedMusicClip.volume??1)))*100);clipGain.className='mt-3 border-t border-gray-100 pt-3';clipGain.innerHTML=`<div class="flex items-center justify-between text-xs font-bold text-gray-400 uppercase"><span>Volume deste trecho</span><output>${clipVolume}%</output></div><input type="range" min="0" max="100" step="1" value="${clipVolume}" class="preview-range w-full mt-2" aria-label="Volume deste trecho de música"><small class="block mt-1 text-gray-400">Ajuste independente, mantido no preview e no render final.</small>`;const input=clipGain.querySelector('input'),output=clipGain.querySelector('output');input.oninput=event=>{const tracks=currentMusicTracks(),item=tracks.find(track=>String(track.clip_id)===String(selectedMusicClip.clip_id));if(!item)return;item.volume=Number(event.target.value)/100;output.textContent=`${event.target.value}%`;applyLocalMusicTracks(tracks);editorPersistence.schedule('music-tracks',()=>api(musicPreviewUrl,{tracks:currentMusicTracks()}).then(data=>applyTimeline(data,true,false)),200)};card.append(clipGain)}
             list.append(card)
         }
         if(inspectorSelection?.kind==='caption')renderCaptionTranscript();
@@ -1940,7 +1957,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(tracks.every(track=>track.start_ms!=null&&track.end_ms!=null))tracks.sort((a,b)=>Number(a.start_ms)-Number(b.start_ms));
         if(!timeline.music)timeline.music={volume:.15,tracks:[]};
         const existing=timeline.music.tracks||[];
-        timeline.music.tracks=tracks.map(track=>({...existing.find(item=>Number(item.id)===Number(track.track_id)),...musicTracks.find(item=>Number(item.id)===Number(track.track_id)),...track,id:Number(track.track_id),url:existing.find(item=>Number(item.id)===Number(track.track_id))?.url||`${musicPreviewUrl}?track_id=${track.track_id}`}));
+        timeline.music.tracks=tracks.map(track=>({...existing.find(item=>String(item.clip_id)===String(track.clip_id))||existing.find(item=>Number(item.id)===Number(track.track_id)),...musicTracks.find(item=>Number(item.id)===Number(track.track_id)),...track,id:Number(track.track_id),url:existing.find(item=>String(item.clip_id)===String(track.clip_id))?.url||existing.find(item=>Number(item.id)===Number(track.track_id))?.url||`${musicPreviewUrl}?track_id=${track.track_id}`}));
         timeline.music_tracks=tracks;timeline.has_music=tracks.length>0;
         configureMusic();syncMusicPosition();updateMusicVolume();requestTimelineRender();
     }
@@ -1949,7 +1966,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const legacy=!right.audio_transition&&right.transition==='CONSTANT_POWER'&&Number(right.start_ms)<Number(left.end_ms);
         right.transition=legacy&&type==='CONSTANT_POWER'?'CONSTANT_POWER':'NONE';
         right.transition_duration_ms=Math.max(0,Math.min(10000,Math.round(duration)));
-        right.audio_transition=!legacy&&type==='CONSTANT_POWER'?{id:right.audio_transition?.id||`music-join-${right.track_id}`,type,from_track_id:left.track_id,duration_ms:Math.max(0,Math.min(10000,Math.round(duration)))}:null;
+        right.audio_transition=!legacy&&type==='CONSTANT_POWER'?{id:right.audio_transition?.id||`music-join-${right.clip_id}`,type,from_clip_id:left.clip_id,duration_ms:Math.max(0,Math.min(10000,Math.round(duration)))}:null;
         // Register the pending save before rendering, so older replies cannot
         // replace this optimistic edit. Read the latest playlist when flushing.
         editorPersistence.schedule('music-tracks',()=>api(musicPreviewUrl,{tracks:currentMusicTracks()}).then(data=>applyTimeline(data,true,false)),200);
@@ -1957,7 +1974,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(feedback){const effective=window.ConnectMusicTransitions.windowFor(left,right,musicController.duration(index-1)*1000,musicController.duration(index)*1000)||(legacy?{duration_ms:Math.min(Number(left.end_ms)-Number(right.start_ms),Number(right.end_ms)-Number(right.start_ms),duration)}:null);feedback.textContent=`Duração disponível: ${(Number(effective?.duration_ms||0)/1000).toFixed(2)}s · Salvando…`}
         else renderList();
     }
-    function currentMusicTracks(){return (timeline.music?.tracks||[]).map(track=>({track_id:Number(track.id),transition:track.transition||'NONE',transition_duration_ms:Number(track.transition_duration_ms??2000),...(track.audio_transition?{audio_transition:track.audio_transition}:track.transition==='CONSTANT_POWER'?{}:{audio_transition:null}),...(track.start_ms!=null?{start_ms:Number(track.start_ms)}:{}),...(track.end_ms!=null?{end_ms:Number(track.end_ms)}:{}),...(track.source_in_ms!=null?{source_in_ms:Number(track.source_in_ms)}:{})})).filter(track=>track.track_id>0)}
+    function currentMusicTracks(){return (timeline.music?.tracks||[]).map(track=>({clip_id:String(track.clip_id||`legacy-${track.id}`),track_id:Number(track.id),volume:Math.max(0,Math.min(1,Number(track.volume??1))),transition:track.transition||'NONE',transition_duration_ms:Number(track.transition_duration_ms??2000),...(track.audio_transition?{audio_transition:track.audio_transition}:track.transition==='CONSTANT_POWER'?{}:{audio_transition:null}),...(track.start_ms!=null?{start_ms:Number(track.start_ms)}:{}),...(track.end_ms!=null?{end_ms:Number(track.end_ms)}:{}),...(track.source_in_ms!=null?{source_in_ms:Number(track.source_in_ms)}:{})})).filter(track=>track.track_id>0)}
     function openMusicSelector(){
         const currentIds=new Set(currentMusicTracks().map(track=>track.track_id));musicSelectError.classList.add('hidden');musicTrackList.replaceChildren();
         if(!musicTracks.length){musicTrackList.innerHTML='<p class="text-sm text-gray-400 p-3">Nenhuma trilha está disponível.</p>'}else musicTracks.forEach(track=>{const selected=currentIds.has(Number(track.id)),row=document.createElement('div');row.className='music-track-row';const button=document.createElement('button'),sample=document.createElement('button');button.type=sample.type='button';button.dataset.musicSelect='true';sample.dataset.musicSample=String(track.id);button.className=`music-track-option ${selected?'is-selected':''}`;sample.className='music-track-sample';button.setAttribute('role','option');button.setAttribute('aria-selected',String(selected));sample.setAttribute('aria-label',`Ouvir prévia de ${track.name}`);sample.innerHTML='<i class="fas fa-play"></i>';button.innerHTML=`<span class="music-track-option__icon"><i class="fas fa-music"></i></span><span><strong class="block text-sm">${esc(track.name)}</strong><small class="block text-xs text-gray-400 mt-1">${esc(track.category||'Trilha')} ${track.tempo?`· ${esc(track.tempo)}`:''}</small></span><span class="music-track-option__meta">${selected?'Na sequência':'Adicionar'}</span>`;button.onclick=()=>selectMusicTrack(track,button);sample.onclick=()=>toggleMusicSample(track,sample);row.append(button,sample);musicTrackList.append(row)});

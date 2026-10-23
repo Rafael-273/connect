@@ -34,7 +34,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         const tracks = (config.tracks?.length ? config.tracks : [config])
             .filter(track => track?.url);
         const signature = JSON.stringify(tracks.map(track => [
-            track.id || track.url, track.url,
+            track.clip_id || track.id || track.url, track.url,
         ]));
         this.tracks = tracks;
         if (this.signature !== signature) {
@@ -120,7 +120,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         const nowMs = Math.max(0, Number(globalMs) || 0);
         const scheduled = this.tracks.every(track => Number.isFinite(Number(track.start_ms)) && Number.isFinite(Number(track.end_ms)) && Number(track.end_ms) > Number(track.start_ms));
         if (scheduled) {
-            const ranges = this.tracks.map(track => ({start:Number(track.start_ms),end:Number(track.end_ms),source:Number(track.source_in_ms)||0, gain:1}));
+            const ranges = this.tracks.map(track => ({start:Number(track.start_ms),end:Number(track.end_ms),source:Number(track.source_in_ms)||0, gain:Math.max(0, Math.min(1, Number(track.volume ?? 1)))}));
             this.tracks.slice(1).forEach((track, offset) => {
                 const index=offset+1,left=this.tracks[offset];
                 let fadeWindow=window.ConnectMusicTransitions?.windowFor(left,track,this.duration(offset)*1000,this.duration(index)*1000)||null;

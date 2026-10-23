@@ -209,14 +209,22 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.preloadedTime = time;
         this.preloader.dataset.source = source;
         this.preloader.src = source;
+        const markReady = () => {
+            if (requestId !== this.preloadRequestId || preloader !== this.preloader) return;
+            if (preloader.seeking || preloader.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+            if (Math.abs(preloader.currentTime - time) >= .05) return;
+            this.preloadedSource = source;
+        };
         this.preloader.addEventListener('loadedmetadata', () => {
             if (requestId !== this.preloadRequestId || preloader !== this.preloader) return;
-            this.preloader.currentTime = Math.min(time, Math.max(0, this.preloader.duration - 0.05));
+            const target = Math.min(time, Math.max(0, preloader.duration - 0.05));
+            // Assigning zero to an already-zero decoder may never emit seeked.
+            if (Math.abs(preloader.currentTime - target) > .001) preloader.currentTime = target;
+            markReady();
         }, warmOptions);
-        this.preloader.addEventListener('seeked', () => {
-            if (requestId !== this.preloadRequestId || preloader !== this.preloader) return;
-            this.preloadedSource = source;
-        }, warmOptions);
+        this.preloader.addEventListener('seeked', markReady, warmOptions);
+        this.preloader.addEventListener('loadeddata', markReady, warmOptions);
+        this.preloader.addEventListener('canplay', markReady, warmOptions);
         this.preloader.load();
     }
 };

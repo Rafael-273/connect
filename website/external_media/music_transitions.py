@@ -10,7 +10,9 @@ def transition_window(left, right, source_duration_ms, incoming_duration_ms=None
     spec = right.get('audio_transition')
     if not isinstance(spec, dict) or spec.get('type') != 'CONSTANT_POWER':
         return None
-    if str(spec.get('from_track_id')) != str(left.get('track_id', left.get('id'))):
+    expected = left.get('clip_id') or left.get('track_id', left.get('id'))
+    source = spec.get('from_clip_id') or spec.get('from_track_id')
+    if str(source) != str(expected):
         return None
     cut = int(right['start_ms'])
     if int(left['end_ms']) != cut:
