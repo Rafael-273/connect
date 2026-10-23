@@ -73,3 +73,15 @@ test('preloading a trimmed take waits for its target frame',()=>{
     assert.equal(h.player.preloadedSource,'');
     incoming.frame();assert.equal(h.player.preloadedSource,'b.mp4');
 });
+
+test('a warmed take reveals and transfers audio immediately without a second frame wait',()=>{
+    const h=harness(),outgoing=h.video,incoming=h.player.preloader;
+    outgoing.dataset.source='a.mp4';outgoing.paused=false;outgoing.muted=false;
+    incoming.dataset.source='b.mp4';incoming.readyState=2;incoming._time=1;
+    h.player.preloadedSource='b.mp4';
+    h.player.seek('b.mp4',1,{autoplay:true});
+    assert.equal(incoming.style.opacity,'1');assert.equal(incoming.muted,false);
+    assert.equal(outgoing.paused,true);assert.equal(outgoing.muted,true);
+    assert.equal(h.player.switching,false);assert.equal(h.loading.includes(true),false);
+    assert.equal(h.plays,1);
+});

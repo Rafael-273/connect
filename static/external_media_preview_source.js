@@ -83,6 +83,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         }
         if (this.preloadedSource === source
             && this.preloader.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+            && !this.preloader.seeking
             && Math.abs(this.preloader.currentTime - time) < .35) {
             this.loadController?.abort();
             this.pendingFrameCheck=null;
@@ -90,8 +91,9 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             this.loadId++;
             const outgoing = this.video, incoming = this.preloader;
             const outgoingMuted = outgoing.muted;
-            // Start muted under the visible take. Audio changes at the same
-            // moment as the visual frame, avoiding both a flash and overlap.
+            // The requested frame is already decoded by warm(). Do not wait
+            // for playing and then another video frame: that freezes the old
+            // image and discards the beginning of the incoming dialogue.
             incoming.muted = true;
             incoming.volume = outgoing.volume;
             incoming.playbackRate = outgoing.playbackRate;
@@ -125,16 +127,10 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
                 if (queued) this.warm(queued.source, queued.time);
             };
             this.finishSwap = finishReveal;
-            const reveal = () => {
-                if (typeof incoming.requestVideoFrameCallback === 'function') {
-                    incoming.requestVideoFrameCallback(finishReveal);
-                } else requestAnimationFrame(finishReveal);
-            };
+            finishReveal();
             if (autoplay) {
-                incoming.addEventListener('playing', () => { if(requestId === this.requestId) reveal(); }, {once: true});
-                this.onLoading(true);
                 this.play();
-            } else reveal();
+            }
             return;
         }
         const loadId = ++this.loadId;
