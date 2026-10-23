@@ -121,7 +121,7 @@ const template=fs.readFileSync(path.join(__dirname,'../../templates/member/exter
 function timelineHarness(){
     const apply=template.match(/    function applyTimeline\(data[^\n]+/)[0];
     const context=vm.createContext({});
-    vm.runInContext(`let timeline={sequence:{duration_ms:10000},captions:[],music:null},appliedEditorialVersion=5,deferredTimeline=null,activePreviewRevision=5,selectedSegment=null,inspectorSelection=null,bladePoints=[],activeClip=null,globalMs=0,multicamEditor=null;const editorPersistence={busy:false};const video={paused:true};const videoSegments=()=>[],clipAt=()=>null,configureMusic=()=>{},renderReviewProxyStatus=()=>{},renderList=()=>{},seek=()=>{},renderPosition=()=>{},scheduleRevisionProxyPoll=()=>{},updateEditControls=()=>{},updateHistoryControls=()=>{},requestTimelineRender=()=>{},invalidatePreviewIndexes=()=>{};const document={getElementById:()=>({textContent:''})};${apply}`,context);
+    vm.runInContext(`let timeline={sequence:{duration_ms:10000},captions:[],music:null},appliedEditorialVersion=5,deferredTimeline=null,activePreviewRevision=5,selectedSegment=null,inspectorSelection=null,bladePoints=[],activeClip=null,globalMs=0,multicamEditor=null;const editorPersistence={busy:false};const video={paused:true};const sourcePlayer={target:null,waitingForPreload:null};let loading=false,seekCalls=[];const videoSegments=()=>[],clipAt=()=>null,configureMusic=()=>{},renderReviewProxyStatus=()=>{},renderList=()=>{},seek=(...args)=>seekCalls.push(args),renderPosition=()=>{},scheduleRevisionProxyPoll=()=>{},updateEditControls=()=>{},updateHistoryControls=()=>{},requestTimelineRender=()=>{},invalidatePreviewIndexes=()=>{};const document={getElementById:()=>({textContent:''})};${apply}`,context);
     return context;
 }
 
@@ -147,4 +147,19 @@ test('minute conversion preserves 1000ms rather than rounding to 1020ms',()=>{
     const expression=template.match(/const minFromMs = ms => (.*);/)[1];
     const convert=vm.runInNewContext(`ms=>${expression}`);
     for(const ms of [33,1000,2000,1234567])assert.equal(Math.round(convert(ms)*60000),ms);
+});
+
+
+test('an editorial response preserves active playback and paused user intent',()=>{
+    const context=timelineHarness();
+    vm.runInContext(`video.paused=false;applyTimeline({editorial_version:6,timeline:{sequence:{duration_ms:10000},captions:[]}});observed=seekCalls.at(-1)[1]`,context);
+    assert.equal(context.observed,true);
+    vm.runInContext(`video.paused=true;applyTimeline({editorial_version:7,timeline:{sequence:{duration_ms:10000},captions:[]}});observed=seekCalls.at(-1)[1]`,context);
+    assert.equal(context.observed,false);
+});
+
+test('an editorial response retains play intent while a transition is waiting for media',()=>{
+    const context=timelineHarness();
+    vm.runInContext(`sourcePlayer.target={autoplay:true};sourcePlayer.waitingForPreload='b:0';loading=true;applyTimeline({editorial_version:6,timeline:{sequence:{duration_ms:10000},captions:[]}});observed=seekCalls.at(-1)[1]`,context);
+    assert.equal(context.observed,true);
 });

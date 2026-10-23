@@ -51,3 +51,28 @@ test('a late music play completion after waiting leaves soundtrack paused',async
  const h=setup();let resolve;h.controller.play=function(){this.isPlaying=true;return new Promise(done=>resolve=done)};
  h.video.emit('playing');h.clock.frame(h.video,0);h.video.emit('waiting');resolve();await Promise.resolve();await Promise.resolve();assert.equal(h.controller.isPlaying,false);
 });
+
+
+test('a prepared continuous handoff preserves music through play and ignores outgoing pause events',()=>{
+ const h=setup();h.video.emit('playing');h.clock.frame(h.video,1);
+ const pauses=h.controller.pauses,next=new Video();
+ h.clock.setVideo(next,{continuous:true});next.emit('play');h.video.emit('pause');
+ assert.equal(h.controller.isPlaying,true);assert.equal(h.controller.pauses,pauses);
+ next.emit('playing');h.clock.frame(next,0);
+ assert.equal(h.controller.starts,1);assert.equal(h.syncs,1);
+ next.emit('waiting');assert.equal(h.controller.isPlaying,false);
+});
+
+test('a prepared handoff that never advances is still stopped by the existing watchdog',()=>{
+ const h=setup();h.video.emit('playing');h.clock.frame(h.video,1);
+ const next=new Video();h.clock.setVideo(next,{continuous:true});next.emit('play');
+ h.expire();assert.equal(h.controller.isPlaying,false);
+});
+
+test('music playback rate follows the active video and ignores recycled decoder rate events',()=>{
+ const h=setup(),rates=[];h.controller.setPlaybackRate=rate=>rates.push(rate);
+ h.video.playbackRate=2;h.video.emit('ratechange');
+ const next=new Video();next.playbackRate=.5;h.clock.setVideo(next);
+ h.video.playbackRate=1;h.video.emit('ratechange');
+ assert.deepEqual(rates,[2,.5]);
+});

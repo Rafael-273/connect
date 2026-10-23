@@ -4,7 +4,9 @@
     const at = (segments, time) => (segments || []).find(item => item.start_ms <= time && time < item.end_ms);
     const sourceTime = (segment, time) => (segment.source_in_ms + (time - segment.start_ms) * segment.rate) / 1000;
     function create(options) {
-        const {panel, stage, mainVideo, getTimeline, getTime, save, seek, editor: showEditor = true} = options;
+        const {panel, stage, getTimeline, getTime, save, seek, editor: showEditor = true} = options;
+        let mainVideo;
+        const boundVideos = new WeakSet();
         const image = document.createElement('video');
         image.muted = true; image.playsInline = true; image.preload = 'metadata'; image.hidden = true;
         Object.assign(image.style, {position: 'absolute', inset: '0', width: '100%', height: '100%', zIndex: '2', pointerEvents: 'none', objectFit: 'cover'});
@@ -157,7 +159,13 @@
             if (mainVideo.paused || mainVideo.seeking) image.pause();
             else if (image.paused) image.play().catch(() => {});
         }
-        mainVideo.addEventListener('pause', () => image.pause());
+        function setMainVideo(video) {
+            mainVideo = video;
+            if (boundVideos.has(video)) return;
+            boundVideos.add(video);
+            video.addEventListener('pause', () => { if (video === mainVideo) image.pause(); });
+        }
+        setMainVideo(options.mainVideo);
         image.addEventListener('loadedmetadata', sync);
         image.addEventListener('loadeddata', sync);
         image.addEventListener('seeked', () => { correctingSeek = false; hasFrame = true; sync(); });
@@ -172,7 +180,7 @@
                 form.querySelector('input, select, button')?.focus({preventScroll: true});
             } else panel.scrollIntoView({block: 'start', behavior: 'smooth'});
         }
-        return {render, sync, focusSelection};
+        return {render, sync, focusSelection, setMainVideo};
     }
     const api = {at, sourceTime, create};
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

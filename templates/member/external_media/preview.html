@@ -656,22 +656,50 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function releasePreviewFrame(){video.style.opacity='1';previewStage.style.backgroundImage=''}
     const soundtrackClock=new window.ConnectPreviewSoundtrackClock(musicController,{sync:()=>musicController.sync(timeline.music,globalMs,{force:true})});
     soundtrackClock.setVideo(video);
-    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(!value)requestPreviewRender()},onVideoChange:next=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next);bindVideoEvents(next)},play:requestVideoPlay});
-    function warmNextClip(clip){if(useReviewMaster())return;const next=nextClipAfter(clip);if(next)sourcePlayer.warm(sourceFor(next),Number(next.source_in_ms||0)/1000)}
-    function seek(ms, autoplay=false){
+    let previewTransition=null,lastPreviewFrame=null;
+    function reportPreviewTransition(detail){
+        const at=performance.now();
+        if(['waiting','swap','cold'].includes(detail.phase)){
+            const same=previewTransition?.source===detail.source&&previewTransition?.time===detail.time;
+            previewTransition={source:detail.source,time:detail.time,startedAt:same?previewTransition.startedAt:at,swappedAt:at,outgoing:lastPreviewFrame};
+        }
+        window.dispatchEvent(new CustomEvent('connect:preview-transition',{detail:{...detail,at,revision:activePreviewRevision}}));
+    }
+    function reportPreviewFrame(playerVideo,presentedTime,displayTime){
+        if(playerVideo!==video||loading||playerVideo.seeking)return;
+        const at=displayTime??performance.now();
+        if(previewTransition&&previewTransition.source===playerVideo.dataset.source){
+            const transition=previewTransition;previewTransition=null;
+            const gap=transition.outgoing?Math.max(0,at-transition.outgoing.at-frameDurationMs()/playerVideo.playbackRate):null;
+            reportPreviewTransition({phase:'first-frame',source:transition.source,time:transition.time,actualTime:presentedTime,elapsedMs:performance.now()-transition.startedAt,revealMs:performance.now()-transition.swappedAt,excessCallbackGapMs:gap});
+        }
+        lastPreviewFrame={at,time:presentedTime};
+    }
+    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(!value)requestPreviewRender()},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,frameTolerance:1/Number(timeline.sequence.fps||30),play:requestVideoPlay});
+    function warmNextClip(clip){
+        if(useReviewMaster())return;
+        let previous=clip,next=nextClipAfter(previous);
+        // Blade points within continuous media need no decoder handoff. Use
+        // their playback time to prepare the next actual discontinuity.
+        while(next&&sourceFor(next)===sourceFor(previous)&&Math.abs(Number(next.source_in_ms)-Number(previous.source_out_ms))<1){previous=next;next=nextClipAfter(previous)}
+        if(next)sourcePlayer.warm(sourceFor(next),Number(next.source_in_ms||0)/1000);
+    }
+    function seek(ms, autoplay=false,{preserveContinuous=false}={}){
+        cancelPlaybackBoundary();previewTransition=null;
         globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs);
+        const keepPlayback=preserveContinuous&&autoplay===!video.paused;
         if(!clip){activeClip=null;video.pause();sourcePlayer.seek('',0,{autoplay:false});video.removeAttribute('src');video.load();renderPosition();syncMusicPosition();return}
         if(useReviewMaster()){
             const source=timeline.review_master_url, masterTime=editedToPlayback(globalMs)/1000;
             activeClip=clip;
-            sourcePlayer.seek(source,masterTime,{autoplay,freeze:false});
+            if(!keepPlayback||!sourcePlayer.isAt(source,masterTime))sourcePlayer.seek(source,masterTime,{autoplay,freeze:false});
             renderPosition(); syncMusicPosition(); return;
         }
         const source=sourceFor(clip), local=(clip.source_in_ms + globalMs-clip.timeline_in_ms)/1000;
         // Consume a warmed take before recycling the secondary buffer for the
         // one after it. Reversing this order discarded the ready frame at
         // every boundary and made the double buffer ineffective.
-        activeClip=clip;sourcePlayer.seek(source,local,{autoplay,freeze:true});warmNextClip(clip);
+        activeClip=clip;if(!keepPlayback||!sourcePlayer.isAt(source,local))sourcePlayer.seek(source,local,{autoplay,freeze:true});warmNextClip(clip);
         renderPosition(); syncMusicPosition();
     }
     function renderPosition(){
@@ -736,7 +764,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const entryType=String(item.entry?.type||'NONE'),exitType=String(item.exit?.type||'NONE'),entryDuration=Math.max(1,Number(item.entry?.duration_ms||300)),exitDuration=Math.max(1,Number(item.exit?.duration_ms||250)),entryProgress=Math.min(1,elapsed/entryDuration),exitProgress=Math.min(1,remaining/exitDuration);
             let opacity=1;if(['FADE','SCALE'].includes(entryType))opacity=Math.min(opacity,entryProgress);if(['FADE','SCALE'].includes(exitType))opacity=Math.min(opacity,exitProgress);if(entryType==='SLIDE'&&entryProgress<1)x=`calc(${x} - ${(1-entryProgress)*100}%)`;if(exitType==='SLIDE'&&exitProgress<1)x=`calc(${x} + ${(1-exitProgress)*100}%)`;if(entryType==='SCALE'&&entryProgress<1)scale*=.82+.18*entryProgress;if(exitType==='SCALE'&&exitProgress<1)scale*=.82+.18*exitProgress;
             node.style.transform=`translate(${x},${y}) scale(${scale})`;node.style.opacity=String(opacity);node.hidden=false;
-            if(node.tagName==='VIDEO'){const expected=(Number(item.source_in_ms||0)+elapsed)/1000;if(Number.isFinite(node.duration)&&node.duration>0&&Math.abs(node.currentTime-expected)>.35)node.currentTime=expected%node.duration;if(!video.paused)node.play().catch(()=>{});else node.pause()}
+            if(node.tagName==='VIDEO'){const expected=(Number(item.source_in_ms||0)+elapsed)/1000;if(Number.isFinite(node.duration)&&node.duration>0&&Math.abs(node.currentTime-expected)>.35)node.currentTime=expected%node.duration;node.playbackRate=video.playbackRate;if(!video.paused)node.play().catch(()=>{});else node.pause()}
         });
         brollLayer.querySelectorAll('[data-broll-id]').forEach(node=>{node.hidden=!active.has(node.dataset.brollId);if(node.hidden&&node.tagName==='VIDEO')node.pause()})
     }
@@ -894,8 +922,24 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         };
         transformBox.addEventListener('pointermove',move);transformBox.addEventListener('pointerup',finish);transformBox.addEventListener('pointercancel',finish);
     });
-    let playbackClock=null;
+    let playbackClock=null,playbackBoundary=null;
+    function cancelPlaybackBoundary(){clearTimeout(playbackBoundary);playbackBoundary=null}
+    function schedulePlaybackBoundary(playerVideo,presentedTime,displayTime){
+        cancelPlaybackBoundary();
+        if(playerVideo!==video||playerVideo.paused||playerVideo.seeking||loading||useReviewMaster()||!activeClip)return;
+        const clip=activeClip,remaining=Number(clip.source_out_ms)-presentedTime*1000;
+        if(remaining<=0||remaining>frameDurationMs()*1.5)return;
+        const next=nextClipAfter(clip);
+        if(next&&sourceFor(next)===sourceFor(clip)&&Math.abs(Number(next.source_in_ms)-Number(clip.source_out_ms))<1)return;
+        const delay=Math.max(0,(displayTime??performance.now())-performance.now()+remaining/playerVideo.playbackRate);
+        playbackBoundary=setTimeout(()=>{
+            playbackBoundary=null;
+            if(playerVideo!==video||activeClip!==clip||playerVideo.paused||playerVideo.seeking||loading)return;
+            syncPlaybackPosition(playerVideo,Number(clip.source_out_ms)/1000);
+        },delay);
+    }
     function stopPlaybackClock(){
+        cancelPlaybackBoundary();
         const previous=playbackClock;playbackClock=null;if(!previous)return;
         if(previous.native)previous.video.cancelVideoFrameCallback?.(previous.id);else cancelAnimationFrame(previous.id);
     }
@@ -904,7 +948,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const clock={video:playerVideo,native:typeof playerVideo.requestVideoFrameCallback==='function',id:0};playbackClock=clock;
         const tick=(now,frame)=>{
             if(playbackClock!==clock||playerVideo!==video||playerVideo.paused)return;
-            if(!playerVideo.seeking){const presentedTime=frame?.mediaTime??playerVideo.currentTime;syncPlaybackPosition(playerVideo,presentedTime);soundtrackClock.frame(playerVideo,presentedTime)}
+            if(!playerVideo.seeking){const presentedTime=frame?.mediaTime??playerVideo.currentTime;syncPlaybackPosition(playerVideo,presentedTime);soundtrackClock.frame(playerVideo,presentedTime);reportPreviewFrame(playerVideo,presentedTime,frame?.expectedDisplayTime);schedulePlaybackBoundary(playerVideo,presentedTime,frame?.expectedDisplayTime)}
             if(playbackClock!==clock||playerVideo.paused)return;
             clock.id=clock.native?playerVideo.requestVideoFrameCallback(tick):requestAnimationFrame(tick);
         };
@@ -919,10 +963,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             }else{
                 const eventClip=activeClip,currentSourceMs=presentedTime*1000;
                 globalMs=Math.max(Number(eventClip.timeline_in_ms),Math.min(Number(eventClip.timeline_out_ms),Number(eventClip.timeline_in_ms)+Math.max(0,currentSourceMs-Number(eventClip.source_in_ms))));
-                if(!playerVideo.paused&&currentSourceMs>=Number(eventClip.source_out_ms)-40){
+                if(!playerVideo.paused&&currentSourceMs>=Number(eventClip.source_out_ms)){
                     const next=nextClipAfter(eventClip);
                     if(next&&sourceFor(next)===sourceFor(eventClip)&&Math.abs(Number(next.source_in_ms)-Number(eventClip.source_out_ms))<1){
-                        if(currentSourceMs<Number(eventClip.source_out_ms))return;
                         activeClip=next;
                         globalMs=Number(next.timeline_in_ms)+Math.max(0,currentSourceMs-Number(next.source_in_ms));
                         warmNextClip(next);renderPosition();return;
@@ -942,16 +985,16 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(playerVideo!==video||loading||draggingTimelineNeedle)return;
             clearTimeout(saveTimer);saveTimer=setTimeout(()=>api('{% url "external_media_project_preview_session" project.public_id %}',{position_ms:Math.round(globalMs),ui_state:{edit_tool:editTool}}),700);
         });
+        for(const event of ['seeking','waiting','ratechange','emptied','error'])playerVideo.addEventListener(event,()=>{if(playerVideo===video)cancelPlaybackBoundary()});
         playerVideo.addEventListener('ended',()=>{
             if(playerVideo!==video)return;
-            musicController.pause();
-            if(useReviewMaster()||!activeClip)return;
+            if(useReviewMaster()||!activeClip){musicController.pause();return}
             // An `ended` queued by the previous take can arrive after a
             // same-source seek. Only advance when the decoder is also at the
             // end of the take that is currently active.
             if(playerVideo.currentTime*1000<Number(activeClip.source_out_ms)-40)return;
             const next=nextClipAfter(activeClip);
-            if(next)seek(next.timeline_in_ms,true);
+            if(next)seek(next.timeline_in_ms,true);else musicController.pause();
         });
         playerVideo.addEventListener('play',()=>{if(playerVideo!==video)return;play.innerHTML='<i class="fas fa-pause"></i>';play.setAttribute('aria-label','Pausar');configureMusic();syncMusicPosition();updateMusicVolume();startPlaybackClock(playerVideo)});
         playerVideo.addEventListener('pause',()=>{if(playerVideo===video){play.innerHTML='<i class="fas fa-play"></i>';play.setAttribute('aria-label','Reproduzir');stopPlaybackClock();musicController.pause()}});
@@ -962,7 +1005,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // after the next take had already become active.
     bindVideoEvents(video);
     function togglePreviewPlayback(){
-        if(video.paused)requestVideoPlay();else video.pause();
+        if(sourcePlayer.target?.autoplay&&(loading||sourcePlayer.waitingForPreload)){
+            sourcePlayer.pause();cancelPlaybackBoundary();musicController.pause();
+            play.innerHTML='<i class="fas fa-play"></i>';play.setAttribute('aria-label','Reproduzir');
+        }else if(video.paused){
+            const clip=clipAt(globalMs),source=useReviewMaster()?timeline.review_master_url:sourceFor(clip);
+            const local=useReviewMaster()?editedToPlayback(globalMs)/1000:(Number(clip?.source_in_ms||0)+globalMs-Number(clip?.timeline_in_ms||0))/1000;
+            if(loading||source!==video.dataset.source||Math.abs(video.currentTime-local)>frameDurationMs()/1000)seek(globalMs,true);
+            else requestVideoPlay();
+        }else sourcePlayer.pause();
     }
     play.addEventListener('click',togglePreviewPlayback);
     previewStage.addEventListener('click',event=>{
@@ -1775,9 +1826,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function renderReviewProxyStatus(){const status=timeline.review_proxy_status,labels={PENDING:'Atualizando preview contínuo…',READY:'Preview contínuo pronto',SOURCE:'Preview fiel do take original',DEFERRED:'Preview por trechos enquanto o contínuo é preparado',STALE:'Há uma revisão mais nova. Atualize a página.',ERROR:'Preview contínuo indisponível'};reviewProxyStatus.textContent=labels[status]||'';reviewProxyStatus.title=status==='ERROR'?(timeline.review_proxy_error||'Falha temporária ao gerar o preview contínuo.') : '';reviewProxyStatus.className=`preview-proxy-status ${status==='PENDING'?'is-pending':status==='READY'||status==='SOURCE'?'is-ready':status==='DEFERRED'||status==='STALE'?'is-fallback':status==='ERROR'?'is-error':''}`;reviewProxyStatus.classList.toggle('hidden',!labels[status]);reviewProxyRetry.classList.toggle('hidden',status!=='ERROR')}
     reviewProxyRetry.onclick=async()=>{reviewProxyRetry.disabled=true;try{const data=await api('{% url "external_media_project_preview_revision_proxy" project.public_id %}');timeline.review_proxy_status=data.status||'PENDING';timeline.review_proxy_error='';revisionProxyAttempts=0;renderReviewProxyStatus();scheduleRevisionProxyPoll()}catch(error){alert(error.message)}finally{reviewProxyRetry.disabled=false}};
     let revisionProxyTimer=null,revisionProxyAttempts=0;
-    function pollRevisionProxy(){if(!['PENDING','DEFERRED'].includes(timeline.review_proxy_status))return;fetch('{% url "external_media_project_preview_revision_proxy" project.public_id %}',{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(response=>response.json()).then(data=>{if(editorPersistence.busy){revisionProxyTimer=setTimeout(pollRevisionProxy,2500);return}if(data.revision&&Number(data.revision)!==activePreviewRevision){timeline.review_proxy_status='STALE';renderReviewProxyStatus();return}if(data.status==='SOURCE'){timeline.review_master_url=null;timeline.review_rendered_layers=[];timeline.review_proxy_status='SOURCE';timeline.review_proxy_error='';renderReviewProxyStatus();seek(globalMs,!video.paused);return}if(data.status==='READY'){timeline.review_master_url=data.url;timeline.review_master_is_edited=true;timeline.review_rendered_layers=data.rendered_layers||[];timeline.review_proxy_status='READY';timeline.review_proxy_error='';revisionProxyAttempts=0;renderReviewProxyStatus();seek(globalMs,!video.paused);return}if(data.status==='ERROR'){timeline.review_proxy_status='ERROR';timeline.review_proxy_error=data.error||'';renderReviewProxyStatus();return}revisionProxyAttempts+=1;if(revisionProxyAttempts>=40){timeline.review_proxy_status='DEFERRED';renderReviewProxyStatus()}revisionProxyTimer=setTimeout(pollRevisionProxy,timeline.review_proxy_status==='DEFERRED'?10000:2500)}).catch(()=>{revisionProxyAttempts+=1;if(revisionProxyAttempts>=40){timeline.review_proxy_status='DEFERRED';renderReviewProxyStatus()}revisionProxyTimer=setTimeout(pollRevisionProxy,timeline.review_proxy_status==='DEFERRED'?10000:4000)})}
+    function pollRevisionProxy(){if(!['PENDING','DEFERRED'].includes(timeline.review_proxy_status))return;fetch('{% url "external_media_project_preview_revision_proxy" project.public_id %}',{headers:{'X-Requested-With':'XMLHttpRequest'}}).then(response=>response.json()).then(data=>{if(editorPersistence.busy){revisionProxyTimer=setTimeout(pollRevisionProxy,2500);return}if(data.revision&&Number(data.revision)!==activePreviewRevision){timeline.review_proxy_status='STALE';renderReviewProxyStatus();return}if(data.status==='SOURCE'){timeline.review_master_url=null;timeline.review_rendered_layers=[];timeline.review_proxy_status='SOURCE';timeline.review_proxy_error='';renderReviewProxyStatus();seek(globalMs,!video.paused);return}if(data.status==='READY'){if(!video.paused||sourcePlayer.target?.autoplay&&(loading||sourcePlayer.waitingForPreload)){revisionProxyTimer=setTimeout(pollRevisionProxy,2500);return}timeline.review_master_url=data.url;timeline.review_master_is_edited=true;timeline.review_rendered_layers=data.rendered_layers||[];timeline.review_proxy_status='READY';timeline.review_proxy_error='';revisionProxyAttempts=0;renderReviewProxyStatus();seek(globalMs,!video.paused);return}if(data.status==='ERROR'){timeline.review_proxy_status='ERROR';timeline.review_proxy_error=data.error||'';renderReviewProxyStatus();return}revisionProxyAttempts+=1;if(revisionProxyAttempts>=40){timeline.review_proxy_status='DEFERRED';renderReviewProxyStatus()}revisionProxyTimer=setTimeout(pollRevisionProxy,timeline.review_proxy_status==='DEFERRED'?10000:2500)}).catch(()=>{revisionProxyAttempts+=1;if(revisionProxyAttempts>=40){timeline.review_proxy_status='DEFERRED';renderReviewProxyStatus()}revisionProxyTimer=setTimeout(pollRevisionProxy,timeline.review_proxy_status==='DEFERRED'?10000:4000)})}
     function scheduleRevisionProxyPoll(){clearTimeout(revisionProxyTimer);revisionProxyAttempts=0;if(timeline.review_proxy_status==='PENDING')revisionProxyTimer=setTimeout(pollRevisionProxy,1500)}
-    function applyTimeline(data,rebuild=true,refreshPreview=true){if(!data.timeline)return false;const version=Number(data.editorial_version??appliedEditorialVersion);if(version<appliedEditorialVersion)return false;if(editorPersistence.busy){if(!deferredTimeline||version>=Number(deferredTimeline.editorial_version??0))deferredTimeline=data;return false}appliedEditorialVersion=version;const runtimeMusic=timeline.music,previousSelection=selectedSegment?{...selectedSegment}:null;timeline=data.timeline;multicamEditor?.render();invalidatePreviewIndexes();if(!timeline.music&&runtimeMusic)timeline.music=runtimeMusic;activePreviewRevision=Number(data.revision||activePreviewRevision);bladePoints=[...(timeline.video_splits_ms||[])];const segments=videoSegments();selectedSegment=previousSelection?segments.find(item=>String(item.assetId)===String(previousSelection.assetId)&&Number(item.masterStartMs)===Number(previousSelection.masterStartMs)&&Number(item.masterEndMs)===Number(previousSelection.masterEndMs))||null:null;if(!selectedSegment&&inspectorSelection?.kind==='video')selectedSegment=segments.find(item=>String(item.assetId)===String(inspectorSelection.id)&&Number(item.masterStartMs)===Number(inspectorSelection.masterStartMs)&&Number(item.masterEndMs)===Number(inspectorSelection.masterEndMs))||null;activeClip=clipAt(Math.min(globalMs,timeline.sequence.duration_ms));configureMusic();renderReviewProxyStatus();document.getElementById('preview-state').textContent=`Revisão ${data.revision} · alterações não renderizadas`;if(rebuild)renderList();if(refreshPreview)seek(Math.min(globalMs,timeline.sequence.duration_ms));else renderPosition();scheduleRevisionProxyPoll();updateEditControls();updateHistoryControls(data.history);requestTimelineRender();return true;}
+    function applyTimeline(data,rebuild=true,refreshPreview=true){const wasPlaying=!video.paused||Boolean(sourcePlayer.target?.autoplay&&(loading||sourcePlayer.waitingForPreload));if(!data.timeline)return false;const version=Number(data.editorial_version??appliedEditorialVersion);if(version<appliedEditorialVersion)return false;if(editorPersistence.busy){if(!deferredTimeline||version>=Number(deferredTimeline.editorial_version??0))deferredTimeline=data;return false}appliedEditorialVersion=version;const runtimeMusic=timeline.music,previousSelection=selectedSegment?{...selectedSegment}:null;timeline=data.timeline;multicamEditor?.render();invalidatePreviewIndexes();if(!timeline.music&&runtimeMusic)timeline.music=runtimeMusic;activePreviewRevision=Number(data.revision||activePreviewRevision);bladePoints=[...(timeline.video_splits_ms||[])];const segments=videoSegments();selectedSegment=previousSelection?segments.find(item=>String(item.assetId)===String(previousSelection.assetId)&&Number(item.masterStartMs)===Number(previousSelection.masterStartMs)&&Number(item.masterEndMs)===Number(previousSelection.masterEndMs))||null:null;if(!selectedSegment&&inspectorSelection?.kind==='video')selectedSegment=segments.find(item=>String(item.assetId)===String(inspectorSelection.id)&&Number(item.masterStartMs)===Number(inspectorSelection.masterStartMs)&&Number(item.masterEndMs)===Number(inspectorSelection.masterEndMs))||null;activeClip=clipAt(Math.min(globalMs,timeline.sequence.duration_ms));configureMusic();renderReviewProxyStatus();document.getElementById('preview-state').textContent=`Revisão ${data.revision} · alterações não renderizadas`;if(rebuild)renderList();if(refreshPreview)seek(Math.min(globalMs,timeline.sequence.duration_ms),wasPlaying,{preserveContinuous:true});else renderPosition();scheduleRevisionProxyPoll();updateEditControls();updateHistoryControls(data.history);requestTimelineRender();return true;}
     document.querySelectorAll('[data-history]').forEach(btn=>btn.onclick=async()=>{
         if(btn.disabled||editorBarrierActive)return;
         const previous={can_undo:!document.querySelector('[data-history="undo"]').disabled,can_redo:!document.querySelector('[data-history="redo"]').disabled};

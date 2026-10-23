@@ -32,3 +32,11 @@ test('manual automation preserves interpolation, duplicate points and reverse se
     assert.equal(audio.manualAutomationFactor(duplicates,1000),.1);
     assert.equal(audio.manualAutomationFactor(duplicates,1001),1);
 });
+
+
+test('all music channels follow playback speed without seeking or pausing them',()=>{
+ const audio=controller();audio.channels=[{currentTime:3,paused:false},{currentTime:1,paused:false}];
+ audio.setPlaybackRate(2);assert.ok(audio.channels.every(channel=>channel.playbackRate===2&&!channel.paused));
+ assert.deepEqual(audio.channels.map(channel=>channel.currentTime),[3,1]);
+ audio.setPlaybackRate(.5);assert.ok(audio.channels.every(channel=>channel.playbackRate===.5));
+});

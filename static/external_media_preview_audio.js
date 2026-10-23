@@ -15,6 +15,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         this.bedCache = null;
         this.automationCache = new WeakMap();
         this.globalMs = 0;
+        this.playbackRate = 1;
         this.sequenceDurationMs = 0;
         this.captions = [];
     }
@@ -45,6 +46,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             this.channels = tracks.map((track, index) => index === 0 ? this.audio : new Audio());
             this.channels.forEach((channel, index) => {
                 channel.loop = true;
+                channel.playbackRate = this.playbackRate;
                 channel.preload = 'auto';
                 channel.dataset.source = tracks[index].url;
                 channel.src = tracks[index].url;
@@ -92,6 +94,11 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         if (config.ducking_enabled) factor *= this.duckingFactor(config, nowMs, this.captions);
         factor *= this.manualAutomationFactor(config.audio_mix?.music_keyframes, nowMs);
         return factor;
+    }
+
+    setPlaybackRate(rate) {
+        this.playbackRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+        this.channels.forEach(channel => { if (channel.playbackRate !== this.playbackRate) channel.playbackRate = this.playbackRate; });
     }
 
     pause() {
@@ -274,20 +281,27 @@ window.ConnectPreviewSoundtrackClock = class ConnectPreviewSoundtrackClock {
         this.controller.pause();
     }
 
-    setVideo(video) {
-        this.stop();
+    setVideo(video, {continuous = false} = {}) {
+        this.handoff = continuous && !this.loading && this.controller.isPlaying;
+        if (!this.handoff) this.stop();
+        else { this.lastTime = null; this.advancing = false; }
+        this.controller.setPlaybackRate?.(video.playbackRate);
         this.video = video;
         this.playing = false;
         if (this.bound.has(video)) return;
         this.bound.add(video);
         const block = () => {
             if (video !== this.video) return;
+            this.handoff = false;
             this.playing = false;
             this.stop();
         };
-        for (const name of ['play', 'pause', 'waiting', 'seeking', 'loadstart', 'emptied', 'error', 'ended']) video.addEventListener(name, block);
+        for (const name of ['pause', 'waiting', 'seeking', 'loadstart', 'emptied', 'error', 'ended']) video.addEventListener(name, block);
+        video.addEventListener('play', () => { if (video === this.video && !this.handoff) block(); });
+        video.addEventListener('ratechange', () => { if (video === this.video) this.controller.setPlaybackRate?.(video.playbackRate); });
         for (const name of ['playing', 'seeked']) video.addEventListener(name, () => {
             if (video === this.video && !video.paused && !video.seeking && !video.error) this.playing = true;
+            if (video === this.video) this.handoff = false;
         });
         // A stalled download does not necessarily stop playback while buffered
         // frames remain. Only block here when the decoder lacks future data.
