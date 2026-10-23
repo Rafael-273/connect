@@ -67,9 +67,9 @@
         box-shadow: 0 3px 10px rgba(90, 20, 16, .08);
     }
     .media-project-preview img { display:block; width:100%; height:100%; object-fit:cover; object-position:center; }
-    /* Portrait videos are cropped from the top, preserving faces and titles
-       that would otherwise be lost by a centered landscape preview. */
-    .media-project-preview img.is-portrait { object-position:center top; }
+    /* Portrait videos keep a little breathing room above the crop instead of
+       pinning it to the absolute top. */
+    .media-project-preview img.is-portrait { object-position:center 20%; }
     .media-project-preview .media-project-avatar { width:100%; height:100%; border-radius:0; box-shadow:none; }
 
     .media-status-badge {
