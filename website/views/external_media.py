@@ -23,6 +23,7 @@ from django.utils.http import content_disposition_header
 from django.views import View
 from safedelete.models import HARD_DELETE
 
+from ..external_media.s3_upload import S3DirectUpload, UploadError
 from ..external_media.tasks import (
     analyze_video_mastering,
     create_project_broll_preview,
@@ -1104,30 +1105,75 @@ def _sign_upload_allocation(allocation: dict) -> str:
 
 
 def _verify_upload_allocation(allocation: dict, signature: str) -> bool:
-    return _hmac.compare_digest(_sign_upload_allocation(allocation), signature)
+    return (isinstance(allocation, dict) and isinstance(signature, str)
+            and re.fullmatch(r'[0-9a-f]{64}', signature) is not None
+            and _hmac.compare_digest(_sign_upload_allocation(allocation), signature))
 
 
-def _generate_presigned_put(storage_key: str, content_type: str) -> str:
-    """Return a presigned PUT URL for the given storage key.
+def _prepare_s3_upload(storage_key, size, content_type):
+    return S3DirectUpload(get_external_media_storage()).begin(storage_key, size, content_type)
 
-    ContentType is intentionally omitted from the signed params so the browser
-    does not need to send an exact header match (avoids video/quicktime vs
-    video/mp4 mismatches on .mov files).
-    """
-    storage = get_external_media_storage()
-    location = str(getattr(storage, 'location', '') or '').strip('/')
-    s3_key = storage_key.lstrip('/')
-    if location and not s3_key.startswith(f'{location}/'):
-        s3_key = f'{location}/{s3_key}'
-    return storage.connection.meta.client.generate_presigned_url(
-        'put_object',
-        Params={'Bucket': storage.bucket_name, 'Key': s3_key},
-        ExpiresIn=3600,
-    )
+
+def _s3_upload_response(project, allocation, upload, content_type, *, broll=False):
+    allocation['storage_key'] = upload['storage_key']
+    if upload.get('multipart'):
+        allocation['multipart'] = upload['multipart']
+    return JsonResponse({
+        'upload_mode': 'multipart' if upload.get('multipart') else 'single',
+        'upload_url': upload.get('upload_url'),
+        'part_size': upload.get('multipart', {}).get('part_size'),
+        'multipart_url': reverse('external_media_project_upload_multipart', args=[project.public_id]),
+        'content_type': content_type,
+        'complete_url': reverse('external_media_project_broll_upload_complete' if broll else 'external_media_project_upload_complete', args=[project.public_id]),
+        'allocation': allocation, 'allocation_sig': _sign_upload_allocation(allocation),
+    })
+
+
+def _complete_s3_upload(allocation):
+    if not allocation.get('multipart'):
+        return None
+    try:
+        S3DirectUpload(get_external_media_storage()).complete(allocation)
+    except UploadError as error:
+        return JsonResponse({'detail': str(error)}, status=400)
+    except Exception:
+        return JsonResponse({'detail': 'Não foi possível concluir o arquivo no S3. Tente novamente.'}, status=502)
+    return None
+
+
+class ExternalMediaProjectUploadMultipartView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        if not settings.USE_S3:
+            return JsonResponse({'detail': 'Upload direto ao S3 requer USE_S3=TRUE.'}, status=400)
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        try:
+            data = json.loads(request.body)
+            allocation, signature = data['allocation'], data['allocation_sig']
+            if not isinstance(allocation, dict) or not isinstance(signature, str):
+                raise ValueError
+        except (TypeError, ValueError, KeyError):
+            return JsonResponse({'detail': 'Dados de upload inválidos.'}, status=400)
+        if not _verify_upload_allocation(allocation, signature) or allocation.get('project_id') != str(project.public_id):
+            return JsonResponse({'detail': 'Assinatura de upload inválida.'}, status=400)
+        action = data.get('action')
+        if action != 'abort' and project.status != ExternalMediaProject.Status.DRAFT:
+            return JsonResponse({'detail': 'Os uploads ficam bloqueados após iniciar o pipeline.'}, status=400)
+        service = S3DirectUpload(get_external_media_storage())
+        try:
+            if action == 'part':
+                return JsonResponse({'upload_url': service.part_url(allocation, data.get('part_number'))})
+            if action == 'abort':
+                service.abort(allocation)
+                return JsonResponse({'aborted': True})
+            return JsonResponse({'detail': 'Operação de upload inválida.'}, status=400)
+        except UploadError as error:
+            return JsonResponse({'detail': str(error)}, status=400)
+        except Exception:
+            return JsonResponse({'detail': 'Não foi possível preparar o envio desta parte ao S3. Tente novamente.'}, status=502)
 
 
 class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
-    """Allocate position/camera, sign the allocation and return a presigned S3 PUT URL.
+    """Allocate position/camera and a signed single or multipart S3 upload.
 
     The browser uploads directly to S3 (no bytes through Django), then POSTs to
     ExternalMediaProjectUploadCompleteView to create the DB record.
@@ -1144,16 +1190,16 @@ class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
 
         try:
             data = json.loads(request.body)
-        except (ValueError, TypeError):
+            file_size = int(data.get('size') or 0)
+        except (ValueError, TypeError, AttributeError):
             return JsonResponse({'detail': 'Corpo da requisição inválido.'}, status=400)
 
         filename = str(data.get('filename') or '').strip()
-        file_size = int(data.get('size') or 0)
         content_type = str(data.get('content_type') or 'video/octet-stream').strip() or 'video/octet-stream'
 
         if Path(filename).suffix.lower() not in VIDEO_EXTENSIONS:
             return JsonResponse({'detail': 'Formato não suportado. Envie MP4, MOV, MKV, WEBM, AVI ou M4V.'}, status=400)
-        if file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
+        if file_size <= 0 or file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
             return JsonResponse({'detail': f'O vídeo excede o limite de {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.'}, status=400)
 
         # ── camera/position allocation (mirrors ExternalMediaProjectUploadView) ──
@@ -1208,7 +1254,7 @@ class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
         )
 
         try:
-            upload_url = _generate_presigned_put(storage_key, content_type)
+            upload = _prepare_s3_upload(storage_key, file_size, content_type)
         except Exception:
             return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
 
@@ -1228,13 +1274,7 @@ class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
             'trim_start_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_start_seconds')) or 0,
             'trim_end_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_end_seconds')),
         }
-        return JsonResponse({
-            'upload_url': upload_url,
-            'content_type': content_type,
-            'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
-            'allocation': allocation,
-            'allocation_sig': _sign_upload_allocation(allocation),
-        })
+        return _s3_upload_response(project, allocation, upload, content_type)
 
 
 class ExternalMediaProjectDirectUploadPresignView(ExternalMediaRequiredMixin, View):
@@ -1264,7 +1304,7 @@ class ExternalMediaProjectDirectUploadPresignView(ExternalMediaRequiredMixin, Vi
             SimpleNamespace(project=project, block_id=None, block=None, position=position), filename,
         )
         try:
-            upload_url = _generate_presigned_put(storage_key, str(data.get('content_type') or 'video/octet-stream'))
+            upload = _prepare_s3_upload(storage_key, file_size, str(data.get('content_type') or 'video/octet-stream'))
         except Exception:
             return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
         allocation = {
@@ -1276,13 +1316,7 @@ class ExternalMediaProjectDirectUploadPresignView(ExternalMediaRequiredMixin, Vi
             'trim_start_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_start_seconds')) or 0,
             'trim_end_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_end_seconds')),
         }
-        return JsonResponse({
-            'upload_url': upload_url,
-            'content_type': str(data.get('content_type') or 'video/octet-stream'),
-            'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
-            'allocation': allocation,
-            'allocation_sig': _sign_upload_allocation(allocation),
-        })
+        return _s3_upload_response(project, allocation, upload, str(data.get('content_type') or 'video/octet-stream'))
 
 
 class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixin, View):
@@ -1297,16 +1331,16 @@ class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixi
 
         try:
             data = json.loads(request.body)
-        except (ValueError, TypeError):
+            file_size = int(data.get('size') or 0)
+        except (ValueError, TypeError, AttributeError):
             return JsonResponse({'detail': 'Corpo da requisição inválido.'}, status=400)
 
         filename = str(data.get('filename') or '').strip()
-        file_size = int(data.get('size') or 0)
         content_type = str(data.get('content_type') or 'video/octet-stream').strip() or 'video/octet-stream'
 
         if Path(filename).suffix.lower() not in VIDEO_EXTENSIONS:
             return JsonResponse({'detail': 'Formato não suportado. Envie MP4, MOV, MKV, WEBM, AVI ou M4V.'}, status=400)
-        if file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
+        if file_size <= 0 or file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
             return JsonResponse({'detail': f'O vídeo excede o limite de {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.'}, status=400)
 
         position = (ProjectBlockMedia.objects.filter(project=project, custom_block=block)
@@ -1317,7 +1351,7 @@ class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixi
         )
 
         try:
-            upload_url = _generate_presigned_put(storage_key, content_type)
+            upload = _prepare_s3_upload(storage_key, file_size, content_type)
         except Exception:
             return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
 
@@ -1337,13 +1371,7 @@ class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixi
             'trim_start_ms': 0,
             'trim_end_ms': None,
         }
-        return JsonResponse({
-            'upload_url': upload_url,
-            'content_type': content_type,
-            'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
-            'allocation': allocation,
-            'allocation_sig': _sign_upload_allocation(allocation),
-        })
+        return _s3_upload_response(project, allocation, upload, content_type)
 
 
 class ExternalMediaProjectBrollUploadPresignView(ExternalMediaRequiredMixin, View):
@@ -1393,7 +1421,7 @@ class ExternalMediaProjectBrollUploadPresignView(ExternalMediaRequiredMixin, Vie
             SimpleNamespace(project=project, public_id=asset_public_id), filename,
         )
         try:
-            upload_url = _generate_presigned_put(storage_key, str(data.get('content_type') or 'application/octet-stream'))
+            upload = _prepare_s3_upload(storage_key, file_size, str(data.get('content_type') or 'application/octet-stream'))
         except Exception:
             return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
         allocation = {
@@ -1404,11 +1432,7 @@ class ExternalMediaProjectBrollUploadPresignView(ExternalMediaRequiredMixin, Vie
             'description': str(data.get('description') or '').strip()[:500],
             'duration_ms': duration_ms, 'position': position,
         }
-        return JsonResponse({
-            'upload_url': upload_url,
-            'complete_url': reverse('external_media_project_broll_upload_complete', args=[project.public_id]),
-            'allocation': allocation, 'allocation_sig': _sign_upload_allocation(allocation),
-        })
+        return _s3_upload_response(project, allocation, upload, str(data.get('content_type') or 'application/octet-stream'), broll=True)
 
 
 class ExternalMediaProjectBrollUploadCompleteView(ExternalMediaRequiredMixin, View):
@@ -1428,6 +1452,18 @@ class ExternalMediaProjectBrollUploadCompleteView(ExternalMediaRequiredMixin, Vi
         custom_block = get_object_or_404(ProjectCustomBlock, pk=custom_block_id, project=project) if custom_block_id else None
         if bool(block) == bool(custom_block):
             return JsonResponse({'detail': 'Bloco de B-roll inválido.'}, status=400)
+        if allocation.get('multipart'):
+            existing = project.broll_assets.filter(file=allocation['storage_key']).first()
+            if existing:
+                return JsonResponse({
+                    'id': str(existing.public_id), 'name': existing.original_filename,
+                    'media_type': existing.media_type, 'description': existing.description,
+                    'preview_status': existing.preview_status,
+                    'status_url': reverse('external_media_project_broll_status', args=[project.public_id, existing.public_id]),
+                })
+        error = _complete_s3_upload(allocation)
+        if error is not None:
+            return error
         try:
             asset = ProjectBrollAsset.objects.create(
                 public_id=uuid.UUID(str(allocation['public_id'])), project=project,
@@ -1452,7 +1488,7 @@ class ExternalMediaProjectBrollUploadCompleteView(ExternalMediaRequiredMixin, Vi
 
 
 class ExternalMediaProjectUploadCompleteView(ExternalMediaRequiredMixin, View):
-    """Create the ProjectBlockMedia record after the browser successfully PUT the file to S3."""
+    """Verify and finalize the S3 object before registering ProjectBlockMedia."""
 
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
@@ -1475,6 +1511,18 @@ class ExternalMediaProjectUploadCompleteView(ExternalMediaRequiredMixin, View):
         custom_block = get_object_or_404(ProjectCustomBlock, pk=custom_block_id, project=project) if custom_block_id else None
         if not block and not custom_block and project.template_version.blocks.exists():
             return JsonResponse({'detail': 'Este template organiza os vídeos por cenas.'}, status=400)
+
+        if allocation.get('multipart'):
+            existing = project.block_media.filter(file=allocation['storage_key']).first()
+            if existing:
+                return JsonResponse({
+                    'id': existing.pk, 'name': existing.original_filename, 'size': existing.file_size,
+                    'status_url': reverse('external_media_project_media_status', args=[project.public_id, existing.pk]),
+                    'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, existing.pk]),
+                })
+        error = _complete_s3_upload(allocation)
+        if error is not None:
+            return error
 
         item = ProjectBlockMedia(
             project=project,

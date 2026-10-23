@@ -1,4 +1,5 @@
 {% extends 'member/external_media/base.html' %}
+{% load static %}
 
 {% block media_header_icon %}
 <a href="{% url 'external_media_dashboard' %}" class="project-detail-header-icon{% if project_header_thumbnail %} has-preview{% endif %}" aria-label="Voltar para projetos">
@@ -585,6 +586,7 @@
 {% endif %}
 
 <form method="post" action="{% url 'external_media_project_run' project.public_id %}">{% csrf_token %}<button class="media-btn media-primary w-full" {% if validation_errors %}disabled style="opacity:.5"{% endif %}><i class="fas fa-wand-magic-sparkles"></i>Gerar vídeo</button></form>
+<script src="{% static 'external_media_s3_upload.js' %}"></script>
 <script>
 (function(){
     const MIN_TRIM_SECONDS = 0.1;
@@ -763,26 +765,10 @@
             const presign = await presignResponse.json().catch(() => ({}));
             if (!presignResponse.ok) throw new Error(presign.detail || 'Não foi possível iniciar o envio.');
 
-            await new Promise((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('PUT', presign.upload_url);
-                xhr.setRequestHeader('Content-Type', presign.content_type || file.type || 'video/mp4');
-                xhr.upload.addEventListener('progress', (event) => {
-                    if (event.lengthComputable) setStatus(`Enviando ${Math.round((event.loaded / event.total) * 100)}%`);
-                });
-                xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('Não foi possível enviar o arquivo.'));
-                xhr.onerror = () => reject(new Error('Não foi possível enviar o arquivo.'));
-                xhr.send(file);
-            });
+            await ConnectS3Upload.upload(file, presign, {csrfToken, onProgress:percent=>setStatus(`Enviando ${percent}%`)});
 
             setStatus('Salvando câmera…');
-            const completeResponse = await fetch(presign.complete_url, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-                body: JSON.stringify({allocation: presign.allocation, allocation_sig: presign.allocation_sig}),
-            });
-            const completed = await completeResponse.json().catch(() => ({}));
-            if (!completeResponse.ok) throw new Error(completed.detail || 'Não foi possível salvar a câmera.');
+            await ConnectS3Upload.complete(presign, csrfToken);
         }
 
         fileInput?.addEventListener('change', async () => {
@@ -993,43 +979,23 @@
                     return;
                 }
 
-                // 2. PUT direto no S3 com progress
+                // 2. Envio direto ao S3, em partes para arquivos grandes
                 try {
-                    await new Promise((resolve, reject) => {
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('PUT', presign.upload_url);
-                        xhr.upload.addEventListener('progress', (ev) => {
-                            if (ev.lengthComputable && uploadStatusLabel) {
-                                uploadStatusLabel.textContent = `Enviando ${Math.round((ev.loaded / ev.total) * 100)}%`;
-                            }
-                        });
-                        xhr.addEventListener('load', () => {
-                            xhr.status >= 200 && xhr.status < 400 ? resolve() : reject(new Error(`S3 ${xhr.status}`));
-                        });
-                        xhr.addEventListener('error', () => reject(new Error('network')));
-                        xhr.send(file);
-                    });
+                    await ConnectS3Upload.upload(file, presign, {csrfToken, onProgress:percent=>{
+                        if(uploadStatusLabel)uploadStatusLabel.textContent=`Enviando ${percent}%`;
+                    }});
                 } catch (e) {
-                    showUploadError('Falha ao enviar o arquivo. Verifique sua conexão e tente novamente.');
+                    showUploadError(e.message || 'Falha ao enviar o arquivo. Verifique sua conexão e tente novamente.');
                     return;
                 }
 
                 // 3. Confirmar com Django para criar o registro e enfileirar preview
                 try {
-                    const res = await fetch(presign.complete_url, {
-                        method: 'POST',
-                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
-                        body: JSON.stringify({allocation: presign.allocation, allocation_sig: presign.allocation_sig}),
-                    });
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        showUploadError(err.detail || 'Vídeo enviado, mas não foi possível registrar. Recarregue a página.');
-                        return;
-                    }
-                    addUploadResult(form, await res.json());
+                    if(uploadStatusLabel)uploadStatusLabel.textContent='Concluindo envio…';
+                    addUploadResult(form, await ConnectS3Upload.complete(presign, csrfToken));
                     processNextFile();
                 } catch (e) {
-                    showUploadError('Vídeo enviado, mas não foi possível registrar. Recarregue a página.');
+                    showUploadError(e.message || 'Vídeo enviado, mas não foi possível registrar. Recarregue a página.');
                 }
                 return;
             }
@@ -1741,17 +1707,6 @@
 <script>
 (() => {
     const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-    const uploadDirectly = (url, file, onProgress) => new Promise((resolve, reject) => {
-        const request = new XMLHttpRequest();
-        request.open('PUT', url);
-        request.upload.addEventListener('progress', event => {
-            if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100));
-        });
-        request.onload = () => request.status >= 200 && request.status < 300
-            ? resolve() : reject(new Error('O S3 recusou o upload do B-roll.'));
-        request.onerror = () => reject(new Error('Não foi possível enviar o B-roll ao S3.'));
-        request.send(file);
-    });
     const formTitle = (form, index) => {
         const title = form.querySelector('[data-broll-form-title]');
         if (title) title.textContent = index ? `Novo B-roll ${index + 1}` : 'Novo B-roll';
@@ -1852,17 +1807,9 @@
                     const presign = await jsonOrRedirect(presignResponse);
                     if (!presign) return;
                     if (!presignResponse.ok) throw new Error(presign.detail || 'Não foi possível iniciar o upload.');
-                    await uploadDirectly(presign.upload_url, file, percent => setStatus(`Enviando para o S3: ${percent}%`));
+                    await ConnectS3Upload.upload(file, presign, {csrfToken:csrf, onProgress:percent=>setStatus(`Enviando para o S3: ${percent}%`)});
                     setStatus('Registrando B-roll…');
-                    const completeResponse = await fetch(presign.complete_url, {
-                        method: 'POST', credentials: 'same-origin',
-                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest'},
-                        body: JSON.stringify({allocation: presign.allocation, allocation_sig: presign.allocation_sig}),
-                    });
-                    const complete = await jsonOrRedirect(completeResponse);
-                    if (!complete) return;
-                    if (!completeResponse.ok) throw new Error(complete.detail || 'Não foi possível registrar o B-roll.');
-                    uploadResult = complete;
+                    uploadResult = await ConnectS3Upload.complete(presign, csrf);
                 } else {
                     const response = await fetch(form.action, {
                         method: 'POST', credentials: 'same-origin', body: formData,
