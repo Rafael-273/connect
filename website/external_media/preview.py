@@ -251,6 +251,16 @@ class ProjectProxyService:
             )
         return manifest
 
+    @staticmethod
+    def review_video_is_needed(project, revision):
+        def video_id(item):
+            return (item.timeline or {}).get('review_video_revision_id') or item.pk
+        requested_id = video_id(revision)
+        return any(
+            candidate is not None and video_id(candidate) == requested_id
+            for candidate in (project.current_timeline_revision, project.approved_timeline_revision)
+        )
+
     @classmethod
     def build_timeline_review_proxy(cls, project_id, revision_id):
         """Render one lightweight, continuous source for a timeline revision.
@@ -262,8 +272,17 @@ class ProjectProxyService:
         """
         project = ExternalMediaProject.objects.select_related(
             'template_version__preset', 'template_version__preview_proxy_profile', 'render_job',
+            'current_timeline_revision', 'approved_timeline_revision',
         ).get(pk=project_id)
         revision = TimelineRevision.objects.get(pk=revision_id, project=project)
+        # Slider/cut edits may queue many immutable snapshots before the worker
+        # reaches them. Only the active or approved picture is useful. Resolve
+        # the shared video identity so an audio-only child does not discard its
+        # parent's still-needed preview. Undo makes an older revision active
+        # again and must remain eligible for generation.
+        if not cls.review_video_is_needed(project, revision):
+            logger.info('Ignorando preview substituído: projeto %s, revisão %s.', project_id, revision_id)
+            return None
         video_revision_id = (revision.timeline or {}).get('review_video_revision_id')
         if video_revision_id:
             revision = TimelineRevision.objects.get(pk=video_revision_id, project=project)
@@ -1618,7 +1637,7 @@ class TimelineRevisionService:
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set,
             'Volume da trilha ajustado', member, current,
-            music_volume=requested,
+            music_volume=requested, reuse_review_video=True,
         )
         session = cls.session(locked, member, revision)
         cls._record(
@@ -1669,7 +1688,7 @@ class TimelineRevisionService:
             return current
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set,
-            'Mixagem de áudio ajustada', member, current, audio_mix=requested,
+            'Mixagem de áudio ajustada', member, current, audio_mix=requested, reuse_review_video=True,
         )
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'UPDATE_AUDIO_MIX', requested, previous, member)

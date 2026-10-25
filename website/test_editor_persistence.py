@@ -56,6 +56,24 @@ class EditorFixture(ExternalMediaFixtureMixin):
 
 
 class EditorPersistenceTests(EditorFixture, TestCase):
+    def test_volume_and_mix_edits_reuse_the_same_picture_without_enqueuing_ffmpeg(self):
+        from unittest.mock import patch
+        from website.external_media.preview import ProjectProxyService
+        initial = self.project.current_timeline_revision
+        with patch.object(TimelineRevisionService, '_enqueue_timeline_review_proxy') as enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                volume = TimelineRevisionService.update_music_volume(self.project, self.member, .42)
+                self.project.refresh_from_db()
+                mix = TimelineRevisionService.update_audio_mix(self.project, self.member, {
+                    'ducking': {'enabled': True, 'base_duck_db': 6},
+                    'music_keyframes': [{'time_ms': 1200, 'gain_db': -3}],
+                })
+            enqueue.assert_not_called()
+        self.assertEqual(volume.timeline['music_volume'], .42)
+        self.assertEqual(mix.timeline['audio_mix']['music_keyframes'], [{'time_ms': 1200, 'gain_db': -3.0}])
+        for changed in (volume, mix):
+            self.assertEqual(ProjectProxyService.timeline_review_proxy_id(changed), ProjectProxyService.timeline_review_proxy_id(initial))
+
     def test_adding_music_preserves_split_clips_and_places_only_the_new_source(self):
         clips=[
             {'clip_id':'left','track_id':123,'start_ms':0,'end_ms':2000,'source_in_ms':500,'volume':.25,'audio_transition':None},
