@@ -1045,6 +1045,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         tracks.splice(index,1,left,right);applyLocalMusicTracks(tracks);
         try{applyTimeline(await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks}),true,false)}catch(error){alert(error.message);renderEditorTimeline()}
     }
+    function splitSelectedAtPlayhead(){
+        if(inspectorSelection?.kind==='music'){
+            const track=(timeline.music?.tracks||[]).find((item,index)=>`music-${item.clip_id||item.id||index}`===String(inspectorSelection.id));
+            if(track)return splitMusicClip(track.clip_id||`legacy-${track.id}`,globalMs);
+            return;
+        }
+        return addBladeAt(globalMs);
+    }
     let magneticSnapping=true;
     const snapButton=document.getElementById('timeline-snap');
     function toggleMagneticSnapping(){magneticSnapping=!magneticSnapping;snapButton.classList.toggle('is-active',magneticSnapping);snapButton.setAttribute('aria-pressed',String(magneticSnapping))}
@@ -1657,7 +1665,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const overlayItems=inspectorSelection?.kind==='overlay'?(timeline.overlays||[]).filter(item=>item.id===inspectorSelection.id):[];
         overlayItems.forEach(item=>{const card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const contentFields=Object.entries(item.content_schema||{});const fields=(contentFields.length?contentFields:Object.entries(item.content||{}).map(([key])=>[key,{label:key}])).map(([key,options])=>`<label class="block text-xs font-bold text-gray-500 mt-2">${esc(options.label||key)}<input data-overlay-content="${esc(key)}" value="${esc(item.content?.[key]||'')}" maxlength="${Number(options.max_length||2048)}" class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-normal"></label>`).join('');card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">${item.type==='TEXT'?'Texto':'QR Code'}</span><strong class="block mt-2">${esc(item.purpose||item.preset||'Elemento visual')}</strong></div><button data-jump class="text-red-600"><i class="fas fa-eye"></i></button></div>${fields}<div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (s)<input data-overlay-number="start_ms" type="number" min="0" step=".1" value="${item.start_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Fim (s)<input data-overlay-number="end_ms" type="number" min=".1" step=".1" value="${item.end_ms/1000}" class="mt-1 w-full rounded-lg border px-2 py-1"></label><label class="text-xs font-bold text-gray-500">Horizontal<input data-overlay-position="x" type="range" min="0" max="1" step=".01" value="${item.position?.x??.5}" class="preview-range"></label><label class="text-xs font-bold text-gray-500">Vertical<input data-overlay-position="y" type="range" min="0" max="1" step=".01" value="${item.position?.y??.82}" class="preview-range"></label></div><label class="block text-xs font-bold text-gray-500 mt-2">Animação<select data-overlay-animation class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>FADE</option><option>SLIDE_UP</option><option>SLIDE_DOWN</option><option>SLIDE_LEFT</option><option>SLIDE_RIGHT</option><option>POP</option></select></label><div class="flex items-center justify-between mt-3"><small class="text-gray-400" data-saved>Salvo</small>${item.source==='MANUAL'?'<button class="text-xs font-bold text-red-600" data-delete-overlay>Remover</button>':''}</div>`;card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);card.querySelector('[data-overlay-animation]').value=item.animation?.type||'NONE';const queue=event=>{card.querySelector('[data-saved]').textContent='Salvando…';queueOverlaySave(item,card,event.target)};card.querySelectorAll('input,select').forEach(field=>field.oninput=queue);card.querySelector('[data-delete-overlay]')?.addEventListener('click',()=>deleteOverlay(item.id));list.append(card)});
         if(inspectorSelection?.kind==='music'&&timeline.music){
-            const config=timeline.music,card=document.createElement('article'),volume=Math.round(Number(config.volume||0)*100);
+            const config=timeline.music,card=document.createElement('article');
+            const selectedMusicClip=(config.tracks||[]).find(track=>String(`music-${track.clip_id||track.id}`)===String(inspectorSelection.id));
+            const volume=Math.round(Number(selectedMusicClip?(selectedMusicClip.volume??1):(config.volume??0))*100);
+            if(selectedMusicClip)card.dataset.musicClipId=String(selectedMusicClip.clip_id||`legacy-${selectedMusicClip.id}`);
             card.className='preview-decision';
             const mix=config.audio_mix||timeline.audio_mix||{}, duck=mix.ducking||{}, keyframes=mix.music_keyframes||[];
             const keyframeRows=keyframes.map((point,index)=>`<div class="flex items-center gap-2 text-xs mt-2"><span class="text-gray-400 w-14">${fmt(point.time_ms||0)}</span><input data-music-keyframe-gain data-index="${index}" type="number" min="-60" max="12" step=".5" value="${Number(point.gain_db||0)}" class="preview-input !py-1 flex-1" aria-label="Ganho do keyframe em decibéis"><span>dB</span><button type="button" class="text-red-500" data-remove-music-keyframe data-index="${index}" aria-label="Remover keyframe"><i class="fas fa-trash"></i></button></div>`).join('');
@@ -1695,8 +1706,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             card.querySelectorAll('[data-music-keyframe-gain]').forEach(input=>input.onchange=event=>queueAudioMix({keyframe_index:Number(event.target.dataset.index),keyframe_gain_db:Number(event.target.value)},card));
             card.querySelectorAll('[data-remove-music-keyframe]').forEach(button=>button.onclick=()=>queueAudioMix({remove_keyframe:Number(button.dataset.index)},card));
             card.querySelector('[data-restore-auto-mix]').onclick=()=>queueAudioMix({restore_auto:true},card);
-            const selectedMusicClip=(config.tracks||[]).find(track=>String(`music-${track.clip_id}`)===String(inspectorSelection.id));
-            if(selectedMusicClip){const clipGain=document.createElement('div'),clipVolume=Math.round(Math.max(0,Math.min(1,Number(selectedMusicClip.volume??1)))*100);clipGain.className='mt-3 border-t border-gray-100 pt-3';clipGain.innerHTML=`<div class="flex items-center justify-between text-xs font-bold text-gray-400 uppercase"><span>Volume deste trecho</span><output>${clipVolume}%</output></div><input type="range" min="0" max="100" step="1" value="${clipVolume}" class="preview-range w-full mt-2" aria-label="Volume deste trecho de música"><small class="block mt-1 text-gray-400">Ajuste independente, mantido no preview e no render final.</small>`;const input=clipGain.querySelector('input'),output=clipGain.querySelector('output');input.oninput=event=>{const tracks=currentMusicTracks(),item=tracks.find(track=>String(track.clip_id)===String(selectedMusicClip.clip_id));if(!item)return;item.volume=Number(event.target.value)/100;output.textContent=`${event.target.value}%`;applyLocalMusicTracks(tracks);editorPersistence.schedule('music-tracks',()=>api(musicPreviewUrl,{tracks:currentMusicTracks()}).then(data=>applyTimeline(data,true,false)),200)};card.append(clipGain)}
+            if(selectedMusicClip){
+                card.querySelector('[data-music-volume-output]').previousElementSibling.textContent='Volume deste trecho';
+                card.querySelector('[data-music-volume]').setAttribute('aria-label','Volume deste trecho de música');
+                card.querySelector('[data-music-volume-saved]').textContent='Ajusta somente o trecho selecionado, em relação ao volume geral.';
+                // Keep project-wide processing separate from the selected clip.
+                // Otherwise these controls look like independent clip effects.
+                const general=document.createElement('details');general.className='mt-4 border-t border-gray-100 pt-3';
+                general.innerHTML='<summary class="text-xs font-bold text-gray-400 cursor-pointer">Mixagem geral da edição</summary><p class="text-xs text-gray-400 mt-2">Perfil, redução em fala, voz e curva manual afetam toda a edição.</p>';
+                const first=card.querySelector('[data-mix-profile]').closest('.grid'),last=card.querySelector('[data-restore-auto-mix]');
+                let node=first;
+                while(node){const next=node.nextElementSibling;general.append(node);if(node===last)break;node=next}
+                card.querySelector('[data-music-volume]').parentElement.after(general);
+            }
             list.append(card)
         }
         if(inspectorSelection?.kind==='caption')renderCaptionTranscript();
@@ -1946,7 +1968,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(event.code==='Space'){event.preventDefault();togglePreviewPlayback();return}
         if(key==='home'||key==='end'){event.preventDefault();seek(key==='home'?0:timeline.sequence.duration_ms,false);return}
         if(['+','=','-'].includes(key)){event.preventDefault();changeTimelineZoom(key==='-'?.5:2);return}
-        if(modified&&key==='k'){event.preventDefault();addBladeAt(globalMs);return}
+        if(modified&&key==='k'){event.preventDefault();splitSelectedAtPlayhead();return}
         if(event.key==='ArrowLeft'||event.key==='ArrowRight'){
             event.preventDefault();const direction=event.key==='ArrowLeft'?-1:1;
             const point=modified?globalMs+direction*5000:event.shiftKey?globalMs+direction*1000
@@ -1954,7 +1976,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             seek(point,false);return;
         }
         if(key==='v'||key==='b'){editTool=key==='v'?'select':'blade';updateEditControls();renderTimelineSelection()}
-        if(key==='c'){event.preventDefault();addBladeAt(globalMs)}
+        if(key==='c'){event.preventDefault();splitSelectedAtPlayhead()}
         if((event.key==='Delete'||event.key==='Backspace')&&selectedSegment){event.preventDefault();deleteSelectedSegment()}
     });
     document.getElementById('apply-all-noise').onclick=applyAllNoise;
@@ -1995,9 +2017,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function queueMusicVolume(percent,card){
         const volume=Math.max(0,Math.min(1,Number(percent||0)/100)),saved=card.querySelector('[data-music-volume-saved]'),output=card.querySelector('[data-music-volume-output]');
         if(!timeline.music)return;
-        timeline.music.volume=volume;
         if(output)output.textContent=`${Math.round(volume*100)}%`;
         if(saved)saved.textContent='Salvando…';
+        if(card.dataset.musicClipId){
+            const tracks=currentMusicTracks(),clip=tracks.find(track=>String(track.clip_id)===card.dataset.musicClipId);
+            if(!clip)return;
+            clip.volume=volume;
+            // Register pending work before optimistic rendering. A response
+            // from an earlier edit must not replace either clip's local gain.
+            editorPersistence.schedule('music-tracks',()=>api(musicPreviewUrl,{tracks:currentMusicTracks()}).then(data=>applyTimeline(data,true,false)),200);
+            applyLocalMusicTracks(tracks);
+            return;
+        }
+        timeline.music.volume=volume;
         updateMusicVolume();
         timeline.music_volume=volume;
         editorPersistence.schedule('music-volume',async()=>{try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{volume});applyTimeline(data,true,false)}catch(error){if(saved)saved.textContent=error.message}},350);

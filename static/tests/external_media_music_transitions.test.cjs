@@ -106,3 +106,64 @@ test('a split music source uses clip identities for its constant-power join',()=
     );
     assert.deepEqual(window,{start_ms:4000,end_ms:6000,duration_ms:2000});
 });
+
+test('the primary volume control saves only its captured clip, including rapid edits on both cuts',async()=>{
+    const html=fs.readFileSync(path.join(__dirname,'../../templates/member/external_media/preview.html'),'utf8');
+    const source=html.slice(html.indexOf('    function queueMusicVolume('),html.indexOf('    function resetMusicSample('));
+    const timeline={music:{volume:.15,tracks:[{clip_id:'left',volume:1},{clip_id:'right',volume:1}]},music_volume:.15};
+    const scheduled=new Map(),writes=[];
+    const context=vm.createContext({timeline,musicPreviewUrl:'/music/',
+        currentMusicTracks:()=>structuredClone(timeline.music.tracks),
+        applyLocalMusicTracks:tracks=>{timeline.music.tracks=tracks},
+        editorPersistence:{schedule:(key,callback)=>scheduled.set(key,callback)},
+        api:async(url,body)=>{writes.push(structuredClone(body));return {}},applyTimeline:()=>{},
+        updateMusicVolume:()=>{throw new Error('clip edits must not use global volume')},
+    });
+    vm.runInContext(source,context);
+    const card=id=>({dataset:{musicClipId:id},querySelector:()=>({textContent:''})});
+    context.queueMusicVolume(25,card('left'));
+    assert.deepEqual(timeline.music.tracks.map(track=>track.volume),[.25,1]);
+    context.queueMusicVolume(80,card('right'));
+    assert.deepEqual(timeline.music.tracks.map(track=>track.volume),[.25,.8]);
+    assert.equal(timeline.music.volume,.15);assert.equal(timeline.music_volume,.15);
+    await scheduled.get('music-tracks')();
+    assert.deepEqual(writes[0].tracks.map(track=>[track.clip_id,track.volume]),[['left',.25],['right',.8]]);
+});
+
+test('preview keeps different clip gains when both cuts refer to the same music file',()=>{
+    const {controller:c,config}=setup();
+    config.tracks=[{id:1,clip_id:'left',url:'a',volume:.25,start_ms:0,end_ms:4000},
+        {id:1,clip_id:'right',url:'a',volume:.8,start_ms:4000,end_ms:8000,source_in_ms:4000,transition:'NONE'}];
+    c.configure(config);c.sync(config,2000);
+    assert.equal(c.channels[0].volume,.125);assert.equal(c.channels[1].volume,0);
+    c.sync(config,5000);assert.equal(c.channels[0].volume,0);assert.equal(c.channels[1].volume,.4);
+});
+
+test('save payload preserves independent gains and source offsets for cuts of one music file',()=>{
+    const html=fs.readFileSync(path.join(__dirname,'../../templates/member/external_media/preview.html'),'utf8');
+    const source=html.match(/    function currentMusicTracks\(\)\{[^\n]+\}/)[0];
+    const context=vm.createContext({timeline:{music:{tracks:[
+        {id:7,clip_id:'left',start_ms:0,end_ms:4000,source_in_ms:0,volume:.25},
+        {id:7,clip_id:'right',start_ms:4000,end_ms:8000,source_in_ms:4000,volume:.8},
+    ]}}});
+    vm.runInContext(source,context);
+    const rows=JSON.parse(vm.runInContext('JSON.stringify(currentMusicTracks())',context));
+    assert.deepEqual(rows.map(row=>[row.track_id,row.clip_id,row.source_in_ms,row.volume]),[[7,'left',0,.25],[7,'right',4000,.8]]);
+});
+
+test('keyboard cut targets the selected music clip instead of cutting the video',()=>{
+    const html=fs.readFileSync(path.join(__dirname,'../../templates/member/external_media/preview.html'),'utf8');
+    const source=html.slice(html.indexOf('    function splitSelectedAtPlayhead('),html.indexOf('    let magneticSnapping='));
+    const calls=[],context=vm.createContext({
+        timeline:{music:{tracks:[{id:7,clip_id:'left'},{id:7,clip_id:'right'}]}},
+        inspectorSelection:{kind:'music',id:'music-right'},globalMs:6000,
+        splitMusicClip:(id,point)=>calls.push(['music',id,point]),addBladeAt:point=>calls.push(['video',point]),
+    });
+    vm.runInContext(source,context);context.splitSelectedAtPlayhead();
+    assert.deepEqual(calls,[['music','right',6000]]);
+    context.inspectorSelection={kind:'music',id:'missing'};context.splitSelectedAtPlayhead();
+    assert.equal(calls.length,1);
+    context.inspectorSelection={kind:'video',id:'take'};context.splitSelectedAtPlayhead();
+    assert.deepEqual(calls[1],['video',6000]);
+    assert.match(html,/if\(modified&&key==='k'\)\{event.preventDefault\(\);splitSelectedAtPlayhead\(\);return\}/);
+});
