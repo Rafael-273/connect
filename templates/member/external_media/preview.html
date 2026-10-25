@@ -1686,7 +1686,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const manageMusicButton=card.querySelector('[data-select-music]');
             manageMusicButton.innerHTML='<i class="fas fa-plus"></i> Adicionar / gerenciar músicas';
             manageMusicButton.title='Adicione faixas à sequência ou remova as selecionadas';
-            const playlist=config.tracks?.length?config.tracks:[config];
+            const playlist=Array.isArray(config.tracks)?config.tracks:[config];
             const sequence=document.createElement('div');
             sequence.className='mt-4 border-t border-gray-100 pt-3';
             sequence.innerHTML=`<div class="flex items-center justify-between gap-2"><strong class="text-xs text-gray-600">Sequência de músicas</strong><span class="text-[.65rem] font-bold uppercase tracking-wide text-gray-400">${playlist.length} faixa${playlist.length===1?'':'s'}</span></div><div class="mt-2 space-y-1">${playlist.map((track,index)=>`<div class="flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1.5 text-xs text-slate-600"><span class="grid h-5 w-5 place-items-center rounded-full bg-white font-bold text-red-600">${index+1}</span><span class="min-w-0 flex-1 truncate">${esc(track.name||'Trilha de fundo')}</span></div>`).join('')}</div><p class="mt-2 text-xs text-gray-400">Use o botão abaixo para adicionar ou remover faixas da sequência.</p>`;
@@ -1844,7 +1844,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         editorPersistence.flushScheduled();
         const saving=api(musicPreviewUrl,{tracks});
-        applyLocalMusicTracks(tracks);clearInspectorSelection();updateEditControls();
+        applyLocalMusicTracks(tracks);
+        // Keep the music panel open on the new playlist, including an empty
+        // lane. Closing the inspector left its sequence hidden/stale instead
+        // of showing the same optimistic deletion as the timeline.
+        const removedIndex=original.findIndex(track=>String(track.clip_id)===String(id)),next=tracks[Math.min(removedIndex,tracks.length-1)];
+        selectInspector('music',next?`music-${next.clip_id}`:null,'Trilha sonora');
+        renderTimelineSelection();updateEditControls();
         try{applyTimeline(await saving,true,false)}catch(error){alert(error.message)}
     }
     async function deleteSelectedSegment(){

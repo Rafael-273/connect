@@ -179,7 +179,7 @@ test('deleting one cut removes only its clip and dependent transition, preservin
         currentMusicTracks:()=>structuredClone(tracks),editorPersistence:{flushScheduled:()=>order.push('flush')},
         api:async(url,body)=>{order.push('enqueue');writes.push(structuredClone(body));return {}},
         applyLocalMusicTracks:rows=>{order.push('local');timeline.music.tracks=rows.map(track=>({...track,id:track.track_id}))},
-        clearInspectorSelection:()=>{},updateEditControls:()=>{},applyTimeline:()=>{},alert:message=>assert.fail(message),
+        selectInspector:()=>{},renderTimelineSelection:()=>{},updateEditControls:()=>{},applyTimeline:()=>{},alert:message=>assert.fail(message),
     });
     vm.runInContext(selection+deletion,context);
     assert.equal(context.selectedTimelineItemForDeletion().id,'left');
@@ -197,7 +197,25 @@ test('deleting the final music clip persists an explicitly empty lane',async()=>
     let saved,local;
     const context=vm.createContext({currentMusicTracks:()=>[{clip_id:'last',track_id:7}],musicPreviewUrl:'/music/',
         editorPersistence:{flushScheduled(){}},api:async(url,body)=>{saved=body.tracks;return {}},
-        applyLocalMusicTracks:rows=>{local=rows},clearInspectorSelection(){},updateEditControls(){},applyTimeline(){},alert:message=>assert.fail(message)});
+        applyLocalMusicTracks:rows=>{local=rows},selectInspector(){},renderTimelineSelection(){},updateEditControls(){},applyTimeline(){},alert:message=>assert.fail(message)});
     vm.runInContext(source,context);await context.deleteMusicClip('last');
     assert.equal(saved.length,0);assert.equal(local.length,0);
+});
+
+test('deleting music refreshes the open sequence panel before the server responds, including an empty lane',async()=>{
+    const html=fs.readFileSync(path.join(__dirname,'../../templates/member/external_media/preview.html'),'utf8');
+    const source=html.slice(html.indexOf('    async function deleteMusicClip('),html.indexOf('    async function deleteSelectedSegment('));
+    let tracks=[{clip_id:'left',track_id:7},{clip_id:'right',track_id:7}],resolve;
+    const panels=[];
+    const context=vm.createContext({currentMusicTracks:()=>structuredClone(tracks),musicPreviewUrl:'/music/',
+        editorPersistence:{flushScheduled(){}},api:()=>new Promise(done=>{resolve=done}),
+        applyLocalMusicTracks:rows=>{tracks=rows},selectInspector:(kind,id)=>panels.push({kind,id,count:tracks.length}),
+        renderTimelineSelection(){},updateEditControls(){},applyTimeline(){},alert:message=>assert.fail(message)});
+    vm.runInContext(source,context);
+    const first=context.deleteMusicClip('left');
+    assert.deepEqual(panels,[{kind:'music',id:'music-right',count:1}]);
+    resolve({});await first;
+    const last=context.deleteMusicClip('right');
+    assert.deepEqual(panels[1],{kind:'music',id:null,count:0});
+    resolve({});await last;
 });
