@@ -56,6 +56,23 @@ test('a missing proxy cancels pending metadata from the previous source',()=>{
     h.video.metadata();h.video.frame();h.flush();assert.equal(h.plays,0);assert.equal(h.video.currentTime,0);assert.equal(h.loading.at(-1),false);
 });
 
+test('a failed playing source is not reloaded on every subsequent seek or preload',()=>{
+    const h=harness();h.player.seek('unavailable.mp4',0,{autoplay:true});
+    h.video.error={code:2};
+    h.video.dispatchEvent(new Event('error'));
+    const loadId=h.player.loadId;
+    for(let i=0;i<20;i++){
+        h.player.seek('unavailable.mp4',0,{autoplay:true});
+        h.player.warm('unavailable.mp4',0);
+    }
+    assert.equal(h.player.loadId,loadId);assert.equal(h.plays,0);
+    assert.equal(h.player.preloader.src,undefined);
+    assert.equal(h.player.target.autoplay,false);
+    h.player.failedSources.set('unavailable.mp4',Date.now()-1);
+    h.player.seek('unavailable.mp4',0,{autoplay:true});
+    assert.equal(h.player.loadId,loadId+1);
+});
+
 test('a next take starting at zero becomes ready without a seeked event',()=>{
     const h=harness();h.video.dataset.source='a.mp4';
     h.player.warm('b.mp4',0);const incoming=h.player.preloader;

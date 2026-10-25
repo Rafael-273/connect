@@ -496,7 +496,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     window.addEventListener('beforeunload',event=>{if(!allowEditorUnload&&editorPersistence.busy){event.preventDefault();event.returnValue=''}});
     const api = (url, body={}) => {
         if(url==='{% url "external_media_project_preview_session" project.public_id %}'||url==='{% url "external_media_project_preview_revision_proxy" project.public_id %}')
-            return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(body)}).then(async response=>{const data=await response.json();if(!response.ok)throw new Error(data.error||'Não foi possível salvar.');return data});
+            return fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrf,'X-Requested-With':'XMLHttpRequest'},body:JSON.stringify(body)}).then(async response=>{let data;try{data=await response.json()}catch(_){throw new Error('O servidor está indisponível. Tente novamente em instantes.')}if(!response.ok)throw new Error(data.error||'Não foi possível salvar.');return data});
         const payload=body instanceof FormData?body:JSON.parse(JSON.stringify(body));
         const patchKey=!(body instanceof FormData)&&/\/(brolls|subtitles|overlays|transforms|colors)\/[^/]+\/$/.test(url)&&!['delete','split_at_ms','restore','restore_original','restore_auto','reset'].some(key=>key in body)?`${url}:${body.segment_start_ms??''}:${body.segment_end_ms??''}`:null;
         return editorPersistence.enqueue(url,payload,patchKey);
@@ -597,7 +597,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function processFilmstripQueue(){
         if(filmstripBusy||!filmstripQueue.length)return;
         filmstripBusy=true;const task=filmstripQueue.shift(),worker=document.createElement('video');worker.muted=true;worker.playsInline=true;worker.preload='metadata';
-        const finish=thumbnail=>{filmstripCache.set(task.key,thumbnail||'');filmstripQueued.delete(task.key);applyFilmstripThumbnail(task.key,thumbnail);filmstripBusy=false;processFilmstripQueue()};
+        let finished=false;
+        const finish=thumbnail=>{if(finished)return;finished=true;clearTimeout(timeout);worker.onerror=worker.onloadedmetadata=worker.onseeked=null;worker.pause();worker.removeAttribute('src');worker.load();filmstripCache.set(task.key,thumbnail||'');filmstripQueued.delete(task.key);applyFilmstripThumbnail(task.key,thumbnail);filmstripBusy=false;processFilmstripQueue()};
+        const timeout=setTimeout(()=>finish(''),30000);
         worker.onerror=()=>finish('');worker.onloadedmetadata=()=>{try{worker.currentTime=Math.min(Math.max(.05,task.time),Math.max(.05,worker.duration-.05))}catch(_){finish('')}};
         worker.onseeked=()=>{try{const canvas=document.createElement('canvas'),scale=Math.min(240/worker.videoWidth,135/worker.videoHeight,1);canvas.width=Math.max(1,Math.round(worker.videoWidth*scale));canvas.height=Math.max(1,Math.round(worker.videoHeight*scale));canvas.getContext('2d').drawImage(worker,0,0,canvas.width,canvas.height);finish(canvas.toDataURL('image/jpeg',.68))}catch(_){finish('')}};
         worker.src=task.source;worker.load();
@@ -983,7 +985,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         playerVideo.addEventListener('timeupdate',()=>{
             if(!playbackClock||playerVideo.paused)syncPlaybackPosition(playerVideo);
             if(playerVideo!==video||loading||draggingTimelineNeedle)return;
-            clearTimeout(saveTimer);saveTimer=setTimeout(()=>api('{% url "external_media_project_preview_session" project.public_id %}',{position_ms:Math.round(globalMs),ui_state:{edit_tool:editTool}}),700);
+            clearTimeout(saveTimer);saveTimer=setTimeout(()=>api('{% url "external_media_project_preview_session" project.public_id %}',{position_ms:Math.round(globalMs),ui_state:{edit_tool:editTool}}).catch(()=>{}),700);
         });
         for(const event of ['seeking','waiting','ratechange','emptied','error'])playerVideo.addEventListener(event,()=>{if(playerVideo===video)cancelPlaybackBoundary()});
         playerVideo.addEventListener('ended',()=>{
@@ -1215,13 +1217,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         });
     }
     const musicWaveformCache=new Map();
-    let musicWaveformContext=null;
+    let musicWaveformContext=null,musicWaveformQueue=Promise.resolve(),waveformRetryAfter=0;
     async function loadMusicWaveform(source){
         if(!source)return null;
-        if(!musicWaveformCache.has(source))musicWaveformCache.set(source,(async()=>{
+        if(!musicWaveformCache.has(source)){
+          const loading=musicWaveformQueue.then(async()=>{
+            const wait=waveformRetryAfter-Date.now();if(wait>0)await new Promise(resolve=>setTimeout(resolve,wait));
             const waveformUrl=new URL(source,location.href);waveformUrl.searchParams.set('waveform','1');
             const response=await fetch(waveformUrl.href,{credentials:'same-origin'});
-            if(!response.ok)throw new Error(`Não foi possível carregar a forma de onda (${response.status}).`);
+            if(!response.ok){if(response.status>=500)waveformRetryAfter=Date.now()+10000;throw new Error(`Não foi possível carregar a forma de onda (${response.status}).`)}
             const bytes=await response.arrayBuffer();
             const AudioContextClass=window.AudioContext||window.webkitAudioContext;
             if(!AudioContextClass)throw new Error('Web Audio não é suportado neste navegador.');
@@ -1236,7 +1240,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 if(performance.now()-started>4){await new Promise(resolve=>setTimeout(resolve,0));started=performance.now()}
             }
             return {durationMs:buffer.duration*1000,peaks};
-        })().catch(error=>{musicWaveformCache.delete(source);throw error}));
+          }).catch(error=>{musicWaveformCache.delete(source);throw error});
+          musicWaveformQueue=loading.catch(()=>{});
+          musicWaveformCache.set(source,loading);
+        }
         return musicWaveformCache.get(source);
     }
     function waveformRange(audio,startMs=0,endMs=null,buckets=720,loop=false){

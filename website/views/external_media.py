@@ -156,6 +156,9 @@ def protected_file_response(request, field_file, force_stream=False):
         except TypeError:
             url = field_file.url
         return redirect(url)
+    if settings.USE_S3 and force_stream:
+        from ..external_media.streaming import s3_stream_response
+        return s3_stream_response(request, field_file, content_type, preview=preview)
     try:
         file_handle = field_file.open('rb')
     except FileNotFoundError as exc:

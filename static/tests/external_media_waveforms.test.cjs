@@ -24,6 +24,15 @@ test('a failed waveform download can be retried instead of poisoning the cache',
     const result=await h.context.loadMusicWaveform('/music?track_id=1');
     assert.ok(result.peaks.length);assert.equal(attempts,2);
 });
+
+test('different take waveforms download and decode serially instead of flooding the server',async()=>{
+    let release;const gate=new Promise(resolve=>{release=resolve}),requests=[];
+    const h=harness(async url=>{requests.push(url);if(requests.length===1)await gate;return {ok:true,arrayBuffer:async()=>new ArrayBuffer(0)}});
+    const first=h.context.loadMusicWaveform('/take-a'),second=h.context.loadMusicWaveform('/take-b');
+    await tick();assert.equal(requests.length,1);
+    release();await Promise.all([first,second]);
+    assert.equal(requests.length,2);assert.equal(h.decodes,2);
+});
 test('split music waveforms use source offsets and repeat across original-file loop boundaries',()=>{
     const {context}=harness();const audio={durationMs:4000,peaks:[.1,.2,.8,.9]};
     const range=(start,end,buckets)=>Array.from(context.waveformRange(audio,start,end,buckets,true));

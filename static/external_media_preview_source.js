@@ -41,6 +41,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.queuedWarm = null;
         this.waitingForPreload = null;
         this.resumePreload = null;
+        this.failedSources = new Map();
     }
 
     seek(source, timeSeconds, {autoplay = false, freeze = true} = {}) {
@@ -56,6 +57,9 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.waitingForPreload = null;
         if (!autoplay && !this.video.paused) this.video.pause();
         if (!source) { this.loadController?.abort(); this.loadId++; this.pendingFrameCheck=null; this.onLoading(false); this.releaseFrame(); return; }
+        if ((this.failedSources.get(source)||0)>Date.now()) {
+            this.target.autoplay=false;this.video.pause();this.onLoading(false);return;
+        }
         // A reserved decoder belongs to this transition until it is consumed.
         // canplay/seeked alone are not proof that the requested frame is ready.
         const matchesWarm = this.preloader.dataset.source === source
@@ -166,6 +170,8 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         };
         const fail = () => {
             if (loadId !== this.loadId) return;
+            this.failedSources.set(source,Date.now()+10000);
+            this.target.autoplay=false;this.video.pause();
             this.cancelFrameCallback();
             this.onLoading(false);
             if (freeze) this.releaseFrame();
@@ -270,6 +276,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             return;
         }
         if (!source) return;
+        if ((this.failedSources.get(source)||0)>Date.now()) return;
         if (source === this.preloader.dataset.source && Math.abs(this.preloadedTime - time) < .001 && !this.preloader.error) return;
         const requestId = ++this.preloadRequestId;
         this.warmController?.abort();this.warmController=new AbortController();
