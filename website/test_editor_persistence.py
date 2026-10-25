@@ -56,6 +56,21 @@ class EditorFixture(ExternalMediaFixtureMixin):
 
 
 class EditorPersistenceTests(EditorFixture, TestCase):
+    def test_adding_music_preserves_split_clips_and_places_only_the_new_source(self):
+        clips=[
+            {'clip_id':'left','track_id':123,'start_ms':0,'end_ms':2000,'source_in_ms':500,'volume':.25,'audio_transition':None},
+            {'clip_id':'right','track_id':123,'start_ms':4000,'end_ms':10000,'source_in_ms':2500,'volume':.8,'audio_transition':None},
+        ]
+        before=TimelineRevisionService.update_music_tracks(self.project,self.member,clips)
+        self.project.refresh_from_db()
+        original=before.timeline['music_tracks']
+        revision=TimelineRevisionService.update_music_tracks(self.project,self.member,[*original,{'track_id':124}])
+        after={row['clip_id']:row for row in revision.timeline['music_tracks']}
+        for row in original:
+            self.assertEqual(after[row['clip_id']],row)
+        added=next(row for row in after.values() if row['track_id']==124)
+        self.assertEqual((added['start_ms'],added['end_ms']),(2000,4000))
+
     def test_soundtrack_changes_reuse_video_proxy_without_enqueuing_video_render(self):
         from unittest.mock import patch
         from website.external_media.preview import ProjectProxyService

@@ -1536,28 +1536,28 @@ class TimelineRevisionService:
                 normalized_item.pop('start_ms', None)
                 normalized_item.pop('end_ms', None)
             normalized.append(normalized_item)
-        # New playlist entries are distributed over the sequence with their
-        # configured transitions already overlapping. This makes the visual
-        # schedule match the constant-power crossfade used by the renderer.
-        # The editor can then move/resize each clip, and subsequent saves
-        # preserve those explicit bounds instead of regenerating them on reload.
+        # Only an entirely unscheduled legacy playlist may be distributed.
+        # Adding one new source must never overwrite the cuts of edited clips.
         if normalized and any('start_ms' not in item or 'end_ms' not in item for item in normalized):
             sequence_duration = max(1_000, int(((current.timeline or {}).get('sequence') or {}).get('duration_ms') or 0))
-            transition_durations = [
-                min(
-                    int(item.get('transition_duration_ms') or 0),
-                    sequence_duration / max(2 * len(normalized), 1),
-                ) if index and item.get('transition') == 'CONSTANT_POWER' else 0
-                for index, item in enumerate(normalized)
-            ]
-            slot = (sequence_duration + sum(transition_durations)) / len(normalized)
-            cursor = 0
-            for index, item in enumerate(normalized):
-                if index:
-                    cursor -= transition_durations[index]
-                item['start_ms'] = round(max(0, cursor))
-                cursor += slot
-                item['end_ms'] = round(min(sequence_duration, cursor))
+            scheduled = [item for item in normalized if 'start_ms' in item and 'end_ms' in item]
+            if scheduled:
+                for item in normalized:
+                    if 'start_ms' in item and 'end_ms' in item:
+                        continue
+                    cursor = 0
+                    for placed in sorted(scheduled, key=lambda row: row['start_ms']):
+                        if placed['start_ms'] - cursor >= 1000:
+                            break
+                        cursor = max(cursor, placed['end_ms'])
+                    if sequence_duration - cursor < 1000:
+                        cursor = 0
+                    next_start = min((row['start_ms'] for row in scheduled if row['start_ms'] > cursor), default=sequence_duration)
+                    item['start_ms'] = cursor
+                    item['end_ms'] = max(cursor + 1000, min(sequence_duration, next_start))
+                    scheduled.append(item)
+            else:
+                cls._distribute_music_tracks(normalized, sequence_duration)
         normalized.sort(key=lambda item: item.get('start_ms', 0))
         previous = (current.timeline or {}).get('music_tracks')
         if previous is None:
@@ -1584,6 +1584,24 @@ class TimelineRevisionService:
             {'tracks': normalized}, {'tracks': previous}, member,
         )
         return revision
+
+    @staticmethod
+    def _distribute_music_tracks(normalized, sequence_duration):
+        transition_durations = [
+            min(
+                int(item.get('transition_duration_ms') or 0),
+                sequence_duration / max(2 * len(normalized), 1),
+            ) if index and item.get('transition') == 'CONSTANT_POWER' else 0
+            for index, item in enumerate(normalized)
+        ]
+        slot = (sequence_duration + sum(transition_durations)) / len(normalized)
+        cursor = 0
+        for index, item in enumerate(normalized):
+            if index:
+                cursor -= transition_durations[index]
+            item['start_ms'] = round(max(0, cursor))
+            cursor += slot
+            item['end_ms'] = round(min(sequence_duration, cursor))
 
     @classmethod
     @transaction.atomic

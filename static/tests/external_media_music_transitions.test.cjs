@@ -219,3 +219,18 @@ test('deleting music refreshes the open sequence panel before the server respond
     assert.deepEqual(panels[1],{kind:'music',id:null,count:0});
     resolve({});await last;
 });
+
+test('adding music fills an available gap without modifying existing cuts, trims or gains',()=>{
+    const html=fs.readFileSync(path.join(__dirname,'../../templates/member/external_media/preview.html'),'utf8');
+    const source=html.slice(html.indexOf('    function newMusicClip('),html.indexOf("    document.getElementById('cancel-music-select')"));
+    const context=vm.createContext({timeline:{sequence:{duration_ms:10000}},globalMs:6000,window:{ConnectEditorPersistence:{operationId:()=> 'new'}}});
+    vm.runInContext(source,context);
+    const tracks=[{clip_id:'left',track_id:7,start_ms:0,end_ms:2000,source_in_ms:500,volume:.25},
+        {clip_id:'right',track_id:7,start_ms:4000,end_ms:10000,source_in_ms:2500,volume:.8}];
+    const before=structuredClone(tracks),added=context.newMusicClip(8,tracks);
+    assert.deepEqual(tracks,before);assert.equal(added.start_ms,2000);assert.equal(added.end_ms,4000);assert.equal(added.clip_id,'new');
+    const full=[{clip_id:'full',start_ms:0,end_ms:10000}];
+    const overlapping=context.newMusicClip(9,full);
+    assert.equal(overlapping.start_ms,6000);assert.equal(overlapping.end_ms,10000);
+    assert.deepEqual(full,[{clip_id:'full',start_ms:0,end_ms:10000}]);
+});

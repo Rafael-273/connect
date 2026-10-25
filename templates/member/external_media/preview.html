@@ -2102,6 +2102,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const file=musicUploadInput.files?.[0];if(!file)return;
         musicSelectError.classList.add('hidden');musicUploadInput.disabled=true;musicUploadButton.classList.add('pointer-events-none','opacity-60');musicUploadButton.innerHTML='<i class="fas fa-spinner fa-spin"></i>Enviando…';
         try{
+            await editorPersistence.flush();
             const body=new FormData();body.append('audio_file',file);
             const data=await api(musicPreviewUrl,body);
             if(data.music_track&&!musicTracks.some(track=>Number(track.id)===Number(data.music_track.id)))musicTracks.push(data.music_track);
@@ -2117,8 +2118,22 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     musicPreview.addEventListener('ended',resetMusicSample);musicPreview.addEventListener('error',()=>{if(musicPreviewTrackId!==null){musicSelectError.textContent='Não foi possível carregar esta prévia.';musicSelectError.classList.remove('hidden');resetMusicSample()}});
     async function selectMusicTrack(track,button){
         editorPersistence.flushScheduled();resetMusicSample();musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=true);button.innerHTML='<span class="music-track-option__icon"><i class="fas fa-spinner fa-spin"></i></span><strong>Salvando sequência…</strong>';
-        const current=currentMusicTracks(),exists=current.some(item=>item.track_id===Number(track.id)),tracks=exists?current.filter(item=>item.track_id!==Number(track.id)):[...current,{track_id:Number(track.id),transition:'NONE',transition_duration_ms:2000}];
-        applyLocalMusicTracks(tracks);try{const data=await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});applyTimeline(data,true);configureMusic();syncMusicPosition();updateMusicVolume();closeMusicSelector()}catch(error){musicSelectError.textContent=error.message;musicSelectError.classList.remove('hidden');musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=false)}
+        const current=currentMusicTracks(),exists=current.some(item=>item.track_id===Number(track.id));
+        // Materialize legacy bounds from the clips already shown, rather than
+        // redistributing them when an unscheduled source is appended.
+        document.querySelectorAll('.editor-track--music [data-clip-key]').forEach(node=>{const item=node._timeline?.item,row=current[item?.trackIndex];if(row&&row.start_ms==null){row.start_ms=item.start;row.end_ms=item.end}});
+        const tracks=exists?current.filter(item=>item.track_id!==Number(track.id)):[...current,newMusicClip(track.id,current)];
+        const saving=api('{% url "external_media_project_preview_music" project.public_id %}',{tracks});
+        applyLocalMusicTracks(tracks);try{const data=await saving;applyTimeline(data,true);configureMusic();syncMusicPosition();updateMusicVolume();closeMusicSelector()}catch(error){musicSelectError.textContent=error.message;musicSelectError.classList.remove('hidden');musicTrackList.querySelectorAll('[data-music-select],[data-music-sample]').forEach(item=>item.disabled=false)}
+    }
+    function newMusicClip(trackId,tracks){
+        const duration=Math.max(1000,Number(timeline.sequence.duration_ms||1000));let cursor=0,start=null,end=duration;
+        for(const item of [...tracks].sort((a,b)=>Number(a.start_ms)-Number(b.start_ms))){
+            if(Number(item.start_ms)-cursor>=1000){start=cursor;end=Number(item.start_ms);break}
+            cursor=Math.max(cursor,Number(item.end_ms)||0);
+        }
+        if(start===null)start=duration-cursor>=1000?cursor:Math.max(0,Math.min(duration-1000,Math.round(globalMs)));
+        return {clip_id:window.ConnectEditorPersistence.operationId(),track_id:Number(trackId),start_ms:start,end_ms:end,source_in_ms:0,volume:1,transition:'NONE',audio_transition:null,transition_duration_ms:2000};
     }
     document.getElementById('cancel-music-select').onclick=closeMusicSelector;document.getElementById('cancel-music-select-footer').onclick=closeMusicSelector;musicSelectModal.addEventListener('click',event=>{if(event.target===musicSelectModal)closeMusicSelector()});
     document.addEventListener('dblclick',event=>{if(event.target.closest('.editor-track--music'))openMusicSelector()});
