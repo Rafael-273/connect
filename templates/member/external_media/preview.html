@@ -1219,7 +1219,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     async function loadMusicWaveform(source){
         if(!source)return null;
         if(!musicWaveformCache.has(source))musicWaveformCache.set(source,(async()=>{
-            const response=await fetch(source,{credentials:'same-origin'});
+            const waveformUrl=new URL(source,location.href);waveformUrl.searchParams.set('waveform','1');
+            const response=await fetch(waveformUrl.href,{credentials:'same-origin'});
             if(!response.ok)throw new Error(`Não foi possível carregar a forma de onda (${response.status}).`);
             const bytes=await response.arrayBuffer();
             const AudioContextClass=window.AudioContext||window.webkitAudioContext;
@@ -1235,11 +1236,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 if(performance.now()-started>4){await new Promise(resolve=>setTimeout(resolve,0));started=performance.now()}
             }
             return {durationMs:buffer.duration*1000,peaks};
-        })());
+        })().catch(error=>{musicWaveformCache.delete(source);throw error}));
         return musicWaveformCache.get(source);
     }
-    function waveformRange(audio,startMs=0,endMs=null,buckets=720){
+    function waveformRange(audio,startMs=0,endMs=null,buckets=720,loop=false){
         if(!audio?.peaks?.length)return [];
+        if(loop){
+            const duration=Math.max(1,Number(audio.durationMs||1)),from=Math.max(0,Number(startMs)||0),to=Math.max(from+1,Number(endMs)||duration),count=audio.peaks.length;
+            return Array.from({length:buckets},(_,bucket)=>{
+                const first=Math.floor((from+(to-from)*bucket/buckets)/duration*count),last=Math.ceil((from+(to-from)*(bucket+1)/buckets)/duration*count);let peak=0;
+                for(let index=first;index<Math.min(last,first+count);index++)peak=Math.max(peak,audio.peaks[index%count]||0);
+                return peak;
+            });
+        }
         const duration=Math.max(1,Number(audio.durationMs||1)),from=Math.max(0,Math.min(duration,Number(startMs)||0)),to=Math.max(from+1,Math.min(duration,endMs==null?duration:Number(endMs)||duration));
         return Array.from({length:buckets},(_,bucket)=>{
             const rangeStart=from+(to-from)*bucket/buckets,rangeEnd=from+(to-from)*(bucket+1)/buckets;
@@ -1265,10 +1274,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     }
     const observedWaveforms=new Set(),visibleWaveforms=new Set();let waveformObserver=null;
     const requestWaveformPaint=frameLatest(()=>paintVisibleWaveforms());
-    function observeWaveform(clip,source,start=0,end=null){
+    function observeWaveform(clip,source,start=0,end=null,loop=false){
         const canvas=clip.querySelector('canvas');if(!canvas||!source)return;
-        const key=JSON.stringify([source,start,end]);
-        if(clip._waveform?.key!==key||clip._waveform?.canvas!==canvas)clip._waveform={key,source,start,end,canvas,audio:null,pending:false,failed:false,peaks:null,drawn:null};
+        const key=JSON.stringify([source,start,end,loop]);
+        if(clip._waveform?.key!==key||clip._waveform?.canvas!==canvas)clip._waveform={key,source,start,end,loop,canvas,audio:null,pending:false,failed:false,attempts:0,peaks:null,drawn:null};
         if(!observedWaveforms.has(clip)){
             observedWaveforms.add(clip);
             if('IntersectionObserver' in window){
@@ -1285,7 +1294,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             const bounds=clip.getBoundingClientRect(),view=window.ConnectEditorView.waveformWindow(bounds,viewport);
             if(!view)continue;
             if(!item.audio){
-                if(!item.pending){item.pending=true;loadMusicWaveform(item.source).then(audio=>{if(clip._waveform!==item||!clip.isConnected)return;item.audio=audio;item.peaks=waveformRange(audio,item.start,item.end);item.pending=false;requestWaveformPaint()}).catch(()=>{item.failed=true;clip.classList.remove('has-real-waveform')})}
+                if(!item.pending){item.pending=true;item.attempts++;loadMusicWaveform(item.source).then(audio=>{item.pending=false;if(clip._waveform!==item||!clip.isConnected)return;item.audio=audio;item.peaks=waveformRange(audio,item.start,item.end,720,item.loop);clip.classList.add('has-real-waveform');requestWaveformPaint()}).catch(()=>{if(clip._waveform!==item||!clip.isConnected)return;if(item.attempts<2){setTimeout(()=>{if(clip._waveform!==item||!clip.isConnected)return;item.pending=false;requestWaveformPaint()},1000)}else{item.pending=false;item.failed=true;clip.classList.remove('has-real-waveform')}})}
                 continue;
             }
             const key=[view.offset,view.width,bounds.height,window.devicePixelRatio||1].join(':');
@@ -1299,7 +1308,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         for(const clip of observedWaveforms)if(!clip.isConnected){waveformObserver?.unobserve(clip);observedWaveforms.delete(clip);visibleWaveforms.delete(clip)}
     }
     function queueMusicWaveforms(){
-        cleanWaveformObservers();document.querySelectorAll('.editor-track--music .editor-track__clip[data-music-waveform-source]').forEach(clip=>observeWaveform(clip,clip.dataset.musicWaveformSource));requestWaveformPaint();
+        cleanWaveformObservers();document.querySelectorAll('.editor-track--music .editor-track__clip[data-music-waveform-source]').forEach(clip=>observeWaveform(clip,clip.dataset.musicWaveformSource,Number(clip.dataset.musicWaveformStart||0),Number(clip.dataset.musicWaveformEnd)||null,true));requestWaveformPaint();
     }
     function queueSourceAudioWaveforms(){
         cleanWaveformObservers();document.querySelectorAll('.editor-track--audio .editor-track__clip[data-source-waveform-source]').forEach(clip=>observeWaveform(clip,clip.dataset.sourceWaveformSource,Number(clip.dataset.sourceWaveformStart||0),Number(clip.dataset.sourceWaveformEnd)||null));requestWaveformPaint();
@@ -1483,6 +1492,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             [...musicLane.querySelectorAll('.editor-track__clip')].forEach((clip,index)=>{
                 const item=musicItems[index];if(!item?.audioUrl)return;
                 clip.classList.add('has-real-waveform');clip.dataset.musicWaveformSource=item.audioUrl;
+                clip.dataset.musicWaveformStart=String(item.sourceInMs||0);clip.dataset.musicWaveformEnd=String(Number(item.sourceInMs||0)+item.end-item.start);
                 if(!clip.querySelector('.editor-music-waveform'))clip.innerHTML=`<canvas class="editor-music-waveform" aria-hidden="true"></canvas><span class="editor-music-waveform__label">${esc(item.label)}</span>`;
             });
             musicItems.slice(0,-1).forEach((item,index)=>{
@@ -1804,6 +1814,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     async function deleteBroll(id){if(!confirm('Remover este B-roll da edição?'))return;applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,{delete:true}),true,false)}
     async function restoreBroll(id){applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`,{restore:true}),true,false)}
     function selectedTimelineItemForDeletion(){
+        if(inspectorSelection?.kind==='music'&&inspectorSelection.transitionIndex==null){
+            const track=(timeline.music?.tracks||[]).find((item,index)=>`music-${item.clip_id||item.id||index}`===String(inspectorSelection.id));
+            if(track)return {kind:'music',id:track.clip_id||`legacy-${track.id}`};
+        }
         if(inspectorSelection?.kind==='caption')return {kind:'caption',id:inspectorSelection.id};
         if(inspectorSelection?.kind==='broll')return {kind:'broll',id:inspectorSelection.id};
         if(inspectorSelection?.kind==='overlay'){
@@ -1818,10 +1832,24 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         remove.disabled=!selectedSegment&&!item;
         remove.title=selectedSegment
             ? `Remover trecho selecionado (${fmt(selectedSegment.start)} — ${fmt(selectedSegment.end)})`
-            : item?.kind==='caption'?'Remover legenda selecionada':item?.kind==='broll'?'Remover elemento selecionado':item?.kind==='overlay'?'Remover texto selecionado':'Selecione um trecho, legenda, elemento ou texto para remover';
+            : item?.kind==='music'?'Remover trecho de música selecionado':item?.kind==='caption'?'Remover legenda selecionada':item?.kind==='broll'?'Remover elemento selecionado':item?.kind==='overlay'?'Remover texto selecionado':'Selecione um trecho, legenda, elemento ou texto para remover';
+    }
+    async function deleteMusicClip(id){
+        const original=currentMusicTracks(),tracks=original.filter(track=>String(track.clip_id)!==String(id));
+        if(tracks.length===original.length)return;
+        for(const track of tracks){
+            if(String(track.audio_transition?.from_clip_id)===String(id)){
+                track.audio_transition=null;track.transition='NONE';
+            }
+        }
+        editorPersistence.flushScheduled();
+        const saving=api(musicPreviewUrl,{tracks});
+        applyLocalMusicTracks(tracks);clearInspectorSelection();updateEditControls();
+        try{applyTimeline(await saving,true,false)}catch(error){alert(error.message)}
     }
     async function deleteSelectedSegment(){
         const item=selectedTimelineItemForDeletion();
+        if(item?.kind==='music'){await deleteMusicClip(item.id);return}
         if(item?.kind==='caption'){await deleteCaption(item.id);return}
         if(item?.kind==='broll'){await deleteBroll(item.id);return}
         if(item?.kind==='overlay'){await deleteOverlay(item.id);return}
@@ -1977,7 +2005,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         if(key==='v'||key==='b'){editTool=key==='v'?'select':'blade';updateEditControls();renderTimelineSelection()}
         if(key==='c'){event.preventDefault();splitSelectedAtPlayhead()}
-        if((event.key==='Delete'||event.key==='Backspace')&&selectedSegment){event.preventDefault();deleteSelectedSegment()}
+        if((event.key==='Delete'||event.key==='Backspace')&&(selectedSegment||selectedTimelineItemForDeletion())){event.preventDefault();deleteSelectedSegment()}
     });
     document.getElementById('apply-all-noise').onclick=applyAllNoise;
     document.getElementById('add-timeline-element').onclick=addBrollAtPlayhead;

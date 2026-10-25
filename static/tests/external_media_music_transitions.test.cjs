@@ -167,3 +167,37 @@ test('keyboard cut targets the selected music clip instead of cutting the video'
     assert.deepEqual(calls[1],['video',6000]);
     assert.match(html,/if\(modified&&key==='k'\)\{event.preventDefault\(\);splitSelectedAtPlayhead\(\);return\}/);
 });
+
+test('deleting one cut removes only its clip and dependent transition, preserving other music timing and gain',async()=>{
+    const html=fs.readFileSync(path.join(__dirname,'../../templates/member/external_media/preview.html'),'utf8');
+    const selection=html.slice(html.indexOf('    function selectedTimelineItemForDeletion('),html.indexOf('    function updateEditControls('));
+    const deletion=html.slice(html.indexOf('    async function deleteMusicClip('),html.indexOf('    async function deleteSelectedSegment('));
+    const tracks=[{track_id:7,clip_id:'left',start_ms:0,end_ms:4000,volume:.25},
+        {track_id:7,clip_id:'right',start_ms:4000,end_ms:8000,source_in_ms:4000,volume:.8,audio_transition:{from_clip_id:'left',type:'CONSTANT_POWER'},transition:'NONE'}];
+    const timeline={music:{tracks:tracks.map(track=>({...track,id:track.track_id}))}},writes=[],order=[];
+    const context=vm.createContext({timeline,inspectorSelection:{kind:'music',id:'music-left'},musicPreviewUrl:'/music/',
+        currentMusicTracks:()=>structuredClone(tracks),editorPersistence:{flushScheduled:()=>order.push('flush')},
+        api:async(url,body)=>{order.push('enqueue');writes.push(structuredClone(body));return {}},
+        applyLocalMusicTracks:rows=>{order.push('local');timeline.music.tracks=rows.map(track=>({...track,id:track.track_id}))},
+        clearInspectorSelection:()=>{},updateEditControls:()=>{},applyTimeline:()=>{},alert:message=>assert.fail(message),
+    });
+    vm.runInContext(selection+deletion,context);
+    assert.equal(context.selectedTimelineItemForDeletion().id,'left');
+    await context.deleteMusicClip('left');
+    assert.deepEqual(order,['flush','enqueue','local']);
+    assert.deepEqual(writes[0].tracks,[{track_id:7,clip_id:'right',start_ms:4000,end_ms:8000,source_in_ms:4000,volume:.8,audio_transition:null,transition:'NONE'}]);
+    assert.equal(timeline.music.tracks.length,1);
+    context.inspectorSelection={kind:'music',id:'music-right',transitionIndex:1};
+    assert.equal(context.selectedTimelineItemForDeletion(),null);
+});
+
+test('deleting the final music clip persists an explicitly empty lane',async()=>{
+    const html=fs.readFileSync(path.join(__dirname,'../../templates/member/external_media/preview.html'),'utf8');
+    const source=html.slice(html.indexOf('    async function deleteMusicClip('),html.indexOf('    async function deleteSelectedSegment('));
+    let saved,local;
+    const context=vm.createContext({currentMusicTracks:()=>[{clip_id:'last',track_id:7}],musicPreviewUrl:'/music/',
+        editorPersistence:{flushScheduled(){}},api:async(url,body)=>{saved=body.tracks;return {}},
+        applyLocalMusicTracks:rows=>{local=rows},clearInspectorSelection(){},updateEditControls(){},applyTimeline(){},alert:message=>assert.fail(message)});
+    vm.runInContext(source,context);await context.deleteMusicClip('last');
+    assert.equal(saved.length,0);assert.equal(local.length,0);
+});

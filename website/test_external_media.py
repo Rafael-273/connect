@@ -3758,6 +3758,21 @@ class OffContextDetectionTests(SimpleTestCase):
 
 
 class ProtectedFileResponseRangeTests(SimpleTestCase):
+    @override_settings(USE_S3=True)
+    def test_waveform_streams_protected_bytes_instead_of_redirecting_to_storage(self):
+        from io import BytesIO
+        file = Mock(name='audio')
+        file.name = 'music.wav'
+        file.size = 4
+        file.open.return_value = BytesIO(b'wave')
+        response = protected_file_response(RequestFactory().get('/music?waveform=1'), file)
+        try:
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b''.join(response.streaming_content), b'wave')
+            file.storage.url.assert_not_called()
+        finally:
+            response.close()
+
     def test_preview_supports_http_range_for_video_seeking(self):
         with tempfile.TemporaryDirectory() as directory:
             storage = FileSystemStorage(location=directory)

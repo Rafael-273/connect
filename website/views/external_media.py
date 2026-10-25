@@ -140,6 +140,9 @@ def _file_chunks(file_handle, start, length, block_size=8192):
 
 def protected_file_response(request, field_file, force_stream=False):
     """Serve locally (with HTTP Range for video seek) or redirect to a signed S3 URL."""
+    # Web Audio fetches must stay on the authenticated app origin. A signed
+    # storage redirect may play in <audio> while fetch/decode fails on CORS.
+    force_stream = force_stream or request.GET.get('waveform') == '1'
     filename = Path(field_file.name).name
     preview = request.GET.get('preview') == '1'
     content_type = mimetypes.guess_type(field_file.name)[0] or 'application/octet-stream'
