@@ -378,6 +378,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 <script src="{% static 'external_media_editor_state.js' %}"></script>
 <script src="{% static 'external_media_music_transitions.js' %}"></script>
 <script src="{% static 'external_media_preview_audio.js' %}"></script>
+<script src="{% static 'external_media_cached_media.js' %}"></script>
 <script src="{% static 'external_media_preview_source.js' %}"></script>
 <script>
 (() => {
@@ -593,10 +594,25 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const filmstripCache=new Map(),filmstripQueued=new Set(),filmstripQueue=[];
     let filmstripBusy=false;
     function filmstripSourceFor(source){if(!source)return '';return `${source}${source.includes('?')?'&':'?'}filmstrip=1`}
+    function persistentThumbnailSource(source){const url=new URL(source,location.href);url.searchParams.set('thumbnail','1');return url.href}
     function applyFilmstripThumbnail(key,thumbnail){document.querySelectorAll('[data-filmstrip-key]').forEach(clip=>{if(clip.dataset.filmstripKey!==key||!thumbnail)return;clip.style.backgroundImage=`url("${thumbnail}")`;clip.classList.add('has-thumbnail')})}
+    function processPersistentFilmstrip(task){
+        const image=new Image();let finished=false;
+        const finish=success=>{
+            if(finished)return;finished=true;clearTimeout(timeout);image.onload=image.onerror=null;filmstripBusy=false;
+            if(success){filmstripCache.set(task.key,task.source);filmstripQueued.delete(task.key);applyFilmstripThumbnail(task.key,task.source)}
+            else if((task.attempt||0)<5){setTimeout(()=>{filmstripQueue.push({...task,attempt:(task.attempt||0)+1});processFilmstripQueue()},Math.min(30000,5000*2**(task.attempt||0)))}
+            else{filmstripCache.set(task.key,'');filmstripQueued.delete(task.key)}
+            processFilmstripQueue();
+        };
+        const timeout=setTimeout(()=>finish(false),20000);
+        image.onload=()=>finish(true);image.onerror=()=>finish(false);image.src=task.source;
+    }
     function processFilmstripQueue(){
         if(filmstripBusy||!filmstripQueue.length)return;
-        filmstripBusy=true;const task=filmstripQueue.shift(),worker=document.createElement('video');worker.muted=true;worker.playsInline=true;worker.preload='metadata';
+        filmstripBusy=true;const task=filmstripQueue.shift();
+        if(task.image){processPersistentFilmstrip(task);return}
+        const worker=document.createElement('video');worker.muted=true;worker.playsInline=true;worker.preload='metadata';
         let finished=false;
         const finish=thumbnail=>{if(finished)return;finished=true;clearTimeout(timeout);worker.onerror=worker.onloadedmetadata=worker.onseeked=null;worker.pause();worker.removeAttribute('src');worker.load();filmstripCache.set(task.key,thumbnail||'');filmstripQueued.delete(task.key);applyFilmstripThumbnail(task.key,thumbnail);filmstripBusy=false;processFilmstripQueue()};
         const timeout=setTimeout(()=>finish(''),30000);
@@ -605,7 +621,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         worker.src=task.source;worker.load();
     }
     function queueFilmstripThumbnails(){
-        [...document.querySelectorAll('[data-filmstrip-source]')].slice(0,36).forEach(clip=>{const key=clip.dataset.filmstripKey,cached=filmstripCache.get(key);if(cached!==undefined){applyFilmstripThumbnail(key,cached);return}if(filmstripQueued.has(key))return;filmstripQueued.add(key);filmstripQueue.push({key,source:clip.dataset.filmstripSource,time:Number(clip.dataset.filmstripTime||0)})});
+        [...document.querySelectorAll('[data-filmstrip-source]')].slice(0,36).forEach(clip=>{const key=clip.dataset.filmstripKey,cached=filmstripCache.get(key);if(cached!==undefined){applyFilmstripThumbnail(key,cached);return}if(filmstripQueued.has(key))return;filmstripQueued.add(key);filmstripQueue.push({key,source:clip.dataset.filmstripSource,time:Number(clip.dataset.filmstripTime||0),image:clip.dataset.filmstripImage==='true'})});
         processFilmstripQueue();
     }
     function rgba(hex, opacity){const value=String(hex||'#000000').replace('#','');const normalized=value.length===3?[...value].map(char=>char+char).join(''):value;const number=parseInt(normalized,16);return `rgba(${(number>>16)&255},${(number>>8)&255},${number&255},${Math.max(0,Math.min(100,Number(opacity??100)))/100})`}
@@ -1217,29 +1233,19 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         });
     }
     const musicWaveformCache=new Map();
-    let musicWaveformContext=null,musicWaveformQueue=Promise.resolve(),waveformRetryAfter=0;
+    let musicWaveformQueue=Promise.resolve(),waveformRetryAfter=0;
     async function loadMusicWaveform(source){
         if(!source)return null;
         if(!musicWaveformCache.has(source)){
           const loading=musicWaveformQueue.then(async()=>{
             const wait=waveformRetryAfter-Date.now();if(wait>0)await new Promise(resolve=>setTimeout(resolve,wait));
             const waveformUrl=new URL(source,location.href);waveformUrl.searchParams.set('waveform','1');
-            const response=await fetch(waveformUrl.href,{credentials:'same-origin'});
-            if(!response.ok){if(response.status>=500)waveformRetryAfter=Date.now()+10000;throw new Error(`Não foi possível carregar a forma de onda (${response.status}).`)}
-            const bytes=await response.arrayBuffer();
-            const AudioContextClass=window.AudioContext||window.webkitAudioContext;
-            if(!AudioContextClass)throw new Error('Web Audio não é suportado neste navegador.');
-            musicWaveformContext||=new AudioContextClass();
-            const buffer=await musicWaveformContext.decodeAudioData(bytes);
-            const samples=buffer.getChannelData(0),buckets=4096,step=Math.max(1,Math.ceil(samples.length/buckets)),peaks=new Float32Array(buckets);
-            let started=performance.now();
-            for(let bucket=0;bucket<buckets;bucket++){
-                const from=bucket*step,to=Math.min(samples.length,from+step);let peak=0;
-                for(let index=from;index<to;index++)peak=Math.max(peak,Math.abs(samples[index]||0));
-                peaks[bucket]=peak;
-                if(performance.now()-started>4){await new Promise(resolve=>setTimeout(resolve,0));started=performance.now()}
-            }
-            return {durationMs:buffer.duration*1000,peaks};
+            let audio;
+            try{audio=await window.ConnectCachedMedia.waitFor(waveformUrl.href)}catch(error){waveformRetryAfter=Date.now()+10000;throw error}
+            if(audio.schema!=='connect.waveform.v1'||!Array.isArray(audio.peaks)||!Number.isFinite(audio.durationMs))throw new Error('Dados da forma de onda inválidos.');
+            musicController.setSourceDuration(source,audio.durationMs);
+            requestTimelineRender();
+            return audio;
           }).catch(error=>{musicWaveformCache.delete(source);throw error});
           musicWaveformQueue=loading.catch(()=>{});
           musicWaveformCache.set(source,loading);
@@ -1386,12 +1392,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 const contentKey=JSON.stringify([kind,item.label,tiny,source,thumbnailTime,item.mediaType]);
                 if(clip._contentKey!==contentKey){
                     clip._contentKey=contentKey;clip.style.backgroundImage='';clip.classList.remove('has-thumbnail');
-                    delete clip.dataset.filmstripKey;delete clip.dataset.filmstripSource;delete clip.dataset.filmstripTime;
+                    delete clip.dataset.filmstripKey;delete clip.dataset.filmstripSource;delete clip.dataset.filmstripTime;delete clip.dataset.filmstripImage;
                     if(isFilmstrip&&source){
                         clip.dataset.filmstripKey=`${isBroll?'broll-'+item.id:item.assetId}:${Math.round(thumbnailTime)}`;
                         clip.innerHTML=`<span class="editor-filmstrip__label">${esc(item.label)}</span>`;
                         if(String(item.mediaType||'').toUpperCase()==='IMAGE'){clip.style.backgroundImage=`url("${source}")`;clip.classList.add('has-thumbnail')}
-                        else{clip.dataset.filmstripSource=filmstripSourceFor(source);clip.dataset.filmstripTime=String(Math.max(0,thumbnailTime/1000))}
+                        else if(!usingMaster){clip.dataset.filmstripKey=`thumbnail:${source}`;clip.dataset.filmstripSource=persistentThumbnailSource(source);clip.dataset.filmstripImage='true'}
                     }else if(kind.includes('source-audio'))clip.innerHTML='<span class="editor-waveform__bars"></span><span class="editor-waveform__label">Áudio original</span>';
                     else clip.textContent=tiny?'':item.label;
                 }
@@ -1673,7 +1679,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             ? (isAudioSelection ? timeline.decisions.filter(item=>item.type==='audio_noise_reduction'&&decisionSourceId(item)===inspectorSelection.id) : [])
             : timeline.decisions.filter(item=>item.type==='audio_noise_reduction');
         const visibleNoiseDecisions=inspectorSelection?.noiseDecisionId?noiseDecisions.filter(item=>String(item.id)===String(inspectorSelection.noiseDecisionId)):noiseDecisions;
-        visibleNoiseDecisions.forEach(item=>{const restored=item.enabled===false,start=Number(item.source_in_ms||0),end=Number(item.source_out_ms||start),card=document.createElement('article');card.className=`preview-decision ${restored?'is-restored':''}`;card.dataset.noiseDecisionId=String(item.id);card.dataset.start=start;card.dataset.end=end;card.innerHTML=`<button type="button" class="w-full text-left" data-jump><div class="flex items-start justify-between gap-2"><div><span class="preview-pill">Ruído</span><strong class="block mt-2">${item.metadata?.label||item.reason||'Ruído detectado'}</strong><small class="text-gray-500">${fmt(start)} — ${fmt(end)}</small></div><i class="fas fa-wave-square text-red-600 mt-1"></i></div></button><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="original"><i class="fas fa-play"></i> Original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="treated"><i class="fas fa-play"></i> Tratado</button></div><div class="flex gap-2 mt-2"><button class="media-btn media-muted !py-2 flex-1" data-decision="false">Usar original</button><button class="media-btn media-primary !py-2 flex-1" data-decision="true">${restored?'Aplicar redução':'Redução aplicada'}</button></div><audio class="hidden" preload="none"></audio>`;card.querySelector('[data-jump]').onclick=()=>seek(start);card.querySelectorAll('[data-play]').forEach(btn=>btn.onclick=async()=>{const audio=card.querySelector('audio');const url=btn.dataset.play==='treated'?item.metadata?.preview_treated_url:item.metadata?.preview_original_url;if(!url)return;try{audio.pause();if(audio.dataset.source!==url){audio.dataset.source=url;audio.src=url;audio.load()}audio.classList.remove('hidden');await audio.play()}catch(error){if(error.name!=='AbortError')alert('Não foi possível reproduzir esta comparação de áudio.')}});card.querySelectorAll('[data-decision]').forEach(btn=>btn.onclick=()=>mutateDecision(item.id,btn.dataset.decision==='true'));list.append(card)});
+        visibleNoiseDecisions.forEach(item=>{const restored=item.enabled===false,start=Number(item.source_in_ms||0),end=Number(item.source_out_ms||start),card=document.createElement('article');card.className=`preview-decision ${restored?'is-restored':''}`;card.dataset.noiseDecisionId=String(item.id);card.dataset.start=start;card.dataset.end=end;card.innerHTML=`<button type="button" class="w-full text-left" data-jump><div class="flex items-start justify-between gap-2"><div><span class="preview-pill">Ruído</span><strong class="block mt-2">${item.metadata?.label||item.reason||'Ruído detectado'}</strong><small class="text-gray-500">${fmt(start)} — ${fmt(end)}</small></div><i class="fas fa-wave-square text-red-600 mt-1"></i></div></button><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="original"><i class="fas fa-play"></i> Original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-play="treated"><i class="fas fa-play"></i> Tratado</button></div><div class="flex gap-2 mt-2"><button class="media-btn media-muted !py-2 flex-1" data-decision="false">Usar original</button><button class="media-btn media-primary !py-2 flex-1" data-decision="true">${restored?'Aplicar redução':'Redução aplicada'}</button></div><audio class="hidden" preload="none"></audio>`;card.querySelector('[data-jump]').onclick=()=>seek(start);card.querySelectorAll('[data-play]').forEach(btn=>btn.onclick=()=>playNoiseComparison(card,item,btn));card.querySelectorAll('[data-decision]').forEach(btn=>btn.onclick=()=>mutateDecision(item.id,btn.dataset.decision==='true'));list.append(card)});
         const brollItems=inspectorSelection?.kind==='broll'?(timeline.brolls||[]).filter(item=>item.id===inspectorSelection.id):[];
         brollItems.forEach(item=>{const media=asset(`broll-asset-${item.asset_id}`)||{},tx=item.transform||{},card=document.createElement('article');card.className='preview-decision';card.dataset.start=item.start_ms;card.dataset.end=item.end_ms;const transformField=(label,key,min,max,step,value)=>`<label class="text-xs font-bold text-gray-500">${label}<span class="flex items-center gap-2 mt-1"><input data-broll-transform-range="${key}" type="range" min="${min}" max="${max}" step="${step}" value="${value}" class="preview-range flex-1"><input data-broll-transform="${key}" type="number" min="${min}" max="${max}" step="${step}" value="${value}" class="w-16 shrink-0 rounded-lg border px-2 py-1 text-xs tabular-nums"></span></label>`;card.innerHTML=`<div class="flex items-center justify-between gap-2"><div class="min-w-0"><span class="preview-pill">B-roll · ${esc(item.media_type)}</span><strong class="block mt-2 truncate">${esc(media.name||'Asset visual')}</strong><small class="text-gray-500">${item.source==='AI'?'Posicionado pela IA':'Ajustado pelo usuário'}${item.confidence!=null?` · ${Math.round(Number(item.confidence)*100)}%`:''}</small></div><button data-jump class="text-violet-700"><i class="fas fa-eye"></i></button></div><div class="grid grid-cols-2 gap-2 mt-3"><label class="text-xs font-bold text-gray-500">Início (min)<input data-broll-number="start_ms" type="number" min="0" step="0.001" value="${minFromMs(item.start_ms)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label><label class="text-xs font-bold text-gray-500">Fim (min)<input data-broll-number="end_ms" type="number" min="0.001" step="0.001" value="${minFromMs(item.end_ms)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label>${item.media_type==='VIDEO'?`<label class="text-xs font-bold text-gray-500">Trecho inicial (min)<input data-broll-number="source_in_ms" type="number" min="0" step="0.001" value="${minFromMs(item.source_in_ms||0)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label><label class="text-xs font-bold text-gray-500">Trecho final (min)<input data-broll-number="source_out_ms" type="number" min="0.001" step="0.001" value="${minFromMs(item.source_out_ms||0)}" class="mt-1 w-full rounded-lg border px-2 py-1 tabular-nums"></label>`:''}</div><label class="block text-xs font-bold text-gray-500 mt-2">Exibição<select data-broll-mode class="mt-1 w-full rounded-lg border px-2 py-1"><option>FULLSCREEN</option><option>OVERLAY</option></select></label>${item.media_type==='IMAGE'?`<label class="block text-xs font-bold text-gray-500 mt-2">Movimento<select data-broll-motion class="mt-1 w-full rounded-lg border px-2 py-1"><option>NONE</option><option>ZOOM_IN</option><option>ZOOM_OUT</option><option>PAN_LEFT</option><option>PAN_RIGHT</option></select></label>`:''}<div class="grid grid-cols-1 gap-2 mt-2">${transformField('X','x',0,1,'0.01',tx.x??.5)}${transformField('Y','y',0,1,'0.01',tx.y??.5)}${transformField('Escala','scale',0.08,1,'0.01',tx.scale??1)}</div><div class="flex items-center justify-between gap-2 mt-3"><small class="text-gray-400" data-saved>Salvo</small><div class="flex flex-wrap justify-end gap-x-3 gap-y-1"><button type="button" class="text-xs font-bold text-violet-700" data-copy-broll-settings title="Copiar exibição, posição, animações e trecho"><i class="fas fa-copy"></i> Copiar</button><button type="button" class="text-xs font-bold text-violet-700 ${brollSettingsClipboard?'':'hidden'}" data-paste-broll-settings ${brollSettingsClipboard?'':'disabled'} title="Colar ajustes copiados de outro B-roll"><i class="fas fa-paste"></i> Colar</button><button type="button" class="text-xs font-bold text-gray-600" data-restore-broll>Restaurar IA</button><button type="button" class="text-xs font-bold text-red-600" data-delete-broll>Remover</button></div></div>`;const assetField=document.createElement('label');assetField.className='block text-xs font-bold text-gray-500 mt-2';assetField.innerHTML=`Asset<select data-broll-asset class="mt-1 w-full rounded-lg border px-2 py-1">${(timeline.assets||[]).filter(value=>value.asset_id).map(value=>`<option value="${esc(value.asset_id)}">${esc(value.name)}</option>`).join('')}</select>`;card.firstElementChild.after(assetField);card.querySelector('[data-broll-asset]').value=String(item.asset_id);card.querySelector('[data-jump]').onclick=()=>seek(item.start_ms);card.querySelector('[data-broll-mode]').value=item.display_mode||'FULLSCREEN';if(card.querySelector('[data-broll-motion]'))card.querySelector('[data-broll-motion]').value=item.motion?.type||'NONE';const queue=event=>{card.querySelector('[data-saved]').textContent='Salvando…';queueBrollSave(item,card,event?.target||event)};card.querySelectorAll('[data-broll-transform-range]').forEach(range=>{const num=card.querySelector(`[data-broll-transform="${range.dataset.brollTransformRange}"]`);if(!num)return;range.oninput=()=>{num.value=range.value;queue(range)};num.oninput=()=>{const lo=Number(range.min),hi=Number(range.max),v=Math.max(lo,Math.min(hi,Number(num.value)||lo));num.value=String(v);range.value=v;queue(num)}});card.querySelectorAll('[data-broll-number], select, [data-broll-asset]').forEach(field=>field.oninput=queue);card.querySelector('[data-copy-broll-settings]').onclick=()=>copyBrollSettings(card);card.querySelector('[data-paste-broll-settings]').onclick=()=>pasteBrollSettings(item.id,card);card.querySelector('[data-delete-broll]').onclick=()=>deleteBroll(item.id);card.querySelector('[data-restore-broll]').onclick=()=>restoreBroll(item.id);list.append(card)});
         list.querySelectorAll('[data-copy-broll-settings]').forEach(button=>{const actions=button.parentElement,card=button.closest('article');if(!actions||!card)return;actions.classList.add('broll-card-actions');card.firstElementChild.after(actions);card.querySelector('[data-saved]')?.remove()});
@@ -1741,6 +1747,21 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(inspectorSelection?.kind==='caption')renderCaptionTranscript();
         if(!list.children.length){const empty=document.createElement('p');empty.className='text-sm text-gray-400 text-center py-10 px-4';empty.textContent=inspectorSelection?'Nenhum ajuste disponível para este item.':'Nenhuma pendência no momento. Clique em um item da timeline para ver seus ajustes.';list.append(empty)}
         renderAdjustmentTabs();
+    }
+    async function playNoiseComparison(card,item,button){
+        const audio=card.querySelector('audio'),url=button.dataset.play==='treated'?item.metadata?.preview_treated_url:item.metadata?.preview_original_url;
+        if(!url)return;
+        card._comparisonAbort?.abort();const controller=new AbortController();card._comparisonAbort=controller;
+        const label=button.innerHTML;button.disabled=true;button.textContent='Preparando…';audio.pause();
+        try{
+            const statusUrl=new URL(url,location.href);statusUrl.searchParams.set('cache_status','1');
+            const status=await window.ConnectCachedMedia.waitFor(statusUrl.href,{signal:controller.signal,isCurrent:()=>card.isConnected});
+            if(controller.signal.aborted||!card.isConnected)return;
+            const playbackUrl=new URL(url,location.href);if(status.key)playbackUrl.searchParams.set('artifact',status.key);
+            if(audio.dataset.source!==playbackUrl.href){audio.dataset.source=playbackUrl.href;audio.src=playbackUrl.href;audio.load()}
+            audio.classList.remove('hidden');await audio.play();
+        }catch(error){if(error.name!=='AbortError')alert(error.message||'Não foi possível reproduzir esta comparação de áudio.')}
+        finally{button.disabled=false;button.innerHTML=label}
     }
     function renderAdjustmentTabs(){
         list.querySelector('.adjustment-tabs')?.remove();

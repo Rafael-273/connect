@@ -55,6 +55,7 @@ from .external_media import (
     ProjectBrollAsset,
     ProjectOverlay,
     ProjectSourceProxy,
+    ProjectPreviewArtifact,
     ProjectPipelineStep,
     PreviewSession,
     ProxyProfile,

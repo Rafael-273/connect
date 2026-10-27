@@ -234,3 +234,24 @@ test('adding music fills an available gap without modifying existing cuts, trims
     assert.equal(overlapping.start_ms,6000);assert.equal(overlapping.end_ms,10000);
     assert.deepEqual(full,[{clip_id:'full',start_ms:0,end_ms:10000}]);
 });
+
+test('scheduled music loads near the cursor and releases distant decoders without waiting for every source',()=>{
+    const window={ConnectMusicTransitions:transitions};
+    class Audio{
+        constructor(){this.dataset={};this.duration=NaN;this.currentTime=0;this.paused=true;this.loads=0}
+        pause(){this.paused=true}play(){this.paused=false;return Promise.resolve()}
+        load(){this.loads++;this.duration=this.src?120:NaN}
+        removeAttribute(name){if(name==='src')delete this.src}
+    }
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../external_media_preview_audio.js'),'utf8'),{window,Audio});
+    const c=new window.ConnectPreviewAudio(new Audio()),config={volume:.5,tracks:Array.from({length:10},(_,index)=>({id:index+1,clip_id:`clip-${index}`,url:`source-${index}`,start_ms:index*30000,end_ms:(index+1)*30000}))};
+    c.configure(config);c.sync(config,1000);
+    assert.equal(c.channels.filter(channel=>channel.src).length,1);
+    assert.equal(c.position.active[0].index,0);
+    c.sync(config,25000);assert.equal(c.channels[1].src,'source-1');
+    c.sync(config,95000,{force:true});
+    assert.equal(c.position.active[0].index,3);assert.equal(c.channels[3].currentTime,5);
+    assert.equal(c.channels[0].src,undefined);assert.equal(c.channels[0].paused,true);
+    assert.ok(c.channels.filter(channel=>channel.src).length<=3);
+    c.configure(null);assert.ok(c.channels.every(channel=>!channel.src));
+});

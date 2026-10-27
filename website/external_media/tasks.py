@@ -41,6 +41,18 @@ from .workspace import JobWorkspace, MediaWorkspaceGarbageCollector
 logger = logging.getLogger(__name__)
 
 
+@shared_task(name='external_media.create_preview_artifact', autoretry_for=())
+def create_preview_artifact(artifact_id, lease):
+    from .preview_artifacts import PreviewArtifactService
+    PreviewArtifactService.build(artifact_id, lease)
+
+
+@shared_task(name='external_media.create_timeline_thumbnail', autoretry_for=())
+def create_timeline_thumbnail(proxy_id, token):
+    from .thumbnails import TimelineThumbnailService
+    TimelineThumbnailService.build(proxy_id, token)
+
+
 @shared_task(bind=True, autoretry_for=(), name='external_media.prepare_subtitles')
 def prepare_external_media(self, job_id):
     ExternalMediaPipeline().prepare_subtitles(job_id)

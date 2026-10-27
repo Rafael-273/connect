@@ -188,6 +188,11 @@ class ProjectProxyService:
                 proxy.status = ProjectSourceProxy.Status.READY
                 proxy.error_message = ''
                 proxy.save()
+                try:
+                    from .thumbnails import TimelineThumbnailService
+                    TimelineThumbnailService.request(proxy)
+                except Exception:
+                    logger.warning('Não foi possível agendar miniatura do take %s.', proxy.pk, exc_info=True)
             except Exception as exc:
                 proxy.status = ProjectSourceProxy.Status.ERROR
                 proxy.error_message = str(exc)[:255]

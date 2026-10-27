@@ -220,6 +220,22 @@ def protected_file_response(request, field_file, force_stream=False):
     return response
 
 
+def cached_preview_response(request, project, kind, field, *, version='', options=None):
+    from ..external_media.preview_artifacts import PreviewArtifactService
+    artifact = PreviewArtifactService.request(project, kind, field, version=version, options=options)
+    if artifact.status != 'READY' or not artifact.file:
+        return PreviewArtifactService.pending_response(artifact)
+    if request.GET.get('cache_status') == '1':
+        return JsonResponse({'status': 'READY', 'key': artifact.key}, headers={'Cache-Control': 'no-store'})
+    request.GET = request.GET.copy()
+    request.GET['preview'] = '1'
+    response = protected_file_response(request, artifact.file)
+    # This URL can outlive a replaced source or changed noise settings. The
+    # underlying cached file is immutable, but revalidate the logical URL.
+    response['Cache-Control'] = 'private, no-cache'
+    return response
+
+
 class ExternalMediaContextMixin:
     def media_context(self, **kwargs):
         from website.models.ministry_membership import MinistryMembership
@@ -763,6 +779,12 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
             remember(overlay.image_file)
         for proxy in project.source_proxies.all():
             remember(proxy.proxy_file)
+            thumbnail = (proxy.metadata or {}).get('timeline_thumbnail') or {}
+            if thumbnail.get('name'):
+                from ..external_media.media_input import StoredMediaFile
+                remember(StoredMediaFile(proxy.proxy_file.storage, thumbnail['name']))
+        for artifact in project.preview_artifacts.all():
+            remember(artifact.file)
         for session in project.subtitle_review_sessions.all():
             remember(session.preview_file)
         for version in project.subtitle_video_versions.all():
@@ -2226,6 +2248,20 @@ class ExternalMediaProjectPreviewSourceView(ExternalMediaRequiredMixin, View):
                 proxy = proxies.filter(source_id=base_source_id).first()
         if not proxy:
             raise Http404('Proxy de preview não encontrado.')
+        if request.GET.get('waveform') == '1':
+            return cached_preview_response(request, proxy.project, 'waveform', proxy.proxy_file, version=proxy.update_at.isoformat())
+        if request.GET.get('thumbnail') == '1':
+            from ..external_media.thumbnails import TimelineThumbnailService, ready_thumbnail
+            from ..external_media.media_input import StoredMediaFile
+            name = ready_thumbnail(proxy)
+            if not name:
+                TimelineThumbnailService.request(proxy)
+                return JsonResponse({'status': 'PENDING'}, status=202, headers={'Cache-Control': 'no-store', 'Retry-After': '5'})
+            request.GET = request.GET.copy()
+            request.GET['preview'] = '1'
+            response = protected_file_response(request, StoredMediaFile(proxy.proxy_file.storage, name))
+            response['Cache-Control'] = 'private, max-age=300' if response.status_code == 302 else 'private, max-age=86400'
+            return response
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
         # A frame extracted by the editor is painted into a canvas.  Redirecting
@@ -2353,7 +2389,12 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, PreviewMu
                 project.template_version, revision_timeline, project.configuration or {},
             )
             music = selected_tracks[0]['file'] if selected_tracks else None
-        if not music or not ProjectService.file_exists(music):
+        if not music:
+            raise Http404('A trilha deste template não está disponível.')
+        if request.GET.get('waveform') == '1':
+            version = override.update_at.isoformat() if requested_track_id else str(project.template_version_id)
+            return cached_preview_response(request, project, 'waveform', music, version=version)
+        if not ProjectService.file_exists(music):
             raise Http404('A trilha deste template não está disponível.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
@@ -2641,21 +2682,12 @@ class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View)
             metadata.get('label') or operation.get('reason') or '',
             metadata.get('event_index'),
         )
-        storage = StorageService()
-        with TemporaryDirectory(prefix='connect-noise-preview-') as temp:
-            workdir = Path(temp)
-            output = workdir / f'{variant}.m4a'
-            source = storage.ffmpeg_input(project.render_job.original_video)
-            AudioCleanupService().render_preview_clip(source, output, decision, variant=variant)
-            # A FileResponse reads lazily, but this temporary directory is removed
-            # as soon as the view returns. Return the short comparison clip in
-            # memory so browser playback never receives a deleted file/HTTP 500.
-            response = HttpResponse(output.read_bytes(), content_type='audio/mp4')
-            response['Content-Length'] = str(output.stat().st_size)
-            response['Content-Disposition'] = content_disposition_header(
-                False, f'noise-{decision_id}-{variant}.m4a',
-            )
-            return response
+        options = decision.as_dict()
+        # Applying/ignoring a suggestion changes editorial state, not the
+        # Original/Treated comparison sound. Keep that cache reusable.
+        options.pop('enabled', None)
+        return cached_preview_response(request, project, 'noise_comparison', project.render_job.original_video,
+            version=str(project.render_job_id), options={'decision': options, 'variant': variant})
 
 
 class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
@@ -2835,6 +2867,8 @@ class ExternalMediaProjectPreviewBrollAssetView(ExternalMediaRequiredMixin, View
     def get(self, request, public_id, asset_id):
         asset = get_object_or_404(ProjectBrollAsset, project__public_id=public_id, public_id=asset_id)
         selected = asset.preview_file if asset.media_type == ProjectBrollAsset.MediaType.VIDEO and asset.preview_status == ProjectBrollAsset.PreviewStatus.READY and asset.preview_file else asset.file
+        if request.GET.get('thumbnail') == '1':
+            return cached_preview_response(request, asset.project, 'broll_thumbnail', selected, version=asset.update_at.isoformat())
         if not ProjectService.file_exists(selected):
             raise Http404('O asset de B-roll não está mais disponível.')
         request.GET = request.GET.copy()

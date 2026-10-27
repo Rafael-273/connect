@@ -18,6 +18,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         this.playbackRate = 1;
         this.sequenceDurationMs = 0;
         this.captions = [];
+        this.sourceDurations = new Map();
     }
 
     invalidateTiming() { this.bedCache=null; this.automationCache=new WeakMap(); }
@@ -26,6 +27,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         this.invalidateTiming();
         if (!config) {
             this.pause();
+            this.channels.forEach(channel=>{if(channel.dataset?.loadedSource){channel.removeAttribute('src');channel.load();delete channel.dataset.loadedSource;}});
             this.tracks = [];
             this.signature = '';
             this.audio.removeAttribute('src');
@@ -40,6 +42,7 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
         this.tracks = tracks;
         if (this.signature !== signature) {
             this.pause();
+            this.channels.forEach(channel=>{if(channel.dataset?.loadedSource){const duration=Number(channel.duration);if(duration>0&&Number.isFinite(duration))this.sourceDurations.set(channel.dataset.loadedSource,duration);channel.removeAttribute('src');channel.load();delete channel.dataset.loadedSource;}});
             this.signature = signature;
             this.position = {index: -1, local: 0, overlap: 0, active: []};
             this.tracks = tracks;
@@ -47,17 +50,44 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
             this.channels.forEach((channel, index) => {
                 channel.loop = true;
                 channel.playbackRate = this.playbackRate;
-                channel.preload = 'auto';
+                channel.preload = 'none';
                 channel.dataset.source = tracks[index].url;
-                channel.src = tracks[index].url;
-                channel.load();
             });
         }
+        this.prepareNear(this.globalMs);
         this.applyVolumes(config, this.globalMs, this.volumeFactorAt(config, this.globalMs));
+    }
+
+    setSourceDuration(source, durationMs) {
+        if(Number.isFinite(durationMs)&&durationMs>0)this.sourceDurations.set(source,durationMs/1000);
+    }
+
+    prepareNear(globalMs) {
+        const scheduled=this.tracks.every(track=>track.start_ms!=null&&track.end_ms!=null&&Number(track.end_ms)>Number(track.start_ms));
+        const now=Number(globalMs)||0,needed=new Set();
+        if(scheduled){
+            this.tracks.forEach((track,index)=>{if(Number(track.start_ms)<=now+10000&&Number(track.end_ms)>now-10000)needed.add(index)});
+            const next=this.tracks.findIndex(track=>Number(track.start_ms)>now+10000);
+            if(next>=0&&Number(this.tracks[next].start_ms)<=now+20000)needed.add(next);
+        }else this.tracks.forEach((_,index)=>needed.add(index));
+        this.channels.forEach((channel,index)=>{
+            const source=this.tracks[index]?.url;
+            if(!source)return;
+            if(needed.has(index)){
+                const current=this.position.index>=0?this.position.index:0;
+                channel.preload=scheduled||index===current||index===current+1?'auto':'metadata';
+                if(channel.dataset.loadedSource!==source){channel.dataset.loadedSource=source;channel.src=source;channel.load()}
+            }else if(channel.dataset.loadedSource){
+                const duration=Number(channel.duration);
+                if(duration>0&&Number.isFinite(duration))this.sourceDurations.set(source,duration);
+                channel.pause();channel.removeAttribute('src');channel.load();delete channel.dataset.loadedSource;channel.preload='none';
+            }
+        });
     }
 
     sync(config, globalMs, {force = false} = {}) {
         if (!config || !this.channels.length) return;
+        this.prepareNear(globalMs);
         const position = this.positionAt(globalMs);
         if (!position) return;
         this.position = position;
@@ -119,11 +149,11 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
 
     duration(index) {
         const duration = this.channels[index]?.duration;
-        return Number.isFinite(duration) && duration > 0 ? duration : 0;
+        return Number.isFinite(duration) && duration > 0 ? duration : (this.sourceDurations.get(this.tracks[index]?.url)||0);
     }
 
     positionAt(globalMs) {
-        if (!this.tracks.length || this.channels.some((_, index) => !this.duration(index))) return null;
+        if (!this.tracks.length) return null;
         const nowMs = Math.max(0, Number(globalMs) || 0);
         const scheduled = this.tracks.every(track => Number.isFinite(Number(track.start_ms)) && Number.isFinite(Number(track.end_ms)) && Number(track.end_ms) > Number(track.start_ms));
         if (scheduled) {
@@ -146,9 +176,10 @@ window.ConnectPreviewAudio = class ConnectPreviewAudio {
                 ranges[offset].gain*=Math.cos(progress*Math.PI/2);
                 ranges[index].gain*=Math.sin(progress*Math.PI/2);
             });
-            const active=ranges.flatMap((range,index)=> nowMs>=range.start&&nowMs<range.end ? [{index,local:(range.source+(nowMs-range.start))/1000%this.duration(index),gain:range.gain}]:[]);
+            const active=ranges.flatMap((range,index)=> this.duration(index)>0&&nowMs>=range.start&&nowMs<range.end ? [{index,local:(range.source+(nowMs-range.start))/1000%this.duration(index),gain:range.gain}]:[]);
             return {index:active[0]?.index??-1,local:active[0]?.local??0,overlap:0,active};
         }
+        if(this.channels.some((_,index)=>!this.duration(index)))return null;
         const spans = this.channels.map((_, index) => this.duration(index));
         const overlaps = spans.map((_, index) => index && String(this.tracks[index].transition||'CONSTANT_POWER').toUpperCase()==='CONSTANT_POWER' ? Math.max(0,Math.min(
             spans[index - 1] - .05, spans[index] - .05,

@@ -1366,6 +1366,23 @@ class ProjectSourceProxy(BaseModel):
         ]
 
 
+class ProjectPreviewArtifact(models.Model):
+    """Disposable derived media; editorial decisions stay in timeline revisions."""
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='preview_artifacts')
+    key = models.CharField(max_length=64)
+    kind = models.CharField(max_length=24)
+    status = models.CharField(max_length=16, default='PENDING')
+    source = models.JSONField(default=dict)
+    options = models.JSONField(default=dict)
+    file = models.FileField(upload_to='external_media/preview_artifacts/', storage=get_external_media_storage, max_length=500, blank=True)
+    lease = models.CharField(max_length=32, blank=True)
+    requested_at = models.DateTimeField()
+    error = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['project', 'key'], name='unique_project_preview_artifact')]
+
+
 class TimelineRevision(BaseModel):
     project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='timeline_revisions')
     revision = models.PositiveIntegerField()

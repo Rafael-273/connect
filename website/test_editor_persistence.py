@@ -56,6 +56,27 @@ class EditorFixture(ExternalMediaFixtureMixin):
 
 
 class EditorPersistenceTests(EditorFixture, TestCase):
+    def test_cached_editor_media_survives_reopening_without_enqueuing_another_job(self):
+        from unittest.mock import patch
+        from django.core.files.base import ContentFile
+        from website.external_media.preview_artifacts import PreviewArtifactService
+        source = self.project.render_job.original_video
+        with patch.object(PreviewArtifactService, 'enqueue') as enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                first = PreviewArtifactService.request(self.project, 'waveform', source, version='v1')
+                duplicate = PreviewArtifactService.request(self.project, 'waveform', source, version='v1')
+            self.assertEqual(first.pk, duplicate.pk)
+            enqueue.assert_called_once()
+            first.file.save('peaks.json', ContentFile(b'{"schema":"connect.waveform.v1","durationMs":1000,"peaks":[0.5]}'), save=False)
+            self.addCleanup(first.file.delete, save=False)
+            first.status = 'READY'
+            first.save(update_fields=['file', 'status'])
+            with self.captureOnCommitCallbacks(execute=True):
+                reopened = PreviewArtifactService.request(self.project, 'waveform', source, version='v1')
+            self.assertEqual(reopened.pk, first.pk)
+            self.assertEqual(reopened.file.name, first.file.name)
+            enqueue.assert_called_once()
+
     def test_volume_and_mix_edits_reuse_the_same_picture_without_enqueuing_ffmpeg(self):
         from unittest.mock import patch
         from website.external_media.preview import ProjectProxyService
