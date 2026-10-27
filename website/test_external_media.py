@@ -6175,6 +6175,59 @@ class DialogueProcessingSmokeTests(SimpleTestCase):
 
 
 class EditableTimelineExportTests(SimpleTestCase):
+    def test_dialogue_stem_preserves_silent_clips_and_short_audio_streams(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory) / 'package'
+            (package / 'Audio').mkdir(parents=True)
+            take = package / 'take.wav'
+            with wave.open(str(take), 'wb') as audio:
+                audio.setparams((1, 2, 48000, 0, 'NONE', 'not compressed'))
+                audio.writeframes(b''.join(
+                    struct.pack('<h', round(10000 * math.sin(2 * math.pi * 440 * n / 48000)))
+                    for n in range(14400)  # Audio ends at 300 ms; video lasts longer.
+                ))
+            sources = [
+                (SimpleNamespace(asset_id=name, relative_path=path), {})
+                for name, path in [('silent', 'silent.mp4'), ('take', 'take.wav')]
+            ]
+            clips = [
+                {
+                    'asset_id': asset_id, 'timeline_in_ms': start, 'timeline_out_ms': end,
+                    'source_in_ms': 0, 'source_out_ms': end - start,
+                }
+                for asset_id, start, end in [
+                    ('silent', 0, 200), ('take', 200, 600), ('silent', 600, 800),
+                    ('take', 800, 1200), ('silent', 1200, 1400),
+                ]
+            ]
+            project = SimpleNamespace(template_version=SimpleNamespace(
+                audio_noise_cleanup_enabled=False, dialogue_processing_enabled=False,
+            ))
+            builder = InternalTimelineBuilder()
+            builder._has_audio = lambda path: Path(path) == take
+            builder._noise_decisions = lambda project: []
+            builder._probe = Mock(return_value={'duration_ms': 1400})
+
+            assets, stem_clips = builder._dialogue_assets(project, sources, clips, package)
+
+            with wave.open(str(package / 'Audio' / 'voz.wav'), 'rb') as audio:
+                self.assertEqual(audio.getnchannels(), 2)
+                self.assertEqual(audio.getsampwidth(), 3)
+                self.assertEqual(audio.getframerate(), 48000)
+                self.assertEqual(audio.getnframes(), 67200)
+                for start_ms, end_ms, audible in [
+                    (0, 200, False), (200, 500, True), (500, 800, False),
+                    (800, 1100, True), (1100, 1400, False),
+                ]:
+                    audio.setpos(start_ms * 48)
+                    samples = audio.readframes((end_ms - start_ms) * 48)
+                    self.assertEqual(any(samples), audible, (start_ms, end_ms))
+
+        self.assertEqual(assets[0]['role'], 'dialogue')
+        self.assertEqual(stem_clips[0]['timeline_in_ms'], 0)
+        self.assertEqual(stem_clips[0]['timeline_out_ms'], 1400)
+        self.assertEqual(stem_clips[0]['source_out_ms'], 1400)
+
     @override_settings(
         EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS=3,
         EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS=0,

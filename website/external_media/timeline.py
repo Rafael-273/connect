@@ -573,6 +573,7 @@ class InternalTimelineBuilder:
         selected_clips = [clip for clip in video_clips if clip['asset_id'] in source_indexes]
         if not selected_clips:
             return [], []
+        duration_ms = max(clip['timeline_out_ms'] for clip in video_clips)
 
         workdir = package_root.parent
         raw_path = workdir / 'premiere_dialogue_raw.wav'
@@ -581,14 +582,27 @@ class InternalTimelineBuilder:
             command.extend(['-i', FFmpegRunner.input_arg(source_path)])
         filters = []
         labels = []
-        for index, clip in enumerate(selected_clips):
-            source_index = source_indexes[clip['asset_id']]
-            start_s = clip['source_in_ms'] / 1000
-            end_s = clip['source_out_ms'] / 1000
+        for index, clip in enumerate(video_clips):
+            clip_duration_s = (clip['timeline_out_ms'] - clip['timeline_in_ms']) / 1000
             label = f'dialogue_{index}'
+            source_index = source_indexes.get(clip['asset_id'])
+            if source_index is None:
+                # Silent intros/outros still occupy time. Dropping them would
+                # shift subsequent speech and shorten A1 relative to V1.
+                chain = 'anullsrc=r=48000:cl=stereo,'
+            else:
+                start_s = clip['source_in_ms'] / 1000
+                end_s = clip['source_out_ms'] / 1000
+                chain = (
+                    f'[{source_index}:a:0]atrim=start={start_s:.3f}:end={end_s:.3f},'
+                    'asetpts=PTS-STARTPTS,aresample=48000,'
+                    'aformat=channel_layouts=stereo,'
+                )
+            # Audio streams may end before their video stream. Pad each clip
+            # before concatenation so later dialogue retains its timeline offset.
             filters.append(
-                f'[{source_index}:a:0]atrim=start={start_s:.3f}:end={end_s:.3f},'
-                f'asetpts=PTS-STARTPTS,aresample=48000[{label}]'
+                f'{chain}apad=whole_dur={clip_duration_s:.3f},'
+                f'atrim=duration={clip_duration_s:.3f},asetpts=PTS-STARTPTS[{label}]'
             )
             labels.append(f'[{label}]')
         filters.append(
@@ -622,7 +636,7 @@ class InternalTimelineBuilder:
             )
             result = DialogueProcessor(self.runner).process(
                 processed_path, workdir / 'premiere_dialogue_processed.m4a',
-                duration_ms=max(clip['timeline_out_ms'] for clip in selected_clips),
+                duration_ms=duration_ms,
                 speech_blocks=blocks,
                 protected_ranges=[],
                 settings_=DialogueSettings.from_config(version.dialogue_processing_config),
@@ -633,9 +647,10 @@ class InternalTimelineBuilder:
         output = package_root / relative
         self.runner.run([
             settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(processed_path),
-            '-map', '0:a:0', '-vn', '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2', str(output),
+            '-map', '0:a:0', '-vn', '-af',
+            f'apad=whole_dur={duration_ms / 1000:.3f},atrim=duration={duration_ms / 1000:.3f}',
+            '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2', str(output),
         ])
-        duration_ms = max(clip['timeline_out_ms'] for clip in selected_clips)
         asset = {
             'id': 'audio_dialogue', 'type': 'audio', 'role': 'dialogue',
             'name': 'Voz tratada', 'path': f'./{relative}', 'bit_depth': 24,

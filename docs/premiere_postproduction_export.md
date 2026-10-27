@@ -21,7 +21,9 @@ causavam enquadramento incorreto no Premiere.
   em vez de PNG por cue, também preserva animações e o renderer ASS já usado pela plataforma.
 - `Captions/*.srt`: alternativa editável com texto e timestamps.
 - `Audio/voz.wav`: A1 alinhada no zero, PCM 48 kHz/24-bit, com os cortes e tratamentos
-  individuais habilitados no template.
+  individuais habilitados no template. Trechos sem áudio, como vinhetas, permanecem
+  como silêncio; streams de áudio mais curtos que o vídeo são completados com silêncio
+  por trecho para preservar a sincronia e a duração total da sequência.
 - `Audio/musica.wav`: A2 alinhada no zero, PCM 48 kHz/24-bit, com volume, ducking dinâmico
   e ducking espectral aprovados já aplicados quando disponíveis.
 - `Audio/mix_referencia.wav`: mix estéreo aprovado para conferência. Não é inserido na
@@ -53,6 +55,8 @@ artificial é produzida.
   Reframe aprovado fica consolidado em V1 e a aparência avançada das legendas fica em
   uma camada ProRes 4444.
 - O SRT preserva texto e tempo, mas não toda a estilização visual.
+- Se o worker não tiver espaço temporário suficiente para a camada ProRes transparente,
+  o pacote continua com os SRTs, sem a camada visual de legendas em V2.
 - A masterização aplicada ao mix completo não é duplicada em cada stem, pois isso
   alteraria o equilíbrio ao somá-los. Ela permanece disponível no mix de referência e
   a masterização final pode ser refeita depois que efeitos adicionais forem incluídos.
