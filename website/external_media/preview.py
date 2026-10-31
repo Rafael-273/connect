@@ -31,6 +31,7 @@ from .quality_control import MediaQualityService
 from .overlays import OverlayTimelineService
 from .broll import BrollTimelineService
 from .workspace import JobWorkspace
+from .video_order import clip_range, order_clips, timeline_mapping, relocate_item
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,20 @@ TIMELINE_REVIEW_PROXY_LEASE = timedelta(minutes=15)
 
 
 class ProjectProxyService:
+    @staticmethod
+    def original_review_master(project):
+        proxy = project.source_proxies.filter(
+            source_id=REVIEW_MASTER_PROXY_ID, status=ProjectSourceProxy.Status.READY,
+        ).exclude(proxy_file='').first()
+        if proxy:
+            return proxy.proxy_file
+        job = project.render_job
+        # Delivery replaces this field with the edited assembly. Its clock
+        # cannot be used to seek original source ranges after a reorder.
+        if job and not job.rendered_from_timeline_revision:
+            return job.original_video
+        return None
+
     @staticmethod
     def timeline_review_proxy_id(revision):
         video_revision_id = (revision.timeline or {}).get('review_video_revision_id') or revision.pk
@@ -204,7 +219,7 @@ class ProjectProxyService:
         # (rather than replaces) the per-take proxies: manual framing still
         # needs those sources until a revision-specific compositor is ready.
         job = project.render_job
-        if job and job.original_video:
+        if job and job.original_video and not job.rendered_from_timeline_revision:
             master_proxy, _ = ProjectSourceProxy.objects.get_or_create(
                 project=project,
                 source_id=REVIEW_MASTER_PROXY_ID,
@@ -303,18 +318,16 @@ class ProjectProxyService:
         quality = MediaQualityService(assembly.runner)
         try:
             source_field = job.original_video
-            if (revision.timeline or {}).get('cameras'):
+            if (revision.timeline or {}).get('cameras') or (revision.timeline or {}).get('video_reordered'):
                 # Delivery replaces job.original_video with the baked final cut.
                 # The cached initial review master is the immutable, primary-only
                 # clock; using a prior delivery would bake old switches twice
                 # and make removing a camera after completion ineffective.
-                clean_master = project.source_proxies.filter(
-                    source_id=REVIEW_MASTER_PROXY_ID, status=ProjectSourceProxy.Status.READY,
-                ).exclude(proxy_file='').first()
+                clean_master = cls.original_review_master(project)
                 if clean_master:
-                    source_field = clean_master.proxy_file
+                    source_field = clean_master
                 elif job.rendered_from_timeline_revision:
-                    raise ExternalMediaError('A base original do preview não está disponível. Reprocesse o projeto para revisar as câmeras.')
+                    raise ExternalMediaError('A base original do preview não está disponível. Reprocesse o projeto para revisar a edição.')
             source = storage.input(source_field).get_ffmpeg_input()
             source_width, source_height = assembly._video_dimensions(source)
             # A manual crop uses even rounding. Without restoring every part
@@ -852,6 +865,11 @@ class PreviewCompositionService:
             })
             source_cursor = global_end
 
+        order_clips(clips, decisions.get('video_order'))
+        if decisions.get('video_order'):
+            markers = [{'time_ms': clip['timeline_in_ms'], 'name': clip['block'].get('name') or clip['asset_id']}
+                       for clip in clips]
+
         # The review UI lets the member click a specific take on the timeline
         # and see only the decisions that belong to it. remove_segment/
         # audio_noise_reduction operations are recorded against the virtual
@@ -949,7 +967,7 @@ class PreviewCompositionService:
         # Until a fresh continuous review proxy is composed, a manual transform
         # must use the source proxy. The prior assembled master can contain a
         # previous crop and would show a different zoom from the final render.
-        if has_reframe_override or has_color_adjustment:
+        if has_reframe_override or has_color_adjustment or decisions.get('video_order'):
             review_master_url = None
         from .multicam import MulticamService
         cameras, camera_segments = MulticamService.compose(source_manifest, operations, clips, project.public_id)
@@ -981,14 +999,16 @@ class PreviewCompositionService:
             ),
             'audio_mix': audio_mix,
             'clips': clips,
+            'video_reordered': bool(decisions.get('video_order')),
             'cameras': cameras,
             'camera_segments': camera_segments,
             # Visual blade points do not remove media by themselves, but must
             # survive a reload so the member can select either resulting take.
             'video_splits_ms': sorted({
-                cls._source_to_timeline(int(value), cuts)
-                for value in (decisions.get('video_splits_ms') or [])
-                if 0 < cls._source_to_timeline(int(value), cuts) < timeline_cursor
+                clip['timeline_in_ms'] + int(value) - clip['master_in_ms']
+                for clip in clips for value in (decisions.get('video_splits_ms') or [])
+                if clip['master_in_ms'] <= int(value) < clip['master_out_ms']
+                and 0 < clip['timeline_in_ms'] + int(value) - clip['master_in_ms'] < timeline_cursor
             }),
             'video_tracks': [
                 {'id': 'V1', 'role': 'main', 'clips': clips},
@@ -1243,6 +1263,35 @@ class TimelineRevisionService:
         revision = cls._create(locked, current.source_manifest, decisions, 'Vídeo dividido', member, current)
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'SPLIT_VIDEO', {'master_ms': point}, {'master_ms': point}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
+    def move_video(cls, project, member, source_id, start_ms, end_ms, before=None):
+        """Insert a linked video/audio take before another take, or at the end."""
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        clips = current.timeline.get('clips') or []
+        selected = {'source_id': str(source_id), 'start_ms': int(start_ms), 'end_ms': int(end_ms)}
+        order = [clip_range(clip) for clip in clips]
+        if selected not in order:
+            raise ValueError('O trecho selecionado não está nesta revisão da timeline.')
+        if before is not None and (not isinstance(before, dict) or before not in order):
+            raise ValueError('Escolha uma posição válida na timeline.')
+        if before == selected:
+            return current
+        remaining = [entry for entry in order if entry != selected]
+        index = remaining.index(before) if before else len(remaining)
+        remaining.insert(index, selected)
+        if remaining == order:
+            return current
+        decisions = deepcopy(current.edit_decision_set)
+        decisions['video_order'] = remaining
+        revision = cls._create(locked, current.source_manifest, decisions, 'Vídeo e áudio movidos', member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'MOVE_VIDEO', {
+            'take': selected, 'before': before,
+        }, {'video_order': order}, member)
         return revision
 
     @classmethod
@@ -1989,6 +2038,27 @@ class TimelineRevisionService:
             project, composition_manifest, decisions, number,
             overlays_override=overlays, brolls_override=brolls,
         )
+        if parent and (decisions.get('video_order') or parent.edit_decision_set.get('video_order')):
+            mapping = timeline_mapping(parent.timeline.get('clips') or [], timeline.get('clips') or [])
+            if any(offset for _, _, offset in mapping) or sum(end - start for start, end, _ in mapping) != sum(
+                clip['timeline_out_ms'] - clip['timeline_in_ms'] for clip in parent.timeline.get('clips') or []
+            ):
+                timeline['captions'] = cls._relocate_cues(project, parent.timeline, mapping)
+                for layer in ('overlays', 'brolls'):
+                    relocated = []
+                    for item in timeline.get(layer) or []:
+                        for index, part in enumerate(relocate_item(item, mapping)):
+                            if index:
+                                part['id'] = f"{part['id']}-part-{uuid.uuid4().hex[:8]}"
+                            relocated.append(part)
+                    timeline[layer] = relocated
+                timeline['overlay_tracks'] = [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': timeline['overlays']}]
+                timeline['broll_tracks'] = [{'id': 'BROLL', 'role': 'broll', 'clips': timeline['brolls']}]
+                for track in timeline['video_tracks']:
+                    if track['id'] == 'V2':
+                        track['clips'] = timeline['brolls']
+                    elif track['id'] == 'V3':
+                        track['clips'] = timeline['overlays']
         if parent is None:
             from .multicam import MulticamService
             proposals = MulticamService.propose(project, composition_manifest, timeline)
@@ -2113,6 +2183,44 @@ class TimelineRevisionService:
         session.save(update_fields=['undo_stack', 'redo_stack', 'current_revision', 'update_at'])
 
     @staticmethod
+    def _relocate_cues(project, previous_timeline, mapping):
+        if not project.render_job_id:
+            return []
+        captions = []
+        descriptors = {item['id']: item for item in previous_timeline.get('captions') or []}
+        next_index = (SubtitleCue.all_objects.filter(track__job=project.render_job).aggregate(value=Max('cue_index'))['value'] or 0) + 1
+        split_indexes = {}
+        for cue in SubtitleCue.objects.select_for_update().filter(track__job=project.render_job).select_related('track'):
+            descriptor = descriptors.get(cue.pk, {
+                'id': cue.pk, 'track_id': cue.track_id, 'language': cue.track.language,
+                'text': cue.text, 'is_source': cue.track.is_source,
+                'start_ms': cue.start_ms, 'end_ms': cue.end_ms,
+            })
+            parts = relocate_item(descriptor, mapping)
+            if not parts:
+                cue.delete()
+                continue
+            for index, part in enumerate(parts):
+                if index:
+                    # Bilingual rendering pairs languages by cue_index. Give
+                    # corresponding split pieces the same index in every track.
+                    key = (cue.cue_index, index)
+                    if key not in split_indexes:
+                        split_indexes[key] = next_index
+                        next_index += 1
+                    sibling = SubtitleCue.objects.create(
+                        track_id=cue.track_id,
+                        cue_index=split_indexes[key],
+                        text=cue.text, start_ms=part['start_ms'], end_ms=part['end_ms'],
+                    )
+                    part['id'] = sibling.pk
+                else:
+                    cue.start_ms, cue.end_ms = part['start_ms'], part['end_ms']
+                    cue.save(update_fields=['start_ms', 'end_ms', 'update_at'])
+                captions.append(part)
+        return captions
+
+    @staticmethod
     def _shift_cues_for_decision(project, decisions, target, enabling):
         """Keep subtitle cues on the same edited clock as a removed take.
 
@@ -2122,6 +2230,10 @@ class TimelineRevisionService:
         Trim the intersecting part instead; a cue contained entirely in the
         deleted take is soft-deleted so revision history can restore it.
         """
+        if decisions.get('video_order'):
+            # _create maps the retained source ranges through both clip lists;
+            # subtraction alone cannot locate a cut after a take was moved.
+            return
         duration = max(0, int(target.get('source_out_ms') or 0) - int(target.get('source_in_ms') or 0))
         if not duration or not project.render_job_id:
             return

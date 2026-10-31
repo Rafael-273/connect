@@ -150,6 +150,43 @@ class EditorPersistenceTests(EditorFixture, TestCase):
         self.project.refresh_from_db()
         self.assertEqual(self.project.editorial_version, self.base)
 
+    def test_manual_take_keeps_automatic_plan_and_master_available_after_reload(self):
+        from copy import deepcopy
+        from website.views.external_media import preview_timeline_with_music
+        current = self.project.current_timeline_revision
+        source_id = current.source_manifest['sources'][0]['id']
+        decisions = deepcopy(current.edit_decision_set)
+        automatic = {
+            'id': 'automatic-take', 'type': 'reframe', 'source_id': source_id,
+            'origin': 'AUTO', 'enabled': True, 'metadata': {},
+            'plan_reference': {'plan': {'crop_width': 300, 'crop_height': 500,
+                                      'keyframes': [{'time_seconds': 0, 'x': 70, 'y': 30}]}},
+        }
+        decisions['operations'].append(automatic)
+        TimelineRevisionService._create(self.project, current.source_manifest, decisions, 'Auto', self.member, current)
+        self.project.refresh_from_db()
+        TimelineRevisionService.create_video_split(self.project, self.member, 5000)
+        revision = TimelineRevisionService.update_transform(
+            self.project, self.member, automatic['id'], {
+                'scale': 1.4, 'x': .3, 'y': 0,
+                'segment_start_ms': 0, 'segment_end_ms': 5000,
+            },
+        )
+        self.assertEqual(revision.edit_decision_set['operations'][0], automatic)
+        self.assertFalse(any(effect['type'] == 'transform' for effect in revision.timeline['clips'][1]['effects']))
+        self.project.refresh_from_db()
+        payload = preview_timeline_with_music(self.project, self.project.current_timeline_revision.timeline)
+        self.assertIsNone(payload['review_master_url'])
+        self.assertEqual(payload['framing_master_url'], reverse(
+            'external_media_project_preview_master', args=[self.project.public_id],
+        ))
+        self.assertNotIn('framing_master_url', self.project.current_timeline_revision.timeline)
+        self.assertEqual(next(item for item in payload['decisions'] if item['id'] == automatic['id']), automatic)
+        response = self.client.get(reverse('external_media_project_preview', args=[self.project.public_id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context['timeline']['framing_master_url'], payload['framing_master_url'])
+        self.assertIsNone(response.context['timeline']['review_master_url'])
+
     def test_sequential_edits_survive_reload_and_preserve_other_cues(self):
         first = self.post(self.cue, {'end_ms': 1800})
         self.assertEqual(first.status_code, 200)

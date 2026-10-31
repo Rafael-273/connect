@@ -2195,7 +2195,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
         # already resolves each source independently (including trim-range
         # aliases), therefore keep source playback whenever a manual frame is
         # present.
-        use_editable_source_proxies = has_reframe_override or bool(timeline.get('cameras'))
+        use_editable_source_proxies = has_reframe_override or bool(timeline.get('cameras')) or bool(timeline.get('video_reordered'))
         revision_proxy = ready_proxies.get(ProjectProxyService.timeline_review_proxy_id(revision))
         if not ProjectProxyService.has_usable_timeline_review_proxy(revision_proxy, revision):
             revision_proxy = None
@@ -2239,7 +2239,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
         elif use_editable_source_proxies:
             timeline['review_master_url'] = None
-            timeline['review_proxy_status'] = 'SOURCE'
+            timeline['review_proxy_status'] = 'PENDING' if timeline.get('video_reordered') and not has_reframe_override else 'SOURCE'
         timeline = preview_timeline_with_music(project, timeline)
         return render(request, 'member/external_media/preview.html', self.media_context(
             project=project, revision=revision, session=session, timeline=timeline,
@@ -2297,13 +2297,13 @@ class ExternalMediaProjectPreviewMasterView(ExternalMediaRequiredMixin, View):
         project = get_object_or_404(
             ExternalMediaProject.objects.select_related('render_job'), public_id=public_id,
         )
-        job = project.render_job
-        if not job or not job.original_video or not ProjectService.file_exists(job.original_video):
+        master = ProjectProxyService.original_review_master(project)
+        if not master or not ProjectService.file_exists(master):
             raise Http404('A prévia com enquadramento final ainda não está disponível.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
         return protected_file_response(
-            request, job.original_video, force_stream=request.GET.get('filmstrip') == '1',
+            request, master, force_stream=request.GET.get('filmstrip') == '1',
         )
 
 
@@ -2566,6 +2566,13 @@ def preview_revision_response(project, member, revision, **extra):
 def preview_timeline_with_music(project, timeline):
     """Add browser-only music metadata without mutating a stored revision."""
     timeline = deepcopy(timeline or {})
+    # A manual take uses its original source. Keep the normalized master
+    # available independently so untouched takes retain their automatic crop.
+    timeline['framing_master_url'] = (
+        reverse('external_media_project_preview_master', kwargs={'public_id': project.public_id})
+        if project.render_job_id and ProjectService.file_exists(ProjectProxyService.original_review_master(project))
+        else None
+    )
     selected_tracks = MusicService.selected_tracks(
         project.template_version, timeline, project.configuration or {},
     )
@@ -2657,6 +2664,20 @@ class ExternalMediaProjectPreviewVideoSplitView(ExternalMediaRequiredMixin, Prev
         try:
             revision = TimelineRevisionService.create_video_split(
                 project, self.member, payload.get('master_ms'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision)
+
+
+class ExternalMediaProjectPreviewVideoMoveView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        try:
+            revision = TimelineRevisionService.move_video(
+                project, self.member, payload.get('source_id'),
+                payload.get('start_ms'), payload.get('end_ms'), payload.get('before'),
             )
         except (TypeError, ValueError) as exc:
             return JsonResponse({'error': str(exc)}, status=400)

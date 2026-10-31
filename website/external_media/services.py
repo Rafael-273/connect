@@ -708,17 +708,17 @@ class SubtitleService:
 
     def write_srt(self, track, path, style):
         blocks = []
-        for cue in track.cues.all():
+        for index, cue in enumerate(sorted(track.cues.all(), key=lambda cue: (cue.start_ms, cue.end_ms, cue.cue_index)), start=1):
             text = self.wrap_text(cue.text, style.max_characters, style.max_lines)
             blocks.append(
-                f'{cue.cue_index}\n{self.milliseconds_to_srt(cue.start_ms)} --> '
+                f'{index}\n{self.milliseconds_to_srt(cue.start_ms)} --> '
                 f'{self.milliseconds_to_srt(cue.end_ms)}\n{text}'
             )
         path.write_text('\n\n'.join(blocks) + '\n', encoding='utf-8')
 
     def write_vtt(self, track, path, style):
         blocks = ['WEBVTT']
-        for cue in track.cues.all():
+        for cue in sorted(track.cues.all(), key=lambda cue: (cue.start_ms, cue.end_ms, cue.cue_index)):
             text = self.wrap_text(cue.text, style.max_characters, style.max_lines)
             blocks.append(
                 f'{self.milliseconds_to_vtt(cue.start_ms)} --> '

@@ -380,6 +380,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 <script src="{% static 'external_media_preview_audio.js' %}"></script>
 <script src="{% static 'external_media_cached_media.js' %}"></script>
 <script src="{% static 'external_media_preview_source.js' %}"></script>
+<script src="{% static 'external_media_preview_framing.js' %}"></script>
 <script>
 (() => {
     let timeline = JSON.parse(document.getElementById('preview-timeline').textContent);
@@ -562,6 +563,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // The timeline excludes accepted cuts. The review master does not, so map
     // between both clocks instead of showing a different image after a cut.
     function editedToMaster(ms,boundary='after'){
+        if(timeline.video_reordered){
+            const clips=timeline.clips||[],clip=clips.find(item=>boundary==='before'
+                ? Number(item.timeline_in_ms)<ms&&ms<=Number(item.timeline_out_ms)
+                : Number(item.timeline_in_ms)<=ms&&ms<Number(item.timeline_out_ms))||clips.at(-1);
+            if(clip)return Number(clip.master_in_ms)+Math.max(0,Math.min(ms-Number(clip.timeline_in_ms),Number(clip.timeline_out_ms)-Number(clip.timeline_in_ms)));
+        }
         let removed=0;
         for(const [start,end] of removedSegments()){
             const editedStart=start-removed;
@@ -574,7 +581,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         return ms+removed;
     }
-    function masterToEdited(ms){let removed=0;for(const [start,end] of removedSegments()){if(ms>=end){removed+=end-start;continue}if(ms>start)return null;break}return ms-removed}
+    function masterToEdited(ms){if(timeline.video_reordered){const clip=(timeline.clips||[]).find(item=>Number(item.master_in_ms)<=ms&&ms<Number(item.master_out_ms));return clip?Number(clip.timeline_in_ms)+ms-Number(clip.master_in_ms):null}let removed=0;for(const [start,end] of removedSegments()){if(ms>=end){removed+=end-start;continue}if(ms>start)return null;break}return ms-removed}
     // The active playback asset can use either clock. Editorial mutations,
     // however, always use the untouched project-master clock consumed by the
     // final renderer. Keeping these concerns separate prevents a READY
@@ -582,7 +589,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // preceding cuts.
     function editedToPlayback(ms){return timeline.review_master_is_edited?ms:editedToMaster(ms)}
     function playbackToEdited(ms){return timeline.review_master_is_edited?ms:masterToEdited(ms)}
-    function sourceFor(clip){ return asset(clip?.asset_id)?.url || ''; }
+    function framingPlayback(clip){return ConnectPreviewFraming.playback(timeline,clip,asset(clip?.asset_id))}
+    function sourceFor(clip){return framingPlayback(clip).url}
+    function playbackIn(clip){return framingPlayback(clip).inMs}
+    function playbackOut(clip){return framingPlayback(clip).outMs}
     function requestVideoPlay(){
         const pending=video.play();
         if(pending&&typeof pending.catch==='function')pending.catch(error=>{
@@ -699,8 +709,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         let previous=clip,next=nextClipAfter(previous);
         // Blade points within continuous media need no decoder handoff. Use
         // their playback time to prepare the next actual discontinuity.
-        while(next&&sourceFor(next)===sourceFor(previous)&&Math.abs(Number(next.source_in_ms)-Number(previous.source_out_ms))<1){previous=next;next=nextClipAfter(previous)}
-        if(next)sourcePlayer.warm(sourceFor(next),Number(next.source_in_ms||0)/1000);
+        while(next&&sourceFor(next)===sourceFor(previous)&&Math.abs(playbackIn(next)-playbackOut(previous))<1){previous=next;next=nextClipAfter(previous)}
+        if(next)sourcePlayer.warm(sourceFor(next),playbackIn(next)/1000);
     }
     function seek(ms, autoplay=false,{preserveContinuous=false}={}){
         cancelPlaybackBoundary();previewTransition=null;
@@ -713,7 +723,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             if(!keepPlayback||!sourcePlayer.isAt(source,masterTime))sourcePlayer.seek(source,masterTime,{autoplay,freeze:false});
             renderPosition(); syncMusicPosition(); return;
         }
-        const source=sourceFor(clip), local=(clip.source_in_ms + globalMs-clip.timeline_in_ms)/1000;
+        const source=sourceFor(clip), local=(playbackIn(clip) + globalMs-clip.timeline_in_ms)/1000;
         // Consume a warmed take before recycling the secondary buffer for the
         // one after it. Reversing this order discarded the ready frame at
         // every boundary and made the double buffer ineffective.
@@ -734,12 +744,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         // outside the output aspect ratio; translate handles the additional
         // crop introduced by zoom. Together, X/Y reach the same full-source
         // bounds used by the final renderer.
-        if(useReviewMaster()){video.style.objectPosition='50% 50%';video.style.transform=''}else if(transform){const scale=Number(transform.scale||1),x=Number(transform.x||0),y=Number(transform.y||0),shift=Math.max(0,(scale-1)*50);video.style.objectPosition=`${50-x*50}% ${50-y*50}%`;video.style.transform=`translate(${x*shift}%, ${y*shift}%) scale(${scale})`}else{video.style.objectPosition='50% 50%';video.style.transform=''};
+        if(useReviewMaster()||framingPlayback(activeClip).automatic){video.style.objectPosition='50% 50%';video.style.transform=''}else if(transform){const scale=Number(transform.scale||1),x=Number(transform.x||0),y=Number(transform.y||0),shift=Math.max(0,(scale-1)*50);video.style.objectPosition=`${50-x*50}% ${50-y*50}%`;video.style.transform=`translate(${x*shift}%, ${y*shift}%) scale(${scale})`}else{video.style.objectPosition='50% 50%';video.style.transform=''};
         const grade=useReviewMaster()?null:activeClip?.color_adjustment,temperature=Math.max(-1,Math.min(1,Number(grade?.temperature||0)/100)),red=Math.max(-1,Math.min(1,(Number(grade?.red||0)+Number(grade?.yellow||0)+Number(grade?.magenta||0))/300+temperature)),green=Math.max(-1,Math.min(1,(Number(grade?.green||0)+Number(grade?.yellow||0)+Number(grade?.cyan||0))/300)),blue=Math.max(-1,Math.min(1,(Number(grade?.blue||0)+Number(grade?.cyan||0)+Number(grade?.magenta||0))/300-temperature));
         if(temperatureMatrix)temperatureMatrix.setAttribute('values',`${1+red*.28} 0 0 0 0 0 ${1+green*.28} 0 0 0 0 0 ${1+blue*.28} 0 0 0 0 0 1 0`);
         video.style.filter=grade?`url(#preview-temperature-filter) brightness(${1+Number(grade.brightness||0)/200}) contrast(${Number(grade.contrast??100)/100}) saturate(${Number(grade.saturation??100)/100})`:'';
         const block=document.getElementById('preview-block'),name=activeClip?.block?.name||asset(activeClip?.asset_id)?.name||'Vídeo';if(block.textContent!==name)block.textContent=name;
         syncCurrentInspectorCards();
+        syncFramingControls();
         syncTranscriptPosition();
         renderOverlays();
         renderBrolls();
@@ -787,18 +798,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         brollLayer.querySelectorAll('[data-broll-id]').forEach(node=>{node.hidden=!active.has(node.dataset.brollId);if(node.hidden&&node.tagName==='VIDEO')node.pause()})
     }
     function reframeDecisionAt(sourceId,masterMs,includeDisabled=false){
-        const all=timeline.decisions.filter(item=>item.type==='reframe'&&String(decisionSourceId(item))===String(sourceId));
-        const scoped=all.filter(item=>{const meta=item.metadata||{};return meta.segment_start_ms!==undefined&&Number(meta.segment_start_ms)<=masterMs&&masterMs<Number(meta.segment_end_ms)});
-        // A project can contain old auto-reframe ranges and newer manual
-        // ranges after several cuts. The manual decision must win; otherwise
-        // the inspector retains the slider value while playback renders the
-        // earlier automatic decision instead.
-        // Operations are append-only. A later restore-original (disabled) or
-        // manual adjustment must override an inherited decision for exactly
-        // this take, regardless of how many blade points exist.
-        return [...scoped].reverse().find(item=>item.enabled===false||Boolean((item.metadata||{}).manual_transform))
-            ||scoped.at(-1)
-            ||all.find(item=>(includeDisabled||item.enabled!==false)&&(item.metadata||{}).segment_start_ms===undefined)||null;
+        return ConnectPreviewFraming.decisionAt(timeline.decisions,sourceId,masterMs,includeDisabled);
     }
     function activeTransformScope(){
         // A blade turns each visual section into an independently editable
@@ -867,9 +867,18 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const reframe=selectedReframeDecision();if(reframe){const current=reframe.metadata?.manual_transform||{scale:1,x:0,y:0};return {kind:'video',id:reframe.id,item:reframe,values:{x:Number(current.x||0),y:Number(current.y||0),scale:Number(current.scale||1)}}}
         return null;
     }
+    function syncFramingControls(){
+        const decision=selectedReframeDecision();if(!decision)return;
+        const values={scale:1,x:0,y:0,...decision.metadata?.manual_transform};
+        list.querySelectorAll('[data-transform]').forEach(input=>{
+            const value=Number(values[input.dataset.transform]);
+            if(Number(input.value)!==value)input.value=String(value);
+        });
+    }
     function applyDirectTransform(target,values){
         if(target.kind==='broll')target.item.transform={...target.item.transform,...values};
         else {
+            const wasUsingAutomaticMaster=framingPlayback(activeClip).automatic;
             // Cards can outlive the snapshot that supplied their item. Resolve
             // the current canonical decision by source AND selected take on
             // every edit; mutating the captured object leaves renderPosition
@@ -887,18 +896,14 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             }
             current.metadata={...current.metadata,manual_transform:{...values}};current.enabled=true;
             target.item=current;
-            // A camera-selection take is composited above the active primary
-            // clip. Its transform belongs to the selected camera source, not
-            // to the underlying principal video that happens to be playing.
-            if(!inspectorSelection?.cameraSegmentId){
-                const effect=activeClip?.effects?.find(item=>item.type==='transform');
-                if(effect)Object.assign(effect,values);else if(activeClip)activeClip.effects=[...(activeClip.effects||[]),{type:'transform',...values}];
-            }
+            syncFramingControls();
+            // The scoped decision drives the optimistic preview. Do not mutate
+            // clip effects: an unsplit source clip may still back other takes.
             // The continuous master can contain an older crop and intentionally
             // ignores CSS transforms. Switch to the editable source as soon as
             // the member touches a framing control so the optimistic preview is
             // immediate and cannot snap back to stale rendered pixels.
-            if(useReviewMaster()){
+            if(useReviewMaster()||wasUsingAutomaticMaster){
                 timeline.review_master_url=null;timeline.review_master_is_edited=false;timeline.review_rendered_layers=[];timeline.review_proxy_status='SOURCE';
                 renderReviewProxyStatus();seek(globalMs,!video.paused);return;
             }
@@ -945,15 +950,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function schedulePlaybackBoundary(playerVideo,presentedTime,displayTime){
         cancelPlaybackBoundary();
         if(playerVideo!==video||playerVideo.paused||playerVideo.seeking||loading||useReviewMaster()||!activeClip)return;
-        const clip=activeClip,remaining=Number(clip.source_out_ms)-presentedTime*1000;
+        const clip=activeClip,remaining=playbackOut(clip)-presentedTime*1000;
         if(remaining<=0||remaining>frameDurationMs()*1.5)return;
         const next=nextClipAfter(clip);
-        if(next&&sourceFor(next)===sourceFor(clip)&&Math.abs(Number(next.source_in_ms)-Number(clip.source_out_ms))<1)return;
+        if(next&&sourceFor(next)===sourceFor(clip)&&Math.abs(playbackIn(next)-playbackOut(clip))<1)return;
         const delay=Math.max(0,(displayTime??performance.now())-performance.now()+remaining/playerVideo.playbackRate);
         playbackBoundary=setTimeout(()=>{
             playbackBoundary=null;
             if(playerVideo!==video||activeClip!==clip||playerVideo.paused||playerVideo.seeking||loading)return;
-            syncPlaybackPosition(playerVideo,Number(clip.source_out_ms)/1000);
+            syncPlaybackPosition(playerVideo,playbackOut(clip)/1000);
         },delay);
     }
     function stopPlaybackClock(){
@@ -980,12 +985,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 globalMs=Math.max(0,Math.min(edited??0,timeline.sequence.duration_ms));activeClip=clipAt(globalMs);
             }else{
                 const eventClip=activeClip,currentSourceMs=presentedTime*1000;
-                globalMs=Math.max(Number(eventClip.timeline_in_ms),Math.min(Number(eventClip.timeline_out_ms),Number(eventClip.timeline_in_ms)+Math.max(0,currentSourceMs-Number(eventClip.source_in_ms))));
-                if(!playerVideo.paused&&currentSourceMs>=Number(eventClip.source_out_ms)){
+                globalMs=Math.max(Number(eventClip.timeline_in_ms),Math.min(Number(eventClip.timeline_out_ms),Number(eventClip.timeline_in_ms)+Math.max(0,currentSourceMs-playbackIn(eventClip))));
+                if(!playerVideo.paused&&currentSourceMs>=playbackOut(eventClip)){
                     const next=nextClipAfter(eventClip);
-                    if(next&&sourceFor(next)===sourceFor(eventClip)&&Math.abs(Number(next.source_in_ms)-Number(eventClip.source_out_ms))<1){
+                    if(next&&sourceFor(next)===sourceFor(eventClip)&&Math.abs(playbackIn(next)-playbackOut(eventClip))<1){
                         activeClip=next;
-                        globalMs=Number(next.timeline_in_ms)+Math.max(0,currentSourceMs-Number(next.source_in_ms));
+                        globalMs=Number(next.timeline_in_ms)+Math.max(0,currentSourceMs-playbackIn(next));
                         warmNextClip(next);renderPosition();return;
                     }
                     if(next){seek(next.timeline_in_ms,true);return}
@@ -1010,7 +1015,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             // An `ended` queued by the previous take can arrive after a
             // same-source seek. Only advance when the decoder is also at the
             // end of the take that is currently active.
-            if(playerVideo.currentTime*1000<Number(activeClip.source_out_ms)-40)return;
+            if(playerVideo.currentTime*1000<playbackOut(activeClip)-40)return;
             const next=nextClipAfter(activeClip);
             if(next)seek(next.timeline_in_ms,true);else musicController.pause();
         });
@@ -1028,7 +1033,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             play.innerHTML='<i class="fas fa-play"></i>';play.setAttribute('aria-label','Reproduzir');
         }else if(video.paused){
             const clip=clipAt(globalMs),source=useReviewMaster()?timeline.review_master_url:sourceFor(clip);
-            const local=useReviewMaster()?editedToPlayback(globalMs)/1000:(Number(clip?.source_in_ms||0)+globalMs-Number(clip?.timeline_in_ms||0))/1000;
+            const local=useReviewMaster()?editedToPlayback(globalMs)/1000:(playbackIn(clip)+globalMs-Number(clip?.timeline_in_ms||0))/1000;
             if(loading||source!==video.dataset.source||Math.abs(video.currentTime-local)>frameDurationMs()/1000)seek(globalMs,true);
             else requestVideoPlay();
         }else sourcePlayer.pause();
@@ -1130,6 +1135,47 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         invalidatePreviewIndexes();
         const endpoint=kind==='broll'?`{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`:kind==='caption'?`{% url 'external_media_project_preview' project.public_id %}subtitles/${id}/`:`{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`;
         api(endpoint,{start_ms:Math.round(startMs),end_ms:Math.round(endMs),...(layer===null?{}:{layer})}).then(data=>{applyTimeline(data,false,true)});
+    }
+    function sourceTakeRange(item){return {source_id:String(item.assetId),start_ms:Number(item.masterStartMs),end_ms:Number(item.masterEndMs)}}
+    async function moveSourceTake(item,before=null){
+        await editorPersistence.flush();
+        const range=sourceTakeRange(item);
+        const data=await api('{% url "external_media_project_preview_video_move" project.public_id %}',{...range,before:before?sourceTakeRange(before):null});
+        applyTimeline(data,true,true);
+        const moved=videoSegments().find(segment=>String(segment.assetId)===range.source_id&&segment.masterStartMs===range.start_ms&&segment.masterEndMs===range.end_ms);
+        if(moved)seek(moved.start,false);
+    }
+    function makeSourceTakeDraggable(clip){
+        clip.classList.add('is-timeline-draggable');
+        clip.addEventListener('pointerdown',event=>{
+            if(event.button!==0||editTool!=='select')return;
+            const item={...clip._timeline.item},lane=clip.parentElement,duration=Number(timeline.sequence.duration_ms),startX=event.clientX;
+            const others=videoSegments().filter(segment=>!(String(segment.assetId)===String(item.assetId)&&segment.masterStartMs===item.masterStartMs&&segment.masterEndMs===item.masterEndMs));
+            let moved=false,before=null,guide=null;
+            event.preventDefault();event.stopPropagation();clip.setPointerCapture?.(event.pointerId);
+            editorPersistence.beginGesture();
+            const move=frameLatest(pointerEvent=>{
+                if(!moved&&Math.abs(pointerEvent.clientX-startX)<6)return;
+                moved=true;clip.classList.add('is-timeline-dragging');
+                if(!guide){guide=document.createElement('i');guide.className='editor-snap-guide';editorCanvas.append(guide)}
+                const scroller=editorScroller.getBoundingClientRect();
+                if(pointerEvent.clientX>scroller.right-30)editorScroller.scrollLeft+=20;
+                else if(pointerEvent.clientX<scroller.left+30)editorScroller.scrollLeft-=20;
+                const point=timelinePoint(pointerEvent,lane,duration);
+                before=others.find(segment=>point<(segment.start+segment.end)/2)||null;
+                const rect=lane.getBoundingClientRect(),boundary=before?before.start:duration;
+                guide.style.left=`${rect.left-editorCanvas.getBoundingClientRect().left+boundary/duration*rect.width}px`;
+            });
+            const finish=pointerEvent=>{
+                move.flush();clip.removeEventListener('pointermove',move);clip.removeEventListener('pointerup',finish);clip.removeEventListener('pointercancel',finish);
+                if(clip.hasPointerCapture?.(pointerEvent.pointerId))clip.releasePointerCapture(pointerEvent.pointerId);
+                guide?.remove();clip.classList.remove('is-timeline-dragging');editorPersistence.endGesture();
+                if(!moved||pointerEvent.type==='pointercancel')return;
+                clip.dataset.timelineDrag='1';
+                moveSourceTake(item,before).catch(error=>alert(error.message));
+            };
+            clip.addEventListener('pointermove',move);clip.addEventListener('pointerup',finish);clip.addEventListener('pointercancel',finish);
+        });
     }
     function makeMusicTimelineItemDraggable(clip,lane,item,duration){
         clip.classList.add('is-timeline-draggable');
@@ -1428,7 +1474,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                     if(!isCaption)seek(item.start,!video.paused);
                 };
                 if(isCaption)clip.ondblclick=event=>{event.preventDefault();event.stopPropagation();const cue=timeline.captions.find(value=>value.id===item.id);if(cue)openSubtitleEditor(cue)};
-                if(created){if(selectKind==='music')makeMusicTimelineItemDraggable(clip,lane,item,duration);else makeTimelineItemDraggable(clip,lane,item,selectKind,duration)}
+                if(isSourceSegment)clip.title+=' · arraste para mover vídeo e áudio juntos';
+                if(created){if(isSourceSegment)makeSourceTakeDraggable(clip);else if(selectKind==='music')makeMusicTimelineItemDraggable(clip,lane,item,duration);else makeTimelineItemDraggable(clip,lane,item,selectKind,duration)}
                 return clip;
             });
             reconcileChildren(lane,nextClips);
@@ -1648,6 +1695,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         inspectorHeader();
         list.innerHTML=''; const flagged=new Set(timeline.review_items||[]); const pendingNoise=timeline.decisions.filter(item=>item.type==='audio_noise_reduction'&&!item.enabled);const applyAllNoise=document.getElementById('apply-all-noise');const canApplyNoise=!inspectorSelection||inspectorSelection.kind==='audio';applyAllNoise.classList.toggle('hidden',!pendingNoise.length||!canApplyNoise);applyAllNoise.disabled=!pendingNoise.length||!canApplyNoise;
         const isVideoSelection=inspectorSelection?.kind==='video', isAudioSelection=inspectorSelection?.kind==='audio';
+        if((isVideoSelection||isAudioSelection)&&selectedSegment&&!selectedSegment.isCamera){
+            const item={...selectedSegment},card=document.createElement('article');card.className='preview-decision';card.dataset.videoOrder='true';
+            card.innerHTML='<span class="preview-pill">Posição na timeline</span><p class="text-xs text-gray-400 mt-3">Arraste o trecho na faixa de vídeo ou áudio para mudar a ordem. Vídeo, áudio e legendas acompanham o trecho.</p><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-move-start>Mover para o início</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-move-end>Mover para o final</button></div>';
+            card.querySelector('[data-move-start]').onclick=()=>moveSourceTake(item,videoSegments()[0]).catch(error=>alert(error.message));
+            card.querySelector('[data-move-end]').onclick=()=>moveSourceTake(item).catch(error=>alert(error.message));
+            list.append(card);
+        }
         const decisions=inspectorSelection
             ? (isVideoSelection ? timeline.decisions.filter(item=>item.type==='remove_segment'&&decisionSourceId(item)===inspectorSelection.id) : [])
             : timeline.decisions.filter(item=>item.type==='remove_segment'&&(flagged.has(item.id)||item.origin==='USER'));
@@ -1670,7 +1724,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const reframeDecisions=inspectorSelection
             ? (isVideoSelection ? [selectedReframeDecision()].filter(Boolean) : [])
             : timeline.decisions.filter(item=>item.type==='reframe'&&flagged.has(item.id));
-        reframeDecisions.forEach(item=>{const current=item.metadata?.manual_transform||{scale:1,x:0,y:0},isOriginal=item.enabled===false,card=document.createElement('article');card.className='preview-decision';card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Enquadramento</span><strong class="block mt-2">${isOriginal?'Enquadramento original':'Ajuste fino'}</strong></div><i class="fas fa-crop-simple text-red-600"></i></div>${isOriginal?'<p class="text-xs text-gray-400 mt-2">Sem o zoom automático para este take. Ajuste manualmente ou restaure a IA.</p>':''}<label class="block text-xs font-bold text-gray-500 mt-3">Zoom <input class="preview-range mt-1" data-transform="scale" type="range" min="1" max="2" step=".01" value="${current.scale}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Horizontal <input class="preview-range mt-1" data-transform="x" type="range" min="-1" max="1" step=".01" value="${current.x}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Vertical <input class="preview-range mt-1" data-transform="y" type="range" min="-1" max="1" step=".01" value="${current.y}"></label><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-reframe-original ${isOriginal?'disabled':''}>Voltar ao original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-reframe-auto ${isOriginal?'':'disabled'}>Restaurar IA</button></div><small class="text-gray-400 block mt-2" data-saved>Salvo</small>`;const queueTransformSave=()=>{const values=Object.fromEntries([...card.querySelectorAll('[data-transform]')].map(field=>[field.dataset.transform,Number(field.value)])),scope=focusSelectedTakeForTransform();applyDirectTransform({kind:'video',item,values},values);card.querySelector('[data-saved]').textContent='Salvando…';const version=(card._transformSaveVersion||0)+1;card._transformSaveVersion=version;editorPersistence.schedule(`transform:${item.id}:${scope.segment_start_ms}:${scope.segment_end_ms}`,()=>saveTransform(item.id,values,card,version,scope),220)};card.querySelectorAll('[data-transform]').forEach(input=>{input.oninput=queueTransformSave;input.onchange=queueTransformSave});card.querySelector('[data-reframe-original]').onclick=()=>saveTransform(item.id,{restore_original:true},card,null,focusSelectedTakeForTransform());card.querySelector('[data-reframe-auto]').onclick=()=>saveTransform(item.id,{restore_auto:true},card,null,focusSelectedTakeForTransform());list.append(card)});
+        reframeDecisions.forEach(item=>{const current=item.metadata?.manual_transform||{scale:1,x:0,y:0},isOriginal=item.enabled===false,card=document.createElement('article');card.className='preview-decision';card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Enquadramento</span><strong class="block mt-2">${isOriginal?'Enquadramento original':'Ajuste fino'}</strong></div><i class="fas fa-crop-simple text-red-600"></i></div>${isOriginal?'<p class="text-xs text-gray-400 mt-2">Sem o zoom automático para este take. Ajuste manualmente ou restaure a IA.</p>':''}<label class="block text-xs font-bold text-gray-500 mt-3">Zoom <input class="preview-range mt-1" data-transform="scale" type="range" min="1" max="2" step=".01" value="${current.scale}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Horizontal <input class="preview-range mt-1" data-transform="x" type="range" min="-1" max="1" step=".01" value="${current.x}"></label><label class="block text-xs font-bold text-gray-500 mt-2">Vertical <input class="preview-range mt-1" data-transform="y" type="range" min="-1" max="1" step=".01" value="${current.y}"></label><div class="flex gap-2 mt-3"><button type="button" class="media-btn media-muted !py-2 flex-1" data-reframe-original ${isOriginal?'disabled':''}>Voltar ao original</button><button type="button" class="media-btn media-muted !py-2 flex-1" data-reframe-auto ${isOriginal?'':'disabled'}>Restaurar IA</button></div><small class="text-gray-400 block mt-2" data-saved>Salvo</small>`;const queueTransformSave=event=>{const latest=selectedReframeDecision()||item,values={scale:1,x:0,y:0,...latest.metadata?.manual_transform,[event.target.dataset.transform]:Number(event.target.value)},scope=focusSelectedTakeForTransform();applyDirectTransform({kind:'video',item,values},values);card.querySelector('[data-saved]').textContent='Salvando…';const version=(card._transformSaveVersion||0)+1;card._transformSaveVersion=version;editorPersistence.schedule(`transform:${item.id}:${scope.segment_start_ms}:${scope.segment_end_ms}`,()=>saveTransform(item.id,values,card,version,scope),220)};card.querySelectorAll('[data-transform]').forEach(input=>{input.oninput=queueTransformSave;input.onchange=queueTransformSave});card.querySelector('[data-reframe-original]').onclick=()=>saveTransform(item.id,{restore_original:true},card,null,focusSelectedTakeForTransform());card.querySelector('[data-reframe-auto]').onclick=()=>saveTransform(item.id,{restore_auto:true},card,null,focusSelectedTakeForTransform());list.append(card)});
         if(isVideoSelection){const sourceId=String(inspectorSelection.id),defaults={brightness:0,contrast:100,saturation:100,temperature:0,red:0,yellow:0,green:0,cyan:0,blue:0,magenta:0},current={...defaults,...([...timeline.decisions||[]].reverse().find(item=>item.type==='color_adjustment'&&item.enabled!==false&&String(item.source_id)===sourceId)?.metadata?.adjustment||{})},card=document.createElement('article'),basic=[['Brilho','brightness',-100,100],['Contraste','contrast',0,200],['Saturação','saturation',0,200],['Temperatura','temperature',-100,100]],mixer=[['Vermelho','red'],['Amarelo','yellow'],['Verde','green'],['Ciano','cyan'],['Azul','blue'],['Magenta','magenta']];card.className='preview-decision';const slider=([label,key,min=-100,max=100])=>`<label class="block text-xs font-bold text-gray-500 mt-3">${label}<input data-color="${key}" class="preview-range mt-1" type="range" min="${min}" max="${max}" step="1" value="${current[key]}"></label>`;card.innerHTML=`<div class="flex items-center justify-between"><div><span class="preview-pill">Cor</span><strong class="block mt-2">Correção básica</strong><small class="text-gray-500 block mt-1">Aplicada somente neste take e no render final.</small></div><i class="fas fa-sliders text-amber-400"></i></div>${basic.map(slider).join('')}<div class="mt-5 pt-4 border-t border-slate-700"><strong class="text-sm">Misturador de cores</strong><small class="block text-xs text-gray-400 mt-1">Ajuste a presença de cada família de cor.</small>${mixer.map(slider).join('')}</div><div class="flex justify-between items-center mt-3"><button type="button" class="text-xs font-bold text-gray-400" data-reset-color>Restaurar cor</button><small class="text-gray-400" data-color-saved>Salvo</small></div>`;const valuesFromCard=()=>Object.fromEntries([...card.querySelectorAll('[data-color]')].map(field=>[field.dataset.color,Number(field.value)]));const preview=values=>{let decision=[...timeline.decisions].reverse().find(item=>item.type==='color_adjustment'&&String(item.source_id)===sourceId);if(!decision){decision={id:`local-color-${sourceId}`,type:'color_adjustment',source_id:sourceId,metadata:{}};timeline.decisions.push(decision)}decision.metadata={...decision.metadata,adjustment:{...defaults,...values}};for(const sourceClip of timeline.clips.filter(item=>String(item.asset_id)===sourceId))sourceClip.color_adjustment={...defaults,...values};const wasUsingMaster=useReviewMaster(),clip=(timeline.clips||[]).find(item=>String(item.asset_id)===sourceId&&globalMs>=item.timeline_in_ms&&globalMs<item.timeline_out_ms);if(clip){clip.color_adjustment={...defaults,...values};activeClip=clip;if(wasUsingMaster){timeline.review_master_url=null;seek(globalMs,!video.paused)}else requestPreviewRender()}else requestPreviewRender()};const save=()=>{const values=valuesFromCard(),saved=card.querySelector('[data-color-saved]');preview(values);saved.textContent='Salvando…';editorPersistence.schedule(`color:${sourceId}`,async()=>{try{applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}colors/${sourceId}/`,values),false,true);saved.textContent='Salvo'}catch(error){saved.textContent=error.message}},220)};card.querySelectorAll('[data-color]').forEach(input=>input.oninput=save);card.querySelector('[data-reset-color]').onclick=async()=>{preview(defaults);try{applyTimeline(await api(`{% url 'external_media_project_preview' project.public_id %}colors/${sourceId}/`,{reset:true}),true,true)}catch(error){alert(error.message)}};list.append(card)}
         const colorSaved=list.querySelector('[data-color-saved]'),colorCard=colorSaved?.closest('.preview-decision');
         if(colorCard&&!colorCard.dataset.colorClipboard){colorCard.dataset.colorClipboard='true';const actions=document.createElement('div');actions.className='grid grid-cols-2 gap-2 mt-3';actions.innerHTML=`<button type="button" class="media-btn media-muted !py-2" data-copy-color><i class="fas fa-copy"></i> Copiar cor</button><button type="button" class="media-btn media-muted !py-2" data-paste-color ${colorSettingsClipboard?'':'disabled'}><i class="fas fa-paste"></i> Colar cor</button>`;colorSaved.closest('div').before(actions);const copy=actions.querySelector('[data-copy-color]'),paste=actions.querySelector('[data-paste-color]');copy.onclick=()=>{colorSettingsClipboard=Object.fromEntries([...colorCard.querySelectorAll('[data-color]')].map(field=>[field.dataset.color,Number(field.value)]));try{sessionStorage.setItem(COLOR_CLIPBOARD_KEY,JSON.stringify(colorSettingsClipboard))}catch(_){}paste.disabled=false;copy.innerHTML='<i class="fas fa-check"></i> Cor copiada'};paste.onclick=()=>{if(!colorSettingsClipboard)return;colorCard.querySelectorAll('[data-color]').forEach(field=>{if(Object.hasOwn(colorSettingsClipboard,field.dataset.color))field.value=colorSettingsClipboard[field.dataset.color]});const first=colorCard.querySelector('[data-color]');first?.dispatchEvent(new Event('input',{bubbles:true}));paste.innerHTML='<i class="fas fa-check"></i> Cor colada'}}
@@ -1765,8 +1819,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     }
     function renderAdjustmentTabs(){
         list.querySelector('.adjustment-tabs')?.remove();
-        const labels={camera:'Alternância',framing:'Enquadramento',color:'Cor',cuts:'Cortes',audio:'Áudio',elements:'Elementos',captions:'Legendas',details:'Detalhes'};
-        const categoryFor=card=>card.classList.contains('preview-camera-info')?'camera':card.querySelector('[data-transform]')?'framing':card.querySelector('[data-color]')?'color':card.querySelector('[data-decision]')?'cuts':card.querySelector('[data-music-volume],audio,[data-play]')?'audio':card.querySelector('[data-broll-transform],[data-overlay-content]')?'elements':card.classList.contains('transcript-card')?'captions':'details';
+        const labels={position:'Posição',camera:'Alternância',framing:'Enquadramento',color:'Cor',cuts:'Cortes',audio:'Áudio',elements:'Elementos',captions:'Legendas',details:'Detalhes'};
+        const categoryFor=card=>card.dataset.videoOrder?'position':card.classList.contains('preview-camera-info')?'camera':card.querySelector('[data-transform]')?'framing':card.querySelector('[data-color]')?'color':card.querySelector('[data-decision]')?'cuts':card.querySelector('[data-music-volume],audio,[data-play]')?'audio':card.querySelector('[data-broll-transform],[data-overlay-content]')?'elements':card.classList.contains('transcript-card')?'captions':'details';
         const cards=[...list.querySelectorAll('.preview-decision')];
         if(!cards.length)return;
         const categories=[];
@@ -1784,7 +1838,6 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function openSubtitleEditor(cue){editingSubtitleCue=cue;document.getElementById('subtitle-edit-language').textContent=String(cue.language||'').toUpperCase();document.getElementById('subtitle-edit-time').textContent=`${fmt(cue.start_ms)} — ${fmt(cue.end_ms)}`;subtitleEditInput.value=cue.text;subtitleEditModal.classList.add('is-open');requestAnimationFrame(()=>subtitleEditInput.focus())}
     async function saveOpenSubtitleEditor(){if(!editingSubtitleCue)return;const text=subtitleEditInput.value.trim();if(!text){alert('A legenda não pode ficar vazia.');return}const localCue=timeline.captions.find(cue=>String(cue.id)===String(editingSubtitleCue.id));if(localCue)localCue.text=text;editableLocalPreview();renderPosition();saveSubtitleEdit.disabled=true;try{const data=await api(`{% url 'external_media_project_preview' project.public_id %}subtitles/${editingSubtitleCue.id}/`,{text});applyTimeline(data);closeSubtitleEditor()}catch(error){alert(error.message)}finally{saveSubtitleEdit.disabled=false}}
     async function deleteCaption(id){
-        if(!confirm('Remover esta legenda? Você poderá desfazer a ação.'))return;
         const data=await api(`{% url 'external_media_project_preview' project.public_id %}subtitles/${id}/`,{delete:true});
         inspectorSelection=null;
         applyTimeline(data,true,false);
