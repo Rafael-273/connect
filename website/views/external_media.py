@@ -1091,12 +1091,28 @@ class ExternalMediaProjectCustomBlockReorderView(ExternalMediaRequiredMixin, Vie
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
         item_ids = request.POST.getlist('item_ids[]')
-        template_ids = {f't-{pk}' for pk in project.template_version.blocks.values_list('pk', flat=True)}
-        custom_ids = {f'c-{pk}' for pk in project.custom_blocks.values_list('pk', flat=True)}
-        expected = template_ids | custom_ids
-        if set(item_ids) != expected or len(item_ids) != len(expected):
+        template_blocks = list(project.template_version.blocks.all().order_by('order', 'pk'))
+        all_ids = [f't-{block.pk}' for block in template_blocks]
+        all_ids.extend(f'c-{pk}' for pk in project.custom_blocks.values_list('pk', flat=True))
+        expected = set(all_ids)
+        # Match the detail page: scenes with an available default video are hidden.
+        hidden_ids = {
+            f't-{block.pk}' for block in template_blocks
+            if ProjectService.file_exists(block.default_video)
+        }
+        submitted = set(item_ids)
+        if len(item_ids) != len(submitted) or submitted not in (expected, expected - hidden_ids):
             return JsonResponse({'detail': 'Ordem de blocos inválida.'}, status=400)
         configuration = dict(project.configuration or {})
+        if submitted != expected:
+            # Reorder visible scenes in their existing slots, keeping automatic
+            # scenes in place in the full sequence consumed by the renderer.
+            current_order = dict.fromkeys(
+                key for key in configuration.get('block_order', []) if key in expected
+            )
+            current_order.update(dict.fromkeys(all_ids))
+            visible_order = iter(item_ids)
+            item_ids = [key if key in hidden_ids else next(visible_order) for key in current_order]
         configuration['block_order'] = item_ids
         project.configuration = configuration
         project.save(update_fields=['configuration', 'update_at'])

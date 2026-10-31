@@ -1068,6 +1068,115 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             name='Projeto de agosto', template_version=self.version, created_by=self.member,
         )
 
+    def make_default_scene(self, key, order):
+        block = MediaTemplateBlock.objects.create(
+            version=self.version, key=key, name=key, order=order,
+            default_video=SimpleUploadedFile(f'{key}.mp4', b'default-video'),
+        )
+        self.addCleanup(block.default_video.delete, save=False)
+        return block
+
+    def test_reorder_visible_scenes_preserves_hidden_default_scenes(self):
+        project = self.make_project()
+        opening = self.make_default_scene('opening', 0)
+        closing = self.make_default_scene('closing', 2)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        template_media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='template.mp4',
+            file=SimpleUploadedFile('template.mp4', b'template'),
+        )
+        custom_media = ProjectBlockMedia.objects.create(
+            project=project, custom_block=custom, position=1, original_filename='custom.mp4',
+            file=SimpleUploadedFile('custom.mp4', b'custom'),
+        )
+        original_order = [f't-{opening.pk}', f't-{self.block.pk}', f'c-{custom.pk}', f't-{closing.pk}']
+        project.configuration = {'block_order': original_order, 'other_setting': True}
+        project.save(update_fields=['configuration', 'update_at'])
+        detail_url = reverse('external_media_project_detail', args=[project.public_id])
+        page = self.client.get(detail_url)
+        self.assertEqual([item['definition'].pk for item in page.context['blocks']], [self.block.pk, custom.pk])
+
+        response = self.client.post(
+            reverse('external_media_project_custom_block_reorder', args=[project.public_id]),
+            {'item_ids[]': [f'c-{custom.pk}', f't-{self.block.pk}']},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        expected = [f't-{opening.pk}', f'c-{custom.pk}', f't-{self.block.pk}', f't-{closing.pk}']
+        self.assertEqual(project.configuration, {'block_order': expected, 'other_setting': True})
+        page = self.client.get(detail_url)
+        self.assertEqual([item['definition'].pk for item in page.context['blocks']], [custom.pk, self.block.pk])
+        manifest = SourceManifestBuilder.build(project)
+        self.assertEqual(
+            [item['id'] for item in manifest['sources']],
+            [f'template-default-{opening.pk}', f'project-media-{custom_media.pk}',
+             f'project-media-{template_media.pk}', f'template-default-{closing.pk}'],
+        )
+
+    def test_reorder_visible_scenes_without_previous_order_keeps_default_slots(self):
+        project = self.make_project()
+        opening = self.make_default_scene('opening', 0)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+
+        response = self.client.post(
+            reverse('external_media_project_custom_block_reorder', args=[project.public_id]),
+            {'item_ids[]': [f'c-{custom.pk}', f't-{self.block.pk}']},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], [f't-{opening.pk}', f'c-{custom.pk}', f't-{self.block.pk}'])
+
+    def test_reorder_still_accepts_the_complete_scene_list(self):
+        project = self.make_project()
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        order = [f'c-{custom.pk}', f't-{self.block.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+        opening = self.make_default_scene('opening', 0)
+        order = [f't-{self.block.pk}', f't-{opening.pk}', f'c-{custom.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+    def test_reorder_requires_default_scenes_whose_files_are_missing(self):
+        project = self.make_project()
+        missing = MediaTemplateBlock.objects.create(
+            version=self.version, key='missing', name='Missing', order=2,
+            default_video='missing/default.mp4',
+        )
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        response = self.client.post(url, {'item_ids[]': [f't-{self.block.pk}']})
+        self.assertEqual(response.status_code, 400)
+        order = [f't-{missing.pk}', f't-{self.block.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+    def test_reorder_rejects_invalid_or_incomplete_visible_scene_lists(self):
+        project = self.make_project()
+        self.make_default_scene('opening', 0)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        invalid_orders = [
+            [], [f'c-{custom.pk}'], [f't-{self.block.pk}'],
+            [f't-{self.block.pk}', f'c-{custom.pk}', f'c-{custom.pk}'],
+            [f't-{self.block.pk}', f'c-{custom.pk}', 'c-999999'],
+        ]
+        for order in invalid_orders:
+            with self.subTest(order=order):
+                response = self.client.post(url, {'item_ids[]': order})
+                self.assertEqual(response.status_code, 400)
+                project.refresh_from_db()
+                self.assertNotIn('block_order', project.configuration or {})
+
     def test_source_manifest_resolves_custom_blocks_and_configured_order(self):
         project = self.make_project()
         custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=2)
