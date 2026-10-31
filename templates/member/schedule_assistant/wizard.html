@@ -1,0 +1,66 @@
+{% extends 'member/ministry_organization/base.html' %}
+{% load static %}
+{% block title %}Assistente de Escalas — Mídia{% endblock %}
+{% block head %}{{ block.super }}<link rel="stylesheet" href="{% static 'schedule_assistant.css' %}"><link rel="stylesheet" href="{% static 'schedule_availability.css' %}"><link rel="stylesheet" href="{% static 'schedule_generation.css' %}"><style>.ministry-organization{padding-bottom:2rem!important}</style>{% endblock %}
+{% block org_header %}
+{% url 'media_schedule_list' as back %}
+<section class="relative overflow-hidden px-4 py-4 border-b" style="border-color: rgba(201, 9, 5, 0.1);">
+    <div class="relative z-10 p-2 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-4 min-w-0">
+            <a href="{{ back }}" class="w-10 h-10 rounded-xl flex items-center justify-center border-2 transition-all hover:-translate-x-1 flex-shrink-0" style="background-color:white;border-color:rgba(201,9,5,.15);color:#C90905;" aria-label="Voltar às escalas"><i class="fas fa-arrow-left"></i></a>
+            <div class="min-w-0">
+                <p class="text-xs font-extrabold uppercase tracking-wider mb-1" style="color:#C90905;">Etapa 1 · Planejamento mensal</p>
+                <h1 class="text-2xl font-black text-gray-900">{{ initial.period_label }}</h1>
+                <p class="text-sm text-gray-600 font-medium mt-0.5">Organize cada culto, suas equipes e atividades.</p>
+            </div>
+        </div>
+        <button type="button" class="org-btn-primary flex-shrink-0" id="sa-add"><i class="fas fa-plus" aria-hidden="true"></i><span class="hidden sm:inline">Adicionar ocorrência</span><span class="sm:hidden sr-only">Adicionar ocorrência</span></button>
+    </div>
+</section>
+{% endblock %}
+{% block org_tabs %}{% endblock %}
+{% block org_bottom_nav %}{% endblock %}
+{% block organization_content %}
+<div id="schedule-assistant" data-api-url="{% url 'media_schedule_assistant_api' state.pk %}" data-list-url="{% url 'media_schedule_list' %}">
+    <form hidden id="assistant-csrf">{% csrf_token %}</form>
+    <span id="sa-save-status" class="sr-only" role="status" aria-live="polite">Planejamento salvo</span>
+    <nav class="sa-steps" aria-label="Etapas do assistente">
+        <button type="button" data-step="1"><span>1</span><strong>Planejamento mensal</strong></button>
+        <button type="button" data-step="2"><span>2</span><strong>Disponibilidades</strong></button>
+        <button type="button" data-step="3"><span>3</span><strong>Gerar e revisar escala</strong></button>
+    </nav>
+    <div id="sa-error" role="alert" hidden><p></p><button type="button" id="sa-reload" hidden>Recarregar rascunho</button><button type="button" id="sa-retry" hidden>Tentar salvar novamente</button></div>
+    <div id="sa-review" class="sa-notice" hidden></div>
+    <div id="sa-planning">
+        <div class="sa-layout">
+            <section class="sa-calendar-section" aria-label="Calendário mensal">
+                <div class="sa-calendar-top"><span id="sa-summary"></span><div class="sa-view-switch" role="group" aria-label="Modo de visualização"><button type="button" data-view="calendar" aria-pressed="true">Calendário</button><button type="button" data-view="list" aria-pressed="false">Lista</button></div></div>
+                <div id="sa-legend" aria-label="Legenda das equipes"></div>
+                <div id="sa-weekdays" class="sa-weekdays" aria-hidden="true"><span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span></div>
+                <div id="sa-calendar" aria-label="Ocorrências do mês"></div>
+                <div id="sa-agenda-list" hidden></div>
+                <div class="sa-calendar-foot">As alterações deste planejamento valem somente para este mês.</div>
+            </section>
+        </div>
+        <dialog class="sa-editor-dialog" id="sa-editor-dialog" aria-label="Detalhes da ocorrência">
+            <aside class="sa-editor" id="sa-editor"></aside>
+        </dialog>
+    </div>
+    {% include 'member/schedule_assistant/availability.html' %}
+    {% include 'member/schedule_assistant/generation.html' %}
+    <div class="sa-bottom"><div class="flex items-center gap-3"><a href="{% url 'media_schedule_list' %}" class="org-btn-secondary">Voltar às escalas</a><button type="button" class="sa-text-button" id="sa-discard">Descartar rascunho</button></div><div><button type="button" class="org-btn-secondary" id="sa-prev">Etapa anterior</button><button type="button" class="org-btn-primary" id="sa-next">Próxima etapa</button></div></div>
+    <dialog id="sa-add-dialog" aria-labelledby="sa-add-title">
+        <div class="sa-dialog-heading"><h2 id="sa-add-title">Adicionar ocorrência</h2><button type="button" data-close-dialog aria-label="Fechar">×</button></div>
+        <div class="sa-dialog-body">
+            <form id="sa-source-form" class="sa-stack"><h3>Da agenda da igreja</h3><label for="sa-source">Culto ou evento deste mês</label><select id="sa-source" required></select><button type="submit" class="org-btn-primary">Adicionar ao planejamento</button></form>
+            <div class="sa-divider"></div>
+            <form id="sa-manual-form" class="sa-stack"><h3>Culto extraordinário ou ocorrência adicional</h3><p>Inclua somente neste planejamento, sem criar outro evento na agenda.</p><label for="sa-manual-event">Vincular a um evento existente (opcional)</label><select id="sa-manual-event" name="event_id"></select><label for="sa-manual-name">Nome</label><input id="sa-manual-name" name="name" required maxlength="255"><div class="sa-form-pair"><div><label for="sa-manual-date">Data</label><input id="sa-manual-date" name="date" type="date" required></div><div><label for="sa-manual-time">Horário</label><input id="sa-manual-time" name="time" type="time" required></div></div><label for="sa-manual-notes">Observações</label><textarea id="sa-manual-notes" name="notes" maxlength="5000" rows="2"></textarea><button type="submit" class="org-btn-primary">Adicionar ocorrência adicional</button></form>
+        </div>
+    </dialog>
+    <dialog id="sa-discard-dialog" aria-labelledby="sa-discard-title"><div class="sa-dialog-body sa-stack"><h2 id="sa-discard-title">Descartar este rascunho?</h2><p>O planejamento será retirado das escalas. Os eventos originais da agenda e as configurações das equipes serão preservados.</p><div class="sa-dialog-actions"><button type="button" data-close-dialog class="org-btn-secondary">Continuar planejando</button><button type="button" id="sa-confirm-discard" class="sa-danger-button">Descartar rascunho</button></div></div></dialog>
+</div>
+{{ initial|json_script:'schedule-assistant-data' }}
+<script src="{% static 'schedule_availability.js' %}" defer></script>
+<script src="{% static 'schedule_generation.js' %}" defer></script>
+<script src="{% static 'schedule_assistant.js' %}" defer></script>
+{% endblock %}

@@ -40,6 +40,6 @@
         {% block organization_content %}{% endblock %}
     </main>
 </div>
-{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+{% block org_bottom_nav %}{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}{% endblock %}
 {% block org_modals %}{% endblock %}
 {% endblock %}

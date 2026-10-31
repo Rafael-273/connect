@@ -1,0 +1,48 @@
+<section class="team-detail-section">
+    <div class="team-detail-section-head">
+        <h2 class="team-detail-section-title">Atividades da equipe</h2>
+        <button type="button" class="org-btn-secondary" data-team-default-modal
+                data-modal-url="{% url 'media_team_activity_create' ministry.pk team.pk %}">Nova atividade</button>
+    </div>
+    <p class="text-sm text-gray-600 mb-3">Responsabilidades compartilhadas pela equipe, sem vagas individuais por atividade.</p>
+    <div class="team-detail-card p-3"><div class="team-activity-list">
+        {% for activity in team_activities %}
+        <div class="team-activity-row">
+            <span class="team-activity-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
+            <div class="team-default-copy"><strong>{{ activity.name }}{% if not activity.is_active %} <span class="text-red-600">· Inativa</span>{% endif %}</strong>
+                <p>{% if activity.description %}{{ activity.description }}{% else %}Responsabilidade compartilhada da equipe{% endif %}</p></div>
+            <button type="button" class="org-btn-secondary team-default-edit" data-team-default-modal
+                    data-modal-url="{% url 'media_team_activity_edit' ministry.pk team.pk activity.pk %}" aria-label="Editar {{ activity.name }}" title="Editar"><i class="fas fa-pen text-xs" aria-hidden="true"></i></button>
+        </div>
+        {% empty %}<p class="text-sm text-gray-500 p-3">Nenhuma atividade cadastrada.</p>{% endfor %}
+    </div>
+    </div>
+</section>
+<section class="team-detail-section">
+    <div class="team-detail-section-head">
+        <h2 class="team-detail-section-title">Cultos e atuações</h2>
+        <button type="button" class="org-btn-secondary" data-team-default-modal
+                data-modal-url="{% url 'media_team_service_create' ministry.pk team.pk %}">Nova atuação</button>
+    </div>
+    <div class="team-detail-card p-3"><div class="team-service-list">
+        {% for service in team_services %}
+        <div class="team-service-row">
+            <span class="team-service-time" aria-hidden="true"><i class="far fa-clock"></i>{{ service.service_time|time:"H:i" }}</span>
+            <div class="team-default-copy"><strong>{{ service.service_label }}{% if not service.is_active %} <span class="text-red-600">· Inativa</span>{% endif %}</strong>
+                {% if not service.source_available %}<p class="text-red-700">Culto removido ou sem horário. Revise a atuação.</p>{% else %}<p>{{ service.member_count }} integrante{{ service.member_count|pluralize }} por atuação</p>{% endif %}
+                <div class="team-activity-pills">{% for link in service.activity_links.all %}<span class="team-activity-pill">{{ link.activity.name }}{% if not link.activity.is_active %} · inativa{% endif %}</span>{% empty %}<span class="team-activity-pill">Sem atividades</span>{% endfor %}</div>
+            </div>
+            <button type="button" class="org-btn-secondary team-default-edit" data-team-default-modal
+                    data-modal-url="{% url 'media_team_service_edit' ministry.pk team.pk service.pk %}" aria-label="Editar {{ service.service_label }}" title="Editar"><i class="fas fa-pen text-xs" aria-hidden="true"></i></button>
+        </div>
+        {% empty %}<p class="text-sm text-gray-500 p-3">Nenhuma atuação cadastrada.</p>{% endfor %}
+    </div>
+    </div>
+</section>
+
+<div id="team-default-modal" class="org-team-modal demands-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="team-default-modal-title">
+    <div class="demands-modal-backdrop" data-team-modal-close></div>
+    <div class="demands-modal-card">
+        <div id="team-default-modal-content"></div>
+    </div>
+</div>

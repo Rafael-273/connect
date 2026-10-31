@@ -1,0 +1,37 @@
+<section id="sa-availability" hidden aria-labelledby="av-title">
+    <div class="sa-month-heading">
+        <div><p class="sa-eyebrow">Etapa 2 · Disponibilidades</p><h2 id="av-title">Quando cada pessoa pode servir?</h2><p>Cadastre as informações recebidas pelo WhatsApp, usando os integrantes das equipes.</p></div>
+    </div>
+    <div class="av-layout">
+        <aside class="av-roster" aria-label="Selecionar integrante">
+            <label for="av-team">Equipe da Mídia</label><select id="av-team"></select>
+            <label for="av-search">Buscar integrante da equipe</label><input type="search" id="av-search" placeholder="Nome do integrante" autocomplete="off">
+            <p id="av-roster-count" class="av-muted" aria-live="polite"></p>
+            <div id="av-members" class="av-members"></div>
+        </aside>
+    </div>
+    <dialog id="av-editor-dialog" class="av-editor-dialog" aria-labelledby="av-person-name">
+        <section class="av-editor" aria-label="Disponibilidade do integrante">
+            <div id="av-empty" class="sa-empty"><i class="fas fa-user-clock" aria-hidden="true"></i><h3>Selecione um integrante</h3><p>As ocorrências da equipe aparecerão aqui, com as informações já cadastradas.</p></div>
+            <form id="av-form" hidden>
+                <fieldset id="av-form-fields">
+                    <header class="av-person"><div><h3 id="av-person-name"></h3><p id="av-experience" class="av-muted"></p><p id="av-other-teams" class="av-muted"></p></div><div class="av-person-actions"><span id="av-record-status" class="av-badge"></span><button type="button" id="av-close-dialog" class="sa-editor-close" aria-label="Fechar disponibilidade">×</button></div></header>
+                    <div id="av-review" class="sa-notice" hidden><p>O planejamento mudou. As informações ainda válidas foram preservadas; revise as ocorrências sinalizadas.</p><label class="av-check"><input type="checkbox" id="av-confirm-review">Confirmo que revisei as ocorrências e os horários atuais.</label></div>
+                    <fieldset class="av-modes"><legend>Como esta pessoa informou a disponibilidade?</legend>
+                        <label><input type="radio" name="availability-mode" value="all" required><span><strong>Disponível em todas as datas</strong><small>Pode servir em qualquer ocorrência desta equipe no mês.</small></span></label>
+                        <label><input type="radio" name="availability-mode" value="only" required><span><strong>Disponível somente nestas datas</strong><small>Marque as ocorrências em que pode servir.</small></span></label>
+                        <label><input type="radio" name="availability-mode" value="except" required><span><strong>Disponível em todas, exceto nestas datas</strong><small>Marque as ocorrências em que não pode servir.</small></span></label>
+                    </fieldset>
+                    <div class="av-calendar-heading"><h4>Ocorrências da equipe</h4><div class="av-legend"><span class="av-available">● Disponível</span><span class="av-unavailable">● Indisponível</span><span class="av-unknown">● Não informado</span></div></div>
+                    <p id="av-selection-help" class="av-muted"></p>
+                    <div id="av-shortcuts" class="av-shortcuts"></div>
+                    <div id="av-dates" class="av-dates"></div>
+                    <p id="av-removed" class="av-muted" hidden></p>
+                    <label for="av-notes" class="av-notes-label">Observações da secretaria (opcional)</label><textarea id="av-notes" rows="2" maxlength="5000" placeholder="Detalhes informados pela pessoa"></textarea>
+                    <div class="av-preview" aria-live="polite"><strong>Resumo antes de salvar</strong><p id="av-preview"></p><p id="av-preview-review" class="av-muted" hidden>Ao salvar, você confirmará o modo escolhido para as ocorrências atuais, incluindo as que precisam de revisão.</p></div>
+                    <div class="av-actions"><span id="av-feedback" role="status" aria-live="polite"></span><button type="button" id="av-clear" class="sa-text-button" hidden>Marcar como não informado</button><button type="submit" id="av-save" class="org-btn-primary">Salvar disponibilidade</button></div>
+                </fieldset>
+            </form>
+        </section>
+    </dialog>
+</section>

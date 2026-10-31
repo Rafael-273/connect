@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from datetime import datetime
 from calendar import monthrange
 from ._base import BaseModel
+from simple_history.models import HistoricalRecords
 
 
 class Team(BaseModel):
@@ -438,6 +439,17 @@ class ScaleDivision(BaseModel):
 
 class DivisionMember(BaseModel):
     """Atribuição de um membro a uma divisão em um dia específico de escala."""
+
+    history = HistoricalRecords()
+    occurrence_team = models.ForeignKey(
+        'ScheduleOccurrenceTeam', on_delete=models.DO_NOTHING, null=True, blank=True,
+        related_name='assignments',
+    )
+    is_locked = models.BooleanField(default=False)
+    assignment_source = models.CharField(max_length=10, default='legacy', choices=[
+        ('legacy', 'Administração'), ('automatic', 'Gerador'), ('manual', 'Secretaria'),
+    ])
+    experience_snapshot = models.CharField(max_length=12, blank=True)
 
     SHIFT_NONE = 'none'
     SHIFT_MORNING = 'morning'

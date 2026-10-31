@@ -1,0 +1,55 @@
+{% extends 'member_base.html' %}
+{% load static %}
+{% block title %}Escalas — Secretaria da Mídia{% endblock %}
+{% block head %}{{ block.super }}<link rel="stylesheet" href="{% static 'org_media.css' %}"><link rel="stylesheet" href="{% static 'schedule_list.css' %}">{% endblock %}
+{% block content %}
+<div class="org-media schedule-list-page min-h-screen bg-gray-50">
+{% include 'parciais/messages.html' %}
+{% url 'media_secretariat' as back %}
+{% include 'parciais/org_media_header.html' with back_url=back title='Escalas da' accent='mídia' subtitle='Secretaria da Mídia' action_partial='member/schedule_assistant/list_action.html' %}
+<main class="schedule-list-main">
+    <form method="get" class="schedule-search" role="search" aria-label="Pesquisar e filtrar escalas">
+        <div class="schedule-search-row">
+            <div class="schedule-search-field"><label class="sr-only" for="{{ filter_form.q.id_for_label }}">{{ filter_form.q.label }}</label>{{ filter_form.q }}{{ filter_form.q.errors }}</div>
+            <button type="submit" class="schedule-search-submit flex-shrink-0 p-2.5 text-white rounded-lg hover:opacity-90 transition-opacity duration-200 flex items-center justify-center" style="background-color: #C90905;" aria-label="Pesquisar escalas" title="Buscar">
+                <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </button>
+            <div class="schedule-filter-menu" id="schedule-filter-menu">
+                <button type="button" class="schedule-filter-toggle px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm" id="schedule-filter-toggle" aria-label="Filtros" aria-expanded="{% if filter_form.errors %}true{% else %}false{% endif %}" aria-controls="schedule-filter-panel">
+                    <svg class="w-4 h-4" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+                    <span class="hidden sm:inline">Filtros</span>{% if request.GET.status or request.GET.month or request.GET.year %}<span class="schedule-filter-dot" aria-label="Filtros ativos"></span>{% endif %}
+                </button>
+                <div id="schedule-filter-panel" class="schedule-filter-panel" {% if not filter_form.errors %}hidden{% endif %}>
+                    <h2>Filtros</h2>
+                    {% for field in filter_form %}{% if field.name != 'q' %}<div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endif %}{% endfor %}
+                    <div class="schedule-filter-actions"><a href="{% url 'media_schedule_list' %}" class="schedule-filter-clear">Limpar filtros</a><button type="submit" class="schedule-filter-apply">Aplicar</button></div>
+                </div>
+            </div>
+        </div>
+    </form>
+<section aria-labelledby="schedule-list-title">
+    <div class="schedule-list-heading"><h2 id="schedule-list-title">Escalas e rascunhos</h2><span>{{ page_obj.paginator.count }} resultado{{ page_obj.paginator.count|pluralize:'s' }}</span></div>
+    <div class="schedule-rows">
+    {% for schedule in schedules %}
+    <article class="schedule-row">
+        <div class="schedule-row-icon" aria-hidden="true"><i class="far fa-calendar-alt"></i></div>
+        <div class="schedule-row-content"><div class="schedule-row-title"><h3>{{ schedule.title }}</h3>{% if schedule.assistant_state.status == 'draft' %}<span class="schedule-badge is-draft">Rascunho</span>{% else %}<span class="schedule-badge">Escala</span>{% endif %}</div><p>{% if schedule.is_weekly %}Semanal{% if schedule.start_date %} · A partir de {{ schedule.start_date|date:'d/m/Y' }}{% endif %}{% else %}{{ schedule.get_month_display }} de {{ schedule.year }}{% endif %}{% if schedule.assistant_state.status == 'draft' %} · Etapa {{ schedule.assistant_state.current_step }} de 3{% endif %}</p></div>
+        {% if schedule.assistant_state.status == 'draft' %}
+        <a class="org-btn-primary schedule-row-action" href="{% url 'media_schedule_assistant' schedule.assistant_state.pk %}">Continuar rascunho <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+        {% else %}
+        <a class="org-btn-secondary schedule-row-action" href="{% url 'schedule_print' schedule.pk %}">Visualizar escala <i class="fas fa-arrow-right" aria-hidden="true"></i></a>
+        {% endif %}
+    </article>
+    {% empty %}<div class="schedule-empty"><i class="far fa-calendar-alt" aria-hidden="true"></i><h3>{% if has_filters %}Nenhuma escala encontrada{% else %}Nenhuma escala cadastrada para a Mídia.{% endif %}</h3><p>{% if has_filters %}Tente outro nome ou ajuste os filtros para encontrar a escala.{% else %}Crie uma escala automática para planejar cultos, disponibilidades e equipes.{% endif %}</p>{% if has_filters %}<a class="org-btn-secondary" href="{% url 'media_schedule_list' %}">Limpar filtros</a>{% else %}<button type="button" class="org-btn-primary" data-open-schedule>Criar escala automática</button>{% endif %}</div>{% endfor %}
+    </div>
+    {% if page_obj.has_other_pages %}<nav class="schedule-pagination" aria-label="Paginação de escalas">{% if page_obj.has_previous %}<a class="org-btn-secondary" href="?{{ pagination_query }}&amp;page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a class="org-btn-secondary" href="?{{ pagination_query }}&amp;page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}</nav>{% endif %}
+</section>
+</main>
+</div>
+<dialog id="schedule-create-dialog" class="schedule-create-dialog org-media" aria-labelledby="schedule-create-title">
+    <div class="schedule-dialog-heading"><h2 id="schedule-create-title">Criar escala automática</h2><button type="button" id="schedule-create-close" aria-label="Fechar"><i class="fas fa-times" aria-hidden="true"></i></button></div>
+    <p>Escolha o mês para planejar os cultos e as equipes. Se houver um rascunho para esse mês, você continuará de onde parou.</p>
+    <form method="post" action="{% url 'media_schedule_assistant_start' %}">{% csrf_token %}<div class="schedule-period-fields">{% for field in start_form %}<div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}</div><button class="org-btn-primary" type="submit"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Criar escala automática</button></form>
+</dialog>
+<script src="{% static 'schedule_list.js' %}" defer></script>
+{% endblock %}

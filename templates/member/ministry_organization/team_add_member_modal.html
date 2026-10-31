@@ -39,6 +39,14 @@
                 {% endif %}
             </div>
 
+            {% if member_form.experience_level %}
+            <div class="modal-section">
+                <label class="modal-field-label" for="{{ member_form.experience_level.id_for_label }}">Classificação de experiência</label>
+                {{ member_form.experience_level }}
+                {{ member_form.experience_level.errors }}
+            </div>
+            {% endif %}
+
             <div class="modal-section">
                 <label class="modal-field-label" for="{{ member_form.roles.id_for_label }}">Funções <span style="font-weight:500;color:#9CA3AF;">(opcional)</span></label>
                 {{ member_form.roles }}

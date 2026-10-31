@@ -1,5 +1,6 @@
 from django import forms
 from django.db import transaction
+from django.db.models import Q
 from website.models.event import Event
 from website.models.media_event_type import MediaEventType, MediaPlanningTemplate, MediaPlanningTemplateItem
 from website.models.media_organization import (
@@ -303,7 +304,7 @@ class MediaRoleForm(forms.ModelForm):
 class MediaSubTeamMembershipForm(forms.ModelForm):
     class Meta:
         model = MediaSubTeamMembership
-        fields = ['member', 'roles', 'responsibilities', 'is_active']
+        fields = ['member', 'experience_level', 'roles', 'responsibilities', 'is_active']
         widgets = {
             'member': forms.Select(attrs={'class': _SELECT}),
             'roles': forms.SelectMultiple(attrs={'class': _SELECT, 'size': 5}),
@@ -315,6 +316,11 @@ class MediaSubTeamMembershipForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.sub_team = sub_team
         self.instance.sub_team = sub_team
+        if sub_team and (sub_team.ministry.code == 'midia_externa' or (sub_team.ministry.name.casefold() == 'mídia externa' and sub_team.ministry == media_ministry())):
+            self.fields['experience_level'].required = False
+            self.fields['experience_level'].widget.attrs['class'] = _SELECT
+        else:
+            self.fields.pop('experience_level', None)
         if self.instance.pk:
             self.fields['member'].disabled = True
         elif not self.is_bound:
@@ -324,6 +330,10 @@ class MediaSubTeamMembershipForm(forms.ModelForm):
         if sub_team:
             roles_qs = roles_qs.filter(sub_team__isnull=True) | roles_qs.filter(sub_team=sub_team)
         self.fields['roles'].queryset = roles_qs.order_by('name')
+
+
+    def clean_experience_level(self):
+        return self.cleaned_data.get('experience_level') or self.instance.experience_level or 'pending'
 
 
 class MediaLeadershipItemForm(forms.ModelForm):
@@ -395,3 +405,105 @@ class MediaResourceCredentialForm(forms.Form):
 
 def _media_members_qs():
     return ministry_members(media_ministry())
+
+
+class MediaTeamActivityForm(forms.ModelForm):
+    class Meta:
+        from website.models import MediaTeamActivity
+        model = MediaTeamActivity
+        fields = ['name', 'description', 'sort_order', 'is_active']
+        labels = {'sort_order': 'Ordem de exibição'}
+        widgets = {'name': forms.TextInput(attrs={'class': _INPUT}),
+                   'description': forms.Textarea(attrs={'class': _TEXTAREA, 'rows': 2}),
+                   'sort_order': forms.NumberInput(attrs={'class': _INPUT, 'min': 0})}
+
+    def __init__(self, *args, sub_team, compact=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.compact = compact
+        self.sub_team = sub_team
+        self.instance.sub_team = sub_team
+        if compact:
+            # These are managed by the configuration screen, not by the quick modal.
+            self.fields.pop('sort_order')
+            self.fields.pop('is_active')
+
+    def save(self, commit=True):
+        if self.compact and not self.instance.pk:
+            latest = type(self.instance).objects.filter(sub_team=self.sub_team).order_by('-sort_order').first()
+            self.instance.sort_order = latest.sort_order + 1 if latest else 0
+        return super().save(commit=commit)
+
+
+class MediaTeamServiceForm(forms.Form):
+    regular_services = forms.MultipleChoiceField(
+        label='Cultos regulares', choices=(),
+        widget=forms.CheckboxSelectMultiple,
+        help_text='Você pode selecionar mais de um culto.',
+    )
+    member_count = forms.IntegerField(label='Quantidade de integrantes', initial=2, min_value=1, max_value=32767,
+                                     widget=forms.NumberInput(attrs={'class': _INPUT, 'min': 1}))
+    is_active = forms.BooleanField(label='Ativa', initial=True, required=False)
+
+    def __init__(self, *args, sub_team, instance=None, compact=False, **kwargs):
+        from website.models import MediaTeamActivity, MediaTeamService
+        super().__init__(*args, **kwargs)
+        self.sub_team = sub_team
+        self.instance = instance or MediaTeamService(sub_team=sub_team)
+        self.compact = compact
+        # Activities are shared responsibilities of the team. New services receive
+        # all active activities while existing links remain untouched on edit.
+        self.default_activities = list(MediaTeamActivity.objects.filter(sub_team=sub_team, is_active=True))
+        self.fields['regular_services'].choices = MediaTeamService.REGULAR_SERVICE_CHOICES
+        if self.instance.pk:
+            # Older agenda-linked defaults stay visible for compatibility and can be
+            # converted to one of the standard regular services when edited.
+            if self.instance.regular_service:
+                selected = [self.instance.regular_service]
+            else:
+                selected = []
+                self.fields['regular_services'].choices = [
+                    *MediaTeamService.REGULAR_SERVICE_CHOICES,
+                    ('', f'Legado: {self.instance.service_label}'),
+                ]
+            self.initial.update(regular_services=selected, member_count=self.instance.member_count,
+                                is_active=self.instance.is_active)
+        if compact:
+            self.fields.pop('is_active')
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        data = super().clean()
+        keys = data.get('regular_services', [])
+        if self.instance.pk and len(keys) != 1:
+            self.add_error('regular_services', 'Selecione exatamente um culto ao editar uma atuação.')
+            return data
+        existing = type(self.instance).objects.filter(sub_team=self.sub_team, regular_service__in=keys)
+        if self.instance.pk:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            self.add_error('regular_services', 'Um ou mais cultos selecionados já estão configurados para esta equipe.')
+        if 'member_count' in data:
+            self.instance.member_count = data['member_count']
+            self.instance.is_active = (
+                self.instance.is_active if self.compact and self.instance.pk
+                else data.get('is_active', True if self.compact else False)
+            )
+        return data
+
+    @transaction.atomic
+    def save(self):
+        from website.models import MediaTeamServiceActivity
+        keys = self.cleaned_data['regular_services']
+        services = []
+        for key in keys:
+            service = self.instance if self.instance.pk else type(self.instance)(sub_team=self.sub_team)
+            service.event = None
+            service.event_date = None
+            service.regular_service = key
+            service.member_count = self.cleaned_data['member_count']
+            service.save()
+            if not service.activity_links.exists():
+                for activity in self.default_activities:
+                    MediaTeamServiceActivity.objects.create(service=service, activity=activity)
+            services.append(service)
+        return services[0] if len(services) == 1 else services

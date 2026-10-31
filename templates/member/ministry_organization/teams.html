@@ -436,6 +436,7 @@
                     <span class="team-member-avatar">{{ membership.member.name|slice:":1"|upper }}</span>
                     <div class="team-member-info">
                         <p class="team-member-name">{{ membership.member.name }}</p>
+                        {% if is_media_ministry %}<p class="text-xs text-gray-600">{{ membership.get_experience_level_display }}</p>{% endif %}
                         <p class="team-member-roles">
                             {% with roles=membership.roles.all %}
                             {% if roles %}

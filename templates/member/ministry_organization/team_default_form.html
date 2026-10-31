@@ -1,0 +1,18 @@
+{% extends 'member/ministry_organization/base.html' %}
+{% block org_header %}
+{% url 'ministry_team_detail' ministry.pk team.pk as back %}
+{% include 'parciais/org_media_header.html' with back_url=back title=title subtitle=team.name %}
+{% endblock %}
+{% block org_tabs %}{% endblock %}
+{% block organization_content %}
+<div class="max-w-xl">
+    <p class="text-sm text-gray-600 mb-4">{% if is_service %}Escolha o culto e o horário cadastrados na agenda. A quantidade é da equipe inteira; selecionar várias atividades não cria vagas adicionais.{% else %}Atividades são responsabilidades compartilhadas pelos integrantes. Use a ordem para organizar a exibição e desmarque “Ativa” para desativar.{% endif %}</p>
+    <form method="post" class="org-card p-5 space-y-5">
+        {% csrf_token %}
+        {% include 'member/ministry_organization/form_fields.html' %}
+        <p class="text-sm text-gray-500">As alterações valem para os próximos planejamentos. Escalas existentes são preservadas.</p>
+        <button type="submit" class="org-btn-primary">Salvar</button>
+        <a href="{{ back }}" class="org-btn-secondary">Cancelar</a>
+    </form>
+</div>
+{% endblock %}

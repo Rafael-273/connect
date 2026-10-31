@@ -3,24 +3,9 @@ from django.shortcuts import redirect
 
 from ...models.ministry_membership import MinistryMembership
 from ..mixins import MemberRequiredMixin
-from website.services.ministry_organization import media_ministry
+from website.services.ministry_organization import get_media_membership as _get_media_membership
 
 MEDIA_MINISTRY_NAME = 'Mídia Externa'
-
-
-def _get_media_membership(member):
-    """Returns the active MinistryMembership for the Mídia Externa ministry, or None."""
-    return (
-        MinistryMembership.objects.filter(
-            member=member,
-            ministry=media_ministry(),
-            ministry__is_active=True,
-            member__is_active=True,
-            is_active=True,
-        )
-        .select_related('ministry')
-        .first()
-    )
 
 
 def _is_media_org_admin(user):

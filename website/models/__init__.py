@@ -75,3 +75,6 @@ from .external_media import (
     VideoMasteringJob,
 )
 from .ministry_manual import MinistryManual
+from .media_team_service import MediaTeamActivity, MediaTeamService, MediaTeamServiceActivity
+from .schedule_assistant import ScheduleAssistantState, ScheduleOccurrence, ScheduleOccurrenceTeam
+from .schedule_availability import ScheduleAvailability, ScheduleAvailabilityOccurrence, ScheduleAvailabilityCoverage

@@ -24,6 +24,9 @@
         {% url 'ministry_manual_list' ministry.pk as ministry_manual_list_url %}
         {% include 'parciais/org_link_card.html' with url=ministry_manual_list_url icon='book' title='Manuais' subtitle='Guias e orientações' %}
 
+        {% url 'media_secretariat' as media_secretariat_url %}
+        {% include 'parciais/org_link_card.html' with url=media_secretariat_url icon='folder-open' title='Secretaria' subtitle='Escalas e planejamento mensal' %}
+
         <p class="text-xs font-bold text-gray-400 uppercase tracking-wider pt-4 pb-1">Operação</p>
 
         {% url 'media_resource_list' as media_resource_list_url %}

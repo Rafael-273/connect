@@ -527,6 +527,7 @@
                 <div class="hero-copy">
                     <div class="eyebrow">{{ schedule.ministry.name }}</div>
                     <h1 class="title">{{ schedule.title }}</h1>
+                    {% if schedule.assistant_state.status == 'draft' %}<p><strong>Rascunho de planejamento — sem escala publicada</strong></p>{% endif %}
                     <p class="subtitle">Escala de serviço para {{ period_label }}.</p>
                 </div>
             </header>

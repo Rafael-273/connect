@@ -1,3 +1,4 @@
+from .assistant_guard import AssistedScheduleWriteGuardMixin
 from datetime import datetime
 
 from django.contrib.auth.decorators import login_required
@@ -11,7 +12,7 @@ from ..mixins import StaffRequiredMixin
 from ...models import MonthlySchedule, ScheduleDay
 
 
-class ScheduleDayCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
+class ScheduleDayCreateView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Adiciona um dia à escala (POST-only, retorna JSON)."""
 
     def post(self, request, schedule_id):
@@ -121,7 +122,7 @@ class ScheduleDayCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
         return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
-class ScheduleDayEditView(LoginRequiredMixin, StaffRequiredMixin, View):
+class ScheduleDayEditView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Edita um dia da escala (POST-only, retorna JSON)."""
 
     def post(self, request, day_id):
@@ -209,7 +210,7 @@ class ScheduleDayGetView(LoginRequiredMixin, StaffRequiredMixin, View):
         return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
-class ScheduleDayDeleteView(LoginRequiredMixin, StaffRequiredMixin, View):
+class ScheduleDayDeleteView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Deleta um dia da escala (POST-only, retorna JSON)."""
 
     def post(self, request, day_id):
@@ -221,7 +222,7 @@ class ScheduleDayDeleteView(LoginRequiredMixin, StaffRequiredMixin, View):
         return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
-class ScheduleDayToggleCancelView(LoginRequiredMixin, StaffRequiredMixin, View):
+class ScheduleDayToggleCancelView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Cancela/descancela um dia da escala (POST-only, retorna JSON)."""
 
     def post(self, request, day_id):

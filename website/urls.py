@@ -1,3 +1,5 @@
+from website.views.schedule_assistant import (MediaSecretariatHome, MediaScheduleList, ScheduleAssistantStart, ScheduleAssistantPage, ScheduleAssistantAPI)
+from website.views.media_team_configuration import MediaTeamDefaultEdit, MediaTeamServiceEdit, MediaTeamExperienceEdit
 from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventRemoveFromMediaView, MediaEventUpdateView
 from website.views.media_planning.my_work import (
     MediaMyWorkView, MediaMyWorkDetailView, MediaMyWorkStatusView, MediaMyWorkAttachmentView,
@@ -289,6 +291,11 @@ from .views.subtitle_review import (
 )
 
 urlpatterns = [
+    path('media/secretaria/', MediaSecretariatHome.as_view(), name='media_secretariat'),
+    path('media/secretaria/escalas/', MediaScheduleList.as_view(), name='media_schedule_list'),
+    path('media/secretaria/escalas/automatica/', ScheduleAssistantStart.as_view(), name='media_schedule_assistant_start'),
+    path('media/secretaria/escalas/assistente/<int:pk>/', ScheduleAssistantPage.as_view(), name='media_schedule_assistant'),
+    path('media/secretaria/escalas/assistente/<int:pk>/dados/', ScheduleAssistantAPI.as_view(), name='media_schedule_assistant_api'),
     path('ministries/', ministry_org.MinistryOrganizationIndex.as_view(), name='ministry_organization_index'),
     path('ministries/<int:ministry_id>/teams/', ministry_org.MinistryTeamList.as_view(), name='ministry_team_list'),
     path('ministries/<int:ministry_id>/teams/new/', ministry_org.MinistryTeamEdit.as_view(), name='ministry_team_create'),
@@ -297,6 +304,11 @@ urlpatterns = [
     path('ministries/<int:ministry_id>/teams/<int:pk>/members/add/', ministry_org.MinistryTeamMemberEdit.as_view(), name='ministry_team_member_add'),
     path('ministries/<int:ministry_id>/teams/<int:pk>/members/<int:membership_id>/edit/', ministry_org.MinistryTeamMemberEdit.as_view(), name='ministry_team_member_edit'),
     path('ministries/<int:ministry_id>/teams/<int:pk>/members/<int:membership_id>/remove/', ministry_org.MinistryTeamMemberRemove.as_view(), name='ministry_team_member_remove'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/experience/<int:membership_id>/', MediaTeamExperienceEdit.as_view(), name='media_team_experience_edit'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/activities/new/', MediaTeamDefaultEdit.as_view(), name='media_team_activity_create'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/activities/<int:item_id>/edit/', MediaTeamDefaultEdit.as_view(), name='media_team_activity_edit'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/services/new/', MediaTeamServiceEdit.as_view(), name='media_team_service_create'),
+    path('ministries/<int:ministry_id>/teams/<int:pk>/services/<int:item_id>/edit/', MediaTeamServiceEdit.as_view(), name='media_team_service_edit'),
     path('ministries/<int:ministry_id>/manuals/', ministry_org.MinistryManualList.as_view(), name='ministry_manual_list'),
     path('ministries/<int:ministry_id>/manuals/preview/', ministry_org.MinistryManualPreview.as_view(), name='ministry_manual_preview'),
     path('ministries/<int:ministry_id>/manuals/new/', ministry_org.MinistryManualEdit.as_view(), name='ministry_manual_create'),

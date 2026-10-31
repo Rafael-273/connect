@@ -1,3 +1,4 @@
+from website.services.schedule_visibility import member_visible_schedules
 from django.shortcuts import get_object_or_404, render
 
 from ..models.schedule import MonthlySchedule, ScheduleDay
@@ -36,7 +37,7 @@ class MemberScheduleDetailView(MemberRequiredMixin, View):
     def get(self, request, schedule_id):
         member = self.member
         schedule = get_object_or_404(
-            MonthlySchedule,
+            member_visible_schedules(MonthlySchedule.objects.all()),
             id=schedule_id,
         )
 

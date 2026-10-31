@@ -13,7 +13,7 @@ from website.forms.media_organization import MediaSubTeamForm, MediaSubTeamMembe
 from website.forms.ministry_manual import MinistryManualForm
 from website.models import Ministry, MinistryMembership, MediaSubTeam, MediaSubTeamMembership, MinistryManual
 from website.services.ministry_organization import media_ministry
-from website.views.media_planning.mixins import _get_media_membership
+from website.services.ministry_organization import get_media_membership as _get_media_membership
 
 
 def organization_admin(user):
@@ -58,7 +58,7 @@ class MinistryOrganizationMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
     def context(self, **kwargs):
-        return {'ministry': self.ministry, 'can_manage': self.can_manage, **kwargs}
+        return {'ministry': self.ministry, 'can_manage': self.can_manage, 'is_media_ministry': self.ministry == media_ministry(), **kwargs}
 
     def team(self, pk):
         qs = MediaSubTeam.objects.filter(ministry=self.ministry)
@@ -186,6 +186,9 @@ class MinistryTeamDetail(MinistryOrganizationMixin, View):
             team=team,
             memberships=memberships,
             manuals=self.manuals().filter(sub_team=team),
+            experience_choices=MediaSubTeamMembership.EXPERIENCE_CHOICES,
+            team_activities=team.activities.all() if self.ministry == media_ministry() else [],
+            team_services=team.service_defaults.select_related('event', 'event_date').prefetch_related('activity_links__activity') if self.ministry == media_ministry() else [],
             section='teams',
             team_detail_subtitle=' · '.join(subtitle_parts),
             add_member_form=add_member_form,

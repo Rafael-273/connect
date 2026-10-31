@@ -1,3 +1,4 @@
+from .assistant_guard import AssistedScheduleWriteGuardMixin
 import json
 
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -17,7 +18,7 @@ class DivisionListView(LoginRequiredMixin, StaffRequiredMixin, View):
         return redirect('schedule_list')
 
 
-class DivisionCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
+class DivisionCreateView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Cria uma nova divisão para uma escala (AJAX)."""
 
     def post(self, request, schedule_id):
@@ -49,7 +50,7 @@ class DivisionCreateView(LoginRequiredMixin, StaffRequiredMixin, View):
         return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
-class DivisionEditView(LoginRequiredMixin, StaffRequiredMixin, View):
+class DivisionEditView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Edita uma divisão (AJAX)."""
 
     def post(self, request, division_id):
@@ -70,7 +71,7 @@ class DivisionEditView(LoginRequiredMixin, StaffRequiredMixin, View):
         return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
-class DivisionDeleteView(LoginRequiredMixin, StaffRequiredMixin, View):
+class DivisionDeleteView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Deleta uma divisão."""
 
     def post(self, request, division_id):
@@ -82,7 +83,7 @@ class DivisionDeleteView(LoginRequiredMixin, StaffRequiredMixin, View):
         return JsonResponse({'success': False, 'error': 'Método não permitido'}, status=405)
 
 
-class ScheduleDayDivisionAssignView(LoginRequiredMixin, StaffRequiredMixin, View):
+class ScheduleDayDivisionAssignView(LoginRequiredMixin, StaffRequiredMixin, AssistedScheduleWriteGuardMixin, View):
     """Atribui membros a divisões em um dia de escala."""
 
     def get(self, request, day_id):

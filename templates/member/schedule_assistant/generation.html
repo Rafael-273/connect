@@ -1,0 +1,12 @@
+<section id="sa-generation" hidden aria-labelledby="sg-title">
+    <div class="sa-month-heading"><div><p class="sa-eyebrow">Etapa 3 · Geração e revisão</p><h2 id="sg-title">Uma escala para o mês inteiro</h2><p>Sugestões com disponibilidade confirmada, acompanhamento e um culto por pessoa ao dia.</p></div><button type="button" class="org-btn-primary" id="sg-generate">Gerar sugestões</button></div>
+    <div class="sa-notice">O resultado é um rascunho. A geração não publica a escala. Ao regenerar, somente designações desbloqueadas serão recalculadas.</div>
+    <p id="sg-status" role="status" aria-live="polite"></p>
+    <div id="sg-stale" class="sa-notice" hidden>Os dados usados na geração mudaram. Revise os bloqueios e gere novamente. As sugestões anteriores permanecem identificadas para revisão.</div>
+    <div id="sg-summary" class="sg-summary" aria-label="Resumo da escala"></div>
+    <div id="sg-obsolete" class="sa-notice" hidden></div>
+    <div class="sg-toolbar"><label for="sg-team">Visualizar equipe</label><select id="sg-team"><option value="">Todas as equipes · visão mensal</option></select><span>Atividades são responsabilidades compartilhadas pela equipe.</span></div>
+    <div id="sg-results" class="sg-results"></div>
+    <details class="sg-metrics" open><summary>Distribuição por integrante</summary><p>Serviços contam cultos distintos. Atuações contam participações em equipes; uma pessoa pode atuar em mais de uma equipe no mesmo culto.</p><div class="sg-table-scroll"><table><thead><tr><th scope="col">Integrante</th><th scope="col">Cultos no rascunho</th><th scope="col">Atuações</th><th scope="col">Como apto a acompanhar</th></tr></thead><tbody id="sg-people"></tbody></table></div></details>
+    <details class="sg-metrics"><summary>Consecutividade e critérios da geração</summary><div id="sg-consecutive"></div><p>O otimizador primeiro maximiza vagas válidas. Depois equilibra a carga total e o acompanhamento, reduz atuações consecutivas e duplas repetidas, favorece treinamento e reduz concentração entre equipes. O histórico do mês anterior participa desse cálculo. Esses critérios são preferências; disponibilidade, vínculo e acompanhamento são obrigatórios.</p><div id="sg-solver"></div></details>
+</section>

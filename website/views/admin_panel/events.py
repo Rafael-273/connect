@@ -4,6 +4,8 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.db import transaction
+from website.services.event_dates import sync_event_dates
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_date, parse_time
 from django.utils import timezone
@@ -11,7 +13,7 @@ from django.utils.text import slugify
 from django.views import View
 
 from ..mixins import ModulePermissionMixin
-from ...models.event import Event, EventDate
+from ...models.event import Event
 from ...services.event_media_integration import mark_institutional_published
 
 
@@ -140,6 +142,7 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
         return slug
 
     @staticmethod
+    @transaction.atomic
     def _save_event(event, data, files):
         extra_dates = data.pop('extra_dates', [])
         if event:
@@ -151,13 +154,6 @@ class EventEditView(LoginRequiredMixin, ModulePermissionMixin, View):
             event.banner = files['banner']
         event.save()
 
-        EventDate.objects.filter(event=event).delete()
-        if not event.is_recurring:
-            for extra in extra_dates:
-                EventDate.objects.create(
-                    event=event,
-                    event_date=extra['event_date'],
-                    event_time=extra['event_time'],
-                )
+        sync_event_dates(event, [] if event.is_recurring else extra_dates)
 
         return event

@@ -1,5 +1,6 @@
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from simple_history.models import HistoricalRecords
 
 from ._base import BaseModel
 
@@ -128,6 +129,18 @@ class MediaRole(BaseModel):
 class MediaSubTeamMembership(BaseModel):
     """Participação de um membro em uma subequipe de mídia."""
 
+    history = HistoricalRecords()
+
+    EXPERIENCE_CHOICES = [
+        ('pending', 'Pendente de classificação'),
+        ('mentor', 'Apto a acompanhar'),
+        ('trainee', 'Em treinamento'),
+    ]
+    experience_level = models.CharField(
+        'Classificação de experiência', max_length=12,
+        choices=EXPERIENCE_CHOICES, default='pending',
+    )
+
     sub_team = models.ForeignKey(
         MediaSubTeam,
         on_delete=models.CASCADE,
@@ -159,6 +172,12 @@ class MediaSubTeamMembership(BaseModel):
 
     def clean(self):
         super().clean()
+        if self.experience_level not in dict(self.EXPERIENCE_CHOICES):
+            raise ValidationError({'experience_level': 'Classificação inválida.'})
+        if self.sub_team_id and self.experience_level != 'pending':
+            from website.services.ministry_organization import media_ministry
+            if self.sub_team.ministry != media_ministry():
+                raise ValidationError({'experience_level': 'Classificação exclusiva das equipes da Mídia.'})
         if self.is_active and not self.deleted and self.sub_team_id and self.member_id:
             from .ministry_membership import MinistryMembership
             if not MinistryMembership.objects.filter(

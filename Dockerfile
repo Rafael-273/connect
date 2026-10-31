@@ -14,8 +14,22 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 WORKDIR /usr/src/platform
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fontconfig && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Use HTTPS para evitar caches HTTP intermediários entregando pacotes alterados.
+# Limpe índices/arquivos parciais e repita a transação completa em falhas transitórias.
+# As validações de certificados, assinaturas e hashes permanecem habilitadas.
+RUN set -eux; \
+    find /etc/apt -type f \( -name '*.sources' -o -name '*.list' \) \
+        -exec sed -i 's|http://deb.debian.org|https://deb.debian.org|g; s|http://security.debian.org|https://security.debian.org|g' {} +; \
+    for attempt in 1 2 3; do \
+        rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*; \
+        if apt-get -o APT::Update::Error-Mode=any -o Acquire::https::No-Cache=true update && \
+            apt-get -o Acquire::Retries=3 -o Acquire::https::No-Cache=true install -y --no-install-recommends ffmpeg fontconfig; then \
+            break; \
+        fi; \
+        if [ "$attempt" = 3 ]; then exit 1; fi; \
+        sleep 5; \
+    done; \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 COPY requirements.txt /usr/src/platform/
     

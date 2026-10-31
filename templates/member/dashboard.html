@@ -528,10 +528,8 @@
                     {% endif %}
                     {% url 'media_resource_list' as media_resource_list_url %}
                     {% include 'parciais/media_link_card.html' with url=media_resource_list_url icon='key' title='Recursos' subtitle='Acessos, credenciais e ferramentas' %}
-                    <div class="flex items-center justify-between bg-gray-50 rounded-xl p-4 border-2 border-gray-200 opacity-70" aria-disabled="true">
-                        <div class="flex items-center gap-3 min-w-0"><div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-200 text-gray-500"><i class="fas fa-folder-open text-sm"></i></div><div><h4 class="text-sm font-bold text-gray-700">Secretaria</h4><p class="text-xs text-gray-500">Em breve</p></div></div>
-                        <span class="text-xs font-bold text-gray-400">Em breve</span>
-                    </div>
+                    {% url 'media_secretariat' as media_secretariat_url %}
+                    {% include 'parciais/media_link_card.html' with url=media_secretariat_url icon='folder-open' title='Secretaria' subtitle='Escalas e planejamento mensal' %}
                     <div class="flex items-center justify-between bg-gray-50 rounded-xl p-4 border-2 border-gray-200 opacity-70" aria-disabled="true">
                         <div class="flex items-center gap-3 min-w-0"><div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-200 text-gray-500"><i class="fas fa-heart-pulse text-sm"></i></div><div><h4 class="text-sm font-bold text-gray-700">Cuidados da equipe</h4><p class="text-xs text-gray-500">Em breve</p></div></div>
                         <span class="text-xs font-bold text-gray-400">Em breve</span>

@@ -10,7 +10,25 @@
                class="block text-sm font-semibold text-gray-700 mb-1.5">
             {{ field.label }}{% if field.field.required %} *{% endif %}
         </label>
-        {% if field.name == 'content' %}{% include 'member/ministry_organization/manual_editor.html' %}{% else %}{{ field }}{% endif %}
+        {% if field.name == 'content' %}
+            {% include 'member/ministry_organization/manual_editor.html' %}
+        {% elif field.name == 'regular_services' %}
+            <div class="regular-service-options" role="group" aria-label="{{ field.label }}">
+                {% for choice in field %}
+                <label class="regular-service-option">
+                    {{ choice.tag }}
+                    <span class="regular-service-icon" aria-hidden="true"><i class="far fa-clock"></i></span>
+                    <span class="regular-service-copy">
+                        <strong>{{ choice.choice_label }}</strong>
+                        <small>Atuação regular da equipe</small>
+                    </span>
+                    <span class="regular-service-check" aria-hidden="true"><i class="fas fa-check"></i></span>
+                </label>
+                {% endfor %}
+            </div>
+        {% else %}
+            {{ field }}
+        {% endif %}
         {% if field.help_text %}<p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>{% endif %}
         {% if field.errors %}
         <div role="alert" class="text-sm text-red-600 mt-1">{{ field.errors }}</div>
