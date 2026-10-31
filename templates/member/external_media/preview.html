@@ -148,6 +148,8 @@
     .editor-timeline__bar .editor-tool,.editor-timeline__bar #delete-segment{width:2.2rem;height:2.2rem;padding:0;justify-content:center;white-space:nowrap}
     .editor-timeline__bar .editor-tool kbd{display:none}
     .editor-timeline__tool-divider{width:1.25rem;height:1px;margin:.15rem auto;background:#344154}
+    .editor-caption-marquee{position:absolute;z-index:40;border:1px solid #f6c453;background:rgba(246,196,83,.14);pointer-events:none;border-radius:3px}
+    .is-caption-selecting,.is-caption-selecting *{user-select:none!important;cursor:crosshair!important}
     .editor-timeline__zoom-value{min-width:2.2rem;color:#8f9daf;font-size:.62rem;font-weight:800;text-align:center}
     .editor-timeline__bar [data-timeline-zoom],.editor-timeline__bar .editor-timeline__zoom-value,.editor-timeline__bar .editor-timeline__tool-divider{display:none}
     .timeline-zoom-control{position:absolute;right:clamp(1rem,3vw,3rem);display:flex;align-items:center;gap:.55rem;padding-left:1rem;border-left:1px solid #293546}.timeline-zoom-control button{display:grid;place-items:center;width:1.9rem;height:1.9rem;border-radius:.35rem;color:#b8c5d6}.timeline-zoom-control button:hover{background:#202b3a;color:#fff}.timeline-zoom-control button:disabled{opacity:.35;cursor:not-allowed}.timeline-zoom-control input{width:8rem;height:.35rem;accent-color:#e23b35;cursor:pointer}
@@ -294,7 +296,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     </aside>
     </div>
     <div class="editor-timeline__transport preview-controls"><button type="button" class="preview-transport-step" id="preview-previous" aria-label="Voltar um quadro"><i class="fas fa-backward-step"></i></button><button class="preview-play" id="preview-play" aria-label="Reproduzir"><i class="fas fa-play"></i></button><button type="button" class="preview-transport-step" id="preview-next" aria-label="Avançar um quadro"><i class="fas fa-forward-step"></i></button><span class="text-sm tabular-nums" id="preview-time">00:00 / 00:00</span><input class="preview-range" id="preview-range" type="range" min="0" max="1" value="0" aria-hidden="true" tabindex="-1"><div class="timeline-zoom-control" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-decrease" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-magnifying-glass-minus"></i></button><input id="timeline-zoom-range" type="range" min="1" max="16" step=".1" value="1" aria-label="Zoom da timeline"><button type="button" id="timeline-zoom-increase" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-magnifying-glass-plus"></i></button></div></div>
-    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Ferramenta lâmina (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" class="editor-tool is-active" id="timeline-snap" aria-pressed="true" title="Encaixe magnético (S); Alt suspende durante o arraste" aria-label="Encaixe magnético"><i class="fas fa-magnet"></i></button><button type="button" class="editor-tool" id="timeline-precision" title="Ajustar início e fim por quadro (T)" aria-label="Ajustar tempos por quadro"><i class="fas fa-stopwatch"></i></button><button type="button" class="editor-tool" id="timeline-shortcuts" title="Atalhos (?)" aria-label="Ver atalhos"><i class="fas fa-keyboard"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
+    <div class="editor-timeline" aria-label="Linha do tempo da edição"><div class="editor-timeline__bar"><strong class="text-xs uppercase tracking-wider text-gray-500">Timeline</strong><div class="flex items-center gap-2"><button type="button" class="editor-tool is-active" data-tool="select" title="Ferramenta de seleção (V)" aria-label="Ferramenta de seleção"><i class="fas fa-arrow-pointer"></i><span class="sr-only">Seleção</span></button><button type="button" class="editor-tool" data-tool="blade" title="Ferramenta lâmina (B)" aria-label="Ferramenta lâmina"><i class="fas fa-scissors"></i><span class="sr-only">Lâmina</span></button><button type="button" class="editor-tool" id="add-timeline-element" title="Adicionar elemento visual" aria-label="Adicionar elemento visual"><i class="fas fa-photo-film"></i><span class="sr-only">Adicionar elemento</span></button><button type="button" class="editor-tool" id="add-timeline-text" title="Adicionar texto" aria-label="Adicionar texto"><i class="fas fa-font"></i><span class="sr-only">Adicionar texto</span></button><button type="button" class="editor-tool" id="add-timeline-music" title="Adicionar música à timeline" aria-label="Adicionar música à timeline"><i class="fas fa-music"></i><span class="sr-only">Adicionar música</span></button><span class="editor-timeline__tool-divider" aria-hidden="true"></span><button type="button" class="editor-tool" data-timeline-zoom="out" title="Diminuir zoom da timeline" aria-label="Diminuir zoom da timeline"><i class="fas fa-minus"></i></button><output class="editor-timeline__zoom-value" id="timeline-zoom-value" aria-live="polite">100%</output><button type="button" class="editor-tool" data-timeline-zoom="in" title="Aumentar zoom da timeline" aria-label="Aumentar zoom da timeline"><i class="fas fa-plus"></i><span class="sr-only">Aumentar zoom</span></button><button type="button" class="editor-tool is-active" id="timeline-snap" aria-pressed="true" title="Encaixe magnético (S); Alt suspende durante o arraste" aria-label="Encaixe magnético"><i class="fas fa-magnet"></i></button><button type="button" class="editor-tool" id="timeline-precision" title="Ajustar início e fim por quadro (T)" aria-label="Ajustar tempos por quadro"><i class="fas fa-stopwatch"></i></button><button type="button" class="editor-tool" id="timeline-shortcuts" title="Atalhos (?)" aria-label="Ver atalhos"><i class="fas fa-keyboard"></i></button><button type="button" class="editor-tool" id="split-caption" disabled title="Dividir legenda no cursor (Ctrl/⌘+K)" aria-label="Dividir legenda"><i class="fas fa-scissors"></i></button><button type="button" class="editor-tool" id="copy-caption" disabled title="Copiar legenda (Ctrl/⌘+C)" aria-label="Copiar legenda"><i class="fas fa-copy"></i></button><button type="button" class="editor-tool" id="paste-caption" disabled title="Colar nova legenda no cursor (Ctrl/⌘+V)" aria-label="Colar legenda"><i class="fas fa-paste"></i></button><button type="button" id="delete-segment" disabled class="text-xs font-bold rounded bg-red-600 px-2 py-1 text-white disabled:opacity-40" title="Remover trecho selecionado (Del)" aria-label="Remover trecho selecionado"><i class="fas fa-trash"></i><span class="sr-only">Remover</span></button></div></div><div class="editor-timeline__scroller" id="editor-scroller" title="Use a roda do mouse para ampliar ou reduzir a timeline"><div class="editor-timeline__canvas" id="editor-canvas"><div class="editor-ruler"><span></span><div class="editor-ruler__scale"><span>00:00</span><span id="timeline-middle">00:00</span><span id="timeline-end">00:00</span></div></div><div id="editor-tracks"></div></div></div></div>
 </div>
 
 <div class="preview-modal" id="back-to-blocks-modal" role="dialog" aria-modal="true" aria-labelledby="back-to-blocks-title">
@@ -363,7 +365,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 </div>
 
 <dialog id="shortcuts-dialog" aria-labelledby="shortcuts-title"><h2 id="shortcuts-title" class="text-xl font-bold">Atalhos da timeline</h2><dl class="text-sm my-4 space-y-2">
-<div><dt class="font-bold">Espaço</dt><dd>Reproduzir / pausar</dd></div><div><dt class="font-bold">← / → · Shift · Ctrl/Cmd</dt><dd>Um quadro · 1 segundo · 5 segundos</dd></div><div><dt class="font-bold">↑ / ↓ · Home / End</dt><dd>Take anterior / próximo · início / fim</dd></div><div><dt class="font-bold">V · B · C ou Ctrl/Cmd K</dt><dd>Seleção · lâmina · cortar</dd></div><div><dt class="font-bold">S · Alt durante arraste · T</dt><dd>Magnetismo · suspender encaixe · ajustar tempos por quadro</dd></div><div><dt class="font-bold">+ / − · Del</dt><dd>Zoom · remover seleção</dd></div><div><dt class="font-bold">Ctrl/Cmd Z · Shift Ctrl/Cmd Z ou Ctrl/Cmd Y</dt><dd>Desfazer · refazer</dd></div></dl><form method="dialog"><button class="media-btn media-muted">Fechar</button></form></dialog>
+<div><dt class="font-bold">Espaço</dt><dd>Reproduzir / pausar</dd></div><div><dt class="font-bold">← / → · Shift · Ctrl/Cmd</dt><dd>Um quadro · 1 segundo · 5 segundos</dd></div><div><dt class="font-bold">↑ / ↓ · Home / End</dt><dd>Take anterior / próximo · início / fim</dd></div><div><dt class="font-bold">V · B · C ou Ctrl/Cmd K</dt><dd>Seleção · lâmina · cortar</dd></div><div><dt class="font-bold">Arrastar em espaço vazio · Shift · Esc</dt><dd>Selecionar legendas por retângulo · adicionar à seleção · cancelar</dd></div><div><dt class="font-bold">Ctrl/Cmd C · Ctrl/Cmd V</dt><dd>Copiar legenda selecionada · colar nova legenda no cursor</dd></div><div><dt class="font-bold">S · Alt durante arraste · T</dt><dd>Magnetismo · suspender encaixe · ajustar tempos por quadro</dd></div><div><dt class="font-bold">+ / − · Del</dt><dd>Zoom · remover seleção</dd></div><div><dt class="font-bold">Ctrl/Cmd Z · Shift Ctrl/Cmd Z ou Ctrl/Cmd Y</dt><dd>Desfazer · refazer</dd></div></dl><form method="dialog"><button class="media-btn media-muted">Fechar</button></form></dialog>
 <dialog id="precision-dialog" aria-labelledby="precision-title"><form id="precision-form">
 <h2 id="precision-title" class="text-xl font-bold">Ajustar tempos por quadro</h2><p id="precision-rate" class="text-sm my-3"></p>
 <label class="block my-3">Quadro inicial (a partir de 0)<input id="precision-start" type="number" min="0" step="1" required></label>
@@ -381,6 +383,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 <script src="{% static 'external_media_cached_media.js' %}"></script>
 <script src="{% static 'external_media_preview_source.js' %}"></script>
 <script src="{% static 'external_media_preview_framing.js' %}"></script>
+<script src="{% static 'external_media_caption_selection.js' %}"></script>
 <script>
 (() => {
     let timeline = JSON.parse(document.getElementById('preview-timeline').textContent);
@@ -448,6 +451,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const csrf = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
     let activeClip = null, globalMs = {{ session.position_ms|default:0 }}, loading = false, saveTimer, timelineZoom = 1, editTool = 'select', bladePoints = [...(timeline.video_splits_ms||[])], selectedSegment = null, editingSubtitleCue = null, inspectorSelection = null, activePreviewRevision = {{ revision.revision }};
     let selectedCaptionIds = new Set(), activeAdjustmentTab = '', activeTranscriptCueId = null;
+    const captionClipboardKey='connect-caption-clipboard-{{ project.public_id }}';
+    let captionClipboard=null;
+    try{captionClipboard=JSON.parse(sessionStorage.getItem(captionClipboardKey)||'null')}catch(_){}
     const BROLL_CLIPBOARD_KEY = 'connect-broll-settings-{{ project.public_id }}';
     const COLOR_CLIPBOARD_KEY = 'connect-color-settings-{{ project.public_id }}';
     let brollSettingsClipboard = null;
@@ -1053,12 +1059,39 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function videoSegments(){const minimum=minimumCutMs();return timeline.clips.flatMap(clip=>{const points=[clip.timeline_in_ms,...bladePoints.filter(point=>point-clip.timeline_in_ms>=minimum&&clip.timeline_out_ms-point>=minimum),clip.timeline_out_ms].sort((a,b)=>a-b);return points.slice(0,-1).map((start,index)=>{const end=points[index+1],offsetStart=start-Number(clip.timeline_in_ms||0),offsetEnd=end-Number(clip.timeline_in_ms||0);return {start,end,label:clip.block?.name||asset(clip.asset_id)?.name||'Vídeo',assetId:clip.asset_id,sourceTimeMs:Number(clip.source_in_ms||0)+offsetStart,masterStartMs:Number(clip.master_in_ms??editedToMaster(clip.timeline_in_ms,'after'))+offsetStart,masterEndMs:Number(clip.master_in_ms??editedToMaster(clip.timeline_in_ms,'after'))+offsetEnd}})})}
     async function addBladeAt(point){point=Math.round(snapToFrame(point));const clip=clipAt(point),minimum=minimumCutMs();if(!clip||point-clip.timeline_in_ms<minimum||clip.timeline_out_ms-point<minimum||bladePoints.some(value=>Math.abs(value-point)<minimum))return;const previous=[...bladePoints];bladePoints=[...bladePoints,point].sort((a,b)=>a-b);renderEditorTimeline();try{applyTimeline(await api('{% url "external_media_project_preview_video_split" project.public_id %}',{master_ms:Math.round(editedToMaster(point))}),false,false)}catch(error){bladePoints=previous;renderEditorTimeline();alert(error.message)}}
     async function splitTimelineItem(kind,id,point){
+        if(kind==='caption')return splitCaption(id,point);
         if(kind==='music')return splitMusicClip(id,point);
         const cutAt=Math.round(snapToFrame(point));
         const endpoint=kind==='broll'
             ? `{% url 'external_media_project_preview' project.public_id %}brolls/${id}/`
             : `{% url 'external_media_project_preview' project.public_id %}overlays/${id}/`;
         try{applyTimeline(await api(endpoint,{split_at_ms:cutAt}))}catch(error){alert(error.message)}
+    }
+    function selectedCaption(){return inspectorSelection?.kind==='caption'?(timeline.captions||[]).find(cue=>String(cue.id)===String(inspectorSelection.id)):null}
+    function selectCreatedCaption(data){
+        applyTimeline(data,true,true);
+        const cue=(data.timeline.captions||[]).find(item=>String(item.id)===String(data.created_cue_id));
+        if(cue){selectInspector('caption',cue.id,cue.text);seek(cue.start_ms,false);renderTimelineSelection()}
+    }
+    async function splitCaption(id,point){
+        const cutAt=Math.round(snapToFrame(point));
+        try{
+            const data=await api(`{% url 'external_media_project_preview' project.public_id %}subtitles/${id}/`,{split_at_ms:cutAt});
+            selectCreatedCaption(data);
+        }catch(error){alert(error.message)}
+    }
+    function copyCaption(){
+        const cue=selectedCaption();if(!cue)return;
+        captionClipboard={track_id:cue.track_id,text:cue.text,duration_ms:Number(cue.end_ms)-Number(cue.start_ms)};
+        try{sessionStorage.setItem(captionClipboardKey,JSON.stringify(captionClipboard))}catch(_){}
+        updateEditControls();
+        const button=document.getElementById('copy-caption');button.title='Legenda copiada — posicione o cursor e cole';
+    }
+    async function pasteCaption(){
+        if(!captionClipboard)return;
+        const payload={...captionClipboard,start_ms:Math.round(snapToFrame(globalMs))};
+        try{selectCreatedCaption(await api('{% url "external_media_project_preview_subtitle_create" project.public_id %}',payload))}
+        catch(error){alert(error.message)}
     }
     async function splitMusicClip(clipId,point){
         const cutAt=Math.round(snapToFrame(point)),tracks=currentMusicTracks(),index=tracks.findIndex(track=>String(track.clip_id)===String(clipId)),clip=tracks[index];
@@ -1069,6 +1102,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         try{applyTimeline(await api('{% url "external_media_project_preview_music" project.public_id %}',{tracks}),true,false)}catch(error){alert(error.message);renderEditorTimeline()}
     }
     function splitSelectedAtPlayhead(){
+        if(inspectorSelection?.kind==='caption')return splitCaption(inspectorSelection.id,globalMs);
         if(inspectorSelection?.kind==='music'){
             const track=(timeline.music?.tracks||[]).find((item,index)=>`music-${item.clip_id||item.id||index}`===String(inspectorSelection.id));
             if(track)return splitMusicClip(track.clip_id||`legacy-${track.id}`,globalMs);
@@ -1421,12 +1455,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             row.className=`editor-track editor-track--${selectKind||'base'}`;
             const title=row.firstElementChild,lane=row.lastElementChild;
             if(title.textContent!==label)title.textContent=label;
-            lane.className=`editor-track__lane ${(isVideo||canBlade)&&editTool==='blade'?'is-blade':''}`;
+            lane.className=`editor-track__lane ${(isVideo||isCaption||canBlade)&&editTool==='blade'?'is-blade':''}`;
             const nextClips=items.map((item,index)=>{
                 const clipKey=`${selectKind}:${item.id??`${item.assetId}:${item.masterStartMs}:${item.masterEndMs}:${index}`}`;
                 let clip=clipsByKey.get(clipKey);const created=!clip;
                 if(!clip){clip=document.createElement('button');clip.type='button';clip.dataset.clipKey=clipKey}
-                clip._timeline={item,kind:selectKind,duration,isSourceSegment:isVideo||kind.includes('source-audio'),canBlade:isVideo||canBlade};
+                clip._timeline={item,kind:selectKind,duration,isSourceSegment:isVideo||kind.includes('source-audio'),canBlade:isVideo||isCaption||canBlade};
                 const rawWidth=(item.end-item.start)/duration*100,isSourceSegment=clip._timeline.isSourceSegment;
                 const tiny=isSourceSegment&&rawWidth<.35,isBroll=kind.includes('editor-track__broll'),isFilmstrip=(kind.includes('editor-video-clip')||isBroll)&&!tiny;
                 const decorated=clip.classList.contains('has-thumbnail')?'has-thumbnail':'';
@@ -1468,7 +1502,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
                 clip.onclick=event=>{
                     event.stopPropagation();if(clip.dataset.timelineDrag){delete clip.dataset.timelineDrag;return}
                     const point=timelinePoint(event,lane,duration);
-                    if(editTool==='blade'&&(isVideo||canBlade)){if(isVideo)addBladeAt(point);else splitTimelineItem(selectKind,item.clipId||item.id,point);return}
+                    if(editTool==='blade'&&(isVideo||isCaption||canBlade)){if(isVideo)addBladeAt(point);else splitTimelineItem(selectKind,item.clipId||item.id,point);return}
                     if(isSourceSegment){selectSourceSegment();if(selectKind)selectInspector(selectKind,item.inspectorId??item.assetId,item.label,item);renderTimelineSelection();return}
                     if(selectKind){selectInspector(selectKind,item.inspectorId??item.id,item.label,null);renderTimelineSelection();return}
                     if(!isCaption)seek(item.start,!video.paused);
@@ -1665,7 +1699,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             .sort((left,right)=>Number(left.start_ms)-Number(right.start_ms));
         const card=document.createElement('article');
         card.className='preview-decision transcript-card';
-        card.innerHTML=`<div class="transcript-card__toolbar"><div><strong>Transcrição sincronizada</strong><small class="block mt-1">${esc(String(selected.language||'').toUpperCase())} · clique para navegar · duplo clique para editar</small></div><button type="button" class="transcript-download" data-download-transcript><i class="fas fa-download"></i>Baixar</button></div><div class="transcript-list" data-transcript-list></div><p class="transcript-help">Os destaques acompanham o vídeo. A edição é salva na timeline e no render final.</p>`;
+        card.innerHTML=`<div class="transcript-card__toolbar"><div><strong>Transcrição sincronizada</strong><small class="block mt-1">${esc(String(selected.language||'').toUpperCase())} · clique para navegar · duplo clique para editar</small></div><button type="button" class="transcript-download" data-download-transcript><i class="fas fa-download"></i>Baixar</button></div><div class="transcript-list" data-transcript-list></div><p class="transcript-help">Use a lâmina para dividir a legenda. Ctrl/⌘+C copia; Ctrl/⌘+V cola uma nova legenda no cursor, em um espaço vazio da mesma faixa. As alterações são salvas na timeline e no render final.</p>`;
         const transcriptList=card.querySelector('[data-transcript-list]');
         cues.forEach(cue=>{
             const row=document.createElement('button');
@@ -1910,6 +1944,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     function updateEditControls(){
         document.querySelectorAll('[data-tool]').forEach(button=>button.classList.toggle('is-active',button.dataset.tool===editTool));
         const remove=document.getElementById('delete-segment'),item=selectedTimelineItemForDeletion();
+        document.getElementById('split-caption').disabled=!selectedCaption();
+        document.getElementById('copy-caption').disabled=!selectedCaption();
+        document.getElementById('paste-caption').disabled=!captionClipboard;
         remove.disabled=!selectedSegment&&!item;
         remove.title=selectedSegment
             ? `Remover trecho selecionado (${fmt(selectedSegment.start)} — ${fmt(selectedSegment.end)})`
@@ -1984,8 +2021,20 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     const stopTimelineNeedleDrag=event=>{if(!draggingTimelineNeedle)return;seekFromTimelinePointer.flush();draggingTimelineNeedle=false;syncTranscriptPosition();if(event.type!=='pointercancel'&&needleWasPlaying)seek(globalMs,true);editorPersistence.endGesture();if(editorCanvas.hasPointerCapture?.(event.pointerId))editorCanvas.releasePointerCapture(event.pointerId)};
     editorCanvas.addEventListener('pointerup',stopTimelineNeedleDrag);editorCanvas.addEventListener('pointercancel',stopTimelineNeedleDrag);
     const editorScroller=document.getElementById('editor-scroller');
+    window.ConnectCaptionSelection.bind({
+        canvas:editorCanvas,scroller:editorScroller,isEnabled:()=>editTool==='select'&&!editorBarrierActive,
+        getSelection:()=>selectedCaptionIds,
+        onBegin:()=>editorPersistence.beginGesture(),onEnd:()=>editorPersistence.endGesture(),
+        onSelection:ids=>{selectedCaptionIds=new Set(ids);renderTimelineSelection()},
+        onFinish:ids=>{
+            selectedSegment=null;
+            const cue=(timeline.captions||[]).find(item=>ids.has(String(item.id)));
+            inspectorSelection=cue?{kind:'caption',id:cue.id,label:ids.size>1?`${ids.size} legendas selecionadas`:cue.text}:null;
+            setReviewPanel(Boolean(cue));renderList();renderDirectTransformControl();updateEditControls();renderTimelineSelection();
+        },
+    });
     editorScroller.addEventListener('scroll',()=>requestWaveformPaint(),{passive:true});
-    editorScroller.title='Use a roda do mouse ou o trackpad para navegar horizontalmente pela timeline';
+    editorScroller.title='Use a roda do mouse ou o trackpad para navegar; arraste em um espaço vazio para selecionar legendas';
     const timelineZoomLimits={min:1,max:16};
     const clampTimelineValue=(value,min,max)=>Math.max(min,Math.min(max,value));
     function timelineViewportWidth(){
@@ -2072,10 +2121,15 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     document.getElementById('cancel-subtitle-edit').onclick=closeSubtitleEditor;document.getElementById('cancel-subtitle-edit-footer').onclick=closeSubtitleEditor;saveSubtitleEdit.onclick=saveOpenSubtitleEditor;
     document.querySelectorAll('[data-tool]').forEach(button=>button.onclick=()=>{editTool=button.dataset.tool;updateEditControls();renderTimelineSelection()});
     document.getElementById('delete-segment').onclick=deleteSelectedSegment;
+    document.getElementById('split-caption').onclick=()=>{const cue=selectedCaption();if(cue)splitCaption(cue.id,globalMs)};
+    document.getElementById('copy-caption').onclick=copyCaption;
+    document.getElementById('paste-caption').onclick=pasteCaption;
     document.addEventListener('keydown',event=>{
         if(event.key==='Escape'&&reviewPanel.classList.contains('is-open')&&!editorTyping()){setReviewPanel(false);return}
         if(editorTyping())return;
         const key=event.key.toLowerCase(),modified=event.ctrlKey||event.metaKey;
+        if(modified&&key==='c'&&selectedCaption()&&!window.getSelection()?.toString()){event.preventDefault();copyCaption();return}
+        if(modified&&key==='v'&&captionClipboard){event.preventDefault();pasteCaption();return}
         if(modified&&key!=='k'&&!['ArrowLeft','ArrowRight'].includes(event.key))return;
         if(key==='s'){event.preventDefault();toggleMagneticSnapping();return}
         if(key==='t'){event.preventDefault();openPrecisionEditor();return}

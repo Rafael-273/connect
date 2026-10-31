@@ -2730,10 +2730,16 @@ class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View)
 class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, cue_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        get_object_or_404(SubtitleCue, pk=cue_id, track__job=project.render_job)
         payload = json.loads(request.body or '{}')
         delete = bool(payload.get('delete'))
         text = payload.get('text') if 'text' in payload else None
         try:
+            if 'split_at_ms' in payload:
+                revision, created_id = TimelineRevisionService.split_subtitle(
+                    project, self.member, cue_id, payload['split_at_ms'],
+                )
+                return preview_revision_response(project, self.member, revision, created_cue_id=created_id)
             revision = TimelineRevisionService.update_subtitle(
                 project, self.member, cue_id,
                 text=text,
@@ -2743,6 +2749,21 @@ class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, Previe
         except (ValueError, TypeError) as exc:
             return JsonResponse({'error': str(exc) or 'Os dados da legenda são inválidos.'}, status=400)
         return preview_revision_response(project, self.member, revision)
+
+
+class ExternalMediaProjectPreviewSubtitleCreateView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        get_object_or_404(SubtitleTrack, pk=payload.get('track_id'), job=project.render_job)
+        try:
+            revision, created_id = TimelineRevisionService.create_subtitle(
+                project, self.member, payload.get('track_id'), payload.get('text'),
+                payload.get('start_ms'), payload.get('duration_ms'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision, created_cue_id=created_id)
 
 
 class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):

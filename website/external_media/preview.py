@@ -1393,6 +1393,67 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def split_subtitle(cls, project, member, cue_id, split_at_ms):
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        cue = SubtitleCue.objects.select_for_update().get(pk=cue_id, track__job=locked.render_job)
+        point = int(split_at_ms)
+        if point - cue.start_ms < MIN_MANUAL_CUT_MS or cue.end_ms - point < MIN_MANUAL_CUT_MS:
+            raise ValueError('Posicione o corte dentro da legenda, deixando ao menos um quadro de cada lado.')
+        # Keep an exactly synchronized bilingual pair aligned for final rendering.
+        peers = list(SubtitleCue.objects.select_for_update().filter(
+            track__job=locked.render_job, cue_index=cue.cue_index,
+            start_ms=cue.start_ms, end_ms=cue.end_ms,
+        ))
+        next_index = (SubtitleCue.all_objects.filter(track__job=locked.render_job).aggregate(value=Max('cue_index'))['value'] or 0) + 1
+        created_id = None
+        for peer in peers:
+            end = peer.end_ms
+            peer.end_ms = point
+            peer.save(update_fields=['end_ms', 'update_at'])
+            right = SubtitleCue.objects.create(
+                track_id=peer.track_id, cue_index=next_index,
+                start_ms=point, end_ms=end, text=peer.text,
+            )
+            if peer.pk == cue.pk:
+                created_id = right.pk
+        revision = cls._create(locked, current.source_manifest, current.edit_decision_set, 'Legenda dividida', member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'SPLIT_SUBTITLE', {
+            'cue_id': cue_id, 'split_at_ms': point, 'created_cue_id': created_id,
+        }, {'cue_id': cue_id, 'end_ms': cue.end_ms}, member)
+        return revision, created_id
+
+    @classmethod
+    @transaction.atomic
+    def create_subtitle(cls, project, member, track_id, text, start_ms, duration_ms):
+        from ..models.external_media import SubtitleTrack
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        track = SubtitleTrack.objects.get(pk=track_id, job=locked.render_job)
+        text = str(text or '').strip()
+        start = int(start_ms)
+        duration = int(duration_ms)
+        limit = int(current.timeline['sequence']['duration_ms'])
+        end = min(limit, start + duration)
+        if not text:
+            raise ValueError('A legenda precisa ter um texto.')
+        if start < 0 or duration < MIN_MANUAL_CUT_MS or end - start < MIN_MANUAL_CUT_MS:
+            raise ValueError('Escolha uma posição dentro da timeline com espaço para a nova legenda.')
+        if SubtitleCue.objects.filter(track=track, start_ms__lt=end, end_ms__gt=start).exists():
+            raise ValueError('Já existe uma legenda nesse intervalo. Posicione o cursor em um espaço vazio desta faixa.')
+        cue = SubtitleCue.objects.create(
+            track=track,
+            cue_index=(SubtitleCue.all_objects.filter(track__job=locked.render_job).aggregate(value=Max('cue_index'))['value'] or 0) + 1,
+            text=text, start_ms=start, end_ms=end,
+        )
+        revision = cls._create(locked, current.source_manifest, current.edit_decision_set, 'Legenda colada', member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'CREATE_SUBTITLE', {'cue_id': cue.pk}, {'cue_id': cue.pk}, member)
+        return revision, cue.pk
+
+    @classmethod
+    @transaction.atomic
     def update_transform(cls, project, member, decision_id, values):
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)

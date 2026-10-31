@@ -777,8 +777,10 @@ class SubtitleService:
         translated_cues = {
             cue.cue_index: cue for cue in ordered_tracks[1].cues.all()
         }
-        for cue_index, original_cue in original_cues.items():
+        for cue_index in dict.fromkeys([*original_cues, *translated_cues]):
+            original_cue = original_cues.get(cue_index)
             translated_cue = translated_cues.get(cue_index)
+            reference_cue = original_cue or translated_cue
             paired_rows = (
                 (original_cue, 'Original', original_style, original_margin),
                 (translated_cue, 'Translated', translated_style, translated_margin),
@@ -788,8 +790,8 @@ class SubtitleService:
                     continue
                 text = self._ass_escape(self._single_line_text(cue.text))
                 rows.extend(self._ass_dialogue_rows(
-                    start_ms=original_cue.start_ms,
-                    end_ms=original_cue.end_ms,
+                    start_ms=reference_cue.start_ms,
+                    end_ms=reference_cue.end_ms,
                     role=role,
                     style=style,
                     text=text,
