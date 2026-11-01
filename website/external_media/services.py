@@ -1821,7 +1821,7 @@ class VideoAssemblyService:
         source_color_adjustments = source_color_adjustments or {}
         manual_source_indexes = {
             int(interval['source_index']) for interval in (source_intervals or [])
-            if interval.get('manual_transform')
+            if interval.get('manual_transform') or interval.get('restore_original')
         }
         if manual_source_indexes:
             source_intervals = [
@@ -1901,6 +1901,20 @@ class VideoAssemblyService:
                     width=canvas_width, height=canvas_height,
                     auto_reframe_config=None, reframe_plan_data={'disabled': True},
                 )
+                # The original pixels serve both manual and automatic cuts.
+                # Carry the saved automatic crop to concat for untouched cuts;
+                # disabling normalization's crop must not reset the whole take.
+                for interval in source_intervals:
+                    if int(interval['source_index']) != index or not interval.get('auto_reframe_plan'):
+                        continue
+                    plan_data = interval['auto_reframe_plan']
+                    plan = AutoReframePlan.from_dict(plan_data['plan']).scaled(
+                        canvas_width / max(1, int(plan_data.get('analysis_width') or source_width)),
+                        canvas_height / max(1, int(plan_data.get('analysis_height') or source_height)),
+                    )
+                    interval['concat_auto_reframe'] = self._shift_reframe_plan_time(
+                        {'plan': plan.as_dict()}, int(interval['start_ms']) + int(source_item.trim_start_ms or 0),
+                    )['plan']
             normalized.append(destination)
 
         original_reframe_plans = [job['reframe_plan_data'] for job in normalize_jobs]
@@ -2243,7 +2257,15 @@ class VideoAssemblyService:
                 transform = interval.get('manual_transform') if isinstance(interval, dict) else None
                 framing_width = interval.get('framing_width') if isinstance(interval, dict) else None
                 framing_height = interval.get('framing_height') if isinstance(interval, dict) else None
-                if transform or (framing_width and framing_height):
+                automatic_crop = interval.get('concat_auto_reframe') if isinstance(interval, dict) else None
+                if automatic_crop:
+                    # Evaluate the approved curve on this cut's original source
+                    # clock, independently of source-envelope reuse/reordering.
+                    filters = AutoReframePlan.from_dict(automatic_crop).ffmpeg_filters(
+                        int(framing_width), int(framing_height),
+                    )
+                    transform_filter = 'setpts=PTS-STARTPTS,' + ','.join(filters) + ',setsar=1,format=yuv420p,'
+                elif transform or (framing_width and framing_height):
                     transform = transform or {}
                     scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
                     x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
@@ -3506,11 +3528,11 @@ class ExternalMediaProjectPipeline:
             end = int(trim.get('end_ms') or source.get('duration_ms') or start)
             source_master_starts[str(source.get('id'))] = (cursor, start)
             cursor += max(1, end - start)
-        scoped_reframes = [
+        reframe_operations = [
             item for item in ((getattr(revision, 'edit_decision_set', {}) or {}).get('operations') or [])
             if item.get('type') == 'reframe'
-            and 'segment_start_ms' in (item.get('metadata') or {})
         ]
+        scoped_reframes = [item for item in reframe_operations if 'segment_start_ms' in (item.get('metadata') or {})]
         result = []
         for clip in clips:
             source_id = str(clip.get('asset_id') or '')
@@ -3529,8 +3551,8 @@ class ExternalMediaProjectPipeline:
             if start < 0 or end <= start:
                 raise ExternalMediaError('A revisão aprovada contém um trecho de vídeo inválido.')
             master_base, trim_start = source_master_starts.get(source_id, (0, int(source.trim_start_ms or 0)))
-            master_start = master_base + int(clip.get('source_in_ms') or 0) - trim_start
-            master_end = master_base + int(clip.get('source_out_ms') or 0) - trim_start
+            master_start = int(clip.get('master_in_ms', master_base + int(clip.get('source_in_ms') or 0) - trim_start))
+            master_end = int(clip.get('master_out_ms', master_base + int(clip.get('source_out_ms') or 0) - trim_start))
             boundaries = {master_start, master_end}
             matching = [
                 item for item in scoped_reframes
@@ -3558,16 +3580,39 @@ class ExternalMediaProjectPipeline:
                     ),
                     candidates[-1] if candidates else None,
                 )
+                if selected is None:
+                    global_reframes = [item for item in reframe_operations
+                                       if str(item.get('source_id')) == source_id
+                                       and 'segment_start_ms' not in (item.get('metadata') or {})]
+                    selected = next(
+                        (item for item in reversed(global_reframes)
+                         if not item.get('enabled', True)
+                         or (item.get('metadata') or {}).get('manual_transform') is not None),
+                        global_reframes[-1] if global_reframes else None,
+                    )
                 transform = (
                     (selected.get('metadata') or {}).get('manual_transform')
                     if selected and selected.get('enabled', True)
                     else None
                 )
+                if not transform and (selected is None or selected.get('enabled', True)):
+                    transform = next(({key: effect[key] for key in ('scale', 'x', 'y') if key in effect}
+                                      for effect in clip.get('effects') or [] if effect.get('type') == 'transform'), None)
+                automatic_plan = (selected or {}).get('plan_reference') if selected and selected.get('enabled', True) and not transform else None
+                if selected and selected.get('enabled', True) and not transform and not automatic_plan:
+                    automatic_plan = next((item.get('plan_reference') for item in reframe_operations
+                                           if str(item.get('source_id')) == source_id
+                                           and item.get('enabled', True) and item.get('plan_reference')
+                                           and 'segment_start_ms' not in (item.get('metadata') or {})), None)
+                if automatic_plan and not automatic_plan.get('plan'):
+                    automatic_plan = None
                 result.append({
                     'source_id': source_id, 'source_index': index,
                     'start_ms': start + part_start - master_start,
                     'end_ms': start + part_end - master_start,
                     'manual_transform': transform,
+                    'restore_original': bool(selected and not selected.get('enabled', True)),
+                    'auto_reframe_plan': automatic_plan,
                 })
         return result
 
