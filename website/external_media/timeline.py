@@ -923,10 +923,13 @@ class InternalTimelineBuilder:
             srt_lines = []
             for cue in track.cues.all():
                 cues.append({'start_ms': cue.start_ms, 'end_ms': cue.end_ms, 'text': cue.text})
+                # Native Premiere captions should receive one text line per
+                # cue, regardless of manual/editor line breaks or HTML breaks.
+                srt_text = ' '.join(re.sub(r'<br\s*/?\s*>', ' ', cue.text, flags=re.IGNORECASE).split())
                 srt_lines.extend([
                     str(cue.cue_index),
                     f'{self._srt_time(cue.start_ms)} --> {self._srt_time(cue.end_ms)}',
-                    cue.text, '',
+                    srt_text, '',
                 ])
             relative = f'Captions/{track.language}.srt'
             (package_root / relative).write_text('\n'.join(srt_lines), encoding='utf-8')
