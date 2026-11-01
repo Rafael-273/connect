@@ -2824,6 +2824,19 @@ class ExternalMediaProjectPipeline:
         try:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 68, 'Preparando a versão final')
             self._step(project, 'render', ProjectPipelineStep.Status.RUNNING)
+            # Cues already use edited time. Validate against the approved clip
+            # sequence before spending time assembling/mastering the final file.
+            protected_ranges = self._subtitle_protected_ranges(project)
+            subtitle_report = self.quality.validate_subtitles(
+                ExternalMediaPipeline._ordered_output_tracks(project.render_job), protected_ranges,
+            )
+            if not subtitle_report.ok:
+                logger.error(
+                    'external_media_protected_subtitle_overlap project=%s revision=%s protected_ranges=%s overlaps=%s',
+                    project.public_id, getattr(project.approved_timeline_revision, 'revision', None),
+                    protected_ranges, subtitle_report.metrics.get('protected_subtitle_overlaps'),
+                )
+            subtitle_report.require_ok()
             if (project.configuration or {}).get('proxy_pipeline'):
                 with JobWorkspace(
                     project.public_id,
@@ -2832,11 +2845,6 @@ class ExternalMediaProjectPipeline:
                 ) as workspace:
                     with timed_step('prepare_final_master', project=project.public_id):
                         self._prepare_final_master(project, workspace.path)
-            subtitle_report = self.quality.validate_subtitles(
-                ExternalMediaPipeline._ordered_output_tracks(project.render_job),
-                (project.configuration or {}).get('protected_block_ranges'),
-            )
-            subtitle_report.require_ok()
             self._update(project, ExternalMediaProject.Status.PROCESSING, 91, 'Finalizando seu vídeo')
             if project.render_job.subtitle_tracks.exists():
                 with timed_step('render_outputs', project=project.public_id):
@@ -3298,6 +3306,7 @@ class ExternalMediaProjectPipeline:
                 'approved_timeline_clips' if exact_approved_timeline_cuts else 'edit_decisions'
             ),
             'source_intervals': source_intervals,
+            'protected_block_ranges': self._subtitle_protected_ranges(project),
             'source_duration_ms': original_duration_ms,
             'expected_duration_ms': expected_duration_ms,
             'cuts': [cut.as_dict() for cut in combined_plan.cuts],
@@ -3826,8 +3835,41 @@ class ExternalMediaProjectPipeline:
         )
 
     @staticmethod
+    def _subtitle_protected_ranges(project):
+        """Protected spans in the same edited clock as the approved captions.
+
+        Analysis configuration is retained for transcription/source processing.
+        It cannot describe the delivery positions after member cuts/reordering.
+        """
+        revision = getattr(project, 'approved_timeline_revision', None)
+        if not revision:
+            return (project.configuration or {}).get('protected_block_ranges') or []
+        sources = {
+            str(source.get('id')): source
+            for source in (revision.source_manifest or {}).get('sources') or []
+        }
+        ranges = []
+        for clip in (revision.timeline or {}).get('clips') or []:
+            source = sources.get(str(clip.get('asset_id')), {})
+            if not (clip.get('skip_extra_processing') or (source.get('metadata') or {}).get('skip_extra_processing')):
+                continue
+            start, end = int(clip['timeline_in_ms']), int(clip['timeline_out_ms'])
+            if end > start:
+                ranges.append({
+                    'start_ms': start, 'end_ms': end,
+                    'source_id': clip.get('asset_id'),
+                    'block_key': source.get('block_key') or (clip.get('block') or {}).get('key'),
+                })
+        return ranges
+
+    @staticmethod
     def _protected_ranges_ms(project, plan):
         """"Manter bloco intacto" ranges, remapped onto the post speech-edit timeline."""
+        if getattr(project, 'approved_timeline_revision', None):
+            # Approved source intervals already include every cut and move.
+            # Remapping with the original speech plan again shifts them twice.
+            return [(item['start_ms'], item['end_ms'])
+                    for item in ExternalMediaProjectPipeline._subtitle_protected_ranges(project)]
         ranges = (project.configuration or {}).get('protected_block_ranges') or []
         remap = plan.remap_time if plan else (lambda ms: ms)
         return [
