@@ -1,7 +1,7 @@
 <div class="event-detail-content h-full overflow-y-auto">
     <div class="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 lg:px-6 lg:py-4">
         {% if not detail_page %}
-        <a href="{% url 'media_content_list' %}?kind={{ filter_kind|default:'all' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
+        <a href="{% url 'media_content_list' %}?kind={{ filter_kind|default:'all' }}&status={{ filter_status|default:'open' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
            id="demands-mobile-back"
            class="{% if detail_page %}hidden{% else %}lg:hidden inline-flex{% endif %} items-center gap-1.5 text-xs font-semibold mb-3" style="color: var(--media-color);">
             <i class="fas fa-arrow-left"></i> Voltar

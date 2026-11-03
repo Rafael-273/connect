@@ -62,12 +62,12 @@ class MediaMyWorkTests(TestCase):
     def status_url(self, task=None):
         return reverse('media_my_work_status', args=[(task or self.task).pk])
 
-    def test_default_list_contains_own_open_and_recently_completed_steps(self):
+    def test_default_list_contains_only_own_open_steps(self):
         response = self.client.get(reverse('media_my_work'), {'user': self.other.pk, 'responsible': self.other.pk})
-        self.assertEqual({a['id'] for a in response.context['activities']}, {self.task.pk, self.free_task.pk, self.completed_task.pk})
+        self.assertEqual({a['id'] for a in response.context['activities']}, {self.task.pk, self.free_task.pk})
         self.assertNotContains(response, 'ETAPA PRIVADA')
         self.assertNotContains(response, 'Minha revisão')
-        self.assertContains(response, 'Etapa já concluída')
+        self.assertNotContains(response, 'Etapa já concluída')
 
     def test_completed_tab_is_also_personal(self):
         self.private_task.status = 'completed'
@@ -273,8 +273,8 @@ class MediaMyWorkTests(TestCase):
     def test_search_by_task_demand_and_event_keeps_personal_scope(self):
         for query, expected in [
             ('Editar chamada', [self.task.pk]),
-            ('Chamada da Conferência', [self.task.pk, self.completed_task.pk]),
-            ('Conferência', [self.task.pk, self.completed_task.pk]),
+            ('Chamada da Conferência', [self.task.pk]),
+            ('Conferência', [self.task.pk]),
         ]:
             response = self.client.get(reverse('media_my_work'), {'q': query})
             self.assertEqual([a['id'] for a in response.context['activities']], expected)
@@ -295,7 +295,7 @@ class MediaMyWorkTests(TestCase):
 
     def test_invalid_filters_are_ignored_and_completed_search_is_preserved(self):
         response = self.client.get(reverse('media_my_work'), {'status': 'bogus', 'period_from': '2026-99-99', 'period_to': 'invalid'})
-        self.assertEqual(len(response.context['activities']), 3)
+        self.assertEqual(len(response.context['activities']), 2)
         response = self.client.get(reverse('media_my_work'), {'tab': 'completed', 'q': 'já concluída', 'status': 'pending'})
         self.assertEqual([a['id'] for a in response.context['activities']], [self.completed_task.pk])
         self.assertIn('q=', response.context['pagination_query'])

@@ -4,6 +4,7 @@ import logging
 import math
 import re
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -495,6 +496,9 @@ class InternalTimelineBuilder:
         }
 
     def _video_clips(self, project, sources, plan, sequence):
+        revision = getattr(project, 'approved_timeline_revision', None)
+        if revision and 'clips' in (revision.timeline or {}):
+            return self._approved_video_clips(revision, sources)
         plan = plan if plan.duration_ms > 1 or plan.cuts else SpeechEditPlan((), sum(
             max(1, int(metadata['duration_ms']) - source.trim_start_ms)
             for source, metadata in sources
@@ -555,6 +559,41 @@ class InternalTimelineBuilder:
         for index, plan_data in enumerate(plans):
             if plan_data and plan_data.get('plan'):
                 decisions.append({'operation': 'auto_reframe', 'source_index': index, 'confidence': None})
+        return clips, decisions, markers
+
+    @staticmethod
+    def _approved_video_clips(revision, sources):
+        """Use the frozen delivery order for the independent dialogue stem.
+
+        The consolidated picture already has these moves/cuts baked in. Rebuilding
+        A1 from manifest order plus old removal decisions desynchronizes it from V1.
+        """
+        available = {source.asset_id: (source, metadata) for source, metadata in sources}
+        clips, markers, cursor = [], [], 0
+        for index, snapshot in enumerate(revision.timeline.get('clips') or [], start=1):
+            asset_id = snapshot.get('asset_id')
+            if asset_id not in available:
+                raise ExternalMediaError('Um vídeo da revisão aprovada não está disponível para exportar o áudio sincronizado.')
+            source, metadata = available[asset_id]
+            clip = deepcopy(snapshot)
+            start, end = int(clip['timeline_in_ms']), int(clip['timeline_out_ms'])
+            source_in, source_out = int(clip['source_in_ms']), int(clip['source_out_ms'])
+            if start != cursor or end <= start or source_in < source.trim_start_ms or source_out - source_in != end - start:
+                raise ExternalMediaError('A revisão aprovada contém um intervalo inválido para exportar o áudio sincronizado.')
+            clip.update({
+                'id': clip.get('id') or f'clip_{index}',
+                'name': source.block_name or source.original_name,
+                'role': source.role,
+                'source_duration_ms': int(metadata['duration_ms']),
+                'audio_enabled': False,
+                'skip_extra_processing': source.skip_extra_processing,
+            })
+            clips.append(clip)
+            markers.append({'name': clip['name'], 'time_ms': start, 'block_key': source.block_key})
+            cursor = end
+        if not clips:
+            raise ExternalMediaError('A revisão aprovada não possui trechos de vídeo para exportar.')
+        decisions = deepcopy((getattr(revision, 'edit_decision_set', {}) or {}).get('operations') or [])
         return clips, decisions, markers
 
     def _dialogue_assets(self, project, sources, video_clips, package_root):

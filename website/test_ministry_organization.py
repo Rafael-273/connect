@@ -455,6 +455,27 @@ class MinistryDemandTests(TestCase):
         self.assertContains(response, self.team.name)
         self.assertNotContains(response, self.foreign_team.name)
 
+    def test_hub_hides_completed_items_by_default_and_can_show_them(self):
+        open_content = MediaContent.objects.create(
+            title='Demanda em aberto', content_type='artwork', status='pending',
+        )
+        completed_content = MediaContent.objects.create(
+            title='Demanda concluída', content_type='artwork', status='approved',
+        )
+
+        self.client.force_login(self.user)
+        default_response = self.client.get(reverse('media_content_list'))
+        default_items = [item for month in default_response.context['sidebar_months'] for item in month['items']]
+        default_ids = {item['pk'] for item in default_items if item['type'] == 'free'}
+        self.assertIn(open_content.pk, default_ids)
+        self.assertNotIn(completed_content.pk, default_ids)
+
+        completed_response = self.client.get(reverse('media_content_list'), {'status': 'completed'})
+        completed_items = [item for month in completed_response.context['sidebar_months'] for item in month['items']]
+        completed_ids = {item['pk'] for item in completed_items if item['type'] == 'free'}
+        self.assertIn(completed_content.pk, completed_ids)
+        self.assertNotIn(open_content.pk, completed_ids)
+
     def test_hub_search_finds_event_from_its_nested_demand_and_task(self):
         import datetime
         from website.services.event_media_integration import start_media_organization

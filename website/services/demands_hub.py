@@ -553,6 +553,11 @@ def build_sidebar_items(request):
     """Retorna lista de meses com eventos e conteúdos livres."""
     params = request.GET
     kind = params.get('kind', 'all')
+    # A agenda deve focar no que ainda pede ação.  Os itens finalizados seguem
+    # acessíveis pelo filtro, sem poluir a primeira visita ao hub.
+    filter_status = params.get('status', 'open')
+    if filter_status not in ('open', 'completed', 'all'):
+        filter_status = 'open'
     q = params.get('q', '').strip()
     responsible_id = params.get('responsible', '')
     team_id = params.get('team', '')
@@ -637,12 +642,21 @@ def build_sidebar_items(request):
         free_qs = free_qs.filter(
             Q(publication_date__date__lte=period_to) | Q(due_date__date__lte=period_to)
         )
+    if filter_status == 'open':
+        free_qs = free_qs.exclude(status__in=DONE_STATUSES)
+    elif filter_status == 'completed':
+        free_qs = free_qs.filter(status__in=DONE_STATUSES)
     free_qs = free_qs.order_by('publication_date', 'due_date', '-created_at')
 
     months = OrderedDict()
 
     if kind in ('all', 'events'):
         for event in events_qs:
+            is_done = bool(event.content_count and event.done_count == event.content_count)
+            if filter_status == 'open' and is_done:
+                continue
+            if filter_status == 'completed' and not is_done:
+                continue
             key = _month_key(event.event_date)
             if key not in months:
                 months[key] = {'label': _month_label(key), 'items': []}
@@ -657,7 +671,7 @@ def build_sidebar_items(request):
                 'done_count': event.done_count,
                 # An event is complete only when it has productions and each
                 # one reached one of the existing terminal content states.
-                'is_done': bool(event.content_count and event.done_count == event.content_count),
+                'is_done': is_done,
                 'event_type': event.event_type.name if event.event_type_id else None,
                 'icon': 'calendar-alt',
             })
@@ -826,7 +840,7 @@ def get_templates():
     )
 
 
-HUB_FILTER_KEYS = ('kind', 'q', 'responsible', 'team', 'event_type', 'period_from', 'period_to')
+HUB_FILTER_KEYS = ('kind', 'status', 'q', 'responsible', 'team', 'event_type', 'period_from', 'period_to')
 
 
 def build_hub_query(request, **extra):

@@ -30,7 +30,7 @@
     <div class="media-work-empty">
         <i class="fas fa-check-circle text-3xl text-gray-400 mb-4" aria-hidden="true"></i>
         <h2 class="text-lg font-bold text-gray-900">{% if has_search %}Nenhuma atividade encontrada.{% elif tab == 'completed' %}Nenhuma atividade concluída recentemente.{% elif tab == 'archived' %}Nenhuma atividade arquivada.{% else %}Tudo certo por aqui.{% endif %}</h2>
-        <p class="text-sm text-gray-500 mt-2">{% if has_search %}Experimente outra pesquisa ou limpe os filtros.{% elif tab == 'completed' %}As atividades concluídas nos últimos 30 dias aparecerão aqui.{% elif tab == 'archived' %}Atividades concluídas há mais de 30 dias aparecerão aqui.{% else %}Você não possui nenhuma atividade em aberto ou concluída recentemente.{% endif %}</p>
+        <p class="text-sm text-gray-500 mt-2">{% if has_search %}Experimente outra pesquisa ou limpe os filtros.{% elif tab == 'completed' %}As atividades concluídas nos últimos 30 dias aparecerão aqui.{% elif tab == 'archived' %}Atividades concluídas há mais de 30 dias aparecerão aqui.{% else %}Você não possui nenhuma atividade em aberto.{% endif %}</p>
     </div>
 {% endfor %}
 {% if page.has_other_pages %}

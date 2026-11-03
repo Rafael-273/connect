@@ -58,6 +58,9 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
         filter_kind = request.GET.get('kind', 'all')
         if filter_kind not in ('all', 'events', 'free'):
             filter_kind = 'all'
+        filter_status = request.GET.get('status', 'open')
+        if filter_status not in ('open', 'completed', 'all'):
+            filter_status = 'open'
         create_mode = request.GET.get('create', '')
         if create_mode not in ('demand', 'event'):
             create_mode = ''
@@ -75,6 +78,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 'sidebar_months': sidebar_months,
                 'selected': '',
                 'filter_kind': filter_kind,
+                'filter_status': filter_status,
                 'filter_q': request.GET.get('q', ''),
                 'filter_responsible': request.GET.get('responsible', ''),
                 'filter_team': request.GET.get('team', ''),
@@ -226,6 +230,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 for date in detail['event'].dates.all()
             ] if detail_type == 'event' and detail else [],
             'filter_kind': filter_kind,
+            'filter_status': filter_status,
             'filter_q': request.GET.get('q', ''),
             'filter_responsible': request.GET.get('responsible', ''),
             'filter_team': request.GET.get('team', ''),

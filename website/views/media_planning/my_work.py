@@ -47,7 +47,9 @@ class IndividualMediaRequiredMixin(MemberRequiredMixin):
 
 class MediaMyWorkView(IndividualMediaRequiredMixin, View):
     def get(self, request):
-        tab = request.GET.get('tab', 'all')
+        # A lista pessoal deve começar pelas atividades que ainda exigem ação.
+        # As concluídas permanecem acessíveis pelas opções do filtro.
+        tab = request.GET.get('tab', 'pending')
         if tab not in ('all', 'pending', 'completed', 'archived'):
             tab = 'all'
         archive_before = timezone.now() - timedelta(days=30)
@@ -88,7 +90,7 @@ class MediaMyWorkView(IndividualMediaRequiredMixin, View):
             **self.nav_context(), 'tab': tab, 'page': page,
             'activities': activities,
             'filter_q': query, 'filter_status': status, **dates,
-            'has_filters': bool(tab != 'all' or status or any(dates.values())),
+            'has_filters': bool(tab not in ('all', 'pending') or status or any(dates.values())),
             'has_search': bool(query or status or any(dates.values())),
             'pagination_query': params.urlencode(),
         })

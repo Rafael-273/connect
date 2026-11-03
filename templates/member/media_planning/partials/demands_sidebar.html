@@ -6,7 +6,7 @@
         <div class="demands-month-grid space-y-2 lg:grid lg:grid-cols-2 lg:gap-2 lg:space-y-0 {% if selected %}lg:grid-cols-1{% endif %}">
             {% for item in month.items %}
             {% if item.type == 'event' %}{% url 'media_event_detail_page' item.pk as item_detail_url %}{% else %}{% url 'media_demand_detail_page' item.pk as item_detail_url %}{% endif %}
-            <a href="{{ item_detail_url }}?kind={{ filter_kind|default:'all' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
+            <a href="{{ item_detail_url }}?kind={{ filter_kind|default:'all' }}&status={{ filter_status|default:'open' }}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% if filter_responsible %}&responsible={{ filter_responsible }}{% endif %}{% if filter_team %}&team={{ filter_team }}{% endif %}{% if filter_event_type %}&event_type={{ filter_event_type }}{% endif %}{% if filter_period_from %}&period_from={{ filter_period_from }}{% endif %}{% if filter_period_to %}&period_to={{ filter_period_to }}{% endif %}"
                data-demands-select="{{ item.key }}"
                class="sidebar-item block p-3 {% if selected == item.key %}active{% endif %}{% if item.is_done %} is-complete{% endif %}">
                 <div class="flex items-center gap-2.5 min-h-[3.5rem]">

@@ -22,6 +22,7 @@
               id="demand-edit-form">
             {% csrf_token %}
             <input type="hidden" name="kind" value="{{ filter_kind|default:'all' }}">
+            <input type="hidden" name="status" value="{{ filter_status|default:'open' }}">
             {% if filter_q %}<input type="hidden" name="q" value="{{ filter_q }}">{% endif %}
             {% if filter_responsible %}<input type="hidden" name="responsible" value="{{ filter_responsible }}">{% endif %}
             {% if filter_team %}<input type="hidden" name="team" value="{{ filter_team }}">{% endif %}

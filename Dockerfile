@@ -14,7 +14,12 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 WORKDIR /usr/src/platform
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fontconfig && \
+# HTTPS avoids corrupted/stale package responses from HTTP intermediary caches.
+# Retries make transient Debian CDN inconsistencies non-fatal.
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get -o Acquire::Retries=5 -o Acquire::https::No-Cache=true update && \
+    apt-get -o Acquire::Retries=5 -o Acquire::https::No-Cache=true install -y --no-install-recommends ffmpeg fontconfig && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /usr/src/platform/
