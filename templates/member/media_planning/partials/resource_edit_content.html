@@ -1,0 +1,30 @@
+<form method="post" action="{% url 'media_resource_edit' resource.pk %}" data-resource-edit-form>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="text-sm text-red-600 mb-3" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="grid sm:grid-cols-2 gap-4">
+        {% for field in form %}
+        <div{% if field.name == 'notes' or field.name == 'sensitive_notes' or field.name == 'access_teams' %} class="sm:col-span-2"{% endif %}{% if field.errors %} data-field-error{% endif %}>
+            {% if field.name == 'access_teams' %}
+            <span id="edit-resource-access-label" class="resource-form-label">{{ field.label }} <span class="normal-case font-normal text-gray-400">(opcional)</span></span>
+            <details class="resource-access" aria-labelledby="edit-resource-access-label" data-edit-resource-access>
+                <summary><span><i class="fas fa-users" aria-hidden="true"></i><span data-access-summary>Selecionar equipes</span></span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary>
+                <div class="resource-access-options">
+                    {% for option in field %}<label class="resource-access-option">{{ option.tag }} <span>{{ option.choice_label }}</span></label>{% empty %}<p class="text-xs text-gray-500 px-3 py-2">Nenhuma equipe disponível.</p>{% endfor %}
+                </div>
+            </details>
+            <p class="text-xs text-gray-500 mt-1">Sem equipes selecionadas, apenas líderes têm acesso.</p>
+            {% else %}
+            <label for="{{ field.id_for_label }}" class="resource-form-label">{{ field.label }}{% if not field.field.required %} <span class="normal-case font-normal text-gray-400">(opcional)</span>{% endif %}</label>
+            {{ field }}
+            {% endif %}
+            {% if field.help_text %}<p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>{% endif %}
+            {% for error in field.errors %}<p class="text-xs text-red-600 mt-1" role="alert">{{ error }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    <p data-resource-edit-error class="hidden text-xs text-red-600 mt-3" role="alert"></p>
+    <div class="org-modal-footer resource-modal-footer">
+        <button type="button" class="org-btn-secondary" data-cancel-resource-edit>Cancelar</button>
+        <button type="submit" class="org-btn-primary"><i class="fas fa-check" aria-hidden="true"></i> Salvar alterações</button>
+    </div>
+</form>

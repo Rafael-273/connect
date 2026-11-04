@@ -506,15 +506,17 @@ class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
 
 class MediaTaskUpdateDescriptionView(MediaMemberRequiredMixin, View):
     def post(self, request, pk):
-        from django.utils.html import linebreaks, urlize
-        from django.utils.safestring import mark_safe
+        from django.utils.html import linebreaks, strip_tags, urlize
 
         task = get_object_or_404(MediaTask, pk=pk)
         description = request.POST.get('description', '').strip()
         task.description = description
         task.save(update_fields=['description', 'update_at'])
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            html = mark_safe(linebreaks(urlize(description))) if description else ''
+            # Descrições legadas podem conter HTML do editor. Nos cards elas
+            # são apenas um resumo textual, portanto nunca exibimos as tags.
+            plain_description = strip_tags(description)
+            html = linebreaks(urlize(plain_description, autoescape=True), autoescape=True) if description else ''
             return JsonResponse({'description': description, 'description_html': html})
         next_url = request.POST.get('next')
         if next_url:

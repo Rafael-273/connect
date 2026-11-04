@@ -354,7 +354,7 @@ class MediaResourceForm(forms.ModelForm):
         model = MediaResource
         fields = [
             'name', 'category', 'url', 'email_username', 'responsible',
-            'access_members', 'subscription_type', 'renewal_date', 'notes', 'is_active',
+            'access_teams', 'subscription_type', 'renewal_date', 'notes', 'is_active',
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': _INPUT}),
@@ -362,7 +362,7 @@ class MediaResourceForm(forms.ModelForm):
             'url': forms.URLInput(attrs={'class': _INPUT}),
             'email_username': forms.TextInput(attrs={'class': _INPUT}),
             'responsible': forms.Select(attrs={'class': _SELECT}),
-            'access_members': forms.SelectMultiple(attrs={'class': _SELECT, 'size': 5}),
+            'access_teams': forms.CheckboxSelectMultiple(),
             'subscription_type': forms.Select(attrs={'class': _SELECT}),
             'renewal_date': forms.DateInput(attrs={'class': _INPUT, 'type': 'date'}),
             'notes': forms.Textarea(attrs={'class': _TEXTAREA, 'rows': 2}),
@@ -371,9 +371,44 @@ class MediaResourceForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['responsible'].queryset = _media_members_qs()
-        self.fields['responsible'].empty_label = '— Selecionar —'
-        self.fields['access_members'].queryset = _media_members_qs()
+        if 'responsible' in self.fields:
+            self.fields['responsible'].queryset = _media_members_qs()
+            self.fields['responsible'].empty_label = '— Selecionar —'
+        self.fields['access_teams'].queryset = media_teams().filter(is_active=True)
+
+
+class MediaResourceCreateForm(MediaResourceForm):
+    password = forms.CharField(
+        label='Senha', required=False, strip=False,
+        widget=forms.PasswordInput(attrs={
+            'class': _INPUT, 'autocomplete': 'new-password',
+            'placeholder': 'Senha do recurso',
+        }),
+    )
+
+    class Meta(MediaResourceForm.Meta):
+        fields = ['name', 'category', 'url', 'subscription_type', 'email_username', 'password', 'access_teams', 'notes']
+        widgets = {
+            **MediaResourceForm.Meta.widgets,
+            'access_teams': forms.CheckboxSelectMultiple(),
+        }
+
+
+class MediaResourceEditForm(MediaResourceCreateForm):
+    sensitive_notes = forms.CharField(
+        label='Notas sensíveis', required=False, strip=False,
+        widget=forms.Textarea(attrs={
+            'class': _TEXTAREA, 'rows': 2,
+            'placeholder': 'Deixe em branco para manter as notas atuais',
+        }),
+    )
+
+    class Meta(MediaResourceCreateForm.Meta):
+        fields = [*MediaResourceCreateForm.Meta.fields, 'sensitive_notes']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['password'].widget.attrs['placeholder'] = 'Deixe em branco para manter a senha atual'
 
 
 class MediaResourceCredentialForm(forms.Form):

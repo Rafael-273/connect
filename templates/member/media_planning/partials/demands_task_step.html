@@ -64,7 +64,7 @@
         <div class="demand-task-desc{% if not task.description %} demand-task-desc--compact{% endif %}" data-task-desc-wrap="{{ task.pk }}">
             {% if task.description %}
             <div class="demand-task-desc-view" data-task-desc-view="{{ task.pk }}">
-                <p class="demand-task-desc-text">{{ task.description|urlize }}</p>
+                <p class="demand-task-desc-text">{{ task.description|striptags|urlize }}</p>
                 <button type="button" class="demand-task-desc-link" data-task-desc-edit="{{ task.pk }}">
                     <i class="fas fa-pen" aria-hidden="true"></i>
                     <span>Editar observação</span>
