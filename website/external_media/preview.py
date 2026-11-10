@@ -9,7 +9,7 @@ import uuid
 from django.core.files import File
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import F, Max
 from django.urls import reverse
 from django.utils import timezone
 
@@ -31,6 +31,7 @@ from .quality_control import MediaQualityService
 from .overlays import OverlayTimelineService
 from .broll import BrollTimelineService
 from .workspace import JobWorkspace
+from .video_order import clip_range, order_clips, timeline_mapping, relocate_item
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,9 @@ MIN_MANUAL_CUT_MS = 33
 # after the fix transparently get one correctly shaped source proxy.
 # Version 3 also rebuilds phone MOV proxies with their audio timestamps rebased
 # to the video clock. Older cached proxies can retain a delayed AAC start PTS.
-SOURCE_PROXY_GEOMETRY_VERSION = 4
+# Version 5 preserves the last video frame and audio tail through AAC proxy
+# encodes; v4 proxies can accumulate per-take timing drift.
+SOURCE_PROXY_GEOMETRY_VERSION = 5
 REVIEW_MASTER_PROXY_ID = '__review-master__'
 TIMELINE_REVIEW_PROXY_PREFIX = '__timeline-review-r'
 TIMELINE_REVIEW_PROXY_LEASE = timedelta(minutes=15)
@@ -55,8 +58,23 @@ TIMELINE_REVIEW_PROXY_LEASE = timedelta(minutes=15)
 
 class ProjectProxyService:
     @staticmethod
+    def original_review_master(project):
+        proxy = project.source_proxies.filter(
+            source_id=REVIEW_MASTER_PROXY_ID, status=ProjectSourceProxy.Status.READY,
+        ).exclude(proxy_file='').first()
+        if proxy:
+            return proxy.proxy_file
+        job = project.render_job
+        # Delivery replaces this field with the edited assembly. Its clock
+        # cannot be used to seek original source ranges after a reorder.
+        if job and not job.rendered_from_timeline_revision:
+            return job.original_video
+        return None
+
+    @staticmethod
     def timeline_review_proxy_id(revision):
-        return f'{TIMELINE_REVIEW_PROXY_PREFIX}{revision.pk}__'
+        video_revision_id = (revision.timeline or {}).get('review_video_revision_id') or revision.pk
+        return f'{TIMELINE_REVIEW_PROXY_PREFIX}{video_revision_id}__'
 
     @classmethod
     def has_usable_timeline_review_proxy(cls, proxy, revision):
@@ -65,7 +83,7 @@ class ProjectProxyService:
             proxy
             and proxy.status == ProjectSourceProxy.Status.READY
             and proxy.proxy_file
-            and metadata.get('timeline_revision_id') == revision.pk
+            and metadata.get('timeline_revision_id') == ((revision.timeline or {}).get('review_video_revision_id') or revision.pk)
         )
 
     @classmethod
@@ -107,12 +125,26 @@ class ProjectProxyService:
 
     @classmethod
     def _profile(cls, project):
-        profile = project.template_version.preview_proxy_profile
+        # Preview quality is a system-wide setting.  Keeping it independent
+        # from each template prevents templates from producing different
+        # review proxies while there is only one supported profile.
+        profile = ProxyProfile.objects.filter(is_active=True, is_default=True).first()
         if not profile:
-            profile, _ = ProxyProfile.objects.get_or_create(
+            profile, created = ProxyProfile.objects.get_or_create(
                 code='community-1',
-                defaults={'name': 'Community 1', 'max_width': 960, 'fps': 30, 'video_crf': 27, 'is_default': True},
+                defaults={
+                    'name': 'Community 1',
+                    'max_width': 960,
+                    'fps': 30,
+                    'video_crf': 27,
+                    'is_default': True,
+                    'is_active': True,
+                },
             )
+            if not created and (not profile.is_active or not profile.is_default):
+                profile.is_active = True
+                profile.is_default = True
+                profile.save(update_fields=['is_active', 'is_default', 'update_at'])
         return profile
 
     @classmethod
@@ -171,6 +203,11 @@ class ProjectProxyService:
                 proxy.status = ProjectSourceProxy.Status.READY
                 proxy.error_message = ''
                 proxy.save()
+                try:
+                    from .thumbnails import TimelineThumbnailService
+                    TimelineThumbnailService.request(proxy)
+                except Exception:
+                    logger.warning('Não foi possível agendar miniatura do take %s.', proxy.pk, exc_info=True)
             except Exception as exc:
                 proxy.status = ProjectSourceProxy.Status.ERROR
                 proxy.error_message = str(exc)[:255]
@@ -182,7 +219,7 @@ class ProjectProxyService:
         # (rather than replaces) the per-take proxies: manual framing still
         # needs those sources until a revision-specific compositor is ready.
         job = project.render_job
-        if job and job.original_video:
+        if job and job.original_video and not job.rendered_from_timeline_revision:
             master_proxy, _ = ProjectSourceProxy.objects.get_or_create(
                 project=project,
                 source_id=REVIEW_MASTER_PROXY_ID,
@@ -203,7 +240,7 @@ class ProjectProxyService:
                         'continuous-review-preview',
                         estimated_bytes=media_input.workspace_estimate(needs_proxy=True),
                     ) as workspace:
-                        output = workspace.file('review-master', 'proxy.mp4')
+                        output = workspace.file('proxy', 'review-master.mp4')
                         input_source = media_input.get_ffmpeg_input()
                         assembly.create_proxy(input_source, output, profile=profile)
                         if assembly._has_audio(input_source):
@@ -234,19 +271,41 @@ class ProjectProxyService:
             )
         return manifest
 
+    @staticmethod
+    def review_video_is_needed(project, revision):
+        def video_id(item):
+            return (item.timeline or {}).get('review_video_revision_id') or item.pk
+        requested_id = video_id(revision)
+        return any(
+            candidate is not None and video_id(candidate) == requested_id
+            for candidate in (project.current_timeline_revision, project.approved_timeline_revision)
+        )
+
     @classmethod
     def build_timeline_review_proxy(cls, project_id, revision_id):
         """Render one lightweight, continuous source for a timeline revision.
 
-        Captions, overlays and B-roll stay browser layers, but the main video
-        and speech audio are concatenated exactly in the edited order.  This
-        is what lets manual framing retain fidelity without swapping the video
-        element at every take boundary.
+        This is a delivery-preview, not merely a transport proxy: its main
+        video, B-roll, overlays and ASS subtitles are rendered server-side
+        from the immutable revision. The browser must not draw those layers a
+        second time once this asset is ready.
         """
         project = ExternalMediaProject.objects.select_related(
             'template_version__preset', 'template_version__preview_proxy_profile', 'render_job',
+            'current_timeline_revision', 'approved_timeline_revision',
         ).get(pk=project_id)
         revision = TimelineRevision.objects.get(pk=revision_id, project=project)
+        # Slider/cut edits may queue many immutable snapshots before the worker
+        # reaches them. Only the active or approved picture is useful. Resolve
+        # the shared video identity so an audio-only child does not discard its
+        # parent's still-needed preview. Undo makes an older revision active
+        # again and must remain eligible for generation.
+        if not cls.review_video_is_needed(project, revision):
+            logger.info('Ignorando preview substituído: projeto %s, revisão %s.', project_id, revision_id)
+            return None
+        video_revision_id = (revision.timeline or {}).get('review_video_revision_id')
+        if video_revision_id:
+            revision = TimelineRevision.objects.get(pk=video_revision_id, project=project)
         job = project.render_job
         if not job or not job.original_video:
             return None
@@ -258,14 +317,35 @@ class ProjectProxyService:
         assembly = VideoAssemblyService(storage=storage)
         quality = MediaQualityService(assembly.runner)
         try:
-            source = storage.input(job.original_video).get_ffmpeg_input()
-            filters, segment_count = cls._timeline_review_filters(revision, assembly)
+            source_field = job.original_video
+            if (revision.timeline or {}).get('cameras') or (revision.timeline or {}).get('video_reordered'):
+                # Delivery replaces job.original_video with the baked final cut.
+                # The cached initial review master is the immutable, primary-only
+                # clock; using a prior delivery would bake old switches twice
+                # and make removing a camera after completion ineffective.
+                clean_master = cls.original_review_master(project)
+                if clean_master:
+                    source_field = clean_master
+                elif job.rendered_from_timeline_revision:
+                    raise ExternalMediaError('A base original do preview não está disponível. Reprocesse o projeto para revisar a edição.')
+            source = storage.input(source_field).get_ffmpeg_input()
+            source_width, source_height = assembly._video_dimensions(source)
+            # A manual crop uses even rounding. Without restoring every part
+            # to one canvas before concat, adjacent pieces can differ by a few
+            # pixels (for example 850x262 vs 854x266) and FFmpeg rejects the
+            # entire review proxy.
+            filters, segment_count = cls._timeline_review_filters(
+                revision, assembly, concat_width=source_width, concat_height=source_height,
+            )
             if not segment_count:
                 raise ExternalMediaError('A revisão não possui trechos de vídeo para o preview contínuo.')
             expected_duration_ms = cls._timeline_review_duration_ms(revision)
-            source_width, source_height = assembly._video_dimensions(source)
-            proxy_width = min(source_width, int(getattr(profile, 'max_width', 0) or settings.EXTERNAL_MEDIA_PROXY_WIDTH))
-            proxy_height = assembly._even(proxy_width * source_height / source_width)
+            # Use the delivery canvas. Rendering a smaller proxy and then
+            # asking libass/Pillow/FFmpeg to infer positions at browser size
+            # is precisely what caused the preview to drift from delivery.
+            preset = job.preset or project.template_version.preset
+            proxy_width = int(getattr(preset, 'width', 0) or source_width)
+            proxy_height = int(getattr(preset, 'height', 0) or source_height)
             filter_graph = ';'.join(filters + [
                 f'[joinedv]scale={proxy_width}:{proxy_height}:flags=fast_bilinear,fps={int(getattr(profile, "fps", 0) or 30)},setsar=1[vout]',
             ])
@@ -273,13 +353,54 @@ class ProjectProxyService:
                 project.public_id, f'timeline-review-r{revision.revision}',
                 estimated_bytes=storage.input(job.original_video).workspace_estimate(needs_proxy=True),
             ) as workspace:
-                output = workspace.file('timeline-review', 'proxy.mp4')
+                main_output = workspace.file('output', 'timeline-review-main.mp4')
                 command = [settings.FFMPEG_BINARY, '-y', '-i', assembly.runner.input_arg(source), '-filter_complex', filter_graph,
                     '-map', '[vout]', '-map', '[joineda]', '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_PROXY_PRESET,
                     '-crf', str(int(getattr(profile, 'video_crf', 0) or settings.EXTERNAL_MEDIA_PROXY_CRF)), '-pix_fmt', 'yuv420p',
                     '-c:a', 'aac', '-b:a', f'{int(getattr(profile, "audio_bitrate_kbps", 0) or 96)}k', '-ar', '48000', '-ac', '2',
-                    '-movflags', '+faststart', str(output)]
+                    '-movflags', '+faststart', str(main_output)]
                 assembly.runner.run(command)
+                rendered_layers = []
+                output = main_output
+                duration_ms = cls._timeline_review_duration_ms(revision)
+                if (revision.timeline or {}).get('camera_segments'):
+                    from .multicam import MulticamRenderService
+                    output = MulticamRenderService(assembly.runner, storage).apply(
+                        project, revision, output, workspace.file('output', 'timeline-review-multicam.mp4'),
+                        proxy_width, proxy_height,
+                    )
+                    rendered_layers.append('MULTICAM')
+                brolls = list((revision.timeline or {}).get('brolls') or [])
+                if brolls:
+                    from .broll import BrollRenderService
+
+                    broll_output = workspace.file('output', 'timeline-review-broll.mp4')
+                    output = BrollRenderService(assembly.runner, storage).apply(
+                        project, output, broll_output, brolls, proxy_width, proxy_height,
+                        duration_ms=duration_ms,
+                    )
+                    rendered_layers.append('BROLL')
+                overlays = list((revision.timeline or {}).get('overlays') or [])
+                if overlays:
+                    from .overlays import OverlayRenderService
+
+                    overlay_output = workspace.file('output', 'timeline-review-overlays.mp4')
+                    output = OverlayRenderService(assembly.runner).apply(
+                        output, overlay_output, overlays, proxy_width, proxy_height, workspace.path,
+                    )
+                    rendered_layers.append('OVERLAYS')
+                tracks = list(job.subtitle_tracks.all().order_by('language', 'pk'))
+                if tracks and project.template_version.subtitles_enabled:
+                    from .services import RenderService
+
+                    subtitle_output = workspace.file('output', 'timeline-review-subtitles.mp4')
+                    RenderService(assembly.runner).render_tracks(
+                        output, tracks, subtitle_output, preset, job.subtitle_style, workspace.path,
+                        source_language=project.template_version.original_language,
+                        translated_style=job.translated_subtitle_style or job.subtitle_style,
+                    )
+                    output = subtitle_output
+                    rendered_layers.append('CAPTIONS')
                 # Do not mark a continuous review proxy as ready solely
                 # because FFmpeg exited successfully.  An AAC stream can
                 # still begin seconds after the picture, which recreates the
@@ -309,6 +430,7 @@ class ProjectProxyService:
                     'timeline_revision': revision.revision, 'continuous': True,
                     'temporal_parity': 'verified_audio_timing_duration_and_geometry',
                     'geometry': {'width': proxy_width, 'height': proxy_height},
+                    'rendered_layers': rendered_layers,
                 }
                 locked_proxy.save()
                 logger.info(
@@ -336,7 +458,7 @@ class ProjectProxyService:
             raise
 
     @classmethod
-    def _timeline_review_filters(cls, revision, assembly):
+    def _timeline_review_filters(cls, revision, assembly, concat_width=None, concat_height=None):
         manifest = revision.source_manifest or {}
         timeline = revision.timeline or {}
         clip_end_by_source = {}
@@ -365,6 +487,11 @@ class ProjectProxyService:
             # overwrite another segment simply because they occur later.
             if 'segment_start_ms' not in (item.get('metadata') or {})
         }
+        color_adjustments = {
+            str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
+            for item in (revision.edit_decision_set.get('operations') or [])
+            if item.get('type') == 'color_adjustment' and item.get('enabled', True)
+        }
         video_filters, audio_filters, count = [], [], 0
         for clip in timeline.get('clips') or []:
             source_id = str(clip.get('asset_id') or '')
@@ -392,20 +519,51 @@ class ProjectProxyService:
             ordered_boundaries = sorted(boundaries)
             for part_start_ms, part_end_ms in zip(ordered_boundaries, ordered_boundaries[1:]):
                 transform = transforms.get(source_id) or {}
-                for item in scoped:
-                    metadata = item.get('metadata') or {}
-                    if int(metadata.get('segment_start_ms') or 0) <= part_start_ms < int(metadata.get('segment_end_ms') or 0):
-                        transform = metadata.get('manual_transform') or {}
-                        break
+                # Several revisions can carry an inherited auto-reframe for
+                # the same blade range. The latest manual choice is the
+                # authority; selecting the first operation made later takes
+                # appear to revert as the number of cuts grew.
+                candidates = [
+                    item for item in scoped
+                    if int((item.get('metadata') or {}).get('segment_start_ms') or 0)
+                    <= part_start_ms
+                    < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
+                ]
+                selected = next(
+                    (item for item in reversed(candidates)
+                     if (item.get('metadata') or {}).get('manual_transform') is not None),
+                    candidates[-1] if candidates else None,
+                )
+                if selected:
+                    transform = (selected.get('metadata') or {}).get('manual_transform') or {}
                 scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
                 x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
                 y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
+                color = color_adjustments.get(source_id) or {}
+                brightness = min(100, max(-100, float(color.get('brightness') or 0))) / 200
+                contrast = min(200, max(0, float(color.get('contrast') or 100))) / 100
+                saturation = min(200, max(0, float(color.get('saturation') or 100))) / 100
+                temperature = min(100, max(-100, float(color.get('temperature') or 0))) / 100
+                red = float(color.get('red') or 0) + float(color.get('yellow') or 0) + float(color.get('magenta') or 0)
+                green = float(color.get('green') or 0) + float(color.get('yellow') or 0) + float(color.get('cyan') or 0)
+                blue = float(color.get('blue') or 0) + float(color.get('cyan') or 0) + float(color.get('magenta') or 0)
+                red = max(0.0, min(2.0, 1 + ((red / 300) + temperature) * .28))
+                green = max(0.0, min(2.0, 1 + (green / 300) * .28))
+                blue = max(0.0, min(2.0, 1 + ((blue / 300) - temperature) * .28))
+                grade = '' if not color else (
+                    f',eq=brightness={brightness:.4f}:contrast={contrast:.4f}:saturation={saturation:.4f}'
+                    f',colorchannelmixer=rr={red:.4f}:gg={green:.4f}:bb={blue:.4f}'
+                )
                 crop = '' if scale == 1 else (
                     f',crop=trunc(iw/{scale:.5f}/2)*2:trunc(ih/{scale:.5f}/2)*2:'
                     f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
                     f'scale=trunc(iw*{scale:.5f}/2)*2:trunc(ih*{scale:.5f}/2)*2'
                 )
-                video_filters.append(f'[0:v]trim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},setpts=PTS-STARTPTS{crop}[v{count}]')
+                normalize = (
+                    f',scale={int(concat_width)}:{int(concat_height)}:flags=fast_bilinear,setsar=1'
+                    if concat_width and concat_height else ''
+                )
+                video_filters.append(f'[0:v]trim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},setpts=PTS-STARTPTS{crop}{normalize}{grade}[v{count}]')
                 audio_filters.append(f'[0:a]atrim=start={part_start_ms / 1000:.3f}:end={part_end_ms / 1000:.3f},asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{count}]')
                 count += 1
         if count:
@@ -464,15 +622,20 @@ class PreviewCapabilityRegistry:
             available.add(cls.AUDIO_NOISE_CLEANUP)
         if MediaTemplatePlugin.Code.LUT in plugin_codes:
             available.add(cls.COLOR)
+        has_cameras = project.block_media.filter(camera_role='SECONDARY').exists()
+        if has_cameras:
+            available.add(cls.CAMERA_SWITCHES)
         available.update(declared)
         if project.template_version.blocks.exclude(overlay_definitions=[]).exists() or project.overlays.exists():
             available.add(cls.GRAPHICS)
-        implemented_editable = {cls.CUTS, cls.SUBTITLES, cls.TRANSFORMS, cls.GRAPHICS, cls.BROLL}
+        implemented_editable = {cls.CUTS, cls.SUBTITLES, cls.TRANSFORMS, cls.GRAPHICS, cls.BROLL, cls.CAMERA_SWITCHES}
         editable = [item for item in configured if item in available and item in implemented_editable]
         if cls.GRAPHICS in available and cls.GRAPHICS not in editable:
             editable.append(cls.GRAPHICS)
         if cls.BROLL in available and cls.BROLL not in editable:
             editable.append(cls.BROLL)
+        if has_cameras and cls.CAMERA_SWITCHES not in editable:
+            editable.append(cls.CAMERA_SWITCHES)
         return {
             'available': sorted(available),
             'editable': editable,
@@ -485,9 +648,12 @@ class PreviewCompositionService:
 
     FIDELITY = {
         'CUTS': 'EXACT',
-        'SUBTITLES': 'EXACT',
+        # Timing is mapped to the same edited clock, but browser typography
+        # and libass do not share one rasterizer. Do not promise pixel parity
+        # for wrapping, glyph metrics or ASS-only background/shadow behavior.
+        'SUBTITLES': 'APPROXIMATE',
         'TRANSFORMS': 'APPROXIMATE',
-        'CAMERA_SWITCHES': 'NOT_AVAILABLE',
+        'CAMERA_SWITCHES': 'APPROXIMATE',
         'LAYOUTS': 'NOT_AVAILABLE',
         'GRAPHICS': 'APPROXIMATE',
         'BROLL': 'APPROXIMATE',
@@ -516,6 +682,32 @@ class PreviewCompositionService:
         }
 
     @classmethod
+    def hydrate_legacy_caption_clock(cls, project, timeline):
+        """Expose legacy revision captions on their authoritative edited clock."""
+        if timeline.get('caption_clock') == 'edited' or not project.render_job_id:
+            return timeline
+        captions = []
+        for cue in SubtitleCue.objects.filter(track__job_id=project.render_job_id).select_related('track').order_by(
+            'track__language', 'start_ms', 'pk',
+        ):
+            start_ms = max(0, int(cue.start_ms or 0))
+            end_ms = max(0, int(cue.end_ms or 0))
+            if end_ms <= start_ms:
+                continue
+            captions.append({
+                'id': cue.pk,
+                'track_id': cue.track_id,
+                'language': cue.track.language,
+                'start_ms': start_ms,
+                'end_ms': end_ms,
+                'text': cue.text,
+                'is_source': cue.track.is_source,
+            })
+        timeline['captions'] = captions
+        timeline['caption_clock'] = 'edited'
+        return timeline
+
+    @classmethod
     def compose(
         cls, project, source_manifest, decisions, revision,
         overlays_override=None, brolls_override=None,
@@ -525,6 +717,11 @@ class PreviewCompositionService:
             for item in project.source_proxies.filter(status=ProjectSourceProxy.Status.READY).select_related('profile')
         }
         operations = decisions.get('operations') or []
+        audio_operation = next(
+            (item for item in operations if item.get('type') == 'audio_automation' and item.get('enabled', True)),
+            None,
+        )
+        audio_mix = deepcopy((audio_operation or {}).get('metadata') or {})
         cuts = sorted(
             (
                 max(0, int(item.get('source_in_ms') or 0)),
@@ -538,6 +735,22 @@ class PreviewCompositionService:
             for item in operations
             if item.get('type') == 'reframe' and item.get('enabled', True)
             and 'segment_start_ms' not in (item.get('metadata') or {})
+        }
+        scoped_reframes = {}
+        for item in operations:
+            metadata = item.get('metadata') or {}
+            if item.get('type') != 'reframe' or 'segment_start_ms' not in metadata:
+                continue
+            scoped_reframes.setdefault(str(item.get('source_id')), []).append(item)
+        for items in scoped_reframes.values():
+            items.sort(key=lambda item: int((item.get('metadata') or {}).get('segment_start_ms') or 0))
+        video_splits = sorted({
+            max(0, int(value)) for value in (decisions.get('video_splits_ms') or [])
+        })
+        color_adjustments = {
+            str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
+            for item in operations
+            if item.get('type') == 'color_adjustment' and item.get('enabled', True)
         }
         assets, clips, markers = [], [], []
         source_cursor = timeline_cursor = 0
@@ -587,30 +800,75 @@ class PreviewCompositionService:
             assets.append(asset)
             marker_start = timeline_cursor
             for keep_start, keep_end in kept:
-                local_start = keep_start - global_start
-                duration = keep_end - keep_start
-                clips.append({
-                    'id': f'clip-{len(clips) + 1}',
-                    'asset_id': source['id'],
-                    'timeline_in_ms': timeline_cursor,
-                    'timeline_out_ms': timeline_cursor + duration,
-                    'source_in_ms': source_in + local_start,
-                    'source_out_ms': source_in + local_start + duration,
-                    'block': {
-                        'id': source.get('block_id'),
-                        'key': source.get('block_key'),
-                        'name': source.get('block_name'),
-                    },
-                    'skip_extra_processing': bool((source.get('metadata') or {}).get('skip_extra_processing')),
-                    'effects': ([{'type': 'transform', **transforms[source['id']]}]
-                                if transforms.get(source['id']) else []),
-                })
-                timeline_cursor += duration
+                # A blade is a real editorial boundary. Persisting it only as a
+                # UI marker left both sides backed by the same clip object, so a
+                # transform response could make the browser fall back to the
+                # source-wide framing. Materialize every side as its own clip
+                # while preserving the original assembled-master coordinates.
+                boundaries = [
+                    keep_start,
+                    *(point for point in video_splits if keep_start < point < keep_end),
+                    keep_end,
+                ]
+                for part_start, part_end in zip(boundaries, boundaries[1:]):
+                    local_start = part_start - global_start
+                    duration = part_end - part_start
+                    scope_candidates = [
+                        item for item in scoped_reframes.get(source_id, [])
+                        if int((item.get('metadata') or {}).get('segment_start_ms') or 0) <= part_start
+                        < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
+                    ]
+                    # The operation list is append-only across revisions. Use
+                    # the latest explicit/manual range for this take instead
+                    # of letting an inherited auto operation mask it.
+                    matching_scope = next(
+                        (item for item in reversed(scope_candidates)
+                         if not item.get('enabled', True)
+                         or (item.get('metadata') or {}).get('manual_transform') is not None),
+                        scope_candidates[-1] if scope_candidates else None,
+                    )
+                    scoped_transform = (
+                        (matching_scope.get('metadata') or {}).get('manual_transform')
+                        if matching_scope and matching_scope.get('enabled', True)
+                        else None
+                    )
+                    # A disabled scoped decision explicitly restores the source
+                    # framing for this segment and therefore blocks any
+                    # source-wide manual transform from leaking into it.
+                    transform = (
+                        scoped_transform
+                        if matching_scope
+                        else transforms.get(source['id'])
+                    )
+                    clips.append({
+                        'id': f'clip-{len(clips) + 1}',
+                        'asset_id': source['id'],
+                        'timeline_in_ms': timeline_cursor,
+                        'timeline_out_ms': timeline_cursor + duration,
+                        'source_in_ms': source_in + local_start,
+                        'source_out_ms': source_in + local_start + duration,
+                        'master_in_ms': part_start,
+                        'master_out_ms': part_end,
+                        'block': {
+                            'id': source.get('block_id'),
+                            'key': source.get('block_key'),
+                            'name': source.get('block_name'),
+                        },
+                        'skip_extra_processing': bool((source.get('metadata') or {}).get('skip_extra_processing')),
+                        'effects': ([{'type': 'transform', **transform}] if transform else []),
+                        'color_adjustment': color_adjustments.get(source_id),
+                    })
+                    timeline_cursor += duration
             markers.append({
                 'time_ms': marker_start,
                 'name': source.get('block_name') or source.get('filename') or source['id'],
             })
             source_cursor = global_end
+
+        order_clips(clips, decisions.get('video_order'))
+        if decisions.get('video_order'):
+            markers = [{'time_ms': clip['timeline_in_ms'], 'name': clip['block'].get('name') or clip['asset_id']}
+                       for clip in clips]
 
         # The review UI lets the member click a specific take on the timeline
         # and see only the decisions that belong to it. remove_segment/
@@ -633,8 +891,13 @@ class PreviewCompositionService:
             for cue in SubtitleCue.objects.filter(track__job_id=project.render_job_id).select_related('track').order_by(
                 'track__language', 'start_ms', 'pk',
             ):
-                start_ms = cls._source_to_timeline(cue.start_ms, cuts)
-                end_ms = cls._source_to_timeline(cue.end_ms, cuts)
+                # SubtitleCue timestamps already use the currently edited
+                # timeline clock. Initial transcription is remapped after the
+                # automatic speech edits, and member cuts shift the persisted
+                # cues in `_shift_cues_for_decision`. Applying `cuts` here a
+                # second time made every caption after a cut advance twice.
+                start_ms = max(0, int(cue.start_ms or 0))
+                end_ms = max(0, int(cue.end_ms or 0))
                 if end_ms <= start_ms:
                     continue
                 captions.append({
@@ -700,10 +963,15 @@ class PreviewCompositionService:
             )
             for item in operations
         )
+        has_color_adjustment = bool(color_adjustments)
         # Until a fresh continuous review proxy is composed, a manual transform
         # must use the source proxy. The prior assembled master can contain a
         # previous crop and would show a different zoom from the final render.
-        if has_reframe_override:
+        if has_reframe_override or has_color_adjustment or decisions.get('video_order'):
+            review_master_url = None
+        from .multicam import MulticamService
+        cameras, camera_segments = MulticamService.compose(source_manifest, operations, clips, project.public_id)
+        if cameras:
             review_master_url = None
         fidelity = {key: cls.FIDELITY[key] for key in capabilities['available']}
         if review_master_url and not has_reframe_override and 'TRANSFORMS' in fidelity:
@@ -729,13 +997,18 @@ class PreviewCompositionService:
             'has_music': bool(
                 project.template_version.background_music_id or project.template_version.music_file
             ),
+            'audio_mix': audio_mix,
             'clips': clips,
+            'video_reordered': bool(decisions.get('video_order')),
+            'cameras': cameras,
+            'camera_segments': camera_segments,
             # Visual blade points do not remove media by themselves, but must
             # survive a reload so the member can select either resulting take.
             'video_splits_ms': sorted({
-                cls._source_to_timeline(int(value), cuts)
-                for value in (decisions.get('video_splits_ms') or [])
-                if 0 < cls._source_to_timeline(int(value), cuts) < timeline_cursor
+                clip['timeline_in_ms'] + int(value) - clip['master_in_ms']
+                for clip in clips for value in (decisions.get('video_splits_ms') or [])
+                if clip['master_in_ms'] <= int(value) < clip['master_out_ms']
+                and 0 < clip['timeline_in_ms'] + int(value) - clip['master_in_ms'] < timeline_cursor
             }),
             'video_tracks': [
                 {'id': 'V1', 'role': 'main', 'clips': clips},
@@ -747,6 +1020,7 @@ class PreviewCompositionService:
             'overlay_tracks': [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': overlays}],
             'overlays': overlays,
             'captions': captions,
+            'caption_clock': 'edited',
             'caption_styles': {
                 'source': cls.subtitle_style_payload(getattr(project.render_job, 'subtitle_style', None))
                 if project.render_job_id else {},
@@ -832,6 +1106,39 @@ class TimelineRevisionService:
             if duration:
                 source['duration_ms'] = duration
         return prepared
+
+    @staticmethod
+    def _available_master_video_ranges(manifest, decisions):
+        """Return uncut video ranges in the original assembled-master clock."""
+        cuts = sorted(
+            (
+                max(0, int(item.get('source_in_ms') or 0)),
+                max(0, int(item.get('source_out_ms') or 0)),
+            )
+            for item in (decisions.get('operations') or [])
+            if item.get('type') == 'remove_segment' and item.get('enabled', True)
+        )
+        ranges, cursor = [], 0
+        for source in manifest.get('sources') or []:
+            if not (source.get('metadata') or {}).get('render_enabled', True):
+                continue
+            trim = source.get('trim') or {}
+            source_start = max(0, int(trim.get('start_ms') or 0))
+            source_duration = int(
+                source.get('duration_ms')
+                or (source.get('metadata') or {}).get('duration_ms')
+                or trim.get('end_ms')
+                or source_start
+            )
+            source_end = max(source_start, min(
+                source_duration, int(trim.get('end_ms') or source_duration),
+            ))
+            duration = source_end - source_start
+            if not duration:
+                continue
+            ranges.extend(PreviewCompositionService._subtract(cursor, cursor + duration, cuts))
+            cursor += duration
+        return ranges
 
     @classmethod
     @transaction.atomic
@@ -937,50 +1244,22 @@ class TimelineRevisionService:
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
         point = max(0, int(master_ms))
-        duration = int((current.timeline.get('sequence') or {}).get('duration_ms') or 0)
-        if point < MIN_MANUAL_CUT_MS or point > duration - MIN_MANUAL_CUT_MS:
+        available_ranges = cls._available_master_video_ranges(
+            current.source_manifest, current.edit_decision_set,
+        )
+        if not any(
+            start + MIN_MANUAL_CUT_MS <= point <= end - MIN_MANUAL_CUT_MS
+            for start, end in available_ranges
+        ):
             raise ValueError('O corte precisa ficar dentro de um vídeo, com ao menos um quadro em cada lado.')
         decisions = deepcopy(current.edit_decision_set)
         points = sorted({int(value) for value in (decisions.get('video_splits_ms') or [])} | {point})
         if any(existing != point and abs(existing - point) < MIN_MANUAL_CUT_MS for existing in points):
             raise ValueError('Já existe um corte neste quadro.')
         decisions['video_splits_ms'] = points
-        # The two visual takes must also receive independent reframe decisions.
-        # They inherit the old framing at first, then can be adjusted separately.
-        cursor = 0
-        source_id = None
-        source_start = source_end = 0
-        for source in current.source_manifest.get('sources') or []:
-            if not (source.get('metadata') or {}).get('render_enabled', True):
-                continue
-            trim = source.get('trim') or {}
-            trim_start = int(trim.get('start_ms') or 0)
-            trim_end = int(trim.get('end_ms') or source.get('duration_ms') or trim_start)
-            source_start, source_end = cursor, cursor + max(1, trim_end - trim_start)
-            if source_start < point < source_end:
-                source_id = str(source.get('id'))
-                break
-            cursor = source_end
-        if source_id:
-            operations = decisions.setdefault('operations', [])
-            target = next((item for item in operations if (
-                item.get('type') == 'reframe'
-                and item.get('enabled', True)
-                and str(item.get('source_id')) == source_id
-                and int((item.get('metadata') or {}).get('segment_start_ms') or source_start) < point
-                and point < int((item.get('metadata') or {}).get('segment_end_ms') or source_end)
-            )), None)
-            if target:
-                metadata = target.setdefault('metadata', {})
-                segment_start = int(metadata.get('segment_start_ms') or source_start)
-                segment_end = int(metadata.get('segment_end_ms') or source_end)
-                sibling = deepcopy(target)
-                sibling['id'] = f"{target.get('id')}-segment-{uuid.uuid4().hex[:10]}"
-                sibling.setdefault('metadata', {})['segment_start_ms'] = point
-                sibling['metadata']['segment_end_ms'] = segment_end
-                metadata['segment_start_ms'] = segment_start
-                metadata['segment_end_ms'] = point
-                operations.append(sibling)
+        # A blade is an editorial boundary, not a duplicated source file. Its
+        # independent framing is added lazily when the member adjusts either
+        # side; the scoped decision keeps both render and preview deterministic.
         revision = cls._create(locked, current.source_manifest, decisions, 'Vídeo dividido', member, current)
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'SPLIT_VIDEO', {'master_ms': point}, {'master_ms': point}, member)
@@ -988,23 +1267,190 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
-    def update_subtitle(cls, project, member, cue_id, text):
+    def move_video(cls, project, member, source_id, start_ms, end_ms, before=None):
+        """Insert a linked video/audio take before another take, or at the end."""
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        clips = current.timeline.get('clips') or []
+        selected = {'source_id': str(source_id), 'start_ms': int(start_ms), 'end_ms': int(end_ms)}
+        order = [clip_range(clip) for clip in clips]
+        if selected not in order:
+            raise ValueError('O trecho selecionado não está nesta revisão da timeline.')
+        if before is not None and (not isinstance(before, dict) or before not in order):
+            raise ValueError('Escolha uma posição válida na timeline.')
+        if before == selected:
+            return current
+        remaining = [entry for entry in order if entry != selected]
+        index = remaining.index(before) if before else len(remaining)
+        remaining.insert(index, selected)
+        if remaining == order:
+            return current
+        decisions = deepcopy(current.edit_decision_set)
+        decisions['video_order'] = remaining
+        revision = cls._create(locked, current.source_manifest, decisions, 'Vídeo e áudio movidos', member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'MOVE_VIDEO', {
+            'take': selected, 'before': before,
+        }, {'video_order': order}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
+    def update_camera(cls, project, member, payload):
+        from .multicam import MulticamService
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        decisions = deepcopy(current.edit_decision_set)
+        operations = decisions.setdefault('operations', [])
+        selection_id = str(payload.get('id') or '')
+        existing = next((o for o in operations if o.get('id') == selection_id and o.get('type') == 'camera_selection'), None)
+        if selection_id and not existing:
+            raise ValueError('Alternância não encontrada.')
+        if payload.get('delete'):
+            if not existing:
+                raise ValueError('Alternância não encontrada.')
+            operations.remove(existing)
+        else:
+            start, end = int(payload['start_ms']), int(payload['end_ms'])
+            # The UI uses the edited clock. Persist source coordinates so later
+            # speech cuts and blades cannot move camera pictures out of sync.
+            parts = [c for c in current.timeline['clips'] if c['timeline_in_ms'] < end and start < c['timeline_out_ms']]
+            if (not parts or start < parts[0]['timeline_in_ms'] or end > parts[-1]['timeline_out_ms']
+                or any(c['asset_id'] != parts[0]['asset_id'] for c in parts)):
+                raise ValueError('O intervalo deve pertencer à mesma gravação principal.')
+            first, last = parts[0], parts[-1]
+            operation = MulticamService.selection(
+                current.source_manifest, reference_id=first['asset_id'], camera_id=str(payload['camera_source_id']),
+                start=first['source_in_ms'] + start - first['timeline_in_ms'],
+                end=last['source_in_ms'] + end - last['timeline_in_ms'],
+                offset=payload.get('offset_ms'), rate=payload.get('rate'), selection_id=selection_id or None,
+            )
+            if existing:
+                operations.remove(existing)
+            operations.append(operation)
+        # Compose validates camera coverage and overlapping ranges before save.
+        revision = cls._create(locked, current.source_manifest, decisions, 'Ajuste de câmera', member, parent=current)
+        session = cls.session(locked, member, current)
+        cls._record(session, current, revision, 'camera_selection', payload, {}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
+    def update_subtitle(cls, project, member, cue_id, text=None, start_ms=None, end_ms=None, delete=False):
+        """Update one cue without losing the revision/undo contract.
+
+        Cues live in the edited timeline clock.  Keeping their values on the
+        model means the final subtitle renderer, the review proxy and the
+        interactive timeline all consume the same source of truth.
+        """
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         cue = SubtitleCue.objects.select_for_update().get(pk=cue_id, track__job=locked.render_job)
-        previous = cue.text
-        cue.text = text.strip()
-        if cue.text == previous:
-            return locked.current_timeline_revision or cls.ensure_initial(locked, member)
-        cue.save(update_fields=['text', 'update_at'])
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        if delete:
+            cue.delete()
+            revision = cls._create(
+                locked, current.source_manifest, current.edit_decision_set, 'Legenda removida', member, current,
+            )
+            session = cls.session(locked, member, revision)
+            cls._record(session, current, revision, 'DELETE_SUBTITLE', {'cue_id': cue_id}, {'cue_id': cue_id}, member)
+            return revision
+
+        previous = {'text': cue.text, 'start_ms': cue.start_ms, 'end_ms': cue.end_ms}
+        if text is not None:
+            cue.text = str(text).strip()
+        if start_ms is not None:
+            cue.start_ms = max(0, int(start_ms))
+        if end_ms is not None:
+            cue.end_ms = int(end_ms)
+        duration = int((current.timeline.get('sequence') or {}).get('duration_ms') or 0)
+        if duration:
+            cue.start_ms = min(cue.start_ms, max(0, duration - MIN_MANUAL_CUT_MS))
+            cue.end_ms = min(cue.end_ms, duration)
+        if not cue.text:
+            raise ValueError('A legenda não pode ficar vazia.')
+        if cue.end_ms - cue.start_ms < MIN_MANUAL_CUT_MS:
+            raise ValueError('A legenda precisa ter ao menos um quadro de duração.')
+        overlaps = SubtitleCue.objects.select_for_update().filter(
+            track_id=cue.track_id,
+            start_ms__lt=cue.end_ms,
+            end_ms__gt=cue.start_ms,
+        ).exclude(pk=cue.pk).exists()
+        if overlaps:
+            raise ValueError('As legendas da mesma faixa não podem se sobrepor.')
+        if (cue.text, cue.start_ms, cue.end_ms) == (
+            previous['text'], previous['start_ms'], previous['end_ms'],
+        ):
+            return locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        cue.save(update_fields=['text', 'start_ms', 'end_ms', 'update_at'])
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set, 'Legenda atualizada', member, current,
         )
         session = cls.session(locked, member, revision)
         cls._record(session, current, revision, 'UPDATE_SUBTITLE', {
-            'cue_id': cue_id, 'text': cue.text,
-        }, {'cue_id': cue_id, 'text': previous}, member)
+            'cue_id': cue_id, 'text': cue.text, 'start_ms': cue.start_ms, 'end_ms': cue.end_ms,
+        }, {'cue_id': cue_id, **previous}, member)
         return revision
+
+    @classmethod
+    @transaction.atomic
+    def split_subtitle(cls, project, member, cue_id, split_at_ms):
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        cue = SubtitleCue.objects.select_for_update().get(pk=cue_id, track__job=locked.render_job)
+        point = int(split_at_ms)
+        if point - cue.start_ms < MIN_MANUAL_CUT_MS or cue.end_ms - point < MIN_MANUAL_CUT_MS:
+            raise ValueError('Posicione o corte dentro da legenda, deixando ao menos um quadro de cada lado.')
+        # Keep an exactly synchronized bilingual pair aligned for final rendering.
+        peers = list(SubtitleCue.objects.select_for_update().filter(
+            track__job=locked.render_job, cue_index=cue.cue_index,
+            start_ms=cue.start_ms, end_ms=cue.end_ms,
+        ))
+        next_index = (SubtitleCue.all_objects.filter(track__job=locked.render_job).aggregate(value=Max('cue_index'))['value'] or 0) + 1
+        created_id = None
+        for peer in peers:
+            end = peer.end_ms
+            peer.end_ms = point
+            peer.save(update_fields=['end_ms', 'update_at'])
+            right = SubtitleCue.objects.create(
+                track_id=peer.track_id, cue_index=next_index,
+                start_ms=point, end_ms=end, text=peer.text,
+            )
+            if peer.pk == cue.pk:
+                created_id = right.pk
+        revision = cls._create(locked, current.source_manifest, current.edit_decision_set, 'Legenda dividida', member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'SPLIT_SUBTITLE', {
+            'cue_id': cue_id, 'split_at_ms': point, 'created_cue_id': created_id,
+        }, {'cue_id': cue_id, 'end_ms': cue.end_ms}, member)
+        return revision, created_id
+
+    @classmethod
+    @transaction.atomic
+    def create_subtitle(cls, project, member, track_id, text, start_ms, duration_ms):
+        from ..models.external_media import SubtitleTrack
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        track = SubtitleTrack.objects.get(pk=track_id, job=locked.render_job)
+        text = str(text or '').strip()
+        start = int(start_ms)
+        duration = int(duration_ms)
+        limit = int(current.timeline['sequence']['duration_ms'])
+        end = min(limit, start + duration)
+        if not text:
+            raise ValueError('A legenda precisa ter um texto.')
+        if start < 0 or duration < MIN_MANUAL_CUT_MS or end - start < MIN_MANUAL_CUT_MS:
+            raise ValueError('Escolha uma posição dentro da timeline com espaço para a nova legenda.')
+        if SubtitleCue.objects.filter(track=track, start_ms__lt=end, end_ms__gt=start).exists():
+            raise ValueError('Já existe uma legenda nesse intervalo. Posicione o cursor em um espaço vazio desta faixa.')
+        cue = SubtitleCue.objects.create(
+            track=track,
+            cue_index=(SubtitleCue.all_objects.filter(track__job=locked.render_job).aggregate(value=Max('cue_index'))['value'] or 0) + 1,
+            text=text, start_ms=start, end_ms=end,
+        )
+        revision = cls._create(locked, current.source_manifest, current.edit_decision_set, 'Legenda colada', member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'CREATE_SUBTITLE', {'cue_id': cue.pk}, {'cue_id': cue.pk}, member)
+        return revision, cue.pk
 
     @classmethod
     @transaction.atomic
@@ -1013,9 +1459,57 @@ class TimelineRevisionService:
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
         decisions = deepcopy(current.edit_decision_set)
         target = next((item for item in decisions.get('operations', []) if item.get('id') == decision_id), None)
+        if target is None:
+            # A take does not need an automatic reframe plan to support manual
+            # framing. Resolve the neutral UI handle against this revision's
+            # own source manifest before creating an editorial operation.
+            source = next((item for item in (current.source_manifest or {}).get('sources', [])
+                           if decision_id == f"reframe-source-{item.get('id')}"
+                           and (item.get('metadata') or {}).get('render_enabled', True)), None)
+            if source is not None:
+                target = {
+                    'id': decision_id, 'type': 'reframe', 'source_id': str(source['id']),
+                    'enabled': True, 'origin': 'USER', 'metadata': {},
+                }
+                decisions.setdefault('operations', []).append(target)
         if not target or target.get('type') != 'reframe':
             raise ValueError('Enquadramento não encontrado nesta timeline.')
+        try:
+            segment_start = int(values.get('segment_start_ms'))
+            segment_end = int(values.get('segment_end_ms'))
+        except (TypeError, ValueError):
+            segment_start = segment_end = None
+        if segment_start is not None and segment_end is not None and segment_end - segment_start >= MIN_MANUAL_CUT_MS:
+            # A blade only changes the timeline; it does not create a new
+            # source file. Create a scoped child decision so a zoom made to
+            # one side of the blade never leaks into the other side.
+            scoped = next((item for item in decisions.get('operations', []) if (
+                item.get('type') == 'reframe'
+                and item.get('source_id') == target.get('source_id')
+                and int((item.get('metadata') or {}).get('segment_start_ms', -1)) == segment_start
+                and int((item.get('metadata') or {}).get('segment_end_ms', -1)) == segment_end
+            )), None)
+            if not scoped:
+                scoped = deepcopy(target)
+                scoped['id'] = f'reframe-segment-{uuid.uuid4().hex[:12]}'
+                scoped['metadata'] = {
+                    **(scoped.get('metadata') or {}),
+                    'segment_start_ms': segment_start,
+                    'segment_end_ms': segment_end,
+                }
+                scoped['metadata'].pop('manual_transform', None)
+                decisions['operations'].append(scoped)
+            target = scoped
         previous = deepcopy((target.get('metadata') or {}).get('manual_transform'))
+        if values.get('restore_original'):
+            target['enabled'] = False
+            target.setdefault('metadata', {}).pop('manual_transform', None)
+            revision = cls._create(locked, current.source_manifest, decisions, 'Enquadramento original restaurado', member, current)
+            session = cls.session(locked, member, revision)
+            cls._record(session, current, revision, 'RESTORE_ORIGINAL_REFRAME', {
+                'decision_id': decision_id,
+            }, {'decision_id': decision_id, 'manual_transform': previous}, member)
+            return revision
         if values.get('restore_auto'):
             target['enabled'] = True
             target.setdefault('metadata', {}).pop('manual_transform', None)
@@ -1046,6 +1540,60 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def update_color_adjustment(cls, project, member, source_id, values):
+        """Persist the Lumetri-like basic grade in the editorial revision.
+
+        The operation is deliberately source-scoped: selecting a take in the
+        video lane never changes the other camera takes.  Both the review
+        compositor and the delivery assembly consume this same metadata.
+        """
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        valid_sources = {str(item.get('id')) for item in (current.source_manifest or {}).get('sources') or []}
+        if str(source_id) not in valid_sources:
+            raise ValueError('Camada de vídeo não encontrada nesta timeline.')
+        adjustment = {
+            'brightness': min(100, max(-100, int(float(values.get('brightness', 0))))),
+            'contrast': min(200, max(0, int(float(values.get('contrast', 100))))),
+            'saturation': min(200, max(0, int(float(values.get('saturation', 100))))),
+            'temperature': min(100, max(-100, int(float(values.get('temperature', 0))))),
+            **{
+                channel: min(100, max(-100, int(float(values.get(channel, 0)))))
+                for channel in ('red', 'yellow', 'green', 'cyan', 'blue', 'magenta')
+            },
+        }
+        decisions = deepcopy(current.edit_decision_set)
+        operations = decisions.setdefault('operations', [])
+        target = next((item for item in operations if item.get('type') == 'color_adjustment' and str(item.get('source_id')) == str(source_id)), None)
+        previous = deepcopy((target or {}).get('metadata', {}).get('adjustment'))
+        if values.get('reset'):
+            if not target:
+                return current
+            operations.remove(target)
+            reason, operation = 'Cor restaurada', 'RESET_COLOR_ADJUSTMENT'
+        else:
+            if previous == adjustment:
+                return current
+            if not target:
+                target = {
+                    'id': f'color-adjustment-{len(operations) + 1}', 'type': 'color_adjustment',
+                    'source_id': str(source_id), 'origin': 'USER', 'producer': 'interactive_preview',
+                    'producer_version': '1', 'reason': 'basic_color_grade', 'confidence': None, 'metadata': {},
+                }
+                operations.append(target)
+            target['enabled'] = True
+            target['origin'] = 'USER'
+            target.setdefault('metadata', {})['adjustment'] = adjustment
+            reason, operation = 'Cor ajustada', 'UPDATE_COLOR_ADJUSTMENT'
+        revision = cls._create(locked, current.source_manifest, decisions, reason, member, current)
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, operation, {
+            'source_id': str(source_id), 'adjustment': None if values.get('reset') else adjustment,
+        }, {'source_id': str(source_id), 'adjustment': previous}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
     def update_music(cls, project, member, track_id):
         """Store the chosen music in the immutable editorial snapshot.
 
@@ -1055,29 +1603,139 @@ class TimelineRevisionService:
         timeline gives it exactly the same history semantics as captions,
         framing and B-roll.
         """
+        return cls.update_music_tracks(project, member, [{'track_id': track_id}])
+
+    @classmethod
+    @transaction.atomic
+    def update_music_tracks(cls, project, member, tracks):
+        """Persist an ordered soundtrack playlist in the editorial revision.
+
+        Each item carries the transition *into* that track.  Keeping this in the
+        revision makes multi-track choices deterministic for preview, undo/redo
+        and the final render.
+        """
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
-        previous = (current.timeline or {}).get('music_override_track_id')
-        track_id = int(track_id) if track_id else None
+        normalized = []
+        for item in (tracks or []):
+            try:
+                track_id = int((item or {}).get('track_id'))
+            except (TypeError, ValueError):
+                continue
+            # A music source may occur more than once after the editor splits
+            # it into independently adjustable clips.
+            if track_id <= 0:
+                continue
+            transition = str((item or {}).get('transition') or 'NONE').upper()
+            if transition not in {'CONSTANT_POWER', 'NONE'}:
+                transition = 'NONE'
+            try:
+                duration_ms = int((item or {}).get('transition_duration_ms', 2000))
+            except (TypeError, ValueError):
+                duration_ms = 2000
+            normalized_item = {
+                'clip_id': str((item or {}).get('clip_id') or uuid.uuid4()),
+                'track_id': track_id,
+                'transition': transition,
+                'transition_duration_ms': max(0, min(10_000, duration_ms)),
+            }
+            try:
+                normalized_item['volume'] = max(0.0, min(1.0, float((item or {}).get('volume', 1))))
+            except (TypeError, ValueError):
+                normalized_item['volume'] = 1.0
+            # Structured transitions are explicit and tied to a neighbour. A null
+            # value is a deliberate removal, never a legacy automatic fade.
+            if 'audio_transition' in item:
+                spec = item.get('audio_transition')
+                normalized_item['audio_transition'] = None
+                if isinstance(spec, dict) and spec.get('type') == 'CONSTANT_POWER':
+                    try:
+                        normalized_item['audio_transition'] = {
+                            'id': str(spec.get('id') or f'music-join-{normalized_item["clip_id"]}')[:100],
+                            'type': 'CONSTANT_POWER',
+                            'from_clip_id': str(spec.get('from_clip_id') or spec.get('from_track_id') or '')[:100],
+                            'duration_ms': max(0, min(10000, int(spec['duration_ms']))),
+                        }
+                    except (KeyError, TypeError, ValueError):
+                        pass
+                normalized_item['transition'] = 'NONE'
+            for key in ('start_ms', 'end_ms', 'source_in_ms'):
+                if (item or {}).get(key) is None:
+                    continue
+                try:
+                    normalized_item[key] = max(0, int((item or {}).get(key)))
+                except (TypeError, ValueError):
+                    continue
+            if normalized_item.get('end_ms', 0) <= normalized_item.get('start_ms', -1):
+                normalized_item.pop('start_ms', None)
+                normalized_item.pop('end_ms', None)
+            normalized.append(normalized_item)
+        # Only an entirely unscheduled legacy playlist may be distributed.
+        # Adding one new source must never overwrite the cuts of edited clips.
+        if normalized and any('start_ms' not in item or 'end_ms' not in item for item in normalized):
+            sequence_duration = max(1_000, int(((current.timeline or {}).get('sequence') or {}).get('duration_ms') or 0))
+            scheduled = [item for item in normalized if 'start_ms' in item and 'end_ms' in item]
+            if scheduled:
+                for item in normalized:
+                    if 'start_ms' in item and 'end_ms' in item:
+                        continue
+                    cursor = 0
+                    for placed in sorted(scheduled, key=lambda row: row['start_ms']):
+                        if placed['start_ms'] - cursor >= 1000:
+                            break
+                        cursor = max(cursor, placed['end_ms'])
+                    if sequence_duration - cursor < 1000:
+                        cursor = 0
+                    next_start = min((row['start_ms'] for row in scheduled if row['start_ms'] > cursor), default=sequence_duration)
+                    item['start_ms'] = cursor
+                    item['end_ms'] = max(cursor + 1000, min(sequence_duration, next_start))
+                    scheduled.append(item)
+            else:
+                cls._distribute_music_tracks(normalized, sequence_duration)
+        normalized.sort(key=lambda item: item.get('start_ms', 0))
+        previous = (current.timeline or {}).get('music_tracks')
+        if previous is None:
+            legacy_id = (current.timeline or {}).get('music_override_track_id')
+            previous = ([{'track_id': int(legacy_id), 'transition': 'CONSTANT_POWER', 'transition_duration_ms': 2000}]
+                        if legacy_id else [])
         # Once the project is edited again, do not let a pre-revision override
         # shadow an undo back to the template music.
         legacy_configuration = dict(locked.configuration or {})
         if legacy_configuration.pop('music_override_track_id', None) is not None:
             locked.configuration = legacy_configuration
             locked.save(update_fields=['configuration', 'update_at'])
-        if previous == track_id:
+        if previous == normalized:
             return current
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set,
             'Trilha sonora alterada', member, current,
-            music_override_track_id=track_id,
+            music_override_track_id=normalized[0]['track_id'] if normalized else '',
+            music_tracks=normalized, reuse_review_video=True,
         )
         session = cls.session(locked, member, revision)
         cls._record(
             session, current, revision, 'UPDATE_MUSIC',
-            {'track_id': track_id}, {'track_id': previous}, member,
+            {'tracks': normalized}, {'tracks': previous}, member,
         )
         return revision
+
+    @staticmethod
+    def _distribute_music_tracks(normalized, sequence_duration):
+        transition_durations = [
+            min(
+                int(item.get('transition_duration_ms') or 0),
+                sequence_duration / max(2 * len(normalized), 1),
+            ) if index and item.get('transition') == 'CONSTANT_POWER' else 0
+            for index, item in enumerate(normalized)
+        ]
+        slot = (sequence_duration + sum(transition_durations)) / len(normalized)
+        cursor = 0
+        for index, item in enumerate(normalized):
+            if index:
+                cursor -= transition_durations[index]
+            item['start_ms'] = round(max(0, cursor))
+            cursor += slot
+            item['end_ms'] = round(min(sequence_duration, cursor))
 
     @classmethod
     @transaction.atomic
@@ -1094,13 +1752,61 @@ class TimelineRevisionService:
         revision = cls._create(
             locked, current.source_manifest, current.edit_decision_set,
             'Volume da trilha ajustado', member, current,
-            music_volume=requested,
+            music_volume=requested, reuse_review_video=True,
         )
         session = cls.session(locked, member, revision)
         cls._record(
             session, current, revision, 'UPDATE_MUSIC_VOLUME',
             {'volume': requested}, {'volume': previous}, member,
         )
+        return revision
+
+    @classmethod
+    @transaction.atomic
+    def update_audio_mix(cls, project, member, payload):
+        """Persist manual mix choices in an immutable timeline revision.
+
+        This deliberately stores project choices on the revision instead of
+        mutating template defaults. Manual keyframes/configuration therefore
+        survive reload/undo and cannot be silently replaced by automation.
+        """
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        previous = deepcopy((current.timeline or {}).get('audio_mix') or {})
+        requested = deepcopy(payload or {})
+        if not isinstance(requested, dict):
+            raise ValueError('Configuração de mixagem inválida.')
+        if requested.pop('restore_auto', False):
+            template_operation = next(
+                (
+                    item for item in (current.edit_decision_set.get('operations') or [])
+                    if item.get('type') == 'audio_automation'
+                ),
+                {},
+            )
+            requested = deepcopy(template_operation.get('metadata') or {})
+        requested['schema'] = 'connect.audio_mix.v1'
+        for key in ('music_keyframes', 'voice_keyframes'):
+            points = []
+            for point in (requested.get(key) or [])[:250]:
+                if not isinstance(point, dict):
+                    continue
+                try:
+                    points.append({
+                        'time_ms': max(0, int(point.get('time_ms') or 0)),
+                        'gain_db': max(-60.0, min(12.0, float(point.get('gain_db') or 0))),
+                    })
+                except (TypeError, ValueError):
+                    continue
+            requested[key] = sorted(points, key=lambda item: item['time_ms'])
+        if requested == previous:
+            return current
+        revision = cls._create(
+            locked, current.source_manifest, current.edit_decision_set,
+            'Mixagem de áudio ajustada', member, current, audio_mix=requested, reuse_review_video=True,
+        )
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'UPDATE_AUDIO_MIX', requested, previous, member)
         return revision
 
     @classmethod
@@ -1163,7 +1869,7 @@ class TimelineRevisionService:
             allowed = set(target.get('allowed_overrides') or [])
             for key in ('content', 'position', 'style', 'animation'):
                 if key in payload and (key == 'content' or key in allowed):
-                    target[key] = deepcopy(payload[key])
+                    target[key] = {**(target.get(key) or {}), **deepcopy(payload[key])}
             if 'timing' in allowed:
                 if 'start_ms' in payload:
                     target['start_ms'] = max(0, int(payload['start_ms']))
@@ -1245,7 +1951,8 @@ class TimelineRevisionService:
                 target['media_type'] = asset.media_type
             for key in ('transform', 'motion', 'entry', 'exit', 'fit', 'crop_mode'):
                 if key in payload:
-                    target[key] = deepcopy(payload[key])
+                    value = deepcopy(payload[key])
+                    target[key] = {**(target.get(key) or {}), **value} if isinstance(value, dict) else value
             target['source'] = 'USER'
             reason, operation = 'B-roll ajustado', 'UPDATE_BROLL'
         revision = cls._create(
@@ -1336,6 +2043,7 @@ class TimelineRevisionService:
         locked.final_render_outdated = True
         locked.save(update_fields=['current_timeline_revision', 'preview_dirty', 'final_render_outdated', 'update_at'])
         cls._sync_cues_from_revision(locked, target)
+        ExternalMediaProject.objects.filter(pk=locked.pk).update(editorial_version=F('editorial_version') + 1)
         return target
 
     @classmethod
@@ -1343,20 +2051,34 @@ class TimelineRevisionService:
     def approve(cls, project, member):
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
         revision = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        # The revision proxy improves visual review, but it is asynchronous
+        # infrastructure. A slow preview worker must never prevent approval
+        # or leave a project stuck in review; the final renderer consumes this
+        # immutable revision directly.
+        # Scoped reframes are intentional editorial decisions.  Keep them
+        # untouched on approval: collapsing them into one source-wide crop
+        # would make the last adjusted side of a blade overwrite all others.
         revision.approved_at = timezone.now()
         revision.save(update_fields=['approved_at', 'update_at'])
+        # Approval must pin both pointers to the same immutable snapshot.  If an
+        # approval had to consolidate legacy per-segment reframes, ``revision``
+        # is a new child and leaving ``current`` on its parent made the editor
+        # and the final worker legitimately read different timelines.
+        locked.current_timeline_revision = revision
         locked.approved_timeline_revision = revision
         locked.preview_dirty = False
         locked.final_render_outdated = True
         locked.save(update_fields=[
-            'approved_timeline_revision', 'preview_dirty', 'final_render_outdated', 'update_at',
+            'current_timeline_revision', 'approved_timeline_revision', 'preview_dirty',
+            'final_render_outdated', 'update_at',
         ])
         return revision
 
     @classmethod
     def _create(
         cls, project, manifest, decisions, reason, member, parent=None,
-        overlays=None, brolls=None, music_override_track_id=None, music_volume=None,
+        overlays=None, brolls=None, music_override_track_id=None, music_tracks=None, music_volume=None, audio_mix=None,
+        reuse_review_video=False,
     ):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
@@ -1369,10 +2091,44 @@ class TimelineRevisionService:
         composition_manifest = cls.manifest_with_reference_durations(
             manifest, cls.source_duration_reference(project, parent),
         )
+        durations = dict(project.source_proxies.filter(status=ProjectSourceProxy.Status.READY).values_list('source_id', 'duration_ms'))
+        for source in composition_manifest.get('sources', []):
+            if not source.get('duration_ms'):
+                source['duration_ms'] = durations.get(source['id'])
         timeline = PreviewCompositionService.compose(
             project, composition_manifest, decisions, number,
             overlays_override=overlays, brolls_override=brolls,
         )
+        if parent and (decisions.get('video_order') or parent.edit_decision_set.get('video_order')):
+            mapping = timeline_mapping(parent.timeline.get('clips') or [], timeline.get('clips') or [])
+            if any(offset for _, _, offset in mapping) or sum(end - start for start, end, _ in mapping) != sum(
+                clip['timeline_out_ms'] - clip['timeline_in_ms'] for clip in parent.timeline.get('clips') or []
+            ):
+                timeline['captions'] = cls._relocate_cues(project, parent.timeline, mapping)
+                for layer in ('overlays', 'brolls'):
+                    relocated = []
+                    for item in timeline.get(layer) or []:
+                        for index, part in enumerate(relocate_item(item, mapping)):
+                            if index:
+                                part['id'] = f"{part['id']}-part-{uuid.uuid4().hex[:8]}"
+                            relocated.append(part)
+                    timeline[layer] = relocated
+                timeline['overlay_tracks'] = [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': timeline['overlays']}]
+                timeline['broll_tracks'] = [{'id': 'BROLL', 'role': 'broll', 'clips': timeline['brolls']}]
+                for track in timeline['video_tracks']:
+                    if track['id'] == 'V2':
+                        track['clips'] = timeline['brolls']
+                    elif track['id'] == 'V3':
+                        track['clips'] = timeline['overlays']
+        if parent is None:
+            from .multicam import MulticamService
+            proposals = MulticamService.propose(project, composition_manifest, timeline)
+            if proposals:
+                decisions = {**decisions, 'operations': [*(decisions.get('operations') or []), *proposals]}
+                timeline = PreviewCompositionService.compose(
+                    project, composition_manifest, decisions, number,
+                    overlays_override=overlays, brolls_override=brolls,
+                )
         # Keep the selected track through every unrelated mutation.  ``None``
         # means inherit the parent; callers changing music pass an explicit
         # id (or the empty-string sentinel when clearing it in the future).
@@ -1380,10 +2136,21 @@ class TimelineRevisionService:
             music_override_track_id = (parent.timeline or {}).get('music_override_track_id')
         if music_override_track_id:
             timeline['music_override_track_id'] = int(music_override_track_id)
+        if music_tracks is None and parent:
+            music_tracks = deepcopy((parent.timeline or {}).get('music_tracks'))
+        if music_tracks is not None:
+            timeline['music_tracks'] = deepcopy(music_tracks)
         if music_volume is None and parent:
             music_volume = (parent.timeline or {}).get('music_volume')
         if music_volume is not None:
             timeline['music_volume'] = max(0.0, min(1.0, float(music_volume)))
+        if audio_mix is None and parent:
+            audio_mix = deepcopy((parent.timeline or {}).get('audio_mix') or {})
+        if audio_mix:
+            timeline['audio_mix'] = deepcopy(audio_mix)
+        if reuse_review_video and parent:
+            # Soundtrack edits do not alter the proxy's video or original take audio.
+            timeline['review_video_revision_id'] = (parent.timeline or {}).get('review_video_revision_id') or parent.pk
         revision = TimelineRevision.objects.create(
             project=project, revision=number, parent=parent, timeline=timeline,
             source_manifest=composition_manifest, edit_decision_set=decisions, reason=reason, created_by=member,
@@ -1394,10 +2161,31 @@ class TimelineRevisionService:
         project.save(update_fields=[
             'current_timeline_revision', 'preview_dirty', 'final_render_outdated', 'update_at',
         ])
+        ExternalMediaProject.objects.filter(pk=project.pk).update(editorial_version=F('editorial_version') + 1)
+        # A manual framing decision is previewed from the source take, not
+        # from the assembled master. A continuous revision proxy would be
+        # discarded by the editor in that case (it may already contain an
+        # earlier auto crop), so do not enqueue one for every slider change.
+        # Besides wasting worker capacity, those redundant jobs obscured the
+        # real editor state with a warning on each adjustment.
+        has_manual_framing = any(
+            item.get('type') == 'reframe'
+            and (
+                not item.get('enabled', True)
+                or (item.get('metadata') or {}).get('manual_transform')
+            )
+            for item in decisions.get('operations', [])
+        )
         # This is deliberately deferred: an edit must be saved even if a
         # worker is temporarily unavailable. The editor continues on source
         # proxies until the continuous revision proxy is ready.
-        if project.render_job_id and project.render_job and project.render_job.original_video:
+        if (
+            not reuse_review_video
+            and not has_manual_framing
+            and project.render_job_id
+            and project.render_job
+            and project.render_job.original_video
+        ):
             transaction.on_commit(lambda: cls._enqueue_timeline_review_proxy(project.pk, revision.pk))
         return revision
 
@@ -1456,7 +2244,57 @@ class TimelineRevisionService:
         session.save(update_fields=['undo_stack', 'redo_stack', 'current_revision', 'update_at'])
 
     @staticmethod
+    def _relocate_cues(project, previous_timeline, mapping):
+        if not project.render_job_id:
+            return []
+        captions = []
+        descriptors = {item['id']: item for item in previous_timeline.get('captions') or []}
+        next_index = (SubtitleCue.all_objects.filter(track__job=project.render_job).aggregate(value=Max('cue_index'))['value'] or 0) + 1
+        split_indexes = {}
+        for cue in SubtitleCue.objects.select_for_update().filter(track__job=project.render_job).select_related('track'):
+            descriptor = descriptors.get(cue.pk, {
+                'id': cue.pk, 'track_id': cue.track_id, 'language': cue.track.language,
+                'text': cue.text, 'is_source': cue.track.is_source,
+                'start_ms': cue.start_ms, 'end_ms': cue.end_ms,
+            })
+            parts = relocate_item(descriptor, mapping)
+            if not parts:
+                cue.delete()
+                continue
+            for index, part in enumerate(parts):
+                if index:
+                    # Bilingual rendering pairs languages by cue_index. Give
+                    # corresponding split pieces the same index in every track.
+                    key = (cue.cue_index, index)
+                    if key not in split_indexes:
+                        split_indexes[key] = next_index
+                        next_index += 1
+                    sibling = SubtitleCue.objects.create(
+                        track_id=cue.track_id,
+                        cue_index=split_indexes[key],
+                        text=cue.text, start_ms=part['start_ms'], end_ms=part['end_ms'],
+                    )
+                    part['id'] = sibling.pk
+                else:
+                    cue.start_ms, cue.end_ms = part['start_ms'], part['end_ms']
+                    cue.save(update_fields=['start_ms', 'end_ms', 'update_at'])
+                captions.append(part)
+        return captions
+
+    @staticmethod
     def _shift_cues_for_decision(project, decisions, target, enabling):
+        """Keep subtitle cues on the same edited clock as a removed take.
+
+        A cut collapses the timeline. Shifting only captions that start after
+        the cut left captions that intersected the removed video untouched,
+        making them survive over unrelated takes and overlap the next cue.
+        Trim the intersecting part instead; a cue contained entirely in the
+        deleted take is soft-deleted so revision history can restore it.
+        """
+        if decisions.get('video_order'):
+            # _create maps the retained source ranges through both clip lists;
+            # subtraction alone cannot locate a cut after a take was moved.
+            return
         duration = max(0, int(target.get('source_out_ms') or 0) - int(target.get('source_in_ms') or 0))
         if not duration or not project.render_job_id:
             return
@@ -1473,22 +2311,71 @@ class TimelineRevisionService:
             if int(item.get('source_in_ms') or 0) < source_start
         )
         timeline_point = max(0, source_start - removed_before)
-        delta = -duration if enabling else duration
-        cues = SubtitleCue.objects.filter(track__job=project.render_job, start_ms__gte=timeline_point)
+        if not enabling:
+            # History navigation restores the exact caption snapshot through
+            # ``_sync_cues_from_revision``. Keep the legacy inverse shift for
+            # disabling an automatic cut directly from the inspector.
+            cues = SubtitleCue.objects.filter(track__job=project.render_job, start_ms__gte=timeline_point)
+            for cue in cues:
+                cue.start_ms = max(0, cue.start_ms + duration)
+                cue.end_ms = max(cue.start_ms + 1, cue.end_ms + duration)
+            SubtitleCue.objects.bulk_update(cues, ['start_ms', 'end_ms'])
+            return
+
+        cut_end = timeline_point + duration
+        changed = []
+        removed = []
+        cues = SubtitleCue.objects.select_for_update().filter(track__job=project.render_job)
         for cue in cues:
-            cue.start_ms = max(0, cue.start_ms + delta)
-            cue.end_ms = max(cue.start_ms + 1, cue.end_ms + delta)
-        SubtitleCue.objects.bulk_update(cues, ['start_ms', 'end_ms'])
+            start, end = int(cue.start_ms), int(cue.end_ms)
+            if end <= timeline_point:
+                continue
+            if start >= cut_end:
+                cue.start_ms = start - duration
+                cue.end_ms = end - duration
+            elif start >= timeline_point and end <= cut_end:
+                # The entire caption belongs to the video being removed.
+                removed.append(cue)
+                continue
+            elif start < timeline_point and end <= cut_end:
+                # Keep only the words shown before the cut.
+                cue.end_ms = timeline_point
+            elif start >= timeline_point and end > cut_end:
+                # Keep only the portion after the cut; it begins where the
+                # two remaining video edges meet.
+                cue.start_ms = timeline_point
+                cue.end_ms = end - duration
+            else:
+                # The caption spans both sides of the removed segment.
+                cue.end_ms = end - duration
+            if cue.end_ms - cue.start_ms < MIN_MANUAL_CUT_MS:
+                removed.append(cue)
+            else:
+                changed.append(cue)
+        if changed:
+            SubtitleCue.objects.bulk_update(changed, ['start_ms', 'end_ms'])
+        for cue in removed:
+            cue.delete()
 
     @staticmethod
     def _sync_cues_from_revision(project, revision):
         if not project.render_job_id:
             return
         by_id = {int(item['id']): item for item in revision.timeline.get('captions') or []}
-        cues = list(SubtitleCue.objects.filter(track__job=project.render_job, pk__in=by_id))
+        # Cues are soft-deleted so Delete can be undone/redone just like every
+        # other timeline operation.  The revision snapshot is authoritative:
+        # an id present there must be restored, and one absent must be hidden.
+        cues = list(SubtitleCue.all_objects.filter(track__job=project.render_job))
         for cue in cues:
-            item = by_id[cue.pk]
+            item = by_id.get(cue.pk)
+            if item is None:
+                if cue.deleted is None:
+                    cue.delete()
+                continue
+            if cue.deleted is not None:
+                cue.undelete()
             cue.start_ms = int(item['start_ms'])
             cue.end_ms = int(item['end_ms'])
             cue.text = item['text']
-        SubtitleCue.objects.bulk_update(cues, ['start_ms', 'end_ms', 'text'])
+        active = [cue for cue in cues if cue.pk in by_id]
+        SubtitleCue.objects.bulk_update(active, ['start_ms', 'end_ms', 'text'])

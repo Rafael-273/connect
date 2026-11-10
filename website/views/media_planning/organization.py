@@ -1,12 +1,16 @@
 from django.contrib import messages
+from django.db import transaction
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views import View
 
 from ...forms.media_organization import (
     MediaLeadershipItemForm,
     MediaResourceCredentialForm,
-    MediaResourceForm,
+    MediaResourceCreateForm,
+    MediaResourceEditForm,
     MediaRoleForm,
 )
 from ...models.media_organization import (
@@ -15,11 +19,13 @@ from ...models.media_organization import (
     MediaResource,
     MediaResourceCredential,
     MediaSubTeamMembership,
+    RESOURCE_CATEGORY_CHOICES,
 )
 from ...utils.media_vault import decrypt_secret, encrypt_secret
 from website.services.ministry_organization import media_teams, scoped_roles
 from website.views import ministry_organization as ministry_org
-from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
+from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin, _get_media_membership, _is_media_org_admin
+from ..mixins import MemberRequiredMixin
 
 
 class MediaOrganizationDashboardView(MediaMemberRequiredMixin, View):
@@ -204,41 +210,105 @@ class MediaLeadershipUpdateView(MediaLeaderRequiredMixin, View):
 
 # ─── Recursos ─────────────────────────────────────────────────────────────────
 
-class MediaResourceListView(MediaMemberRequiredMixin, View):
+class MediaResourceAccessMixin(MemberRequiredMixin):
+    """Media members can use resources assigned to their active teams."""
+
+    def dispatch(self, request, *args, **kwargs):
+        member = getattr(request.user, 'member', None) if request.user.is_authenticated else None
+        if member:
+            self.media_membership = _get_media_membership(member)
+            self.is_media_leader = _is_media_org_admin(request.user) or bool(
+                self.media_membership and self.media_membership.role == 'leader'
+            )
+            if not self.is_media_leader and not self.media_membership:
+                messages.error(request, 'Apenas membros da Mídia Externa têm acesso a esta área.')
+                return redirect('member_dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+    def _nav_context(self):
+        return {
+            'can_consolidate': getattr(self.member, 'is_available_to_consolidate', False),
+            'is_media_member': True,
+            'is_media_leader': self.is_media_leader,
+            'nav_active': 'external_media',
+        }
+
+    def accessible_resources(self):
+        resources = MediaResource.objects.all()
+        if self.is_media_leader:
+            return resources
+        return resources.filter(
+            Q(access_teams__leader=self.member) | Q(
+                access_teams__memberships__member=self.member,
+                access_teams__memberships__is_active=True,
+                access_teams__memberships__deleted__isnull=True,
+            ),
+            access_teams__is_active=True,
+            access_teams__deleted__isnull=True,
+            access_teams__ministry_id=self.media_membership.ministry_id,
+        ).distinct()
+
+
+class MediaResourceListView(MediaResourceAccessMixin, View):
     template_name = 'member/media_planning/resource_list.html'
 
     def get(self, request):
-        resources = MediaResource.objects.select_related(
-            'responsible'
-        ).prefetch_related('access_members').order_by('name')
-        ctx = {**self._nav_context(), 'resources': resources}
+        ctx = _resource_list_context(self)
         return render(request, self.template_name, ctx)
+
+
+def _resource_list_context(view, form=None):
+    params = view.request.GET
+    search = params.get('q', '').strip()
+    category = params.get('category', '').strip()
+    status = params.get('status', '').strip()
+    resources = view.accessible_resources() if isinstance(view, MediaResourceAccessMixin) else MediaResource.objects.all()
+    if search:
+        resources = resources.filter(Q(name__icontains=search) | Q(email_username__icontains=search) | Q(url__icontains=search))
+    if category:
+        resources = resources.filter(category=category)
+    if status in ('active', 'inactive'):
+        resources = resources.filter(is_active=status == 'active')
+    return {
+        **view._nav_context(),
+        'resources': resources.select_related('responsible', 'credential').prefetch_related('access_teams').order_by('name'),
+        'resource_form': form if form is not None else MediaResourceCreateForm() if getattr(view, 'is_media_leader', True) else None,
+        'resource_modal_open': form is not None,
+        'resource_search': search,
+        'resource_category': category,
+        'resource_status': status,
+        'resource_categories': RESOURCE_CATEGORY_CHOICES,
+        'resource_filters_active': bool(search or category or status),
+    }
 
 
 class MediaResourceCreateView(MediaLeaderRequiredMixin, View):
-    template_name = 'member/media_planning/resource_form.html'
-
     def get(self, request):
-        ctx = {**self._nav_context(), 'form': MediaResourceForm(), 'action': 'create'}
-        return render(request, self.template_name, ctx)
+        return redirect(f"{reverse('media_resource_list')}?create=1")
 
     def post(self, request):
-        form = MediaResourceForm(request.POST)
+        form = MediaResourceCreateForm(request.POST)
         if form.is_valid():
-            resource = form.save()
-            form.save_m2m()
+            with transaction.atomic():
+                resource = form.save()
+                password = form.cleaned_data['password']
+                if password:
+                    credential = MediaResourceCredential.objects.create(
+                        resource=resource, encrypted_password=encrypt_secret(password),
+                        last_updated_by=request.user,
+                    )
+                    MediaCredentialAccessLog.objects.create(
+                        credential=credential, user=request.user, action='update',
+                    )
             messages.success(request, f'Recurso "{resource.name}" criado!')
-            return redirect('media_resource_detail', pk=resource.pk)
-        ctx = {**self._nav_context(), 'form': form, 'action': 'create'}
-        return render(request, self.template_name, ctx)
+            return redirect('media_resource_list')
+        return render(request, MediaResourceListView.template_name, _resource_list_context(self, form))
 
 
-class MediaResourceDetailView(MediaMemberRequiredMixin, View):
-    template_name = 'member/media_planning/resource_detail.html'
-
+class MediaResourceDetailView(MediaResourceAccessMixin, View):
     def get(self, request, pk):
         resource = get_object_or_404(
-            MediaResource.objects.select_related('responsible').prefetch_related('access_members'),
+            self.accessible_resources().select_related('responsible').prefetch_related('access_teams'),
             pk=pk,
         )
         credential = getattr(resource, 'credential', None)
@@ -247,19 +317,22 @@ class MediaResourceDetailView(MediaMemberRequiredMixin, View):
             'resource': resource,
             'credential': credential,
             'has_credential': credential and bool(credential.encrypted_password),
-            'credential_form': MediaResourceCredentialForm(),
         }
-        return render(request, self.template_name, ctx)
+        if request.GET.get('modal') != '1':
+            return redirect(f"{reverse('media_resource_list')}?resource={resource.pk}")
+        return render(request, 'member/media_planning/partials/resource_detail_content.html', ctx)
 
 
 class MediaResourceUpdateView(MediaLeaderRequiredMixin, View):
-    template_name = 'member/media_planning/resource_form.html'
+    template_name = 'member/media_planning/partials/resource_edit_content.html'
 
     def get(self, request, pk):
         resource = get_object_or_404(MediaResource, pk=pk)
+        if request.GET.get('modal') != '1':
+            return redirect(f"{reverse('media_resource_list')}?edit={resource.pk}")
         ctx = {
             **self._nav_context(),
-            'form': MediaResourceForm(instance=resource),
+            'form': MediaResourceEditForm(instance=resource, prefix='edit'),
             'resource': resource,
             'action': 'edit',
         }
@@ -267,19 +340,36 @@ class MediaResourceUpdateView(MediaLeaderRequiredMixin, View):
 
     def post(self, request, pk):
         resource = get_object_or_404(MediaResource, pk=pk)
-        form = MediaResourceForm(request.POST, instance=resource)
+        form = MediaResourceEditForm(request.POST, instance=resource, prefix='edit')
         if form.is_valid():
-            form.save()
-            form.save_m2m()
+            with transaction.atomic():
+                form.save()
+                password = form.cleaned_data['password']
+                notes = form.cleaned_data['sensitive_notes']
+                if password or notes:
+                    credential, _ = MediaResourceCredential.objects.get_or_create(resource=resource)
+                    if password:
+                        credential.encrypted_password = encrypt_secret(password)
+                    if notes:
+                        credential.encrypted_notes = encrypt_secret(notes)
+                    credential.last_updated_by = request.user
+                    credential.save()
+                    MediaCredentialAccessLog.objects.create(credential=credential, user=request.user, action='update')
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'ok': True, 'name': resource.name, 'category': resource.get_category_display(), 'has_password': resource.has_credentials})
             messages.success(request, f'Recurso "{resource.name}" atualizado!')
-            return redirect('media_resource_detail', pk=resource.pk)
+            return redirect(f"{reverse('media_resource_list')}?resource={resource.pk}")
         ctx = {
             **self._nav_context(),
             'form': form,
             'resource': resource,
             'action': 'edit',
         }
-        return render(request, self.template_name, ctx)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return render(request, self.template_name, ctx, status=422)
+        list_ctx = _resource_list_context(self)
+        list_ctx.update(resource_edit_form=form, edit_resource=resource)
+        return render(request, MediaResourceListView.template_name, list_ctx)
 
 
 class MediaResourceCredentialUpdateView(MediaLeaderRequiredMixin, View):
@@ -287,6 +377,8 @@ class MediaResourceCredentialUpdateView(MediaLeaderRequiredMixin, View):
         resource = get_object_or_404(MediaResource, pk=pk)
         form = MediaResourceCredentialForm(request.POST)
         if not form.is_valid():
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({'error': 'Erro ao salvar credenciais.'}, status=400)
             messages.error(request, 'Erro ao salvar credenciais.')
             return redirect('media_resource_detail', pk=pk)
 
@@ -306,13 +398,15 @@ class MediaResourceCredentialUpdateView(MediaLeaderRequiredMixin, View):
             user=request.user,
             action='update',
         )
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'ok': True, 'has_password': bool(credential.encrypted_password)})
         messages.success(request, 'Credenciais atualizadas com segurança.')
         return redirect('media_resource_detail', pk=pk)
 
 
-class MediaResourceCredentialRevealView(MediaLeaderRequiredMixin, View):
+class MediaResourceCredentialRevealView(MediaResourceAccessMixin, View):
     def post(self, request, pk):
-        resource = get_object_or_404(MediaResource, pk=pk)
+        resource = get_object_or_404(self.accessible_resources(), pk=pk)
         try:
             credential = resource.credential
         except MediaResourceCredential.DoesNotExist:

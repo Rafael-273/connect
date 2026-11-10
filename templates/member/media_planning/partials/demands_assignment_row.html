@@ -47,10 +47,16 @@
                 <div class="demand-col-due">
                     <label class="demand-field-label demand-field-label-mobile">{% if use_absolute_dates %}Prazo{% else %}Prazo relativo{% endif %}</label>
                     {% if use_absolute_dates %}
-                    <input type="date" name="{{ prefix }}-assignment_due_date"
-                           value="{{ row.due_date|default:'' }}"
-                           class="media-field-input demand-step-control demand-due-date"
-                           aria-label="Prazo da etapa">
+                    <div class="demand-due-absolute">
+                        <input type="date" name="{{ prefix }}-assignment_due_date"
+                               value="{{ row.due_date|default:'' }}"
+                               class="media-field-input demand-step-control demand-due-date"
+                               aria-label="Data do prazo da etapa">
+                        <input type="time" name="{{ prefix }}-assignment_due_time"
+                               value="{{ row.due_time|default:'' }}"
+                               class="media-field-input demand-step-control demand-due-time"
+                               aria-label="Horário do prazo da etapa">
+                    </div>
                     {% else %}
                     <div class="demand-due-offset">
                         <input type="number" min="0" step="1"

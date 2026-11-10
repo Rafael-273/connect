@@ -119,6 +119,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
+MEDIA_WORK_TIME_ZONE = os.getenv('MEDIA_WORK_TIME_ZONE', 'America/Sao_Paulo')
 
 USE_I18N = True
 
@@ -180,6 +181,13 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 SITE_DOMAIN = os.getenv('SITE_DOMAIN', 'localhost:8000')
 
+# Dados exibidos na página pública do Sítio Filadélfia.
+PHILADELPHIA_PIX_KEY = os.getenv('PHILADELPHIA_PIX_KEY', '')
+PHILADELPHIA_PIX_QR_CODE = os.getenv('PHILADELPHIA_PIX_QR_CODE', '')
+PHILADELPHIA_CREDIT_CARD_URL = os.getenv('PHILADELPHIA_CREDIT_CARD_URL', '')
+PHILADELPHIA_CAMPAIGN_VIDEO_URL = os.getenv('PHILADELPHIA_CAMPAIGN_VIDEO_URL', '')
+PHILADELPHIA_INSTAGRAM_REEL_URL = os.getenv('PHILADELPHIA_INSTAGRAM_REEL_URL', '')
+
 # OpenAI (texto + transcrição de arquivos). O tradutor ao vivo continua usando
 # Azure Speech; o modelo de texto deve ser escolhido por cada fluxo/view.
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
@@ -223,6 +231,23 @@ EXTERNAL_MEDIA_FFMPEG_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_FFMPEG_TIMEOUT', 2
 # B-roll-heavy long-form edits can legitimately take longer than the former
 # 45-minute ceiling, while still remaining below the full pipeline timeout.
 EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT = int(os.getenv('EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT', 7200))
+# The chunked B-roll renderer revisits the same master many times.  Workflow
+# disks are ephemeral, but a bounded per-run copy is safe and avoids opening a
+# large S3 object for every chunk.  This is deliberately separate from the
+# general remote materialization fallback, whose lower limit protects callers
+# that cannot account for an additional render output.
+EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB = int(
+    os.getenv('EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB', 512)
+)
+# The timeline compositor can efficiently build one B-roll track while
+# decoding the master only once.  In production, sixteen remote sources could
+# still make FFmpeg retain enough decoder and filter queues to be killed by a
+# small Workflow worker.  Four sources keeps the monolithic fast path for the
+# common edit while routing B-roll-heavy projects through the bounded chunked
+# renderer. Keep this configurable for larger workers.
+EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES = int(
+    os.getenv('EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES', 4)
+)
 EXTERNAL_MEDIA_FFMPEG_PRESET = os.getenv('EXTERNAL_MEDIA_FFMPEG_PRESET', 'veryfast')
 EXTERNAL_MEDIA_RENDER_PRESET = os.getenv('EXTERNAL_MEDIA_RENDER_PRESET', 'superfast')
 EXTERNAL_MEDIA_INTERMEDIATE_PRESET = os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_PRESET', 'superfast')
@@ -230,6 +255,10 @@ EXTERNAL_MEDIA_INTERMEDIATE_CRF = int(os.getenv('EXTERNAL_MEDIA_INTERMEDIATE_CRF
 # Mantém a renderização final rápida em máquinas multi-core sem abrir encodes
 # demais e deixar o computador sem responsividade.
 EXTERNAL_MEDIA_ASSEMBLY_WORKERS = int(os.getenv('EXTERNAL_MEDIA_ASSEMBLY_WORKERS', 2))
+# The concat filter keeps a decoder and frame queue for every input. Keeping a
+# bounded fan-in prevents long projects (dozens of editorial takes) from
+# exhausting the worker's memory during the final assembly pass.
+EXTERNAL_MEDIA_CONCAT_BATCH_SIZE = int(os.getenv('EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 8))
 EXTERNAL_MEDIA_PROXY_WIDTH = int(os.getenv('EXTERNAL_MEDIA_PROXY_WIDTH', 854))
 EXTERNAL_MEDIA_PROXY_CRF = int(os.getenv('EXTERNAL_MEDIA_PROXY_CRF', 30))
 EXTERNAL_MEDIA_PROXY_PRESET = os.getenv('EXTERNAL_MEDIA_PROXY_PRESET', 'ultrafast')
@@ -255,11 +284,24 @@ EXTERNAL_MEDIA_WORKSPACE_MAX_AGE_HOURS = int(os.getenv('EXTERNAL_MEDIA_WORKSPACE
 EXTERNAL_MEDIA_STREAMING_WORKSPACE_ESTIMATE_MB = int(
     os.getenv('EXTERNAL_MEDIA_STREAMING_WORKSPACE_ESTIMATE_MB', 512)
 )
+# Conservative scratch-space estimate for the optional full-resolution ProRes
+# 4444 alpha overlay included in Premiere packages.
+EXTERNAL_MEDIA_CAPTION_OVERLAY_ESTIMATED_BYTES_PER_PIXEL = float(
+    os.getenv('EXTERNAL_MEDIA_CAPTION_OVERLAY_ESTIMATED_BYTES_PER_PIXEL', 0.25)
+)
 EXTERNAL_MEDIA_REMOTE_MATERIALIZE_MAX_MB = int(
     os.getenv('EXTERNAL_MEDIA_REMOTE_MATERIALIZE_MAX_MB', 256)
 )
 EXTERNAL_MEDIA_S3_URL_EXPIRATION_SECONDS = int(
     os.getenv('EXTERNAL_MEDIA_S3_URL_EXPIRATION_SECONDS', 86400)
+)
+# Keep Premiere source media streaming from S3.  A short retry budget handles
+# transient HTTP/TLS resets without materializing originals on Render disk.
+EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS = int(
+    os.getenv('EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS', 3)
+)
+EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS = float(
+    os.getenv('EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS', 2)
 )
 CELERY_BEAT_SCHEDULE = {
     'cleanup-manual-jobs': {

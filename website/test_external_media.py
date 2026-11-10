@@ -1,4 +1,5 @@
 import json
+import base64
 import io
 import math
 import re
@@ -7,6 +8,7 @@ import subprocess
 import tempfile
 import wave
 import zipfile
+from html import unescape
 from decimal import Decimal
 from datetime import timedelta
 from pathlib import Path
@@ -17,7 +19,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, RequestFactory, SimpleTestCase, TestCase
+from django.test import Client, RequestFactory, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from safedelete.models import HARD_DELETE
@@ -30,6 +32,10 @@ from website.external_media.audio_mixing import (
     DuckingSettings, build_dynamic_ducking_envelope,
     SpeechBlock,
     build_ducking_envelope,
+    combine_gain_envelopes,
+    ducking_options,
+    normalize_volume_keyframes,
+    resolved_ducking_config,
     build_spectral_windows,
     clip_blocks_against_protected_ranges,
     group_speech_blocks,
@@ -88,6 +94,7 @@ from website.external_media.services import (
     ExternalMediaProjectPipeline,
     FFmpegRunner,
     LUTService,
+    ProjectService,
     RenderService,
     SubtitleService,
     TemplateService,
@@ -115,6 +122,7 @@ from website.models.external_media import (
     MediaTemplateVersion,
     ProjectPipelineStep,
     ProjectBlockMedia,
+    ProjectBrollAsset,
     ProjectCustomBlock,
     ProjectSourceProxy,
     PreviewSession,
@@ -344,7 +352,7 @@ class SubtitleIntegrityTests(ExternalMediaFixtureMixin, TestCase):
             3: 'Peace be with you.',
             4: 'Amen.',
         }
-        SubtitleCue.objects.create(
+        other_cue = SubtitleCue.objects.create(
             track=self.track, cue_index=3, start_ms=9000, end_ms=11000, text='Paz do Senhor.',
         )
         SubtitleCue.objects.create(
@@ -1060,6 +1068,115 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
             name='Projeto de agosto', template_version=self.version, created_by=self.member,
         )
 
+    def make_default_scene(self, key, order):
+        block = MediaTemplateBlock.objects.create(
+            version=self.version, key=key, name=key, order=order,
+            default_video=SimpleUploadedFile(f'{key}.mp4', b'default-video'),
+        )
+        self.addCleanup(block.default_video.delete, save=False)
+        return block
+
+    def test_reorder_visible_scenes_preserves_hidden_default_scenes(self):
+        project = self.make_project()
+        opening = self.make_default_scene('opening', 0)
+        closing = self.make_default_scene('closing', 2)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        template_media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='template.mp4',
+            file=SimpleUploadedFile('template.mp4', b'template'),
+        )
+        custom_media = ProjectBlockMedia.objects.create(
+            project=project, custom_block=custom, position=1, original_filename='custom.mp4',
+            file=SimpleUploadedFile('custom.mp4', b'custom'),
+        )
+        original_order = [f't-{opening.pk}', f't-{self.block.pk}', f'c-{custom.pk}', f't-{closing.pk}']
+        project.configuration = {'block_order': original_order, 'other_setting': True}
+        project.save(update_fields=['configuration', 'update_at'])
+        detail_url = reverse('external_media_project_detail', args=[project.public_id])
+        page = self.client.get(detail_url)
+        self.assertEqual([item['definition'].pk for item in page.context['blocks']], [self.block.pk, custom.pk])
+
+        response = self.client.post(
+            reverse('external_media_project_custom_block_reorder', args=[project.public_id]),
+            {'item_ids[]': [f'c-{custom.pk}', f't-{self.block.pk}']},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        expected = [f't-{opening.pk}', f'c-{custom.pk}', f't-{self.block.pk}', f't-{closing.pk}']
+        self.assertEqual(project.configuration, {'block_order': expected, 'other_setting': True})
+        page = self.client.get(detail_url)
+        self.assertEqual([item['definition'].pk for item in page.context['blocks']], [custom.pk, self.block.pk])
+        manifest = SourceManifestBuilder.build(project)
+        self.assertEqual(
+            [item['id'] for item in manifest['sources']],
+            [f'template-default-{opening.pk}', f'project-media-{custom_media.pk}',
+             f'project-media-{template_media.pk}', f'template-default-{closing.pk}'],
+        )
+
+    def test_reorder_visible_scenes_without_previous_order_keeps_default_slots(self):
+        project = self.make_project()
+        opening = self.make_default_scene('opening', 0)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+
+        response = self.client.post(
+            reverse('external_media_project_custom_block_reorder', args=[project.public_id]),
+            {'item_ids[]': [f'c-{custom.pk}', f't-{self.block.pk}']},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], [f't-{opening.pk}', f'c-{custom.pk}', f't-{self.block.pk}'])
+
+    def test_reorder_still_accepts_the_complete_scene_list(self):
+        project = self.make_project()
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        order = [f'c-{custom.pk}', f't-{self.block.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+        opening = self.make_default_scene('opening', 0)
+        order = [f't-{self.block.pk}', f't-{opening.pk}', f'c-{custom.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+    def test_reorder_requires_default_scenes_whose_files_are_missing(self):
+        project = self.make_project()
+        missing = MediaTemplateBlock.objects.create(
+            version=self.version, key='missing', name='Missing', order=2,
+            default_video='missing/default.mp4',
+        )
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        response = self.client.post(url, {'item_ids[]': [f't-{self.block.pk}']})
+        self.assertEqual(response.status_code, 400)
+        order = [f't-{missing.pk}', f't-{self.block.pk}']
+        response = self.client.post(url, {'item_ids[]': order})
+        self.assertEqual(response.status_code, 200)
+        project.refresh_from_db()
+        self.assertEqual(project.configuration['block_order'], order)
+
+    def test_reorder_rejects_invalid_or_incomplete_visible_scene_lists(self):
+        project = self.make_project()
+        self.make_default_scene('opening', 0)
+        custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=1)
+        url = reverse('external_media_project_custom_block_reorder', args=[project.public_id])
+        invalid_orders = [
+            [], [f'c-{custom.pk}'], [f't-{self.block.pk}'],
+            [f't-{self.block.pk}', f'c-{custom.pk}', f'c-{custom.pk}'],
+            [f't-{self.block.pk}', f'c-{custom.pk}', 'c-999999'],
+        ]
+        for order in invalid_orders:
+            with self.subTest(order=order):
+                response = self.client.post(url, {'item_ids[]': order})
+                self.assertEqual(response.status_code, 400)
+                project.refresh_from_db()
+                self.assertNotIn('block_order', project.configuration or {})
+
     def test_source_manifest_resolves_custom_blocks_and_configured_order(self):
         project = self.make_project()
         custom = ProjectCustomBlock.objects.create(project=project, name='Extra', position=2)
@@ -1242,6 +1359,317 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         )
         media.delete(force_policy=HARD_DELETE)
 
+    def test_manual_cut_shifts_preview_captions_exactly_once(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        manifest = SourceManifestBuilder.build(project)
+        project.configuration = {
+            'source_manifest': manifest,
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['configuration', 'render_job', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=6000, end_ms=7000, text='Depois do corte',
+        )
+
+        initial = TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.create_manual_cut(
+            project, self.member, 2000, 3000,
+        )
+
+        cue.refresh_from_db()
+        self.assertEqual(initial.timeline['captions'][0]['start_ms'], 6000)
+        self.assertEqual(initial.timeline['caption_clock'], 'edited')
+        self.assertEqual((cue.start_ms, cue.end_ms), (5000, 6000))
+        self.assertEqual(revision.timeline['sequence']['duration_ms'], 9000)
+        self.assertEqual(
+            (revision.timeline['captions'][0]['start_ms'], revision.timeline['captions'][0]['end_ms']),
+            (5000, 6000),
+        )
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_preview_subtitle_timing_and_delete_are_undoable(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        project.configuration = {
+            'source_manifest': SourceManifestBuilder.build(project),
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['configuration', 'render_job', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=1000, end_ms=2000, text='Legenda editável',
+        )
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        moved = TimelineRevisionService.update_subtitle(
+            project, self.member, cue.pk, start_ms=1500, end_ms=2600,
+        )
+        cue.refresh_from_db()
+        self.assertEqual((cue.start_ms, cue.end_ms), (1500, 2600))
+        self.assertEqual(
+            (moved.timeline['captions'][0]['start_ms'], moved.timeline['captions'][0]['end_ms']),
+            (1500, 2600),
+        )
+
+        other_cue = SubtitleCue.objects.create(
+            track=track, cue_index=2, start_ms=3000, end_ms=4000, text='Outra legenda',
+        )
+        with self.assertRaisesMessage(ValueError, 'As legendas da mesma faixa não podem se sobrepor.'):
+            TimelineRevisionService.update_subtitle(
+                project, self.member, cue.pk, start_ms=2500, end_ms=3500,
+            )
+        cue.refresh_from_db()
+        self.assertEqual((cue.start_ms, cue.end_ms), (1500, 2600))
+        other_cue.delete()
+
+        removed = TimelineRevisionService.update_subtitle(project, self.member, cue.pk, delete=True)
+        self.assertEqual(removed.timeline['captions'], [])
+        self.assertFalse(SubtitleCue.objects.filter(pk=cue.pk).exists())
+
+        TimelineRevisionService.navigate_history(project, self.member, 'undo')
+        restored = SubtitleCue.objects.get(pk=cue.pk)
+        self.assertEqual((restored.start_ms, restored.end_ms), (1500, 2600))
+        TimelineRevisionService.navigate_history(project, self.member, 'redo')
+        self.assertFalse(SubtitleCue.objects.filter(pk=cue.pk).exists())
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_manual_cut_trims_or_removes_captions_linked_to_removed_video(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        project.configuration = {
+            'source_manifest': SourceManifestBuilder.build(project),
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': []},
+        }
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['configuration', 'render_job', 'update_at'])
+        cues = {}
+        for language, start, end, text in (
+            ('pt', 1500, 2500, 'Começa antes do corte'),
+            ('en', 2200, 2800, 'Inteira no corte'),
+            ('es', 2500, 3600, 'Termina depois do corte'),
+            ('fr', 1500, 3500, 'Atravessa o corte'),
+        ):
+            track = SubtitleTrack.objects.create(job=job, language=language, is_source=language == 'pt')
+            cues[language] = SubtitleCue.objects.create(
+                track=track, cue_index=1, start_ms=start, end_ms=end, text=text,
+            )
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.create_manual_cut(project, self.member, 2000, 3000)
+
+        self.assertEqual(
+            (SubtitleCue.objects.get(pk=cues['pt'].pk).start_ms, SubtitleCue.objects.get(pk=cues['pt'].pk).end_ms),
+            (1500, 2000),
+        )
+        self.assertFalse(SubtitleCue.objects.filter(pk=cues['en'].pk).exists())
+        self.assertIsNotNone(SubtitleCue.all_objects.get(pk=cues['en'].pk).deleted)
+        self.assertEqual(
+            (SubtitleCue.objects.get(pk=cues['es'].pk).start_ms, SubtitleCue.objects.get(pk=cues['es'].pk).end_ms),
+            (2000, 2600),
+        )
+        self.assertEqual(
+            (SubtitleCue.objects.get(pk=cues['fr'].pk).start_ms, SubtitleCue.objects.get(pk=cues['fr'].pk).end_ms),
+            (1500, 2500),
+        )
+        self.assertEqual({cue['language'] for cue in revision.timeline['captions']}, {'pt', 'es', 'fr'})
+
+        TimelineRevisionService.navigate_history(project, self.member, 'undo')
+        self.assertEqual(
+            (SubtitleCue.objects.get(pk=cues['en'].pk).start_ms, SubtitleCue.objects.get(pk=cues['en'].pk).end_ms),
+            (2200, 2800),
+        )
+        TimelineRevisionService.navigate_history(project, self.member, 'redo')
+        self.assertFalse(SubtitleCue.objects.filter(pk=cues['en'].pk).exists())
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_video_split_after_a_cut_uses_the_original_master_clock(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        manifest = SourceManifestBuilder.build(project)
+        project.configuration = {
+            'source_manifest': manifest,
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': [{
+                'id': 'existing-cut', 'type': 'remove_segment', 'source_id': 'project-master',
+                'source_in_ms': 2000, 'source_out_ms': 3000, 'enabled': True,
+            }]},
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.create_video_split(project, self.member, 9500)
+
+        self.assertEqual(revision.edit_decision_set['video_splits_ms'], [9500])
+        self.assertEqual(
+            [(clip['master_in_ms'], clip['master_out_ms']) for clip in revision.timeline['clips']],
+            [(0, 2000), (3000, 9500), (9500, 10_000)],
+        )
+        self.assertEqual(
+            [(clip['timeline_in_ms'], clip['timeline_out_ms']) for clip in revision.timeline['clips']],
+            [(0, 2000), (2000, 8500), (8500, 9000)],
+        )
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_zoom_after_video_split_is_scoped_to_the_selected_take(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=10_000,
+        )
+        manifest = SourceManifestBuilder.build(project)
+        source_id = manifest['sources'][0]['id']
+        project.configuration = {
+            'source_manifest': manifest,
+            'edit_decision_set': {
+                'schema': 'connect.edit_decisions.v1',
+                'operations': [{
+                    'id': 'base-reframe', 'type': 'reframe', 'source_id': source_id,
+                    'enabled': True, 'origin': 'AUTO', 'metadata': {},
+                }],
+            },
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        TimelineRevisionService.create_video_split(project, self.member, 5000)
+        first = TimelineRevisionService.update_transform(project, self.member, 'base-reframe', {
+            'scale': 1.35, 'x': -.2, 'y': .1,
+            'segment_start_ms': 0, 'segment_end_ms': 5000,
+        })
+
+        operations = first.edit_decision_set['operations']
+        base = next(item for item in operations if item['id'] == 'base-reframe')
+        scoped = [item for item in operations if item['id'].startswith('reframe-segment-')]
+        self.assertNotIn('manual_transform', base.get('metadata') or {})
+        self.assertEqual(len(scoped), 1)
+        self.assertEqual(
+            (scoped[0]['metadata']['segment_start_ms'], scoped[0]['metadata']['segment_end_ms']),
+            (0, 5000),
+        )
+        self.assertEqual(scoped[0]['metadata']['manual_transform']['scale'], 1.35)
+        self.assertEqual(len(first.timeline['clips']), 2)
+        self.assertEqual(first.timeline['clips'][0]['effects'][0]['scale'], 1.35)
+        self.assertEqual(first.timeline['clips'][1]['effects'], [])
+
+        second = TimelineRevisionService.update_transform(project, self.member, 'base-reframe', {
+            'scale': 1.1, 'x': .15, 'y': 0,
+            'segment_start_ms': 5000, 'segment_end_ms': 10_000,
+        })
+        scoped = sorted(
+            (
+                item for item in second.edit_decision_set['operations']
+                if item['id'].startswith('reframe-segment-')
+            ),
+            key=lambda item: item['metadata']['segment_start_ms'],
+        )
+        self.assertEqual(len(scoped), 2)
+        self.assertEqual([item['metadata']['manual_transform']['scale'] for item in scoped], [1.35, 1.1])
+        self.assertEqual(
+            [clip['effects'][0]['scale'] for clip in second.timeline['clips']],
+            [1.35, 1.1],
+        )
+
+        restored = TimelineRevisionService.update_transform(project, self.member, scoped[0]['id'], {
+            'restore_original': True,
+            'segment_start_ms': 0, 'segment_end_ms': 5000,
+        })
+        self.assertEqual(restored.timeline['clips'][0]['effects'], [])
+        self.assertEqual(restored.timeline['clips'][1]['effects'][0]['scale'], 1.1)
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_each_of_many_video_takes_keeps_its_own_transform(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project, block=self.block, position=1, original_filename='take.mov',
+            file=SimpleUploadedFile('take.mov', b'video'), duration_ms=20_000,
+        )
+        manifest = SourceManifestBuilder.build(project)
+        source_id = manifest['sources'][0]['id']
+        project.configuration = {
+            'source_manifest': manifest,
+            'edit_decision_set': {'schema': 'connect.edit_decisions.v1', 'operations': [{
+                'id': 'base-reframe', 'type': 'reframe', 'source_id': source_id,
+                'enabled': True, 'origin': 'AUTO', 'metadata': {},
+            }]},
+        }
+        project.save(update_fields=['configuration', 'update_at'])
+
+        TimelineRevisionService.ensure_initial(project, self.member)
+        TimelineRevisionService.create_video_split(project, self.member, 4_000)
+        TimelineRevisionService.create_video_split(project, self.member, 8_000)
+        TimelineRevisionService.create_video_split(project, self.member, 12_000)
+        TimelineRevisionService.create_video_split(project, self.member, 16_000)
+        revision = None
+        for start, end, scale in (
+            (0, 4_000, 1.12), (4_000, 8_000, 1.28), (8_000, 12_000, 1.46),
+            (12_000, 16_000, 1.61), (16_000, 20_000, 1.79),
+        ):
+            revision = TimelineRevisionService.update_transform(project, self.member, 'base-reframe', {
+                'scale': scale, 'x': 0, 'y': 0,
+                'segment_start_ms': start, 'segment_end_ms': end,
+            })
+
+        self.assertEqual(
+            [(clip['master_in_ms'], clip['master_out_ms']) for clip in revision.timeline['clips']],
+            [(0, 4_000), (4_000, 8_000), (8_000, 12_000), (12_000, 16_000), (16_000, 20_000)],
+        )
+        self.assertEqual(
+            [clip['effects'][0]['scale'] for clip in revision.timeline['clips']],
+            [1.12, 1.28, 1.46, 1.61, 1.79],
+        )
+        media.delete(force_policy=HARD_DELETE)
+
+    def test_legacy_preview_revision_uses_current_edited_caption_clock(self):
+        project = self.make_project()
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.save(update_fields=['render_job', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(
+            track=track, cue_index=1, start_ms=5000, end_ms=6000, text='Tempo oficial',
+        )
+        legacy_timeline = {
+            'captions': [{
+                'id': cue.pk, 'track_id': track.pk, 'language': 'pt',
+                'start_ms': 4000, 'end_ms': 5000, 'text': 'Tempo antigo', 'is_source': True,
+            }],
+        }
+
+        PreviewCompositionService.hydrate_legacy_caption_clock(project, legacy_timeline)
+
+        self.assertEqual(legacy_timeline['caption_clock'], 'edited')
+        self.assertEqual(
+            (legacy_timeline['captions'][0]['start_ms'], legacy_timeline['captions'][0]['end_ms']),
+            (5000, 6000),
+        )
+        self.assertEqual(legacy_timeline['captions'][0]['text'], 'Tempo oficial')
+
     def test_preview_applies_all_pending_noise_reductions_in_one_revision(self):
         project = self.make_project()
         manifest = SourceManifestBuilder.build(project)
@@ -1278,9 +1706,38 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
 
         project.refresh_from_db()
         self.assertEqual(approved, revision)
+        self.assertEqual(project.current_timeline_revision, revision)
         self.assertEqual(project.approved_timeline_revision, revision)
         self.assertFalse(project.preview_dirty)
         self.assertTrue(project.final_render_outdated)
+
+    def test_render_refuses_a_revision_that_changed_after_approval(self):
+        project = self.make_project()
+        approved = TimelineRevision.objects.create(
+            project=project, revision=1, created_by=self.member,
+            timeline={'sequence': {'duration_ms': 1000}}, source_manifest={}, edit_decision_set={},
+        )
+        current = TimelineRevision.objects.create(
+            project=project, revision=2, parent=approved, created_by=self.member,
+            timeline={'sequence': {'duration_ms': 900}}, source_manifest={}, edit_decision_set={},
+        )
+        project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        project.current_timeline_revision = current
+        project.approved_timeline_revision = approved
+        project.preview_dirty = True
+        project.save(update_fields=[
+            'status', 'current_timeline_revision', 'approved_timeline_revision',
+            'preview_dirty', 'update_at',
+        ])
+
+        response = self.client.post(reverse('external_media_project_render', args=[project.public_id]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('external_media_project_preview', args=[project.public_id]))
+        project.refresh_from_db()
+        self.assertEqual(project.status, ExternalMediaProject.Status.AWAITING_REVIEW)
+        self.assertEqual(project.current_timeline_revision, current)
+        self.assertEqual(project.approved_timeline_revision, approved)
 
     def test_music_choice_is_revisioned_and_undoable(self):
         project = self.make_project()
@@ -1305,6 +1762,48 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         restored = TimelineRevisionService.navigate_history(project, self.member, 'undo')
         self.assertEqual(restored.pk, initial.pk)
         self.assertNotIn('music_override_track_id', restored.timeline)
+
+    def test_explicit_music_transition_persists_and_supports_undo_redo_removal(self):
+        project = self.make_project()
+        initial = TimelineRevisionService.ensure_initial(project, self.member)
+        tracks = [
+            {'track_id': 123, 'start_ms': 0, 'end_ms': 4000},
+            {'track_id': 124, 'start_ms': 4000, 'end_ms': 8000, 'source_in_ms': 1000,
+             'audio_transition': {'id': 'join', 'type': 'CONSTANT_POWER', 'from_track_id': 123, 'duration_ms': 2000}},
+        ]
+        revision = TimelineRevisionService.update_music_tracks(project, self.member, tracks)
+        self.assertEqual(revision.timeline['music_tracks'][1]['audio_transition'], tracks[1]['audio_transition'])
+        self.assertEqual(revision.timeline['music_tracks'][1]['start_ms'], 4000)
+        self.assertTrue(all(track['transition'] == 'NONE' for track in revision.timeline['music_tracks']))
+        self.assertEqual(TimelineRevisionService.navigate_history(project, self.member, 'undo').pk, initial.pk)
+        self.assertEqual(TimelineRevisionService.navigate_history(project, self.member, 'redo').pk, revision.pk)
+        tracks[1]['audio_transition'] = None
+        removed = TimelineRevisionService.update_music_tracks(project, self.member, tracks)
+        self.assertIsNone(removed.timeline['music_tracks'][1]['audio_transition'])
+        restored = TimelineRevisionService.navigate_history(project, self.member, 'undo')
+        self.assertEqual(restored.timeline['music_tracks'][1]['audio_transition']['duration_ms'], 2000)
+
+    def test_music_joins_follow_timeline_order_after_repositioning(self):
+        project = self.make_project()
+        TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.update_music_tracks(project, self.member, [
+            {'track_id': 124, 'start_ms': 4000, 'end_ms': 8000, 'source_in_ms': 1000,
+             'audio_transition': {'type': 'CONSTANT_POWER', 'from_track_id': 123, 'duration_ms': 2000}},
+            {'track_id': 123, 'start_ms': 0, 'end_ms': 4000},
+        ])
+        self.assertEqual([track['track_id'] for track in revision.timeline['music_tracks']], [123, 124])
+        self.assertEqual(revision.timeline['music_tracks'][1]['audio_transition']['from_track_id'], 123)
+
+    def test_new_music_defaults_to_no_transition_and_invalid_specs_are_safe(self):
+        project = self.make_project()
+        TimelineRevisionService.ensure_initial(project, self.member)
+        revision = TimelineRevisionService.update_music_tracks(project, self.member, [
+            {'track_id': 123}, {'track_id': 124, 'audio_transition': {'type': 'CONSTANT_POWER', 'duration_ms': 'bad'}},
+        ])
+        left, right = revision.timeline['music_tracks']
+        self.assertEqual(left['end_ms'], right['start_ms'])
+        self.assertEqual(right['transition'], 'NONE')
+        self.assertIsNone(right['audio_transition'])
 
     def test_interactive_preview_page_uses_the_persisted_timeline(self):
         project = self.make_project()
@@ -1387,9 +1886,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
     def test_retry_revision_proxy_marks_it_pending_before_enqueueing(self, enqueue):
         project = self.make_project()
         job = self.make_job()
-        profile = ProxyProfile.objects.create(code='revision-proxy-retry', name='Retry de proxy')
-        self.version.preview_proxy_profile = profile
-        self.version.save(update_fields=['preview_proxy_profile', 'update_at'])
+        profile = ProjectProxyService._profile(project)
         project.render_job = job
         project.configuration = {
             'source_manifest': {'schema': 'connect.source_manifest.v1', 'sources': []},
@@ -1708,6 +2205,97 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(upload.block, self.block)
         self.assertEqual(upload.position, 1)
 
+    def test_template_without_scenes_accepts_a_direct_project_video(self):
+        self.block.delete()
+        self.version.intro_video.save('abertura.mp4', ContentFile(b'intro'), save=False)
+        self.version.outro_video.save('encerramento.mp4', ContentFile(b'outro'), save=True)
+        project = self.make_project()
+
+        response = self.client.post(
+            reverse('external_media_project_direct_upload', args=[project.public_id]),
+            {'file': SimpleUploadedFile('principal.mp4', b'video', content_type='video/mp4')},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        upload = ProjectBlockMedia.objects.get(project=project)
+        self.assertIsNone(upload.block)
+        self.assertIsNone(upload.custom_block)
+        self.assertEqual(upload.camera_label, 'Vídeo principal')
+        manifest = SourceManifestBuilder.build(project)
+        self.assertEqual(
+            [source['kind'] for source in manifest['sources']],
+            ['template_intro', 'project_upload', 'template_outro'],
+        )
+        self.assertEqual(manifest['sources'][1]['source_reference'], str(upload.pk))
+        self.version.outro_enabled = False
+        self.version.save(update_fields=['outro_enabled', 'update_at'])
+        self.assertEqual(
+            [source['kind'] for source in SourceManifestBuilder.build(project)['sources']],
+            ['template_intro', 'project_upload'],
+        )
+        self.assertEqual(ProjectService.validate_uploads(project), [])
+        detail = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
+        self.assertContains(detail, 'Vídeo principal')
+        self.assertNotContains(detail, 'Adicionar cena personalizada')
+
+    def test_template_without_scenes_accepts_multiple_direct_project_videos(self):
+        self.block.delete()
+        project = self.make_project()
+
+        response = self.client.post(
+            reverse('external_media_project_direct_upload', args=[project.public_id]),
+            {'file': [
+                SimpleUploadedFile('parte-1.mp4', b'video-1', content_type='video/mp4'),
+                SimpleUploadedFile('parte-2.mp4', b'video-2', content_type='video/mp4'),
+            ]},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        uploads = list(ProjectBlockMedia.objects.filter(project=project).order_by('position'))
+        self.assertEqual([item.original_filename for item in uploads], ['parte-1.mp4', 'parte-2.mp4'])
+        self.assertEqual([item.position for item in uploads], [1, 2])
+        self.assertTrue(all(item.camera_role == ProjectBlockMedia.CameraRole.PRIMARY for item in uploads))
+
+    def test_direct_project_video_accepts_elements_and_extra_cameras(self):
+        self.block.delete()
+        project = self.make_project()
+        primary = ProjectBlockMedia.objects.create(
+            project=project,
+            file=SimpleUploadedFile('principal.mp4', b'video', content_type='video/mp4'),
+            original_filename='principal.mp4', file_size=5, position=1,
+            camera_role=ProjectBlockMedia.CameraRole.PRIMARY, camera_key='primary', camera_order=1,
+        )
+        png = base64.b64decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+        )
+
+        element_response = self.client.post(
+            reverse('external_media_project_direct_broll_upload', args=[project.public_id]),
+            {
+                'description': 'QR Code para inscrição', 'duration_seconds': '5',
+                'file': SimpleUploadedFile(
+                    'qr.png', png, content_type='image/png',
+                ),
+            },
+        )
+        camera_response = self.client.post(
+            reverse('external_media_project_direct_upload', args=[project.public_id]),
+            {
+                'camera_role': 'SECONDARY', 'camera_position': str(primary.position),
+                'camera_label': 'Câmera lateral',
+                'file': SimpleUploadedFile('lateral.mp4', b'video', content_type='video/mp4'),
+            },
+        )
+
+        self.assertEqual(element_response.status_code, 302)
+        self.assertEqual(camera_response.status_code, 302)
+        element = ProjectBrollAsset.objects.get(project=project)
+        self.assertIsNone(element.block)
+        self.assertIsNone(element.custom_block)
+        camera = ProjectBlockMedia.objects.get(project=project, camera_role=ProjectBlockMedia.CameraRole.SECONDARY)
+        self.assertEqual(camera.position, primary.position)
+        self.assertEqual(camera.camera_label, 'Câmera lateral')
+
     def test_preview_task_skips_media_deleted_before_worker_start(self):
         result = create_project_preview.run(999999)
 
@@ -1742,7 +2330,96 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         response = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Gerar vídeo')
-        self.assertContains(response, 'Adicionar bloco personalizado')
+        self.assertContains(response, 'Adicionar cena personalizada')
+        self.assertContains(response, 'data-project-submit-overlay')
+        self.assertContains(response, "document.addEventListener('submit'")
+        self.assertContains(response, 'Aguarde e não feche esta página.')
+
+    def test_preview_keeps_source_mode_after_reloading_a_manual_transform(self):
+        """A missing proxy in another take cannot hide a saved zoom."""
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.AWAITING_REVIEW
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+        decisions = {
+            'operations': [{
+                'id': 'reframe-take-1',
+                'type': 'reframe',
+                'source_id': 'take-1',
+                'enabled': True,
+                'metadata': {'manual_transform': {'scale': 1.35, 'x': .2, 'y': -.1}},
+            }],
+        }
+        timeline = {
+            'sequence': {'duration_ms': 5_000},
+            'assets': [
+                {'id': 'take-1', 'name': 'Take com proxy', 'duration_ms': 5_000},
+                {'id': 'take-2', 'name': 'Take sem proxy', 'duration_ms': 1_000},
+            ],
+            'clips': [{
+                'id': 'clip-1', 'asset_id': 'take-1', 'timeline_in_ms': 0,
+                'timeline_out_ms': 5_000, 'source_in_ms': 0, 'source_out_ms': 5_000,
+            }],
+            'decisions': decisions['operations'],
+        }
+        revision = TimelineRevision.objects.create(
+            project=project,
+            revision=1,
+            timeline=timeline,
+            source_manifest={'sources': []},
+            edit_decision_set=decisions,
+            created_by=self.member,
+        )
+        project.current_timeline_revision = revision
+        project.save(update_fields=['current_timeline_revision', 'update_at'])
+
+        response = self.client.get(reverse('external_media_project_preview', args=[project.public_id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context['timeline']['review_master_url'])
+        self.assertEqual(response.context['timeline']['review_proxy_status'], 'SOURCE')
+
+    def test_media_trim_restores_all_saved_ranges_in_the_edit_modal(self):
+        project = self.make_project()
+        media = ProjectBlockMedia.objects.create(
+            project=project,
+            block=self.block,
+            position=1,
+            original_filename='mensagem.mp4',
+            file=SimpleUploadedFile('mensagem.mp4', b'video', content_type='video/mp4'),
+            preview_status=ProjectBlockMedia.PreviewStatus.READY,
+        )
+        ranges = [
+            {'start_seconds': 2, 'end_seconds': 18},
+            {'start_seconds': 31.25, 'end_seconds': 49.5},
+        ]
+
+        save_response = self.client.post(
+            reverse('external_media_project_media_trim', args=[project.public_id, media.pk]),
+            {
+                'trim_start_seconds': '2',
+                'trim_end_seconds': '18',
+                'trim_ranges': json.dumps(ranges),
+            },
+        )
+
+        self.assertEqual(save_response.status_code, 200)
+        media.refresh_from_db()
+        expected_ranges = [
+            {'start_ms': 2000, 'end_ms': 18000},
+            {'start_ms': 31250, 'end_ms': 49500},
+        ]
+        self.assertEqual(media.trim_ranges, expected_ranges)
+
+        detail_response = self.client.get(
+            reverse('external_media_project_detail', args=[project.public_id]),
+        )
+        rendered = detail_response.content.decode()
+        match = re.search(r'data-media-trim-ranges="([^"]+)"', rendered)
+
+        self.assertIsNotNone(match)
+        self.assertEqual(json.loads(unescape(match.group(1))), expected_ranges)
 
     def test_project_duration_minutes_rounds_up(self):
         project = self.make_project()
@@ -1878,6 +2555,40 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         self.assertFalse(ExternalMediaJob.all_objects.filter(pk=job.pk).exists())
         self.assertFalse(ExternalMediaJob.all_objects.filter(pk=previous_job.pk).exists())
 
+    def test_deleting_project_removes_review_suggestions_and_premiere_archive(self):
+        project = self.make_project()
+        job = self.make_job()
+        job.processing_project = project
+        job.save(update_fields=['processing_project', 'update_at'])
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+        track = SubtitleTrack.objects.create(job=job, language='pt', is_source=True)
+        cue = SubtitleCue.objects.create(track=track, cue_index=1, start_ms=0, end_ms=1000, text='Teste')
+        session = SubtitleReviewSession.objects.create(
+            project=project, job=job, token_hash='a' * 64, token_prefix='teste', languages=['pt'],
+            base_revisions={'pt': 1}, expires_at=timezone.now() + timedelta(days=1), created_by=self.member,
+        )
+        suggestion = SubtitleSuggestion.objects.create(
+            session=session, cue=cue, language='pt', original_text='Teste', suggested_text='Revisado',
+        )
+        export = ExternalMediaProjectExport.objects.create(
+            project=project, created_by=self.member,
+            archive=SimpleUploadedFile('projeto-premiere.zip', b'premiere-package'),
+            timeline_json=SimpleUploadedFile('timeline.json', b'{}'),
+        )
+        archive_storage, archive_name = export.archive.storage, export.archive.name
+        timeline_storage, timeline_name = export.timeline_json.storage, export.timeline_json.name
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse('external_media_project_delete', args=[project.public_id]))
+
+        self.assertRedirects(response, reverse('external_media_dashboard'))
+        self.assertFalse(SubtitleSuggestion.all_objects.filter(pk=suggestion.pk).exists())
+        self.assertFalse(ExternalMediaProjectExport.all_objects.filter(pk=export.pk).exists())
+        self.assertFalse(archive_storage.exists(archive_name))
+        self.assertFalse(timeline_storage.exists(timeline_name))
+
     def test_project_detail_hides_processing_diagnostics(self):
         project = self.make_project()
         previous_job = self.make_job()
@@ -1938,6 +2649,36 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         detail = self.client.get(reverse('external_media_project_detail', args=[project.public_id]))
         self.assertContains(detail, 'Exportar projeto')
         self.assertContains(detail, 'Adobe Premiere')
+
+    @patch('website.views.external_media.export_premiere_project.delay')
+    def test_failed_premiere_export_is_reused_on_retry(self, delay):
+        delay.return_value.id = 'premiere-export-retry-123'
+        project = self.make_project()
+        job = self.make_job()
+        project.render_job = job
+        project.status = ExternalMediaProject.Status.FINISHED
+        project.save(update_fields=['render_job', 'status', 'update_at'])
+        export = ExternalMediaProjectExport.objects.create(
+            project=project,
+            created_by=self.member,
+            status=ExternalMediaProjectExport.Status.ERROR,
+            progress=78,
+            current_step='Exportação interrompida',
+            error_message='Falha ao validar a exportação.',
+        )
+
+        response = self.client.post(
+            reverse('external_media_project_export_premiere', args=[project.public_id]),
+        )
+
+        self.assertRedirects(response, reverse('external_media_project_detail', args=[project.public_id]))
+        self.assertEqual(ExternalMediaProjectExport.objects.filter(project=project).count(), 1)
+        export.refresh_from_db()
+        self.assertEqual(export.status, ExternalMediaProjectExport.Status.PREPARING)
+        self.assertEqual(export.progress, 2)
+        self.assertEqual(export.current_step, 'Nova tentativa adicionada à fila')
+        self.assertEqual(export.error_message, '')
+        self.assertEqual(export.celery_task_id, 'premiere-export-retry-123')
 
     def test_export_status_endpoint_returns_async_progress(self):
         project = self.make_project()
@@ -2187,7 +2928,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         project.refresh_from_db()
         self.assertNotIn('off_context_plan', project.configuration)
 
-    def test_off_context_detection_stores_disabled_suggestions_for_review(self):
+    def test_off_context_detection_legacy_plugin_is_ignored(self):
         MediaTemplatePlugin.objects.create(
             version=self.version, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION, order=4,
         )
@@ -2214,21 +2955,16 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         pipeline._apply_off_context_detection(job, Path('/tmp/video.mp4'), detailed)
 
         project.refresh_from_db()
-        stored_cuts = project.configuration['off_context_plan']['cuts']
-        self.assertEqual(stored_cuts[0]['start_ms'], 1000)
-        self.assertEqual(stored_cuts[0]['end_ms'], 2000)
+        self.assertNotIn('off_context_plan', project.configuration)
         step = ProjectPipelineStep.objects.get(
             project=project, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
         )
-        self.assertEqual(step.status, ProjectPipelineStep.Status.FINISHED)
-        self.assertIn('1 trecho', step.message)
-        # The suggestion must not have been folded into a real, enabled cut yet.
+        self.assertEqual(step.status, ProjectPipelineStep.Status.PENDING)
         decisions = EditDecisionSetBuilder.build(project)
         off_context_ops = [
             item for item in decisions['operations'] if item['producer'] == 'off_context_detection'
         ]
-        self.assertEqual(len(off_context_ops), 1)
-        self.assertFalse(off_context_ops[0]['enabled'])
+        self.assertEqual(off_context_ops, [])
 
     def test_off_context_detection_survives_a_failed_ai_call(self):
         MediaTemplatePlugin.objects.create(
@@ -2259,7 +2995,7 @@ class ExternalMediaProjectTests(ExternalMediaFixtureMixin, TestCase):
         step = ProjectPipelineStep.objects.get(
             project=project, code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION,
         )
-        self.assertEqual(step.status, ProjectPipelineStep.Status.FINISHED)
+        self.assertEqual(step.status, ProjectPipelineStep.Status.PENDING)
 
     def test_speech_edit_remaps_block_ranges_to_the_edited_timeline(self):
         MediaTemplatePlugin.objects.create(
@@ -2890,19 +3626,17 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(silence.configuration['profile'], 'conservative')
         self.assertEqual(fillers.configuration['filler_words'], ['eh', 'hum', 'tipo'])
 
-    def test_admin_panel_can_enable_off_context_detection(self):
+    def test_admin_panel_keeps_off_context_detection_disabled(self):
         response = self.client.post(
             reverse('admin_external_media_version_edit', args=[self.version.pk]),
-            self._version_edit_payload(
-                advanced_plugins=[MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION],
-            ),
+            self._version_edit_payload(),
         )
         self.assertRedirects(
             response,
             reverse('admin_external_media_template_detail', args=[self.template.pk]),
         )
         plugin = self.version.plugins.get(code=MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION)
-        self.assertTrue(plugin.is_enabled)
+        self.assertFalse(plugin.is_enabled)
 
     def test_admin_panel_saves_auto_reframe_priority(self):
         response = self.client.post(
@@ -2922,6 +3656,20 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(plugin.configuration['priority'], 'body')
         self.assertEqual(plugin.configuration['safe_margin'], 0.15)
         self.assertEqual(plugin.configuration['top_margin'], 0.12)
+
+    def test_admin_panel_saves_stable_full_body_reframe_priority(self):
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(
+                language_mode='single',
+                advanced_plugins=[MediaTemplatePlugin.Code.AUTO_TRACKING],
+                auto_reframe_priority='full_body',
+            ),
+        )
+        self.assertRedirects(response, reverse('admin_external_media_template_detail', args=[self.template.pk]))
+        plugin = self.version.plugins.get(code=MediaTemplatePlugin.Code.AUTO_TRACKING)
+        self.assertEqual(plugin.configuration['priority'], 'full_body')
+        self.assertEqual(plugin.configuration['top_margin'], 0.05)
 
 
 class ExternalMediaRetryTests(ExternalMediaFixtureMixin, TestCase):
@@ -3119,6 +3867,25 @@ class OffContextDetectionTests(SimpleTestCase):
 
 
 class ProtectedFileResponseRangeTests(SimpleTestCase):
+    @override_settings(USE_S3=True)
+    def test_waveform_streams_protected_bytes_instead_of_redirecting_to_storage(self):
+        file = Mock(name='audio')
+        file.name = 'music.wav'
+        file.size = 4
+        file.storage.location = 'private_media'
+        file.storage.bucket_name = 'test-bucket'
+        body = Mock()
+        body.iter_chunks.return_value = iter([b'wave'])
+        file.storage.connection.meta.client.get_object.return_value = {'Body': body, 'ContentLength': 4}
+        response = protected_file_response(RequestFactory().get('/music?waveform=1'), file)
+        try:
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b''.join(response.streaming_content), b'wave')
+            file.storage.url.assert_not_called()
+            file.open.assert_not_called()
+        finally:
+            response.close()
+
     def test_preview_supports_http_range_for_video_seeking(self):
         with tempfile.TemporaryDirectory() as directory:
             storage = FileSystemStorage(location=directory)
@@ -3575,6 +4342,17 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertEqual(plan.saved_ms, 1000)
         self.assertEqual(plan.remap_time(2000), 1000)
 
+    def test_speech_edit_preserves_a_short_approved_interval_between_nearby_cuts(self):
+        plan = SpeechEditPlan.normalized([
+            SpeechCut(100, 200, 'manual'),
+            SpeechCut(250, 350, 'manual'),
+        ], 500)
+
+        self.assertEqual(
+            SpeechEditService._keep_intervals(plan),
+            [(0, 100), (200, 250), (350, 500)],
+        )
+
     def test_proxy_timeline_validation_rejects_large_duration_drift(self):
         configuration = {
             'analysis_source_duration_ms': 10000,
@@ -3589,6 +4367,186 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
                 12000,
                 [{'block_key': 'testimony', 'start_ms': 0, 'end_ms': 12000}],
             )
+
+    def test_final_render_remaps_review_cuts_after_accumulated_take_drift(self):
+        analysis_ranges = [
+            {'block_key': 'a', 'start_ms': 0, 'end_ms': 1000},
+            {'block_key': 'b', 'start_ms': 1000, 'end_ms': 2000},
+            {'block_key': 'c', 'start_ms': 2000, 'end_ms': 3000},
+        ]
+        final_ranges = [
+            {'block_key': 'a', 'start_ms': 0, 'end_ms': 1033},
+            {'block_key': 'b', 'start_ms': 1033, 'end_ms': 2066},
+            {'block_key': 'c', 'start_ms': 2066, 'end_ms': 3099},
+        ]
+
+        cuts = ExternalMediaProjectPipeline._remap_analysis_cuts_to_final(
+            [SpeechCut(2100, 2300, 'manual', 'Corte manual')],
+            analysis_ranges,
+            final_ranges,
+            3099,
+        )
+
+        self.assertEqual(cuts, [SpeechCut(2166, 2366, 'manual', 'Corte manual')])
+
+    def test_source_local_validation_accepts_2250ms_accumulated_legacy_proxy_drift(self):
+        analysis, final, cursor = [], [], 0
+        for index in range(47):
+            duration = 3000 + (48 if index < 46 else 42)
+            analysis.append({'block_key': str(index), 'start_ms': cursor, 'end_ms': cursor + duration})
+            final.append({'block_key': str(index), 'start_ms': index * 3000, 'end_ms': (index + 1) * 3000})
+            cursor += duration
+        configuration = {'analysis_source_duration_ms': cursor, 'analysis_source_block_ranges': analysis}
+        intervals = [{'source_index': index, 'start_ms': 100, 'end_ms': 200} for index in range(47)]
+        report = ExternalMediaProjectPipeline._validate_analysis_timeline(
+            configuration, 141000, final, source_intervals=intervals,
+        )
+        self.assertTrue(report['ok'])
+        self.assertEqual(report['duration_drift_ms'], 2250)
+        self.assertEqual(report['largest_block_drift_ms'], 48)
+        self.assertEqual(report['coordinate_space'], 'source_local')
+        with self.assertRaisesMessage(ExternalMediaError, 'perderam sincronismo'):
+            ExternalMediaProjectPipeline._validate_analysis_timeline(configuration, 141000, final)
+
+    def test_source_local_validation_still_rejects_changed_sources(self):
+        configuration = {'analysis_source_duration_ms': 3000, 'analysis_source_block_ranges': [
+            {'block_key': 'a', 'start_ms': 0, 'end_ms': 3000},
+        ]}
+        for ranges, message in [
+            ([], 'quantidade de blocos'),
+            ([{'block_key': 'b', 'start_ms': 0, 'end_ms': 3000}], 'ordem dos blocos'),
+            ([{'block_key': 'a', 'start_ms': 0, 'end_ms': 5000}], 'não está sincronizado'),
+        ]:
+            with self.subTest(message=message), self.assertRaisesMessage(ExternalMediaError, message):
+                ExternalMediaProjectPipeline._validate_analysis_timeline(
+                    configuration, 5000, ranges,
+                    source_intervals=[{'source_index': 0, 'start_ms': 100, 'end_ms': 200}],
+                )
+
+    def test_assembly_preflight_failure_happens_before_encoding(self):
+        runner = Mock()
+        service = VideoAssemblyService(runner=runner)
+        preflight = Mock(side_effect=ExternalMediaError('Fonte incompatível'))
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            service, '_effective_duration_ms', return_value=1000,
+        ), patch.object(service, '_normalize') as normalize:
+            with self.assertRaisesMessage(ExternalMediaError, 'Fonte incompatível'):
+                service.assemble(
+                    [Path('a.mp4'), Path('b.mp4')], Path(directory) / 'out.mp4',
+                    SimpleNamespace(width=160, height=90), Path(directory),
+                    source_intervals=[{'source_index': 0, 'start_ms': 100, 'end_ms': 200}],
+                    preflight=preflight,
+                )
+        preflight.assert_called_once()
+        self.assertEqual(len(preflight.call_args.args[0]), 2)
+        normalize.assert_not_called()
+        runner.run.assert_not_called()
+
+    def test_final_render_derives_cuts_from_the_exact_approved_preview_clips(self):
+        revision = SimpleNamespace(
+            source_manifest={'sources': [
+                {'id': 'take-a', 'duration_ms': 1000, 'trim': {'start_ms': 0, 'end_ms': 1000}},
+                {'id': 'take-b', 'duration_ms': 1000, 'trim': {'start_ms': 0, 'end_ms': 1000}},
+            ]},
+            timeline={'clips': [
+                {'asset_id': 'take-a', 'source_in_ms': 0, 'source_out_ms': 1000},
+                {'asset_id': 'take-b', 'source_in_ms': 0, 'source_out_ms': 100},
+                {'asset_id': 'take-b', 'source_in_ms': 200, 'source_out_ms': 1000},
+            ]},
+        )
+        final_ranges = [
+            {'start_ms': 0, 'end_ms': 1033},
+            {'start_ms': 1033, 'end_ms': 2066},
+        ]
+
+        cuts = ExternalMediaProjectPipeline._cuts_from_approved_timeline(
+            revision, final_ranges, 2066,
+        )
+
+        self.assertEqual(cuts, [
+            SpeechCut(1133, 1233, 'timeline', 'Corte aprovado no editor'),
+        ])
+
+    def test_approved_source_intervals_preserve_order_splits_and_local_times(self):
+        sources = [AssemblySource(Path('a.mp4'), label='a', trim_start_ms=100, trim_end_ms=1100),
+                   AssemblySource(Path('b.mp4'), label='b')]
+        revision = SimpleNamespace(source_manifest={'sources': [
+            {'id': 'a', 'trim': {'start_ms': 100, 'end_ms': 1100}}, {'id': 'b'},
+        ]}, timeline={'clips': [
+            {'asset_id': 'b', 'source_in_ms': 250, 'source_out_ms': 500},
+            {'asset_id': 'a', 'source_in_ms': 300, 'source_out_ms': 600},
+            {'asset_id': 'a', 'source_in_ms': 600, 'source_out_ms': 630},
+        ]})
+        intervals = ExternalMediaProjectPipeline._approved_source_intervals(revision, sources)
+        self.assertEqual([(i['source_index'], i['start_ms'], i['end_ms']) for i in intervals],
+                         [(1, 250, 500), (0, 200, 500), (0, 500, 530)])
+        sources[0] = AssemblySource(Path('a.mp4'), label='a', trim_start_ms=200, trim_end_ms=1100)
+        with self.assertRaisesMessage(ExternalMediaError, 'limites de um take mudaram'):
+            ExternalMediaProjectPipeline._approved_source_intervals(revision, sources)
+
+    def test_approved_source_intervals_use_latest_vertical_transform_seen_in_editor(self):
+        source = AssemblySource(Path('take.mp4'), label='take', trim_start_ms=0, trim_end_ms=5000)
+        old_transform = {'scale': 1.25, 'x': 0, 'y': -1}
+        approved_transform = {'scale': 1.25, 'x': 0, 'y': 1}
+        revision = SimpleNamespace(
+            source_manifest={'sources': [{
+                'id': 'take', 'duration_ms': 5000,
+                'trim': {'start_ms': 0, 'end_ms': 5000},
+            }]},
+            timeline={'clips': [{
+                'asset_id': 'take', 'source_in_ms': 0, 'source_out_ms': 5000,
+            }]},
+            edit_decision_set={'operations': [{
+                'id': 'old', 'type': 'reframe', 'source_id': 'take', 'enabled': True,
+                'metadata': {
+                    'segment_start_ms': 0, 'segment_end_ms': 5000,
+                    'manual_transform': old_transform,
+                },
+            }, {
+                'id': 'approved', 'type': 'reframe', 'source_id': 'take', 'enabled': True,
+                'metadata': {
+                    'segment_start_ms': 0, 'segment_end_ms': 5000,
+                    'manual_transform': approved_transform,
+                },
+            }]},
+        )
+
+        intervals = ExternalMediaProjectPipeline._approved_source_intervals(revision, [source])
+
+        self.assertEqual(len(intervals), 1)
+        self.assertEqual(intervals[0]['manual_transform'], approved_transform)
+
+    def test_approved_final_master_does_not_apply_global_cuts_again(self):
+        revision = SimpleNamespace(pk=4, revision=2, edit_decision_set={'operations': []},
+            source_manifest={'sources': [{'id': 'a', 'duration_ms': 1000}]},
+            timeline={'clips': [
+                {'asset_id': 'a', 'source_in_ms': 0, 'source_out_ms': 400},
+                {'asset_id': 'a', 'source_in_ms': 600, 'source_out_ms': 1000},
+            ]})
+        ranges = [{'start_ms': 0, 'end_ms': 1000, 'block_key': 'a'}]
+        project = SimpleNamespace(public_id='test', approved_timeline_revision=revision,
+            current_timeline_revision=revision, render_job=SimpleNamespace(pk=1),
+            configuration={'analysis_source_duration_ms': 1000, 'analysis_source_block_ranges': ranges},
+            template_version=SimpleNamespace(preset=SimpleNamespace(width=160, height=90),
+                lut_intensity=0, music_volume=0, audio_mastering_enabled=False,
+                dialogue_processing_enabled=False, audio_noise_cleanup_enabled=False), save=Mock())
+        pipeline = ExternalMediaProjectPipeline()
+        pipeline.templates = Mock()
+        pipeline.templates.enabled_plugins.return_value = []
+        pipeline.assembly = Mock(last_block_ranges=ranges)
+        pipeline.quality = Mock()
+        pipeline.quality.validate_media.return_value.as_dict.return_value = {'ok': True}
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            pipeline, '_materialize', return_value=([AssemblySource(Path('a.mp4'), label='a')], None, None),
+        ), patch.object(pipeline, '_update'), patch(
+            'website.external_media.services.replace_file_safely',
+        ), patch.object(SpeechEditService, 'apply') as apply_cuts:
+            pipeline._prepare_final_master(project, Path(directory))
+        apply_cuts.assert_not_called()
+        intervals = pipeline.assembly.assemble.call_args.kwargs['source_intervals']
+        self.assertEqual([(i['start_ms'], i['end_ms']) for i in intervals], [(0, 400), (600, 1000)])
+        self.assertEqual(pipeline.quality.validate_media.call_args.kwargs['expected_duration_ms'], 800)
+        self.assertEqual(project.configuration['render_contract']['cut_source'], 'approved_source_intervals')
 
     def test_quality_control_rejects_subtitles_over_intact_blocks(self):
         cue = SimpleNamespace(start_ms=900, end_ms=1400, cue_index=3)
@@ -3637,6 +4595,29 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertTrue(output_exists)
         self.assertLess(duration, 1600)
         self.assertGreater(duration, 1450)
+
+    def test_speech_edit_ffmpeg_keeps_a_short_clip_between_two_cuts(self):
+        runner = FFmpegRunner()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            output = workdir / 'edited.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'testsrc=size=320x240:rate=30:duration=0.5',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.5', '-shortest',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            plan = SpeechEditPlan.normalized([
+                SpeechCut(100, 200, 'manual'),
+                SpeechCut(270, 350, 'manual'),
+            ], 500)
+            SpeechEditService(runner).apply(source, output, plan)
+            duration = SpeechEditService(runner).duration_ms(output)
+
+        # Keeps 0-100, 200-270 and 350-500. The former 80 ms filter silently
+        # discarded the middle 70 ms and produced a visibly shorter result.
+        self.assertGreaterEqual(duration, 290)
+        self.assertLessEqual(duration, 380)
 
     def test_speech_edit_keeps_audio_and_video_aligned_after_many_cuts(self):
         runner = FFmpegRunner()
@@ -3820,6 +4801,27 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         self.assertGreater(compact, generic)
         self.assertEqual(round(compact), round(300 - (1214 * .025)))
 
+    def test_auto_reframe_full_body_mode_centers_a_standing_speaker_stably(self):
+        service = AutoReframeService(priority='full_body', safe_margin=.10, top_margin=.05)
+        keyframes = service._stable_full_body_keyframes(
+            observations=[
+                (0.0, (180, 300, 620, 1700)),
+                (1.0, (190, 310, 630, 1710)),
+            ],
+            crop_width=800,
+            crop_height=1422,
+            source_width=1080,
+            source_height=1920,
+        )
+        self.assertEqual(len(keyframes), 1)
+        # The robust upper median resists an opening-frame detection wobble.
+        self.assertEqual(keyframes[0].x, 10)
+        self.assertEqual(round(keyframes[0].y), round(310 - (1422 * .05)))
+
+    def test_auto_reframe_full_body_face_fallback_reaches_legs(self):
+        _left, _top, _width, height = AutoReframeService._full_body_box_from_face(400, 250, 100, 100)
+        self.assertEqual(height, 970)
+
     def test_manual_reframe_offsets_match_the_editor_image_direction(self):
         project = SimpleNamespace(
             approved_timeline_revision=SimpleNamespace(
@@ -3844,6 +4846,55 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
         plan = result[0]['plan']
         self.assertEqual((plan['crop_width'], plan['crop_height']), (864, 1536))
         self.assertEqual((plan['keyframes'][0]['x'], plan['keyframes'][0]['y']), (0, 384))
+
+    def test_manual_reframe_replaces_auto_zoom_instead_of_multiplying_it(self):
+        project = SimpleNamespace(
+            approved_timeline_revision=SimpleNamespace(
+                source_manifest={'sources': [{'id': 'camera-1'}]},
+                edit_decision_set={'operations': [{
+                    'type': 'reframe', 'source_id': 'camera-1', 'enabled': True,
+                    'plan_reference': {
+                        'analysis_width': 1080, 'analysis_height': 1920,
+                        # Auto Reframe had already zoomed 2x before review.
+                        'plan': {
+                            'crop_width': 540, 'crop_height': 960,
+                            'keyframes': [{'time_seconds': 0, 'x': 270, 'y': 500}],
+                        },
+                    },
+                    'metadata': {'manual_transform': {'scale': 1, 'x': 0, 'y': 0}},
+                }]},
+            ),
+        )
+
+        result = ExternalMediaProjectPipeline._approved_reframe_plans(project, [])
+        plan = result[0]['plan']
+
+        self.assertEqual((plan['crop_width'], plan['crop_height']), (1080, 1920))
+        self.assertEqual((plan['keyframes'][0]['x'], plan['keyframes'][0]['y']), (0, 0))
+
+    def test_manual_reframe_can_reach_source_area_outside_centered_cover(self):
+        project = SimpleNamespace(
+            approved_timeline_revision=SimpleNamespace(
+                source_manifest={'sources': [{'id': 'camera-1'}]},
+                edit_decision_set={'operations': [{
+                    'type': 'reframe', 'source_id': 'camera-1', 'enabled': True,
+                    'plan_reference': {
+                        'analysis_width': 1920, 'analysis_height': 1080,
+                        'plan': {
+                            'crop_width': 1920, 'crop_height': 600,
+                            'keyframes': [{'time_seconds': 0, 'x': 0, 'y': 240}],
+                        },
+                    },
+                    'metadata': {'manual_transform': {'scale': 1, 'x': 0, 'y': 1}},
+                }]},
+            ),
+        )
+
+        result = ExternalMediaProjectPipeline._approved_reframe_plans(project, [])
+        plan = result[0]['plan']
+
+        self.assertEqual((plan['crop_width'], plan['crop_height']), (1920, 600))
+        self.assertEqual((plan['keyframes'][0]['x'], plan['keyframes'][0]['y']), (0, 0))
 
     def test_reframe_can_be_disabled_for_one_source(self):
         project = SimpleNamespace(
@@ -4131,6 +5182,234 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             self.assertEqual(service.last_block_ranges[0]['end_ms'], service.last_block_ranges[1]['start_ms'])
             self.assertGreater(service.last_block_ranges[1]['end_ms'], service.last_block_ranges[1]['start_ms'])
 
+    def test_video_assembly_batches_a_long_concat_to_bound_ffmpeg_inputs(self):
+        runner = Mock()
+        service = VideoAssemblyService(runner=runner)
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            settings, 'EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 3,
+        ):
+            workdir = Path(directory)
+            output = workdir / 'assembled.mp4'
+            service._concat_normalized(
+                [workdir / f'normalized_{index:03d}.mp4' for index in range(17)], output, workdir,
+            )
+
+        commands = [call.args[0] for call in runner.run.call_args_list]
+        self.assertGreater(len(commands), 1)
+        self.assertTrue(all(command.count('-i') <= 3 for command in commands))
+        self.assertEqual(commands[-1][-1], str(output))
+
+    def test_source_local_cut_ignores_duration_drift_in_preceding_takes(self):
+        import numpy as np
+
+        runner = FFmpegRunner()
+        service = VideoAssemblyService(runner=runner)
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source = workdir / 'source.mp4'
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=30:duration=1',
+                '-f', 'lavfi', '-i', 'aevalsrc=0.3*sin(2*PI*(220*t+900*t*t)):s=48000:d=1',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            output = workdir / 'kept.mp4'
+            with patch.object(service, '_effective_duration_ms', return_value=1150):
+                service.assemble([source] * 4, output, SimpleNamespace(width=160, height=90), workdir,
+                    source_intervals=[{'source_index': 3, 'start_ms': 400, 'end_ms': 700}])
+            raw = subprocess.check_output([
+                'ffmpeg', '-v', 'error', '-i', str(output), '-vn', '-ac', '1',
+                '-ar', '48000', '-f', 'f32le', '-',
+            ])
+            actual = np.frombuffer(raw, dtype='<f4')
+            # Both edges contain the exact chirp selected in take 4, even when
+            # the preceding duration records disagree with the real files.
+            for left, right in [(0.005, 0.055), (0.245, 0.295)]:
+                start, end = round(left * 48000), round(right * 48000)
+                t = np.arange(start, end) / 48000 + 0.4
+                expected = np.sin(2 * np.pi * (220 * t + 900 * t * t))
+                self.assertGreater(np.corrcoef(actual[start:end], expected)[0, 1], 0.98)
+
+    def test_batched_source_intervals_are_trimmed_once_and_in_order(self):
+        runner = Mock()
+        runner.input_arg.side_effect = FFmpegRunner.input_arg
+        service = VideoAssemblyService(runner=runner)
+        with tempfile.TemporaryDirectory() as directory, patch.object(settings, 'EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 3):
+            workdir = Path(directory)
+            paths = [workdir / f'take-{index}.mp4' for index in range(10)]
+            intervals = [(100 * index, 100 * index + 200) for index in range(10)]
+            service._concat_normalized(paths, workdir / 'result.mp4', workdir, intervals=intervals)
+        commands = [call.args[0] for call in runner.run.call_args_list]
+        graphs = [command[command.index('-filter_complex') + 1] for command in commands]
+        self.assertTrue(all(command.count('-i') <= 3 for command in commands))
+        self.assertEqual(sum(graph.count('atrim=') for graph in graphs), 10)
+        self.assertNotIn('atrim=', graphs[-1])
+        first_pass_inputs = [command[index + 1] for command in commands[:4]
+                             for index, value in enumerate(command) if value == '-i']
+        self.assertEqual(first_pass_inputs, [str(path) for path in paths])
+
+    @override_settings(USE_S3=False, EXTERNAL_MEDIA_ASSEMBLY_WORKERS=1)
+    def test_scoped_vertical_framing_retains_source_until_final_crop(self):
+        service = VideoAssemblyService(runner=Mock())
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            service, '_effective_duration_ms', return_value=1000,
+        ), patch.object(service, '_video_dimensions', return_value=(1920, 1080)), patch.object(
+            service, '_normalize', return_value=None,
+        ) as normalize, patch.object(service, '_concat_normalized') as concat:
+            service.assemble(
+                [AssemblySource(Path('take.mp4'), label='take')],
+                Path(directory) / 'out.mp4', SimpleNamespace(width=1920, height=600), Path(directory),
+                source_intervals=[{
+                    'source_index': 0, 'start_ms': 0, 'end_ms': 1000,
+                    'manual_transform': {'scale': 1, 'x': 0, 'y': 1},
+                }],
+            )
+
+        # The old pipeline discarded 240px at the top before applying Y=1.
+        self.assertEqual((normalize.call_args.kwargs['width'], normalize.call_args.kwargs['height']),
+                         (1920, 1080))
+        interval = concat.call_args.kwargs['intervals'][0]
+        self.assertEqual((interval['framing_width'], interval['framing_height']), (1920, 600))
+        runner = Mock()
+        runner.input_arg.side_effect = FFmpegRunner.input_arg
+        service.runner = runner
+        service._concat_group([Path('normalized.mp4')], Path('out.mp4'), intervals=[interval])
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('crop=trunc(1920/1.00000/2)*2:trunc(600/1.00000/2)*2:', graph)
+        self.assertIn('(ih-oh)/2-(1.00000)*(ih-oh)/2', graph)
+        self.assertIn('scale=1920:600', graph)
+
+    def test_reuses_one_normalization_for_multiple_ranges_of_the_same_source(self):
+        service = VideoAssemblyService(runner=Mock())
+        source_a = RemoteMediaSource('https://example.test/a', storage_name='projects/a.mov')
+        source_b = RemoteMediaSource('https://example.test/b', storage_name='projects/b.mov')
+        sources = [
+            AssemblySource(source_a, label='a-1', trim_start_ms=100, trim_end_ms=400),
+            AssemblySource(source_a, label='a-2', trim_start_ms=500, trim_end_ms=900),
+            AssemblySource(source_b, label='b', trim_start_ms=0, trim_end_ms=300),
+        ]
+        jobs = [
+            {
+                'source': item.path, 'analysis_source': item.path, 'destination': Path(f'/tmp/{index}.mp4'),
+                'width': 1080, 'height': 1920, 'lut_path': None, 'lut_intensity': 0,
+                'auto_reframe_config': {'priority': 'face'}, 'reframe_plan_data': {'plan': {'x': 1}},
+                'trim_start_ms': item.trim_start_ms, 'trim_end_ms': item.trim_end_ms,
+                'preserve_framing': False,
+            }
+            for index, item in enumerate(sources)
+        ]
+        intervals = [
+            {'source_index': 0, 'start_ms': 20, 'end_ms': 80},
+            {'source_index': 1, 'start_ms': 30, 'end_ms': 90},
+            {'source_index': 2, 'start_ms': 40, 'end_ms': 100},
+        ]
+
+        unique_jobs, outputs, translated, indexes = service._reuse_source_normalizations(
+            jobs, [item['destination'] for item in jobs], sources, intervals,
+        )
+
+        self.assertEqual(len(unique_jobs), 2)
+        self.assertEqual(len(outputs), 2)
+        self.assertEqual(indexes, [0, 0, 1])
+        self.assertEqual((unique_jobs[0]['trim_start_ms'], unique_jobs[0]['trim_end_ms']), (120, 590))
+        self.assertEqual((unique_jobs[1]['trim_start_ms'], unique_jobs[1]['trim_end_ms']), (40, 100))
+        self.assertEqual(
+            [(item['source_index'], item['start_ms'], item['end_ms']) for item in translated],
+            [(0, 0, 60), (0, 410, 470), (1, 0, 60)],
+        )
+
+    def test_bounded_normalization_shifts_saved_reframe_plan_to_the_new_clock(self):
+        plan = {
+            'analysis_width': 640, 'analysis_height': 360,
+            'plan': {
+                'crop_width': 300, 'crop_height': 300,
+                'keyframes': [
+                    {'time_seconds': 1.0, 'x': 10, 'y': 20},
+                    {'time_seconds': 2.0, 'x': 30, 'y': 40},
+                ],
+            },
+        }
+        shifted = VideoAssemblyService._shift_reframe_plan_time(plan, 1250)
+        self.assertEqual(
+            [item['time_seconds'] for item in shifted['plan']['keyframes']],
+            [-0.25, 0.75],
+        )
+        self.assertEqual(plan['plan']['keyframes'][0]['time_seconds'], 1.0)
+
+    def test_does_not_reuse_a_source_without_a_persisted_reframe_plan(self):
+        service = VideoAssemblyService(runner=Mock())
+        source = RemoteMediaSource('https://example.test/a', storage_name='projects/a.mov')
+        sources = [AssemblySource(source, trim_end_ms=200), AssemblySource(source, trim_start_ms=200, trim_end_ms=400)]
+        jobs = [
+            {
+                'source': source, 'analysis_source': source, 'destination': Path(f'/tmp/{index}.mp4'),
+                'width': 1080, 'height': 1920, 'lut_path': None, 'lut_intensity': 0,
+                'auto_reframe_config': {'priority': 'face'}, 'reframe_plan_data': None,
+                'trim_start_ms': item.trim_start_ms, 'trim_end_ms': item.trim_end_ms,
+                'preserve_framing': False,
+            }
+            for index, item in enumerate(sources)
+        ]
+        unique_jobs, _, _, indexes = service._reuse_source_normalizations(
+            jobs, [item['destination'] for item in jobs], sources,
+            [{'source_index': 0, 'start_ms': 0, 'end_ms': 100}, {'source_index': 1, 'start_ms': 0, 'end_ms': 100}],
+        )
+        self.assertEqual(len(unique_jobs), 2)
+        self.assertEqual(indexes, [0, 1])
+
+    def test_proxy_and_delivery_preserve_audio_content_at_the_same_cut_boundaries(self):
+        import numpy as np
+
+        runner = FFmpegRunner()
+        service = VideoAssemblyService(runner=runner)
+        preset = SimpleNamespace(width=160, height=90)
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            source, proxy = workdir / 'source.mp4', workdir / 'proxy.mp4'
+            # A chirp gives each audio window a distinct signature. Checking
+            # duration alone misses shifted syllables in otherwise valid MP4s.
+            runner.run([
+                'ffmpeg', '-y', '-f', 'lavfi', '-i',
+                'testsrc2=size=160x90:rate=30:duration=1.017',
+                '-f', 'lavfi', '-i',
+                'aevalsrc=0.3*sin(2*PI*(220*t+900*t*t)):s=48000:d=1.017',
+                '-c:v', 'libx264', '-c:a', 'aac', str(source),
+            ])
+            service.create_proxy(source, proxy)
+            outputs = []
+            # Ten takes force multiple concat batches. Analysis has one extra
+            # encode (proxy creation), which used to shift its content by AAC
+            # priming delay at every take relative to the delivery master.
+            for label, input_path in [('preview', proxy), ('delivery', source)]:
+                master = workdir / f'{label}.mp4'
+                service.assemble([input_path] * 10, master, preset, workdir)
+                streams = json.loads(subprocess.check_output([
+                    'ffprobe', '-v', 'error', '-show_entries',
+                    'stream=codec_type,start_time', '-of', 'json', str(master),
+                ]))['streams']
+                for stream in streams:
+                    self.assertLess(abs(float(stream['start_time'])), 0.001)
+                edited = workdir / f'{label}-cut.mp4'
+                plan = SpeechEditPlan((
+                    SpeechCut(350, 700, 'manual'),
+                    SpeechCut(4270, 4610, 'manual'),
+                    SpeechCut(9460, 9720, 'manual'),
+                ), 10000)
+                SpeechEditService(runner).apply(master, edited, plan)
+                raw = subprocess.check_output([
+                    'ffmpeg', '-v', 'error', '-i', str(edited),
+                    '-vn', '-ac', '1', '-ar', '48000', '-f', 'f32le', '-',
+                ])
+                outputs.append(np.frombuffer(raw, dtype='<f4'))
+            preview, delivery = outputs
+            self.assertEqual(len(preview), len(delivery))
+            # Compare actual sound before and after each cut, including late
+            # takes; agreement in total duration alone is not sufficient.
+            for seconds in (0.25, 0.35, 3.82, 3.92, 8.67, 8.77):
+                start = round(seconds * 48000)
+                left, right = preview[start:start + 2400], delivery[start:start + 2400]
+                self.assertGreater(np.corrcoef(left, right)[0, 1], 0.98, seconds)
+
     def test_video_assembly_creates_lightweight_proxy(self):
         runner = FFmpegRunner()
         with tempfile.TemporaryDirectory() as directory:
@@ -4314,8 +5593,13 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
             ),
         )
 
+        self.assertIn(
+            'zscale=matrixin=bt2020nc:transferin=smpte2084:primariesin=bt2020:transfer=linear:npl=1000',
+            filters,
+        )
         self.assertIn('format=gbrpf32le', filters)
-        self.assertIn('tonemap=tonemap=hable:desat=0:peak=100', filters)
+        self.assertIn('tonemap=tonemap=mobius:param=0.30:desat=0', filters)
+        self.assertIn('zscale=transfer=bt709:primaries=bt709:matrix=bt709', filters)
         self.assertEqual(filters[-1], 'format=yuv420p')
 
     def test_audio_copy_falls_back_to_aac_when_ffmpeg_rejects_it(self):
@@ -4389,6 +5673,19 @@ class FFmpegRenderSmokeTests(SimpleTestCase):
 
 
 class AudioMixingUnitTests(SimpleTestCase):
+    def test_legacy_ducking_config_receives_new_control_defaults(self):
+        settings_ = resolved_ducking_config({'base_duck_db': 9.0})
+
+        self.assertEqual(settings_['base_duck_db'], 9.0)
+        self.assertEqual(settings_['voice_gain_db'], 0.0)
+        self.assertEqual(settings_['voice_activation_db'], -96.0)
+        self.assertEqual(settings_['between_speech_gain'], 1.0)
+
+    def test_legacy_boolean_ducking_is_normalized(self):
+        self.assertEqual(ducking_options({'ducking': True}), {'enabled': True})
+        self.assertEqual(ducking_options({'ducking': False}), {'enabled': False})
+        self.assertEqual(ducking_options({'ducking': {'enabled': True}}), {'enabled': True})
+
     def test_group_speech_blocks_merges_close_intervals(self):
         blocks = group_speech_blocks([(0, 1000), (1300, 2000), (2100, 2400)], gap_threshold_ms=450)
         self.assertEqual(len(blocks), 1)
@@ -4496,6 +5793,96 @@ class AudioMixingUnitTests(SimpleTestCase):
         self.assertEqual(settings_.attack_ms, 300)
         self.assertEqual(settings_.hold_ms, DuckingSettings().hold_ms)
 
+    def test_emotional_profile_is_resolved_before_individual_overrides(self):
+        settings_ = DuckingSettings.from_config({
+            'profile': 'emotional', 'ducking': {'release_ms': 1750},
+        })
+        self.assertEqual(settings_.base_duck_db, 6.0)
+        self.assertEqual(settings_.attack_ms, 260)
+        self.assertEqual(settings_.release_ms, 1750)
+
+    def test_volume_keyframes_are_clamped_and_combined_with_ducking(self):
+        manual = normalize_volume_keyframes([
+            {'time_ms': 0, 'gain_db': -6}, {'time_ms': 1000, 'gain_db': 30},
+        ], 2000)
+        self.assertEqual(manual[0][1], 10 ** (-6 / 20))
+        self.assertAlmostEqual(manual[-1][1], 10 ** (12 / 20))
+        combined = combine_gain_envelopes([(0, 1), (2, 1)], manual)
+        self.assertAlmostEqual(combined[0][1], manual[0][1])
+        self.assertAlmostEqual(combined[-1][1], manual[-1][1])
+
+    def test_between_speech_gain_controls_the_music_bed(self):
+        settings_ = DuckingSettings(between_speech_gain=.7)
+        envelope = build_ducking_envelope([], duration_ms=1000, duck_gain=.4, settings_=settings_)
+        self.assertEqual(envelope, [(0.0, .7), (1.0, .7)])
+
+
+class AudioPlaylistTimelineTests(SimpleTestCase):
+    def test_playlist_honors_absolute_clip_positions_and_crossfade_overlap(self):
+        runner = Mock()
+        service = AudioMixingService(runner)
+
+        service.build_playlist(
+            [Path('/tmp/first.mp3'), Path('/tmp/second.mp3')],
+            Path('/tmp/playlist.wav'),
+            transitions=['CONSTANT_POWER'], durations_ms=[2000],
+            clip_positions_ms=[(0, 4000), (2000, 6000)],
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('adelay=0:all=1[scheduled_music0]', graph)
+        self.assertIn('adelay=2000:all=1[scheduled_music1]', graph)
+        self.assertIn('afade=t=out:st=2.000:d=2.000:curve=qsin', graph)
+        self.assertIn('afade=t=in:st=0.000:d=2.000:curve=qsin', graph)
+        self.assertIn('amix=inputs=2:duration=longest:dropout_transition=0:normalize=0', graph)
+        self.assertEqual(command.count('-stream_loop'), 2)
+
+    def test_playlist_keeps_a_manual_gap_instead_of_concatenating_tracks(self):
+        runner = Mock()
+        service = AudioMixingService(runner)
+
+        service.build_playlist(
+            [Path('/tmp/first.mp3'), Path('/tmp/second.mp3')],
+            Path('/tmp/playlist.wav'),
+            transitions=['CONSTANT_POWER'], durations_ms=[2000],
+            clip_positions_ms=[(0, 2000), (5000, 7000)],
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('adelay=5000:all=1[scheduled_music1]', graph)
+        self.assertNotIn('afade=', graph)
+        self.assertNotIn('acrossfade=', graph)
+
+    def test_playlist_honors_a_trimmed_source_start(self):
+        runner = Mock()
+        service = AudioMixingService(runner)
+
+        service.build_playlist(
+            [Path('/tmp/trimmed.mp3'), Path('/tmp/second.mp3')],
+            Path('/tmp/playlist.wav'),
+            clip_positions_ms=[(1000, 4000), (5000, 7000)],
+            clip_source_in_ms=[2500, 0],
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('atrim=start=2.500:duration=3.000', graph)
+
+    def test_single_scheduled_track_is_rendered_as_a_trimmed_clip(self):
+        runner = Mock()
+        service = AudioMixingService(runner)
+
+        service.build_playlist(
+            [Path('/tmp/trimmed.mp3')], Path('/tmp/playlist.wav'),
+            clip_positions_ms=[(1000, 4000)], clip_source_in_ms=[2500],
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertIn('atrim=start=2.500:duration=3.000', graph)
+
 
 class AudioMixingSmokeTests(SimpleTestCase):
     @staticmethod
@@ -4523,6 +5910,26 @@ class AudioMixingSmokeTests(SimpleTestCase):
             )
             self.assertTrue(output.exists())
             self.assertEqual(result.metrics['mode'], 'flat')
+
+    def test_playlist_renders_tracks_at_their_timeline_positions(self):
+        service = AudioMixingService()
+        with tempfile.TemporaryDirectory() as directory:
+            workdir = Path(directory)
+            first = workdir / 'first.mp4'
+            second = workdir / 'second.mp4'
+            playlist = workdir / 'playlist.wav'
+            self._render_tone(first, 220, 3)
+            self._render_tone(second, 440, 3)
+
+            service.build_playlist(
+                [first, second], playlist,
+                transitions=['CONSTANT_POWER'], durations_ms=[1000],
+                clip_positions_ms=[(0, 3000), (2000, 5000)],
+            )
+
+            self.assertTrue(playlist.exists())
+            self.assertGreater(playlist.stat().st_size, 0)
+            self.assertAlmostEqual(service._probe_duration_s(playlist), 5.0, delta=.15)
 
     def test_mix_adaptive_applies_ducking_and_reports_metrics(self):
         service = AudioMixingService()
@@ -4772,6 +6179,44 @@ class DialogueProcessingUnitTests(SimpleTestCase):
         # The block that's already at the reference level needs no correction at all.
         self.assertNotIn((2000, 3000), gains_by_block)
 
+    def test_leveling_uses_small_filters_instead_of_one_nested_expression(self):
+        runner = Mock()
+        processor = DialogueProcessor(runner=runner)
+        blocks = [SpeechBlock(index * 1000, index * 1000 + 700) for index in range(20)]
+        processor._compute_block_gains = lambda *args: (
+            [(block, 1.0 if index % 2 else -1.0) for index, block in enumerate(blocks)], -20.0,
+        )
+
+        processor.process(
+            Path('/tmp/input.mp4'), Path('/tmp/output.mp4'), duration_ms=20_000,
+            speech_blocks=blocks, settings_=DialogueSettings(),
+        )
+
+        command = runner.run.call_args.args[0]
+        graph = command[command.index('-filter_complex') + 1]
+        self.assertNotIn('if(lt(t', graph)
+        self.assertIn("enable='between(t\\,", graph)
+        self.assertGreater(graph.count('volume=eval=frame'), len(blocks))
+
+
+class FFmpegRunnerTests(SimpleTestCase):
+    def test_failed_command_includes_a_compact_redacted_diagnostic(self):
+        runner = FFmpegRunner()
+        failure = subprocess.CalledProcessError(
+            1, ['ffmpeg'], stderr=(
+                'Error initializing complex filters.\n'
+                'No such filter: deesser\n'
+                'https://bucket.example/video.mp4?X-Amz-Signature=secret\n'
+                'Invalid argument\n'
+            ),
+        )
+        with patch('website.external_media.ffmpeg_runner.subprocess.run', side_effect=failure):
+            with self.assertRaisesMessage(ExternalMediaError, 'No such filter: deesser') as raised:
+                runner.run(['ffmpeg', '-i', 'input.mp4', 'output.mp4'])
+
+        self.assertNotIn('secret', str(raised.exception))
+        self.assertIn('[REDACTED]', str(raised.exception))
+
 
 class DialogueProcessingSmokeTests(SimpleTestCase):
     @staticmethod
@@ -4839,6 +6284,94 @@ class DialogueProcessingSmokeTests(SimpleTestCase):
 
 
 class EditableTimelineExportTests(SimpleTestCase):
+    def test_dialogue_stem_preserves_silent_clips_and_short_audio_streams(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package = Path(directory) / 'package'
+            (package / 'Audio').mkdir(parents=True)
+            take = package / 'take.wav'
+            with wave.open(str(take), 'wb') as audio:
+                audio.setparams((1, 2, 48000, 0, 'NONE', 'not compressed'))
+                audio.writeframes(b''.join(
+                    struct.pack('<h', round(10000 * math.sin(2 * math.pi * 440 * n / 48000)))
+                    for n in range(14400)  # Audio ends at 300 ms; video lasts longer.
+                ))
+            sources = [
+                (SimpleNamespace(asset_id=name, relative_path=path), {})
+                for name, path in [('silent', 'silent.mp4'), ('take', 'take.wav')]
+            ]
+            clips = [
+                {
+                    'asset_id': asset_id, 'timeline_in_ms': start, 'timeline_out_ms': end,
+                    'source_in_ms': 0, 'source_out_ms': end - start,
+                }
+                for asset_id, start, end in [
+                    ('silent', 0, 200), ('take', 200, 600), ('silent', 600, 800),
+                    ('take', 800, 1200), ('silent', 1200, 1400),
+                ]
+            ]
+            project = SimpleNamespace(template_version=SimpleNamespace(
+                audio_noise_cleanup_enabled=False, dialogue_processing_enabled=False,
+            ))
+            builder = InternalTimelineBuilder()
+            builder._has_audio = lambda path: Path(path) == take
+            builder._noise_decisions = lambda project: []
+            builder._probe = Mock(return_value={'duration_ms': 1400})
+
+            assets, stem_clips = builder._dialogue_assets(project, sources, clips, package)
+
+            with wave.open(str(package / 'Audio' / 'voz.wav'), 'rb') as audio:
+                self.assertEqual(audio.getnchannels(), 2)
+                self.assertEqual(audio.getsampwidth(), 3)
+                self.assertEqual(audio.getframerate(), 48000)
+                self.assertEqual(audio.getnframes(), 67200)
+                for start_ms, end_ms, audible in [
+                    (0, 200, False), (200, 500, True), (500, 800, False),
+                    (800, 1100, True), (1100, 1400, False),
+                ]:
+                    audio.setpos(start_ms * 48)
+                    samples = audio.readframes((end_ms - start_ms) * 48)
+                    self.assertEqual(any(samples), audible, (start_ms, end_ms))
+
+        self.assertEqual(assets[0]['role'], 'dialogue')
+        self.assertEqual(stem_clips[0]['timeline_in_ms'], 0)
+        self.assertEqual(stem_clips[0]['timeline_out_ms'], 1400)
+        self.assertEqual(stem_clips[0]['source_out_ms'], 1400)
+
+    @override_settings(
+        EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS=3,
+        EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS=0,
+    )
+    def test_remote_probe_retries_with_a_fresh_presigned_url_after_connection_reset(self):
+        initial_url = RemoteMediaSource('https://s3.example/first', storage_name='media/take.mov')
+        refreshed_url = RemoteMediaSource('https://s3.example/second', storage_name='media/take.mov')
+        media_input = Mock()
+        media_input.get_ffmpeg_input.return_value = refreshed_url
+        builder = InternalTimelineBuilder()
+        builder._probe = Mock(side_effect=[
+            ExternalMediaError(
+                'O FFmpeg não conseguiu processar este vídeo. Detalhe do FFmpeg: Connection reset by peer'
+            ),
+            {'duration_ms': 1000, 'width': 1920, 'height': 1080, 'fps': 30.0},
+        ])
+
+        metadata = builder._probe_remote(media_input, initial_url)
+
+        self.assertEqual(metadata['duration_ms'], 1000)
+        self.assertEqual(builder._probe.call_args_list[0].args[0], initial_url)
+        self.assertEqual(builder._probe.call_args_list[1].args[0], refreshed_url)
+        media_input.get_ffmpeg_input.assert_called_once_with()
+
+    def test_remote_probe_does_not_retry_invalid_media_errors(self):
+        remote_url = RemoteMediaSource('https://s3.example/file', storage_name='media/take.mov')
+        media_input = Mock()
+        builder = InternalTimelineBuilder()
+        builder._probe = Mock(side_effect=ExternalMediaError('Invalid data found when processing input'))
+
+        with self.assertRaisesRegex(ExternalMediaError, 'Invalid data'):
+            builder._probe_remote(media_input, remote_url)
+
+        media_input.get_ffmpeg_input.assert_not_called()
+
     def test_premiere_package_streams_virtual_s3_source_directly_to_zip(self):
         source_file = Mock()
         source_file.open.return_value = io.BytesIO(b'video-from-s3')
@@ -4913,7 +6446,7 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertEqual(_premiere_archive_filename(project), 'anuncio-setembro-2026-premiere.zip')
 
     def test_selected_background_music_is_exported_without_a_legacy_plugin(self):
-        builder = InternalTimelineBuilder()
+        builder = InternalTimelineBuilder(runner=Mock())
         builder._copy_field = Mock()
         builder._probe = Mock(return_value={'duration_ms': 1000})
         music_file = SimpleNamespace(name='background/podcast-theme.mp3')
@@ -4928,14 +6461,50 @@ class EditableTimelineExportTests(SimpleTestCase):
             ),
             render_job_id=None,
             configuration={},
+            approved_timeline_revision=None,
+            current_timeline_revision=None,
         )
         with tempfile.TemporaryDirectory() as directory:
             Path(directory, 'Audio').mkdir()
             asset, track = builder._music(project, Path(directory), 2500)
 
         self.assertEqual(asset['id'], 'audio_music')
-        self.assertEqual(len(track['clips']), 3)
+        self.assertEqual(asset['path'], './Audio/musica.wav')
+        self.assertEqual(asset['bit_depth'], 24)
+        self.assertEqual(len(track['clips']), 1)
+        self.assertEqual(track['clips'][0]['timeline_out_ms'], 2500)
+        self.assertEqual(track['volume_automation'], [])
         self.assertEqual(track['role'], 'music')
+
+    def test_premiere_export_uses_music_selected_in_timeline_revision(self):
+        builder = InternalTimelineBuilder(runner=Mock())
+        builder._copy_field = Mock()
+        builder._probe = Mock(return_value={'duration_ms': 1000})
+        template_file = SimpleNamespace(name='background/template.mp3')
+        selected_file = SimpleNamespace(name='background/selected.mp3')
+        selected_track = SimpleNamespace(name='Trilha escolhida', audio_file=selected_file)
+        revision = SimpleNamespace(timeline={'music_override_track_id': 42})
+        project = SimpleNamespace(
+            template_version=SimpleNamespace(
+                background_music=SimpleNamespace(name='Trilha do template', audio_file=template_file),
+                music_file=None, audio_mixing_config={}, audio_mixing_enabled=False,
+                audio_ducking_enabled=False, music_volume=0.2,
+            ),
+            approved_timeline_revision=revision,
+            current_timeline_revision=revision,
+            render_job_id=None,
+            configuration={},
+        )
+
+        with patch('website.external_media.timeline.BackgroundMusicTrack.objects.filter') as tracks:
+            tracks.return_value.exclude.return_value.first.return_value = selected_track
+            with tempfile.TemporaryDirectory() as directory:
+                Path(directory, 'Audio').mkdir()
+                _asset, track = builder._music(project, Path(directory), 2500)
+
+        builder._copy_field.assert_called_once()
+        self.assertIs(builder._copy_field.call_args.args[0], selected_file)
+        self.assertEqual(track['clips'][0]['name'], 'Trilha_escolhida')
 
     def test_premiere_json_payload_converts_decimals_to_numbers(self):
         payload = json_compatible({
@@ -5039,12 +6608,26 @@ class EditableTimelineExportTests(SimpleTestCase):
                 'timeline_in_ms': 0, 'timeline_out_ms': 1000,
                 'source_in_ms': 0, 'source_out_ms': 1000,
             }]
+            project = SimpleNamespace(
+                template_version=SimpleNamespace(
+                    audio_noise_cleanup_enabled=False,
+                    audio_noise_cleanup_config={},
+                    dialogue_processing_enabled=False,
+                    dialogue_processing_config={},
+                    audio_mixing_config={},
+                ),
+                approved_timeline_revision=None,
+                current_timeline_revision=None,
+                configuration={},
+                render_job_id=None,
+            )
             assets, dialogue_clips = InternalTimelineBuilder()._dialogue_assets(
-                [(source, {})], clips, root,
+                project, [(source, {})], clips, root,
             )
             self.assertEqual(len(assets), 1)
-            self.assertTrue((root / 'Audio' / 'dialogue_001_take.wav').exists())
-            self.assertEqual(dialogue_clips[0]['asset_id'], 'video_1_dialogue')
+            self.assertTrue((root / 'Audio' / 'voz.wav').exists())
+            self.assertEqual(assets[0]['bit_depth'], 24)
+            self.assertEqual(dialogue_clips[0]['asset_id'], 'audio_dialogue')
 
     def test_keyframe_simplifier_keeps_trajectory_endpoints(self):
         points = [
@@ -5150,8 +6733,8 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertEqual(xml.count('<pathurl>'), 2)
         self.assertIn('<mediatype>video</mediatype>', xml)
         self.assertIn('<mediatype>audio</mediatype>', xml)
-        self.assertIn('generatoritem', xml)
-        self.assertIn('Bem-vindos à Filadélfia', xml)
+        self.assertNotIn('generatoritem', xml)
+        self.assertNotIn('Bem-vindos à Filadélfia', xml)
         self.assertIn('Legendas estilizadas (visual final)', xml)
         self.assertIn('../Graphics/captions_pt_styled.mov', xml)
         self.assertIn('<alphatype>straight</alphatype>', xml)
@@ -5188,6 +6771,159 @@ class EditableTimelineExportTests(SimpleTestCase):
         self.assertIn('<horiz>0.0</horiz>', xml)
         self.assertIn('<vert>0.0</vert>', xml)
         self.assertNotIn('<horiz>1920</horiz>', xml)
+
+    def test_consolidated_postproduction_layout_has_no_duplicate_motion_or_reference_audio(self):
+        timeline = {
+            'project': {'name': 'Reels aprovado'},
+            'sequence': {
+                'name': 'Reels aprovado', 'duration_ms': 2000, 'width': 1080, 'height': 1920,
+                'fps': 30.0, 'timebase': 30, 'ntsc': False, 'audio_sample_rate': 48000,
+                'audio_channels': 2, 'audio_bit_depth': 24,
+            },
+            'assets': [{
+                'id': 'video_consolidated', 'name': 'Vídeo consolidado',
+                'path': './Media/video_consolidado.mp4', 'type': 'video', 'role': 'main',
+                'has_audio': False, 'duration_ms': 2000, 'width': 1080, 'height': 1920,
+                'fps': 30.0,
+            }, {
+                'id': 'audio_dialogue', 'name': 'Voz tratada', 'path': './Audio/voz.wav',
+                'type': 'audio', 'role': 'dialogue', 'duration_ms': 2000, 'bit_depth': 24,
+                'sample_rate': 48000, 'channels': 2,
+            }, {
+                'id': 'audio_music', 'name': 'Música', 'path': './Audio/musica.wav',
+                'type': 'audio', 'role': 'music', 'duration_ms': 2000, 'bit_depth': 24,
+                'sample_rate': 48000, 'channels': 2,
+            }, {
+                'id': 'audio_reference_mix', 'name': 'Mix de referência',
+                'path': './Audio/mix_referencia.wav', 'type': 'audio', 'role': 'reference_mix',
+                'duration_ms': 2000, 'bit_depth': 24, 'active_in_sequence': False,
+            }, {
+                'id': 'caption_overlay_pt', 'name': 'Legendas estilizadas',
+                'path': './Graphics/captions_pt_styled.mov', 'type': 'video',
+                'role': 'caption_overlay', 'has_audio': False, 'alpha_mode': 'straight',
+                'duration_ms': 2000, 'width': 1080, 'height': 1920, 'fps': 30.0,
+            }],
+            'video_tracks': [{
+                'id': 'V1', 'role': 'main', 'locked': True, 'clips': [{
+                    'id': 'video_consolidated_clip', 'asset_id': 'video_consolidated',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000, 'audio_enabled': False,
+                    'effects': [],
+                }],
+            }, {
+                'id': 'V2', 'role': 'caption_overlay', 'locked': True, 'clips': [{
+                    'id': 'caption_overlay_pt_clip', 'asset_id': 'caption_overlay_pt',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000, 'audio_enabled': False,
+                }],
+            }],
+            'audio_tracks': [{
+                'id': 'A1', 'role': 'dialogue', 'clips': [{
+                    'id': 'dialogue_stem', 'asset_id': 'audio_dialogue',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000,
+                }],
+            }, {
+                'id': 'A2', 'role': 'music', 'clips': [{
+                    'id': 'music_stem', 'asset_id': 'audio_music',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000,
+                }],
+            }, {
+                'id': 'A5', 'role': 'reference_mix', 'enabled': False, 'clips': [{
+                    'id': 'reference_mix_clip', 'asset_id': 'audio_reference_mix',
+                    'timeline_in_ms': 0, 'timeline_out_ms': 2000,
+                    'source_in_ms': 0, 'source_out_ms': 2000,
+                }],
+            }],
+            'clips': [{'id': 'source_decision_clip'}], 'captions': [], 'markers': [],
+            'compatibility': {'warnings': []},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relative in [
+                'Media/video_consolidado.mp4', 'Audio/voz.wav', 'Audio/musica.wav',
+                'Audio/mix_referencia.wav', 'Graphics/captions_pt_styled.mov',
+            ]:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b'asset')
+            (root / 'Project').mkdir()
+            xml_path = root / 'Project' / 'timeline.xml'
+            PremiereExporter().export(timeline, xml_path)
+            report = ExportValidationService().validate(root, timeline, xml_path)
+            xml = xml_path.read_text(encoding='utf-8')
+
+        self.assertTrue(report['valid'])
+        self.assertEqual(report['postproduction']['layout'], 'consolidated_postproduction')
+        self.assertTrue(report['postproduction']['reference_mix_in_sequence'])
+        self.assertTrue(report['postproduction']['reference_mix_disabled_track'])
+        self.assertNotIn('<effectid>basic</effectid>', xml)
+        self.assertIn('../Audio/mix_referencia.wav', xml)
+        self.assertIn('<enabled>FALSE</enabled>', xml)
+
+    def test_consolidated_video_is_copied_without_audio(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'approved.mp4'
+            package = root / 'package'
+            (package / 'Media').mkdir(parents=True)
+            subprocess.run([
+                settings.FFMPEG_BINARY, '-y', '-f', 'lavfi', '-i',
+                'color=c=blue:s=320x180:r=30:d=1', '-f', 'lavfi', '-i',
+                'sine=frequency=440:sample_rate=48000:duration=1', '-shortest',
+                '-c:v', 'mpeg4', '-c:a', 'aac', str(source),
+            ], check=True, capture_output=True)
+            media_input = SimpleNamespace(get_ffmpeg_input=lambda: source)
+            project = SimpleNamespace(
+                render_job=SimpleNamespace(original_video=SimpleNamespace(name='approved.mp4')),
+            )
+            with patch('website.external_media.timeline.media_input_factory', return_value=media_input):
+                asset, track = InternalTimelineBuilder()._consolidated_video(
+                    project, package,
+                    {'width': 320, 'height': 180, 'fps': 30.0}, 1000,
+                )
+            audio_stream = subprocess.run([
+                settings.FFPROBE_BINARY, '-v', 'error', '-select_streams', 'a:0',
+                '-show_entries', 'stream=index', '-of', 'csv=p=0',
+                str(package / 'Media' / 'video_consolidado.mp4'),
+            ], check=True, capture_output=True, text=True).stdout.strip()
+
+        self.assertEqual(audio_stream, '')
+        self.assertFalse(asset['has_audio'])
+        self.assertEqual(track['clips'][0]['effects'], [])
+
+    def test_consolidated_video_rate_becomes_sequence_rate(self):
+        sequence = {'fps': 30.0, 'timebase': 30, 'ntsc': False}
+
+        InternalTimelineBuilder._align_sequence_rate(sequence, {'fps': 29.97002997002997})
+
+        self.assertAlmostEqual(sequence['fps'], 29.97002997002997)
+        self.assertEqual(sequence['timebase'], 30)
+        self.assertTrue(sequence['ntsc'])
+
+    def test_consolidated_layout_accepts_project_without_music_or_captions(self):
+        timeline = {
+            'sequence': {'duration_ms': 1000, 'width': 1920, 'height': 1080, 'fps': 30},
+            'assets': [{
+                'id': 'video_consolidated', 'role': 'main', 'has_audio': False,
+                'duration_ms': 1000, 'width': 1920, 'height': 1080, 'fps': 30,
+            }],
+            'video_tracks': [{'id': 'V1', 'role': 'main', 'clips': [{
+                'asset_id': 'video_consolidated', 'effects': [],
+            }]}],
+            'audio_tracks': [], 'captions': [],
+        }
+        errors, warnings = [], []
+
+        report = ExportValidationService._validate_postproduction_layout(
+            timeline, errors, warnings,
+        )
+
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+        self.assertFalse(report['music_stem'])
+        self.assertFalse(report['caption_overlay'])
 
     def test_reframe_keeps_proxy_plan_as_normalized_geometry(self):
         effect = InternalTimelineBuilder()._transform_effect(
@@ -5270,6 +7006,14 @@ class EditableTimelineExportTests(SimpleTestCase):
         command = runner.run.call_args.args[0]
         self.assertIn(':alpha=1', command[command.index('-vf') + 1])
         self.assertIn('yuva444p10le', command)
+
+    @override_settings(EXTERNAL_MEDIA_CAPTION_OVERLAY_ESTIMATED_BYTES_PER_PIXEL=0.25)
+    def test_caption_overlay_estimate_scales_with_frames_and_resolution(self):
+        estimated = InternalTimelineBuilder._caption_overlay_estimated_bytes(
+            {'width': 1920, 'height': 1080, 'fps': 30}, 2,
+        )
+
+        self.assertEqual(estimated, 1920 * 1080 * 30 * 2 * 0.25)
 
     def test_caption_overlay_movie_has_transparent_background_and_visible_text(self):
         ass = """[Script Info]
@@ -5630,11 +7374,12 @@ class BrollUnitTests(SimpleTestCase):
             for index, asset in enumerate(assets)
         ]
         runner, storage = Mock(), Storage()
-        BrollRenderService(runner=runner, storage=storage).apply(
-            SimpleNamespace(public_id='chunked-project', broll_assets=Assets()),
-            Path('/tmp/master.mp4'), Path('/tmp/output.mp4'), decisions,
-            1920, 1080, duration_ms=6000,
-        )
+        with patch.object(settings, 'EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES', 4):
+            BrollRenderService(runner=runner, storage=storage).apply(
+                SimpleNamespace(public_id='chunked-project', broll_assets=Assets()),
+                Path('/tmp/master.mp4'), Path('/tmp/output.mp4'), decisions,
+                1920, 1080, duration_ms=6000,
+            )
 
         calls = [call.args[0] for call in runner.run.call_args_list]
         chunk_calls = [command for command in calls if '-filter_complex' in command]
@@ -5644,6 +7389,63 @@ class BrollUnitTests(SimpleTestCase):
         self.assertIn('-map', calls[-1])
         self.assertIn('1:a?', calls[-1])
         self.assertEqual(len(storage.deleted), len(chunk_calls))
+
+    def test_chunked_renderer_materializes_a_safe_remote_master_once(self):
+        assets = [
+            SimpleNamespace(
+                public_id=f'00000000-0000-0000-0000-{index:012d}',
+                media_type='VIDEO', file=SimpleNamespace(path=f'/tmp/broll-{index}.mp4'),
+            )
+            for index in range(1, 6)
+        ]
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return assets
+
+        class Storage:
+            @staticmethod
+            def ffmpeg_input(field):
+                return field.path
+
+            @staticmethod
+            def stage_temporary(source, namespace):
+                return f'https://example.test/{Path(source).name}', f'tmp/{Path(source).name}'
+
+            @staticmethod
+            def delete_temporary(name):
+                return None
+
+        decisions = [
+            {
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': index * 1000, 'end_ms': (index + 1) * 1000,
+                'display_mode': 'FULLSCREEN', 'transform': {}, 'entry': {}, 'exit': {},
+            }
+            for index, asset in enumerate(assets)
+        ]
+        remote_master = RemoteMediaSource(
+            'https://example.test/master.mp4', storage_name='tmp/master.mp4', size_bytes=10 * 1024 ** 2,
+        )
+        runner = Mock()
+        with (
+            patch.object(settings, 'EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB', 32),
+            patch.object(settings, 'EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES', 4),
+        ):
+            BrollRenderService(runner=runner, storage=Storage()).apply(
+                SimpleNamespace(public_id='chunked-project', broll_assets=Assets()),
+                remote_master, Path('/tmp/output.mp4'), decisions, 1920, 1080, duration_ms=6000,
+            )
+
+        commands = [call.args[0] for call in runner.run.call_args_list]
+        remux = commands[0]
+        self.assertIn('-c', remux)
+        self.assertIn('copy', remux)
+        self.assertEqual(remux[remux.index('-i') + 1], str(remote_master))
+        chunk_commands = [command for command in commands if '-filter_complex' in command]
+        self.assertTrue(chunk_commands)
+        self.assertTrue(all('master-local.mp4' in command[command.index('-i') + 1] for command in chunk_commands))
 
     def test_chunked_renderer_keeps_the_master_audio_duration(self):
         runner = FFmpegRunner()
@@ -5669,16 +7471,17 @@ class BrollUnitTests(SimpleTestCase):
                 def filter(**kwargs):
                     return assets
 
-            BrollRenderService(runner=runner).apply(
-                SimpleNamespace(broll_assets=Assets()), source, output, [
-                    {
-                        'asset_id': str(asset.public_id), 'enabled': True,
-                        'start_ms': index * 1000, 'end_ms': (index + 1) * 1000,
-                        'display_mode': 'FULLSCREEN', 'transform': {}, 'entry': {}, 'exit': {},
-                    }
-                    for index, asset in enumerate(assets)
-                ], 320, 180, duration_ms=6000,
-            )
+            with patch.object(settings, 'EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES', 4):
+                BrollRenderService(runner=runner).apply(
+                    SimpleNamespace(broll_assets=Assets()), source, output, [
+                        {
+                            'asset_id': str(asset.public_id), 'enabled': True,
+                            'start_ms': index * 1000, 'end_ms': (index + 1) * 1000,
+                            'display_mode': 'FULLSCREEN', 'transform': {}, 'entry': {}, 'exit': {},
+                        }
+                        for index, asset in enumerate(assets)
+                    ], 320, 180, duration_ms=6000,
+                )
             report = MediaQualityService(runner).validate_media(
                 output, expected_duration_ms=6000,
             )
@@ -5788,6 +7591,61 @@ class BrollUnitTests(SimpleTestCase):
         self.assertIn('scale=2880:1620:force_original_aspect_ratio=increase', filters)
         self.assertIn("crop=1920:1080:x='(iw-ow)*0.1':y='(ih-oh)*0.9'", filters)
         self.assertNotIn('scale=1920:1080:force_original_aspect_ratio=disable', filters)
+
+    def test_fullscreen_moving_image_applies_editor_crop_before_zoom(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='IMAGE', file=SimpleNamespace(path='/tmp/broll.png'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), [{
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': 0, 'end_ms': 1000, 'display_mode': 'FULLSCREEN',
+                'transform': {'x': .2, 'y': .8, 'scale': 1},
+                'motion': {'type': 'ZOOM_IN'}, 'entry': {}, 'exit': {},
+            }], 1920, 1080,
+        )
+        command = runner.run.call_args.args[0]
+        filters = command[command.index('-filter_complex') + 1]
+        self.assertIn(
+            "crop=3840:2160:x='(iw-ow)*0.2':y='(ih-oh)*0.8',"
+            "zoompan=z='1*(1+0.06*(on+0)/30)':"
+            "x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2'",
+            filters,
+        )
+
+    def test_fullscreen_moving_image_preserves_manual_scale(self):
+        asset = SimpleNamespace(
+            public_id='00000000-0000-0000-0000-000000000010',
+            media_type='IMAGE', file=SimpleNamespace(path='/tmp/broll.png'),
+        )
+
+        class Assets:
+            @staticmethod
+            def filter(**kwargs):
+                return [asset]
+
+        runner = Mock()
+        BrollRenderService(runner=runner).apply(
+            SimpleNamespace(broll_assets=Assets()), Path('/tmp/master.mp4'),
+            Path('/tmp/output.mp4'), [{
+                'asset_id': str(asset.public_id), 'enabled': True,
+                'start_ms': 0, 'end_ms': 1000, 'display_mode': 'FULLSCREEN',
+                'transform': {'x': .5, 'y': .5, 'scale': 1.5},
+                'motion': {'type': 'ZOOM_OUT'}, 'entry': {}, 'exit': {},
+            }], 1920, 1080,
+        )
+        command = runner.run.call_args.args[0]
+        filters = command[command.index('-filter_complex') + 1]
+        self.assertIn("zoompan=z='1.5*(1.06-0.06*(on+0)/30)'", filters)
 
     def test_apply_uses_dedicated_timeout_not_full_pipeline_timeout(self):
         """B-roll compositing uses ``-stream_loop -1`` for video assets, which

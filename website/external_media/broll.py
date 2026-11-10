@@ -16,6 +16,7 @@ from website.ai import AIServiceError, get_ai_service
 from website.models.external_media import MediaTemplatePlugin, ProjectBrollAsset, SubtitleCue
 
 from .ffmpeg_runner import FFmpegRunner
+from .media_input import RemoteMediaSource
 
 
 logger = logging.getLogger(__name__)
@@ -36,9 +37,18 @@ class BrollTimelineService:
     @classmethod
     def configuration(cls, project):
         plugin = project.template_version.plugins.filter(
-            code=MediaTemplatePlugin.Code.BROLL, is_enabled=True,
+            code=MediaTemplatePlugin.Code.BROLL,
         ).first()
-        return {**cls.DEFAULTS, **(plugin.configuration or {})} if plugin else {'enabled': False}
+        # B-roll is always available at the project/block level. A legacy
+        # template plugin can still hold presentation defaults, but it no
+        # longer decides whether a member may add an image or video.
+        return {
+            **cls.DEFAULTS,
+            **((plugin.configuration or {}) if plugin else {}),
+            'enabled': True,
+            'allow_video': True,
+            'allow_image': True,
+        }
 
     @classmethod
     def ensure_auto_decisions(cls, project, ai_service=None):
@@ -142,7 +152,6 @@ class BrollTimelineService:
                 'id': f'broll-asset-{asset.public_id}',
                 'asset_id': str(asset.public_id),
                 'name': asset.original_filename,
-                'description': asset.description,
                 'media_type': asset.media_type,
                 'duration_ms': asset.duration_ms,
                 'url': reverse('external_media_project_preview_broll_asset', kwargs={
@@ -168,7 +177,6 @@ class BrollTimelineService:
             start, end = ranges.get(block_key, (0, max((cue['end_ms'] for cue in cues), default=5000)))
             request_assets.append({
                 'asset_id': str(asset.public_id), 'media_type': asset.media_type,
-                'description': asset.description or asset.original_filename,
                 'duration_ms': asset.duration_ms, 'block_key': block_key,
                 'allowed_range_ms': [start, end],
             })
@@ -193,16 +201,11 @@ class BrollTimelineService:
     @classmethod
     def _fallback_decision(cls, asset, ranges, cues, config, index):
         block_start, block_end = ranges.get(cls._asset_block_key(asset), (0, max((c['end_ms'] for c in cues), default=5000)))
-        words = set(re.findall(r'[\wÀ-ÿ]{4,}', (asset.description or asset.original_filename).lower()))
-        relevant = [cue for cue in cues if block_start <= cue['start_ms'] < block_end]
-        best = max(relevant, key=lambda cue: len(words & set(re.findall(r'[\wÀ-ÿ]{4,}', cue['text'].lower()))), default=None)
-        start = int(best['start_ms'] if best else block_start + index * 1000)
+        start = int(block_start + index * 1000)
         duration = min(6000, max(2500, int(asset.duration_ms or 5000)))
         start = min(max(block_start, start), max(block_start, block_end - 1))
         end = min(block_end, start + duration)
-        description = (asset.description or asset.original_filename).lower()
-        overlay = config.get('allow_overlay') and any(token in description for token in ('qr', 'logo', 'card', 'inscri'))
-        return cls._decision(asset, start, max(start + 1, end), 'OVERLAY' if overlay else 'FULLSCREEN', .55, config)
+        return cls._decision(asset, start, max(start + 1, end), 'FULLSCREEN', .55, config)
 
     @classmethod
     def _validated_ai_decision(cls, asset, candidate, ranges, config, fallback):
@@ -259,7 +262,9 @@ class BrollTimelineService:
 
     @staticmethod
     def _asset_block_key(asset):
-        return f'custom-{asset.custom_block_id}' if asset.custom_block_id else str(asset.block.key)
+        if asset.custom_block_id:
+            return f'custom-{asset.custom_block_id}'
+        return str(asset.block.key) if asset.block_id else 'project-main'
 
     @staticmethod
     def _configured_block_ranges(project):
@@ -297,8 +302,8 @@ class BrollRenderService:
     """Executes approved timeline decisions without making editorial choices."""
 
     # A single FFmpeg graph opens every input even if those assets are never
-    # visible together. Beyond this point render in temporal chunks instead.
-    MAX_MONOLITHIC_SOURCES = 4
+    # visible together. The limit is configurable because the monolithic path
+    # decodes the master once and is substantially faster for typical projects.
     MAX_CHUNK_DURATION_MS = 20_000
 
     def __init__(self, runner=None, storage=None):
@@ -360,10 +365,11 @@ class BrollRenderService:
             if duration_ms is not None
             else max(int(item['end_ms']) for item, _asset, _input_index in available)
         )
-        if len(input_indexes) > self.MAX_MONOLITHIC_SOURCES:
+        max_monolithic_sources = max(1, int(settings.EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES))
+        if len(input_indexes) > max_monolithic_sources:
             return self._apply_chunked(
                 project_ref, video_path, output_path, available, width, height,
-                timeline_duration_ms,
+                timeline_duration_ms, max_monolithic_sources,
             )
         segments = self._segments(available, timeline_duration_ms)
         filters = self._timeline_filters(segments, width, height)
@@ -392,7 +398,10 @@ class BrollRenderService:
         )
         return output_path
 
-    def _apply_chunked(self, project_ref, video_path, output_path, available, width, height, duration_ms):
+    def _apply_chunked(
+        self, project_ref, video_path, output_path, available, width, height, duration_ms,
+        max_monolithic_sources,
+    ):
         """Render temporal chunks so FFmpeg only opens sources visible in each one.
 
         Completed chunks are moved to S3 immediately by ``stage_temporary``.
@@ -402,7 +411,7 @@ class BrollRenderService:
         segments = self._chunk_segments(available, duration_ms)
         logger.info(
             'broll_render_chunked_start project=%s chunks=%s layers=%s max_sources_per_graph=%s',
-            project_ref, len(segments), len(available), self.MAX_MONOLITHIC_SOURCES,
+            project_ref, len(segments), len(available), max_monolithic_sources,
         )
         staged_inputs, temporary_names, local_parts = [], [], []
         output_path = Path(output_path)
@@ -410,10 +419,16 @@ class BrollRenderService:
         with tempfile.TemporaryDirectory(prefix='broll-concat-', dir=output_path.parent) as directory:
             workdir = Path(directory)
             try:
+                # A Workflow has no persistent disk, but it does have bounded
+                # scratch space for this run.  Keeping a reasonably sized
+                # master here is materially different from a cross-run cache:
+                # it is deleted with the workspace and simply prevents every
+                # temporal chunk from reopening the same S3 object.
+                chunk_master = self._materialize_chunk_master(project_ref, video_path, workdir)
                 for index, (start_ms, end_ms, active) in enumerate(segments):
                     part = workdir / f'part-{index:04d}.mp4'
                     self._render_chunk(
-                        project_ref, video_path, part, active, start_ms, end_ms, width, height,
+                        project_ref, chunk_master, part, active, start_ms, end_ms, width, height,
                     )
                     if self.storage:
                         staged, temporary_name = self.storage.stage_temporary(
@@ -425,7 +440,7 @@ class BrollRenderService:
                         staged_inputs.append((part, end_ms - start_ms))
                         local_parts.append(part)
                 self._concat_chunks(
-                    project_ref, staged_inputs, video_path, output_path, workdir, duration_ms,
+                    project_ref, staged_inputs, chunk_master, output_path, workdir, duration_ms,
                 )
             finally:
                 for name in temporary_names:
@@ -437,6 +452,41 @@ class BrollRenderService:
             project_ref, len(segments), output_path.name,
         )
         return output_path
+
+    def _materialize_chunk_master(self, project_ref, video_path, workdir):
+        """Return a local, lossless per-run master when its size is safe.
+
+        Chunking protects FFmpeg from opening too many B-roll sources at once,
+        but otherwise makes it reopen the master for every boundary.  A
+        remuxed local copy avoids that repeated S3 stream without changing a
+        single encoded video or audio packet.  Oversized masters retain the
+        streaming path rather than risking the workflow's scratch disk.
+        """
+        if not isinstance(video_path, RemoteMediaSource):
+            return video_path
+        size_bytes = max(0, int(getattr(video_path, 'size_bytes', 0) or 0))
+        max_bytes = max(0, int(settings.EXTERNAL_MEDIA_BROLL_LOCAL_MASTER_MAX_MB)) * 1024 ** 2
+        if not size_bytes or not max_bytes or size_bytes > max_bytes:
+            logger.info(
+                'broll_render_master_local_skipped project=%s bytes=%s max_bytes=%s',
+                project_ref, size_bytes, max_bytes,
+            )
+            return video_path
+        local_master = Path(workdir) / 'master-local.mp4'
+        logger.info(
+            'broll_render_master_local_start project=%s bytes=%s', project_ref, size_bytes,
+        )
+        self.runner.run([
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(video_path),
+            '-map', '0:v:0', '-map', '0:a?', '-c', 'copy', '-movflags', '+faststart',
+            '-avoid_negative_ts', 'make_zero', str(local_master),
+        ], timeout=settings.EXTERNAL_MEDIA_BROLL_RENDER_TIMEOUT)
+        logger.info(
+            'broll_render_master_local_ready project=%s bytes=%s path=%s',
+            project_ref, local_master.stat().st_size if local_master.exists() else size_bytes,
+            local_master.name,
+        )
+        return local_master
 
     @classmethod
     def _chunk_segments(cls, available, duration_ms):
@@ -624,17 +674,33 @@ class BrollRenderService:
             motion = str((item.get('motion') or {}).get('type')).upper()
             frames = max(1, round(item_duration * 30))
             offset_frames = max(0, round((segment_start_ms - item_start_ms) / 1000 * 30))
+            base_scale = min(2, max(1, float(transform.get('scale') or 1)))
             if motion == 'ZOOM_OUT':
-                zoom = f'1.06-0.06*(on+{offset_frames})/{frames}'
+                zoom = f'{base_scale}*(1.06-0.06*(on+{offset_frames})/{frames})'
             elif motion in {'PAN_LEFT', 'PAN_RIGHT'}:
-                zoom = '1.04'
+                zoom = f'{base_scale}*1.04'
             else:
-                zoom = f'1+0.06*(on+{offset_frames})/{frames}'
-            x = 'iw-iw/zoom' if motion == 'PAN_LEFT' else ('0' if motion == 'PAN_RIGHT' else 'iw/2-(iw/zoom/2)')
+                zoom = f'{base_scale}*(1+0.06*(on+{offset_frames})/{frames})'
+            progress = f'min(1,(on+{offset_frames})/{frames})'
+            if motion == 'PAN_LEFT':
+                x = f'(iw-iw/zoom)*{progress}'
+            elif motion == 'PAN_RIGHT':
+                x = f'(iw-iw/zoom)*(1-{progress})'
+            else:
+                x = '(iw-iw/zoom)/2'
+            y = '(ih-ih/zoom)/2'
+            # CSS applies object-fit/object-position first and then scales the
+            # resulting fullscreen element around its centre.  Do the same:
+            # choose the cover crop with the editor's X/Y values before
+            # zoompan, then use zoompan only for the manual scale and motion.
+            # Previously the first crop was always centred, so X/Y could only
+            # move through the tiny (4-6%) zoom margin and appeared ignored.
             chain.append(
                 f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
-                f"crop={width * 2}:{height * 2},zoompan=z='{zoom}':x='{x}':"
-                f"y='ih/2-(ih/zoom/2)':d=1:s={width}x{height}:fps=30"
+                f"crop={width * 2}:{height * 2}:"
+                f"x='(iw-ow)*{focus_x}':y='(ih-oh)*{focus_y}',"
+                f"zoompan=z='{zoom}':x='{x}':"
+                f"y='{y}':d=1:s={width}x{height}:fps=30"
             )
             chain.extend([f'trim=duration={segment_duration}', 'setpts=PTS-STARTPTS'])
         else:

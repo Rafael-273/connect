@@ -9,9 +9,15 @@
     .media-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 1.25rem; box-shadow: 0 8px 30px rgba(38,2,0,.06); }
     .media-btn { display:inline-flex; align-items:center; justify-content:center; gap:.55rem; border-radius:.8rem; padding:.75rem 1rem; font-weight:800; transition:.2s; }
     .media-btn:hover { transform: translateY(-1px); }
-    .media-flash { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+    .media-toast-stack { position:fixed; z-index:100; top:5.5rem; right:1rem; display:grid; gap:.6rem; width:min(calc(100vw - 2rem),24rem); pointer-events:none; }
+    .media-flash { display:flex; align-items:center; justify-content:space-between; gap:.75rem; border:1px solid #bbf7d0; border-radius:.9rem; padding:.8rem .9rem; background:#fff; color:#166534; box-shadow:0 14px 36px rgba(15,23,42,.15); pointer-events:auto; animation:media-toast-in .24s ease-out; transition:opacity .24s ease, transform .24s ease; }
+    .media-flash.is-leaving { opacity:0; transform:translateX(1.5rem); }
+    .media-flash--error { border-color:#fecaca; color:#b42318; }
+    .media-flash--warning { border-color:#fde68a; color:#92400e; }
     .media-flash__close { display:grid; place-items:center; width:2rem; height:2rem; flex:none; border-radius:.55rem; color:#667085; }
     .media-flash__close:hover { background:#f3f4f6; color:#111827; }
+    @keyframes media-toast-in { from { opacity:0; transform:translateX(1.5rem); } to { opacity:1; transform:translateX(0); } }
+    @media (max-width:640px) { .media-toast-stack { top:4.75rem; right:.75rem; width:calc(100vw - 1.5rem); } }
     .media-primary { color:#fff; background:#C90905; }
     .media-secondary { color:#C90905; border:2px solid #C90905; background:#fff; }
     .media-muted { color:#374151; border:1px solid #d1d5db; background:#fff; }
@@ -78,11 +84,19 @@
 </header>
 
 {% if messages %}
-<div class="w-full px-4 sm:px-6 md:px-8 pt-4">
-    {% for message in messages %}<div class="media-flash p-3 mb-2 rounded-xl border bg-white text-sm font-bold" role="status"><span>{{ message }}</span><button type="button" class="media-flash__close" aria-label="Fechar aviso" onclick="this.parentElement.remove()"><i class="fas fa-xmark"></i></button></div>{% endfor %}
+<div class="media-toast-stack" aria-live="polite" aria-atomic="true">
+    {% for message in messages %}<div class="media-flash text-sm font-bold {% if message.tags == 'error' %}media-flash--error{% elif message.tags == 'warning' %}media-flash--warning{% endif %}" role="status" {% if message.tags == 'success' %}data-auto-dismiss="true"{% endif %}><span class="flex items-center gap-2"><i class="fas {% if message.tags == 'success' %}fa-circle-check{% elif message.tags == 'error' %}fa-circle-exclamation{% elif message.tags == 'warning' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}"></i>{{ message }}</span><button type="button" class="media-flash__close" aria-label="Fechar aviso" onclick="this.closest('.media-flash').remove()"><i class="fas fa-xmark"></i></button></div>{% endfor %}
 </div>
 {% endif %}
 
 <main class="media-shell w-full px-4 sm:px-6 md:px-8 pt-4">{% block media_content %}{% endblock %}</main>
 {% block media_bottom_nav %}{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}{% endblock %}
+<script>
+    document.querySelectorAll('[data-auto-dismiss="true"]').forEach((toast) => {
+        window.setTimeout(() => {
+            toast.classList.add('is-leaving');
+            window.setTimeout(() => toast.remove(), 250);
+        }, 4200);
+    });
+</script>
 {% endblock %}

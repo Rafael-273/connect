@@ -3,33 +3,44 @@ from __future__ import annotations
 import logging
 import math
 import re
+import time
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings
 
-from .audio_mixing import DuckingSettings, build_ducking_envelope, group_speech_blocks
+from ..models.external_media import BackgroundMusicTrack
+from .audio_mixing import (
+    DuckingSettings, build_ducking_envelope, build_dynamic_ducking_envelope,
+    build_spectral_windows, combine_gain_envelopes, group_speech_blocks,
+    ducking_options, normalize_volume_keyframes,
+)
+from .audio_noise import AudioCleanupService, NoiseCleanupSettings, NoiseReductionDecision
+from .audio_utils import build_piecewise_expression, linear_gain_from_db
 from .canonical import EditDecisionSetBuilder, ProjectProcessingState, SourceManifestBuilder, normalize_edit_ranges
+from .dialogue_processing import DialogueProcessor, DialogueSettings
 from .ffmpeg_runner import FFmpegRunner
 from .exceptions import ExternalMediaError
 from .media_input import RemoteMediaSource, media_input_factory
 from .speech_edit import SpeechEditPlan
+from .workspace import DiskCapacityGuard
 
 
 CAPABILITY_MATRIX = {
     'cuts': {'exportable': True, 'strategy': 'native'},
     'source_in_out': {'exportable': True, 'strategy': 'native'},
-    'music': {'exportable': True, 'strategy': 'separate_track'},
-    'volume_automation': {'exportable': True, 'strategy': 'keyframes'},
-    'auto_reframe': {'exportable': 'partial', 'strategy': 'transform_keyframes'},
-    'captions': {'exportable': True, 'strategy': 'srt_editable_titles_and_alpha_overlay'},
+    'music': {'exportable': True, 'strategy': 'processed_wav_stem'},
+    'volume_automation': {'exportable': True, 'strategy': 'baked_into_music_stem'},
+    'auto_reframe': {'exportable': True, 'strategy': 'consolidated_visual_master'},
+    'captions': {'exportable': True, 'strategy': 'srt_native_caption_import_and_alpha_overlay'},
     'caption_style': {'exportable': True, 'strategy': 'pre_rendered_alpha_overlay'},
-    'overlays': {'exportable': 'partial', 'strategy': 'portable_text_or_png_with_timeline_metadata'},
+    'overlays': {'exportable': True, 'strategy': 'consolidated_visual_master'},
     'lut': {'exportable': 'partial', 'strategy': 'asset_and_metadata'},
-    'dialogue_processing': {'exportable': 'partial', 'strategy': 'separate_dialogue_source_plus_metadata'},
-    'audio_noise_reduction': {'exportable': 'partial', 'strategy': 'metadata_and_original_dialogue_source'},
+    'dialogue_processing': {'exportable': True, 'strategy': 'processed_dialogue_stem'},
+    'audio_noise_reduction': {'exportable': True, 'strategy': 'processed_dialogue_stem'},
     'mastering': {'exportable': False, 'strategy': 'recommended_after_premiere'},
-    'complex_motion': {'exportable': 'partial', 'strategy': 'pre_render_when_available'},
+    'complex_motion': {'exportable': True, 'strategy': 'consolidated_visual_master'},
 }
 
 
@@ -123,7 +134,7 @@ class InternalTimelineBuilder:
                 # FFprobe/FFmpeg consume the presigned URL, while the archive
                 # service streams the original object into Media/ later.
                 self.package_source_files[relative_path] = source.field_file
-                metadata = self._probe(ffmpeg_input)
+                metadata = self._probe_remote(media_input, ffmpeg_input)
             else:
                 self._copy_field(source.field_file, local_path)
                 metadata = self._probe(local_path)
@@ -145,7 +156,9 @@ class InternalTimelineBuilder:
         cuts = self._cuts_from_decisions(decisions_snapshot)
         video_clips, decisions, markers = self._video_clips(project, local_sources, cuts, sequence)
         duration_ms = max((clip['timeline_out_ms'] for clip in video_clips), default=0)
-        dialogue_assets, dialogue_clips = self._dialogue_assets(local_sources, video_clips, package_root)
+        dialogue_assets, dialogue_clips = self._dialogue_assets(
+            project, local_sources, video_clips, package_root,
+        )
         assets.extend(dialogue_assets)
         audio_tracks = [
             {
@@ -162,9 +175,40 @@ class InternalTimelineBuilder:
             assets.append(music_asset)
             audio_tracks[1] = music_track
 
-        lut = self._lut(project, package_root)
-        if lut:
-            assets.append(lut)
+        consolidated_asset, consolidated_track = self._consolidated_video(
+            project, package_root, sequence, duration_ms,
+        )
+        if consolidated_asset:
+            # The finished visual master is V1 in the editable package. It is the
+            # authoritative cadence for the Premiere sequence: source uploads can
+            # have a different (or variable) FPS from the rendered deliverable.
+            # Keeping the original source FPS here makes the generated XML invalid
+            # for a perfectly valid final master (for example 30 vs 29.97 fps).
+            self._align_sequence_rate(sequence, consolidated_asset)
+        reference_mix_asset = self._reference_mix(project, package_root, duration_ms)
+        if reference_mix_asset:
+            assets.append(reference_mix_asset)
+            # Keep the mastered delivery mix immediately available for A/B in
+            # Premiere, but disabled so it can never double the dialogue/music
+            # stems on first import.
+            audio_tracks.append({
+                'id': 'A5', 'name': 'Mix de referência masterizado (desativado)',
+                'role': 'reference_mix', 'enabled': False,
+                'clips': [{
+                    'id': 'reference_mix_clip', 'asset_id': reference_mix_asset['id'],
+                    'name': reference_mix_asset['name'],
+                    'timeline_in_ms': 0, 'timeline_out_ms': duration_ms,
+                    'source_in_ms': 0, 'source_out_ms': duration_ms,
+                }],
+            })
+
+        # V1 already contains colour and graphic overlays. Those assets are retained
+        # only by the editable-source fallback, where the XML still needs them.
+        lut = None
+        if not consolidated_asset:
+            lut = self._lut(project, package_root)
+            if lut:
+                assets.append(lut)
 
         captions, caption_assets = self._captions(project, package_root)
         assets.extend(caption_assets)
@@ -173,12 +217,46 @@ class InternalTimelineBuilder:
         )
         if caption_overlay_asset:
             assets.append(caption_overlay_asset)
-        overlay_assets, overlay_track, overlays = self._graphic_overlays(
-            project, package_root, sequence, duration_ms, video_clips,
-        )
-        assets.extend(overlay_assets)
+        if consolidated_asset:
+            revision = project.approved_timeline_revision or project.current_timeline_revision
+            overlays = list((revision.timeline if revision else {}).get('overlays') or [])
+            overlay_assets, overlay_track = [], None
+        else:
+            overlay_assets, overlay_track, overlays = self._graphic_overlays(
+                project, package_root, sequence, duration_ms, video_clips,
+            )
+            assets.extend(overlay_assets)
+        if consolidated_asset:
+            # Original takes were needed only while deriving the independent dialogue
+            # tracks. The post-production package uses the approved visual master in V1.
+            source_ids = {source.asset_id for source, _metadata in local_sources}
+            redundant_assets = [asset for asset in assets if asset['id'] in source_ids]
+            redundant_ids = {asset['id'] for asset in redundant_assets}
+            assets = [asset for asset in assets if asset['id'] not in redundant_ids]
+            assets.append(consolidated_asset)
+            for source, _metadata in local_sources:
+                local_source = package_root / source.relative_path
+                if local_source.exists():
+                    local_source.unlink()
+            self.package_source_files.clear()
         effects = self._effects(project, lut)
-        compatibility = self._compatibility(project, effects, bool(caption_overlay_asset))
+        compatibility = self._compatibility(
+            project, effects, bool(caption_overlay_asset), bool(consolidated_asset),
+        )
+        visual_tracks = (
+            [consolidated_track]
+            if consolidated_track else
+            [{'id': 'V1', 'name': 'Main Video', 'role': 'main', 'clips': video_clips}]
+        )
+        if caption_overlay_track:
+            caption_overlay_track = {**caption_overlay_track, 'id': 'V2'}
+            visual_tracks.append(caption_overlay_track)
+        visual_tracks.append({
+            'id': 'V3', 'name': 'Efeitos adicionais', 'role': 'effects', 'clips': [],
+        })
+        if not consolidated_asset and overlay_track and overlay_track.get('clips'):
+            visual_tracks.append({**overlay_track, 'id': 'V4'})
+        timeline_clips = consolidated_track['clips'] if consolidated_track else video_clips
         timeline = {
             'schema': 'connect.internal_timeline.v1',
             'project': {
@@ -189,20 +267,18 @@ class InternalTimelineBuilder:
             },
             'sequence': {**sequence, 'duration_ms': duration_ms},
             'assets': assets,
-            'video_tracks': [
-                {'id': 'V1', 'name': 'Main Video', 'role': 'main', 'clips': video_clips},
-                overlay_track,
-                {'id': 'V3', 'name': 'Titles', 'role': 'title', 'clips': []},
-                {'id': 'V4', 'name': 'Graphics', 'role': 'graphic', 'clips': []},
-            ] + ([caption_overlay_track] if caption_overlay_track else []),
-            'audio_tracks': audio_tracks,
-            'clips': video_clips,
+            'video_tracks': visual_tracks,
+            'audio_tracks': [track for track in audio_tracks if track.get('clips')],
+            'clips': timeline_clips,
             'captions': captions,
-            'overlay_tracks': [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': overlays}],
+            'overlay_tracks': (
+                [] if consolidated_asset
+                else [{'id': 'OVERLAYS', 'role': 'overlay', 'clips': overlays}]
+            ),
             'overlays': overlays,
             'transitions': [],
             'effects': effects,
-            'keyframes': [
+            'keyframes': [] if consolidated_asset else [
                 keyframe for clip in video_clips
                 for effect in clip.get('effects', [])
                 for keyframe in effect.get('keyframes', [])
@@ -220,6 +296,79 @@ class InternalTimelineBuilder:
             'compatibility': compatibility,
         }
         return timeline
+
+    def _consolidated_video(self, project, package_root, sequence, duration_ms):
+        """Packages the approved visual render without audio or burned captions.
+
+        ``ExternalMediaJob.original_video`` is replaced by the final-master stage after
+        cuts, framing, colour, B-roll and graphic overlays are approved. Subtitle
+        rendering happens afterwards into MediaAsset, so this file is the exact visual
+        intermediate required by a post-production export.
+        """
+        job = getattr(project, 'render_job', None)
+        field = getattr(job, 'original_video', None) if job else None
+        if not field or duration_ms <= 0:
+            return None, None
+        relative = 'Media/video_consolidado.mp4'
+        output = package_root / relative
+        media_input = media_input_factory(field).get_ffmpeg_input()
+        self.runner.run([
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(media_input),
+            '-map', '0:v:0', '-an', '-c:v', 'copy', '-movflags', '+faststart', str(output),
+        ])
+        metadata = self._probe(output)
+        asset = {
+            'id': 'video_consolidated', 'type': 'video', 'role': 'main',
+            'name': 'Vídeo consolidado', 'path': f'./{relative}', 'has_audio': False,
+            **metadata,
+        }
+        clip = {
+            'id': 'video_consolidated_clip', 'asset_id': asset['id'],
+            'name': asset['name'], 'timeline_in_ms': 0, 'timeline_out_ms': duration_ms,
+            'source_in_ms': 0, 'source_out_ms': duration_ms,
+            'audio_enabled': False, 'effects': [],
+        }
+        return asset, {
+            'id': 'V1', 'name': 'Vídeo consolidado (cortes e enquadramento aprovados)',
+            'role': 'main', 'clips': [clip], 'locked': True,
+        }
+
+    @staticmethod
+    def _align_sequence_rate(sequence, asset):
+        """Uses the final master cadence for the XML sequence when available."""
+        try:
+            fps = float(asset.get('fps') or 0)
+        except (TypeError, ValueError):
+            return
+        if fps <= 0:
+            return
+        sequence['fps'] = fps
+        sequence['timebase'] = max(1, round(fps))
+        sequence['ntsc'] = abs(fps - round(fps)) > 0.01
+
+    def _reference_mix(self, project, package_root, duration_ms):
+        """Exports the approved stereo mix for A/B reference, without activating it."""
+        job = getattr(project, 'render_job', None)
+        field = getattr(job, 'original_video', None) if job else None
+        if not field or duration_ms <= 0:
+            return None
+        media_input = media_input_factory(field).get_ffmpeg_input()
+        if not self._has_audio(media_input):
+            return None
+        relative = 'Audio/mix_referencia.wav'
+        output = package_root / relative
+        self.runner.run([
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(media_input),
+            '-map', '0:a:0', '-vn', '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2',
+            '-t', f'{duration_ms / 1000:.3f}', str(output),
+        ])
+        return {
+            'id': 'audio_reference_mix', 'type': 'audio', 'role': 'reference_mix',
+            'name': 'Mix de referência (não inserir junto com os stems)',
+            'path': f'./{relative}', 'bit_depth': 24, 'sample_rate': 48000,
+            'channels': 2, 'active_in_sequence': False,
+            **self._probe(output, audio_only=True),
+        }
 
     def _graphic_overlays(self, project, package_root, sequence, duration_ms, video_clips=None):
         from .overlays import OverlayAssetRenderer, OverlayTimelineService
@@ -343,9 +492,13 @@ class InternalTimelineBuilder:
             'pixel_aspect_ratio': 'square',
             'audio_sample_rate': 48000,
             'audio_channels': 2,
+            'audio_bit_depth': 24,
         }
 
     def _video_clips(self, project, sources, plan, sequence):
+        revision = getattr(project, 'approved_timeline_revision', None)
+        if revision and 'clips' in (revision.timeline or {}):
+            return self._approved_video_clips(revision, sources)
         plan = plan if plan.duration_ms > 1 or plan.cuts else SpeechEditPlan((), sum(
             max(1, int(metadata['duration_ms']) - source.trim_start_ms)
             for source, metadata in sources
@@ -408,35 +561,171 @@ class InternalTimelineBuilder:
                 decisions.append({'operation': 'auto_reframe', 'source_index': index, 'confidence': None})
         return clips, decisions, markers
 
-    def _dialogue_assets(self, sources, video_clips, package_root):
-        """Extrai A1 por take, deixando vídeo, diálogo e música independentes."""
-        assets, clips, asset_by_video = [], [], {}
-        for index, (source, _metadata) in enumerate(sources, start=1):
+    @staticmethod
+    def _approved_video_clips(revision, sources):
+        """Use the frozen delivery order for the independent dialogue stem.
+
+        The consolidated picture already has these moves/cuts baked in. Rebuilding
+        A1 from manifest order plus old removal decisions desynchronizes it from V1.
+        """
+        available = {source.asset_id: (source, metadata) for source, metadata in sources}
+        clips, markers, cursor = [], [], 0
+        for index, snapshot in enumerate(revision.timeline.get('clips') or [], start=1):
+            asset_id = snapshot.get('asset_id')
+            if asset_id not in available:
+                raise ExternalMediaError('Um vídeo da revisão aprovada não está disponível para exportar o áudio sincronizado.')
+            source, metadata = available[asset_id]
+            clip = deepcopy(snapshot)
+            start, end = int(clip['timeline_in_ms']), int(clip['timeline_out_ms'])
+            source_in, source_out = int(clip['source_in_ms']), int(clip['source_out_ms'])
+            if start != cursor or end <= start or source_in < source.trim_start_ms or source_out - source_in != end - start:
+                raise ExternalMediaError('A revisão aprovada contém um intervalo inválido para exportar o áudio sincronizado.')
+            clip.update({
+                'id': clip.get('id') or f'clip_{index}',
+                'name': source.block_name or source.original_name,
+                'role': source.role,
+                'source_duration_ms': int(metadata['duration_ms']),
+                'audio_enabled': False,
+                'skip_extra_processing': source.skip_extra_processing,
+            })
+            clips.append(clip)
+            markers.append({'name': clip['name'], 'time_ms': start, 'block_key': source.block_key})
+            cursor = end
+        if not clips:
+            raise ExternalMediaError('A revisão aprovada não possui trechos de vídeo para exportar.')
+        decisions = deepcopy((getattr(revision, 'edit_decision_set', {}) or {}).get('operations') or [])
+        return clips, decisions, markers
+
+    def _dialogue_assets(self, project, sources, video_clips, package_root):
+        """Builds one timeline-aligned, treated 48 kHz/24-bit dialogue stem."""
+        audio_sources = []
+        source_indexes = {}
+        for source, _metadata in sources:
             source_path = package_root / source.relative_path
             remote_field = self.package_source_files.get(source.relative_path)
             if remote_field:
                 source_path = media_input_factory(remote_field).get_ffmpeg_input()
             if not self._has_audio(source_path):
                 continue
-            safe_name = self._safe_name(Path(source.original_name).stem)
-            relative = f'Audio/dialogue_{index:03d}_{safe_name}.wav'
-            output = package_root / relative
-            self.runner.run([
-                settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source_path),
-                '-map', '0:a:0', '-vn', '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '2', str(output),
-            ])
-            asset_id = f'{source.asset_id}_dialogue'
-            asset_by_video[source.asset_id] = asset_id
-            assets.append({
-                'id': asset_id, 'type': 'audio', 'role': 'dialogue',
-                'name': f'{Path(source.original_name).stem} — diálogo',
-                'path': f'./{relative}', **self._probe(output, audio_only=True),
-            })
-        for video_clip in video_clips:
-            asset_id = asset_by_video.get(video_clip['asset_id'])
-            if asset_id:
-                clips.append({**video_clip, 'asset_id': asset_id, 'audio_enabled': True})
-        return assets, clips
+            source_indexes[source.asset_id] = len(audio_sources)
+            audio_sources.append(source_path)
+        selected_clips = [clip for clip in video_clips if clip['asset_id'] in source_indexes]
+        if not selected_clips:
+            return [], []
+        duration_ms = max(clip['timeline_out_ms'] for clip in video_clips)
+
+        workdir = package_root.parent
+        raw_path = workdir / 'premiere_dialogue_raw.wav'
+        command = [settings.FFMPEG_BINARY, '-y']
+        for source_path in audio_sources:
+            command.extend(['-i', FFmpegRunner.input_arg(source_path)])
+        filters = []
+        labels = []
+        for index, clip in enumerate(video_clips):
+            clip_duration_s = (clip['timeline_out_ms'] - clip['timeline_in_ms']) / 1000
+            label = f'dialogue_{index}'
+            source_index = source_indexes.get(clip['asset_id'])
+            if source_index is None:
+                # Silent intros/outros still occupy time. Dropping them would
+                # shift subsequent speech and shorten A1 relative to V1.
+                chain = 'anullsrc=r=48000:cl=stereo,'
+            else:
+                start_s = clip['source_in_ms'] / 1000
+                end_s = clip['source_out_ms'] / 1000
+                chain = (
+                    f'[{source_index}:a:0]atrim=start={start_s:.3f}:end={end_s:.3f},'
+                    'asetpts=PTS-STARTPTS,aresample=48000,'
+                    'aformat=channel_layouts=stereo,'
+                )
+            # Audio streams may end before their video stream. Pad each clip
+            # before concatenation so later dialogue retains its timeline offset.
+            filters.append(
+                f'{chain}apad=whole_dur={clip_duration_s:.3f},'
+                f'atrim=duration={clip_duration_s:.3f},asetpts=PTS-STARTPTS[{label}]'
+            )
+            labels.append(f'[{label}]')
+        filters.append(
+            f'{"".join(labels)}concat=n={len(labels)}:v=0:a=1,aresample=48000[dialogue]'
+        )
+        command.extend([
+            '-filter_complex', ';'.join(filters), '-map', '[dialogue]',
+            '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2', str(raw_path),
+        ])
+        self.runner.run(command)
+
+        processed_path = raw_path
+        version = project.template_version
+        decisions = self._noise_decisions(project)
+        if version.audio_noise_cleanup_enabled and decisions:
+            cleanup_result = AudioCleanupService(self.runner).apply(
+                processed_path, workdir / 'premiere_dialogue_noise.m4a', decisions,
+                settings_=NoiseCleanupSettings.from_config(version.audio_noise_cleanup_config),
+            )
+            processed_path = cleanup_result.path
+        if version.dialogue_processing_enabled:
+            track = (
+                project.render_job.subtitle_tracks.filter(is_source=True).prefetch_related('cues').first()
+                if getattr(project, 'render_job_id', None) else None
+            )
+            blocks = group_speech_blocks(
+                [(cue.start_ms, cue.end_ms) for cue in track.cues.all()] if track else [],
+                gap_threshold_ms=DuckingSettings.from_config(
+                    version.audio_mixing_config,
+                ).speech_gap_hold_ms,
+            )
+            result = DialogueProcessor(self.runner).process(
+                processed_path, workdir / 'premiere_dialogue_processed.m4a',
+                duration_ms=duration_ms,
+                speech_blocks=blocks,
+                protected_ranges=[],
+                settings_=DialogueSettings.from_config(version.dialogue_processing_config),
+            )
+            processed_path = result.path
+
+        relative = 'Audio/voz.wav'
+        output = package_root / relative
+        self.runner.run([
+            settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(processed_path),
+            '-map', '0:a:0', '-vn', '-af',
+            f'apad=whole_dur={duration_ms / 1000:.3f},atrim=duration={duration_ms / 1000:.3f}',
+            '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2', str(output),
+        ])
+        asset = {
+            'id': 'audio_dialogue', 'type': 'audio', 'role': 'dialogue',
+            'name': 'Voz tratada', 'path': f'./{relative}', 'bit_depth': 24,
+            'sample_rate': 48000, 'channels': 2,
+            **self._probe(output, audio_only=True),
+        }
+        clip = {
+            'id': 'dialogue_stem', 'asset_id': asset['id'], 'name': asset['name'],
+            'timeline_in_ms': 0, 'timeline_out_ms': duration_ms,
+            'source_in_ms': 0, 'source_out_ms': duration_ms, 'audio_enabled': True,
+        }
+        return [asset], [clip]
+
+    @staticmethod
+    def _noise_decisions(project):
+        revision = (
+            getattr(project, 'approved_timeline_revision', None)
+            or getattr(project, 'current_timeline_revision', None)
+        )
+        stored = []
+        if revision:
+            stored = [
+                {
+                    'start_ms': item.get('source_in_ms'),
+                    'end_ms': item.get('source_out_ms'),
+                    **(item.get('metadata') or {}),
+                    'enabled': item.get('enabled', True),
+                    'confidence': item.get('confidence'),
+                    'label': (item.get('metadata') or {}).get('label') or item.get('reason'),
+                }
+                for item in revision.edit_decision_set.get('operations') or []
+                if item.get('type') == 'audio_noise_reduction'
+            ]
+        if not stored:
+            stored = (project.configuration or {}).get('noise_reduction_decisions') or []
+        return [NoiseReductionDecision.from_dict(item) for item in stored if item.get('enabled')]
 
     @staticmethod
     def _subtract_cuts(start, end, cuts):
@@ -545,51 +834,124 @@ class InternalTimelineBuilder:
 
     def _music(self, project, package_root, duration_ms):
         version = project.template_version
-        track = version.background_music
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        revision_timeline = (revision.timeline if revision else {}) or {}
+        revision_mix = dict(revision_timeline.get('audio_mix') or {})
+        revision_ducking = ducking_options(revision_mix)
+        override_id = revision_timeline.get('music_override_track_id')
+        override = None
+        if override_id:
+            override = BackgroundMusicTrack.objects.filter(
+                pk=override_id,
+            ).exclude(audio_file='').first()
+        # A selection in the editor revision overrides the template's default.
+        # Fall back gracefully if a legacy revision references a removed track.
+        track = override or version.background_music
         # The selected track is the source of truth. Older versions may not have a
         # persisted music plugin even though the platform render already uses it.
         field = track.audio_file if track and track.audio_file else version.music_file
         if not field:
             return None, None
-        suffix = Path(field.name).suffix.lower() or '.wav'
         name = self._safe_name(track.name if track else Path(field.name).stem)
-        relative = f'Audio/music_{name}{suffix}'
-        local = package_root / relative
-        self._copy_field(field, local)
-        metadata = self._probe(local, audio_only=True)
-        asset = {'id': 'audio_music', 'type': 'audio', 'role': 'music', 'name': name, 'path': f'./{relative}', **metadata}
-        source_duration = max(1, int(metadata['duration_ms']))
-        clips, cursor, index = [], 0, 0
-        while cursor < duration_ms:
-            index += 1
-            used = min(source_duration, duration_ms - cursor)
-            clips.append({
-                'id': f'music_clip_{index}', 'asset_id': 'audio_music', 'name': name,
-                'timeline_in_ms': cursor, 'timeline_out_ms': cursor + used,
-                'source_in_ms': 0, 'source_out_ms': used,
-            })
-            cursor += used
+        suffix = Path(field.name).suffix.lower() or '.wav'
+        source = package_root.parent / f'premiere_music_source{suffix}'
+        self._copy_field(field, source)
         cues = []
         if project.render_job_id:
             track_source = project.render_job.subtitle_tracks.filter(is_source=True).prefetch_related('cues').first()
             cues = [(cue.start_ms, cue.end_ms) for cue in track_source.cues.all()] if track_source else []
-        ducking_settings = DuckingSettings.from_config(version.audio_mixing_config)
+        ducking_settings = DuckingSettings.from_config(revision_mix or version.audio_mixing_config)
         # Use the same speech-gap hold configured for the platform render. This keeps
         # the Premiere A2 automation from rising during short breaths or pauses.
         blocks = group_speech_blocks(cues, gap_threshold_ms=ducking_settings.speech_gap_hold_ms)
-        duck_db = float(
-            ((project.configuration or {}).get('audio_metrics') or {}).get('mixing', {}).get('duck_db')
-            or (version.audio_mixing_config or {}).get('base_duck_db', 8)
+        mixing_metrics = (
+            ((project.configuration or {}).get('audio_metrics') or {}).get('mixing', {})
         )
-        envelope = build_ducking_envelope(
-            blocks, duration_ms, 10 ** (-duck_db / 20), ducking_settings,
-        ) if version.audio_mixing_enabled and version.audio_ducking_enabled else [(0, 1), (duration_ms / 1000, 1)]
-        base_volume = max(0.0001, float(version.music_volume))
+        duck_db = float(
+            mixing_metrics.get('duck_db')
+            or ducking_settings.base_duck_db
+        )
+        duck_dbs = [float(value) for value in (mixing_metrics.get('duck_db_by_block') or [])]
+        if version.audio_mixing_enabled and bool(revision_ducking.get('enabled', version.audio_ducking_enabled)):
+            if blocks and len(duck_dbs) == len(blocks):
+                envelope = build_dynamic_ducking_envelope(
+                    blocks, duration_ms,
+                    [linear_gain_from_db(-value) for value in duck_dbs], ducking_settings,
+                )
+            else:
+                envelope = build_ducking_envelope(
+                    blocks, duration_ms, linear_gain_from_db(-duck_db), ducking_settings,
+                )
+        else:
+            envelope = [(0, 1), (duration_ms / 1000, 1)]
+        manual_keyframes = revision_mix.get('music_keyframes') or []
+        envelope = combine_gain_envelopes(
+            envelope, normalize_volume_keyframes(manual_keyframes, duration_ms),
+        )
+        base_volume = max(0.0001, float(revision_timeline.get(
+            'music_volume', revision_mix.get('music_volume', version.music_volume),
+        )))
         automation = [
             {'time_ms': round(time_s * 1000), 'gain_db': round(20 * math.log10(max(0.0001, gain * base_volume)), 3)}
             for time_s, gain in envelope
         ]
-        return asset, {'id': 'A2', 'name': 'Music', 'role': 'music', 'clips': clips, 'volume_automation': automation}
+        volume_expression = build_piecewise_expression([
+            (point['time_ms'] / 1000, 10 ** (point['gain_db'] / 20))
+            for point in automation
+        ])
+        duration_s = max(0.001, duration_ms / 1000)
+        relative = 'Audio/musica.wav'
+        output = package_root / relative
+        filters = [
+            f'asetpts=N/SR/TB,atrim=duration={duration_s:.3f},'
+            f"volume=eval=frame:volume='{volume_expression}'"
+        ]
+        spectral_windows = []
+        if (
+            version.audio_mixing_enabled
+            and bool(revision_ducking.get('spectral_enabled', getattr(version, 'audio_spectral_ducking_enabled', False)))
+            and blocks
+        ):
+            density = float(mixing_metrics.get('spectral_density') or 0)
+            spectral_windows = build_spectral_windows(
+                blocks, density * ducking_settings.spectral_max_cut_db,
+            )
+            for start_s, end_s in spectral_windows:
+                filters.append(
+                    f'equalizer=f={ducking_settings.spectral_center_hz}:width_type=o:'
+                    f'width={ducking_settings.spectral_bandwidth_octaves:.2f}:'
+                    f'g=-{density * ducking_settings.spectral_max_cut_db:.2f}:'
+                    f"enable='between(t\\,{start_s:.3f}\\,{end_s:.3f})'"
+                )
+        filters.append(
+            f'apad=whole_dur={duration_s:.3f},atrim=duration={duration_s:.3f}'
+        )
+        self.runner.run([
+            settings.FFMPEG_BINARY, '-y', '-stream_loop', '-1', '-i', str(source),
+            '-af', ','.join(filters),
+            '-vn', '-c:a', 'pcm_s24le', '-ar', '48000', '-ac', '2', str(output),
+        ])
+        metadata = self._probe(output, audio_only=True)
+        asset = {
+            'id': 'audio_music', 'type': 'audio', 'role': 'music', 'name': 'Música',
+            'path': f'./{relative}', 'bit_depth': 24, 'sample_rate': 48000,
+            'channels': 2, **metadata,
+        }
+        clip = {
+            'id': 'music_stem', 'asset_id': 'audio_music', 'name': name,
+            'timeline_in_ms': 0, 'timeline_out_ms': duration_ms,
+            'source_in_ms': 0, 'source_out_ms': duration_ms,
+        }
+        return asset, {
+            'id': 'A2', 'name': 'Música (ducking aplicado)', 'role': 'music',
+            'clips': [clip], 'volume_automation': [], 'processing': {
+                'ducking_baked': bool(version.audio_mixing_enabled and version.audio_ducking_enabled),
+                'dynamic_ducking_baked': bool(blocks and len(duck_dbs) == len(blocks)),
+                'spectral_ducking_baked': bool(spectral_windows),
+                'source_automation': automation,
+                'manual_keyframes': manual_keyframes,
+            },
+        }
 
     def _captions(self, project, package_root):
         if not project.render_job_id:
@@ -600,10 +962,13 @@ class InternalTimelineBuilder:
             srt_lines = []
             for cue in track.cues.all():
                 cues.append({'start_ms': cue.start_ms, 'end_ms': cue.end_ms, 'text': cue.text})
+                # Native Premiere captions should receive one text line per
+                # cue, regardless of manual/editor line breaks or HTML breaks.
+                srt_text = ' '.join(re.sub(r'<br\s*/?\s*>', ' ', cue.text, flags=re.IGNORECASE).split())
                 srt_lines.extend([
                     str(cue.cue_index),
                     f'{self._srt_time(cue.start_ms)} --> {self._srt_time(cue.end_ms)}',
-                    cue.text, '',
+                    srt_text, '',
                 ])
             relative = f'Captions/{track.language}.srt'
             (package_root / relative).write_text('\n'.join(srt_lines), encoding='utf-8')
@@ -620,9 +985,9 @@ class InternalTimelineBuilder:
 
         FCP 7 XML's legacy Text generator cannot represent the subtitle renderer's
         full design (background alpha/padding, shadow, outline and exact position).
-        The package therefore keeps editable title clips *and* includes this alpha
-        movie on a separate track. Editors can lock it for an exact visual result or
-        hide it when they want to rebuild the captions natively in Premiere.
+        The package includes this alpha movie on a separate track. Editors can lock
+        it for an exact visual result or hide it after importing the packaged SRT
+        as native captions in Premiere.
         """
         job = getattr(project, 'render_job', None)
         if not job or duration_ms <= 0:
@@ -673,14 +1038,18 @@ class InternalTimelineBuilder:
         try:
             self._render_alpha_caption_movie(ass_path, movie_path, sequence, duration_ms)
         except ExternalMediaError:
-            # The ProRes layer is a visual convenience. The SRT and editable title
-            # clips are already included, so a worker built without libass or
+            # The ProRes layer is a visual convenience. The SRT files are already
+            # included, so a worker built without libass or
             # prores_ks must not make the whole Premiere package unavailable.
             logger.warning(
                 'Não foi possível gerar a camada ProRes de legendas para a exportação do Premiere; '
-                'o pacote seguirá com SRT e títulos editáveis.',
+                'o pacote seguirá com SRTs para importação no Premiere.',
                 exc_info=True,
             )
+            # FFmpeg can leave a nearly complete ProRes file behind when the
+            # scratch disk fills. This layer is optional; remove it before the
+            # package metadata is written so the fallback can actually finish.
+            movie_path.unlink(missing_ok=True)
             return None, None
         metadata = self._probe(movie_path)
         asset_id = f'caption_overlay_{suffix}'
@@ -721,6 +1090,14 @@ class InternalTimelineBuilder:
         else:
             ass_filter = f"ass='{escaped_ass_path}':alpha=1"
         duration_seconds = max(0.04, duration_ms / 1000)
+        estimated_bytes = self._caption_overlay_estimated_bytes(sequence, duration_seconds)
+        capacity = DiskCapacityGuard.inspect(root=movie_path.parent)
+        if estimated_bytes > capacity.available_for_job_bytes:
+            raise ExternalMediaError(
+                'Espaço temporário insuficiente para a camada ProRes transparente de legendas. '
+                f'Necessário aproximadamente {estimated_bytes / 1024 ** 3:.1f} GB; '
+                f'disponível com margem {capacity.available_for_job_bytes / 1024 ** 3:.1f} GB.'
+            )
         # ProRes 4444 is broadly supported by Premiere and preserves the alpha channel.
         # The transparent source makes the exported layer sit naturally over V1.
         source = (
@@ -733,6 +1110,17 @@ class InternalTimelineBuilder:
             '-an', '-c:v', 'prores_ks', '-profile:v', '4', '-pix_fmt', 'yuva444p10le',
             '-movflags', '+faststart', str(movie_path),
         ])
+
+    @staticmethod
+    def _caption_overlay_estimated_bytes(sequence, duration_seconds):
+        """Estimate a transparent ProRes movie before it consumes the worker disk."""
+        width = max(1, int(sequence.get('width') or 1))
+        height = max(1, int(sequence.get('height') or 1))
+        fps = max(1.0, float(sequence.get('fps') or 30))
+        return math.ceil(
+            width * height * fps * duration_seconds
+            * float(settings.EXTERNAL_MEDIA_CAPTION_OVERLAY_ESTIMATED_BYTES_PER_PIXEL)
+        )
 
     def _lut(self, project, package_root):
         version = project.template_version
@@ -752,7 +1140,7 @@ class InternalTimelineBuilder:
             effects.append({
                 'type': 'dialogue_processing', 'portability': 'NON_PORTABLE',
                 'configuration': version.dialogue_processing_config,
-                'note': 'Áudio original incluído; reaplique EQ/compressão/de-esser no Premiere se desejado.',
+                'note': 'EQ, compressão, de-esser e nivelamento habilitados foram aplicados em A1.',
             })
         noise_decisions = (project.configuration or {}).get('noise_reduction_decisions') or []
         for decision in noise_decisions:
@@ -785,26 +1173,37 @@ class InternalTimelineBuilder:
         return effects
 
     @staticmethod
-    def _compatibility(project, effects, caption_overlay_available=True):
+    def _compatibility(
+        project, effects, caption_overlay_available=True, consolidated_video_available=False,
+    ):
         warnings = []
         if any(effect['type'] == 'lut' for effect in effects):
             warnings.append('O LUT foi incluído no pacote e documentado, mas pode precisar ser reaplicado no Premiere.')
         if any(effect['type'] == 'dialogue_processing' for effect in effects):
-            warnings.append('EQ, compressão e de-esser são metadados não portáveis; o áudio original permanece editável.')
+            warnings.append('EQ, compressão, de-esser e nivelamento foram aplicados ao stem de voz A1.')
         if any(effect['type'] == 'audio_noise_reduction' for effect in effects):
-            warnings.append('Reduções de ruído são metadados; o WAV de diálogo original permanece disponível para revisão no Premiere.')
+            warnings.append('As reduções de ruído aprovadas foram aplicadas ao stem de voz A1.')
         if project.template_version.audio_mastering_enabled:
             warnings.append('A masterização final não foi aplicada destrutivamente. Use “Masterizar Vídeo” após o Premiere.')
-        warnings.append('O reenquadramento automatico e aplicado como Basic Motion editavel no Premiere.')
+        if consolidated_video_available:
+            warnings.append(
+                'O reenquadramento aprovado está incorporado ao vídeo consolidado em V1; '
+                'não depende de Basic Motion do Premiere.'
+            )
+        else:
+            warnings.append(
+                'O master visual consolidado não estava disponível; a exportação usou os takes '
+                'editáveis com Basic Motion como compatibilidade legada.'
+            )
         if caption_overlay_available:
             warnings.append(
                 'As legendas têm uma camada ProRes 4444 transparente com o visual final; '
-                'os títulos e SRT permanecem editáveis em trilhas separadas.'
+                'importe o SRT do pacote no Premiere para criar uma faixa de legendas nativa.'
             )
         else:
             warnings.append(
                 'A camada ProRes de referência visual das legendas não pôde ser gerada neste worker; '
-                'use os títulos e SRT editáveis incluídos no pacote.'
+                'importe o SRT incluído no pacote no Premiere.'
             )
         return {'warnings': warnings, 'matrix': CAPABILITY_MATRIX}
 
@@ -830,6 +1229,34 @@ class InternalTimelineBuilder:
         metadata.update({'width': width, 'height': height, 'fps': float(numerator) / max(1, float(denominator))})
         self._probe_cache[cache_key] = dict(metadata)
         return metadata
+
+    def _probe_remote(self, media_input, initial_input):
+        """Probe S3 media again with a fresh presigned URL after a network reset."""
+        attempts = max(1, int(settings.EXTERNAL_MEDIA_S3_PROBE_RETRY_ATTEMPTS))
+        delay_seconds = max(0.0, float(settings.EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS))
+        remote_input = initial_input
+        for attempt in range(1, attempts + 1):
+            try:
+                return self._probe(remote_input)
+            except ExternalMediaError as exc:
+                if attempt >= attempts or not self._is_transient_remote_error(exc):
+                    raise
+                wait_seconds = delay_seconds * (2 ** (attempt - 1))
+                logger.warning(
+                    'premiere_s3_probe_retry storage_name=%s attempt=%s max_attempts=%s delay_seconds=%.1f',
+                    getattr(remote_input, 'storage_name', ''), attempt, attempts, wait_seconds,
+                )
+                if wait_seconds:
+                    time.sleep(wait_seconds)
+                remote_input = media_input.get_ffmpeg_input()
+
+    @staticmethod
+    def _is_transient_remote_error(exc):
+        detail = str(exc).lower()
+        return any(marker in detail for marker in (
+            'connection reset by peer', 'error in the pull function', 'io error',
+            'timed out', 'connection timed out', 'network is unreachable', 'connection refused',
+        ))
 
     def _has_audio(self, path):
         return bool(self.runner.run([

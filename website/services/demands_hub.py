@@ -227,17 +227,28 @@ def _task_offset_for_form(task, content):
     return decompress_assignment_offset(None)
 
 
-def _parse_assignment_date(value):
+def _parse_assignment_date(value, time_value=None):
+    """Converte a data e o horário do formulário em um prazo da etapa.
+
+    Mantém meio-dia como padrão para etapas antigas, criadas antes do campo de
+    horário existir.
+    """
     if not value:
         return None
+    selected_time = datetime.time(hour=12, minute=0)
+    if time_value:
+        try:
+            selected_time = datetime.time.fromisoformat(str(time_value))
+        except ValueError:
+            return None
     if isinstance(value, datetime.date) and not isinstance(value, datetime.datetime):
-        naive = datetime.datetime.combine(value, datetime.time(hour=12, minute=0))
+        naive = datetime.datetime.combine(value, selected_time)
         return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
     if isinstance(value, str):
         try:
             parts = value.split('-')
             d = datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
-            naive = datetime.datetime.combine(d, datetime.time(hour=12, minute=0))
+            naive = datetime.datetime.combine(d, selected_time)
             return timezone.make_aware(naive) if timezone.is_naive(naive) else naive
         except (ValueError, IndexError):
             return None
@@ -251,6 +262,7 @@ def parse_demand_assignments(post_data, prefix='demand', absolute_dates=False):
     due_days = post_data.getlist(f'{prefix}-assignment_due_days')
     due_relations = post_data.getlist(f'{prefix}-assignment_due_relation')
     due_dates = post_data.getlist(f'{prefix}-assignment_due_date')
+    due_times = post_data.getlist(f'{prefix}-assignment_due_time')
     descs = post_data.getlist(f'{prefix}-assignment_desc')
     ids = post_data.getlist(f'{prefix}-assignment_id')
     assignments = []
@@ -260,7 +272,10 @@ def parse_demand_assignments(post_data, prefix='demand', absolute_dates=False):
         days_raw = due_days[i].strip() if i < len(due_days) and due_days[i] is not None else ''
         relation = due_relations[i].strip() if i < len(due_relations) and due_relations[i] else 'before'
         offset = None if absolute_dates else compress_assignment_offset(days_raw, relation)
-        due_date = _parse_assignment_date(due_dates[i]) if absolute_dates and i < len(due_dates) else None
+        due_date = (
+            _parse_assignment_date(due_dates[i], due_times[i] if i < len(due_times) else None)
+            if absolute_dates and i < len(due_dates) else None
+        )
         desc = descs[i].strip() if i < len(descs) and descs[i] else ''
         task_id = ids[i].strip() if i < len(ids) and ids[i] else ''
         if not role and not user and offset is None and due_date is None and not desc:
@@ -438,6 +453,7 @@ def build_assignment_rows(content):
                 'due_days': offset_parts['due_days'],
                 'due_relation': offset_parts['due_relation'],
                 'due_date': t.due_date.date().isoformat() if t.due_date else '',
+                'due_time': t.due_date.strftime('%H:%M') if t.due_date else '',
                 'description': t.description or '',
                 'is_custom_role': t.title not in ASSIGNMENT_ROLE_PRESETS,
             })
@@ -537,6 +553,11 @@ def build_sidebar_items(request):
     """Retorna lista de meses com eventos e conteúdos livres."""
     params = request.GET
     kind = params.get('kind', 'all')
+    # A agenda deve focar no que ainda pede ação.  Os itens finalizados seguem
+    # acessíveis pelo filtro, sem poluir a primeira visita ao hub.
+    filter_status = params.get('status', 'open')
+    if filter_status not in ('open', 'completed', 'all'):
+        filter_status = 'open'
     q = params.get('q', '').strip()
     responsible_id = params.get('responsible', '')
     team_id = params.get('team', '')
@@ -553,14 +574,33 @@ def build_sidebar_items(request):
     )
 
     if q:
-        events_qs = events_qs.filter(Q(title__icontains=q) | Q(location__icontains=q))
+        # Eventos funcionam como agrupadores de demandas. Ao procurar uma
+        # demanda, etapa ou responsável, o evento correspondente também deve
+        # aparecer na lista lateral — e não somente quando o seu próprio
+        # título coincide com a busca.
+        events_qs = events_qs.filter(
+            Q(title__icontains=q)
+            | Q(description__icontains=q)
+            | Q(location__icontains=q)
+            | Q(event_type__name__icontains=q)
+            | Q(media_contents__title__icontains=q)
+            | Q(media_contents__description__icontains=q)
+            | Q(media_contents__responsible__email__icontains=q)
+            | Q(media_contents__responsible__member__name__icontains=q)
+            | Q(media_contents__tasks__title__icontains=q)
+            | Q(media_contents__tasks__description__icontains=q)
+            | Q(media_contents__tasks__assigned_to__email__icontains=q)
+            | Q(media_contents__tasks__assigned_to__member__name__icontains=q)
+        ).distinct()
     if event_type_id:
         events_qs = events_qs.filter(event_type_id=event_type_id)
     if period_from:
         events_qs = events_qs.filter(event_date__gte=period_from)
     if period_to:
         events_qs = events_qs.filter(event_date__lte=period_to)
-    if not period_from and not period_to:
+    # Sem uma busca, a lista inicial privilegia a agenda recente. Uma busca
+    # explícita, porém, deve alcançar o histórico inteiro.
+    if not q and not period_from and not period_to:
         events_qs = events_qs.filter(event_date__gte=today - datetime.timedelta(days=30))
 
     if responsible_id or team_id:
@@ -579,7 +619,17 @@ def build_sidebar_items(request):
         Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member'))
     )
     if q:
-        free_qs = free_qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
+        free_qs = free_qs.filter(
+            Q(title__icontains=q)
+            | Q(description__icontains=q)
+            | Q(sub_team__name__icontains=q)
+            | Q(responsible__email__icontains=q)
+            | Q(responsible__member__name__icontains=q)
+            | Q(tasks__title__icontains=q)
+            | Q(tasks__description__icontains=q)
+            | Q(tasks__assigned_to__email__icontains=q)
+            | Q(tasks__assigned_to__member__name__icontains=q)
+        ).distinct()
     if responsible_id:
         free_qs = free_qs.filter(responsible_id=responsible_id)
     if team_id:
@@ -592,12 +642,21 @@ def build_sidebar_items(request):
         free_qs = free_qs.filter(
             Q(publication_date__date__lte=period_to) | Q(due_date__date__lte=period_to)
         )
+    if filter_status == 'open':
+        free_qs = free_qs.exclude(status__in=DONE_STATUSES)
+    elif filter_status == 'completed':
+        free_qs = free_qs.filter(status__in=DONE_STATUSES)
     free_qs = free_qs.order_by('publication_date', 'due_date', '-created_at')
 
     months = OrderedDict()
 
     if kind in ('all', 'events'):
         for event in events_qs:
+            is_done = bool(event.content_count and event.done_count == event.content_count)
+            if filter_status == 'open' and is_done:
+                continue
+            if filter_status == 'completed' and not is_done:
+                continue
             key = _month_key(event.event_date)
             if key not in months:
                 months[key] = {'label': _month_label(key), 'items': []}
@@ -610,6 +669,9 @@ def build_sidebar_items(request):
                 'date_label': _date_label_short(event.event_date),
                 'content_count': event.content_count,
                 'done_count': event.done_count,
+                # An event is complete only when it has productions and each
+                # one reached one of the existing terminal content states.
+                'is_done': is_done,
                 'event_type': event.event_type.name if event.event_type_id else None,
                 'icon': 'calendar-alt',
             })
@@ -631,13 +693,24 @@ def build_sidebar_items(request):
                 'content_type': content.get_content_type_display(),
                 'icon': meta['icon'],
                 'status': content.status,
+                'is_done': content.status in DONE_STATUSES,
                 'responsible': _assignment_summary(content),
             })
 
     result = []
-    for key in sorted(months.keys()):
+    # Keep the active agenda at the top: current/upcoming months progress
+    # forward from now, then older months recede in reverse chronological order.
+    current_month = (today.year, today.month)
+    future_keys = sorted(key for key in months if key >= current_month)
+    past_keys = sorted((key for key in months if key < current_month), reverse=True)
+    for key in [*future_keys, *past_keys]:
         month = months[key]
-        month['items'].sort(key=lambda x: x['date'])
+        if key == current_month:
+            month['items'].sort(key=lambda x: (x['date'] < today, x['date']))
+        elif key < current_month:
+            month['items'].sort(key=lambda x: x['date'], reverse=True)
+        else:
+            month['items'].sort(key=lambda x: x['date'])
         result.append(month)
     return result
 
@@ -664,6 +737,10 @@ def build_event_detail(event_pk):
     attach_assignment_warnings(contents)
     total = len(contents)
     done = sum(1 for c in contents if c.status in DONE_STATUSES)
+    in_progress = sum(1 for c in contents if c.status == 'in_progress')
+    review = sum(1 for c in contents if c.status == 'review')
+    today = timezone.localdate()
+    overdue = sum(1 for c in contents if c.due_date and c.due_date.date() < today and c.status not in DONE_STATUSES)
     phases = group_contents_by_phase(contents, event.event_date)
 
     for _, phase_contents in phases:
@@ -679,6 +756,10 @@ def build_event_detail(event_pk):
         'phases': phases,
         'total': total,
         'done': done,
+        'pending': total - done,
+        'in_progress': in_progress,
+        'review': review,
+        'overdue': overdue,
         'progress': int(done / total * 100) if total else 0,
     }
 
@@ -687,8 +768,10 @@ def build_free_detail(content_pk):
     content = MediaContent.objects.select_related(
         'responsible__member', 'sub_team__ministry', 'assigned_role'
     ).prefetch_related(
-        Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member').order_by('sort_order', 'pk'))
-    ).get(pk=content_pk, event__isnull=True)
+        Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member').order_by('sort_order', 'pk')),
+        'attachments__uploaded_by__member',
+        'comments__author__member',
+    ).get(pk=content_pk)
     attach_assignment_warnings([content])
     content.type_meta = content_type_meta(content.content_type)
     content.responsible_name = _person_name(content.responsible)
@@ -757,7 +840,7 @@ def get_templates():
     )
 
 
-HUB_FILTER_KEYS = ('kind', 'q', 'responsible', 'team', 'event_type', 'period_from', 'period_to')
+HUB_FILTER_KEYS = ('kind', 'status', 'q', 'responsible', 'team', 'event_type', 'period_from', 'period_to')
 
 
 def build_hub_query(request, **extra):
@@ -789,4 +872,9 @@ def content_hub_selected(content):
 
 def content_hub_url(content):
     from django.urls import reverse
-    return f"{reverse('media_content_list')}?selected={content_hub_selected(content)}"
+    # O hub deixou de usar o painel mestre-detalhe acionado por ``selected``.
+    # Use a rota de detalhe para que links vindos do calendário, alertas e
+    # ações pós-edição abram efetivamente a demanda correspondente.
+    if getattr(content, 'event_id', None):
+        return reverse('media_event_detail_page', args=[content.event_id])
+    return reverse('media_demand_detail_page', args=[content.pk])

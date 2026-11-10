@@ -1,0 +1,223 @@
+[
+  {
+    "name": "centered",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 4000
+    },
+    "right": {
+      "start_ms": 4000,
+      "end_ms": 8000,
+      "source_in_ms": 1000,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 2000
+      }
+    },
+    "source_duration_ms": 6000,
+    "expected": {
+      "start_ms": 3000,
+      "end_ms": 5000,
+      "duration_ms": 2000
+    }
+  },
+  {
+    "name": "no incoming head shifts after cut",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 4000
+    },
+    "right": {
+      "start_ms": 4000,
+      "end_ms": 8000,
+      "source_in_ms": 0,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 2000
+      }
+    },
+    "source_duration_ms": 6000,
+    "expected": {
+      "start_ms": 4000,
+      "end_ms": 6000,
+      "duration_ms": 2000
+    }
+  },
+  {
+    "name": "no outgoing tail shifts before cut",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 4000
+    },
+    "right": {
+      "start_ms": 4000,
+      "end_ms": 8000,
+      "source_in_ms": 2000,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 2000
+      }
+    },
+    "source_duration_ms": 4000,
+    "expected": {
+      "start_ms": 2000,
+      "end_ms": 4000,
+      "duration_ms": 2000
+    }
+  },
+  {
+    "name": "limited handles",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 4000,
+      "source_in_ms": 500
+    },
+    "right": {
+      "start_ms": 4000,
+      "end_ms": 8000,
+      "source_in_ms": 100,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 2000
+      }
+    },
+    "source_duration_ms": 4700,
+    "expected": {
+      "start_ms": 3900,
+      "end_ms": 4200,
+      "duration_ms": 300
+    }
+  },
+  {
+    "name": "no handles",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 4000
+    },
+    "right": {
+      "start_ms": 4000,
+      "end_ms": 8000,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 2000
+      }
+    },
+    "source_duration_ms": 4000,
+    "expected": null
+  },
+  {
+    "name": "gap suspends transition",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 4000
+    },
+    "right": {
+      "start_ms": 4100,
+      "end_ms": 8000,
+      "source_in_ms": 1000,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 2000
+      }
+    },
+    "source_duration_ms": 6000,
+    "expected": null
+  },
+  {
+    "name": "removed neighbour suspends transition",
+    "left": {
+      "track_id": 2,
+      "start_ms": 0,
+      "end_ms": 4000
+    },
+    "right": {
+      "start_ms": 4000,
+      "end_ms": 8000,
+      "source_in_ms": 1000,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 2000
+      }
+    },
+    "source_duration_ms": 6000,
+    "expected": null
+  },
+  {
+    "name": "zero duration",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 4000
+    },
+    "right": {
+      "start_ms": 4000,
+      "end_ms": 8000,
+      "source_in_ms": 1000,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 0
+      }
+    },
+    "source_duration_ms": 6000,
+    "expected": null
+  },
+  {
+    "name": "half clip limits neighbouring joins",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 1000
+    },
+    "right": {
+      "start_ms": 1000,
+      "end_ms": 2000,
+      "source_in_ms": 4000,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 10000
+      }
+    },
+    "source_duration_ms": 6000,
+    "expected": {
+      "start_ms": 500,
+      "end_ms": 1500,
+      "duration_ms": 1000
+    }
+  },
+  {
+    "name": "loop iterations are not original handles",
+    "left": {
+      "track_id": 1,
+      "start_ms": 0,
+      "end_ms": 4000
+    },
+    "right": {
+      "start_ms": 4000,
+      "end_ms": 8000,
+      "source_in_ms": 6000,
+      "audio_transition": {
+        "type": "CONSTANT_POWER",
+        "from_track_id": 1,
+        "duration_ms": 2000
+      }
+    },
+    "source_duration_ms": 4000,
+    "incoming_duration_ms": 5000,
+    "expected": null
+  }
+]

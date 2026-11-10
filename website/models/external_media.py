@@ -1,3 +1,4 @@
+import json
 import uuid
 from pathlib import Path
 
@@ -586,6 +587,7 @@ class GlossaryTerm(BaseModel):
 class MediaAsset(BaseModel):
     class Kind(models.TextChoices):
         VIDEO = 'VIDEO', 'Vídeo renderizado'
+        THUMBNAIL = 'THUMBNAIL', 'Miniatura do vídeo'
         SRT = 'SRT', 'Legenda SRT'
         VTT = 'VTT', 'Legenda VTT'
 
@@ -916,9 +918,11 @@ class MediaTemplateVersion(BaseModel):
     intro_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
+    intro_enabled = models.BooleanField(default=True, verbose_name='Usar vídeo de abertura')
     outro_video = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
+    outro_enabled = models.BooleanField(default=True, verbose_name='Usar vídeo de encerramento')
     lut_file = models.FileField(
         upload_to=external_media_template_path, storage=get_external_media_storage, blank=True,
     )
@@ -1085,6 +1089,8 @@ class ExternalMediaProject(BaseModel):
     )
     preview_dirty = models.BooleanField(default=False)
     final_render_outdated = models.BooleanField(default=False)
+    # Unlike revision numbers, this also increases when history moves backwards.
+    editorial_version = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         ordering = ['-created_at']
@@ -1193,6 +1199,16 @@ class ProjectBlockMedia(BaseModel):
     preview_status = models.CharField(max_length=16, choices=PreviewStatus.choices, default=PreviewStatus.PENDING)
     preview_error = models.CharField(max_length=255, blank=True)
 
+    @property
+    def trim_ranges_json(self):
+        """JSON pronto para ser usado com segurança nos atributos ``data-*``.
+
+        A representação padrão de uma lista no template usa aspas simples,
+        enquanto o editor no navegador precisa de JSON válido para restaurar
+        todos os trechos previamente salvos.
+        """
+        return json.dumps(self.trim_ranges or [], cls=DjangoJSONEncoder, separators=(',', ':'))
+
     class Meta:
         ordering = ['block__order', 'position', 'pk']
         constraints = [
@@ -1205,7 +1221,8 @@ class ProjectBlockMedia(BaseModel):
         verbose_name_plural = 'Vídeos dos blocos'
 
     def __str__(self):
-        return f'{self.project}: {(self.block or self.custom_block).name} #{self.position}'
+        owner = self.block or self.custom_block
+        return f'{self.project}: {owner.name if owner else "Vídeo principal"} #{self.position}'
 
 
 class ProjectBrollAsset(BaseModel):
@@ -1259,8 +1276,9 @@ class ProjectBrollAsset(BaseModel):
                 check=(
                     models.Q(block__isnull=False, custom_block__isnull=True)
                     | models.Q(block__isnull=True, custom_block__isnull=False)
+                    | models.Q(block__isnull=True, custom_block__isnull=True)
                 ),
-                name='broll_asset_exactly_one_block',
+                name='broll_asset_at_most_one_block',
             ),
         ]
         verbose_name = 'Asset de B-roll'
@@ -1348,6 +1366,23 @@ class ProjectSourceProxy(BaseModel):
         ]
 
 
+class ProjectPreviewArtifact(models.Model):
+    """Disposable derived media; editorial decisions stay in timeline revisions."""
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='preview_artifacts')
+    key = models.CharField(max_length=64)
+    kind = models.CharField(max_length=24)
+    status = models.CharField(max_length=16, default='PENDING')
+    source = models.JSONField(default=dict)
+    options = models.JSONField(default=dict)
+    file = models.FileField(upload_to='external_media/preview_artifacts/', storage=get_external_media_storage, max_length=500, blank=True)
+    lease = models.CharField(max_length=32, blank=True)
+    requested_at = models.DateTimeField()
+    error = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['project', 'key'], name='unique_project_preview_artifact')]
+
+
 class TimelineRevision(BaseModel):
     project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='timeline_revisions')
     revision = models.PositiveIntegerField()
@@ -1386,6 +1421,20 @@ class PreviewSession(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=['project', 'member'], name='unique_project_member_preview_session'),
         ]
+
+
+class PreviewOperation(models.Model):
+    """A committed HTTP operation, used to replay an uncertain save safely."""
+
+    project = models.ForeignKey(ExternalMediaProject, on_delete=models.CASCADE, related_name='preview_operations')
+    member = models.ForeignKey(Member, on_delete=models.CASCADE)
+    operation_id = models.UUIDField()
+    request_hash = models.CharField(max_length=64)
+    response = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['project', 'operation_id'], name='unique_preview_operation')]
 
 
 class TimelineMutation(BaseModel):

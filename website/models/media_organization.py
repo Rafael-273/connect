@@ -248,6 +248,10 @@ class MediaResource(BaseModel):
         related_name='media_resources_access',
         verbose_name='Quem possui acesso',
     )
+    access_teams = models.ManyToManyField(
+        'MediaSubTeam', blank=True, related_name='accessible_resources',
+        verbose_name='Equipes com acesso',
+    )
     subscription_type = models.CharField(
         max_length=20,
         choices=SUBSCRIPTION_TYPE_CHOICES,

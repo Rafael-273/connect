@@ -83,6 +83,10 @@ class StoredMediaFile:
     def open(self, mode='rb'):
         return self.storage.open(self.name, mode)
 
+    @property
+    def path(self):
+        return self.storage.path(self.name)
+
 
 class LocalMediaInput(MediaInput):
     mode = 'LOCAL'

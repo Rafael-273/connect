@@ -12,16 +12,18 @@ from PIL import Image, UnidentifiedImageError
 from django.conf import settings
 from django.contrib import messages
 from django.db import IntegrityError, transaction
-from django.db.models import F, Max, Q, Sum
+from django.db.models import F, Max, Prefetch, Q, Sum
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django.utils.datastructures import MultiValueDict
 from django.utils.http import content_disposition_header
 from django.views import View
 from safedelete.models import HARD_DELETE
 
+from ..external_media.s3_upload import S3DirectUpload, UploadError
 from ..external_media.tasks import (
     analyze_video_mastering,
     create_project_broll_preview,
@@ -64,7 +66,9 @@ from ..models.external_media import (
     OverlayPreset,
     SubtitleCue,
     SubtitleReviewSession,
+    SubtitleSuggestion,
     SubtitleTrack,
+    TimelineMutation,
     VideoMasteringJob,
     external_media_broll_asset_path,
     external_media_project_upload_path,
@@ -73,7 +77,9 @@ from ..models.external_media import (
 from ..external_media.services import MusicService, ProjectService
 from tempfile import TemporaryDirectory
 
+from ..external_media.editor_persistence import PreviewMutationMixin
 from ..external_media.audio_noise import AudioCleanupService, NoiseReductionDecision, ReductionMode
+from ..external_media.audio_mixing import ducking_options, resolved_ducking_config
 from ..external_media.preview import (
     PreviewCompositionService, ProjectProxyService, REVIEW_MASTER_PROXY_ID, TimelineRevisionService,
 )
@@ -134,6 +140,9 @@ def _file_chunks(file_handle, start, length, block_size=8192):
 
 def protected_file_response(request, field_file, force_stream=False):
     """Serve locally (with HTTP Range for video seek) or redirect to a signed S3 URL."""
+    # Web Audio fetches must stay on the authenticated app origin. A signed
+    # storage redirect may play in <audio> while fetch/decode fails on CORS.
+    force_stream = force_stream or request.GET.get('waveform') == '1'
     filename = Path(field_file.name).name
     preview = request.GET.get('preview') == '1'
     content_type = mimetypes.guess_type(field_file.name)[0] or 'application/octet-stream'
@@ -147,6 +156,9 @@ def protected_file_response(request, field_file, force_stream=False):
         except TypeError:
             url = field_file.url
         return redirect(url)
+    if settings.USE_S3 and force_stream:
+        from ..external_media.streaming import s3_stream_response
+        return s3_stream_response(request, field_file, content_type, preview=preview)
     try:
         file_handle = field_file.open('rb')
     except FileNotFoundError as exc:
@@ -208,6 +220,22 @@ def protected_file_response(request, field_file, force_stream=False):
     return response
 
 
+def cached_preview_response(request, project, kind, field, *, version='', options=None):
+    from ..external_media.preview_artifacts import PreviewArtifactService
+    artifact = PreviewArtifactService.request(project, kind, field, version=version, options=options)
+    if artifact.status != 'READY' or not artifact.file:
+        return PreviewArtifactService.pending_response(artifact)
+    if request.GET.get('cache_status') == '1':
+        return JsonResponse({'status': 'READY', 'key': artifact.key}, headers={'Cache-Control': 'no-store'})
+    request.GET = request.GET.copy()
+    request.GET['preview'] = '1'
+    response = protected_file_response(request, artifact.file)
+    # This URL can outlive a replaced source or changed noise settings. The
+    # underlying cached file is immutable, but revalidate the logical URL.
+    response['Cache-Control'] = 'private, no-cache'
+    return response
+
+
 class ExternalMediaContextMixin:
     def media_context(self, **kwargs):
         from website.models.ministry_membership import MinistryMembership
@@ -237,6 +265,17 @@ class ExternalMediaDashboardView(ExternalMediaRequiredMixin, ExternalMediaContex
 
         projects = ExternalMediaProject.objects.select_related(
             'created_by', 'template_version__template', 'render_job',
+        ).prefetch_related(
+            Prefetch(
+                'render_job__assets',
+                queryset=MediaAsset.objects.filter(kind=MediaAsset.Kind.THUMBNAIL),
+                to_attr='dashboard_thumbnails',
+            ),
+            Prefetch(
+                'block_media',
+                queryset=ProjectBlockMedia.objects.exclude(thumbnail='').order_by('block__order', 'position', 'pk'),
+                to_attr='dashboard_media',
+            ),
         ).order_by('-created_at')
 
         if query:
@@ -261,6 +300,7 @@ class ExternalMediaDashboardView(ExternalMediaRequiredMixin, ExternalMediaContex
         )
 
         return render(request, 'member/external_media/dashboard.html', self.media_context(
+            create_form=ExternalMediaProjectForm(),
             query=query,
             status=status,
             total=projects.count(),
@@ -273,9 +313,6 @@ class ExternalMediaDashboardView(ExternalMediaRequiredMixin, ExternalMediaContex
             ]).count(),
             finished_count=all_projects.filter(status=ExternalMediaProject.Status.FINISHED).count(),
             total_downloads=summary['total'] or 0,
-            mastering_jobs=VideoMasteringJob.objects.select_related(
-                'created_by', 'mastering_profile',
-            ).order_by('-created_at')[:50],
         ))
 
 
@@ -416,7 +453,7 @@ class ExternalMediaCreateView(ExternalMediaRequiredMixin, ExternalMediaContextMi
         project.created_by = self.member
         project.configuration = dict(project.template_version.default_settings)
         project.save()
-        messages.success(request, 'Projeto criado. Agora envie os vídeos de cada bloco.')
+        messages.success(request, 'Projeto criado com sucesso.')
         return redirect('external_media_project_detail', public_id=project.public_id)
 
 
@@ -473,12 +510,22 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
         media_by_block = {}
         broll_by_block = {}
         missing_media_by_block = {}
+        direct_media = []
+        direct_brolls = []
         for item in project.block_media.all():
             if ProjectService.file_exists(item.file):
+                if not item.block_id and not item.custom_block_id:
+                    direct_media.append(item)
+                    continue
                 media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
             else:
+                if not item.block_id and not item.custom_block_id:
+                    continue
                 missing_media_by_block.setdefault(('custom', item.custom_block_id) if item.custom_block_id else ('template', item.block_id), []).append(item)
         for asset in project.broll_assets.filter(is_enabled=True):
+            if not asset.block_id and not asset.custom_block_id:
+                direct_brolls.append(asset)
+                continue
             key = ('custom', asset.custom_block_id) if asset.custom_block_id else ('template', asset.block_id)
             broll_by_block.setdefault(key, []).append(asset)
         blocks = [
@@ -513,6 +560,10 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
                 media for media in block_data['media']
                 if media.camera_role == ProjectBlockMedia.CameraRole.SECONDARY
             ]
+        # Blocos com vídeo padrão já fazem parte da edição automaticamente. Eles
+        # não exigem nenhuma ação de quem está criando o projeto e, portanto,
+        # não devem competir visualmente com os campos de upload.
+        blocks = [block for block in blocks if not block['has_default_video']]
         block_by_key = {
             f"{'c' if item['is_custom'] else 't'}-{item['definition'].pk}": item
             for item in blocks
@@ -526,25 +577,26 @@ class ExternalMediaProjectDetailView(ExternalMediaRequiredMixin, ExternalMediaCo
         return render(request, 'member/external_media/project_detail.html', self.media_context(
             project=project,
             blocks=blocks,
+            has_template_scenes=project.template_version.blocks.exists(),
+            direct_media=direct_media,
+            direct_brolls=direct_brolls,
             plugins=project.template_version.plugins.all(),
-            steps=project.pipeline_steps.all(),
+            steps=project.pipeline_steps.order_by('order', 'pk'),
             upload_form=ProjectBlockMediaForm(),
             custom_block_form=ProjectCustomBlockForm(),
             settings_form=ExternalMediaProjectSettingsForm(project=project),
             assets=project.render_job.assets.all() if project.render_job_id else [],
+            project_header_thumbnail=(
+                project.render_job.assets.filter(kind=MediaAsset.Kind.THUMBNAIL).first()
+                if project.render_job_id else None
+            ),
             validation_errors=ProjectService.validate_uploads(project),
             can_retry_render=self._can_retry_project_render(project),
             restore_processed_result=restore_job,
             use_s3=settings.USE_S3,
             broll_config=BrollTimelineService.configuration(project),
-            project_exports=project.exports.order_by('-created_at')[:10],
+            project_exports=project.exports.order_by('-created_at')[:1],
             processing_history=project.processing_history.select_related('preset').prefetch_related('assets'),
-            pending_subtitle_reviews=project.subtitle_review_sessions.filter(
-                status__in=[
-                    SubtitleReviewSession.Status.SUBMITTED,
-                    SubtitleReviewSession.Status.UNDER_REVIEW,
-                ],
-            ).count(),
         ))
 
 
@@ -651,10 +703,11 @@ class ExternalMediaProjectReopenReviewView(ExternalMediaRequiredMixin, View):
             project.error_message = ''
             project.finished_at = None
             project.current_timeline_revision = revision
+            project.editorial_version = F('editorial_version') + 1
             project.configuration = configuration
             project.save(update_fields=[
                 'status', 'progress', 'current_step', 'error_message', 'finished_at',
-                'current_timeline_revision', 'configuration', 'update_at',
+                'current_timeline_revision', 'editorial_version', 'configuration', 'update_at',
             ])
             project.preview_sessions.update(current_revision=revision, undo_stack=[], redo_stack=[])
         messages.success(request, 'Edição reaberta. O resultado anterior continua preservado até uma nova aprovação.')
@@ -708,17 +761,35 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
         )
 
         files = []
+        storages = {}
 
         def remember(field_file):
             if field_file and field_file.name:
                 files.append((field_file.storage, field_file.name))
+                storages[id(field_file.storage)] = field_file.storage
 
         for item in project.block_media.all():
             remember(item.file)
             remember(item.thumbnail)
+            remember(item.preview_file)
         for asset in project.broll_assets.all():
             remember(asset.file)
             remember(asset.preview_file)
+        for overlay in project.overlays.all():
+            remember(overlay.image_file)
+        for proxy in project.source_proxies.all():
+            remember(proxy.proxy_file)
+            thumbnail = (proxy.metadata or {}).get('timeline_thumbnail') or {}
+            if thumbnail.get('name'):
+                from ..external_media.media_input import StoredMediaFile
+                remember(StoredMediaFile(proxy.proxy_file.storage, thumbnail['name']))
+        for artifact in project.preview_artifacts.all():
+            remember(artifact.file)
+        for session in project.subtitle_review_sessions.all():
+            remember(session.preview_file)
+        for version in project.subtitle_video_versions.all():
+            for asset in version.assets.all():
+                remember(asset.file)
         for export in project.exports.all():
             remember(export.archive)
             remember(export.timeline_json)
@@ -733,6 +804,16 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
 
         project_name = project.name
         with transaction.atomic():
+            # Suggestions deliberately protect their cue.  Delete them before
+            # deleting jobs/tracks so the database collector cannot be blocked
+            # by a review suggestion that belongs to this same project.
+            for suggestion in SubtitleSuggestion.objects.filter(session__project=project):
+                suggestion.delete(force_policy=HARD_DELETE)
+            # Timeline mutations protect their source/target revisions.  They
+            # are project-scoped audit records and must go before the project's
+            # revisions are collected for hard deletion.
+            for mutation in TimelineMutation.objects.filter(project=project):
+                mutation.delete(force_policy=HARD_DELETE)
             # A remoção é feita antes do projeto porque o job atual é referenciado por
             # `render_job`; o banco então limpa esse ponteiro sem deixar histórico órfão.
             for job in processing_jobs:
@@ -740,7 +821,8 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
             project.delete(force_policy=HARD_DELETE)
 
             def remove_files():
-                for storage, name in files:
+                for storage, name in set((id(storage), name) for storage, name in files):
+                    storage = storages[storage]
                     try:
                         storage.delete(name)
                     except Exception:
@@ -748,9 +830,31 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
                         # não deve impedir a limpeza do projeto.
                         continue
 
+                # Direct browser uploads can leave an object in S3 before a
+                # database row is created.  Every project-owned object lives
+                # under this isolated prefix, so remove it as a final sweep.
+                prefix = f'external_media/projects/{project.public_id}'
+                for storage in list(storages.values()) or [get_external_media_storage()]:
+                    self._delete_storage_prefix(storage, prefix)
+
             transaction.on_commit(remove_files)
         messages.success(request, f'Projeto “{project_name}” excluído.')
         return redirect('external_media_dashboard')
+
+    @classmethod
+    def _delete_storage_prefix(cls, storage, prefix):
+        """Best-effort recursive cleanup for all project-owned storage objects."""
+        try:
+            directories, filenames = storage.listdir(prefix)
+        except Exception:
+            return
+        for filename in filenames:
+            try:
+                storage.delete(f'{prefix}/{filename}')
+            except Exception:
+                continue
+        for directory in directories:
+            cls._delete_storage_prefix(storage, f'{prefix}/{directory}')
 
 
 class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
@@ -866,6 +970,82 @@ class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
         return redirect('external_media_project_detail', public_id=public_id)
 
 
+class ExternalMediaProjectDirectUploadView(ExternalMediaProjectUploadView):
+    """Upload for templates intentionally created without project scenes."""
+
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        if project.status != ExternalMediaProject.Status.DRAFT:
+            return self._error_response(request, public_id, 'Os uploads ficam bloqueados após iniciar o pipeline.')
+        if project.template_version.blocks.exists():
+            return self._error_response(request, public_id, 'Este template organiza os vídeos por cenas.')
+        uploads = request.FILES.getlist('file')
+        if not uploads:
+            return self._error_response(request, public_id, 'Escolha pelo menos um vídeo para enviar.')
+        forms = []
+        for upload in uploads:
+            form = ProjectBlockMediaForm(request.POST, MultiValueDict({'file': [upload]}))
+            if not form.is_valid():
+                return self._error_response(request, public_id, 'Não foi possível enviar o vídeo: ' + ' '.join(
+                    error for errors in form.errors.values() for error in errors
+                ))
+            forms.append(form)
+        requested_camera_role = forms[0].cleaned_data.get('camera_role') or ProjectBlockMedia.CameraRole.PRIMARY
+        is_extra_camera = requested_camera_role == ProjectBlockMedia.CameraRole.SECONDARY
+        if is_extra_camera and len(forms) > 1:
+            return self._error_response(request, public_id, 'Envie uma câmera extra por vez para vinculá-la ao vídeo principal correto.')
+        direct_media = ProjectBlockMedia.all_objects.filter(
+            project=project, block__isnull=True, custom_block__isnull=True,
+        )
+        next_position = (direct_media.aggregate(value=Max('position'))['value'] or 0) + 1
+        if is_extra_camera:
+            try:
+                camera_position = int(request.POST.get('camera_position') or 0)
+            except (TypeError, ValueError):
+                camera_position = 0
+            primary_exists = direct_media.filter(
+                position=camera_position, camera_role=ProjectBlockMedia.CameraRole.PRIMARY,
+            ).exists()
+            if not primary_exists:
+                return self._error_response(request, public_id, 'Escolha o vídeo principal ao qual esta câmera pertence.')
+        created = []
+        with transaction.atomic():
+            for index, form in enumerate(forms):
+                item = form.save(commit=False)
+                item.project = project
+                if is_extra_camera:
+                    item.position = camera_position
+                    item.camera_role = ProjectBlockMedia.CameraRole.SECONDARY
+                    item.camera_key = f'camera-{get_random_string(12).lower()}'
+                    item.camera_order = (direct_media.filter(position=camera_position).aggregate(value=Max('camera_order'))['value'] or 0) + 1
+                    item.camera_label = (form.cleaned_data.get('camera_label') or '').strip() or 'Câmera extra'
+                else:
+                    item.position = next_position + index
+                    item.camera_role = ProjectBlockMedia.CameraRole.PRIMARY
+                    item.camera_key = 'primary'
+                    item.camera_order = 1
+                    item.camera_label = 'Vídeo principal'
+                item.camera_hint = form.cleaned_data.get('camera_hint') or ProjectBlockMedia.CameraHint.AUTO
+                item.original_filename = item.file.name
+                item.file_size = item.file.size
+                item.trim_start_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_start_seconds')) or 0
+                item.trim_end_ms = ProjectBlockMediaForm.seconds_to_ms(form.cleaned_data.get('trim_end_seconds'))
+                item.preview_status = ProjectBlockMedia.PreviewStatus.PENDING
+                item.save()
+                created.append(item)
+        for item in created:
+            self._enqueue_preview(item)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            payload = [{
+                'id': item.pk, 'name': item.original_filename, 'size': item.file_size,
+                'status_url': reverse('external_media_project_media_status', args=[project.public_id, item.pk]),
+                'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, item.pk]),
+            } for item in created]
+            return JsonResponse({'items': payload, **(payload[0] if len(payload) == 1 else {})})
+        messages.success(request, f'{len(created)} vídeo(s) adicionado(s) ao projeto.')
+        return redirect('external_media_project_detail', public_id=public_id)
+
+
 class ExternalMediaProjectSettingsView(ExternalMediaRequiredMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(
@@ -893,9 +1073,9 @@ class ExternalMediaProjectCustomBlockView(ExternalMediaRequiredMixin, View):
             if not custom_block.pk:
                 custom_block.position = (project.custom_blocks.aggregate(value=Max('position'))['value'] or 0) + 1
             custom_block.save()
-            messages.success(request, 'Bloco personalizado salvo.')
+            messages.success(request, 'Cena personalizada salva.')
         else:
-            messages.error(request, 'Informe um nome para o bloco personalizado.')
+            messages.error(request, 'Informe um nome para a cena personalizada.')
         return redirect('external_media_project_detail', public_id=public_id)
 
 
@@ -903,7 +1083,7 @@ class ExternalMediaProjectCustomBlockDeleteView(ExternalMediaRequiredMixin, View
     def post(self, request, public_id, block_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
         get_object_or_404(ProjectCustomBlock, pk=block_id, project=project).delete()
-        messages.success(request, 'Bloco personalizado removido.')
+        messages.success(request, 'Cena personalizada removida.')
         return redirect('external_media_project_detail', public_id=public_id)
 
 
@@ -911,12 +1091,28 @@ class ExternalMediaProjectCustomBlockReorderView(ExternalMediaRequiredMixin, Vie
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
         item_ids = request.POST.getlist('item_ids[]')
-        template_ids = {f't-{pk}' for pk in project.template_version.blocks.values_list('pk', flat=True)}
-        custom_ids = {f'c-{pk}' for pk in project.custom_blocks.values_list('pk', flat=True)}
-        expected = template_ids | custom_ids
-        if set(item_ids) != expected or len(item_ids) != len(expected):
+        template_blocks = list(project.template_version.blocks.all().order_by('order', 'pk'))
+        all_ids = [f't-{block.pk}' for block in template_blocks]
+        all_ids.extend(f'c-{pk}' for pk in project.custom_blocks.values_list('pk', flat=True))
+        expected = set(all_ids)
+        # Match the detail page: scenes with an available default video are hidden.
+        hidden_ids = {
+            f't-{block.pk}' for block in template_blocks
+            if ProjectService.file_exists(block.default_video)
+        }
+        submitted = set(item_ids)
+        if len(item_ids) != len(submitted) or submitted not in (expected, expected - hidden_ids):
             return JsonResponse({'detail': 'Ordem de blocos inválida.'}, status=400)
         configuration = dict(project.configuration or {})
+        if submitted != expected:
+            # Reorder visible scenes in their existing slots, keeping automatic
+            # scenes in place in the full sequence consumed by the renderer.
+            current_order = dict.fromkeys(
+                key for key in configuration.get('block_order', []) if key in expected
+            )
+            current_order.update(dict.fromkeys(all_ids))
+            visible_order = iter(item_ids)
+            item_ids = [key if key in hidden_ids else next(visible_order) for key in current_order]
         configuration['block_order'] = item_ids
         project.configuration = configuration
         project.save(update_fields=['configuration', 'update_at'])
@@ -953,30 +1149,75 @@ def _sign_upload_allocation(allocation: dict) -> str:
 
 
 def _verify_upload_allocation(allocation: dict, signature: str) -> bool:
-    return _hmac.compare_digest(_sign_upload_allocation(allocation), signature)
+    return (isinstance(allocation, dict) and isinstance(signature, str)
+            and re.fullmatch(r'[0-9a-f]{64}', signature) is not None
+            and _hmac.compare_digest(_sign_upload_allocation(allocation), signature))
 
 
-def _generate_presigned_put(storage_key: str, content_type: str) -> str:
-    """Return a presigned PUT URL for the given storage key.
+def _prepare_s3_upload(storage_key, size, content_type):
+    return S3DirectUpload(get_external_media_storage()).begin(storage_key, size, content_type)
 
-    ContentType is intentionally omitted from the signed params so the browser
-    does not need to send an exact header match (avoids video/quicktime vs
-    video/mp4 mismatches on .mov files).
-    """
-    storage = get_external_media_storage()
-    location = str(getattr(storage, 'location', '') or '').strip('/')
-    s3_key = storage_key.lstrip('/')
-    if location and not s3_key.startswith(f'{location}/'):
-        s3_key = f'{location}/{s3_key}'
-    return storage.connection.meta.client.generate_presigned_url(
-        'put_object',
-        Params={'Bucket': storage.bucket_name, 'Key': s3_key},
-        ExpiresIn=3600,
-    )
+
+def _s3_upload_response(project, allocation, upload, content_type, *, broll=False):
+    allocation['storage_key'] = upload['storage_key']
+    if upload.get('multipart'):
+        allocation['multipart'] = upload['multipart']
+    return JsonResponse({
+        'upload_mode': 'multipart' if upload.get('multipart') else 'single',
+        'upload_url': upload.get('upload_url'),
+        'part_size': upload.get('multipart', {}).get('part_size'),
+        'multipart_url': reverse('external_media_project_upload_multipart', args=[project.public_id]),
+        'content_type': content_type,
+        'complete_url': reverse('external_media_project_broll_upload_complete' if broll else 'external_media_project_upload_complete', args=[project.public_id]),
+        'allocation': allocation, 'allocation_sig': _sign_upload_allocation(allocation),
+    })
+
+
+def _complete_s3_upload(allocation):
+    if not allocation.get('multipart'):
+        return None
+    try:
+        S3DirectUpload(get_external_media_storage()).complete(allocation)
+    except UploadError as error:
+        return JsonResponse({'detail': str(error)}, status=400)
+    except Exception:
+        return JsonResponse({'detail': 'Não foi possível concluir o arquivo no S3. Tente novamente.'}, status=502)
+    return None
+
+
+class ExternalMediaProjectUploadMultipartView(ExternalMediaRequiredMixin, View):
+    def post(self, request, public_id):
+        if not settings.USE_S3:
+            return JsonResponse({'detail': 'Upload direto ao S3 requer USE_S3=TRUE.'}, status=400)
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        try:
+            data = json.loads(request.body)
+            allocation, signature = data['allocation'], data['allocation_sig']
+            if not isinstance(allocation, dict) or not isinstance(signature, str):
+                raise ValueError
+        except (TypeError, ValueError, KeyError):
+            return JsonResponse({'detail': 'Dados de upload inválidos.'}, status=400)
+        if not _verify_upload_allocation(allocation, signature) or allocation.get('project_id') != str(project.public_id):
+            return JsonResponse({'detail': 'Assinatura de upload inválida.'}, status=400)
+        action = data.get('action')
+        if action != 'abort' and project.status != ExternalMediaProject.Status.DRAFT:
+            return JsonResponse({'detail': 'Os uploads ficam bloqueados após iniciar o pipeline.'}, status=400)
+        service = S3DirectUpload(get_external_media_storage())
+        try:
+            if action == 'part':
+                return JsonResponse({'upload_url': service.part_url(allocation, data.get('part_number'))})
+            if action == 'abort':
+                service.abort(allocation)
+                return JsonResponse({'aborted': True})
+            return JsonResponse({'detail': 'Operação de upload inválida.'}, status=400)
+        except UploadError as error:
+            return JsonResponse({'detail': str(error)}, status=400)
+        except Exception:
+            return JsonResponse({'detail': 'Não foi possível preparar o envio desta parte ao S3. Tente novamente.'}, status=502)
 
 
 class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
-    """Allocate position/camera, sign the allocation and return a presigned S3 PUT URL.
+    """Allocate position/camera and a signed single or multipart S3 upload.
 
     The browser uploads directly to S3 (no bytes through Django), then POSTs to
     ExternalMediaProjectUploadCompleteView to create the DB record.
@@ -993,16 +1234,16 @@ class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
 
         try:
             data = json.loads(request.body)
-        except (ValueError, TypeError):
+            file_size = int(data.get('size') or 0)
+        except (ValueError, TypeError, AttributeError):
             return JsonResponse({'detail': 'Corpo da requisição inválido.'}, status=400)
 
         filename = str(data.get('filename') or '').strip()
-        file_size = int(data.get('size') or 0)
         content_type = str(data.get('content_type') or 'video/octet-stream').strip() or 'video/octet-stream'
 
         if Path(filename).suffix.lower() not in VIDEO_EXTENSIONS:
             return JsonResponse({'detail': 'Formato não suportado. Envie MP4, MOV, MKV, WEBM, AVI ou M4V.'}, status=400)
-        if file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
+        if file_size <= 0 or file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
             return JsonResponse({'detail': f'O vídeo excede o limite de {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.'}, status=400)
 
         # ── camera/position allocation (mirrors ExternalMediaProjectUploadView) ──
@@ -1057,7 +1298,7 @@ class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
         )
 
         try:
-            upload_url = _generate_presigned_put(storage_key, content_type)
+            upload = _prepare_s3_upload(storage_key, file_size, content_type)
         except Exception:
             return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
 
@@ -1077,13 +1318,49 @@ class ExternalMediaProjectUploadPresignView(ExternalMediaRequiredMixin, View):
             'trim_start_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_start_seconds')) or 0,
             'trim_end_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_end_seconds')),
         }
-        return JsonResponse({
-            'upload_url': upload_url,
-            'content_type': content_type,
-            'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
-            'allocation': allocation,
-            'allocation_sig': _sign_upload_allocation(allocation),
-        })
+        return _s3_upload_response(project, allocation, upload, content_type)
+
+
+class ExternalMediaProjectDirectUploadPresignView(ExternalMediaRequiredMixin, View):
+    """Allocate an S3 upload for a template without scenes."""
+
+    def post(self, request, public_id):
+        if not settings.USE_S3:
+            return JsonResponse({'detail': 'Upload direto ao S3 requer USE_S3=TRUE.'}, status=400)
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
+        if project.template_version.blocks.exists():
+            return JsonResponse({'detail': 'Este template organiza os vídeos por cenas.'}, status=400)
+        try:
+            data = json.loads(request.body)
+            filename = str(data.get('filename') or '').strip()
+            file_size = int(data.get('size') or 0)
+        except (ValueError, TypeError):
+            return JsonResponse({'detail': 'Corpo da requisição inválido.'}, status=400)
+        if Path(filename).suffix.lower() not in VIDEO_EXTENSIONS:
+            return JsonResponse({'detail': 'Formato não suportado. Envie MP4, MOV, MKV, WEBM, AVI ou M4V.'}, status=400)
+        if file_size <= 0 or file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
+            return JsonResponse({'detail': f'O vídeo excede o limite de {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.'}, status=400)
+        position = (
+            ProjectBlockMedia.objects.filter(project=project, block__isnull=True, custom_block__isnull=True)
+            .aggregate(value=Max('position'))['value'] or 0
+        ) + 1
+        storage_key = external_media_project_upload_path(
+            SimpleNamespace(project=project, block_id=None, block=None, position=position), filename,
+        )
+        try:
+            upload = _prepare_s3_upload(storage_key, file_size, str(data.get('content_type') or 'video/octet-stream'))
+        except Exception:
+            return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
+        allocation = {
+            'project_id': str(project.public_id), 'block_id': None, 'custom_block_id': None,
+            'storage_key': storage_key, 'filename': filename, 'size': file_size, 'position': position,
+            'camera_key': 'primary', 'camera_role': ProjectBlockMedia.CameraRole.PRIMARY,
+            'camera_order': 1, 'camera_label': 'Vídeo principal',
+            'camera_hint': str(data.get('camera_hint') or ProjectBlockMedia.CameraHint.AUTO),
+            'trim_start_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_start_seconds')) or 0,
+            'trim_end_ms': ProjectBlockMediaForm.seconds_to_ms(data.get('trim_end_seconds')),
+        }
+        return _s3_upload_response(project, allocation, upload, str(data.get('content_type') or 'video/octet-stream'))
 
 
 class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixin, View):
@@ -1098,16 +1375,16 @@ class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixi
 
         try:
             data = json.loads(request.body)
-        except (ValueError, TypeError):
+            file_size = int(data.get('size') or 0)
+        except (ValueError, TypeError, AttributeError):
             return JsonResponse({'detail': 'Corpo da requisição inválido.'}, status=400)
 
         filename = str(data.get('filename') or '').strip()
-        file_size = int(data.get('size') or 0)
         content_type = str(data.get('content_type') or 'video/octet-stream').strip() or 'video/octet-stream'
 
         if Path(filename).suffix.lower() not in VIDEO_EXTENSIONS:
             return JsonResponse({'detail': 'Formato não suportado. Envie MP4, MOV, MKV, WEBM, AVI ou M4V.'}, status=400)
-        if file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
+        if file_size <= 0 or file_size > settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024:
             return JsonResponse({'detail': f'O vídeo excede o limite de {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.'}, status=400)
 
         position = (ProjectBlockMedia.objects.filter(project=project, custom_block=block)
@@ -1118,7 +1395,7 @@ class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixi
         )
 
         try:
-            upload_url = _generate_presigned_put(storage_key, content_type)
+            upload = _prepare_s3_upload(storage_key, file_size, content_type)
         except Exception:
             return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
 
@@ -1138,13 +1415,7 @@ class ExternalMediaProjectCustomBlockUploadPresignView(ExternalMediaRequiredMixi
             'trim_start_ms': 0,
             'trim_end_ms': None,
         }
-        return JsonResponse({
-            'upload_url': upload_url,
-            'content_type': content_type,
-            'complete_url': reverse('external_media_project_upload_complete', args=[project.public_id]),
-            'allocation': allocation,
-            'allocation_sig': _sign_upload_allocation(allocation),
-        })
+        return _s3_upload_response(project, allocation, upload, content_type)
 
 
 class ExternalMediaProjectBrollUploadPresignView(ExternalMediaRequiredMixin, View):
@@ -1194,7 +1465,7 @@ class ExternalMediaProjectBrollUploadPresignView(ExternalMediaRequiredMixin, Vie
             SimpleNamespace(project=project, public_id=asset_public_id), filename,
         )
         try:
-            upload_url = _generate_presigned_put(storage_key, str(data.get('content_type') or 'application/octet-stream'))
+            upload = _prepare_s3_upload(storage_key, file_size, str(data.get('content_type') or 'application/octet-stream'))
         except Exception:
             return JsonResponse({'detail': 'Não foi possível gerar o acesso de upload ao S3.'}, status=500)
         allocation = {
@@ -1205,11 +1476,7 @@ class ExternalMediaProjectBrollUploadPresignView(ExternalMediaRequiredMixin, Vie
             'description': str(data.get('description') or '').strip()[:500],
             'duration_ms': duration_ms, 'position': position,
         }
-        return JsonResponse({
-            'upload_url': upload_url,
-            'complete_url': reverse('external_media_project_broll_upload_complete', args=[project.public_id]),
-            'allocation': allocation, 'allocation_sig': _sign_upload_allocation(allocation),
-        })
+        return _s3_upload_response(project, allocation, upload, str(data.get('content_type') or 'application/octet-stream'), broll=True)
 
 
 class ExternalMediaProjectBrollUploadCompleteView(ExternalMediaRequiredMixin, View):
@@ -1229,6 +1496,18 @@ class ExternalMediaProjectBrollUploadCompleteView(ExternalMediaRequiredMixin, Vi
         custom_block = get_object_or_404(ProjectCustomBlock, pk=custom_block_id, project=project) if custom_block_id else None
         if bool(block) == bool(custom_block):
             return JsonResponse({'detail': 'Bloco de B-roll inválido.'}, status=400)
+        if allocation.get('multipart'):
+            existing = project.broll_assets.filter(file=allocation['storage_key']).first()
+            if existing:
+                return JsonResponse({
+                    'id': str(existing.public_id), 'name': existing.original_filename,
+                    'media_type': existing.media_type, 'description': existing.description,
+                    'preview_status': existing.preview_status,
+                    'status_url': reverse('external_media_project_broll_status', args=[project.public_id, existing.public_id]),
+                })
+        error = _complete_s3_upload(allocation)
+        if error is not None:
+            return error
         try:
             asset = ProjectBrollAsset.objects.create(
                 public_id=uuid.UUID(str(allocation['public_id'])), project=project,
@@ -1253,7 +1532,7 @@ class ExternalMediaProjectBrollUploadCompleteView(ExternalMediaRequiredMixin, Vi
 
 
 class ExternalMediaProjectUploadCompleteView(ExternalMediaRequiredMixin, View):
-    """Create the ProjectBlockMedia record after the browser successfully PUT the file to S3."""
+    """Verify and finalize the S3 object before registering ProjectBlockMedia."""
 
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id, status=ExternalMediaProject.Status.DRAFT)
@@ -1274,6 +1553,20 @@ class ExternalMediaProjectUploadCompleteView(ExternalMediaRequiredMixin, View):
         custom_block_id = allocation.get('custom_block_id')
         block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version) if block_id else None
         custom_block = get_object_or_404(ProjectCustomBlock, pk=custom_block_id, project=project) if custom_block_id else None
+        if not block and not custom_block and project.template_version.blocks.exists():
+            return JsonResponse({'detail': 'Este template organiza os vídeos por cenas.'}, status=400)
+
+        if allocation.get('multipart'):
+            existing = project.block_media.filter(file=allocation['storage_key']).first()
+            if existing:
+                return JsonResponse({
+                    'id': existing.pk, 'name': existing.original_filename, 'size': existing.file_size,
+                    'status_url': reverse('external_media_project_media_status', args=[project.public_id, existing.pk]),
+                    'delete_url': reverse('external_media_project_media_delete', args=[project.public_id, existing.pk]),
+                })
+        error = _complete_s3_upload(allocation)
+        if error is not None:
+            return error
 
         item = ProjectBlockMedia(
             project=project,
@@ -1353,7 +1646,7 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             )
             return None
 
-    def post(self, request, public_id, block_id, custom=False):
+    def post(self, request, public_id, block_id=None, custom=False):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         if project.status != ExternalMediaProject.Status.DRAFT:
             return self._error_response(
@@ -1361,7 +1654,10 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             )
         block = None
         custom_block = None
-        if custom:
+        if block_id is None:
+            if project.template_version.blocks.exists():
+                return self._error_response(request, project, 'Este template organiza os elementos por cenas.')
+        elif custom:
             custom_block = get_object_or_404(ProjectCustomBlock, pk=block_id, project=project)
         else:
             block = get_object_or_404(MediaTemplateBlock, pk=block_id, version=project.template_version)
@@ -1376,17 +1672,11 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             ProjectBrollAsset.MediaType.VIDEO if suffix in VIDEO_EXTENSIONS
             else ProjectBrollAsset.MediaType.IMAGE
         )
-        config = BrollTimelineService.configuration(project)
-        if not config.get('enabled'):
-            return self._error_response(request, project, 'O Template não habilitou B-rolls.')
-        if media_type == 'VIDEO' and not config.get('allow_video', True):
-            return self._error_response(request, project, 'Este Template não permite B-roll de vídeo.')
-        if media_type == 'IMAGE' and not config.get('allow_image', True):
-            return self._error_response(request, project, 'Este Template não permite B-roll de imagem.')
         item = form.save(commit=False)
         item.project = project
         item.block = block
         item.custom_block = custom_block
+        item.description = ''
         item.media_type = media_type
         item.original_filename = upload.name
         item.file_size = upload.size
@@ -1397,7 +1687,11 @@ class ExternalMediaProjectBrollUploadView(ExternalMediaRequiredMixin, View):
             if media_type == ProjectBrollAsset.MediaType.VIDEO
             else ProjectBrollAsset.PreviewStatus.READY
         )
-        owner_filter = {'custom_block': custom_block} if custom_block else {'block': block}
+        owner_filter = (
+            {'custom_block': custom_block} if custom_block else
+            {'block': block} if block else
+            {'block__isnull': True, 'custom_block__isnull': True}
+        )
         item.position = (project.broll_assets.filter(**owner_filter).aggregate(value=Max('position'))['value'] or 0) + 1
         item.save()
         self._enqueue_preview(item)
@@ -1695,6 +1989,7 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             project.started_at = None
             project.finished_at = None
             project.current_timeline_revision = None
+            project.editorial_version = F('editorial_version') + 1
             project.approved_timeline_revision = None
             project.preview_dirty = False
             project.final_render_outdated = False
@@ -1704,7 +1999,7 @@ class ExternalMediaProjectRunView(ExternalMediaRequiredMixin, View):
             project.save(update_fields=[
                 'status', 'progress', 'current_step', 'error_message', 'started_at', 'finished_at',
                 'current_timeline_revision', 'approved_timeline_revision',
-                'preview_dirty', 'final_render_outdated', 'configuration', 'update_at',
+                'preview_dirty', 'final_render_outdated', 'configuration', 'editorial_version', 'update_at',
             ])
             project.preview_sessions.update(current_revision=None, undo_stack=[], redo_stack=[])
             transaction.on_commit(lambda: self._enqueue(project.pk))
@@ -1745,6 +2040,18 @@ class ExternalMediaProjectRenderView(ExternalMediaRequiredMixin, View):
                 return redirect('external_media_project_detail', public_id=public_id)
             if project.template_version.interactive_preview_enabled and not project.approved_timeline_revision_id:
                 messages.warning(request, 'Revise e aprove a edição antes de renderizar.')
+                return redirect('external_media_project_preview', public_id=public_id)
+            if (
+                project.template_version.interactive_preview_enabled
+                and (
+                    project.preview_dirty
+                    or project.current_timeline_revision_id != project.approved_timeline_revision_id
+                )
+            ):
+                messages.warning(
+                    request,
+                    'A edição exibida mudou após a última aprovação. Aprove esta revisão antes de renderizar.',
+                )
                 return redirect('external_media_project_preview', public_id=public_id)
             project.status = ExternalMediaProject.Status.PENDING
             project.progress = 84
@@ -1797,24 +2104,17 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             messages.warning(request, 'O preview ficará disponível após a análise inicial.')
             return redirect('external_media_project_detail', public_id=public_id)
         revision = TimelineRevisionService.ensure_initial(project, self.member)
-        # An AWAITING_REVIEW project with an approved revision is a project that
-        # was reopened after rendering. Its approved snapshot is the source of
-        # truth for the final version, even if a stale session still points to
-        # another revision.
-        reopened_terminal_review = (
-            project.status == ExternalMediaProject.Status.AWAITING_REVIEW
-            and project.approved_timeline_revision_id
-        )
-        if reopened_terminal_review:
-            revision = project.approved_timeline_revision
-            if project.current_timeline_revision_id != revision.pk:
-                project.current_timeline_revision = revision
-                project.save(update_fields=['current_timeline_revision', 'update_at'])
+        project.refresh_from_db(fields=['editorial_version'])
+        # Reopening a finished project keeps its approved revision as the
+        # baseline, but any edit creates a child in ``current``. Never reset
+        # that pointer on page load: doing so silently discarded saved editor
+        # choices such as the music playlist and its timeline positions.
         session = TimelineRevisionService.session(project, self.member, revision)
         # Revisions are immutable snapshots. Older ones were created before the
         # normalized master was exposed to the browser, so enrich only this
         # response rather than rewriting editorial history just to change a URL.
         timeline = deepcopy(revision.timeline)
+        PreviewCompositionService.hydrate_legacy_caption_clock(project, timeline)
         # Recover legacy revisions that were saved while a split source had no
         # matching proxy/duration. Keep this revision's element changes, but
         # borrow the video structure from the newest intact revision so a page
@@ -1887,9 +2187,22 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             )
             for item in revision.edit_decision_set.get('operations', [])
         )
-        use_editable_source_proxies = has_reframe_override and assets_have_proxies
+        # A manual frame must never fall back to the assembled master: that
+        # master was rendered before the member moved the zoom/position
+        # sliders.  Requiring *every* asset to have a source proxy here made a
+        # missing, unrelated take silently reactivate that stale master after
+        # reload, so the saved adjustment appeared to be lost.  The browser
+        # already resolves each source independently (including trim-range
+        # aliases), therefore keep source playback whenever a manual frame is
+        # present.
+        use_editable_source_proxies = has_reframe_override or bool(timeline.get('cameras')) or bool(timeline.get('video_reordered'))
         revision_proxy = ready_proxies.get(ProjectProxyService.timeline_review_proxy_id(revision))
         if not ProjectProxyService.has_usable_timeline_review_proxy(revision_proxy, revision):
+            revision_proxy = None
+        # A revision proxy is based on the already auto-reframed master and
+        # cannot undo that crop. Manual framing is defined over the original
+        # take, so keep the browser on the per-source proxies in this case.
+        if has_reframe_override:
             revision_proxy = None
         if revision_proxy:
             version = int(revision_proxy.update_at.timestamp() * 1000)
@@ -1901,6 +2214,15 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
             # Its browser clock is therefore the edited timeline clock.
             timeline['review_master_is_edited'] = True
             timeline['review_proxy_status'] = 'READY'
+            rendered_layers = (revision_proxy.metadata or {}).get('rendered_layers') or []
+            timeline['review_rendered_layers'] = rendered_layers
+            for capability, layer in {
+                'SUBTITLES': 'CAPTIONS', 'BROLL': 'BROLL', 'GRAPHICS': 'OVERLAYS', 'CAMERA_SWITCHES': 'MULTICAM',
+            }.items():
+                if layer in rendered_layers and capability in (timeline.get('fidelity') or {}):
+                    timeline['fidelity'][capability] = 'EXACT'
+            if 'TRANSFORMS' in (timeline.get('fidelity') or {}):
+                timeline['fidelity']['TRANSFORMS'] = 'EXACT'
         elif job and job.original_video and ProjectService.file_exists(job.original_video) and not use_editable_source_proxies:
             review_proxy = ready_proxies.get(REVIEW_MASTER_PROXY_ID)
             if review_proxy:
@@ -1917,7 +2239,7 @@ class ExternalMediaProjectPreviewView(ExternalMediaRequiredMixin, ExternalMediaC
                 timeline['fidelity']['TRANSFORMS'] = 'EXACT'
         elif use_editable_source_proxies:
             timeline['review_master_url'] = None
-            timeline['review_proxy_status'] = 'PENDING'
+            timeline['review_proxy_status'] = 'PENDING' if timeline.get('video_reordered') and not has_reframe_override else 'SOURCE'
         timeline = preview_timeline_with_music(project, timeline)
         return render(request, 'member/external_media/preview.html', self.media_context(
             project=project, revision=revision, session=session, timeline=timeline,
@@ -1942,9 +2264,30 @@ class ExternalMediaProjectPreviewSourceView(ExternalMediaRequiredMixin, View):
                 proxy = proxies.filter(source_id=base_source_id).first()
         if not proxy:
             raise Http404('Proxy de preview não encontrado.')
+        if request.GET.get('waveform') == '1':
+            return cached_preview_response(request, proxy.project, 'waveform', proxy.proxy_file, version=proxy.update_at.isoformat())
+        if request.GET.get('thumbnail') == '1':
+            from ..external_media.thumbnails import TimelineThumbnailService, ready_thumbnail
+            from ..external_media.media_input import StoredMediaFile
+            name = ready_thumbnail(proxy)
+            if not name:
+                TimelineThumbnailService.request(proxy)
+                return JsonResponse({'status': 'PENDING'}, status=202, headers={'Cache-Control': 'no-store', 'Retry-After': '5'})
+            request.GET = request.GET.copy()
+            request.GET['preview'] = '1'
+            response = protected_file_response(request, StoredMediaFile(proxy.proxy_file.storage, name))
+            response['Cache-Control'] = 'private, max-age=300' if response.status_code == 302 else 'private, max-age=86400'
+            return response
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
-        return protected_file_response(request, proxy.proxy_file)
+        # A frame extracted by the editor is painted into a canvas.  Redirecting
+        # this request to a signed S3 URL makes that canvas cross-origin and
+        # browsers block ``toDataURL``. Keep only those small, sequential
+        # filmstrip requests same-origin; normal player playback can still use
+        # the efficient signed-storage redirect.
+        return protected_file_response(
+            request, proxy.proxy_file, force_stream=request.GET.get('filmstrip') == '1',
+        )
 
 
 class ExternalMediaProjectPreviewMasterView(ExternalMediaRequiredMixin, View):
@@ -1954,12 +2297,14 @@ class ExternalMediaProjectPreviewMasterView(ExternalMediaRequiredMixin, View):
         project = get_object_or_404(
             ExternalMediaProject.objects.select_related('render_job'), public_id=public_id,
         )
-        job = project.render_job
-        if not job or not job.original_video or not ProjectService.file_exists(job.original_video):
+        master = ProjectProxyService.original_review_master(project)
+        if not master or not ProjectService.file_exists(master):
             raise Http404('A prévia com enquadramento final ainda não está disponível.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
-        return protected_file_response(request, job.original_video)
+        return protected_file_response(
+            request, master, force_stream=request.GET.get('filmstrip') == '1',
+        )
 
 
 class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, View):
@@ -1970,6 +2315,16 @@ class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, V
         revision = project.current_timeline_revision
         if not revision:
             return JsonResponse({'status': 'PENDING'})
+        has_reframe_override = any(
+            item.get('type') == 'reframe'
+            and (
+                not item.get('enabled', True)
+                or (item.get('metadata') or {}).get('manual_transform')
+            )
+            for item in revision.edit_decision_set.get('operations', [])
+        )
+        if has_reframe_override:
+            return JsonResponse({'status': 'SOURCE', 'revision': revision.revision})
         proxy = ProjectSourceProxy.objects.filter(
             project=project, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
         ).order_by('-update_at').first()
@@ -1988,6 +2343,7 @@ class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, V
                 'external_media_project_preview_source',
                 kwargs={'public_id': project.public_id, 'source_id': proxy.source_id},
             ) + f'?v={version}',
+            'rendered_layers': (proxy.metadata or {}).get('rendered_layers') or [],
         })
 
     def post(self, request, public_id):
@@ -2022,8 +2378,10 @@ class ExternalMediaProjectPreviewRevisionProxyView(ExternalMediaRequiredMixin, V
         return JsonResponse({'status': 'PENDING', 'revision': revision.revision})
 
 
-class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     """Streams the template music so it can be synchronized in the browser."""
+
+    upload_extensions = {'.mp3', '.wav', '.m4a', '.aac', '.ogg', '.flac', '.webm'}
 
     def get(self, request, public_id):
         project = get_object_or_404(
@@ -2034,18 +2392,25 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
         )
         requested_track_id = request.GET.get('track_id')
         revision = project.current_timeline_revision
-        override_id = ((revision.timeline if revision else {}) or {}).get('music_override_track_id')
-        override_id = override_id or (project.configuration or {}).get('music_override_track_id')
+        revision_timeline = (revision.timeline if revision else {}) or {}
         # A requested track is an audition only. It never alters the current
         # revision; the POST endpoint remains the sole save operation.
         if requested_track_id:
             override = get_object_or_404(
                 BackgroundMusicTrack, pk=requested_track_id, audio_file__isnull=False,
             )
+            music = override.audio_file
         else:
-            override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
-        music = override.audio_file if override else MusicService.selected_file(project.template_version)
-        if not music or not ProjectService.file_exists(music):
+            selected_tracks = MusicService.selected_tracks(
+                project.template_version, revision_timeline, project.configuration or {},
+            )
+            music = selected_tracks[0]['file'] if selected_tracks else None
+        if not music:
+            raise Http404('A trilha deste template não está disponível.')
+        if request.GET.get('waveform') == '1':
+            version = override.update_at.isoformat() if requested_track_id else str(project.template_version_id)
+            return cached_preview_response(request, project, 'waveform', music, version=version)
+        if not ProjectService.file_exists(music):
             raise Http404('A trilha deste template não está disponível.')
         request.GET = request.GET.copy()
         request.GET['preview'] = '1'
@@ -2053,7 +2418,56 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
 
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        upload = request.FILES.get('audio_file')
+        if upload:
+            suffix = Path(upload.name).suffix.lower()
+            max_bytes = settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB * 1024 * 1024
+            if suffix not in self.upload_extensions:
+                return JsonResponse({
+                    'error': 'Envie um arquivo MP3, WAV, M4A, AAC, OGG, FLAC ou WEBM.',
+                }, status=400)
+            if upload.size <= 0 or upload.size > max_bytes:
+                return JsonResponse({
+                    'error': f'A música deve ter até {settings.EXTERNAL_MEDIA_MAX_UPLOAD_MB} MB.',
+                }, status=400)
+            current_revision = project.current_timeline_revision
+            tracks = list(((current_revision.timeline if current_revision else {}) or {}).get('music_tracks') or [])
+            if len(tracks) >= 8:
+                return JsonResponse({'error': 'Escolha entre uma e oito músicas.'}, status=400)
+            name = Path(upload.name).stem.strip()[:200] or 'Nova música'
+            # Save once before assigning the file so the storage path contains
+            # this track's id instead of the shared "pending" placeholder.
+            track = BackgroundMusicTrack.objects.create(
+                name=name, category=BackgroundMusicTrack.Category.OTHER,
+            )
+            track.audio_file = upload
+            track.save(update_fields=['audio_file', 'update_at'])
+            tracks.append({
+                'track_id': track.pk,
+                'transition': 'NONE',
+                'transition_duration_ms': 2000,
+            })
+            try:
+                revision = TimelineRevisionService.update_music_tracks(project, self.member, tracks)
+            except Exception:
+                track.audio_file.delete(save=False)
+                track.delete()
+                raise
+            return preview_revision_response(
+                project, self.member, revision,
+                music_track={
+                    'id': track.pk, 'name': track.name, 'category': track.category, 'tempo': track.tempo,
+                },
+            )
         payload = json.loads(request.body or '{}')
+        if 'audio_mix' in payload:
+            try:
+                revision = TimelineRevisionService.update_audio_mix(
+                    project, self.member, payload['audio_mix'],
+                )
+            except (TypeError, ValueError):
+                return JsonResponse({'error': 'Configuração de mixagem inválida.'}, status=400)
+            return preview_revision_response(project, self.member, revision)
         if 'volume' in payload:
             try:
                 revision = TimelineRevisionService.update_music_volume(
@@ -2061,6 +2475,26 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
                 )
             except (TypeError, ValueError):
                 return JsonResponse({'error': 'Volume de música inválido.'}, status=400)
+            return preview_revision_response(project, self.member, revision)
+        if 'tracks' in payload:
+            tracks = payload.get('tracks')
+            if not isinstance(tracks, list) or len(tracks) > 32:
+                return JsonResponse({'error': 'A timeline suporta até 32 clipes de música.'}, status=400)
+            track_ids = []
+            for item in tracks:
+                try:
+                    track_id = int((item or {}).get('track_id'))
+                except (TypeError, ValueError):
+                    return JsonResponse({'error': 'Uma música selecionada é inválida.'}, status=400)
+                if track_id <= 0:
+                    return JsonResponse({'error': 'Uma música selecionada é inválida.'}, status=400)
+                track_ids.append(track_id)
+            available = set(BackgroundMusicTrack.objects.filter(
+                pk__in=track_ids,
+            ).exclude(audio_file='').values_list('pk', flat=True))
+            if set(track_ids) != available:
+                return JsonResponse({'error': 'Uma das músicas selecionadas não está disponível.'}, status=400)
+            revision = TimelineRevisionService.update_music_tracks(project, self.member, tracks)
             return preview_revision_response(project, self.member, revision)
         track = get_object_or_404(BackgroundMusicTrack, pk=payload.get('track_id'), audio_file__isnull=False)
         revision = TimelineRevisionService.update_music(project, self.member, track.pk)
@@ -2070,11 +2504,46 @@ class ExternalMediaProjectPreviewMusicView(ExternalMediaRequiredMixin, View):
 def preview_revision_response(project, member, revision, **extra):
     """Keep preview mutations and history navigation on the same response shape."""
     timeline = preview_timeline_with_music(project, revision.timeline)
+    PreviewCompositionService.hydrate_legacy_caption_clock(project, timeline)
+    # The page GET replaces stored/original asset URLs with the normalized
+    # source proxies.  Mutations used to skip that step, so applying their JSON
+    # response could make an already open preview decode a different video than
+    # the one displayed after a reload (and consequently appear to jump its
+    # framing).  Keep the AJAX response on exactly the same protected, versioned
+    # sources as the initial page response.
+    ready_proxies = {
+        source_proxy.source_id: source_proxy
+        for source_proxy in project.source_proxies.filter(status=ProjectSourceProxy.Status.READY)
+        if source_proxy.proxy_file
+    }
+    for asset in (timeline.get('assets') or []):
+        # Assets with an asset_id are B-roll and use their own endpoint.
+        if asset.get('asset_id'):
+            continue
+        source_id = str(asset.get('id') or '')
+        base_source_id = re.sub(r'-trecho-\d+$', '', source_id)
+        source_proxy = ready_proxies.get(source_id) or ready_proxies.get(base_source_id)
+        if not source_proxy:
+            asset['url'] = None
+            continue
+        version = int(source_proxy.update_at.timestamp() * 1000)
+        asset['url'] = reverse(
+            'external_media_project_preview_source',
+            kwargs={'public_id': project.public_id, 'source_id': source_proxy.source_id},
+        ) + f'?v={version}'
     proxy = ProjectSourceProxy.objects.filter(
         project=project, source_id=ProjectProxyService.timeline_review_proxy_id(revision),
         status=ProjectSourceProxy.Status.READY,
     ).first()
-    if ProjectProxyService.has_usable_timeline_review_proxy(proxy, revision):
+    has_reframe_override = any(
+        item.get('type') == 'reframe'
+        and (
+            not item.get('enabled', True)
+            or (item.get('metadata') or {}).get('manual_transform')
+        )
+        for item in revision.edit_decision_set.get('operations', [])
+    )
+    if not has_reframe_override and ProjectProxyService.has_usable_timeline_review_proxy(proxy, revision):
         version = int(proxy.update_at.timestamp() * 1000)
         timeline['review_master_url'] = reverse(
             'external_media_project_preview_source',
@@ -2082,8 +2551,10 @@ def preview_revision_response(project, member, revision, **extra):
         ) + f'?v={version}'
         timeline['review_master_is_edited'] = True
         timeline['review_proxy_status'] = 'READY'
+        timeline['review_rendered_layers'] = (proxy.metadata or {}).get('rendered_layers') or []
     else:
-        timeline['review_proxy_status'] = 'PENDING'
+        timeline['review_master_url'] = None
+        timeline['review_proxy_status'] = 'SOURCE' if has_reframe_override else 'PENDING'
     return JsonResponse({
         'revision': revision.revision,
         'timeline': timeline,
@@ -2095,39 +2566,65 @@ def preview_revision_response(project, member, revision, **extra):
 def preview_timeline_with_music(project, timeline):
     """Add browser-only music metadata without mutating a stored revision."""
     timeline = deepcopy(timeline or {})
-    override_id = timeline.get('music_override_track_id') or (project.configuration or {}).get('music_override_track_id')
-    override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
-    music = override.audio_file if override else MusicService.selected_file(project.template_version)
-    timeline['has_music'] = bool(music and ProjectService.file_exists(music))
+    # A manual take uses its original source. Keep the normalized master
+    # available independently so untouched takes retain their automatic crop.
+    timeline['framing_master_url'] = (
+        reverse('external_media_project_preview_master', kwargs={'public_id': project.public_id})
+        if project.render_job_id and ProjectService.file_exists(ProjectProxyService.original_review_master(project))
+        else None
+    )
+    selected_tracks = MusicService.selected_tracks(
+        project.template_version, timeline, project.configuration or {},
+    )
+    selected_tracks = [item for item in selected_tracks if item.get('file') and ProjectService.file_exists(item['file'])]
+    music = selected_tracks[0]['file'] if selected_tracks else None
+    timeline['has_music'] = bool(selected_tracks)
     if timeline['has_music']:
+        raw_audio_mix = timeline.get('audio_mix')
+        audio_mix = dict(raw_audio_mix) if isinstance(raw_audio_mix, dict) else {}
+        effective_mix = resolved_ducking_config(audio_mix or project.template_version.audio_mixing_config)
+        ducking = ducking_options(audio_mix)
         music_url = reverse('external_media_project_preview_music', kwargs={'public_id': project.public_id})
-        # The browser uses this URL as the audio cache key. Include the track
-        # id so replacing a song reloads the <audio> element immediately
-        # instead of retaining the prior source under the same endpoint.
-        if override:
-            music_url += f'?track_id={override.pk}'
+        browser_tracks = []
+        for item in selected_tracks:
+            url = music_url
+            if item.get('id'):
+                url += f'?track_id={item["id"]}'
+            browser_tracks.append({
+                'id': item.get('id'), 'clip_id': item.get('clip_id'), 'name': item.get('name') or '', 'url': url,
+                'transition': item.get('transition') or 'CONSTANT_POWER',
+                'transition_duration_ms': int(item.get('transition_duration_ms', 2000)),
+                'start_ms': item.get('start_ms'), 'end_ms': item.get('end_ms'),
+                'source_in_ms': item.get('source_in_ms'),
+                'audio_transition': item.get('audio_transition'),
+                'volume': item.get('volume', 1),
+            })
         timeline['music'] = {
-            'url': music_url,
-            'name': override.name if override else '',
+            'url': browser_tracks[0]['url'],
+            'name': browser_tracks[0]['name'],
+            'tracks': browser_tracks,
             'volume': max(0.0, min(1.0, float(timeline.get(
-                'music_volume', project.template_version.music_volume,
+                'music_volume', audio_mix.get('music_volume', project.template_version.music_volume),
             )))),
             'fade_in_seconds': float(project.template_version.fade_in_seconds),
             'fade_out_seconds': float(project.template_version.fade_out_seconds),
-            'ducking_enabled': bool(
-                project.template_version.audio_mixing_enabled
-                and project.template_version.audio_ducking_enabled
-            ),
-            'duck_db': float((project.template_version.audio_mixing_config or {}).get('base_duck_db', 14)),
-            'attack_ms': int((project.template_version.audio_mixing_config or {}).get('attack_ms', 140)),
-            'hold_ms': int((project.template_version.audio_mixing_config or {}).get('hold_ms', 300)),
-            'release_ms': int((project.template_version.audio_mixing_config or {}).get('release_ms', 850)),
-            'speech_gap_hold_ms': int((project.template_version.audio_mixing_config or {}).get('speech_gap_hold_ms', 1800)),
+            'audio_mix': audio_mix,
+            'profile': effective_mix.get('profile', 'balanced'),
+            'ducking_enabled': bool(ducking.get('enabled', project.template_version.audio_mixing_enabled and project.template_version.audio_ducking_enabled)),
+            'spectral_enabled': bool(ducking.get('spectral_enabled', project.template_version.audio_spectral_ducking_enabled)),
+            'duck_db': float(effective_mix.get('base_duck_db', 11.0)),
+            'attack_ms': int(effective_mix.get('attack_ms', 140)),
+            'hold_ms': int(effective_mix.get('hold_ms', 300)),
+            'release_ms': int(effective_mix.get('release_ms', 850)),
+            'speech_gap_hold_ms': int(effective_mix.get('speech_gap_hold_ms', 1800)),
+            'between_speech_gain': float(effective_mix.get('between_speech_gain', 1.0)),
+            'voice_gain_db': float(effective_mix.get('voice_gain_db', 0.0)),
+            'voice_activation_db': float(effective_mix.get('voice_activation_db', -96.0)),
         }
     return timeline
 
 
-class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, decision_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2140,14 +2637,14 @@ class ExternalMediaProjectPreviewDecisionView(ExternalMediaRequiredMixin, View):
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewApplyAllNoiseView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewApplyAllNoiseView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         revision = TimelineRevisionService.apply_all_noise_reductions(project, self.member)
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2160,13 +2657,27 @@ class ExternalMediaProjectPreviewCutView(ExternalMediaRequiredMixin, View):
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewVideoSplitView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewVideoSplitView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
         try:
             revision = TimelineRevisionService.create_video_split(
                 project, self.member, payload.get('master_ms'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision)
+
+
+class ExternalMediaProjectPreviewVideoMoveView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        try:
+            revision = TimelineRevisionService.move_video(
+                project, self.member, payload.get('source_id'),
+                payload.get('start_ms'), payload.get('end_ms'), payload.get('before'),
             )
         except (TypeError, ValueError) as exc:
             return JsonResponse({'error': str(exc)}, status=400)
@@ -2208,35 +2719,54 @@ class ExternalMediaProjectPreviewNoiseClipView(ExternalMediaRequiredMixin, View)
             metadata.get('label') or operation.get('reason') or '',
             metadata.get('event_index'),
         )
-        storage = StorageService()
-        with TemporaryDirectory(prefix='connect-noise-preview-') as temp:
-            workdir = Path(temp)
-            output = workdir / f'{variant}.m4a'
-            source = storage.ffmpeg_input(project.render_job.original_video)
-            AudioCleanupService().render_preview_clip(source, output, decision, variant=variant)
-            # A FileResponse reads lazily, but this temporary directory is removed
-            # as soon as the view returns. Return the short comparison clip in
-            # memory so browser playback never receives a deleted file/HTTP 500.
-            response = HttpResponse(output.read_bytes(), content_type='audio/mp4')
-            response['Content-Length'] = str(output.stat().st_size)
-            response['Content-Disposition'] = content_disposition_header(
-                False, f'noise-{decision_id}-{variant}.m4a',
-            )
-            return response
+        options = decision.as_dict()
+        # Applying/ignoring a suggestion changes editorial state, not the
+        # Original/Treated comparison sound. Keep that cache reusable.
+        options.pop('enabled', None)
+        return cached_preview_response(request, project, 'noise_comparison', project.render_job.original_video,
+            version=str(project.render_job_id), options={'decision': options, 'variant': variant})
 
 
-class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, cue_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        get_object_or_404(SubtitleCue, pk=cue_id, track__job=project.render_job)
         payload = json.loads(request.body or '{}')
-        text = str(payload.get('text') or '').strip()
-        if not text:
-            return JsonResponse({'error': 'A legenda não pode ficar vazia.'}, status=400)
-        revision = TimelineRevisionService.update_subtitle(project, self.member, cue_id, text)
+        delete = bool(payload.get('delete'))
+        text = payload.get('text') if 'text' in payload else None
+        try:
+            if 'split_at_ms' in payload:
+                revision, created_id = TimelineRevisionService.split_subtitle(
+                    project, self.member, cue_id, payload['split_at_ms'],
+                )
+                return preview_revision_response(project, self.member, revision, created_cue_id=created_id)
+            revision = TimelineRevisionService.update_subtitle(
+                project, self.member, cue_id,
+                text=text,
+                start_ms=payload.get('start_ms'), end_ms=payload.get('end_ms'),
+                delete=delete,
+            )
+        except (ValueError, TypeError) as exc:
+            return JsonResponse({'error': str(exc) or 'Os dados da legenda são inválidos.'}, status=400)
         return preview_revision_response(project, self.member, revision)
 
 
-class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewSubtitleCreateView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        get_object_or_404(SubtitleTrack, pk=payload.get('track_id'), job=project.render_job)
+        try:
+            revision, created_id = TimelineRevisionService.create_subtitle(
+                project, self.member, payload.get('track_id'), payload.get('text'),
+                payload.get('start_ms'), payload.get('duration_ms'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision, created_cue_id=created_id)
+
+
+class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, decision_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2246,6 +2776,18 @@ class ExternalMediaProjectPreviewTransformView(ExternalMediaRequiredMixin, View)
             )
         except ValueError as exc:
             return JsonResponse({'error': str(exc)}, status=404)
+        return preview_revision_response(project, self.member, revision)
+
+
+class ExternalMediaProjectPreviewColorView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
+    def post(self, request, public_id, source_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        try:
+            revision = TimelineRevisionService.update_color_adjustment(
+                project, self.member, source_id, json.loads(request.body or '{}'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc) or 'Os ajustes de cor são inválidos.'}, status=400)
         return preview_revision_response(project, self.member, revision)
 
 
@@ -2293,7 +2835,7 @@ class ExternalMediaProjectOverlayDataView(ExternalMediaRequiredMixin, View):
         return redirect('external_media_project_detail', public_id=public_id)
 
 
-class ExternalMediaProjectPreviewOverlayView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewOverlayView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, overlay_id=None):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2322,7 +2864,7 @@ class ExternalMediaProjectPreviewOverlayView(ExternalMediaRequiredMixin, View):
                 )
                 if target and 'content' in payload:
                     payload['content'] = OverlayTimelineService.validate_content(
-                        target.get('type'), target.get('content_schema') or {}, payload['content'],
+                        target.get('type'), target.get('content_schema') or {}, {**(target.get('content') or {}), **payload['content']},
                         target.get('image_storage_name'),
                     )
             revision = TimelineRevisionService.mutate_overlay(
@@ -2352,7 +2894,20 @@ class ExternalMediaProjectPreviewOverlayAssetView(ExternalMediaRequiredMixin, Vi
             return HttpResponse(output.read_bytes(), content_type='image/png')
 
 
-class ExternalMediaProjectPreviewBrollView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewCameraView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        try:
+            payload = json.loads(request.body or '{}')
+            if not isinstance(payload, dict):
+                raise ValueError('Dados de câmera inválidos.')
+            revision = TimelineRevisionService.update_camera(project, self.member, payload)
+        except (ValueError, TypeError, KeyError, OverflowError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision)
+
+
+class ExternalMediaProjectPreviewBrollView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id, broll_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
         payload = json.loads(request.body or '{}')
@@ -2370,17 +2925,20 @@ class ExternalMediaProjectPreviewBrollAssetView(ExternalMediaRequiredMixin, View
     def get(self, request, public_id, asset_id):
         asset = get_object_or_404(ProjectBrollAsset, project__public_id=public_id, public_id=asset_id)
         selected = asset.preview_file if asset.media_type == ProjectBrollAsset.MediaType.VIDEO and asset.preview_status == ProjectBrollAsset.PreviewStatus.READY and asset.preview_file else asset.file
+        if request.GET.get('thumbnail') == '1':
+            return cached_preview_response(request, asset.project, 'broll_thumbnail', selected, version=asset.update_at.isoformat())
         if not ProjectService.file_exists(selected):
             raise Http404('O asset de B-roll não está mais disponível.')
-        return protected_file_response(request, selected)
+        request.GET = request.GET.copy()
+        request.GET['preview'] = '1'
+        return protected_file_response(
+            request, selected, force_stream=request.GET.get('filmstrip') == '1',
+        )
 
 
-class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)
-        config = BrollTimelineService.configuration(project)
-        if not config.get('enabled'):
-            return JsonResponse({'error': 'O Template não habilitou B-rolls.'}, status=400)
         form = ProjectBrollAssetForm(request.POST, request.FILES)
         if not form.is_valid():
             return JsonResponse({'error': ' '.join(error for errors in form.errors.values() for error in errors)}, status=400)
@@ -2397,10 +2955,6 @@ class ExternalMediaProjectPreviewBrollUploadView(ExternalMediaRequiredMixin, Vie
             if Path(upload.name).suffix.lower() in VIDEO_EXTENSIONS
             else ProjectBrollAsset.MediaType.IMAGE
         )
-        if media_type == ProjectBrollAsset.MediaType.VIDEO and not config.get('allow_video', True):
-            return JsonResponse({'error': 'Este Template não permite B-roll de vídeo.'}, status=400)
-        if media_type == ProjectBrollAsset.MediaType.IMAGE and not config.get('allow_image', True):
-            return JsonResponse({'error': 'Este Template não permite B-roll de imagem.'}, status=400)
         asset = form.save(commit=False)
         asset.project, asset.block, asset.custom_block = project, block, custom_block
         asset.media_type = media_type
@@ -2439,7 +2993,7 @@ class ExternalMediaProjectPreviewSessionView(ExternalMediaRequiredMixin, View):
         return JsonResponse({'saved': True})
 
 
-class ExternalMediaProjectPreviewHistoryView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewHistoryView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     direction = 'undo'
 
     def post(self, request, public_id):
@@ -2452,7 +3006,7 @@ class ExternalMediaProjectPreviewRedoView(ExternalMediaProjectPreviewHistoryView
     direction = 'redo'
 
 
-class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, View):
+class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         with transaction.atomic():
             project = get_object_or_404(
@@ -2460,7 +3014,10 @@ class ExternalMediaProjectPreviewApproveView(ExternalMediaRequiredMixin, View):
             )
             if project.status != ExternalMediaProject.Status.AWAITING_REVIEW:
                 return JsonResponse({'error': 'Este projeto não está aguardando revisão.'}, status=409)
-            revision = TimelineRevisionService.approve(project, self.member)
+            try:
+                revision = TimelineRevisionService.approve(project, self.member)
+            except ValueError as exc:
+                return JsonResponse({'error': str(exc)}, status=400)
             project.status = ExternalMediaProject.Status.PENDING
             project.progress = 68
             project.current_step = 'Renderização aprovada e adicionada à fila'
@@ -2535,13 +3092,30 @@ class ExternalMediaProjectPremiereExportView(ExternalMediaRequiredMixin, View):
         if active:
             messages.warning(request, 'Já existe uma exportação deste projeto em andamento.')
             return redirect('external_media_project_detail', public_id=public_id)
-        export = ExternalMediaProjectExport.objects.create(
-            project=project,
-            created_by=self.member,
-            status=ExternalMediaProjectExport.Status.PREPARING,
-            progress=2,
-            current_step='Exportação adicionada à fila',
-        )
+        previous = project.exports.order_by('-created_at').first()
+        if previous and previous.status == ExternalMediaProjectExport.Status.ERROR:
+            export = previous
+            export.status = ExternalMediaProjectExport.Status.PREPARING
+            export.progress = 2
+            export.current_step = 'Nova tentativa adicionada à fila'
+            export.error_message = ''
+            export.compatibility = {}
+            export.validation_report = {}
+            export.celery_task_id = ''
+            export.started_at = None
+            export.finished_at = None
+            export.save(update_fields=[
+                'status', 'progress', 'current_step', 'error_message', 'compatibility',
+                'validation_report', 'celery_task_id', 'started_at', 'finished_at', 'update_at',
+            ])
+        else:
+            export = ExternalMediaProjectExport.objects.create(
+                project=project,
+                created_by=self.member,
+                status=ExternalMediaProjectExport.Status.PREPARING,
+                progress=2,
+                current_step='Exportação adicionada à fila',
+            )
         try:
             task_id = (
                 enqueue_video_work('premiere-export', export.pk)
@@ -2772,7 +3346,15 @@ class ExternalMediaAssetDownloadView(ExternalMediaRequiredMixin, View):
         asset = get_object_or_404(MediaAsset, pk=asset_id, job__public_id=public_id)
         if request.GET.get('preview') != '1':
             MediaAsset.objects.filter(pk=asset.pk).update(download_count=F('download_count') + 1)
-        return protected_file_response(request, asset.file)
+        # A redirect to a signed S3 URL with Content-Disposition is interpreted
+        # as inline playback by some mobile browsers.  The explicit download
+        # variant keeps the response on this endpoint so Django sends the
+        # attachment header directly and the browser starts a download.
+        return protected_file_response(
+            request,
+            asset.file,
+            force_stream=request.GET.get('download') == '1',
+        )
 
 
 class ExternalMediaOriginalDownloadView(ExternalMediaRequiredMixin, View):

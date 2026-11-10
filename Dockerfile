@@ -14,8 +14,12 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 WORKDIR /usr/src/platform
 
-RUN timeout 600 apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=15 update && \
-    timeout 600 apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=15 install -y --no-install-recommends ffmpeg fontconfig && \
+# HTTPS avoids corrupted/stale package responses from HTTP intermediary caches.
+# Bound retries and timeouts so network failures do not stall a build indefinitely.
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' /etc/apt/sources.list.d/debian.sources && \
+    rm -rf /var/lib/apt/lists/* && \
+    timeout 600 apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::https::Timeout=15 -o Acquire::https::No-Cache=true update && \
+    timeout 600 apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::https::Timeout=15 -o Acquire::https::No-Cache=true install -y --no-install-recommends ffmpeg fontconfig && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /usr/src/platform/

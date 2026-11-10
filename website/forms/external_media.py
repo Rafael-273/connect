@@ -164,8 +164,8 @@ class ProjectBrollAssetForm(forms.ModelForm):
 
     class Meta:
         model = ProjectBrollAsset
-        fields = ['file', 'description']
-        labels = {'file': 'Foto, PNG/QR Code ou vídeo', 'description': 'Descrição para a IA'}
+        fields = ['file']
+        labels = {'file': 'Foto, PNG/QR Code ou vídeo'}
         widgets = {
             'file': forms.ClearableFileInput(attrs={
                 'accept': '.mp4,.mov,.mkv,.webm,.avi,.m4v,.png,.jpg,.jpeg,.webp',

@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 MAX_FFMPEG_CROP_KEYFRAMES = 48
 # Increment whenever the crop strategy changes. Cached proxy plans from older
 # strategies must not be reused by a reprocess.
-# Version 21 makes source dimensions rotation-aware, keeps portrait Body
+# Version 22 adds a stable full-body speaker profile, keeps portrait Body
 # group framing stable, and lets body/group framing
 # tighten a source that already has the output aspect ratio.  Plans generated from a
 # phone file whose pixels are landscape but whose display matrix is portrait
 # cannot safely be replayed: FFmpeg applies that matrix before our crop filter.
-AUTO_REFRAME_PLAN_VERSION = 21
+AUTO_REFRAME_PLAN_VERSION = 22
 
 
 def limit_keyframes_for_ffmpeg(keyframes, max_count=MAX_FFMPEG_CROP_KEYFRAMES):
@@ -132,7 +132,7 @@ class AutoReframeService:
         self, priority='face', safe_margin=0.15, interval_frames=None, smoothing=0.18,
         top_margin=None, horizontal_smoothing=None, vertical_lock=None,
     ):
-        self.priority = priority if priority in {'face', 'body', 'static'} else 'face'
+        self.priority = priority if priority in {'face', 'body', 'full_body', 'static'} else 'face'
         # A face-only crop feels like a webcam close-up and is very unforgiving if
         # detection misses a strand of hair. Keep enough room for the upper torso.
         requested_safe_margin = min(0.40, max(0.0, float(safe_margin)))
@@ -140,7 +140,15 @@ class AutoReframeService:
         # Face framing should keep the hair/head close to the top edge, without
         # becoming a tight headshot. Older templates stored 12–18%, which made
         # the speaker look noticeably low in wide renders.
-        default_top_margin = 0.02 if self.priority == 'face' else 0.10
+        # ``full_body`` is deliberately a little tighter than the generic
+        # presentation profile. It leaves a visible, phone-friendly gap above
+        # the head (about a finger in a 9:16 preview) without pushing a
+        # standing speaker down the screen.
+        default_top_margin = (
+            0.02 if self.priority == 'face'
+            else 0.05 if self.priority == 'full_body'
+            else 0.10
+        )
         requested_top_margin = min(0.35, max(0.0, float(
             default_top_margin if top_margin is None else top_margin,
         )))
@@ -150,7 +158,8 @@ class AutoReframeService:
             # narrow, safe interval: close to the top but never flush against it.
             self.top_margin = min(0.025, max(0.015, requested_top_margin))
         else:
-            self.top_margin = max(0.10, requested_top_margin)
+            minimum_top_margin = 0.05 if self.priority == 'full_body' else 0.10
+            self.top_margin = max(minimum_top_margin, requested_top_margin)
         self.interval_frames = max(
             1,
             int(interval_frames or settings.EXTERNAL_MEDIA_AUTO_REFRAME_INTERVAL_FRAMES),
@@ -265,6 +274,14 @@ class AutoReframeService:
                 keyframes = self._stable_face_keyframes(
                     observations, crop_width, crop_height, source_width, source_height,
                 )
+            elif self.priority == 'full_body':
+                # This profile is for one speaker who stays broadly in one
+                # place. A single robust anchor avoids the distracting tiny
+                # pans caused by gestures, while still centering an
+                # off-centre camera composition.
+                keyframes = self._stable_full_body_keyframes(
+                    observations, crop_width, crop_height, source_width, source_height,
+                )
             elif self.priority == 'body' and source_height > source_width and output_height > output_width:
                 # A vertical Body setup is normally a static, two-person or
                 # standing presentation shot. HOG/face boxes fluctuate with
@@ -376,6 +393,12 @@ class AutoReframeService:
         face_priority_detection = bool(faces and self.priority == 'face')
         if face_priority_detection:
             boxes = [self._face_priority_box(x, y, width, height) for x, y, width, height in faces]
+        elif self.priority == 'full_body' and body_boxes:
+            # A true body detection has the feet/legs that face-derived boxes
+            # cannot infer reliably. Prefer it for the standing-speaker mode.
+            boxes = body_boxes
+        elif self.priority == 'full_body' and faces:
+            boxes = [self._full_body_box_from_face(x, y, width, height) for x, y, width, height in faces]
         elif self.priority == 'body' and faces:
             # In a vertical group shot, HOG often joins the people with the
             # background and reports almost the whole frame as one "body".
@@ -629,6 +652,27 @@ class AutoReframeService:
         target_y = min(max_y, max(0.0, round(locked_y / 8.0) * 8.0))
         return [ReframeKeyframe(0.0, target_x, target_y)]
 
+    def _stable_full_body_keyframes(
+        self, observations, crop_width, crop_height, source_width, source_height,
+    ):
+        """Frame one mostly-stationary standing speaker as a stable full body shot."""
+        max_x = max(0.0, source_width - crop_width)
+        max_y = max(0.0, source_height - crop_height)
+        targets = [
+            (
+                min(max_x, max(0.0, self._horizontal_anchor_x(left, top, right, bottom) - crop_width / 2.0)),
+                self._target_crop_y(top, bottom, crop_height, max_y),
+            )
+            for _time, (left, top, right, bottom) in observations
+        ]
+        x_values = sorted(item[0] for item in targets)
+        y_values = sorted(item[1] for item in targets)
+        return [ReframeKeyframe(
+            0.0,
+            x_values[len(x_values) // 2] if x_values else max_x / 2.0,
+            y_values[len(y_values) // 2] if y_values else max_y / 2.0,
+        )]
+
     def _smooth_keyframes(self, observations, crop_width, crop_height, source_width, source_height):
         keyframes = []
         smooth_x = smooth_y = None
@@ -804,6 +848,20 @@ class AutoReframeService:
             top,
             body_width,
             body_height,
+        )
+
+    @staticmethod
+    def _full_body_box_from_face(x, y, width, height):
+        """Conservative whole-person estimate when HOG has no usable body box."""
+        face_center_x = x + (width / 2.0)
+        body_width = width * 3.2
+        top = y - height * 0.20
+        bottom = y + height * 9.5
+        return (
+            face_center_x - (body_width / 2.0),
+            top,
+            body_width,
+            bottom - top,
         )
 
     @classmethod

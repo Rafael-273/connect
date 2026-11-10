@@ -1,6 +1,6 @@
 {% extends 'member/external_media/base.html' %}
 
-{% block title %}Projetos de mídia{% endblock %}
+{% block title %}Projetos de edição{% endblock %}
 
 {% block head %}
 {{ block.super }}
@@ -24,7 +24,7 @@
         border-radius: 1rem;
         border: 1px solid #e9edf3;
         box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
-        overflow: hidden;
+        overflow: visible;
         transition: box-shadow 0.2s ease, transform 0.2s ease;
     }
     .media-project-card:hover {
@@ -37,7 +37,6 @@
         align-items: center;
         gap: 0.875rem;
         padding: 1rem 1.125rem;
-        border-bottom: 1px solid #eef1f5;
         background: linear-gradient(90deg, #fff9f9 0%, #fff 58%);
     }
 
@@ -55,18 +54,35 @@
         background: #C90905;
         box-shadow: 0 2px 8px rgba(201, 9, 5, 0.2);
     }
+    .media-project-preview {
+        flex-shrink: 0;
+        /* Keep the list preview in the same landscape format used by the
+           rendered project (1920 × 1080), without reserving full-size space. */
+        width: clamp(9rem, 15vw, 12rem);
+        aspect-ratio: 16 / 9;
+        overflow: hidden;
+        border: 1px solid #f0e2e1;
+        border-radius: .75rem;
+        background: #fff5f5;
+        box-shadow: 0 3px 10px rgba(90, 20, 16, .08);
+    }
+    .media-project-preview img { display:block; width:100%; height:100%; object-fit:cover; object-position:center; }
+    /* Portrait videos keep a little breathing room above the crop instead of
+       pinning it to the absolute top. */
+    .media-project-preview img.is-portrait { object-position:center 20%; }
+    .media-project-preview .media-project-avatar { width:100%; height:100%; border-radius:0; box-shadow:none; }
 
     .media-status-badge {
         display: inline-flex;
         align-items: center;
         gap: .42rem;
         flex-shrink: 0;
-        padding: .36rem .6rem;
+        padding: .4rem .65rem;
         border-radius: 9999px;
-        border: 0;
+        border: 1px solid transparent;
         font-size: .72rem;
-        font-weight: 700;
-        letter-spacing: .015em;
+        font-weight: 800;
+        letter-spacing: .02em;
         line-height: 1;
         white-space: nowrap;
     }
@@ -76,19 +92,43 @@
         height: .4rem;
         border-radius: 9999px;
         background: currentColor;
-        opacity: .85;
+        box-shadow: 0 0 0 3px currentColor;
+        opacity: .88;
     }
-    .media-status-badge.is-finished { background: #f0fdf4; color: #15803d; }
-    .media-status-badge.is-error { background: #fff1f2; color: #be123c; }
-    .media-status-badge.is-cancelled { background: #f1f5f9; color: #64748b; }
-    .media-status-badge.is-processing { background: #fff8e6; color: #b45309; }
+    .media-status-badge.is-finished { background:linear-gradient(135deg,#f0fdf4,#f7fef9); border-color:#d3f4dd; color:#16803d; }
+    .media-status-badge.is-error { background:linear-gradient(135deg,#fff1f2,#fff8f8); border-color:#fecdd3; color:#be123c; }
+    .media-status-badge.is-cancelled { background:#f8fafc; border-color:#e2e8f0; color:#64748b; }
+    .media-status-badge.is-processing { background:linear-gradient(135deg,#fff8e6,#fffdf5); border-color:#fce7b0; color:#b45309; }
 
     .media-project-actions {
         display: flex;
         align-items: center;
         gap: 0.4rem;
-        margin-left: auto;
     }
+    .media-project-open {
+        display: inline-flex;
+        align-items: center;
+        gap: .42rem;
+        flex-shrink: 0;
+        padding: .55rem .7rem;
+        border-radius: .65rem;
+        background: #C90905;
+        color: #fff;
+        font-size: .8rem;
+        font-weight: 800;
+        text-decoration: none;
+        transition: background .18s ease, transform .18s ease;
+    }
+    .media-project-open:hover { background:#ab0704; color:#fff; transform:translateY(-1px); }
+    .media-project-open i { font-size:.7rem; }
+    .media-project-header-status { margin-left: auto; }
+    .media-project-more { position:relative; flex-shrink:0; }
+    .media-project-more summary { list-style:none; }
+    .media-project-more summary::-webkit-details-marker { display:none; }
+    .media-project-more__list { position:absolute; z-index:30; top:calc(100% + .45rem); right:0; width:12.5rem; overflow:hidden; border:1px solid #e2e8f0; border-radius:.8rem; background:#fff; padding:.35rem; box-shadow:0 16px 36px rgba(15,23,42,.16); }
+    .media-project-more__item { display:flex; width:100%; align-items:center; gap:.65rem; border-radius:.55rem; padding:.65rem .7rem; color:#475467; font-size:.82rem; font-weight:700; text-align:left; text-decoration:none; }
+    .media-project-more__item:hover { background:#f8fafc; color:#C90905; }
+    .media-project-more__item.is-danger:hover { background:#fff1f2; color:#dc2626; }
     .media-project-action {
         width: 2rem;
         height: 2rem;
@@ -124,6 +164,14 @@
         box-shadow: 0 24px 64px rgba(15, 23, 42, .24);
         overflow: hidden;
     }
+    .media-create-dialog { width: min(32rem, 100%); }
+    .media-create-dialog .media-confirm-content { padding: 1.5rem; }
+    .media-create-dialog label { display:block; margin-bottom:.4rem; color:#374151; font-size:.875rem; font-weight:700; }
+    .media-create-dialog input,
+    .media-create-dialog select { width:100%; padding:.7rem .8rem; border:1px solid #d1d5db; border-radius:.7rem; background:#fff; }
+    .media-create-dialog input:focus,
+    .media-create-dialog select:focus { outline:none; border-color:#C90905; box-shadow:0 0 0 3px rgba(201,9,5,.1); }
+    .media-create-dialog .errorlist { margin:.35rem 0 0; color:#b91c1c; font-size:.8125rem; }
     .media-confirm-content { padding: 1.6rem; }
     .media-confirm-icon {
         width: 2.8rem;
@@ -154,6 +202,37 @@
     .media-confirm-cancel:hover { background: #e5e7eb; }
     .media-confirm-delete { background: #C90905; color: #fff; }
     .media-confirm-delete:hover { background: #a60704; }
+
+    .project-delete-loading {
+        position: fixed;
+        inset: 0;
+        z-index: 110;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(15, 23, 42, .66);
+        backdrop-filter: blur(4px);
+    }
+    .project-delete-loading.is-open { display: flex; animation: fadeIn .18s ease-out; }
+    .project-delete-loading__card {
+        width: min(25rem, 100%);
+        padding: 2rem;
+        border-radius: 1.25rem;
+        background: #fff;
+        text-align: center;
+        box-shadow: 0 24px 64px rgba(15, 23, 42, .28);
+    }
+    .project-delete-loading__spinner {
+        width: 3rem;
+        height: 3rem;
+        margin: 0 auto 1rem;
+        border: .3rem solid #fee2e2;
+        border-top-color: #C90905;
+        border-radius: 50%;
+        animation: project-delete-spin .8s linear infinite;
+    }
+    @keyframes project-delete-spin { to { transform: rotate(360deg); } }
 
     .media-project-card-body { padding: .875rem 1.125rem 1rem; }
 
@@ -274,23 +353,41 @@
 
         .media-filter-bar { margin-bottom: 1rem; }
         .media-project-card-header {
-            flex-wrap: wrap;
-            align-items: flex-start;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto auto;
+            align-items: start;
             gap: .75rem;
             padding: .9rem;
         }
-        .media-project-card-header > .flex-1 {
-            min-width: 0;
-            padding-top: .1rem;
+        .media-project-preview {
+            grid-column: 1 / -1;
+            grid-row: 1;
+            width: 100%;
+            border-radius: .9rem;
         }
+        .media-project-card-header > .flex-1 {
+            grid-column: 1;
+            grid-row: 2;
+            min-width: 0;
+            padding-top: .15rem;
+        }
+        .media-project-header-status { grid-column: 2; grid-row: 2; margin-left: 0; }
+        .media-project-open {
+            grid-column: 1 / -1;
+            grid-row: 3;
+            width: 100%;
+            justify-content: center;
+            min-height: 2.75rem;
+        }
+        .media-project-more { grid-column: 3; grid-row: 2; align-self: center; }
         .media-project-actions {
             order: initial;
             width: auto;
-            margin-left: auto;
             padding-top: 0;
             border-top: 0;
             align-self: center;
         }
+        .media-project-open { padding:.52rem .62rem; }
         .media-project-action { width: 2.2rem; height: 2.2rem; }
         .media-project-card-body { padding: .9rem; }
         .media-project-meta { display: grid; gap: .65rem; }
@@ -300,8 +397,8 @@
 {% endblock %}
 
 {% block media_header_title %}
-<p class="text-xs font-bold uppercase tracking-widest mb-0.5" style="color:#C90905">Histórico de processamentos</p>
-<h1 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">Projetos de <span style="color:#C90905">mídia</span></h1>
+<p class="text-xs font-bold uppercase tracking-widest mb-0.5" style="color:#C90905">Área de edição</p>
+<h1 class="text-xl sm:text-2xl md:text-3xl font-black text-gray-900 leading-tight">Projetos de <span style="color:#C90905">edição</span></h1>
 <p class="text-sm text-gray-600 font-medium mt-1">
     {% if query or status != 'all' %}
         {{ total }} resultado{{ total|pluralize }} encontrado{{ total|pluralize }}
@@ -309,10 +406,6 @@
         {{ total_all }} projeto{{ total_all|pluralize }} · {{ processing_count }} em andamento · {{ total_downloads }} download{{ total_downloads|pluralize }}
     {% endif %}
 </p>
-{% endblock %}
-
-{% block media_header_actions %}
-<a href="{% url 'external_media_mastering_create' %}" class="hidden sm:inline-flex media-btn media-secondary"><i class="fas fa-wave-square"></i>Masterizar vídeo</a>
 {% endblock %}
 
 {% block media_content %}
@@ -379,21 +472,21 @@
             </div>
         </div>
 
-        <a href="{% url 'external_media_create' %}"
+        <button type="button" data-open-create-project
            class="sm:hidden flex-shrink-0 w-10 h-10 text-white rounded-lg transition-all flex items-center justify-center"
            style="background-color: #C90905;"
            title="Novo projeto"
            aria-label="Novo projeto">
             <i class="fas fa-plus"></i>
-        </a>
+        </button>
         </form>
 
-        <a href="{% url 'external_media_create' %}"
+        <button type="button" data-open-create-project
            class="hidden sm:flex flex-shrink-0 px-4 py-2 text-white rounded-lg transition-all duration-200 items-center gap-2 text-sm font-semibold"
            style="background-color: #C90905;">
             <i class="fas fa-plus"></i>
             Novo projeto
-        </a>
+        </button>
     </div>
 </div>
 
@@ -403,7 +496,17 @@
             {% for project in projects %}
             <article class="media-project-card">
                 <div class="media-project-card-header">
-                    <div class="media-project-avatar"><span class="mt-1">{{ project.name|slice:":1"|upper }}</span></div>
+                    <div class="media-project-preview">
+                        {% for asset in project.render_job.dashboard_thumbnails %}
+                        <img class="media-project-preview-image" src="{% url 'external_media_asset' project.render_job.public_id asset.pk %}?preview=1" alt="Prévia de {{ project.name }}" loading="lazy">
+                        {% empty %}
+                        {% if project.dashboard_media %}
+                        <img class="media-project-preview-image" src="{{ project.dashboard_media.0.thumbnail.url }}" alt="Prévia de {{ project.name }}" loading="lazy">
+                        {% else %}
+                        <div class="media-project-avatar"><span class="mt-1">{{ project.name|slice:":1"|upper }}</span></div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
                     <div class="flex-1 min-w-0">
                         <h3 class="text-base font-bold text-gray-900 truncate">{{ project.name }}</h3>
                         <p class="text-xs text-gray-500 flex items-center gap-1.5 mt-0.5">
@@ -411,60 +514,18 @@
                             {{ project.template_version.template.name }}
                         </p>
                     </div>
-                    <div class="media-project-actions">
-                        <a href="{% url 'external_media_project_edit' project.public_id %}" class="media-project-action" title="Editar projeto" aria-label="Editar projeto {{ project.name }}">
-                            <i class="fas fa-pen"></i>
-                        </a>
-                        <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">
-                            {% csrf_token %}
-                            <button class="media-project-action" title="Clonar projeto" aria-label="Clonar projeto {{ project.name }}">
-                                <i class="fas fa-clone"></i>
-                            </button>
-                        </form>
-                        <button type="button" class="media-project-action is-danger" data-delete-project data-project-name="{{ project.name }}" data-project-status="{{ project.status }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}" title="Excluir projeto" aria-label="Excluir projeto {{ project.name }}">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="media-project-card-body">
-                    <div class="media-project-meta sm:hidden">
-                        <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
-                        <span><i class="fas fa-user"></i>{{ project.created_by.name }}</span>
-                        <span><i class="far fa-calendar-alt"></i>{{ project.created_at|date:'d/m/Y H:i' }}</span>
-                    </div>
-                    <div class="hidden sm:grid media-info-grid">
-                        <div class="media-info-item">
-                            <i class="fas fa-user"></i>
-                            <span class="mt-1">{{ project.created_by.name }}</span>
+                    <span class="media-status-badge media-project-header-status {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
+                    <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-project-open" aria-label="Abrir projeto {{ project.name }}">
+                        <span>Abrir</span><i class="fas fa-arrow-right"></i>
+                    </a>
+                    <details class="media-project-more">
+                        <summary class="media-project-action cursor-pointer" title="Mais ações" aria-label="Mais ações para {{ project.name }}"><i class="fas fa-ellipsis"></i></summary>
+                        <div class="media-project-more__list">
+                            <a href="{% url 'external_media_project_edit' project.public_id %}" class="media-project-more__item"><i class="fas fa-pen"></i>Editar projeto</a>
+                            <form method="post" action="{% url 'external_media_project_duplicate' project.public_id %}">{% csrf_token %}<button type="submit" class="media-project-more__item"><i class="fas fa-clone"></i>Clonar projeto</button></form>
+                            <button type="button" class="media-project-more__item is-danger" data-delete-project data-project-name="{{ project.name }}" data-project-status="{{ project.status }}" data-delete-url="{% url 'external_media_project_delete' project.public_id %}"><i class="fas fa-trash"></i>Excluir projeto</button>
                         </div>
-                        <div class="media-info-item">
-                            <i class="far fa-calendar-alt"></i>
-                            <span class="mt-1">{{ project.created_at|date:'d/m/Y H:i' }}</span>
-                        </div>
-                        <div class="media-info-item">
-                            <i class="fas fa-stopwatch"></i>
-                            <span class="mt-1">{% if project.duration_minutes != None %}{{ project.duration_minutes }} min de processamento{% else %}Tempo indisponível{% endif %}</span>
-                        </div>
-                        <div class="media-info-item">
-                            <i class="fas fa-download"></i>
-                            {% with downloads=project.render_job.download_count|default:0 %}
-                            <span class="mt-1">{{ downloads }} download{{ downloads|pluralize }}</span>
-                            {% endwith %}
-                        </div>
-                        <div class="media-info-item span-full">
-                            <i class="fas fa-circle-info"></i>
-                            <span class="media-status-badge {% if project.status == 'FINISHED' %}is-finished{% elif project.status == 'ERROR' %}is-error{% elif project.status == 'CANCELLED' %}is-cancelled{% else %}is-processing{% endif %}">{{ project.get_status_display }}</span>
-                        </div>
-                    </div>
-
-                    <div class="media-project-footer">
-                        <a href="{% url 'external_media_project_detail' project.public_id %}" class="media-open-btn">
-                            <span class="media-open-btn-icon"><i class="fas fa-play"></i></span>
-                            <span>Abrir projeto</span>
-                            <i class="fas fa-arrow-right media-open-btn-arrow"></i>
-                        </a>
-                    </div>
+                    </details>
                 </div>
             </article>
             {% endfor %}
@@ -481,52 +542,42 @@
                         Ainda não há projetos criados. Comece produzindo o primeiro vídeo!
                     {% endif %}
                 </p>
-                <a href="{% url 'external_media_create' %}" class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
+                <button type="button" data-open-create-project class="inline-flex items-center gap-2 px-8 py-4 text-white font-bold rounded-2xl transition-all hover:-translate-y-1 hover:opacity-90" style="background: #C90905;">
                     <i class="fas fa-plus"></i>
                     Novo projeto
-                </a>
+                </button>
             </div>
         {% endif %}
     </div>
+</div>
 
-    {% if mastering_jobs %}
-    <section class="media-legacy-section">
-        <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
-            <div>
-                <h2 class="text-lg font-black text-gray-900 mb-1">Masterizações</h2>
-                <p class="text-sm text-gray-500">Vídeos finalizados tratados sem recompressão da imagem.</p>
+<div id="create-project-modal" class="media-confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="create-project-title">
+    <div class="media-confirm-dialog media-create-dialog" role="document">
+        <form method="post" action="{% url 'external_media_create' %}">
+            {% csrf_token %}
+            <div class="media-confirm-content">
+                <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-start gap-3">
+                        <span class="media-confirm-icon"><i class="fas fa-plus"></i></span>
+                        <div class="pt-0.5">
+                            <h2 id="create-project-title" class="text-xl font-black text-gray-900">Novo projeto de edição</h2>
+                            <p class="text-sm text-gray-600 leading-relaxed mt-1">Dê um nome e escolha o template para começar.</p>
+                        </div>
+                    </div>
+                    <button type="button" data-close-create-project class="w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors" aria-label="Fechar"><i class="fas fa-xmark"></i></button>
+                </div>
+                {% for error in create_form.non_field_errors %}<p class="mt-4 text-sm font-bold text-red-700">{{ error }}</p>{% endfor %}
+                <div class="mt-5 space-y-4">
+                    <div>{{ create_form.name.label_tag }}{{ create_form.name }}{{ create_form.name.errors }}</div>
+                    <div>{{ create_form.template_version.label_tag }}{{ create_form.template_version }}{{ create_form.template_version.errors }}</div>
+                </div>
+                <div class="media-confirm-actions">
+                    <button type="button" class="media-confirm-cancel" data-close-create-project>Cancelar</button>
+                    <button type="submit" class="media-confirm-delete"><i class="fas fa-arrow-right mr-1"></i>Continuar</button>
+                </div>
             </div>
-            <a href="{% url 'external_media_mastering_create' %}" class="media-btn media-secondary text-sm"><i class="fas fa-plus"></i>Nova masterização</a>
-        </div>
-        <div class="media-project-list space-y-3">
-            {% for mastering in mastering_jobs %}
-            <article class="media-project-card">
-                <div class="media-project-card-header">
-                    <div class="media-project-avatar"><i class="fas fa-wave-square"></i></div>
-                    <div class="flex-1 min-w-0">
-                        <h3 class="text-base font-bold text-gray-900 truncate">{{ mastering.name }}</h3>
-                        <p class="text-xs text-gray-500">{{ mastering.mastering_profile.name|default:'Aguardando perfil' }}</p>
-                    </div>
-                    <span class="media-status-badge {% if mastering.status == 'FINISHED' %}is-finished{% elif mastering.status == 'ERROR' %}is-error{% else %}is-processing{% endif %}">{{ mastering.get_status_display }}</span>
-                </div>
-                <div class="media-project-card-body">
-                    <div class="media-info-grid">
-                        <div class="media-info-item"><i class="far fa-calendar-alt"></i><span>{{ mastering.created_at|date:'d/m/Y H:i' }}</span></div>
-                        <div class="media-info-item"><i class="fas fa-volume-up"></i><span>{% if mastering.output_metrics.integrated_lufs != None %}{{ mastering.output_metrics.integrated_lufs|floatformat:1 }} LUFS{% else %}Análise em andamento{% endif %}</span></div>
-                        <div class="media-info-item"><i class="fas fa-download"></i><span>{{ mastering.download_count }} download{{ mastering.download_count|pluralize }}</span></div>
-                    </div>
-                    <a href="{% url 'external_media_mastering_detail' mastering.public_id %}" class="media-open-btn">
-                        <span class="media-open-btn-icon"><i class="fas fa-sliders-h"></i></span>
-                        <span class="mt-2">Abrir masterização</span>
-                        <i class="fas fa-arrow-right media-open-btn-arrow mr-1"></i>
-                    </a>
-                </div>
-            </article>
-            {% endfor %}
-        </div>
-    </section>
-    {% endif %}
-
+        </form>
+    </div>
 </div>
 
 <div id="delete-project-modal" class="media-confirm-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
@@ -552,7 +603,29 @@
     </div>
 </div>
 
+<div id="project-delete-loading" class="project-delete-loading" aria-hidden="true" role="status" aria-live="assertive">
+    <div class="project-delete-loading__card">
+        <div class="project-delete-loading__spinner" aria-hidden="true"></div>
+        <h2 class="text-xl font-black text-gray-900">Excluindo projeto…</h2>
+        <p class="mt-2 text-sm leading-relaxed text-gray-600">Removendo vídeos, arquivos e exportações vinculados. Isso pode levar alguns instantes.</p>
+    </div>
+</div>
+
 <script>
+    (function() {
+        function setPreviewCrop(image) {
+            image.classList.toggle(
+                'is-portrait',
+                image.naturalWidth > 0 && image.naturalHeight > image.naturalWidth,
+            );
+        }
+
+        document.querySelectorAll('.media-project-preview-image').forEach((image) => {
+            if (image.complete) setPreviewCrop(image);
+            else image.addEventListener('load', () => setPreviewCrop(image), { once: true });
+        });
+    })();
+
     const filterToggle = document.getElementById('filter-toggle');
     const filterPanel  = document.getElementById('filter-panel');
 
@@ -573,14 +646,47 @@
     });
 
     (function() {
+        const modal = document.getElementById('create-project-modal');
+        const form = modal.querySelector('form');
+        let trigger = null;
+
+        function closeModal() {
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            trigger?.focus();
+        }
+
+        document.querySelectorAll('[data-open-create-project]').forEach((button) => {
+            button.addEventListener('click', () => {
+                trigger = button;
+                modal.classList.add('is-open');
+                modal.setAttribute('aria-hidden', 'false');
+                form.querySelector('input, select')?.focus();
+            });
+        });
+        modal.querySelectorAll('[data-close-create-project]').forEach((button) => {
+            button.addEventListener('click', closeModal);
+        });
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) closeModal();
+        });
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+        });
+    })();
+
+    (function() {
         const modal = document.getElementById('delete-project-modal');
         const form = document.getElementById('delete-project-form');
         const name = document.getElementById('delete-project-name');
         const processingNote = document.getElementById('delete-project-processing-note');
+        const loading = document.getElementById('project-delete-loading');
+        const confirmButton = form.querySelector('.media-confirm-delete');
         const activeStatuses = new Set(['PENDING', 'ASSEMBLING', 'PROCESSING', 'AWAITING_REVIEW']);
         let trigger = null;
 
         function closeModal() {
+            if (form.dataset.submitting === 'true') return;
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             form.removeAttribute('action');
@@ -590,7 +696,10 @@
 
         document.querySelectorAll('[data-delete-project]').forEach((button) => {
             button.addEventListener('click', () => {
+                button.closest('details')?.removeAttribute('open');
                 trigger = button;
+                delete form.dataset.submitting;
+                confirmButton.disabled = false;
                 name.textContent = `“${button.dataset.projectName}”`;
                 form.action = button.dataset.deleteUrl;
                 processingNote.classList.toggle('hidden', !activeStatuses.has(button.dataset.projectStatus || ''));
@@ -600,6 +709,26 @@
             });
         });
         modal.querySelector('[data-close-delete-modal]').addEventListener('click', closeModal);
+        form.addEventListener('submit', (event) => {
+            if (form.dataset.submitting === 'true') {
+                event.preventDefault();
+                return;
+            }
+            form.dataset.submitting = 'true';
+            confirmButton.disabled = true;
+            confirmButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Excluindo…';
+            modal.querySelectorAll('button').forEach((button) => { button.disabled = true; });
+            loading.classList.add('is-open');
+            loading.setAttribute('aria-hidden', 'false');
+        });
+        window.addEventListener('pageshow', () => {
+            if (!loading.classList.contains('is-open')) return;
+            loading.classList.remove('is-open');
+            loading.setAttribute('aria-hidden', 'true');
+            delete form.dataset.submitting;
+            confirmButton.disabled = false;
+            confirmButton.innerHTML = '<i class="fas fa-trash mr-1"></i>Excluir projeto';
+        });
         modal.addEventListener('click', (event) => {
             if (event.target === modal) closeModal();
         });

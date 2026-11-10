@@ -3,6 +3,8 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
 from ...models.media_content import MediaContent
@@ -12,6 +14,7 @@ from ...services.demands_hub import (
     DEMAND_TYPES_ORGANIZATIONAL,
     DEMAND_TYPES_TECHNICAL,
     ASSIGNMENT_ROLE_PRESETS,
+    CONTENT_STATUS_PROTECTED,
     build_assignment_rows,
     build_event_detail,
     build_free_detail,
@@ -36,20 +39,36 @@ from ...forms.media_planning import (
 from .mixins import MediaLeaderRequiredMixin, MediaMemberRequiredMixin
 
 
+def _task_post_with_datetime(post_data):
+    """Une os campos de data e hora usados no editor rápido de etapas."""
+    data = post_data.copy()
+    if 'due_date_date' in data:
+        due_date = data.get('due_date_date', '')
+        due_time = data.get('due_date_time', '') or '12:00'
+        data['due_date'] = f'{due_date}T{due_time}' if due_date else ''
+    return data
+
+
 class MediaContentListView(MediaMemberRequiredMixin, View):
     """Hub Demandas e Eventos — lista + master-detail."""
 
     template_name = 'member/media_planning/demands_hub.html'
 
-    def get(self, request):
+    def get(self, request, detail_kind=None, detail_pk=None):
         filter_kind = request.GET.get('kind', 'all')
         if filter_kind not in ('all', 'events', 'free'):
             filter_kind = 'all'
+        filter_status = request.GET.get('status', 'open')
+        if filter_status not in ('open', 'completed', 'all'):
+            filter_status = 'open'
         create_mode = request.GET.get('create', '')
         if create_mode not in ('demand', 'event'):
             create_mode = ''
 
-        selected = request.GET.get('selected', '')
+        detail_page = detail_kind in ('event', 'free') and bool(detail_pk)
+        # A listagem não usa mais o antigo painel mestre-detalhe: cada item
+        # abre sua própria rota de detalhes.
+        selected = f'{detail_kind}-{detail_pk}' if detail_page else ''
         sidebar_months = build_sidebar_items(request)
         nav_context = self._nav_context()
 
@@ -59,6 +78,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 'sidebar_months': sidebar_months,
                 'selected': '',
                 'filter_kind': filter_kind,
+                'filter_status': filter_status,
                 'filter_q': request.GET.get('q', ''),
                 'filter_responsible': request.GET.get('responsible', ''),
                 'filter_team': request.GET.get('team', ''),
@@ -83,7 +103,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
 
         # Keep the first visit useful, but do not rebuild a full detail panel just
         # because the user switched between list tabs.
-        if not create_mode and not selected and not request.GET.get('kind') and sidebar_months:
+        if detail_page and not create_mode and not selected and not request.GET.get('kind') and sidebar_months:
             first_month = sidebar_months[0]
             if first_month.get('items') and request.GET.get('auto_select', '1') != '0':
                 selected = first_month['items'][0]['key']
@@ -108,10 +128,9 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 event_edit_form = MediaEventQuickForm(
                     prefix='event-edit',
                     initial={field: getattr(event, field) for field in (
-                        'title', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
+                        'title', 'event_type', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
                     )},
                 )
-                del event_edit_form.fields['event_type']
             except Exception:
                 selected = ''
                 detail = None
@@ -125,11 +144,29 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
 
         demand_form = MediaDemandQuickForm(prefix='demand')
         event_form = MediaEventQuickForm(prefix='event')
+        extra_event_dates = []
+        if detail_type == 'event' and detail:
+            event = detail['event']
+            event_form = MediaEventQuickForm(
+                prefix='event',
+                initial={field: getattr(event, field) for field in (
+                    'title', 'event_type', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
+                )},
+            )
+            extra_event_dates = [
+                {
+                    'date': event_date.event_date.strftime('%Y-%m-%d'),
+                    'time': event_date.event_time.strftime('%H:%M') if event_date.event_time else '',
+                }
+                for event_date in detail['event'].dates.all()
+            ]
         event_types = list(event_form.fields['event_type'].queryset)
         edit_form = MediaDemandQuickForm(prefix='edit')
+        inline_general_form = MediaDemandQuickForm(prefix='inline-general')
         edit_assignments = [{'id': '', 'role': '', 'user_id': '', 'due_days': '', 'due_relation': 'before'}]
         if detail_type == 'free' and detail:
             edit_form = MediaDemandQuickForm(instance=detail['content'], prefix='edit')
+            inline_general_form = MediaDemandQuickForm(instance=detail['content'], prefix='inline-general')
             edit_assignments = build_assignment_rows(detail['content'])
 
         failed_form = getattr(request, 'failed_demand_form', None)
@@ -158,11 +195,12 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             'demand_form': demand_form,
             'event_form': event_form,
             'event_types': event_types,
-            'extra_event_dates': [],
+            'extra_event_dates': extra_event_dates,
             'edit_form': edit_form,
+            'inline_general_form': inline_general_form,
             'edit_assignments': edit_assignments,
-            'demand_assignments': failed_assignments if failed_form is not None and failed_form.prefix == 'demand' else [{'id': '', 'role': '', 'user_id': '', 'due_days': '', 'due_relation': 'before', 'description': '', 'is_custom_role': False}],
-            'blank_assignment': {'id': '', 'role': '', 'user_id': '', 'due_days': '', 'due_relation': 'before', 'description': '', 'is_custom_role': False},
+            'demand_assignments': failed_assignments if failed_form is not None and failed_form.prefix == 'demand' else [{'id': '', 'role': '', 'user_id': '', 'due_days': '', 'due_relation': 'before', 'due_date': '', 'description': '', 'is_custom_role': False}],
+            'blank_assignment': {'id': '', 'role': '', 'user_id': '', 'due_days': '', 'due_relation': 'before', 'due_date': '', 'description': '', 'is_custom_role': False},
             'demand_type_roles': get_demand_type_roles_map(),
             'assignment_role_presets': ASSIGNMENT_ROLE_PRESETS,
             'edit_mode': request.GET.get('edit', '') == '1',
@@ -180,6 +218,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             'selected': selected,
             'detail': detail,
             'detail_type': detail_type,
+            'detail_page': detail_page,
             'event_template': event_template,
             'available_template_count': available_template_count,
             'event_edit_form': event_edit_form,
@@ -191,6 +230,7 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
                 for date in detail['event'].dates.all()
             ] if detail_type == 'event' and detail else [],
             'filter_kind': filter_kind,
+            'filter_status': filter_status,
             'filter_q': request.GET.get('q', ''),
             'filter_responsible': request.GET.get('responsible', ''),
             'filter_team': request.GET.get('team', ''),
@@ -211,6 +251,13 @@ class MediaDemandsPanelView(MediaMemberRequiredMixin, View):
 
         if kind == 'event' and pk:
             detail = build_event_detail(pk)
+            event = detail['event']
+            event_form = MediaEventQuickForm(
+                prefix='event',
+                initial={field: getattr(event, field) for field in (
+                    'title', 'event_type', 'event_date', 'event_time', 'end_date', 'end_time', 'location', 'description',
+                )},
+            )
             event_template = get_template_for_event(detail['event'])
             available_template_count = get_available_template_items(detail['event']).count()
             return render(request, 'member/media_planning/partials/demands_detail_event.html', {
@@ -218,6 +265,15 @@ class MediaDemandsPanelView(MediaMemberRequiredMixin, View):
                 'detail': detail,
                 'event_template': event_template,
                 'available_template_count': available_template_count,
+                'event_form': event_form,
+                'event_types': list(event_form.fields['event_type'].queryset),
+                'extra_event_dates': [
+                    {
+                        'date': event_date.event_date.strftime('%Y-%m-%d'),
+                        'time': event_date.event_time.strftime('%H:%M') if event_date.event_time else '',
+                    }
+                    for event_date in detail['event'].dates.all()
+                ],
                 'selected': request.GET.get('selected'),
             })
         if kind == 'free' and pk:
@@ -360,7 +416,7 @@ class MediaContentDeleteView(MediaLeaderRequiredMixin, View):
 class MediaTaskCreateView(MediaLeaderRequiredMixin, View):
     def post(self, request, pk):
         content = get_object_or_404(MediaContent, pk=pk)
-        form = MediaTaskForm(request.POST, content=content)
+        form = MediaTaskForm(_task_post_with_datetime(request.POST), content=content)
         if form.is_valid():
             task = form.save(commit=False)
             task.content = content
@@ -368,6 +424,54 @@ class MediaTaskCreateView(MediaLeaderRequiredMixin, View):
             messages.success(request, f'Tarefa "{task.title}" criada!')
         else:
             messages.error(request, 'Erro ao criar a tarefa. Verifique os campos.')
+        next_url = request.POST.get('next', '')
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
+        return redirect(content_hub_url(content))
+
+
+class MediaTaskUpdateView(MediaMemberRequiredMixin, View):
+    """Atualiza uma única etapa a partir do painel de detalhes."""
+
+    def post(self, request, pk):
+        task = get_object_or_404(MediaTask, pk=pk)
+        form = MediaTaskForm(_task_post_with_datetime(request.POST), instance=task, content=task.content)
+        if form.is_valid():
+            task = form.save()
+            sync_content_status_from_tasks(task.content)
+            messages.success(request, f'Etapa "{task.title}" atualizada!')
+        else:
+            messages.error(request, 'Não foi possível atualizar a etapa. Verifique os campos.')
+
+        next_url = request.POST.get('next', '')
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
+        return redirect(content_hub_url(task.content))
+
+
+class MediaTaskDeleteView(MediaLeaderRequiredMixin, View):
+    """Remove uma etapa e recalcula o status da demanda."""
+
+    def post(self, request, pk):
+        task = get_object_or_404(MediaTask.objects.select_related('content'), pk=pk)
+        content = task.content
+        title = task.title
+        task.delete()
+        if content.tasks.exists():
+            sync_content_status_from_tasks(content)
+        elif content.status not in CONTENT_STATUS_PROTECTED and content.status != 'pending':
+            MediaContent.objects.filter(pk=content.pk).update(status='pending', update_at=timezone.now())
+        messages.success(request, f'Etapa "{title}" excluída.')
+
+        next_url = request.POST.get('next', '')
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+        ):
+            return redirect(next_url)
         return redirect(content_hub_url(content))
 
 
@@ -402,15 +506,17 @@ class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
 
 class MediaTaskUpdateDescriptionView(MediaMemberRequiredMixin, View):
     def post(self, request, pk):
-        from django.utils.html import linebreaks, urlize
-        from django.utils.safestring import mark_safe
+        from django.utils.html import linebreaks, strip_tags, urlize
 
         task = get_object_or_404(MediaTask, pk=pk)
         description = request.POST.get('description', '').strip()
         task.description = description
         task.save(update_fields=['description', 'update_at'])
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            html = mark_safe(linebreaks(urlize(description))) if description else ''
+            # Descrições legadas podem conter HTML do editor. Nos cards elas
+            # são apenas um resumo textual, portanto nunca exibimos as tags.
+            plain_description = strip_tags(description)
+            html = linebreaks(urlize(plain_description, autoescape=True), autoescape=True) if description else ''
             return JsonResponse({'description': description, 'description_html': html})
         next_url = request.POST.get('next')
         if next_url:

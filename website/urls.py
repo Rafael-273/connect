@@ -1,6 +1,10 @@
 from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventRemoveFromMediaView, MediaEventUpdateView
+from website.views.media_planning.my_work import (
+    MediaMyWorkView, MediaMyWorkDetailView, MediaMyWorkStatusView, MediaMyWorkAttachmentView,
+)
 from .views import ministry_organization as ministry_org
 from django.urls import path
+from django.views.generic import RedirectView
 from django.contrib.auth import views as auth_views
 from django.conf import settings
 from .views.media_planning import (
@@ -27,6 +31,8 @@ from .views.media_planning import (
     MediaContentUpdateView,
     MediaContentDeleteView,
     MediaTaskCreateView,
+    MediaTaskUpdateView,
+    MediaTaskDeleteView,
     MediaTaskUpdateStatusView,
     MediaTaskUpdateDescriptionView,
     MediaCommentCreateView,
@@ -70,6 +76,7 @@ from .views.media_planning import (
 )
 from .views.music import MusicListView, MusicCreateView, MusicDeleteView, MusicUpdateView, MusicUserListView
 from .views.home import HomeView, TestimonyListView, ContactView
+from .views.philadelphia_site import PhiladelphiaSiteView
 from .views.visitor import VisitorCreateView, MemberVisitorCreateView, MemberVisitorListView, PastoralVisitorListView, PastoralVisitorReportView
 from .views.evangelism import EvangelismCreateView, EvangelismListView
 from .views.member import (
@@ -236,11 +243,15 @@ from .views.external_media import (
     ExternalMediaProjectPreviewApplyAllNoiseView,
     ExternalMediaProjectPreviewCutView,
     ExternalMediaProjectPreviewVideoSplitView,
+    ExternalMediaProjectPreviewVideoMoveView,
     ExternalMediaProjectPreviewNoiseClipView,
     ExternalMediaProjectPreviewSubtitleView,
+    ExternalMediaProjectPreviewSubtitleCreateView,
     ExternalMediaProjectPreviewTransformView,
+    ExternalMediaProjectPreviewColorView,
     ExternalMediaProjectPreviewOverlayView,
     ExternalMediaProjectPreviewOverlayAssetView,
+    ExternalMediaProjectPreviewCameraView,
     ExternalMediaProjectPreviewBrollView,
     ExternalMediaProjectPreviewBrollAssetView,
     ExternalMediaProjectPreviewBrollUploadView,
@@ -254,19 +265,16 @@ from .views.external_media import (
     ExternalMediaProjectSettingsView,
     ExternalMediaProjectStatusView,
     ExternalMediaProjectUploadView,
+    ExternalMediaProjectDirectUploadView,
     ExternalMediaProjectUploadPresignView,
+    ExternalMediaProjectUploadMultipartView,
+    ExternalMediaProjectDirectUploadPresignView,
     ExternalMediaProjectCustomBlockUploadPresignView,
     ExternalMediaProjectUploadCompleteView,
     ExternalMediaProjectTimelineDownloadView,
     ExternalMediaRenderView,
     ExternalMediaRetryView,
     ExternalMediaStatusView,
-    VideoMasteringCreateView,
-    VideoMasteringDetailView,
-    VideoMasteringOriginalView,
-    VideoMasteringOutputView,
-    VideoMasteringRunView,
-    VideoMasteringStatusView,
 )
 from .views.subtitle_review import (
     ProjectSubtitleReviewApproveAllView,
@@ -301,6 +309,12 @@ urlpatterns = [
     path('ministries/<int:ministry_id>/manuals/<int:pk>/archive/', ministry_org.MinistryManualArchive.as_view(), name='ministry_manual_archive'),
 
     path('', HomeView.as_view(), name='home'),
+    path('sitio-filadelfia/', PhiladelphiaSiteView.as_view(), name='philadelphia_site'),
+    path(
+        'philadelphia-site/',
+        RedirectView.as_view(pattern_name='philadelphia_site', permanent=True),
+        name='philadelphia_site_legacy',
+    ),
     path('testemunhos/', TestimonyListView.as_view(), name='testemunhos'),
     path('contato/', ContactView.as_view(), name='contato'),
     path('visitor/', VisitorCreateView.as_view(), name='visitor'),
@@ -379,11 +393,15 @@ urlpatterns = [
     path('member/media/projects/<uuid:public_id>/preview/music/', ExternalMediaProjectPreviewMusicView.as_view(), name='external_media_project_preview_music'),
     path('member/media/projects/<uuid:public_id>/preview/decisions/<str:decision_id>/', ExternalMediaProjectPreviewDecisionView.as_view(), name='external_media_project_preview_decision'),
     path('member/media/projects/<uuid:public_id>/preview/noise/apply-all/', ExternalMediaProjectPreviewApplyAllNoiseView.as_view(), name='external_media_project_preview_noise_apply_all'),
+    path('member/media/projects/<uuid:public_id>/preview/cameras/', ExternalMediaProjectPreviewCameraView.as_view(), name='external_media_project_preview_camera'),
     path('member/media/projects/<uuid:public_id>/preview/cuts/', ExternalMediaProjectPreviewCutView.as_view(), name='external_media_project_preview_cut_create'),
     path('member/media/projects/<uuid:public_id>/preview/video-splits/', ExternalMediaProjectPreviewVideoSplitView.as_view(), name='external_media_project_preview_video_split'),
+    path('member/media/projects/<uuid:public_id>/preview/video-move/', ExternalMediaProjectPreviewVideoMoveView.as_view(), name='external_media_project_preview_video_move'),
     path('member/media/projects/<uuid:public_id>/preview/noise/<str:decision_id>/', ExternalMediaProjectPreviewNoiseClipView.as_view(), name='external_media_project_preview_noise_clip'),
     path('member/media/projects/<uuid:public_id>/preview/subtitles/<int:cue_id>/', ExternalMediaProjectPreviewSubtitleView.as_view(), name='external_media_project_preview_subtitle'),
+    path('member/media/projects/<uuid:public_id>/preview/subtitles/new/', ExternalMediaProjectPreviewSubtitleCreateView.as_view(), name='external_media_project_preview_subtitle_create'),
     path('member/media/projects/<uuid:public_id>/preview/transforms/<str:decision_id>/', ExternalMediaProjectPreviewTransformView.as_view(), name='external_media_project_preview_transform'),
+    path('member/media/projects/<uuid:public_id>/preview/colors/<str:source_id>/', ExternalMediaProjectPreviewColorView.as_view(), name='external_media_project_preview_color'),
     path('member/media/projects/<uuid:public_id>/preview/overlays/new/', ExternalMediaProjectPreviewOverlayView.as_view(), name='external_media_project_preview_overlay_create'),
     path('member/media/projects/<uuid:public_id>/preview/overlays/<str:overlay_id>/', ExternalMediaProjectPreviewOverlayView.as_view(), name='external_media_project_preview_overlay'),
     path('member/media/projects/<uuid:public_id>/preview/overlays/<str:overlay_id>/asset.png', ExternalMediaProjectPreviewOverlayAssetView.as_view(), name='external_media_project_preview_overlay_asset'),
@@ -408,7 +426,9 @@ urlpatterns = [
     path('member/media/projects/<uuid:public_id>/exports/<uuid:export_public_id>/download/', ExternalMediaProjectExportDownloadView.as_view(), name='external_media_project_export_download'),
     path('member/media/projects/<uuid:public_id>/exports/<uuid:export_public_id>/timeline/', ExternalMediaProjectTimelineDownloadView.as_view(), name='external_media_project_export_timeline'),
     path('member/media/projects/<uuid:public_id>/blocks/<int:block_id>/upload/', ExternalMediaProjectUploadView.as_view(), name='external_media_project_upload'),
+    path('member/media/projects/<uuid:public_id>/upload/', ExternalMediaProjectDirectUploadView.as_view(), name='external_media_project_direct_upload'),
     path('member/media/projects/<uuid:public_id>/blocks/<int:block_id>/brolls/', ExternalMediaProjectBrollUploadView.as_view(), name='external_media_project_broll_upload'),
+    path('member/media/projects/<uuid:public_id>/brolls/', ExternalMediaProjectBrollUploadView.as_view(), name='external_media_project_direct_broll_upload'),
     path('member/media/projects/<uuid:public_id>/custom-blocks/<int:block_id>/brolls/', ExternalMediaProjectBrollUploadView.as_view(), {'custom': True}, name='external_media_project_custom_broll_upload'),
     path('member/media/projects/<uuid:public_id>/blocks/<int:block_id>/brolls/presign/', ExternalMediaProjectBrollUploadPresignView.as_view(), name='external_media_project_broll_upload_presign'),
     path('member/media/projects/<uuid:public_id>/custom-blocks/<int:block_id>/brolls/presign/', ExternalMediaProjectBrollUploadPresignView.as_view(), {'custom': True}, name='external_media_project_custom_broll_upload_presign'),
@@ -418,7 +438,9 @@ urlpatterns = [
     path('member/media/projects/<uuid:public_id>/brolls/<uuid:asset_id>/status/', ExternalMediaProjectBrollStatusView.as_view(), name='external_media_project_broll_status'),
     path('member/media/projects/<uuid:public_id>/brolls/<uuid:asset_id>/trim/', ExternalMediaProjectBrollTrimView.as_view(), name='external_media_project_broll_trim'),
     path('member/media/projects/<uuid:public_id>/blocks/<int:block_id>/presign/', ExternalMediaProjectUploadPresignView.as_view(), name='external_media_project_upload_presign'),
+    path('member/media/projects/<uuid:public_id>/presign/', ExternalMediaProjectDirectUploadPresignView.as_view(), name='external_media_project_direct_upload_presign'),
     path('member/media/projects/<uuid:public_id>/custom-blocks/<int:block_id>/presign/', ExternalMediaProjectCustomBlockUploadPresignView.as_view(), name='external_media_project_custom_block_upload_presign'),
+    path('member/media/projects/<uuid:public_id>/uploads/multipart/', ExternalMediaProjectUploadMultipartView.as_view(), name='external_media_project_upload_multipart'),
     path('member/media/projects/<uuid:public_id>/uploads/complete/', ExternalMediaProjectUploadCompleteView.as_view(), name='external_media_project_upload_complete'),
     path('member/media/projects/<uuid:public_id>/overlays/<str:overlay_id>/data/', ExternalMediaProjectOverlayDataView.as_view(), name='external_media_project_overlay_data'),
     path('member/media/projects/<uuid:public_id>/custom-blocks/new/', ExternalMediaProjectCustomBlockView.as_view(), name='external_media_project_custom_block_create'),
@@ -434,12 +456,6 @@ urlpatterns = [
     path('member/media/projects/<uuid:public_id>/uploads/<int:media_id>/trim/', ExternalMediaProjectMediaTrimView.as_view(), name='external_media_project_media_trim'),
     path('member/media/glossary/', ExternalMediaGlossaryView.as_view(), name='external_media_glossary'),
     path('member/media/glossary/<int:term_id>/delete/', ExternalMediaGlossaryDeleteView.as_view(), name='external_media_glossary_delete'),
-    path('member/media/mastering/new/', VideoMasteringCreateView.as_view(), name='external_media_mastering_create'),
-    path('member/media/mastering/<uuid:public_id>/', VideoMasteringDetailView.as_view(), name='external_media_mastering_detail'),
-    path('member/media/mastering/<uuid:public_id>/run/', VideoMasteringRunView.as_view(), name='external_media_mastering_run'),
-    path('member/media/mastering/<uuid:public_id>/status/', VideoMasteringStatusView.as_view(), name='external_media_mastering_status'),
-    path('member/media/mastering/<uuid:public_id>/original/', VideoMasteringOriginalView.as_view(), name='external_media_mastering_original'),
-    path('member/media/mastering/<uuid:public_id>/output/', VideoMasteringOutputView.as_view(), name='external_media_mastering_output'),
     path('member/media/<uuid:public_id>/', ExternalMediaDetailView.as_view(), name='external_media_detail'),
     path('member/media/<uuid:public_id>/status/', ExternalMediaStatusView.as_view(), name='external_media_status'),
     path('member/media/<uuid:public_id>/editor/', ExternalMediaEditorView.as_view(), name='external_media_editor'),
@@ -704,6 +720,8 @@ urlpatterns = [
     path('media/category/<str:content_type>/', MediaCategoryContentsView.as_view(), name='media_category_contents'),
     # Content CRUD
     path('media/contents/', MediaContentListView.as_view(), name='media_content_list'),
+    path('media/demandas/<int:detail_pk>/', MediaContentListView.as_view(), {'detail_kind': 'free'}, name='media_demand_detail_page'),
+    path('media/eventos/<int:detail_pk>/', MediaContentListView.as_view(), {'detail_kind': 'event'}, name='media_event_detail_page'),
     path('media/contents/panel/', MediaDemandsPanelView.as_view(), name='media_demands_panel'),
     path('media/contents/criar/', MediaDemandQuickCreateView.as_view(), name='media_demand_quick_create'),
     path('media/contents/<int:pk>/editar-rapido/', MediaDemandQuickUpdateView.as_view(), name='media_demand_quick_update'),
@@ -713,6 +731,8 @@ urlpatterns = [
     path('media/contents/<int:pk>/edit/', MediaContentUpdateView.as_view(), name='media_content_update'),
     path('media/contents/<int:pk>/delete/', MediaContentDeleteView.as_view(), name='media_content_delete'),
     path('media/contents/<int:pk>/tasks/create/', MediaTaskCreateView.as_view(), name='media_task_create'),
+    path('media/tasks/<int:pk>/editar/', MediaTaskUpdateView.as_view(), name='media_task_update'),
+    path('media/tasks/<int:pk>/excluir/', MediaTaskDeleteView.as_view(), name='media_task_delete'),
     path('media/tasks/<int:pk>/status/', MediaTaskUpdateStatusView.as_view(), name='media_task_update_status'),
     path('media/tasks/<int:pk>/descricao/', MediaTaskUpdateDescriptionView.as_view(), name='media_task_update_description'),
     path('media/contents/<int:pk>/comment/', MediaCommentCreateView.as_view(), name='media_comment_create'),
@@ -737,6 +757,10 @@ urlpatterns = [
     path('media/events/<int:event_pk>/tipo/', MediaEventSetTypeView.as_view(), name='media_event_set_type'),
     path('media/events/<int:event_pk>/aplicar-template/', MediaApplyTemplateView.as_view(), name='media_apply_template'),
     # Organization
+    path('media/meu-trabalho/', MediaMyWorkView.as_view(), name='media_my_work'),
+    path('media/meu-trabalho/<int:pk>/', MediaMyWorkDetailView.as_view(), name='media_my_work_detail'),
+    path('media/meu-trabalho/<int:pk>/status/', MediaMyWorkStatusView.as_view(), name='media_my_work_status'),
+    path('media/meu-trabalho/<int:pk>/anexos/<int:attachment_pk>/', MediaMyWorkAttachmentView.as_view(), name='media_my_work_attachment'),
     path('media/organizacao/', MediaOrganizationDashboardView.as_view(), name='media_organization'),
     path('media/organizacao/equipes/', MediaSubTeamListView.as_view(), name='media_subteam_list'),
     path('media/organizacao/equipes/nova/', MediaSubTeamCreateView.as_view(), name='media_subteam_create'),

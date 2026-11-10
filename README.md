@@ -281,6 +281,7 @@ Dois consumers em `website/consumers.py`:
 | `REDIS_URL` | Channel layer Redis (opcional; fallback in-memory) |
 | `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Redis usado pela fila de Mídia Externa |
 | `RENDER_WORKFLOW_ENABLED`, `RENDER_API_KEY`, `RENDER_WORKFLOW_TASK` | Worker de vídeo sob demanda no Render; desativado por padrão |
+| `EXTERNAL_MEDIA_BROLL_MAX_MONOLITHIC_SOURCES` | Máximo de fontes de B-roll no único processo FFmpeg (padrão `4`); acima disso o render é dividido em blocos para reduzir o pico de memória. |
 | `DOMAIN` | Host permitido no deploy |
 | `HOSTNAME`, `PORT` | Binding do servidor Docker (dev) |
 | `USE_S3` | `TRUE` para usar S3 como storage de mídia |

@@ -1,24 +1,202 @@
 {% extends "member_base.html" %}
 {% load static %}
 {% block title %}Recursos · Organização da Mídia{% endblock %}
-{% block head %}<link rel="stylesheet" href="{% static 'org_media.css' %}">{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{% static 'org_media.css' %}">
+<style>
+    .resources-page .resource-create { min-height: 2.75rem; padding: 0 .95rem; border-radius: .8rem; font-size: .8125rem; font-weight: 800; }
+    .resource-card { display: flex; flex-direction: column; padding: 1.25rem; min-width: 0; transition: border-color .2s ease, box-shadow .2s ease; }
+    .resource-card:hover { border-color: rgba(201, 9, 5, .3); box-shadow: 0 3px 12px rgba(17, 24, 39, .04); }
+    .resource-icon { width: 2.75rem; height: 2.75rem; border-radius: .75rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: rgba(201, 9, 5, .08); color: #C90905; }
+    .resource-card:focus-visible, .resources-page .resource-create:focus-visible { outline: 3px solid rgba(201, 9, 5, .35); outline-offset: 3px; }
+    .resource-modal-card { max-width: 42rem; }
+    .resource-modal-footer { position: sticky; bottom: 0; background: #fff; }
+    .resource-form-label { display: block; margin-bottom: .375rem; color: #6b7280; font-size: .6875rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .resource-access { border: 1.5px solid #e5e7eb; border-radius: .75rem; background: #fff; overflow: hidden; }
+    .resource-access:focus-within { border-color: #C90905; box-shadow: 0 0 0 3px rgba(201, 9, 5, .1); }
+    .resource-access summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 2.7rem; padding: .6rem .875rem; cursor: pointer; color: #4b5563; font-size: .875rem; }
+    .resource-access summary::-webkit-details-marker { display: none; }
+    .resource-access summary > span { display: flex; align-items: center; gap: .6rem; }
+    .resource-access summary .fa-users { color: #C90905; }
+    .resource-access summary .fa-chevron-down { color: #9ca3af; font-size: .7rem; transition: transform .2s; }
+    .resource-access[open] summary .fa-chevron-down { transform: rotate(180deg); }
+    .resource-access-options { max-height: 10rem; overflow-y: auto; padding: .35rem; border-top: 1px solid #f3f4f6; }
+    .resource-access-option { display: flex; align-items: center; gap: .625rem; padding: .5rem .625rem; border-radius: .5rem; color: #374151; font-size: .8125rem; cursor: pointer; }
+    .resource-access-option:hover { background: #fef2f2; }
+    .resource-access-option input { width: 1rem; height: 1rem; accent-color: #C90905; flex-shrink: 0; }
+    .resources-page select::after { content: none; }
+    .resources-page select:not([multiple]) { appearance: auto; -webkit-appearance: auto; background-image: none; }
+    .org-media .resource-search-input { width: 100%; padding: .625rem 1rem; border: 2px solid #e5e7eb; border-radius: .75rem; background: #fff; font-size: .875rem; color: #111827; transition: border-color .2s, box-shadow .2s; }
+    .org-media .resource-search-input:focus { outline: none; border-color: #C90905; box-shadow: 0 0 0 3px rgba(201, 9, 5, .12); }
+    .org-media .resource-search-input::placeholder { color: #9ca3af; }
+    .resource-filter-toggle { list-style: none; cursor: pointer; }
+    .resource-filter-toggle::-webkit-details-marker { display: none; }
+    .resource-filter-panel { width: min(20rem, calc(100vw - 2rem)); }
+    .resource-detail-card { max-width: 38rem; }
+    .resource-detail-actions { position: relative; flex-shrink: 0; }
+    .resource-detail-actions summary { list-style: none; width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center; border-radius: .5rem; color: #6b7280; background: #f3f4f6; cursor: pointer; }
+    .resource-detail-actions summary::-webkit-details-marker { display: none; }
+    .resource-detail-actions summary:hover, .resource-detail-actions[open] summary { color: #C90905; background: #fef2f2; }
+    .resource-detail-menu { position: absolute; top: calc(100% + .375rem); right: 0; z-index: 30; min-width: 10rem; padding: .375rem; border: 1px solid #e5e7eb; border-radius: .75rem; background: #fff; box-shadow: 0 8px 24px rgba(17, 24, 39, .12); }
+    .resource-detail-menu a { display: flex; align-items: center; gap: .625rem; padding: .625rem .75rem; border-radius: .5rem; color: #374151; font-size: .8125rem; font-weight: 600; }
+    .resource-detail-menu a:hover { color: #C90905; background: #fef2f2; }
+    .resource-detail-header { position: relative; z-index: 2; }
+    @media (max-width: 639px) {
+        .resources-page .resource-create { width: 2.75rem; padding: 0; }
+        .resources-page .resource-create span { display: none; }
+    }
+</style>
+{% endblock %}
 {% block content %}
-<div class="org-media min-h-screen pb-28 bg-gray-50">
-    {% url 'media_organization' as org_url %}
-    {% include 'parciais/org_media_header.html' with back_url=org_url title='Recursos' subtitle='Acessos, credenciais e ferramentas' %}
-    <div class="px-4 sm:px-6 pt-4 space-y-2 w-full">
-        {% for res in resources %}
-        <a href="{% url 'media_resource_detail' res.pk %}" class="org-card block p-4">
-            <div class="font-bold text-gray-900">{{ res.name }}</div>
-            <div class="text-xs text-gray-500 mt-0.5">{{ res.get_category_display }}{% if res.has_credentials %} · <i class="fas fa-lock text-xs"></i> credenciais{% endif %}</div>
-        </a>
-        {% empty %}
-        <div class="text-center py-14"><p class="text-gray-500">Nenhum recurso cadastrado.</p></div>
-        {% endfor %}
-        {% if is_media_leader %}
-        <a href="{% url 'media_resource_create' %}" class="org-btn-primary block text-center mt-2">+ Novo recurso</a>
+<div class="org-media resources-page min-h-screen pb-8 bg-gray-50">
+    {% include 'parciais/messages.html' %}
+    {% if is_media_leader %}{% url 'media_organization' as org_url %}{% else %}{% url 'member_dashboard' as org_url %}{% endif %}
+    {% include 'parciais/org_media_header.html' with back_url=org_url title='Recursos' subtitle='Acessos, credenciais e ferramentas' action_partial='member/media_planning/partials/resources_header_action.html' %}
+    <main class="px-4 sm:px-6 pt-5 pb-4 w-full">
+        <form method="get" class="mb-5" role="search">
+            <div class="flex items-center gap-2">
+                <div class="relative flex-1 min-w-0">
+                    <input id="resource-search" name="q" type="search" value="{{ resource_search }}" placeholder="Buscar recurso, usuário ou endereço..." class="resource-search-input" aria-label="Buscar recursos" autocomplete="off">
+                </div>
+                <button type="submit" class="flex-shrink-0 p-2.5 text-white rounded-lg hover:opacity-90 transition-opacity duration-200 flex items-center justify-center" style="background-color: #C90905;" aria-label="Buscar">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </button>
+                <details class="relative flex-shrink-0" id="resource-filters">
+                    <summary class="resource-filter-toggle px-3 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2 text-sm" aria-label="Filtros">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h16l-6.5 7.5v5L10.5 19v-6.5L4 5z"/></svg>
+                        <span class="hidden sm:inline">Filtros</span>
+                        {% if resource_category or resource_status %}<span class="w-2 h-2 rounded-full flex-shrink-0" style="background: #C90905;" aria-label="Filtros ativos"></span>{% endif %}
+                    </summary>
+                    <div class="resource-filter-panel absolute right-0 top-full mt-2 bg-white border border-gray-200 rounded-xl z-50 p-4">
+                        <p class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Filtros</p>
+                        <div class="space-y-3">
+                            <div><label for="resource-category" class="block text-xs font-medium text-gray-700 mb-1">Categoria</label><select id="resource-category" name="category" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="">Todas as categorias</option>{% for value, label in resource_categories %}<option value="{{ value }}"{% if resource_category == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+                            <div><label for="resource-status" class="block text-xs font-medium text-gray-700 mb-1">Situação</label><select id="resource-status" name="status" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"><option value="">Todas</option><option value="active"{% if resource_status == 'active' %} selected{% endif %}>Ativos</option><option value="inactive"{% if resource_status == 'inactive' %} selected{% endif %}>Inativos</option></select></div>
+                        </div>
+                        <div class="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+                            <a href="{% url 'media_resource_list' %}" class="flex-1 text-center px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-lg transition-all">Limpar filtros</a>
+                            <button type="submit" class="flex-1 px-3 py-2 text-sm text-white rounded-lg hover:opacity-90 transition-opacity" style="background-color: #C90905;">Aplicar</button>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </form>
+        {% if resources %}
+        <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">{{ resources|length }} recurso{{ resources|length|pluralize }}</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {% for res in resources %}
+            <a href="{% url 'media_resource_detail' res.pk %}" class="org-card resource-card" data-open-resource-detail data-resource-id="{{ res.pk }}" data-resource-name="{{ res.name }}" aria-haspopup="dialog">
+                <div class="flex items-start gap-3">
+                    <div class="resource-icon"><i class="fas fa-key" aria-hidden="true"></i></div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-900 break-words">{{ res.name }}</h2>
+                        <p data-resource-category class="text-xs text-gray-500 mt-1">{{ res.get_category_display }}</p>
+                    </div>
+                    {% if res.is_active %}
+                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden="true"></span>Ativo</span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500 flex-shrink-0"><span class="w-1.5 h-1.5 rounded-full bg-gray-400" aria-hidden="true"></span>Inativo</span>
+                    {% endif %}
+                </div>
+                <div class="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-gray-100">
+                    {% if res.has_credentials %}
+                    <span data-resource-credential-label class="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-500"><i class="fas fa-lock" aria-hidden="true"></i> Com credenciais</span>
+                    {% else %}
+                    <span data-resource-credential-label class="text-xs text-gray-400">Sem credenciais</span>
+                    {% endif %}
+                    <span class="org-link inline-flex items-center gap-2 text-xs">Ver recurso<i class="fas fa-arrow-right" aria-hidden="true"></i></span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="org-card flex flex-col items-center justify-center min-h-[320px] p-8 text-center">
+            <div class="w-20 h-20 rounded-2xl org-icon-box flex items-center justify-center mb-5"><i class="fas fa-key text-3xl" aria-hidden="true"></i></div>
+            <h2 class="text-base font-bold text-gray-800">{% if resource_filters_active %}Nenhum recurso encontrado{% else %}Nenhum recurso cadastrado{% endif %}</h2>
+            <p class="text-sm text-gray-500 mt-1 max-w-sm">
+                {% if resource_filters_active %}
+                Tente ajustar a pesquisa ou os filtros.
+                {% elif is_media_leader %}
+                Cadastre os acessos, credenciais e ferramentas para organizar os recursos da equipe de mídia.
+                {% else %}
+                Os recursos disponíveis para suas equipes aparecerão aqui.
+                {% endif %}
+            </p>
+            {% if resource_filters_active %}<a href="{% url 'media_resource_list' %}" class="org-link text-sm mt-4">Limpar pesquisa e filtros</a>{% endif %}
+        </div>
         {% endif %}
+    </main>
+    {% if is_media_leader %}
+    {% include 'member/media_planning/partials/resource_create_modal.html' %}
+    {% endif %}
+    <div id="resource-detail-modal" class="org-modal" role="dialog" aria-modal="true" aria-labelledby="resource-detail-title" aria-hidden="true">
+        <div class="org-modal-backdrop" data-close-resource-detail></div>
+        <div class="org-modal-card resource-detail-card">
+            <div class="org-modal-header-accent org-modal-header resource-detail-header">
+                <div class="flex items-start gap-3 min-w-0"><div class="org-modal-icon"><i class="fas fa-key" aria-hidden="true"></i></div><div class="min-w-0"><p data-resource-detail-kicker class="text-[10px] font-bold uppercase tracking-wider text-red-600">Recurso</p><h2 id="resource-detail-title" class="text-lg font-black text-gray-900 leading-tight break-words"></h2></div></div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    {% if is_media_leader %}
+                    <details class="resource-detail-actions" id="resource-detail-actions" hidden>
+                        <summary aria-label="Ações do recurso"><i class="fas fa-ellipsis-vertical" aria-hidden="true"></i></summary>
+                        <div class="resource-detail-menu"><a id="resource-detail-edit" href="#"><i class="fas fa-pen" aria-hidden="true"></i> Editar</a></div>
+                    </details>
+                    {% endif %}
+                    <button type="button" class="org-modal-close" data-close-resource-detail aria-label="Fechar"><i class="fas fa-times" aria-hidden="true"></i></button>
+                </div>
+            </div>
+            <div class="org-modal-body" id="resource-detail-content" aria-live="polite"></div>
+        </div>
     </div>
 </div>
-{% include 'parciais/member_bottom_nav.html' with nav_active='external_media' %}
+{% if edit_resource %}<template id="resource-edit-initial" data-resource-id="{{ edit_resource.pk }}">{% include 'member/media_planning/partials/resource_edit_content.html' with form=resource_edit_form resource=edit_resource %}</template>{% endif %}
+<script src="{% static 'media_resource_detail.js' %}"></script>
+<script src="{% static 'media_resource_list.js' %}"></script>
+{% if is_media_leader %}
+<script>
+(function () {
+    var modal = document.getElementById('resource-create-modal');
+    var trigger = document.querySelector('[data-open-resource-modal]');
+    if (!modal || !trigger) return;
+    var previousOverflow = '';
+    function openModal() {
+        previousOverflow = document.body.style.overflow;
+        modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+        (modal.querySelector('[data-field-error] input, [data-field-error] select, [data-field-error] textarea') || modal.querySelector('input:not([type="hidden"])') || modal.querySelector('[data-close-resource-modal]')).focus();
+    }
+    function closeModal() {
+        modal.classList.remove('active');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = previousOverflow;
+        trigger.focus();
+    }
+    trigger.addEventListener('click', function (event) { event.preventDefault(); openModal(); });
+    modal.querySelectorAll('[data-close-resource-modal]').forEach(function (button) {
+        button.addEventListener('click', closeModal);
+    });
+    document.addEventListener('keydown', function (event) {
+        if (!modal.classList.contains('active')) return;
+        if (event.key === 'Escape') { event.preventDefault(); closeModal(); return; }
+        if (event.key !== 'Tab') return;
+        var focusable = Array.from(modal.querySelectorAll('a[href], button:not([disabled]), input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])')).filter(function (element) { return element.getClientRects().length; });
+        if (!focusable.length) return;
+        var first = focusable[0], last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    });
+    var access = modal.querySelector('[data-resource-access]');
+    if (access) {
+        var summary = access.querySelector('[data-access-summary]');
+        function updateAccessSummary() {
+            var count = access.querySelectorAll('input[type="checkbox"]:checked').length;
+            summary.textContent = count ? count + (count === 1 ? ' equipe selecionada' : ' equipes selecionadas') : 'Selecionar equipes';
+        }
+        access.addEventListener('change', updateAccessSummary);
+        updateAccessSummary();
+    }
+    {% if resource_modal_open or request.GET.create == '1' %}openModal();{% endif %}
+}());
+</script>
+{% endif %}
 {% endblock %}

@@ -12,6 +12,7 @@ from types import SimpleNamespace
 from django.utils import timezone
 
 from website.models.external_media import MediaTemplatePlugin
+from .audio_mixing import resolved_ducking_config
 from .speech_edit import SpeechEditPlan
 
 
@@ -165,6 +166,13 @@ class EffectiveCapabilities:
             result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.TRANSLATION_EN, configuration={}))
         if version.color_lut_id or version.lut_file:
             result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.LUT, configuration={}))
+        # Abertura e encerramento são assets estruturais do template. Não são
+        # cenas que o usuário precisa preencher, portanto a simples presença
+        # do arquivo já os torna parte da montagem.
+        if version.intro_enabled and version.intro_video:
+            result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.INTRO, configuration={}))
+        if version.outro_enabled and version.outro_video:
+            result.append(SimpleNamespace(code=MediaTemplatePlugin.Code.OUTRO, configuration={}))
         has_music = bool(
             (version.background_music_id and version.background_music and version.background_music.audio_file)
             or version.music_file
@@ -203,7 +211,7 @@ class SourceManifestBuilder:
                 'position': position,
                 'block_id': entity.pk if entity else None,
                 'block_type': 'custom' if custom_block else ('template' if block else None),
-                'block_key': f'custom-{custom_block.pk}' if custom_block else (block.key if block else ''),
+                'block_key': f'custom-{custom_block.pk}' if custom_block else (block.key if block else ('project-main' if kind == 'project_upload' else '')),
                 'block_name': entity.name if entity else role,
                 'source_reference': str(getattr(media, 'pk', '') or getattr(block, 'pk', '') or getattr(custom_block, 'pk', '') or role),
                 'storage_name': field.name,
@@ -220,6 +228,7 @@ class SourceManifestBuilder:
                     'camera_role': getattr(media, 'camera_role', 'PRIMARY'),
                     'camera_label': getattr(media, 'camera_label', '') or '',
                     'camera_hint': getattr(media, 'camera_hint', 'AUTO'),
+                    'multicam_alignment': (project.configuration or {}).get('multicam_alignments', {}).get(source_id),
                     'take_position': getattr(media, 'position', None),
                     # Until a camera-selection decision exists, only the primary
                     # source enters the legacy sequential renderer.
@@ -245,17 +254,21 @@ class SourceManifestBuilder:
                 })
                 position += 1
 
-        # Keep the current capability semantics; intro/outro remain absent until
-        # a template enables them through the same effective resolver.
-        if version.intro_video and MediaTemplatePlugin.Code.INTRO in capabilities:
+        if version.intro_enabled and version.intro_video and MediaTemplatePlugin.Code.INTRO in capabilities:
             append('template_intro', f'template-intro-{version.pk}', version.intro_video, role='intro')
 
-        media_by_block, media_by_custom = {}, {}
+        media_by_block, media_by_custom, direct_media = {}, {}, []
         for item in project.block_media.select_related('block', 'custom_block').all().order_by('position', 'camera_order', 'pk'):
             if item.block_id:
                 media_by_block.setdefault(item.block_id, []).append(item)
             elif item.custom_block_id:
                 media_by_custom.setdefault(item.custom_block_id, []).append(item)
+            else:
+                direct_media.append(item)
+        # A template may intentionally have no scenes. In that case the member
+        # uploads the main video directly and intro/outro still wrap it.
+        for item in direct_media:
+            append('project_upload', f'project-media-{item.pk}', item.file, role='main', media=item)
         block_entries = []
         for block in version.blocks.all().order_by('order', 'pk'):
             items = media_by_block.get(block.pk, [])
@@ -278,15 +291,18 @@ class SourceManifestBuilder:
             block_entries = [entry for _, _, entry in sorted(decorated)]
         for kind, source_id, field, role, block, custom, media in block_entries:
             append(kind, source_id, field, role=role, block=block, custom_block=custom, media=media)
-        if version.outro_video and MediaTemplatePlugin.Code.OUTRO in capabilities:
+        if version.outro_enabled and version.outro_video and MediaTemplatePlugin.Code.OUTRO in capabilities:
             append('template_outro', f'template-outro-{version.pk}', version.outro_video, role='outro')
         multicam_groups = {}
         for source in sources:
             metadata = source.get('metadata') or {}
-            if metadata.get('media_role') != 'CAMERA' or not source.get('block_id'):
+            alignment = (project.configuration or {}).get('multicam_alignments', {}).get(source['id'])
+            if alignment is not None:
+                source['metadata'] = metadata = {**metadata, 'multicam_alignment': alignment}
+            if metadata.get('media_role') != 'CAMERA' or source.get('kind') not in {'upload', 'custom_upload', 'project_upload'}:
                 continue
             group_id = (
-                f"{source['block_type']}-{source['block_id']}-take-"
+                f"{source['block_type'] or 'project'}-{source['block_id'] or 'main'}-take-"
                 f"{metadata.get('take_position') or source['position']}"
             )
             group = multicam_groups.setdefault(group_id, {
@@ -294,11 +310,14 @@ class SourceManifestBuilder:
                 'block_id': source['block_id'],
                 'block_type': source['block_type'],
                 'reference_source_id': None,
+                'reference_source_ids': [],
                 'source_ids': [],
             })
             group['source_ids'].append(source['id'])
             if metadata.get('camera_role') == 'PRIMARY':
-                group['reference_source_id'] = source['id']
+                group['reference_source_ids'].append(source['id'])
+                if group['reference_source_id'] is None:
+                    group['reference_source_id'] = source['id']
         return {
             'schema': SOURCE_MANIFEST_SCHEMA,
             'project_id': str(project.public_id),
@@ -307,7 +326,10 @@ class SourceManifestBuilder:
             'created_at': timezone.now().isoformat(),
             'sources': sources,
             'multicam_groups': [
-                group for group in multicam_groups.values() if len(group['source_ids']) > 1
+                group for group in multicam_groups.values()
+                if group['reference_source_id'] and any(
+                    source_id not in group['reference_source_ids'] for source_id in group['source_ids']
+                )
             ],
         }
 
@@ -315,7 +337,7 @@ class SourceManifestBuilder:
     def resolve_field(project, source):
         """Returns the original Django file field referenced by a manifest item."""
         kind, reference = source['kind'], str(source.get('source_reference') or '')
-        if kind in {'upload', 'custom_upload'}:
+        if kind in {'upload', 'custom_upload', 'project_upload'}:
             item = project.block_media.select_related('block', 'custom_block').get(pk=reference)
             return item.file
         version = project.template_version
@@ -387,11 +409,25 @@ class EditDecisionSetBuilder:
                 'metadata': {'lut_file': lut_file.name, 'intensity': version.lut_intensity},
             })
         if version.background_music_id or version.music_file:
+            mixing = resolved_ducking_config(version.audio_mixing_config)
             operations.append({
                 'id': f'audio-{len(operations) + 1}', 'type': 'audio_automation', 'source_id': 'project-master',
                 'origin': 'AUTO', 'producer': 'template', 'producer_version': 'legacy',
                 'reason': 'background_music', 'confidence': None,
-                'metadata': {'music_volume': version.music_volume, 'ducking': bool(version.audio_ducking_enabled)},
+                'metadata': {
+                    'schema': 'connect.audio_mix.v1',
+                    'profile': mixing.get('profile', 'balanced'),
+                    'music_volume': float(version.music_volume),
+                    'voice_gain_db': mixing.get('voice_gain_db', 0.0),
+                    'ducking': {
+                        **{key: value for key, value in mixing.items() if key != 'profile'},
+                        'enabled': bool(version.audio_ducking_enabled),
+                        'spectral_enabled': bool(version.audio_spectral_ducking_enabled),
+                    },
+                    # Manual automation is intentionally empty at creation. It
+                    # belongs to the project revision, never to the template.
+                    'music_keyframes': [], 'voice_keyframes': [],
+                },
             })
         for index, decision in enumerate(configuration.get('noise_reduction_decisions') or []):
             start_ms = _int(decision.get('start_ms'))

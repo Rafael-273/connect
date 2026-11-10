@@ -39,7 +39,7 @@ from website.models.external_media import (
 )
 
 from .audio_mastering import AudioMasteringService, MasteringTarget
-from .audio_mixing import AudioMixingService, DuckingSettings, group_speech_blocks
+from .audio_mixing import AudioMixingService, DuckingSettings, ducking_options, group_speech_blocks
 from .audio_noise import (
     AudioCleanupService,
     AudioNoiseAnalysisService,
@@ -68,6 +68,11 @@ from .speech_edit import SpeechCut, SpeechEditAnalyzer, SpeechEditPlan, SpeechEd
 from .workspace import JobWorkspace
 
 logger = logging.getLogger(__name__)
+
+# Persist the timing implementation independently of framing/geometry. Existing
+# review assets keep their original clock until explicitly rebuilt; a new final
+# render must not be mistaken for proof that those old assets were regenerated.
+ASSEMBLY_TIMING_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -703,17 +708,17 @@ class SubtitleService:
 
     def write_srt(self, track, path, style):
         blocks = []
-        for cue in track.cues.all():
+        for index, cue in enumerate(sorted(track.cues.all(), key=lambda cue: (cue.start_ms, cue.end_ms, cue.cue_index)), start=1):
             text = self.wrap_text(cue.text, style.max_characters, style.max_lines)
             blocks.append(
-                f'{cue.cue_index}\n{self.milliseconds_to_srt(cue.start_ms)} --> '
+                f'{index}\n{self.milliseconds_to_srt(cue.start_ms)} --> '
                 f'{self.milliseconds_to_srt(cue.end_ms)}\n{text}'
             )
         path.write_text('\n\n'.join(blocks) + '\n', encoding='utf-8')
 
     def write_vtt(self, track, path, style):
         blocks = ['WEBVTT']
-        for cue in track.cues.all():
+        for cue in sorted(track.cues.all(), key=lambda cue: (cue.start_ms, cue.end_ms, cue.cue_index)):
             text = self.wrap_text(cue.text, style.max_characters, style.max_lines)
             blocks.append(
                 f'{self.milliseconds_to_vtt(cue.start_ms)} --> '
@@ -772,8 +777,10 @@ class SubtitleService:
         translated_cues = {
             cue.cue_index: cue for cue in ordered_tracks[1].cues.all()
         }
-        for cue_index, original_cue in original_cues.items():
+        for cue_index in dict.fromkeys([*original_cues, *translated_cues]):
+            original_cue = original_cues.get(cue_index)
             translated_cue = translated_cues.get(cue_index)
+            reference_cue = original_cue or translated_cue
             paired_rows = (
                 (original_cue, 'Original', original_style, original_margin),
                 (translated_cue, 'Translated', translated_style, translated_margin),
@@ -783,8 +790,8 @@ class SubtitleService:
                     continue
                 text = self._ass_escape(self._single_line_text(cue.text))
                 rows.extend(self._ass_dialogue_rows(
-                    start_ms=original_cue.start_ms,
-                    end_ms=original_cue.end_ms,
+                    start_ms=reference_cue.start_ms,
+                    end_ms=reference_cue.end_ms,
                     role=role,
                     style=style,
                     text=text,
@@ -1299,14 +1306,27 @@ class RenderService:
         return Path(settings.BASE_DIR) / 'static' / 'fonts' / 'subtitles'
 
     @staticmethod
+    def hdr_to_sdr_filters(metadata):
+        """Convert phone HLG/PQ footage to SDR without crushing midtones."""
+        matrix = metadata.color_space or 'bt2020nc'
+        transfer = metadata.color_transfer or 'arib-std-b67'
+        primaries = metadata.color_primaries or 'bt2020'
+        return [
+            f'zscale=matrixin={matrix}:transferin={transfer}:primariesin={primaries}:transfer=linear:npl=1000',
+            'format=gbrpf32le',
+            # Mobius leaves the ordinary tonal range intact and compresses
+            # highlights only after its knee. Hable made indoor HLG footage
+            # visibly darker than the browser/source preview.
+            'tonemap=tonemap=mobius:param=0.30:desat=0',
+            'zscale=transfer=bt709:primaries=bt709:matrix=bt709',
+            'format=yuv420p',
+        ]
+
+    @staticmethod
     def build_video_filters(preset, escaped_ass_path, metadata):
         filters = []
         if metadata.is_hdr:
-            filters.extend([
-                'format=gbrpf32le',
-                'tonemap=tonemap=hable:desat=0:peak=100',
-                'format=yuv420p',
-            ])
+            filters.extend(RenderService.hdr_to_sdr_filters(metadata))
         if preset.width and preset.height:
             filters.extend([
                 f'scale={preset.width}:{preset.height}:force_original_aspect_ratio=increase:flags=lanczos',
@@ -1416,7 +1436,12 @@ class TemplateService:
 
     @staticmethod
     def enabled_plugins(project):
-        return EffectiveCapabilities.resolve(project)
+        # This AI suggestion is no longer part of the editing workflow. Ignore
+        # capability snapshots made before it was removed from templates.
+        return [
+            plugin for plugin in EffectiveCapabilities.resolve(project)
+            if plugin.code != MediaTemplatePlugin.Code.OFF_CONTEXT_DETECTION
+        ]
 
 
 class ProjectService:
@@ -1471,9 +1496,17 @@ class ProjectService:
             if ProjectService.file_exists(item.file):
                 counts[item.block_id] = counts.get(item.block_id, 0) + 1
             else:
+                owner = item.block or item.custom_block
                 errors.append(
-                    f'{(item.block or item.custom_block).name}: o vídeo enviado não está mais disponível. Envie-o novamente.'
+                    f'{owner.name if owner else "Vídeo principal"}: o vídeo enviado não está mais disponível. Envie-o novamente.'
                 )
+        if not project.template_version.blocks.exists():
+            direct_count = sum(
+                1 for item in project.block_media.filter(block__isnull=True, custom_block__isnull=True)
+                if ProjectService.file_exists(item.file)
+            )
+            if not direct_count:
+                errors.append('Envie o vídeo principal do projeto.')
         for block in project.template_version.blocks.all():
             count = counts.get(block.pk, 0)
             has_default = ProjectService.file_exists(block.default_video)
@@ -1655,12 +1688,73 @@ class LUTService:
 class IntroOutroService:
     @staticmethod
     def enabled_fields(version, enabled_codes):
-        intro = version.intro_video if MediaTemplatePlugin.Code.INTRO in enabled_codes and version.intro_video else None
-        outro = version.outro_video if MediaTemplatePlugin.Code.OUTRO in enabled_codes and version.outro_video else None
+        # Intro/outro are fixed template assets. Keep the optional argument for
+        # callers of the legacy API, but do not require a plugin toggle.
+        intro = version.intro_video if version.intro_enabled and version.intro_video else None
+        outro = version.outro_video if version.outro_enabled and version.outro_video else None
         return intro, outro
 
 
 class MusicService:
+    @staticmethod
+    def selected_tracks(version, timeline=None, configuration=None):
+        """Resolve the revision playlist, preserving its editorial order.
+
+        The returned dictionaries deliberately contain the file object instead
+        of a storage path so callers can use their existing materialization
+        strategy for local and remote storage alike.
+        """
+        timeline = timeline or {}
+        requested = timeline.get('music_tracks')
+        if isinstance(requested, list):
+            ids = []
+            requested_clips = []
+            for item in requested:
+                try:
+                    track_id = int((item or {}).get('track_id'))
+                except (TypeError, ValueError):
+                    continue
+                if track_id > 0:
+                    if track_id not in ids:
+                        ids.append(track_id)
+                    try:
+                        transition_duration_ms = int((item or {}).get('transition_duration_ms', 2000))
+                    except (TypeError, ValueError):
+                        transition_duration_ms = 2000
+                    requested_clips.append({
+                        'clip_id': str((item or {}).get('clip_id') or f'legacy-{len(requested_clips)}'),
+                        'track_id': track_id,
+                        'transition': str((item or {}).get('transition') or 'CONSTANT_POWER').upper(),
+                        'transition_duration_ms': max(0, min(10_000, transition_duration_ms)),
+                        'start_ms': (item or {}).get('start_ms'),
+                        'end_ms': (item or {}).get('end_ms'),
+                        'source_in_ms': (item or {}).get('source_in_ms'),
+                        'audio_transition': (item or {}).get('audio_transition'),
+                        'volume': (item or {}).get('volume', 1),
+                    })
+            available = {
+                item.pk: item for item in BackgroundMusicTrack.objects.filter(pk__in=ids).exclude(audio_file='')
+            }
+            resolved = []
+            for clip in requested_clips:
+                track = available.get(clip['track_id'])
+                if track:
+                    resolved.append({
+                        'id': track.pk, 'name': track.name, 'file': track.audio_file,
+                        **clip,
+                    })
+            if resolved and all(item.get('start_ms') is not None for item in resolved):
+                resolved.sort(key=lambda item: int(item['start_ms']))
+            return resolved
+        override_id = timeline.get('music_override_track_id') or (configuration or {}).get('music_override_track_id')
+        override = BackgroundMusicTrack.objects.filter(pk=override_id).exclude(audio_file='').first() if override_id else None
+        if override:
+            return [{'id': override.pk, 'name': override.name, 'file': override.audio_file,
+                     'transition': 'CONSTANT_POWER', 'transition_duration_ms': 2000}]
+        field = MusicService.selected_file(version)
+        return ([{'id': None, 'name': '', 'file': field, 'transition': 'CONSTANT_POWER', 'transition_duration_ms': 2000}]
+                if field else [])
+
     @staticmethod
     def selected_file(version, enabled_codes=None):
         """Return the template track.
@@ -1688,7 +1782,8 @@ class VideoAssemblyService:
     def assemble(
         self, sources, output_path, preset, workdir, lut_path=None, lut_intensity=50, music_path=None,
         music_volume=0.15, auto_reframe_config=None, analysis_sources=None,
-        reframe_plans=None, progress_callback=None,
+        reframe_plans=None, progress_callback=None, source_intervals=None, preflight=None,
+        source_color_adjustments=None,
     ):
         self.last_reframe_plans = []
         self.last_protected_ranges = []
@@ -1697,6 +1792,7 @@ class VideoAssemblyService:
         source_paths = [source.path for source in source_items]
         if (
             len(source_items) == 1
+            and source_intervals is None
             and not lut_path
             and not music_path
             and not auto_reframe_config
@@ -1722,10 +1818,21 @@ class VideoAssemblyService:
         ]
         analysis_sources = [source.path for source in analysis_source_items]
         reframe_plans = reframe_plans or []
+        source_color_adjustments = source_color_adjustments or {}
+        manual_source_indexes = {
+            int(interval['source_index']) for interval in (source_intervals or [])
+            if interval.get('manual_transform') or interval.get('restore_original')
+        }
+        if manual_source_indexes:
+            source_intervals = [
+                {**interval, 'framing_width': width, 'framing_height': height}
+                if int(interval['source_index']) in manual_source_indexes else dict(interval)
+                for interval in source_intervals
+            ]
         if (
             not reframe_plans
             and auto_reframe_config
-            and auto_reframe_config.get('priority') == 'body'
+            and auto_reframe_config.get('priority') in {'body', 'full_body'}
             and height > width
         ):
             # Phone recordings split into editorial takes still share the same
@@ -1764,6 +1871,9 @@ class VideoAssemblyService:
                 100 if lut_is_prepared else lut_intensity
             )
             normalize_jobs.append({
+                # Kept separately from the normalized-output position because
+                # identical recipes may be collapsed before encoding.
+                'source_index': index,
                 'source': source,
                 'destination': destination,
                 'width': width,
@@ -1776,8 +1886,54 @@ class VideoAssemblyService:
                 'trim_start_ms': source_item.trim_start_ms,
                 'trim_end_ms': source_item.trim_end_ms,
                 'preserve_framing': source_item.skip_extra_processing,
+                'color_adjustment': source_color_adjustments.get(source_item.label),
             })
+            if index in manual_source_indexes:
+                # The browser positions the entire source before clipping it to
+                # the delivery canvas. Keep that same source area until concat;
+                # a centered cover crop here permanently discards headroom that
+                # the approved vertical slider may need later.
+                source_width, source_height = self._video_dimensions(source)
+                canvas_width, canvas_height = self._manual_framing_canvas(
+                    source_width, source_height, width, height,
+                )
+                normalize_jobs[-1].update(
+                    width=canvas_width, height=canvas_height,
+                    auto_reframe_config=None, reframe_plan_data={'disabled': True},
+                )
+                # The original pixels serve both manual and automatic cuts.
+                # Carry the saved automatic crop to concat for untouched cuts;
+                # disabling normalization's crop must not reset the whole take.
+                for interval in source_intervals:
+                    if int(interval['source_index']) != index or not interval.get('auto_reframe_plan'):
+                        continue
+                    plan_data = interval['auto_reframe_plan']
+                    plan = AutoReframePlan.from_dict(plan_data['plan']).scaled(
+                        canvas_width / max(1, int(plan_data.get('analysis_width') or source_width)),
+                        canvas_height / max(1, int(plan_data.get('analysis_height') or source_height)),
+                    )
+                    interval['concat_auto_reframe'] = self._shift_reframe_plan_time(
+                        {'plan': plan.as_dict()}, int(interval['start_ms']) + int(source_item.trim_start_ms or 0),
+                    )['plan']
             normalized.append(destination)
+
+        original_reframe_plans = [job['reframe_plan_data'] for job in normalize_jobs]
+        # A single upload can legitimately appear many times in an approved
+        # timeline.  Normalizing it once per selected range was by far the
+        # most expensive part of final rendering: each invocation reopened,
+        # decoded and reframed the same S3 object.  When the visual recipe is
+        # identical, normalize one minimal envelope containing its approved
+        # ranges, stage that output in S3, and trim individual ranges only
+        # while concatenating. This never changes a cut boundary: the
+        # source-local timestamps saved by the editor remain authoritative.
+        normalize_jobs, normalized, source_intervals, source_job_indexes = self._reuse_source_normalizations(
+            normalize_jobs, normalized, source_items, source_intervals,
+        )
+
+        # Probe and validate the complete source list before encoding any take.
+        # A stale review must fail here, not after a long delivery assembly.
+        if preflight is not None:
+            preflight(self.last_block_ranges)
 
         # In the final pass the proxy phase has already produced all crop plans.
         # The 4K takes are then independent, so a bounded pool can encode two at
@@ -1808,18 +1964,18 @@ class VideoAssemblyService:
                         # dimensions before deleting that proxy below.
                         serialized_reframe_plans[index - 1] = self._serialize_reframe_plan(
                             reframe_plan,
-                            analysis_sources[index - 1],
+                            analysis_sources[job['source_index']],
                         )
-                    source_temporary_name = source_items[index - 1].temporary_storage_name
+                    source_temporary_name = source_items[job['source_index']].temporary_storage_name
                     if source_temporary_name:
                         self.storage.delete_temporary(source_temporary_name)
-                    analysis_temporary_name = analysis_source_items[index - 1].temporary_storage_name
+                    analysis_temporary_name = analysis_source_items[job['source_index']].temporary_storage_name
                     if analysis_temporary_name and analysis_temporary_name != source_temporary_name:
                         self.storage.delete_temporary(analysis_temporary_name)
                     if settings.USE_S3:
                         staged, temporary_name = self.storage.stage_temporary(
                             normalized[index - 1],
-                            f'assembly-{uuid.uuid4().hex[:12]}-{index - 1:03d}',
+                            f'assembly-{uuid.uuid4().hex[:12]}-{job["source_index"]:03d}',
                         )
                         normalized[index - 1] = staged
                         temporary_normalized.append(temporary_name)
@@ -1837,18 +1993,23 @@ class VideoAssemblyService:
                     self.storage.delete_temporary(temporary_name)
                 raise
         try:
-            for index, reframe_plan in enumerate(reframe_results):
-                effective_auto_reframe_config = normalize_jobs[index]['auto_reframe_config']
+            reframe_results_by_job = dict(enumerate(reframe_results))
+            for source_index, job_index in enumerate(source_job_indexes):
+                reframe_plan = reframe_results_by_job[job_index]
+                effective_auto_reframe_config = normalize_jobs[job_index]['auto_reframe_config']
                 used_auto_reframe = bool(reframe_plan) or used_auto_reframe
-                supplied_plan = normalize_jobs[index]['reframe_plan_data']
+                # The encoder may receive a time-shifted copy of the plan when
+                # only an approved source envelope is normalized. Persist and
+                # expose the immutable plan approved by the editor instead.
+                supplied_plan = original_reframe_plans[source_index]
                 self.last_reframe_plans.append(
                     (
                         supplied_plan
                         if supplied_plan is not None
                         else (
-                            serialized_reframe_plans[index]
-                            if index in serialized_reframe_plans
-                            else self._serialize_reframe_plan(reframe_plan, analysis_sources[index])
+                            serialized_reframe_plans[job_index]
+                            if job_index in serialized_reframe_plans
+                            else self._serialize_reframe_plan(reframe_plan, analysis_sources[source_index])
                         )
                     ) if effective_auto_reframe_config else None
                 )
@@ -1858,26 +2019,15 @@ class VideoAssemblyService:
             # add silence at its boundary even after its image has started.
             # Rebase every normalized stream in a concat filter instead: its
             # resulting clock is the same one subtitles and the editor use.
-            concat_filters, concat_inputs = [], []
-            command = [settings.FFMPEG_BINARY, '-y']
-            for index, path in enumerate(normalized):
-                command.extend(['-i', self.runner.input_arg(path)])
-                concat_filters.extend([
-                    f'[{index}:v:0]setpts=PTS-STARTPTS[v{index}]',
-                    f'[{index}:a:0]asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
-                ])
-                concat_inputs.append(f'[v{index}][a{index}]')
-            concat_filters.append(
-                f"{''.join(concat_inputs)}concat=n={len(normalized)}:v=1:a=1[vout][aout]"
-            )
-            command.extend([
-                '-filter_complex', ';'.join(concat_filters), '-map', '[vout]', '-map', '[aout]',
-                '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
-                '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p',
-                '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
-                '-avoid_negative_ts', 'make_zero', '-movflags', '+faststart', str(assembled),
-            ])
-            self.runner.run(command)
+            if source_intervals is None:
+                self._concat_normalized(normalized, assembled, workdir)
+            else:
+                # Cut in each take's own clock, before concatenation. Container
+                # durations and AAC padding from previous takes must never
+                # participate in choosing the samples of the next take.
+                selected = [normalized[item['source_index']] for item in source_intervals]
+                intervals = source_intervals
+                self._concat_normalized(selected, assembled, workdir, intervals=intervals)
         finally:
             for temporary_name in temporary_normalized:
                 self.storage.delete_temporary(temporary_name)
@@ -1897,6 +2047,265 @@ class VideoAssemblyService:
             )
         return used_auto_reframe
 
+    @classmethod
+    def _reuse_source_normalizations(cls, jobs, normalized, source_items, source_intervals):
+        """Collapse identical source recipes and translate clip ranges to them.
+
+        Reuse is intentionally limited to approved source-local rendering. A
+        legacy global master may have cuts in a different coordinate space, and
+        an unsaved Auto Reframe analysis must still run independently per take.
+        """
+        if not source_intervals:
+            return jobs, normalized, source_intervals, list(range(len(source_items)))
+
+        unique_jobs = []
+        unique_outputs = []
+        original_to_unique = {}
+        job_indexes = []
+        for source_index, job in enumerate(jobs):
+            if job['auto_reframe_config'] and job['reframe_plan_data'] is None:
+                # The detector is part of the recipe. Until its result is
+                # persisted, treating two ranges as equivalent could alter the
+                # framing a member approved.
+                key = ('unplanned-reframe', source_index)
+            else:
+                key = cls._normalization_recipe_key(job)
+            job_index = original_to_unique.get(key)
+            if job_index is None:
+                job_index = len(unique_jobs)
+                original_to_unique[key] = job_index
+                unique_job = dict(job)
+                unique_job['source_index'] = source_index
+                # Start from the source clock. Once all approved intervals are
+                # known below, the job is narrowed to their smallest envelope.
+                unique_job['trim_start_ms'] = 0
+                unique_job['trim_end_ms'] = None
+                unique_job['destination'] = normalized[source_index]
+                unique_jobs.append(unique_job)
+                unique_outputs.append(normalized[source_index])
+            job_indexes.append(job_index)
+
+        translated_intervals = []
+        for interval in source_intervals:
+            original_index = int(interval['source_index'])
+            source = source_items[original_index]
+            translated_intervals.append({
+                **interval,
+                'source_index': job_indexes[original_index],
+                'start_ms': int(interval['start_ms']) + int(source.trim_start_ms or 0),
+                'end_ms': int(interval['end_ms']) + int(source.trim_start_ms or 0),
+            })
+
+        # Encoding an entire upload and discarding most of it during concat was
+        # the dominant final-render cost. Normalize only the smallest source
+        # envelope containing the approved ranges for each visual recipe. The
+        # concat intervals are rebased to that envelope, so cut boundaries do
+        # not move. A persisted tracking plan is shifted by the same amount to
+        # keep its crop curve on the original source clock.
+        interval_bounds = {}
+        for interval in translated_intervals:
+            job_index = int(interval['source_index'])
+            current = interval_bounds.setdefault(
+                job_index, [int(interval['start_ms']), int(interval['end_ms'])],
+            )
+            current[0] = min(current[0], int(interval['start_ms']))
+            current[1] = max(current[1], int(interval['end_ms']))
+        bounded_jobs = set()
+        for job_index, (start_ms, end_ms) in interval_bounds.items():
+            job = unique_jobs[job_index]
+            # A newly generated detector plan has no persisted source-clock
+            # contract yet. Keep that rare path unchanged; approved renders
+            # normally arrive here with a saved plan.
+            if job['auto_reframe_config'] and job['reframe_plan_data'] is None:
+                continue
+            job['trim_start_ms'] = start_ms
+            job['trim_end_ms'] = end_ms
+            job['reframe_plan_data'] = cls._shift_reframe_plan_time(
+                job['reframe_plan_data'], start_ms,
+            )
+            bounded_jobs.add(job_index)
+        for interval in translated_intervals:
+            job_index = int(interval['source_index'])
+            if job_index not in bounded_jobs:
+                continue
+            envelope_start = interval_bounds[job_index][0]
+            interval['start_ms'] = int(interval['start_ms']) - envelope_start
+            interval['end_ms'] = int(interval['end_ms']) - envelope_start
+        if bounded_jobs:
+            logger.info(
+                'external_media_normalization_envelopes jobs=%s encoded_duration_ms=%s selected_duration_ms=%s',
+                len(bounded_jobs),
+                sum(interval_bounds[index][1] - interval_bounds[index][0] for index in bounded_jobs),
+                sum(int(item['end_ms']) - int(item['start_ms']) for item in translated_intervals),
+            )
+        if len(unique_jobs) < len(jobs):
+            logger.info(
+                'external_media_source_reuse source_entries=%s unique_recipes=%s reused_entries=%s',
+                len(jobs), len(unique_jobs), len(jobs) - len(unique_jobs),
+            )
+        return unique_jobs, unique_outputs, translated_intervals, job_indexes
+
+    @staticmethod
+    def _shift_reframe_plan_time(plan_data, trim_start_ms):
+        if not plan_data or plan_data.get('disabled') or not plan_data.get('plan') or not trim_start_ms:
+            return plan_data
+        plan = plan_data['plan']
+        offset_seconds = int(trim_start_ms) / 1000
+        return {
+            **plan_data,
+            'plan': {
+                **plan,
+                'keyframes': [
+                    {
+                        **keyframe,
+                        'time_seconds': float(keyframe.get('time_seconds') or 0) - offset_seconds,
+                    }
+                    for keyframe in (plan.get('keyframes') or [])
+                ],
+            },
+        }
+
+    @staticmethod
+    def _normalization_recipe_key(job):
+        source = job['source']
+        analysis_source = job.get('analysis_source')
+        source_key = getattr(source, 'storage_name', '') or str(source)
+        analysis_key = getattr(analysis_source, 'storage_name', '') or str(analysis_source)
+        plan = job.get('reframe_plan_data') or {}
+        return json.dumps({
+            'source': source_key,
+            'analysis_source': analysis_key,
+            'width': int(job['width']),
+            'height': int(job['height']),
+            'lut_path': str(job.get('lut_path') or ''),
+            'lut_intensity': int(job.get('lut_intensity') or 0),
+            'auto_reframe': job.get('auto_reframe_config') or {},
+            'reframe_plan': plan,
+            'color_adjustment': job.get('color_adjustment') or {},
+            'preserve_framing': bool(job.get('preserve_framing')),
+        }, sort_keys=True, default=str)
+
+    def _concat_normalized(self, paths, output_path, workdir, intervals=None):
+        """Join normalized clips with a bounded number of FFmpeg inputs.
+
+        A concat filter allocates decode/filter queues for every input. A
+        project with 40+ takes used to open every S3 stream in one process,
+        which can be killed by the container OOM killer even though each take
+        is small on disk. Build a small concat tree instead, preserving the
+        same timestamp rebasing at every level.
+        """
+        batch_size = max(2, int(getattr(settings, 'EXTERNAL_MEDIA_CONCAT_BATCH_SIZE', 8)))
+        current = list(paths)
+        if intervals is not None and len(intervals) != len(current):
+            raise ExternalMediaError('Os trechos aprovados não correspondem aos vídeos disponíveis.')
+        current_intervals = list(intervals) if intervals is not None else None
+        temporary_batches = []
+        pass_index = 0
+        try:
+            while len(current) > batch_size:
+                next_paths = []
+                for batch_index, offset in enumerate(range(0, len(current), batch_size)):
+                    destination = workdir / f'concat-{pass_index:02d}-{batch_index:03d}.mp4'
+                    self._concat_group(
+                        current[offset:offset + batch_size], destination,
+                        intervals=current_intervals[offset:offset + batch_size] if current_intervals is not None else None,
+                    )
+                    temporary_batches.append(destination)
+                    next_paths.append(destination)
+                current = next_paths
+                # These files already contain the kept pieces. Never apply
+                # source-local trims a second time at a higher concat level.
+                current_intervals = None
+                pass_index += 1
+            self._concat_group(current, output_path, intervals=current_intervals)
+        finally:
+            for path in temporary_batches:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    logger.warning('Não foi possível remover intermediário de concatenação %s.', path)
+
+    @staticmethod
+    def _manual_framing_canvas(source_width, source_height, width, height):
+        factor = max(width / source_width, height / source_height)
+        return (
+            math.ceil(source_width * factor / 2) * 2,
+            math.ceil(source_height * factor / 2) * 2,
+        )
+
+    def _concat_group(self, paths, output_path, intervals=None):
+        if not paths:
+            raise ExternalMediaError('Não há trechos de vídeo para concatenar.')
+        concat_filters, concat_inputs = [], []
+        # Keeping filter-complex single-threaded bounds the queue allocation
+        # for each batch. Parallelism belongs at the job/worker level here.
+        command = [settings.FFMPEG_BINARY, '-y', '-threads', '1', '-filter_complex_threads', '1']
+        for index, path in enumerate(paths):
+            command.extend(['-i', self.runner.input_arg(path)])
+            video_trim = audio_trim = ''
+            transform_filter = ''
+            if intervals is not None:
+                interval = intervals[index]
+                start_ms, end_ms = (
+                    (interval['start_ms'], interval['end_ms'])
+                    if isinstance(interval, dict) else interval
+                )
+                if start_ms < 0 or end_ms <= start_ms:
+                    raise ExternalMediaError('A revisão contém um trecho de vídeo inválido.')
+                bounds = f'start={start_ms / 1000:.3f}:end={end_ms / 1000:.3f}'
+                video_trim, audio_trim = f'trim={bounds},', f'atrim={bounds},'
+                transform = interval.get('manual_transform') if isinstance(interval, dict) else None
+                framing_width = interval.get('framing_width') if isinstance(interval, dict) else None
+                framing_height = interval.get('framing_height') if isinstance(interval, dict) else None
+                automatic_crop = interval.get('concat_auto_reframe') if isinstance(interval, dict) else None
+                if automatic_crop:
+                    # Evaluate the approved curve on this cut's original source
+                    # clock, independently of source-envelope reuse/reordering.
+                    filters = AutoReframePlan.from_dict(automatic_crop).ffmpeg_filters(
+                        int(framing_width), int(framing_height),
+                    )
+                    transform_filter = 'setpts=PTS-STARTPTS,' + ','.join(filters) + ',setsar=1,format=yuv420p,'
+                elif transform or (framing_width and framing_height):
+                    transform = transform or {}
+                    scale = min(2.0, max(1.0, float(transform.get('scale') or 1)))
+                    x = min(1.0, max(-1.0, float(transform.get('x') or 0)))
+                    y = min(1.0, max(-1.0, float(transform.get('y') or 0)))
+                    # ``crop`` rounds to even pixels for yuv420p. Scaling it
+                    # back by the inverse zoom can therefore miss the source
+                    # canvas by one or two pixels (e.g. 1078 instead of
+                    # 1080), which makes FFmpeg's concat reject the segment.
+                    # Probe the normalized input and restore that exact canvas.
+                    target_width, target_height = (
+                        (int(framing_width), int(framing_height))
+                        if framing_width and framing_height else self._video_dimensions(path)
+                    )
+                    crop_width = str(target_width) if framing_width else 'iw'
+                    crop_height = str(target_height) if framing_height else 'ih'
+                    transform_filter = (
+                        f'crop=trunc({crop_width}/{scale:.5f}/2)*2:trunc({crop_height}/{scale:.5f}/2)*2:'
+                        f'(iw-ow)/2-({x:.5f})*(iw-ow)/2:(ih-oh)/2-({y:.5f})*(ih-oh)/2,'
+                        f'scale={target_width}:{target_height}:flags=lanczos,setsar=1,format=yuv420p,'
+                    )
+            concat_filters.extend([
+                f'[{index}:v:0]{video_trim}{transform_filter}setpts=PTS-STARTPTS[v{index}]',
+                f'[{index}:a:0]{audio_trim}asetpts=PTS-STARTPTS,aresample=async=1000:first_pts=0[a{index}]',
+            ])
+            concat_inputs.append(f'[v{index}][a{index}]')
+        concat_filters.append(
+            f"{''.join(concat_inputs)}concat=n={len(paths)}:v=1:a=1[vjoined][aout];[vjoined]fps=30[vout]"
+        )
+        command.extend([
+            '-filter_complex', ';'.join(concat_filters), '-map', '[vout]', '-map', '[aout]',
+            '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
+            '-crf', str(settings.EXTERNAL_MEDIA_INTERMEDIATE_CRF), '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '192k', '-ar', '48000', '-ac', '2',
+            # Preserve presentation time zero. B-frame DTS and AAC priming may
+            # be negative; shifting them to zero also shifts actual content.
+            # MP4 edit lists account for that encoder delay without moving PTS.
+            '-avoid_negative_ts', 'disabled', '-movflags', '+faststart', str(output_path),
+        ])
+        self.runner.run(command)
+
     def create_proxy(self, source, destination, trim_start_ms=0, trim_end_ms=None, profile=None):
         source_width, source_height = self._video_dimensions(source)
         max_width = int(getattr(profile, 'max_width', 0) or settings.EXTERNAL_MEDIA_PROXY_WIDTH)
@@ -1912,6 +2321,10 @@ class VideoAssemblyService:
         audio_filters = [
             *self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'atrim'),
             'aresample=async=1000:first_pts=0',
+            # Keep video authoritative for -shortest. Without padding, AAC
+            # packet cadence can drop a video frame or truncate audio again
+            # on the extra proxy encode, accumulating drift across takes.
+            'apad',
         ]
         command = [settings.FFMPEG_BINARY, '-y', '-i', FFmpegRunner.input_arg(source)]
         command.extend([
@@ -1927,7 +2340,7 @@ class VideoAssemblyService:
             # which is not enough for VFR phone recordings after CFR video
             # normalization. 1000 keeps speech locked to the 30 fps clock.
             '-af', ','.join(audio_filters),
-            '-ar', '48000', '-ac', '2', '-shortest', '-avoid_negative_ts', 'make_zero',
+            '-ar', '48000', '-ac', '2', '-shortest', '-avoid_negative_ts', 'disabled',
             '-movflags', '+faststart', str(destination),
         ])
         self.runner.run(command)
@@ -1945,7 +2358,7 @@ class VideoAssemblyService:
     def _normalize(
         self, source, destination, width, height, lut_path, lut_intensity=50, auto_reframe_config=None,
         analysis_source=None, reframe_plan_data=None, trim_start_ms=0, trim_end_ms=None,
-        preserve_framing=False,
+        preserve_framing=False, source_index=None, color_adjustment=None,
     ):
         has_audio = self._has_audio(source)
         metadata = RenderService(runner=self.runner).probe_video(source)
@@ -1957,11 +2370,7 @@ class VideoAssemblyService:
         # seeking preserves that gap and it becomes audible after concat.
         filters = self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'trim')
         if metadata.is_hdr:
-            filters.extend([
-                'format=gbrpf32le',
-                'tonemap=tonemap=hable:desat=0:peak=100',
-                'format=yuv420p',
-            ])
+            filters.extend(RenderService.hdr_to_sdr_filters(metadata))
         reframe_plan = None
         if auto_reframe_config:
             analysis_source = analysis_source or source
@@ -2026,6 +2435,21 @@ class VideoAssemblyService:
                     f"[lut_graded_source]lut3d='{escaped}'[lut_graded]",
                     f"[lut_original][lut_graded]blend=all_expr='A*{1 - intensity:.3f}+B*{intensity:.3f}'",
                 ])
+        if color_adjustment:
+            brightness = min(100, max(-100, float(color_adjustment.get('brightness') or 0))) / 200
+            contrast = min(200, max(0, float(color_adjustment.get('contrast') or 100))) / 100
+            saturation = min(200, max(0, float(color_adjustment.get('saturation') or 100))) / 100
+            temperature = min(100, max(-100, float(color_adjustment.get('temperature') or 0))) / 100
+            red = float(color_adjustment.get('red') or 0) + float(color_adjustment.get('yellow') or 0) + float(color_adjustment.get('magenta') or 0)
+            green = float(color_adjustment.get('green') or 0) + float(color_adjustment.get('yellow') or 0) + float(color_adjustment.get('cyan') or 0)
+            blue = float(color_adjustment.get('blue') or 0) + float(color_adjustment.get('cyan') or 0) + float(color_adjustment.get('magenta') or 0)
+            red = max(0.0, min(2.0, 1 + ((red / 300) + temperature) * .28))
+            green = max(0.0, min(2.0, 1 + (green / 300) * .28))
+            blue = max(0.0, min(2.0, 1 + ((blue / 300) - temperature) * .28))
+            filters.extend([
+                f'eq=brightness={brightness:.4f}:contrast={contrast:.4f}:saturation={saturation:.4f}',
+                f'colorchannelmixer=rr={red:.4f}:gg={green:.4f}:bb={blue:.4f}',
+            ])
         command.extend([
             '-vf', ','.join(filters), '-map', '0:v:0', '-map', '0:a:0' if has_audio else '1:a:0',
             '-c:v', 'libx264', '-preset', settings.EXTERNAL_MEDIA_INTERMEDIATE_PRESET,
@@ -2035,10 +2459,10 @@ class VideoAssemblyService:
             # to 30 fps otherwise retains timestamps that make speech drift.
             '-af', ','.join([
                 *self._timeline_trim_filters(trim_start_ms, trim_end_ms, 'atrim'),
-                'aresample=async=1000:first_pts=0',
+                'aresample=async=1000:first_pts=0', 'apad',
             ]),
             '-ar', '48000', '-ac', '2', '-colorspace', 'bt709', '-color_primaries', 'bt709',
-            '-color_trc', 'bt709', '-shortest', '-avoid_negative_ts', 'make_zero', str(destination),
+            '-color_trc', 'bt709', '-shortest', '-avoid_negative_ts', 'disabled', str(destination),
         ])
         self.runner.run(command)
         return reframe_plan
@@ -2152,7 +2576,7 @@ class VideoAssemblyService:
         return filters
 
     def _consistent_portrait_body_plans(self, analysis_sources, output_width, output_height, config):
-        """Create compatible Body plans with one shared composition per recording."""
+        """Create compatible stable body plans with one shared composition per recording."""
         plans = [None] * len(analysis_sources)
         candidates = []
         for index, source in enumerate(analysis_sources):
@@ -2163,7 +2587,7 @@ class VideoAssemblyService:
             if source_height <= source_width:
                 continue
             plan = AutoReframeService(
-                priority='body',
+                priority=config.get('priority', 'body'),
                 safe_margin=config.get('safe_margin', 0.15),
                 top_margin=config.get('top_margin'),
                 interval_frames=config.get('interval_frames'),
@@ -2196,7 +2620,14 @@ class VideoAssemblyService:
             keyframe.y / max_y for _, _, _, plan, max_y in reference_candidates if max_y > 0
             for keyframe in plan.keyframes[:1]
         )
+        x_ratios = sorted(
+            keyframe.x / max(1, source_width - plan.crop_width)
+            for _, source_width, _, plan, _ in reference_candidates
+            if source_width > plan.crop_width
+            for keyframe in plan.keyframes[:1]
+        )
         shared_y_ratio = y_ratios[max(0, (len(y_ratios) - 1) // 4)] if y_ratios else 0.65
+        shared_x_ratio = x_ratios[len(x_ratios) // 2] if x_ratios else 0.5
         output_ratio = output_width / output_height
         for index, source_width, source_height, _plan, _max_y in candidates:
             crop_width = self._even(min(source_width, source_width * crop_width_ratio))
@@ -2210,7 +2641,11 @@ class VideoAssemblyService:
                 crop_width=crop_width,
                 crop_height=crop_height,
                 keyframes=(
-                    ReframeKeyframe(0.0, max_x / 2, min(max_y, max(0, max_y * shared_y_ratio))),
+                    ReframeKeyframe(
+                        0.0,
+                        min(max_x, max(0, max_x * shared_x_ratio)),
+                        min(max_y, max(0, max_y * shared_y_ratio)),
+                    ),
                 ),
             )
             plans[index] = {
@@ -2247,6 +2682,13 @@ class ExternalMediaProjectPipeline:
                 MediaTemplatePlugin.Code.SUBTITLE_PT,
                 MediaTemplatePlugin.Code.TRANSLATION_EN,
             } & plugin_codes)
+            # A multicamera edit needs the same word-level timing used by
+            # subtitles, even when the template does not display captions.
+            # Without it, the cameras can be aligned but there is no editorial
+            # context from which to create automatic timeline decisions.
+            needs_editorial_transcript = wants_subtitles or project.block_media.filter(
+                camera_role='SECONDARY',
+            ).exists()
             self.projects.initialize_steps(project, plugins)
             self._step(project, 'upload', ProjectPipelineStep.Status.FINISHED, 'Uploads conferidos')
             self._update(project, ExternalMediaProject.Status.ASSEMBLING, 8, 'Organizando seus vídeos')
@@ -2317,6 +2759,7 @@ class ExternalMediaProjectPipeline:
                     **(project.configuration or {}),
                     'proxy_pipeline': True,
                     'analysis_source_duration_ms': self.assembly._duration_ms(assembled),
+                    'analysis_timing_version': ASSEMBLY_TIMING_VERSION,
                     'analysis_source_block_ranges': self.assembly.last_block_ranges,
                     'auto_reframe_plan_version': AUTO_REFRAME_PLAN_VERSION,
                     'auto_reframe_plans': self.assembly.last_reframe_plans if auto_reframe_plugin else [],
@@ -2326,7 +2769,7 @@ class ExternalMediaProjectPipeline:
                 project.save(update_fields=['configuration', 'update_at'])
                 self._persist_canonical_state(project, job.pk, self._source_manifest)
             self._update(project, ExternalMediaProject.Status.PROCESSING, 22, 'Preparando seu projeto')
-            if wants_subtitles:
+            if needs_editorial_transcript:
                 media_pipeline = ExternalMediaPipeline()
                 media_pipeline.prepare_subtitle_tracks(job.pk)
                 for code in (MediaTemplatePlugin.Code.SUBTITLE_PT, MediaTemplatePlugin.Code.TRANSLATION_EN):
@@ -2346,10 +2789,17 @@ class ExternalMediaProjectPipeline:
                     )
             # The AI only proposes editorial placement. The resulting structured
             # decisions are frozen into the initial InternalTimeline revision.
+            project.refresh_from_db(fields=['configuration'])
+            if project.block_media.filter(camera_role='SECONDARY').exists():
+                from .multicam import MulticamService
+                with JobWorkspace(project.public_id, 'multicam-sync', estimated_bytes=8 * 1024 * 1024) as workspace:
+                    MulticamService.prepare(project, self.storage, self.assembly.runner, workspace.path)
+                MulticamService.review_candidates(project)
+                self._persist_canonical_state(project, job.pk)
             BrollTimelineService.ensure_auto_decisions(project)
             if MediaTemplatePlugin.Code.BROLL in plugin_codes:
                 self._step(project, MediaTemplatePlugin.Code.BROLL, ProjectPipelineStep.Status.FINISHED)
-            if not project.template_version.interactive_preview_enabled:
+            if not project.template_version.interactive_preview_enabled and not (project.configuration or {}).get('multicam_alignments'):
                 self.render(project_id)
                 return
             from .preview import ProjectProxyService, TimelineRevisionService
@@ -2357,6 +2807,9 @@ class ExternalMediaProjectPipeline:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 64, 'Preparando a revisão')
             ProjectProxyService.prepare(project)
             TimelineRevisionService.ensure_initial(project)
+            if not project.template_version.interactive_preview_enabled:
+                self.render(project_id)
+                return
             job.status = ExternalMediaJob.Status.AWAITING_REVIEW
             job.progress = 66
             job.current_step = 'Aguardando sua revisão'
@@ -2380,9 +2833,32 @@ class ExternalMediaProjectPipeline:
             raise ExternalMediaError('O projeto ainda não possui conteúdo preparado.')
         if project.template_version.interactive_preview_enabled and not project.approved_timeline_revision_id:
             raise ExternalMediaError('A edição precisa ser aprovada antes da renderização final.')
+        if (
+            project.template_version.interactive_preview_enabled
+            and (
+                project.preview_dirty
+                or project.current_timeline_revision_id != project.approved_timeline_revision_id
+            )
+        ):
+            raise ExternalMediaError(
+                'A revisão atual difere da revisão aprovada. Aprove novamente antes de renderizar.'
+            )
         try:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 68, 'Preparando a versão final')
             self._step(project, 'render', ProjectPipelineStep.Status.RUNNING)
+            # Cues already use edited time. Validate against the approved clip
+            # sequence before spending time assembling/mastering the final file.
+            protected_ranges = self._subtitle_protected_ranges(project)
+            subtitle_report = self.quality.validate_subtitles(
+                ExternalMediaPipeline._ordered_output_tracks(project.render_job), protected_ranges,
+            )
+            if not subtitle_report.ok:
+                logger.error(
+                    'external_media_protected_subtitle_overlap project=%s revision=%s protected_ranges=%s overlaps=%s',
+                    project.public_id, getattr(project.approved_timeline_revision, 'revision', None),
+                    protected_ranges, subtitle_report.metrics.get('protected_subtitle_overlaps'),
+                )
+            subtitle_report.require_ok()
             if (project.configuration or {}).get('proxy_pipeline'):
                 with JobWorkspace(
                     project.public_id,
@@ -2391,11 +2867,6 @@ class ExternalMediaProjectPipeline:
                 ) as workspace:
                     with timed_step('prepare_final_master', project=project.public_id):
                         self._prepare_final_master(project, workspace.path)
-            subtitle_report = self.quality.validate_subtitles(
-                ExternalMediaPipeline._ordered_output_tracks(project.render_job),
-                (project.configuration or {}).get('protected_block_ranges'),
-            )
-            subtitle_report.require_ok()
             self._update(project, ExternalMediaProject.Status.PROCESSING, 91, 'Finalizando seu vídeo')
             if project.render_job.subtitle_tracks.exists():
                 with timed_step('render_outputs', project=project.public_id):
@@ -2413,6 +2884,11 @@ class ExternalMediaProjectPipeline:
                         project.render_job.original_language,
                         project.render_job.original_video,
                         'video_final.mp4',
+                    )
+                    ExternalMediaPipeline().create_dashboard_thumbnail(
+                        project.render_job,
+                        source,
+                        workspace.path,
                     )
                 project.render_job.status = ExternalMediaJob.Status.FINISHED
                 project.render_job.progress = 100
@@ -2488,14 +2964,41 @@ class ExternalMediaProjectPipeline:
         # configuration fallback only preserves projects edited before music
         # became a revisioned setting.
         music_revision = project.approved_timeline_revision or project.current_timeline_revision
-        override_id = (
-            ((music_revision.timeline if music_revision else {}) or {}).get('music_override_track_id')
-            or (project.configuration or {}).get('music_override_track_id')
-        )
-        override = BackgroundMusicTrack.objects.filter(pk=override_id, audio_file__isnull=False).first() if override_id else None
-        music_field = override.audio_file if override else self.music.selected_file(version, codes)
+        music_timeline = (music_revision.timeline if music_revision else {}) or {}
+        music_tracks = self.music.selected_tracks(version, music_timeline, project.configuration or {})
         lut = materialize_small_asset(lut_field, 'template_lut') if lut_field else None
-        music = materialize_small_asset(music_field, 'template_music') if music_field else None
+        local_music_tracks = [
+            materialize_small_asset(item['file'], f'template_music_{index + 1}')
+            for index, item in enumerate(music_tracks) if item.get('file')
+        ]
+        has_timeline_timing = any(
+            item.get('start_ms') is not None and item.get('end_ms') is not None
+            for item in music_tracks
+        )
+        if len(local_music_tracks) > 1 or has_timeline_timing:
+            music = AudioMixingService(self.assembly.runner).build_playlist(
+                local_music_tracks,
+                workdir / 'template_music_playlist.wav',
+                [item.get('transition') for item in music_tracks[1:]],
+                [item.get('transition_duration_ms') for item in music_tracks[1:]],
+                [
+                    max(0, int(item.get('end_ms') or 0) - int(item.get('start_ms') or 0))
+                    if item.get('end_ms') is not None and item.get('start_ms') is not None else None
+                    for item in music_tracks
+                ],
+                [
+                    (item.get('start_ms'), item.get('end_ms'))
+                    if item.get('start_ms') is not None and item.get('end_ms') is not None else None
+                    for item in music_tracks
+                ],
+                [item.get('source_in_ms') for item in music_tracks],
+                [item.get('audio_transition') for item in music_tracks],
+                [item.get('clip_id') or item.get('id') for item in music_tracks],
+                sequence_duration_ms=(music_timeline.get('sequence') or {}).get('duration_ms'),
+                clip_volumes=[item.get('volume', 1) for item in music_tracks],
+            )
+        else:
+            music = local_music_tracks[0] if local_music_tracks else None
         available = {
             MediaTemplatePlugin.Code.INTRO: any(item['role'] == 'intro' for item in self._source_manifest['sources']),
             MediaTemplatePlugin.Code.OUTRO: any(item['role'] == 'outro' for item in self._source_manifest['sources']),
@@ -2566,6 +3069,10 @@ class ExternalMediaProjectPipeline:
         plugins = self.templates.enabled_plugins(project)
         sources, lut_path, music_path = self._materialize(project, plugins, workdir)
         assembled = workdir / 'project_master_original.mp4'
+        source_intervals = (
+            self._approved_source_intervals(project.approved_timeline_revision, sources)
+            if project.approved_timeline_revision else None
+        )
         auto_reframe_plugin = next(
             (plugin for plugin in plugins if plugin.code == MediaTemplatePlugin.Code.AUTO_TRACKING),
             None,
@@ -2573,6 +3080,11 @@ class ExternalMediaProjectPipeline:
         configuration = project.configuration or {}
         saved_reframe_plans = configuration.get('auto_reframe_plans') or []
         approved_revision = project.approved_timeline_revision
+        approved_color_adjustments = {
+            str(item.get('source_id')): (item.get('metadata') or {}).get('adjustment')
+            for item in ((approved_revision.edit_decision_set.get('operations') if approved_revision else []) or [])
+            if item.get('type') == 'color_adjustment' and item.get('enabled', True)
+        }
         if approved_revision:
             # The review screen is an approval of this exact framing plan. Its
             # plan references are immutable revision data and must win over a
@@ -2604,6 +3116,14 @@ class ExternalMediaProjectPipeline:
                     ),
                 )
         self._update(project, ExternalMediaProject.Status.PROCESSING, 72, 'Montando seu vídeo')
+        preflight_report = {}
+
+        def validate_source_timeline(ranges):
+            preflight_report.update(self._validate_analysis_timeline(
+                configuration, int(ranges[-1]['end_ms']), ranges,
+                source_intervals=source_intervals,
+            ))
+
         with timed_step('assemble_final_master', clips=len(sources), reused_reframe_plans=bool(saved_reframe_plans)):
             self.assembly.assemble(
                 sources,
@@ -2622,6 +3142,9 @@ class ExternalMediaProjectPipeline:
                 ) if auto_reframe_plugin else None,
                 analysis_sources=analysis_sources,
                 reframe_plans=saved_reframe_plans,
+                source_intervals=source_intervals,
+                source_color_adjustments=approved_color_adjustments,
+                preflight=validate_source_timeline if source_intervals is not None else None,
                 progress_callback=lambda completed, total: self._update(
                     project,
                     ExternalMediaProject.Status.PROCESSING,
@@ -2639,23 +3162,47 @@ class ExternalMediaProjectPipeline:
         # them back to the original master and apply both plans in one FFmpeg pass.
         # This removes an entire 4K re-encode without changing the resulting cuts.
         combined_cuts = []
-        original_duration_ms = SpeechEditService(self.assembly.runner).duration_ms(assembled)
-        timeline_report = self._validate_analysis_timeline(
+        original_duration_ms = (
+            int(self.assembly.last_block_ranges[-1]['end_ms'])
+            if source_intervals is not None
+            else SpeechEditService(self.assembly.runner).duration_ms(assembled)
+        )
+        timeline_report = preflight_report or self._validate_analysis_timeline(
             configuration,
             original_duration_ms,
             self.assembly.last_block_ranges,
+            source_intervals=source_intervals,
         )
+        exact_approved_timeline_cuts = False
         if approved:
-            combined_cuts.extend(
-                SpeechCut(
-                    int(item.get('source_in_ms') or 0),
-                    int(item.get('source_out_ms') or 0),
-                    (item.get('metadata') or {}).get('kind', 'silence'),
-                    item.get('reason') or '',
-                )
-                for item in (approved.edit_decision_set.get('operations') or [])
-                if item.get('type') == 'remove_segment' and item.get('enabled', True)
+            snapshot_cuts = self._cuts_from_approved_timeline(
+                approved, self.assembly.last_block_ranges, original_duration_ms,
             )
+            if snapshot_cuts is not None:
+                exact_approved_timeline_cuts = True
+                # The immutable clip list is the exact sequence played by the
+                # editor and by its continuous review proxy. Deriving the
+                # delivery cuts from those kept clips makes the final output
+                # obey that visual contract even when proxy durations differ
+                # from the high-resolution takes by a frame.
+                combined_cuts.extend(snapshot_cuts)
+            else:
+                approved_cuts = [
+                    SpeechCut(
+                        int(item.get('source_in_ms') or 0),
+                        int(item.get('source_out_ms') or 0),
+                        (item.get('metadata') or {}).get('kind', 'silence'),
+                        item.get('reason') or '',
+                    )
+                    for item in (approved.edit_decision_set.get('operations') or [])
+                    if item.get('type') == 'remove_segment' and item.get('enabled', True)
+                ]
+                combined_cuts.extend(self._remap_analysis_cuts_to_final(
+                    approved_cuts,
+                    configuration.get('analysis_source_block_ranges') or [],
+                    self.assembly.last_block_ranges,
+                    original_duration_ms,
+                ))
         else:
             if background_plan and background_plan.cuts:
                 combined_cuts.extend(background_plan.cuts)
@@ -2675,23 +3222,25 @@ class ExternalMediaProjectPipeline:
         if combined_cuts:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 82, 'Ajustando seu vídeo')
             edited = workdir / 'project_master_speech_edited.mp4'
-            combined_plan = SpeechEditPlan.normalized(
-                combined_cuts,
-                original_duration_ms,
-                max(
-                    getattr(background_plan, 'crossfade_ms', 0) or 0,
-                    getattr(plan, 'crossfade_ms', 0) or 0,
-                    40,
-                ),
+            crossfade_ms = max(
+                getattr(background_plan, 'crossfade_ms', 0) or 0,
+                getattr(plan, 'crossfade_ms', 0) or 0,
+                40,
+            )
+            combined_plan = (
+                SpeechEditPlan(tuple(combined_cuts), original_duration_ms, crossfade_ms)
+                if exact_approved_timeline_cuts
+                else SpeechEditPlan.normalized(combined_cuts, original_duration_ms, crossfade_ms)
             )
             cut_report = self.quality.validate_cuts(combined_plan.cuts, original_duration_ms)
             cut_report.require_ok()
-            with timed_step('apply_combined_speech_edits_to_final_master', cuts=len(combined_plan.cuts)):
-                with self.storage.staged_processing_input(
-                    final_path, f'project-{project.public_id}-speech-edit',
-                ) as processing_input:
-                    SpeechEditService(self.assembly.runner).apply(processing_input, edited, combined_plan)
-            final_path = edited
+            if source_intervals is None:
+                with timed_step('apply_combined_speech_edits_to_final_master', cuts=len(combined_plan.cuts)):
+                    with self.storage.staged_processing_input(
+                        final_path, f'project-{project.public_id}-speech-edit',
+                    ) as processing_input:
+                        SpeechEditService(self.assembly.runner).apply(processing_input, edited, combined_plan)
+                final_path = edited
         else:
             combined_plan = SpeechEditPlan.normalized((), original_duration_ms)
         job = project.render_job
@@ -2705,8 +3254,19 @@ class ExternalMediaProjectPipeline:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 87, 'Ajustando o áudio')
             with timed_step('finalize_audio_final_master'):
                 final_path = self._finalize_audio(project, job, workdir, final_path, music_path, combined_plan)
-        expected_duration_ms = max(1, original_duration_ms - combined_plan.saved_ms)
+        expected_duration_ms = (
+            sum(item['end_ms'] - item['start_ms'] for item in source_intervals)
+            if source_intervals is not None
+            else max(1, original_duration_ms - combined_plan.saved_ms)
+        )
         revision = project.approved_timeline_revision or project.current_timeline_revision
+        if revision and (revision.timeline or {}).get('camera_segments'):
+            from .multicam import MulticamRenderService
+            metadata = RenderService(self.assembly.runner).probe_video(final_path)
+            final_path = MulticamRenderService(self.assembly.runner, self.storage).apply(
+                project, revision, final_path, workdir / 'project_master_multicam.mp4',
+                version.preset.width or metadata.width, version.preset.height or metadata.height,
+            )
         brolls = list((revision.timeline if revision else {}).get('brolls') or [])
         if brolls:
             self._update(project, ExternalMediaProject.Status.PROCESSING, 88, 'Aplicando B-rolls')
@@ -2759,10 +3319,34 @@ class ExternalMediaProjectPipeline:
             deep_audio=True,
         )
         quality_report.require_ok()
+        render_contract = {
+            'timing_version': ASSEMBLY_TIMING_VERSION,
+            'analysis_timing_version': configuration.get('analysis_timing_version'),
+            'approved_revision': approved.revision if approved else None,
+            'approved_revision_id': approved.pk if approved else None,
+            'cut_source': 'approved_source_intervals' if source_intervals is not None else (
+                'approved_timeline_clips' if exact_approved_timeline_cuts else 'edit_decisions'
+            ),
+            'source_intervals': source_intervals,
+            'protected_block_ranges': self._subtitle_protected_ranges(project),
+            'source_duration_ms': original_duration_ms,
+            'expected_duration_ms': expected_duration_ms,
+            'cuts': [cut.as_dict() for cut in combined_plan.cuts],
+        }
+        logger.info(
+            'external_media_render_contract project=%s revision=%s source=%s duration_ms=%s expected_ms=%s cuts=%s',
+            project.public_id,
+            render_contract['approved_revision'],
+            render_contract['cut_source'],
+            original_duration_ms,
+            expected_duration_ms,
+            len(combined_plan.cuts),
+        )
         project.configuration = {
             **(project.configuration or {}),
             'timeline_validation': timeline_report,
             'quality_report': quality_report.as_dict(),
+            'render_contract': render_contract,
         }
         project.save(update_fields=['configuration', 'update_at'])
         if not approved:
@@ -2798,10 +3382,18 @@ class ExternalMediaProjectPipeline:
             for item in operations
             if item.get('type') == 'reframe' and not item.get('enabled', True)
         }
+        scoped_manual_sources = {
+            item.get('source_id')
+            for item in operations
+            if item.get('type') == 'reframe'
+            and item.get('enabled', True)
+            and (item.get('metadata') or {}).get('manual_transform')
+            and 'segment_start_ms' in (item.get('metadata') or {})
+        }
         fallback_plans = list(fallback_plans or [])
         result = []
         for index, source in enumerate(manifest.get('sources') or []):
-            if source.get('id') in disabled_sources:
+            if source.get('id') in disabled_sources or source.get('id') in scoped_manual_sources:
                 result.append({'disabled': True})
                 continue
             raw_fallback = fallback_plans[index] if index < len(fallback_plans) else None
@@ -2818,24 +3410,37 @@ class ExternalMediaProjectPipeline:
             old_width = int(plan.get('crop_width') or analysis_width)
             old_height = int(plan.get('crop_height') or analysis_height)
             scale = min(2.0, max(1.0, float(manual.get('scale') or 1)))
-            new_width = max(2, round(old_width / scale / 2) * 2)
-            new_height = max(2, round(old_height / scale / 2) * 2)
-            # CSS preview translations move the *image* (positive values move
-            # it right/down). FFmpeg moves the crop window instead, so its
-            # offsets must be the inverse. Keeping this mapping aligned is
-            # especially important for a vertical group shot: a negative Y in
-            # the editor removes empty headroom by moving the crop downward.
-            offset_x = -float(manual.get('x') or 0) * max(0, analysis_width - new_width) / 2
-            offset_y = -float(manual.get('y') or 0) * max(0, analysis_height - new_height) / 2
-            keyframes = []
-            for keyframe in plan.get('keyframes') or []:
-                center_x = float(keyframe.get('x') or 0) + old_width / 2
-                center_y = float(keyframe.get('y') or 0) + old_height / 2
-                keyframes.append({
-                    **keyframe,
-                    'x': min(analysis_width - new_width, max(0, center_x - new_width / 2 + offset_x)),
-                    'y': min(analysis_height - new_height, max(0, center_y - new_height / 2 + offset_y)),
-                })
+            # A manual transform is an absolute editor composition over the
+            # original take. It replaces Auto Reframe; applying it on top of
+            # the automatic crop multiplies zoom and Y displacement. Recover
+            # the largest cover crop with the delivery aspect ratio. X/Y then
+            # choose the crop across the whole original take, including the
+            # source area outside the centered cover crop. This is what lets a
+            # member recover headroom or lateral content after choosing
+            # "Voltar ao original".
+            target_ratio = old_width / max(1, old_height)
+            source_ratio = analysis_width / max(1, analysis_height)
+            if source_ratio >= target_ratio:
+                cover_height = analysis_height
+                cover_width = min(analysis_width, round(cover_height * target_ratio))
+            else:
+                cover_width = analysis_width
+                cover_height = min(analysis_height, round(cover_width / max(target_ratio, .000001)))
+            cover_width = max(2, round(cover_width / 2) * 2)
+            cover_height = max(2, round(cover_height / 2) * 2)
+            new_width = max(2, round(cover_width / scale / 2) * 2)
+            new_height = max(2, round(cover_height / scale / 2) * 2)
+            available_x = max(0, analysis_width - new_width)
+            available_y = max(0, analysis_height - new_height)
+            crop_x = available_x / 2 - float(manual.get('x') or 0) * available_x / 2
+            crop_y = available_y / 2 - float(manual.get('y') or 0) * available_y / 2
+            crop_x = min(analysis_width - new_width, max(0, crop_x))
+            crop_y = min(analysis_height - new_height, max(0, crop_y))
+            source_keyframes = plan.get('keyframes') or [{'time_seconds': 0}]
+            keyframes = [
+                {**keyframe, 'x': crop_x, 'y': crop_y}
+                for keyframe in source_keyframes
+            ]
             plan_data['plan'] = {
                 **plan, 'crop_width': new_width, 'crop_height': new_height, 'keyframes': keyframes,
             }
@@ -2843,14 +3448,19 @@ class ExternalMediaProjectPipeline:
         return result
 
     @staticmethod
-    def _validate_analysis_timeline(configuration, original_duration_ms, final_ranges):
+    def _validate_analysis_timeline(configuration, original_duration_ms, final_ranges, *, source_intervals=None):
         analysis_duration_ms = int(configuration.get('analysis_source_duration_ms') or 0)
         analysis_ranges = configuration.get('analysis_source_block_ranges') or []
         if not analysis_duration_ms:
             raise ExternalMediaError('A duração da timeline de análise não foi registrada.')
         duration_drift_ms = abs(original_duration_ms - analysis_duration_ms)
         duration_tolerance_ms = max(1000, round(original_duration_ms * 0.01))
-        if duration_drift_ms > duration_tolerance_ms:
+        # Only cuts positioned on a joined master depend on its cumulative
+        # clock. Approved source-local cuts do not: old proxy encoder padding
+        # can accumulate across dozens of takes without changing any selected
+        # source interval. Keep recording this drift, and still validate every
+        # take below, but do not use that obsolete global clock to reject them.
+        if source_intervals is None and duration_drift_ms > duration_tolerance_ms:
             raise ExternalMediaError(
                 'O proxy e o vídeo original perderam sincronismo '
                 f'({duration_drift_ms / 1000:.2f}s de diferença).'
@@ -2872,11 +3482,219 @@ class ExternalMediaProjectPipeline:
                 )
         return {
             'ok': True,
+            'coordinate_space': 'source_local' if source_intervals is not None else 'assembled_master',
+            'cumulative_drift_exceeds_master_tolerance': duration_drift_ms > duration_tolerance_ms,
             'analysis_duration_ms': analysis_duration_ms,
             'original_duration_ms': original_duration_ms,
             'duration_drift_ms': duration_drift_ms,
             'largest_block_drift_ms': largest_block_drift_ms,
         }
+
+    @classmethod
+    def _remap_analysis_cuts_to_final(cls, cuts, analysis_ranges, final_ranges, final_duration_ms):
+        """Translate review-clock cuts onto the freshly assembled delivery clock."""
+        if not cuts or not analysis_ranges or len(analysis_ranges) != len(final_ranges):
+            return list(cuts)
+        remapped = []
+        for cut in cuts:
+            start_ms = cls._remap_analysis_time_to_final(
+                cut.start_ms, analysis_ranges, final_ranges, final_duration_ms,
+            )
+            end_ms = cls._remap_analysis_time_to_final(
+                cut.end_ms, analysis_ranges, final_ranges, final_duration_ms,
+            )
+            if end_ms <= start_ms:
+                continue
+            remapped.append(SpeechCut(start_ms, end_ms, cut.kind, cut.label))
+        return remapped
+
+    @staticmethod
+    def _approved_source_intervals(revision, sources):
+        """Resolve kept clips without projecting them onto a new master clock."""
+        clips = (revision.timeline or {}).get('clips') or []
+        if not clips:
+            raise ExternalMediaError('A revisão aprovada não possui trechos de vídeo para renderizar.')
+        by_id = {str(source.label): (index, source) for index, source in enumerate(sources)}
+        manifest = {
+            str(item['id']): item for item in (revision.source_manifest or {}).get('sources', [])
+            if (item.get('metadata') or {}).get('render_enabled', True)
+        }
+        source_master_starts, cursor = {}, 0
+        for source in (revision.source_manifest or {}).get('sources', []):
+            if not (source.get('metadata') or {}).get('render_enabled', True):
+                continue
+            trim = source.get('trim') or {}
+            start = int(trim.get('start_ms') or 0)
+            end = int(trim.get('end_ms') or source.get('duration_ms') or start)
+            source_master_starts[str(source.get('id'))] = (cursor, start)
+            cursor += max(1, end - start)
+        reframe_operations = [
+            item for item in ((getattr(revision, 'edit_decision_set', {}) or {}).get('operations') or [])
+            if item.get('type') == 'reframe'
+        ]
+        scoped_reframes = [item for item in reframe_operations if 'segment_start_ms' in (item.get('metadata') or {})]
+        result = []
+        for clip in clips:
+            source_id = str(clip.get('asset_id') or '')
+            if source_id not in by_id or source_id not in manifest:
+                raise ExternalMediaError('Um vídeo da revisão aprovada não está mais disponível para renderizar.')
+            index, source = by_id[source_id]
+            approved_trim = manifest[source_id].get('trim') or {}
+            if (
+                int(approved_trim.get('start_ms') or 0) != int(source.trim_start_ms or 0)
+                or (approved_trim.get('end_ms') is not None
+                    and int(approved_trim['end_ms']) != source.trim_end_ms)
+            ):
+                raise ExternalMediaError('Os limites de um take mudaram após a aprovação. Revise a edição antes de renderizar.')
+            start = int(clip.get('source_in_ms') or 0) - int(source.trim_start_ms or 0)
+            end = int(clip.get('source_out_ms') or 0) - int(source.trim_start_ms or 0)
+            if start < 0 or end <= start:
+                raise ExternalMediaError('A revisão aprovada contém um trecho de vídeo inválido.')
+            master_base, trim_start = source_master_starts.get(source_id, (0, int(source.trim_start_ms or 0)))
+            master_start = int(clip.get('master_in_ms', master_base + int(clip.get('source_in_ms') or 0) - trim_start))
+            master_end = int(clip.get('master_out_ms', master_base + int(clip.get('source_out_ms') or 0) - trim_start))
+            boundaries = {master_start, master_end}
+            matching = [
+                item for item in scoped_reframes
+                if str(item.get('source_id')) == source_id
+            ]
+            for item in matching:
+                metadata = item.get('metadata') or {}
+                for boundary in (metadata.get('segment_start_ms'), metadata.get('segment_end_ms')):
+                    if boundary is not None and master_start < int(boundary) < master_end:
+                        boundaries.add(int(boundary))
+            for part_start, part_end in zip(sorted(boundaries), sorted(boundaries)[1:]):
+                candidates = [
+                    item for item in matching
+                    if int((item.get('metadata') or {}).get('segment_start_ms') or 0) <= part_start
+                    < int((item.get('metadata') or {}).get('segment_end_ms') or 0)
+                ]
+                # Revisions retain earlier operations for audit/undo. Match the
+                # editor: the latest explicit manual/disabled choice wins over
+                # an inherited auto-reframe covering the same range.
+                selected = next(
+                    (
+                        item for item in reversed(candidates)
+                        if not item.get('enabled', True)
+                        or (item.get('metadata') or {}).get('manual_transform') is not None
+                    ),
+                    candidates[-1] if candidates else None,
+                )
+                if selected is None:
+                    global_reframes = [item for item in reframe_operations
+                                       if str(item.get('source_id')) == source_id
+                                       and 'segment_start_ms' not in (item.get('metadata') or {})]
+                    selected = next(
+                        (item for item in reversed(global_reframes)
+                         if not item.get('enabled', True)
+                         or (item.get('metadata') or {}).get('manual_transform') is not None),
+                        global_reframes[-1] if global_reframes else None,
+                    )
+                transform = (
+                    (selected.get('metadata') or {}).get('manual_transform')
+                    if selected and selected.get('enabled', True)
+                    else None
+                )
+                if not transform and (selected is None or selected.get('enabled', True)):
+                    transform = next(({key: effect[key] for key in ('scale', 'x', 'y') if key in effect}
+                                      for effect in clip.get('effects') or [] if effect.get('type') == 'transform'), None)
+                automatic_plan = (selected or {}).get('plan_reference') if selected and selected.get('enabled', True) and not transform else None
+                if selected and selected.get('enabled', True) and not transform and not automatic_plan:
+                    automatic_plan = next((item.get('plan_reference') for item in reframe_operations
+                                           if str(item.get('source_id')) == source_id
+                                           and item.get('enabled', True) and item.get('plan_reference')
+                                           and 'segment_start_ms' not in (item.get('metadata') or {})), None)
+                if automatic_plan and not automatic_plan.get('plan'):
+                    automatic_plan = None
+                result.append({
+                    'source_id': source_id, 'source_index': index,
+                    'start_ms': start + part_start - master_start,
+                    'end_ms': start + part_end - master_start,
+                    'manual_transform': transform,
+                    'restore_original': bool(selected and not selected.get('enabled', True)),
+                    'auto_reframe_plan': automatic_plan,
+                })
+        return result
+
+    @staticmethod
+    def _cuts_from_approved_timeline(revision, final_ranges, final_duration_ms):
+        """Build delivery cuts from the exact kept clips approved in the editor."""
+        timeline = revision.timeline or {}
+        clips = timeline.get('clips') or []
+        manifest_sources = [
+            source for source in (revision.source_manifest or {}).get('sources', [])
+            if (source.get('metadata') or {}).get('render_enabled', True)
+        ]
+        if not clips or len(manifest_sources) != len(final_ranges):
+            return None
+        source_ranges = {}
+        for source, final in zip(manifest_sources, final_ranges):
+            trim = source.get('trim') or {}
+            trim_start_ms = int(trim.get('start_ms') or 0)
+            source_duration_ms = int(
+                source.get('duration_ms')
+                or (source.get('metadata') or {}).get('duration_ms')
+                or trim.get('end_ms')
+                or trim_start_ms
+            )
+            trim_end_ms = min(source_duration_ms, int(trim.get('end_ms') or source_duration_ms))
+            source_ranges[str(source.get('id'))] = {
+                'trim_start_ms': trim_start_ms,
+                'analysis_duration_ms': max(0, trim_end_ms - trim_start_ms),
+                'final_start_ms': int(final.get('start_ms') or 0),
+                'final_end_ms': int(final.get('end_ms') or 0),
+            }
+        kept = []
+        for clip in clips:
+            target = source_ranges.get(str(clip.get('asset_id') or ''))
+            if not target:
+                return None
+            local_start = max(0, int(clip.get('source_in_ms') or 0) - target['trim_start_ms'])
+            local_end = max(local_start, int(clip.get('source_out_ms') or 0) - target['trim_start_ms'])
+            start_ms = (
+                target['final_start_ms'] if local_start <= 0
+                else min(target['final_end_ms'], target['final_start_ms'] + local_start)
+            )
+            end_ms = (
+                target['final_end_ms']
+                if local_end >= target['analysis_duration_ms']
+                else min(target['final_end_ms'], target['final_start_ms'] + local_end)
+            )
+            if end_ms > start_ms:
+                kept.append((start_ms, end_ms))
+        if not kept:
+            return None
+        merged = []
+        for start_ms, end_ms in sorted(kept):
+            if merged and start_ms <= merged[-1][1]:
+                merged[-1] = (merged[-1][0], max(merged[-1][1], end_ms))
+            else:
+                merged.append((start_ms, end_ms))
+        cuts, cursor = [], 0
+        for start_ms, end_ms in merged:
+            if start_ms > cursor:
+                cuts.append(SpeechCut(cursor, start_ms, 'timeline', 'Corte aprovado no editor'))
+            cursor = max(cursor, end_ms)
+        if cursor < int(final_duration_ms):
+            cuts.append(SpeechCut(cursor, int(final_duration_ms), 'timeline', 'Corte aprovado no editor'))
+        return cuts
+
+    @staticmethod
+    def _remap_analysis_time_to_final(value_ms, analysis_ranges, final_ranges, final_duration_ms):
+        value_ms = max(0, int(value_ms))
+        for analysis, final in zip(analysis_ranges, final_ranges):
+            analysis_start = int(analysis.get('start_ms') or 0)
+            analysis_end = int(analysis.get('end_ms') or analysis_start)
+            if value_ms > analysis_end:
+                continue
+            final_start = int(final.get('start_ms') or 0)
+            final_end = int(final.get('end_ms') or final_start)
+            # The media is never time-stretched between analysis and delivery.
+            # Preserve the offset inside the take, while clamping a proxy-only
+            # trailing frame to the real end of its high-resolution source.
+            offset = max(0, value_ms - analysis_start)
+            return min(final_end, final_start + offset)
+        return min(max(0, int(final_duration_ms)), value_ms)
 
     def _finalize_audio(self, project, job, workdir, video_path, music_path, plan):
         """Processes dialogue, mixes in music (with adaptive ducking, if enabled), then
@@ -2890,8 +3708,10 @@ class ExternalMediaProjectPipeline:
         """
         version = project.template_version
         revision = project.approved_timeline_revision or project.current_timeline_revision
+        revision_timeline = (revision.timeline if revision else {}) or {}
+        revision_mix = dict(revision_timeline.get('audio_mix') or {})
         music_volume = max(0.0, min(1.0, float(
-            ((revision.timeline if revision else {}) or {}).get('music_volume', version.music_volume)
+            revision_timeline.get('music_volume', revision_mix.get('music_volume', version.music_volume))
         )))
         final_path = video_path
         retained_temporary_names = []
@@ -2946,7 +3766,10 @@ class ExternalMediaProjectPipeline:
             speech_blocks = self._speech_blocks_for_job(job) if mixing_enabled else []
             protected_ranges = self._protected_ranges_ms(project, plan) if mixing_enabled else []
             duration_ms = SpeechEditService(self.assembly.runner).duration_ms(final_path)
-            ducking_settings = DuckingSettings.from_config(version.audio_mixing_config)
+            ducking_settings = DuckingSettings.from_config(
+                revision_mix or version.audio_mixing_config,
+            )
+            revision_ducking = ducking_options(revision_mix)
             mixed_path = workdir / 'audio_mixed.mp4'
             with self.storage.staged_processing_input(
                 final_path, f'project-{project.public_id}-audio-mix',
@@ -2958,8 +3781,13 @@ class ExternalMediaProjectPipeline:
                     speech_blocks=speech_blocks,
                     protected_ranges=protected_ranges,
                     settings_=ducking_settings,
-                    ducking_enabled=mixing_enabled and version.audio_ducking_enabled,
-                    spectral_enabled=mixing_enabled and version.audio_spectral_ducking_enabled,
+                    ducking_enabled=mixing_enabled and bool(
+                        revision_ducking.get('enabled', version.audio_ducking_enabled)
+                    ),
+                    spectral_enabled=mixing_enabled and bool(
+                        revision_ducking.get('spectral_enabled', version.audio_spectral_ducking_enabled)
+                    ),
+                    music_keyframes=revision_mix.get('music_keyframes') or [],
                 )
             final_path = mix_result.path
             mix_metrics = mix_result.metrics
@@ -3052,8 +3880,41 @@ class ExternalMediaProjectPipeline:
         )
 
     @staticmethod
+    def _subtitle_protected_ranges(project):
+        """Protected spans in the same edited clock as the approved captions.
+
+        Analysis configuration is retained for transcription/source processing.
+        It cannot describe the delivery positions after member cuts/reordering.
+        """
+        revision = getattr(project, 'approved_timeline_revision', None)
+        if not revision:
+            return (project.configuration or {}).get('protected_block_ranges') or []
+        sources = {
+            str(source.get('id')): source
+            for source in (revision.source_manifest or {}).get('sources') or []
+        }
+        ranges = []
+        for clip in (revision.timeline or {}).get('clips') or []:
+            source = sources.get(str(clip.get('asset_id')), {})
+            if not (clip.get('skip_extra_processing') or (source.get('metadata') or {}).get('skip_extra_processing')):
+                continue
+            start, end = int(clip['timeline_in_ms']), int(clip['timeline_out_ms'])
+            if end > start:
+                ranges.append({
+                    'start_ms': start, 'end_ms': end,
+                    'source_id': clip.get('asset_id'),
+                    'block_key': source.get('block_key') or (clip.get('block') or {}).get('key'),
+                })
+        return ranges
+
+    @staticmethod
     def _protected_ranges_ms(project, plan):
         """"Manter bloco intacto" ranges, remapped onto the post speech-edit timeline."""
+        if getattr(project, 'approved_timeline_revision', None):
+            # Approved source intervals already include every cut and move.
+            # Remapping with the original speech plan again shifts them twice.
+            return [(item['start_ms'], item['end_ms'])
+                    for item in ExternalMediaProjectPipeline._subtitle_protected_ranges(project)]
         ranges = (project.configuration or {}).get('protected_block_ranges') or []
         remap = plan.remap_time if plan else (lambda ms: ms)
         return [
@@ -3136,7 +3997,13 @@ class ExternalMediaProjectPipeline:
         project.save(update_fields=['status', 'current_step', 'error_message', 'update_at'])
         ProjectPipelineStep.objects.filter(
             project=project, status=ProjectPipelineStep.Status.RUNNING,
-        ).update(status=ProjectPipelineStep.Status.ERROR, message=message, finished_at=timezone.now())
+        ).update(
+            status=ProjectPipelineStep.Status.ERROR,
+            # ProjectPipelineStep.message is a CharField(255); the project itself
+            # retains the complete diagnostic in its TextField.
+            message=(message or '')[:255],
+            finished_at=timezone.now(),
+        )
 
 
 class ExternalMediaPipeline:
@@ -3151,6 +4018,31 @@ class ExternalMediaPipeline:
         self.speech_editor = SpeechEditService(self.audio.runner)
         self.off_context_analyzer = OffContextAnalyzer()
         self.quality = MediaQualityService(self.audio.runner)
+
+    def create_dashboard_thumbnail(self, job, source, workdir):
+        """Persist a compact still from the final video for project cards.
+
+        A thumbnail is helpful metadata only, so an extraction failure must not
+        invalidate an otherwise successful render.
+        """
+        thumbnail_path = workdir / 'dashboard-thumbnail.jpg'
+        try:
+            self.audio.runner.run([
+                settings.FFMPEG_BINARY, '-y', '-ss', '1',
+                '-i', FFmpegRunner.input_arg(source), '-frames:v', '1',
+                '-vf', 'scale=640:-2', '-q:v', '3', str(thumbnail_path),
+            ])
+            if not thumbnail_path.exists() or not thumbnail_path.stat().st_size:
+                raise ExternalMediaError('O vídeo não possui um quadro disponível para a miniatura.')
+            self.storage.save_asset(
+                job,
+                MediaAsset.Kind.THUMBNAIL,
+                job.original_language,
+                thumbnail_path,
+                thumbnail_path.name,
+            )
+        except Exception:
+            logger.warning('dashboard_thumbnail_failed job=%s', job.pk, exc_info=True)
 
     def prepare_subtitle_tracks(self, job_id):
         job = self._get_job(job_id)
@@ -3187,6 +4079,12 @@ class ExternalMediaPipeline:
                     detailed,
                     (project.configuration or {}).get('protected_block_ranges') if project else [],
                 )
+                if project and project.block_media.filter(camera_role='SECONDARY').exists():
+                    project.configuration = {**(project.configuration or {}), 'multicam_words': [
+                        {'start_ms': item.start_ms, 'end_ms': item.end_ms, 'text': item.text}
+                        for item in detailed if item.granularity == 'word'
+                    ]}
+                    project.save(update_fields=['configuration', 'update_at'])
                 boundaries = self._block_boundaries_ms(job)
                 segments = self.transcription.group_for_subtitles(detailed, boundaries)
                 self._update(job, ExternalMediaJob.Status.GENERATING_SUBTITLES, 52, 'Sincronizando as legendas')
@@ -3286,6 +4184,13 @@ class ExternalMediaPipeline:
                             88 + round(((index + 1) / len(tracks)) * 11),
                             f'Vídeo {track.language.upper()} concluído',
                         )
+                output_asset = job.assets.filter(kind=MediaAsset.Kind.VIDEO).order_by('pk').first()
+                if output_asset:
+                    self.create_dashboard_thumbnail(
+                        job,
+                        media_input_factory(output_asset.file).get_ffmpeg_input(),
+                        workdir,
+                    )
             job.status = ExternalMediaJob.Status.FINISHED
             job.progress = 100
             job.current_step = 'Processamento finalizado'

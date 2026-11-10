@@ -207,19 +207,19 @@ class PremiereExporter:
                 )
 
         # FCP 7 XML has no portable native-caption representation that Premiere
-        # imports consistently. Generate editable legacy text/title clips in addition
-        # to the SRT files, preserving every cue and its timing in the sequence.
-        self._caption_tracks(video, timeline.get('captions') or [], timeline['sequence'])
+        # imports consistently. Captions therefore remain as SRT sidecars in
+        # Captions/; editors import them in Premiere to create native Caption
+        # tracks and apply a caption style there.
 
         audio = ET.SubElement(media, 'audio')
         audio_format = ET.SubElement(audio, 'format')
         sample = ET.SubElement(audio_format, 'samplecharacteristics')
-        self._text(sample, 'depth', 16)
+        self._text(sample, 'depth', timeline['sequence'].get('audio_bit_depth', 24))
         self._text(sample, 'samplerate', timeline['sequence']['audio_sample_rate'])
         for audio_track_index, track_data in enumerate(timeline['audio_tracks'], start=1):
             track = ET.SubElement(audio, 'track')
             self._text(track, 'name', track_data.get('name') or f'Audio {audio_track_index}')
-            self._text(track, 'enabled', 'TRUE')
+            self._text(track, 'enabled', 'TRUE' if track_data.get('enabled', True) else 'FALSE')
             self._text(track, 'locked', 'FALSE')
             for clip in track_data['clips']:
                 self._clipitem(
@@ -296,50 +296,6 @@ class PremiereExporter:
             self._text(link, 'trackindex', linked_track)
             self._text(link, 'clipindex', 1)
 
-    def _caption_tracks(self, video, captions, sequence):
-        for caption_track_index, caption in enumerate(captions, start=1):
-            track = ET.SubElement(video, 'track')
-            language = (caption.get('language') or 'caption').upper()
-            self._text(track, 'name', f'Captions {language}')
-            self._text(track, 'enabled', 'TRUE')
-            self._text(track, 'locked', 'FALSE')
-            for cue_index, cue in enumerate(caption.get('cues') or [], start=1):
-                self._caption_generator(
-                    track, cue, sequence,
-                    item_id=f'caption-{language.lower()}-{cue_index}',
-                    name=f'Caption {language} {cue_index}',
-                    style=caption.get('style') or {},
-                )
-
-    def _caption_generator(self, parent, cue, sequence, item_id, name, style):
-        node = ET.SubElement(parent, 'generatoritem', id=item_id)
-        self._text(node, 'name', name)
-        duration = self._frames(sequence['duration_ms'], sequence['fps'])
-        self._text(node, 'duration', duration)
-        self._rate(node, sequence)
-        self._text(node, 'start', self._frames(cue['start_ms'], sequence['fps']))
-        self._text(node, 'end', self._frames(cue['end_ms'], sequence['fps']))
-        self._text(node, 'in', 0)
-        self._text(node, 'out', self._frames(cue['end_ms'] - cue['start_ms'], sequence['fps']))
-        effect = ET.SubElement(node, 'effect')
-        self._text(effect, 'name', 'Text')
-        self._text(effect, 'effectid', 'Text')
-        self._text(effect, 'effectcategory', 'Text')
-        self._text(effect, 'effecttype', 'generator')
-        self._text(effect, 'mediatype', 'video')
-        self._generator_parameter(effect, 'str', 'Text', cue.get('text') or '')
-        # These are advisory values for compatible importers. The complete style
-        # remains in timeline.json because legacy XML cannot faithfully carry all
-        # current platform caption styling.
-        self._generator_parameter(effect, 'font', 'Font', style.get('font') or 'Arial')
-        self._generator_parameter(effect, 'fontsize', 'Font Size', style.get('font_size') or 48)
-
-    def _generator_parameter(self, effect, parameter_id, name, value):
-        parameter = ET.SubElement(effect, 'parameter')
-        self._text(parameter, 'parameterid', parameter_id)
-        self._text(parameter, 'name', name)
-        self._text(parameter, 'value', value)
-
     def _file(self, clip_node, asset, sequence, media_type):
         file_id = f"file-{asset['id']}"
         file_node = ET.SubElement(clip_node, 'file', id=file_id)
@@ -369,7 +325,7 @@ class PremiereExporter:
         if asset.get('has_audio', True):
             audio = ET.SubElement(media, 'audio')
             sample = ET.SubElement(audio, 'samplecharacteristics')
-            self._text(sample, 'depth', 16)
+            self._text(sample, 'depth', asset.get('bit_depth') or sequence.get('audio_bit_depth', 24))
             self._text(sample, 'samplerate', sequence['audio_sample_rate'])
             self._text(audio, 'channelcount', sequence['audio_channels'])
 
@@ -495,6 +451,7 @@ class ExportValidationService:
             errors.append('A timeline possui duração inválida.')
         if not timeline.get('video_tracks'):
             errors.append('Nenhuma trilha de vídeo foi criada.')
+        postproduction = self._validate_postproduction_layout(timeline, errors, warnings)
         offline = [
             asset['path'] for asset in timeline.get('assets', [])
             if not exists_in_package(package_root / asset['path'].removeprefix('./'))
@@ -509,9 +466,109 @@ class ExportValidationService:
             'audio_track_count': len(timeline.get('audio_tracks', [])),
             'caption_track_count': len(timeline.get('captions', [])),
             'offline_media': offline,
+            'postproduction': postproduction,
         }
         if errors:
             raise ExternalMediaError('Falha ao validar exportação: ' + ' '.join(errors))
+        return report
+
+    @staticmethod
+    def _validate_postproduction_layout(timeline, errors, warnings):
+        """Checks the deterministic layout used by the enhanced Premiere package.
+
+        Legacy packages remain valid: the stricter checks are activated only when the
+        consolidated visual asset is present.
+        """
+        assets = {asset.get('id'): asset for asset in timeline.get('assets', [])}
+        consolidated = assets.get('video_consolidated')
+        report = {
+            'layout': 'legacy_editable_sources',
+            'consolidated_video': False,
+            'dialogue_stem': False,
+            'music_stem': False,
+            'caption_overlay': False,
+            'reference_mix_in_sequence': False,
+        }
+        if not consolidated:
+            return report
+
+        report['layout'] = 'consolidated_postproduction'
+        report['consolidated_video'] = True
+        sequence = timeline.get('sequence', {})
+        duration_ms = int(sequence.get('duration_ms') or 0)
+        if consolidated.get('has_audio') is not False:
+            errors.append('O vídeo consolidado V1 deve estar sem áudio.')
+        if (
+            int(consolidated.get('width') or 0) != int(sequence.get('width') or 0)
+            or int(consolidated.get('height') or 0) != int(sequence.get('height') or 0)
+        ):
+            errors.append('A resolução do vídeo consolidado não corresponde à sequência.')
+        expected_fps = float(sequence.get('fps') or 0)
+        actual_fps = float(consolidated.get('fps') or 0)
+        if expected_fps and abs(expected_fps - actual_fps) > 0.06:
+            errors.append('O FPS do vídeo consolidado não corresponde à sequência.')
+        if duration_ms and abs(int(consolidated.get('duration_ms') or 0) - duration_ms) > 250:
+            errors.append('A duração do vídeo consolidado diverge da timeline.')
+
+        video_tracks = timeline.get('video_tracks', [])
+        main_track = next((track for track in video_tracks if track.get('role') == 'main'), None)
+        main_clips = (main_track or {}).get('clips') or []
+        if len(main_clips) != 1 or main_clips[0].get('asset_id') != consolidated.get('id'):
+            errors.append('V1 deve conter somente o vídeo consolidado.')
+        elif main_clips[0].get('effects'):
+            errors.append('V1 não deve duplicar efeitos já incorporados ao vídeo consolidado.')
+
+        reference = next(
+            (asset for asset in assets.values() if asset.get('role') == 'reference_mix'), None,
+        )
+        reference_tracks = [
+            track for track in timeline.get('audio_tracks', [])
+            if any(clip.get('asset_id') == reference.get('id') for clip in track.get('clips', []))
+        ] if reference else []
+        if reference_tracks:
+            report['reference_mix_in_sequence'] = True
+            report['reference_mix_disabled_track'] = not any(
+                track.get('enabled', True) for track in reference_tracks
+            )
+            if not report['reference_mix_disabled_track']:
+                errors.append('O mix de referência deve permanecer desativado junto com os stems.')
+
+        for role, label in (('dialogue', 'voz'), ('music', 'música')):
+            asset = next((item for item in assets.values() if item.get('role') == role), None)
+            if not asset:
+                continue
+            report[f'{role}_stem'] = True
+            if int(asset.get('bit_depth') or 0) != 24:
+                errors.append(f'O stem de {label} deve usar PCM 24-bit.')
+            if int(asset.get('sample_rate') or 0) != 48000:
+                errors.append(f'O stem de {label} deve usar 48 kHz.')
+            clips = [
+                clip for track in timeline.get('audio_tracks', [])
+                for clip in track.get('clips', []) if clip.get('asset_id') == asset.get('id')
+            ]
+            if len(clips) != 1:
+                errors.append(f'O stem de {label} deve aparecer uma única vez na timeline.')
+            elif (
+                int(clips[0].get('timeline_in_ms') or 0) != 0
+                or abs(int(clips[0].get('timeline_out_ms') or 0) - duration_ms) > 1
+            ):
+                errors.append(f'O stem de {label} deve cobrir toda a duração da timeline.')
+
+        caption_asset = next(
+            (asset for asset in assets.values() if asset.get('role') == 'caption_overlay'), None,
+        )
+        if caption_asset:
+            report['caption_overlay'] = True
+            caption_track = next((track for track in video_tracks if track.get('id') == 'V2'), None)
+            if caption_asset.get('alpha_mode') != 'straight':
+                errors.append('A camada visual de legendas deve preservar transparência alpha.')
+            if not caption_track or not any(
+                clip.get('asset_id') == caption_asset.get('id')
+                for clip in caption_track.get('clips', [])
+            ):
+                errors.append('A camada visual de legendas deve estar posicionada em V2.')
+        elif timeline.get('captions'):
+            warnings.append('O pacote contém legendas editáveis, mas não a referência visual transparente em V2.')
         return report
 
 
@@ -525,7 +582,7 @@ class PremierePackageService:
         timeline_path.write_text(json.dumps(timeline, ensure_ascii=False, indent=2), encoding='utf-8')
         xml_path = package_root / 'Project' / 'timeline.xml'
         PremiereExporter().export(timeline, xml_path)
-        progress('PACKAGING_ASSETS', 66, 'Organizando originais, áudio, legendas e LUTs')
+        progress('PACKAGING_ASSETS', 66, 'Organizando vídeo, áudio e legendas')
         progress('VALIDATING', 78, 'Validando XML, referências e mídia offline')
         report = json_compatible(ExportValidationService().validate(
             package_root, timeline, xml_path, virtual_assets=source_files,
@@ -536,23 +593,44 @@ class PremierePackageService:
         caption_overlay_available = any(
             asset.get('role') == 'caption_overlay' for asset in timeline.get('assets', [])
         )
+        dialogue_available = any(
+            asset.get('role') == 'dialogue' for asset in timeline.get('assets', [])
+        )
+        music_available = any(
+            asset.get('role') == 'music' for asset in timeline.get('assets', [])
+        )
+        reference_mix_available = any(
+            asset.get('role') == 'reference_mix' for asset in timeline.get('assets', [])
+        )
         caption_instructions = (
             'A trilha “Legendas estilizadas (visual final)” é um ProRes 4444 com transparência '
             'e reproduz o visual final das legendas. Ela vem bloqueada: mantenha-a visível para '
-            'fidelidade visual ou oculte-a para editar os títulos/SRT nativos.\n'
-            'Os SRTs ficam em Captions/. As trilhas de títulos PT/EN permanecem editáveis, mas o ProRes '
-            'é a referência fiel para fundo, opacidade, sombra, contorno e posicionamento.\n'
+            'fidelidade visual ou oculte-a após importar um SRT como faixa de legendas nativa.\n'
+            'Os SRTs ficam em Captions/. Importe o arquivo do idioma desejado no Premiere e aplique '
+            'o estilo de legenda no painel Texto; o ProRes é a referência fiel para fundo, opacidade, '
+            'sombra, contorno e posicionamento.\n'
             if caption_overlay_available else
             'A camada ProRes de referência visual das legendas não pôde ser gerada neste worker. '
-            'Os SRTs em Captions/ e os títulos PT/EN no XML continuam disponíveis para edição.\n'
+            'Importe o SRT desejado em Captions/ no Premiere para criar uma faixa de legenda nativa.\n'
         )
         (package_root / 'README.txt').write_text(
             'Abra Project/timeline.xml no Adobe Premiere Pro.\n'
-            'Media contém os vídeos originais. Audio contém os WAVs de diálogo e a música de fundo.\n'
-            'A1 é o diálogo separado; A2 é a música, com keyframes de volume equivalentes ao ducking do render.\n'
+            'V1 contém o vídeo consolidado aprovado, sem áudio e sem legendas incorporadas.\n'
+            'O reenquadramento, os cortes, a cor e os elementos visuais já estão aplicados em V1.\n'
+            + ('A1 é a voz tratada em WAV PCM 48 kHz/24-bit.\n' if dialogue_available else '')
+            + (
+                'A2 é a música em WAV PCM 48 kHz/24-bit, com volume e ducking já aplicados.\n'
+                if music_available else ''
+            )
+            + (
+                'A faixa “Mix de referência masterizado” contém o mix estéreo aprovado, desativado por padrão, para conferência A/B. '
+                'Ative-o somente com A1/A2 silenciadas; Audio/mix_referencia.wav é a mesma referência.\n'
+                if reference_mix_available else ''
+            )
             + caption_instructions +
-            'LUT, tratamento de diálogo e masterização constam nos metadados; reaplique-os no Premiere '\
-            'quando quiser uma edição não destrutiva.\n'
+            'Os SRTs de Captions/ contêm uma única linha de texto por legenda, sem quebras manuais. '
+            'Se o Premiere redistribuir o texto em duas linhas, ajuste o tamanho da fonte e a largura da caixa de legenda no próprio Premiere.\n'
+            'A masterização do mix completo não foi duplicada individualmente nos stems.\n'
             'Consulte Metadata/timeline.json e Metadata/validation.json para detalhes.\n'
             'A masterização final deve ser feita após a edição, usando “Masterizar Vídeo”.\n',
             encoding='utf-8',
