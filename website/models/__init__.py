@@ -72,4 +72,4 @@ from .external_media import (
     TimelineRevision,
     VideoMasteringJob,
 )
-from .ministry_manual import MinistryManual
+from .ministry_manual import MinistryManual, ManualGenerationJob

@@ -14,7 +14,8 @@ ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 WORKDIR /usr/src/platform
 
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fontconfig && \
+RUN timeout 600 apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=15 update && \
+    timeout 600 apt-get -o Acquire::ForceIPv4=true -o Acquire::Retries=1 -o Acquire::http::Timeout=15 install -y --no-install-recommends ffmpeg fontconfig && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /usr/src/platform/
@@ -35,7 +36,7 @@ FROM base AS media-worker
 COPY requirements-diarization.txt /usr/src/platform/
 
 RUN --mount=type=cache,target=/root/.cache/pip \
-    python -m pip install --timeout 600 --retries 10 \
+    python -m pip install --timeout 30 --retries 3 \
     --index-url https://pypi.org/simple -r requirements-diarization.txt
 
 # Default target for Render Workflows. Docker Compose continues to select the

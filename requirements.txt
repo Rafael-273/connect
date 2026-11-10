@@ -34,6 +34,7 @@ reportlab==4.0.7
 cryptography>=45.0.7,<47
 openai==2.46.0
 celery==5.4.0
+kombu==5.5.4
 redis==5.2.1
 watchdog==6.0.0
 numpy==1.26.4

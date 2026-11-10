@@ -26,6 +26,7 @@ services:
     hostname: "${HOSTNAME}"
     build:
       context: .
+      network: ${DOCKER_BUILD_NETWORK:-host}
       dockerfile: Dockerfile
       target: web
     working_dir: /usr/src/platform
@@ -58,6 +59,7 @@ services:
   media-worker:
     build:
       context: .
+      network: ${DOCKER_BUILD_NETWORK:-host}
       dockerfile: Dockerfile
       target: media-worker
     working_dir: /usr/src/platform
@@ -87,6 +89,7 @@ services:
   media-preview-worker:
     build:
       context: .
+      network: ${DOCKER_BUILD_NETWORK:-host}
       dockerfile: Dockerfile
       target: media-worker
     working_dir: /usr/src/platform
@@ -113,6 +116,7 @@ services:
   media-scheduler:
     build:
       context: .
+      network: ${DOCKER_BUILD_NETWORK:-host}
       dockerfile: Dockerfile
       target: media-worker
     working_dir: /usr/src/platform

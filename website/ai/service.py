@@ -78,6 +78,7 @@ class AIService:
         model: str | None = None,
         max_output_tokens: int | None = None,
         safety_identifier: str | None = None,
+        response_schema: dict[str, Any] | None = None,
     ) -> str:
         """Generate text through the OpenAI Responses API.
 
@@ -101,6 +102,11 @@ class AIService:
             request["max_output_tokens"] = max_output_tokens
         if safety_identifier:
             request["safety_identifier"] = safety_identifier
+        if response_schema is not None:
+            request["text"] = {"format": {
+                "type": "json_schema", "name": "manual", "strict": True,
+                "schema": response_schema,
+            }}
 
         try:
             response = self.client.responses.create(**request)
@@ -111,7 +117,7 @@ class AIService:
         except AIServiceError:
             raise
         except Exception as exc:
-            logger.exception("Falha ao gerar texto com o modelo %s", request["model"])
+            logger.error("Falha ao gerar texto com o modelo %s", request["model"])
             raise AIServiceError("Não foi possível gerar a resposta de IA.") from exc
 
     def transcribe(
@@ -147,7 +153,7 @@ class AIService:
         except AIServiceError:
             raise
         except Exception as exc:
-            logger.exception(
+            logger.error(
                 "Falha ao transcrever áudio com o modelo %s", request["model"]
             )
             raise AIServiceError("Não foi possível transcrever o áudio.") from exc

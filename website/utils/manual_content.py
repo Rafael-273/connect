@@ -4,11 +4,11 @@ import markdown
 
 
 def sanitize_manual_content(content):
-    html = markdown.markdown(content or '')
+    html = markdown.markdown(content or '', extensions=['tables'])
     return bleach.clean(
         html,
-        tags={'p', 'br', 'h1', 'h2', 'h3', 'h4', 'strong', 'b', 'em', 'i', 'ul', 'ol', 'li', 'a', 'hr', 'blockquote', 'code', 'pre'},
-        attributes={'a': ['href', 'title']},
+        tags={'p', 'div', 'br', 'h1', 'h2', 'h3', 'h4', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'ul', 'ol', 'li', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'blockquote', 'code', 'pre'},
+        attributes={'a': ['href', 'title'], 'img': ['src', 'alt', 'title'], 'th': ['colspan', 'rowspan'], 'td': ['colspan', 'rowspan']},
         protocols={'http', 'https', 'mailto'},
         strip=True,
     )

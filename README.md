@@ -334,6 +334,13 @@ docker compose up --build
 
 O `docker-compose.yml` executa automaticamente `collectstatic`, `migrate` e inicia o servidor de desenvolvimento.
 
+Por padrão, as etapas de construção usam a rede do host para evitar falhas de
+DNS da rede bridge do Docker. Em ambientes onde essa opção não estiver
+disponível, use `DOCKER_BUILD_NETWORK=default docker compose up --build` após
+verificar a conectividade do Docker. Essa opção afeta apenas o build; os
+containers em execução continuam usando a rede do Compose. O APT tem tempo
+limite e falha caso o repositório esteja inacessível.
+
 A aplicação ficará disponível em `http://localhost:8000`.
 
 ### Usando a camada compartilhada de IA
@@ -362,6 +369,23 @@ transcricao = ai.transcribe(
 A chave nunca deve ser enviada ao navegador; somente o backend deve usar esse
 serviço. Para texto, cada fluxo escolhe o `model` explicitamente; apenas a
 transcrição fica centralizada na `env`.
+
+### Manuais gerados a partir de áudio
+
+Administradores e líderes autorizados podem gerar um rascunho na tela de
+manuais. O processamento requer Redis, um worker Celery na fila `celery`,
+Celery Beat para limpeza periódica e `ffprobe` disponível no worker (configurável
+por `FFPROBE_BINARY`), além de `OPENAI_API_KEY`. Execute as migrações e o
+`collectstatic` ao atualizar a instalação. São aceitos arquivos MP3, MP4,
+MPEG, MPGA, M4A, WAV e WebM de até 24 MB e duas horas.
+
+O áudio fica temporariamente no banco de dados para permitir novas tentativas
+sem upload; a transcrição é mantida apenas durante o processamento ou após
+falha. Ambos são removidos após a geração bem-sucedida. A limpeza periódica
+exclui tarefas sem atualização por 24 horas, inclusive dados de tentativas
+com erro. O conteúdo gerado é salvo como rascunho e deve ser revisado antes da
+publicação. Faça backup e defina a retenção do banco conforme a política da
+instalação.
 
 O módulo de Mídia Externa escolhe `gpt-4.1-mini` no próprio fluxo de tradução,
 enquanto o Whisper permanece configurável por `OPENAI_TRANSCRIPTION_MODEL`.

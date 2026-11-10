@@ -262,6 +262,10 @@ EXTERNAL_MEDIA_S3_URL_EXPIRATION_SECONDS = int(
     os.getenv('EXTERNAL_MEDIA_S3_URL_EXPIRATION_SECONDS', 86400)
 )
 CELERY_BEAT_SCHEDULE = {
+    'cleanup-manual-jobs': {
+        'task': 'manuals.cleanup',
+        'schedule': timedelta(hours=1),
+    },
     'cleanup-external-media-workspaces': {
         'task': 'external_media.cleanup_workspaces',
         'schedule': timedelta(hours=1),

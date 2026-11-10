@@ -1,46 +1,82 @@
-{% extends 'member/ministry_organization/base.html' %}
-
-{% block org_header %}
-{% url 'media_organization' as org_url %}
-{% include 'parciais/org_media_header.html' with back_url=org_url title='Manuais' subtitle='Guias e orientações' %}
+{% extends 'member/media_planning/operations_base.html' %}
+{% load static %}
+{% block title %}Manuais · Mídia{% endblock %}
+{% block head %}{{ block.super }}<link rel="stylesheet" href="{% static 'org_media.css' %}"><link rel="stylesheet" href="{% static 'ministry_manual.css' %}">{% endblock %}
+{% block operations_bottom_nav %}{% endblock %}
+{% block page_header %}
+{% url 'media_organization' as organization_url %}
+{% include 'parciais/org_media_header.html' with back_url=organization_url title='Manuais' accent='da mídia' subtitle='Guias e orientações para a equipe' %}
 {% endblock %}
-
-{% block organization_content %}
-
-<div class="flex items-center justify-end gap-4">
+{% block operations %}
+<div class="manuals-hub" id="manual-app"
+     data-create-url="{% url 'ministry_manual_create' ministry.pk %}"
+     data-edit-url="{% url 'ministry_manual_edit' ministry.pk 0 %}"
+     data-generate-url="{% url 'ministry_manual_generate' ministry.pk %}"
+     data-status-url="{% url 'ministry_manual_generation_status' ministry.pk 0 %}"
+     data-preview-url="{% url 'ministry_manual_preview' ministry.pk %}">
+    <div class="manuals-controls">
+        <form method="get" class="manuals-filter-form" role="search">
+            <label class="manuals-sr-only" for="manual-search">Buscar manuais</label>
+            <input id="manual-search" type="search" name="q" value="{{ query }}" placeholder="Buscar manuais por título ou resumo...">
+            {% if teams %}<label class="manuals-sr-only" for="manual-team">Filtrar por equipe</label><select name="team" id="manual-team"><option value="">Todas as equipes</option>{% for team in teams %}<option value="{{ team.pk }}" {% if selected_team == team.pk|stringformat:'s' %}selected{% endif %}>{{ team.name }}</option>{% endfor %}</select>{% endif %}
+            <button type="submit" class="manuals-search-button" aria-label="Buscar"><i class="fas fa-search" aria-hidden="true"></i></button>
+            {% if query or selected_team %}<a href="{% url 'ministry_manual_list' ministry.pk %}" class="manuals-clear">Limpar</a>{% endif %}
+            {% if can_manage %}<button type="button" data-new-manual class="manuals-create"><i class="fas fa-plus" aria-hidden="true"></i><span>Criar manual</span></button>{% endif %}
+        </form>
+    </div>
+    {% if jobs %}<div class="manuals-jobs" aria-live="polite">{% for job in jobs %}<div class="manual-job" data-job="{{ job.pk }}"><strong>Geração de manual</strong> <span data-job-status>Verificando processamento…</span> <button type="button" data-job-retry hidden>Tentar novamente</button></div>{% endfor %}</div>{% endif %}
+    <div class="manuals-panel-wrap">
+      <div class="manuals-layout">
+        <aside class="manuals-sidebar {% if selected_manual %}manuals-mobile-hidden{% endif %}" aria-label="Lista de manuais">
+          <div class="manuals-sidebar-inner">
+            <p class="manuals-list-label">{{ manuals|length }} {% if manuals|length == 1 %}manual{% else %}manuais{% endif %}</p>
+            <div class="manuals-list">{% for manual in manuals %}
+              <a href="?q={{ query|urlencode }}{% if selected_team %}&amp;team={{ selected_team|urlencode }}{% endif %}&amp;selected={{ manual.pk }}" class="manuals-item {% if selected_manual.pk == manual.pk %}active{% endif %}" {% if selected_manual.pk == manual.pk %}aria-current="true"{% endif %}>
+                <span class="manuals-item-icon"><i class="fas fa-book" aria-hidden="true"></i></span>
+                <span class="manuals-item-content"><strong>{{ manual.title }}</strong><span>{{ manual.sub_team.name|default:'Todo o ministério' }}</span><small>{% if manual.is_draft %}Rascunho{% elif not manual.is_active %}Arquivado{% else %}Publicado{% endif %} · {% if manual.origin == 'ai' %}Gerado com IA{% else %}Criação manual{% endif %}</small></span>
+                <i class="fas fa-chevron-right manuals-item-arrow" aria-hidden="true"></i>
+              </a>
+            {% empty %}
+              <div class="manuals-empty-list"><span class="manuals-empty-icon"><i class="fas fa-book-open" aria-hidden="true"></i></span><p>Nenhum manual encontrado.</p><small>{% if query or selected_team %}Tente ajustar a busca ou os filtros.{% else %}Crie um manual para orientar sua equipe.{% endif %}</small></div>
+            {% endfor %}</div>
+          </div>
+        </aside>
+        <main class="manuals-detail {% if not selected_manual %}manuals-mobile-hidden{% endif %}">
+          {% if selected_manual %}
+          <div class="manuals-detail-header">
+            <a class="manuals-back" href="?q={{ query|urlencode }}{% if selected_team %}&amp;team={{ selected_team|urlencode }}{% endif %}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Voltar à lista</a>
+            <div class="manuals-detail-title"><span class="manuals-detail-icon"><i class="fas fa-book" aria-hidden="true"></i></span><div><h2>{{ selected_manual.title }}</h2><p>{{ selected_manual.sub_team.name|default:'Todo o ministério' }}</p></div></div>
+            <div class="manuals-detail-meta"><span>{% if selected_manual.is_draft %}Rascunho{% elif not selected_manual.is_active %}Arquivado{% else %}Publicado{% endif %}</span><span>{% if selected_manual.origin == 'ai' %}Gerado com IA{% else %}Criação manual{% endif %}</span><span>Atualizado em {{ selected_manual.update_at|date:'d/m/Y H:i' }}</span></div>
+            {% if can_manage %}<div class="manuals-detail-actions"><button type="button" data-edit-manual="{{ selected_manual.pk }}"><i class="fas fa-pen" aria-hidden="true"></i> Editar manual</button>{% if selected_manual.is_active %}<form method="post" action="{% url 'ministry_manual_archive' ministry.pk selected_manual.pk %}" onsubmit="return confirm('Arquivar este manual?');">{% csrf_token %}<button type="submit"><i class="fas fa-box-archive" aria-hidden="true"></i> Arquivar</button></form>{% endif %}</div>{% endif %}
+          </div>
+          <article class="manuals-detail-body">{% if selected_manual.summary %}<p class="manuals-summary">{{ selected_manual.summary }}</p>{% endif %}<div class="manual-content">{{ selected_manual.safe_content|safe }}</div></article>
+          {% else %}
+          <div class="manuals-detail-empty"><span class="manuals-detail-empty-icon"><i class="fas fa-book-open" aria-hidden="true"></i></span><p>Selecione um manual</p><small>Consulte orientações e treinamentos da sua equipe em um só lugar.</small></div>
+          {% endif %}
+        </main>
+      </div>
+    </div>
     {% if can_manage %}
-    <a href="{% url 'ministry_manual_create' ministry.pk %}" class="org-btn-primary">
-        <i class="fas fa-plus text-xs"></i>
-        <span class="hidden sm:inline">Novo manual</span>
-    </a>
+    <dialog id="manual-dialog" class="manual-dialog" aria-labelledby="manual-dialog-title">
+      <div class="manual-dialog-header"><div><p class="text-xs font-bold text-red-700 uppercase">Manuais da mídia</p><h2 id="manual-dialog-title" class="text-lg font-black">Novo manual</h2><p class="text-xs text-gray-500">Crie, revise e publique orientações para a equipe.</p></div><button type="button" data-close-dialog aria-label="Fechar">✕</button></div>
+      <div class="manual-dialog-body">
+        <div id="manual-choices" class="manual-choices"><button type="button" data-manual-choice><i class="fas fa-pen"></i><strong>Criar manualmente</strong><span>Escreva e formate seu conteúdo</span></button><button type="button" data-ai-choice><i class="fas fa-wand-magic-sparkles"></i><strong>Gerar com IA</strong><span>Use o áudio de um treinamento</span></button></div>
+        <form id="manual-audio-form" hidden>{% csrf_token %}<label for="manual-audio">Áudio do treinamento</label><input id="manual-audio" name="audio" type="file" accept=".mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm" required><p class="text-xs text-gray-500 mt-2">Até 24 MB e 2 horas. O conteúdo gerado será salvo como rascunho para revisão.</p><p data-audio-status role="status" class="text-sm mt-3"></p><div class="manual-actions"><button type="button" data-back-choice>Voltar</button><button class="manual-primary" type="submit">Gerar manual</button></div></form>
+        <form id="manual-form" method="post" hidden>{% csrf_token %}
+          {% for field in form %}{% if field.name != 'content' %}{% if field.is_hidden %}{{ field }}{% else %}<div class="mb-4"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endif %}{% endif %}{% endfor %}
+          <label for="manual-rich">Conteúdo</label>
+          <div class="manual-toolbar" role="toolbar" aria-label="Formatação">
+            <button type="button" data-cmd="formatBlock" data-value="h1">H1</button><button type="button" data-cmd="formatBlock" data-value="h2">H2</button><button type="button" data-cmd="formatBlock" data-value="h3">H3</button>
+            <button type="button" data-cmd="bold"><b>N</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>S</u></button><button type="button" data-cmd="strikeThrough"><s>T</s></button>
+            <button type="button" data-cmd="insertUnorderedList">• Lista</button><button type="button" data-cmd="insertOrderedList">1. Lista</button><button type="button" data-insert="checklist">☐ Checklist</button><button type="button" data-insert="link">Link</button><button type="button" data-insert="image">Imagem</button><button type="button" data-insert="table">Tabela</button><button type="button" data-cmd="formatBlock" data-value="blockquote">Aviso</button><button type="button" data-cmd="undo">Desfazer</button><button type="button" data-cmd="redo">Refazer</button><button type="button" data-preview>Pré-visualizar</button>
+          </div>
+          {{ form.content }}<div id="manual-rich" class="manual-rich manual-content" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Conteúdo do manual"></div><div id="manual-preview" class="manual-content" hidden></div>
+          <p data-form-error role="alert" class="text-sm text-red-700 mt-2"></p>
+          <div class="manual-actions"><button type="button" data-close-dialog>Cancelar</button><button type="submit" name="publication" value="draft">Salvar rascunho</button><button class="manual-primary" type="submit" name="publication" value="publish">Publicar</button></div>
+        </form>
+      </div>
+    </dialog>
     {% endif %}
 </div>
-
-<form method="get" class="org-card p-4 space-y-3">
-    <div class="flex-1">
-        <input id="manual-search" name="q" value="{{ query }}"
-               class="form-input" placeholder="Buscar manual por título ou resumo...">
-    </div>
-    {% if teams %}
-    <div class="flex flex-wrap gap-2">
-        <a href="?q={{ query|urlencode }}"
-           class="org-tab text-xs py-1.5 px-3 {% if not selected_team %}active{% endif %}">
-            Todos
-        </a>
-        {% for team in teams %}
-        <a href="?q={{ query|urlencode }}&team={{ team.pk }}"
-           class="org-tab text-xs py-1.5 px-3 {% if selected_team == team.pk|stringformat:'s' %}active{% endif %}">
-            {{ team.name }}
-        </a>
-        {% endfor %}
-    </div>
-    {% endif %}
-    <div class="flex gap-2">
-        <button type="submit" class="org-btn-primary">Buscar</button>
-        <a href="{% url 'ministry_manual_list' ministry.pk %}" class="org-btn-secondary">Limpar</a>
-    </div>
-</form>
-
-{% include 'member/ministry_organization/manual_cards.html' %}
-
+<script src="{% static 'manuals_page.js' %}" defer></script>
 {% endblock %}
