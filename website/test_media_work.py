@@ -300,3 +300,12 @@ class MediaMyWorkTests(TestCase):
         self.assertEqual([a['id'] for a in response.context['activities']], [self.completed_task.pk])
         self.assertIn('q=', response.context['pagination_query'])
         self.assertIn('tab=completed', response.context['pagination_query'])
+
+
+class MediaWorkRoleIconTests(TestCase):
+    def test_role_icons_are_accent_and_case_insensitive_with_a_fallback(self):
+        from website.services.media_work import activity_role_icon
+        self.assertEqual(activity_role_icon('Designer'), 'palette')
+        self.assertEqual(activity_role_icon('FOTÓGRAFO'), 'camera')
+        self.assertEqual(activity_role_icon('Editor'), 'film')
+        self.assertEqual(activity_role_icon('Papel personalizado'), 'list-check')

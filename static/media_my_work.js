@@ -5,6 +5,7 @@
     let controller;
     let opener;
     let previousOverflow;
+    let refreshPending = false;
     function message(text) {
         body.replaceChildren();
         const paragraph = document.createElement('p');
@@ -51,9 +52,27 @@
     });
     dialog.addEventListener('close', () => {
         controller?.abort();
+        refreshPending = false;
         document.body.style.overflow = previousOverflow;
         opener?.focus();
     });
+    async function refreshWhenIdle() {
+        if (!refreshPending || !opener || !dialog.open || body.querySelector('[data-delivery-row][data-busy="1"], [data-delivery-row][data-failed="1"]')) return;
+        refreshPending = false;
+        const url = new URL(opener.href);
+        url.searchParams.set('fragment', 'activity');
+        try {
+            const response = await fetch(url);
+            if (!response.ok || response.redirected) throw new Error('unavailable');
+            if (dialog.open) body.innerHTML = await response.text();
+        } catch (_) { window.location.reload(); }
+    }
+    document.addEventListener('delivery:updated', event => {
+        dialog.querySelector('.work-detail-status-form [role="alert"]')?.remove();
+        if (event.detail?.status === 'in_review' || event.detail?.needsConfirmation || event.detail?.forceRefresh) refreshPending = true;
+        refreshWhenIdle();
+    });
+    document.addEventListener('delivery:idle', refreshWhenIdle);
     dialog.addEventListener('submit', async event => {
         const form = event.target.closest('.work-detail-status-form');
         if (!form) return;
@@ -65,13 +84,14 @@
         buttons.forEach(button => { button.disabled = true; });
         try {
             const response = await fetch(form.action, {method: 'POST', body: data});
-            if (!response.ok || !response.redirected || new URL(response.url).pathname !== window.location.pathname) throw new Error('update');
+            if (!response.ok) throw new Error(await response.text());
+            if (!response.redirected || new URL(response.url).pathname !== window.location.pathname) throw new Error('update');
             window.location.reload();
-        } catch (_) {
+        } catch (failure) {
             buttons.forEach(button => { button.disabled = false; });
             let error = form.querySelector('[role="alert"]');
             if (!error) { error = document.createElement('p'); error.setAttribute('role', 'alert'); form.append(error); }
-            error.textContent = 'Não foi possível confirmar a atualização. Tente novamente.';
+            error.textContent = failure.message === 'update' ? 'Não foi possível confirmar a atualização. Tente novamente.' : failure.message;
         }
     });
 })();

@@ -591,6 +591,7 @@ class MediaAsset(BaseModel):
         SRT = 'SRT', 'Legenda SRT'
         VTT = 'VTT', 'Legenda VTT'
 
+    content_file = models.ForeignKey('ContentFile', on_delete=models.PROTECT, null=True, blank=True, related_name='editor_exports')
     job = models.ForeignKey(ExternalMediaJob, on_delete=models.CASCADE, related_name='assets')
     kind = models.CharField(max_length=20, choices=Kind.choices)
     language = models.CharField(max_length=10, choices=ExternalMediaJob.LANGUAGE_CHOICES)

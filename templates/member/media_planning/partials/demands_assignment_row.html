@@ -82,5 +82,6 @@
             <textarea name="{{ prefix }}-assignment_desc" rows="2" class="media-field-input"
                       placeholder="Links, referências ou dependências (opcional)">{{ row.description|default:'' }}</textarea>
         </div>
+        {% include 'member/media_planning/partials/delivery_format_fields.html' %}
     </div>
 </div>

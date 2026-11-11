@@ -47,7 +47,7 @@ DEMAND_QUICK_TYPES = [
         'value': 'artwork', 'label': 'Design', 'emoji': '🎨', 'group': 'technical',
         'hint': 'Posts, stories, carrosséis, banners e artes',
         'due_label': 'Prazo de produção', 'pub_label': 'Publicação',
-        'default_roles': ['Designer', 'Revisor', 'Publicador'],
+        'default_roles': ['Designer', 'Publicador'],
     },
     {
         'value': 'video', 'label': 'Vídeo', 'emoji': '🎥', 'group': 'technical',
@@ -96,7 +96,6 @@ ASSIGNMENT_ROLE_PRESETS = [
     'Publicador',
     'Designer',
     'Fotógrafo',
-    'Revisor',
     'Operador',
     'Responsável',
 ]
@@ -265,6 +264,8 @@ def parse_demand_assignments(post_data, prefix='demand', absolute_dates=False):
     due_times = post_data.getlist(f'{prefix}-assignment_due_time')
     descs = post_data.getlist(f'{prefix}-assignment_desc')
     ids = post_data.getlist(f'{prefix}-assignment_id')
+    format_rows = post_data.getlist(f'{prefix}-assignment_formats')
+    other_rows = post_data.getlist(f'{prefix}-assignment_other_format')
     assignments = []
     for i, role in enumerate(roles):
         role = (role or '').strip()
@@ -278,7 +279,7 @@ def parse_demand_assignments(post_data, prefix='demand', absolute_dates=False):
         )
         desc = descs[i].strip() if i < len(descs) and descs[i] else ''
         task_id = ids[i].strip() if i < len(ids) and ids[i] else ''
-        if not role and not user and offset is None and due_date is None and not desc:
+        if not role and not user and offset is None and due_date is None and not desc and not (i < len(format_rows) and format_rows[i] != '[]'):
             continue
         assignment = {
             'role': role or 'Etapa',
@@ -287,6 +288,14 @@ def parse_demand_assignments(post_data, prefix='demand', absolute_dates=False):
             'description': desc,
             'task_id': int(task_id) if task_id.isascii() and task_id.isdigit() and len(task_id) <= 18 else None,
         }
+        if i < len(format_rows):
+            try:
+                formats = json.loads(format_rows[i])
+            except (ValueError, TypeError):
+                formats = None
+            assignment['delivery_formats'] = formats
+            assignment['delivery_other'] = other_rows[i] if i < len(other_rows) else ''
+            assignment['delivery_formats_json'] = json.dumps(formats)
         if absolute_dates:
             assignment['due_date'] = due_date
         assignments.append(assignment)
@@ -303,7 +312,7 @@ def sync_content_status_from_tasks(content):
         return content.status
 
     completed = sum(1 for task in tasks if task.status == 'completed')
-    in_progress = sum(1 for task in tasks if task.status == 'in_progress')
+    in_progress = sum(1 for task in tasks if task.status in ('in_progress', 'in_review'))
     total = len(tasks)
 
     if completed == total:
@@ -329,6 +338,7 @@ def content_status_label(status):
 @transaction.atomic
 def sync_content_assignments(content, assignments):
     """Sincroniza MediaTask com as etapas informadas."""
+    MediaContent.objects.select_for_update().get(pk=content.pk)
     validate_ministry_assignees([a.get('user_id') for a in assignments])
     user_ids = {a['user_id'] for a in assignments if a.get('user_id')}
     if user_ids - set(User.objects.filter(pk__in=user_ids, is_active=True).values_list('pk', flat=True)):
@@ -362,7 +372,7 @@ def sync_content_assignments(content, assignments):
                 'description', 'sort_order', 'update_at',
             ])
         else:
-            MediaTask.objects.create(
+            task = MediaTask.objects.create(
                 content=content,
                 title=data['role'],
                 assigned_to_id=data.get('user_id'),
@@ -371,6 +381,13 @@ def sync_content_assignments(content, assignments):
                 description=data.get('description', ''),
                 sort_order=order,
             )
+
+        if 'delivery_formats' in data:
+            from website.services.content_deliveries import configure_requirements
+            formats = data['delivery_formats']
+            if not isinstance(formats, list) or any(not isinstance(value, str) for value in formats):
+                raise ValidationError('Formatos de entrega inválidos.')
+            configure_requirements(task, formats, data.get('delivery_other', ''))
 
     tasks = list(content.tasks.select_related('assigned_to__member').order_by('sort_order', 'pk'))
     first_assigned = next((t for t in tasks if t.assigned_to_id), None)
@@ -441,13 +458,15 @@ def sync_template_item_assignments(item, assignments):
 
 def build_assignment_rows(content):
     """Linhas iniciais para o formulário de etapas."""
-    tasks = list(content.tasks.order_by('sort_order', 'pk'))
+    tasks = list(content.tasks.prefetch_related('delivery_requirements').order_by('sort_order', 'pk'))
     if tasks:
         rows = []
         for t in tasks:
             offset_parts = _task_offset_for_form(t, content)
             rows.append({
                 'id': t.pk,
+                'delivery_formats_json': json.dumps([r.format for r in t.delivery_requirements.all() if r.active]),
+                'delivery_other': next((r.label for r in t.delivery_requirements.all() if r.active and r.format == 'other'), ''),
                 'role': t.title,
                 'user_id': t.assigned_to_id or '',
                 'due_days': offset_parts['due_days'],
@@ -730,7 +749,7 @@ def build_event_detail(event_pk):
         MediaContent.objects.filter(event=event)
         .select_related('responsible__member', 'sub_team__ministry', 'assigned_role')
         .prefetch_related(
-            Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member').order_by('sort_order', 'pk'))
+            Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member').prefetch_related('delivery_requirements__deliveries__asset', 'delivery_requirements__deliveries__submitted_by').order_by('sort_order', 'pk'))
         )
         .order_by('due_date', 'publication_date', 'title')
     )
@@ -768,7 +787,7 @@ def build_free_detail(content_pk):
     content = MediaContent.objects.select_related(
         'responsible__member', 'sub_team__ministry', 'assigned_role'
     ).prefetch_related(
-        Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member').order_by('sort_order', 'pk')),
+        Prefetch('tasks', queryset=MediaTask.objects.select_related('assigned_to__member').prefetch_related('delivery_requirements__deliveries__asset', 'delivery_requirements__deliveries__submitted_by').order_by('sort_order', 'pk')),
         'attachments__uploaded_by__member',
         'comments__author__member',
     ).get(pk=content_pk)

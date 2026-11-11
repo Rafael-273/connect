@@ -1,3 +1,5 @@
+from django.db import transaction
+from django.core.exceptions import ValidationError
 from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -186,7 +188,9 @@ class MediaContentListView(MediaMemberRequiredMixin, View):
             if event_obj:
                 demand_event_title = event_obj.title
 
+        from website.services.content_deliveries import FORMATS
         ctx = {
+            'delivery_format_choices': FORMATS,
             **nav_context,
             **filters,
             'create_mode': create_mode,
@@ -435,13 +439,32 @@ class MediaTaskCreateView(MediaLeaderRequiredMixin, View):
 class MediaTaskUpdateView(MediaMemberRequiredMixin, View):
     """Atualiza uma única etapa a partir do painel de detalhes."""
 
+    @transaction.atomic
     def post(self, request, pk):
         task = get_object_or_404(MediaTask, pk=pk)
+        if request.POST.get('status') == 'in_review' and task.status != 'in_review':
+            messages.error(request, 'A etapa entra em revisão após o envio das entregas obrigatórias.')
+            return redirect(content_hub_url(task.content))
+        if task.status == 'in_review' and request.POST.get('status') != 'in_review':
+            messages.error(request, 'Avalie as entregas para alterar o status desta etapa.')
+            return redirect(content_hub_url(task.content))
+        if request.POST.get('status') == 'completed' and task.status != 'completed' and task.delivery_requirements.filter(active=True, required=True).exists():
+            messages.error(request, 'Aprove as entregas para concluir esta etapa.')
+            return redirect(content_hub_url(task.content))
         form = MediaTaskForm(_task_post_with_datetime(request.POST), instance=task, content=task.content)
         if form.is_valid():
-            task = form.save()
-            sync_content_status_from_tasks(task.content)
-            messages.success(request, f'Etapa "{task.title}" atualizada!')
+            try:
+                with transaction.atomic():
+                    task = form.save()
+                    if request.POST.get('delivery_formats_present') == '1':
+                        from website.services.content_deliveries import configure_requirements
+                        configure_requirements(task, request.POST.getlist('delivery_formats'),
+                                               request.POST.get('delivery_other_format', ''))
+                    sync_content_status_from_tasks(task.content)
+            except ValidationError as exc:
+                messages.error(request, ' '.join(exc.messages))
+            else:
+                messages.success(request, f'Etapa "{task.title}" atualizada!')
         else:
             messages.error(request, 'Não foi possível atualizar a etapa. Verifique os campos.')
 
@@ -476,6 +499,7 @@ class MediaTaskDeleteView(MediaLeaderRequiredMixin, View):
 
 
 class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
+    @transaction.atomic
     def post(self, request, pk):
         task = get_object_or_404(MediaTask, pk=pk)
         new_status = request.POST.get('status', '')
@@ -483,6 +507,14 @@ class MediaTaskUpdateStatusView(MediaMemberRequiredMixin, View):
             new_status = 'pending' if task.status == 'completed' else 'completed'
         valid_statuses = [c[0] for c in TASK_STATUS_CHOICES]
         if new_status in valid_statuses:
+            if task.status == 'in_review' or (new_status in ('completed', 'in_review') and task.delivery_requirements.filter(active=True, required=True).exists()):
+                return JsonResponse({'error': 'Avalie as entregas para alterar o status desta etapa.'}, status=400)
+            if new_status == 'completed':
+                from website.services.content_deliveries import assert_complete
+                try:
+                    assert_complete(task)
+                except ValidationError as exc:
+                    return JsonResponse({'error': ' '.join(exc.messages)}, status=400)
             task.status = new_status
             task.save(update_fields=['status', 'update_at'])
             content_status = sync_content_status_from_tasks(task.content)

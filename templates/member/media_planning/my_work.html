@@ -9,12 +9,8 @@
 {% for activity in activities %}
     {% ifchanged activity.deadline.group %}<h2 class="media-work-group">{{ activity.deadline.group }}</h2>{% endifchanged %}
     <article class="media-work-card {% if activity.status == 'completed' %}is-completed{% endif %}">
-        <form method="post" action="{% url 'media_my_work_status' activity.id %}" class="media-work-card-action">
-            {% csrf_token %}<input type="hidden" name="status" value="{% if activity.status == 'completed' %}pending{% else %}completed{% endif %}"><input type="hidden" name="return_to" value="list">
-            <button class="work-complete-button {% if activity.status == 'completed' %}is-completed{% endif %}" type="submit" aria-label="{% if activity.status == 'completed' %}Marcar {{ activity.title }} como pendente{% else %}Concluir {{ activity.title }}{% endif %}" title="{% if activity.status == 'completed' %}Marcar como pendente{% else %}Concluir{% endif %}"><i class="fas fa-check" aria-hidden="true"></i></button>
-        </form>
         <a class="media-work-open" href="{% url 'media_my_work_detail' activity.id %}" data-work-detail aria-haspopup="dialog">
-            <span class="media-work-type-icon" aria-hidden="true"><i class="fas fa-list-check"></i></span>
+            <span class="media-work-type-icon" aria-hidden="true"><i class="fas fa-{{ activity.role_icon }}"></i></span>
             <span class="media-work-copy">
                 <h3>{{ activity.demand_title }}</h3>
                 <span>{{ activity.title }} · {{ activity.event_title|default:'Demanda avulsa' }}</span>
@@ -22,7 +18,7 @@
             <span class="media-work-deadline {% if activity.deadline.overdue and activity.status != 'completed' %}is-overdue{% endif %}">
                 {% if activity.due_date %}<time datetime="{{ activity.due_date|date:'c' }}">{{ activity.deadline.label }} · {{ activity.due_date|date:'d/m' }}</time>{% else %}Sem prazo{% endif %}
             </span>
-            {% if activity.status != 'completed' %}<span class="media-work-status-tag {% if activity.status == 'in_progress' %}is-in-progress{% endif %}">{{ activity.status_label }}</span>{% endif %}
+            {% if activity.status != 'completed' %}<span class="media-work-status-tag {% if activity.status == 'in_progress' %}is-in-progress{% elif activity.status == 'in_review' %}is-review{% endif %}">{{ activity.status_label }}</span>{% endif %}
             <i class="fas fa-chevron-right media-work-chevron" aria-hidden="true"></i>
         </a>
     </article>
@@ -50,5 +46,5 @@
     </header>
     <div id="work-detail-body" class="work-detail-body" aria-live="polite"></div>
 </dialog>
-<script src="{% static 'media_my_work.js' %}" defer></script>
+<script src="{% static 'media_my_work.js' %}?v=5" defer></script>
 {% endblock %}

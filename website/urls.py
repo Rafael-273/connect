@@ -1,3 +1,5 @@
+from website.views.media_planning.delivery_review import MediaDeliveryReviewView
+from website.views.media_planning.deliveries import MediaDeliveryActionView, MediaDeliveryProjectsView, MediaDeliveryFileView
 from website.views.media_planning.operations import MediaEventsView, MediaDemandsView, MediaEventRemoveFromMediaView, MediaEventUpdateView
 from website.views.media_planning.my_work import (
     MediaMyWorkView, MediaMyWorkDetailView, MediaMyWorkStatusView, MediaMyWorkAttachmentView,
@@ -759,6 +761,10 @@ urlpatterns = [
     path('media/events/<int:event_pk>/tipo/', MediaEventSetTypeView.as_view(), name='media_event_set_type'),
     path('media/events/<int:event_pk>/aplicar-template/', MediaApplyTemplateView.as_view(), name='media_apply_template'),
     # Organization
+    path('media/etapas/<int:pk>/revisar-entregas/', MediaDeliveryReviewView.as_view(), name='media_delivery_review'),
+    path('media/entregas/requisitos/<int:pk>/', MediaDeliveryActionView.as_view(), name='media_delivery_action'),
+    path('media/entregas/requisitos/<int:pk>/projetos/', MediaDeliveryProjectsView.as_view(), name='media_delivery_projects'),
+    path('media/entregas/<int:pk>/arquivo/', MediaDeliveryFileView.as_view(), name='media_delivery_file'),
     path('media/meu-trabalho/', MediaMyWorkView.as_view(), name='media_my_work'),
     path('media/meu-trabalho/<int:pk>/', MediaMyWorkDetailView.as_view(), name='media_my_work_detail'),
     path('media/meu-trabalho/<int:pk>/status/', MediaMyWorkStatusView.as_view(), name='media_my_work_status'),

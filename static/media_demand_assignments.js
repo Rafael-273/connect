@@ -108,6 +108,13 @@
             if (dueDaysInput) dueDaysInput.value = row.due_days || '';
             if (dueRelInput) dueRelInput.value = row.due_relation || 'before';
             if (descInput) descInput.value = row.description || '';
+            var formatsInput = wrap.querySelector('[data-delivery-formats]');
+            if (formatsInput) {
+                formatsInput.value = row.delivery_formats_json || '[]';
+                if (row.delivery_formats_json !== undefined) formatsInput.dataset.deliveryConfigured = '1';
+            }
+            var otherFormat = wrap.querySelector('[data-delivery-other]');
+            if (otherFormat) otherFormat.value = row.delivery_other || '';
             list.appendChild(node);
         });
         bindRoleFields(list);

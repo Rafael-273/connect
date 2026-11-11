@@ -1,0 +1,69 @@
+.delivery-review-page { max-width:58rem; margin:2rem auto; padding:0 1rem; }
+.delivery-review-page > a { display:inline-block; margin-bottom:1rem; color:#b42318; }
+.delivery-review-dialog { box-sizing:border-box; width:min(48rem, calc(100% - 2rem)); max-height:min(85dvh, 60rem); padding:0; border:1px solid #e5e7eb; border-radius:1.1rem; color:#344054; background:#fff; }
+.delivery-review-dialog::backdrop { background:rgba(16,24,40,.5); }
+.delivery-review-content { min-width:0; overflow:hidden; border:1px solid #eaecf0; border-radius:1rem; background:#fff; }
+.delivery-review-dialog .delivery-review-content { border:0; border-radius:0; }
+.delivery-review-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; padding:1.25rem 1.4rem; background:#fff8f7; border-bottom:1px solid #f5e6e4; }
+.delivery-review-heading h2 { margin:.2rem 0; color:#101828; font-size:1.15rem; font-weight:700; overflow-wrap:anywhere; }
+.delivery-review-heading p { margin:0; color:#667085; font-size:.8rem; }
+.delivery-review-heading .delivery-review-kicker { color:#b42318; text-transform:uppercase; font-size:.68rem; font-weight:700; letter-spacing:.04em; }
+.delivery-review-close { display:flex; flex:none; align-items:center; justify-content:center; width:2rem; height:2rem; border-radius:.5rem; background:#fff; color:#667085; }
+.delivery-review-page .delivery-review-close { display:none; }
+.delivery-review-body { padding:1.25rem 1.4rem 1.5rem; }
+.delivery-review-intro, .delivery-review-state { margin:0 0 1rem; color:#667085; font-size:.875rem; }
+.delivery-review-error { margin:0 0 1rem; padding:.7rem .85rem; border:1px solid #f3d1cb; border-radius:.65rem; background:#fff8f6; color:#9f2a20; font-size:.8125rem; }
+.delivery-review-body .work-detail-card { padding:0; border:0; }
+.delivery-review-body .work-detail-kicker { color:#98a2b3; font-size:.68rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+.delivery-review-body .delivery-item { padding:1rem 0; border-bottom:1px solid #edf0f2; }
+.delivery-review-body .delivery-item-heading { justify-content:flex-start; gap:.5rem; }
+.delivery-review-body .delivery-requirement-tag { padding:.15rem .5rem; border-radius:999px; background:#f2f4f7; color:#667085; font-size:.68rem; }
+.delivery-review-body .delivery-current { display:flex; align-items:center; gap:.75rem; margin-top:.7rem; min-width:0; }
+.delivery-review-body .delivery-preview { display:flex; flex:none; align-items:center; justify-content:center; width:7rem; height:5rem; overflow:hidden; border-radius:.6rem; background:#f2f4f7; color:#98a2b3; }
+.delivery-review-body .delivery-preview img { width:100%; height:100%; object-fit:cover; }
+.delivery-review-body .delivery-preview-video { width:min(18rem,100%); height:10rem; background:#20242c; }
+.delivery-review-body .delivery-current-details { min-width:0; }
+.delivery-review-body .delivery-filename { display:block; overflow:hidden; color:#344054; font-size:.8rem; text-overflow:ellipsis; white-space:nowrap; }
+.delivery-review-body .delivery-file-meta, .delivery-review-body .delivery-history { margin-top:.3rem; color:#667085; font-size:.75rem; }
+.delivery-review-body .delivery-file-meta a { color:#b42318; font-weight:600; }
+.delivery-review-form { margin-top:1.25rem; }
+.delivery-review-form label { display:block; margin-bottom:.45rem; color:#344054; font-size:.8rem; font-weight:700; }
+.delivery-review-form label span { color:#98a2b3; font-weight:400; }
+.delivery-review-form textarea { box-sizing:border-box; width:100%; padding:.7rem .8rem; border:1px solid #d0d5dd; border-radius:.7rem; resize:vertical; font-size:.875rem; }
+.delivery-review-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:.65rem; margin-top:1rem; }
+.delivery-review-actions button { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; }
+.demand-task-delivery-action { display:flex; align-items:center; flex-wrap:wrap; gap:.6rem; margin-top:.75rem; }
+.demand-review-status { color:#9a6700; background:#fffaeb; border-radius:999px; padding:.2rem .55rem; font-size:.7rem; font-weight:700; }
+.demand-review-link { display:inline-flex; align-items:center; gap:.4rem; color:#b42318; font-size:.8rem; font-weight:700; }
+.demand-review-link:hover { text-decoration:underline; }
+@media(max-width:600px) { .delivery-review-dialog { width:calc(100% - 1rem); max-height:90dvh; } .delivery-review-actions button { width:100%; } .delivery-review-heading, .delivery-review-body { padding:1rem; } }
+.review-delivery-list { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:.85rem; align-items:start; }
+.review-delivery { box-sizing:border-box; min-width:0; padding:.85rem; border:1px solid #eaecf0; border-radius:.8rem; background:#fff; }
+.review-delivery-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem; margin-bottom:.65rem; }
+.review-delivery-heading h3 { margin:0; color:#1d2939; font-size:.9rem; font-weight:700; }
+.review-delivery-preview { box-sizing:border-box; display:flex; align-items:center; justify-content:center; width:100%; height:12rem; overflow:hidden; border:1px solid #eaecf0; border-radius:.7rem; background:#f8fafc; }
+.review-delivery-preview img { display:block; width:100%; height:100%; object-fit:contain; }
+.review-delivery-video { display:block; width:100%; max-width:30rem; max-height:18rem; border-radius:.7rem; background:#20242c; }
+.review-delivery-file { display:inline-flex; align-items:center; gap:.5rem; padding:.75rem; border:1px solid #eaecf0; border-radius:.65rem; color:#b42318; font-size:.85rem; }
+.review-delivery-empty { color:#98a2b3; font-size:.8rem; }
+.review-decision { display:inline-flex; align-items:center; gap:.3rem; padding:.2rem .55rem; border-radius:999px; font-size:.7rem; font-weight:700; }
+.review-decision.is-approved { background:#ecfdf3; color:#067647; }
+.review-decision.is-rejected { background:#fff6f4; color:#b42318; }
+.review-delivery-form { max-width:30rem; margin-top:.75rem; }
+.review-delivery-actions { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); align-items:stretch; width:100%; gap:.55rem; }
+.review-delivery-actions > button { width:100%; min-width:0; white-space:nowrap; }
+.review-approve, .review-reject-toggle, .review-reject-confirm { box-sizing:border-box; display:inline-flex; align-items:center; justify-content:center; gap:.4rem; min-width:0; min-height:2.5rem; padding:.55rem .65rem; border-radius:.65rem; font-size:.8rem; font-weight:600; line-height:1.2; cursor:pointer; transition:background .15s, border-color .15s; }
+.review-approve { border:1px solid #b42318; background:#c90905; color:white; }
+.review-approve:hover { background:#a80a06; }
+.review-reject-toggle { width:100%; border:1px solid #d0d5dd; background:white; color:#475467; }
+.review-reject-toggle:hover, .review-reject-toggle[aria-expanded="true"] { color:#b42318; border-color:#e7aaa4; background:#fff8f7; }
+.review-reject-panel[hidden] { display:none; }
+.review-reject-panel { margin-top:.75rem; padding:.75rem; border:1px solid #f3dfdc; border-radius:.7rem; background:#fffbfa; }
+.review-reject-panel label { display:block; margin:0 0 .4rem; color:#344054; font-size:.8rem; font-weight:600; }
+.review-reject-panel label span { color:#98a2b3; font-weight:400; }
+.review-reject-panel textarea { box-sizing:border-box; width:100%; padding:.7rem .8rem; border:1px solid #d0d5dd; border-radius:.65rem; resize:vertical; font-size:.85rem; background:#fff; }
+.review-reject-confirm { width:100%; margin-top:.5rem; border:1px solid #b42318; background:white; color:#b42318; }
+.review-form-error, .review-previous-note { margin:.65rem 0 0; padding:.65rem .75rem; border-radius:.6rem; background:#fff8f6; color:#9f2a20; font-size:.8rem; line-height:1.45; overflow-wrap:anywhere; }
+.review-form-error[hidden] { display:none; }
+@media(max-width:600px) { .review-delivery-list { grid-template-columns:minmax(0, 1fr); } .review-delivery-preview { height:12rem; } }
+@media(max-width:360px) { .review-delivery-actions { gap:.35rem; } .review-delivery-actions > button { padding-inline:.35rem; font-size:.75rem; } }

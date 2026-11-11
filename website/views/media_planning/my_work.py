@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.contrib import messages
 from datetime import timedelta
 
@@ -12,7 +13,6 @@ from django.utils import timezone
 from django.views import View
 
 from website.models import MediaContent
-from website.models.media_task import TASK_STATUS_CHOICES
 from website.services.demands_hub import sync_content_status_from_tasks
 from website.services.media_work import (
     activity_attachments, activity_data, individual_tasks, ordered_tasks,
@@ -56,7 +56,7 @@ class MediaMyWorkView(IndividualMediaRequiredMixin, View):
         tasks = ordered_tasks(request.user, tab, archive_before)
         query = request.GET.get('q', '').strip()[:200]
         status = request.GET.get('status', '')
-        if status not in ('pending', 'in_progress') or tab in ('completed', 'archived'):
+        if status not in ('pending', 'in_progress', 'in_review') or tab in ('completed', 'archived'):
             status = ''
         if query:
             tasks = tasks.filter(Q(title__icontains=query) | Q(content__title__icontains=query) | Q(content__event__title__icontains=query))
@@ -117,7 +117,16 @@ class MediaMyWorkDetailView(IndividualMediaRequiredMixin, View):
         template = 'member/media_planning/my_work_detail.html'
         if request.GET.get('fragment') == 'activity':
             template = 'member/media_planning/partials/my_work_detail_content.html'
+        from website.services.content_deliveries import requirements_for, VIDEO_TYPES
+        from website.services.delivery_reviews import needs_confirmation
         return render(request, template, {
+            'delivery_requirements': requirements_for(task),
+            'delivery_video': task.content.content_type in VIDEO_TYPES,
+            'delivery_writable': task.status != 'in_review',
+            'delivery_removable': True,
+            'delivery_review': task.delivery_reviews.filter(requirement__isnull=True).select_related('reviewer').first() if task.status in ('in_progress', 'completed') else None,
+            'delivery_has_required': task.delivery_requirements.filter(active=True, required=True).exists(),
+            'delivery_needs_confirmation': needs_confirmation(task),
             **self.nav_context(), 'activity': activity,
             'attachments': activity_attachments(task),
         })
@@ -127,7 +136,7 @@ class MediaMyWorkStatusView(IndividualMediaRequiredMixin, View):
     def post(self, request, pk):
         task = get_object_or_404(individual_tasks(request.user), pk=pk)
         status = request.POST.get('status')
-        if status not in dict(TASK_STATUS_CHOICES):
+        if status not in ('pending', 'in_progress', 'completed'):
             return HttpResponseBadRequest('Status inválido.')
         with transaction.atomic():
             # Serialize personal updates on the same demand before recalculating it.
@@ -138,6 +147,26 @@ class MediaMyWorkStatusView(IndividualMediaRequiredMixin, View):
                 individual_tasks(request.user).select_for_update(), pk=pk,
                 content_id=content.pk,
             )
+            if task.status == 'in_review':
+                return HttpResponseBadRequest('Esta etapa está em revisão. Aguarde a avaliação da liderança.')
+            if status == 'completed':
+                from website.services.content_deliveries import assert_complete
+                try:
+                    assert_complete(task)
+                except ValidationError as exc:
+                    return HttpResponseBadRequest(' '.join(exc.messages))
+                if task.delivery_requirements.filter(active=True, required=True).exists():
+                    from website.services.delivery_reviews import confirm_corrections, needs_confirmation
+                    if not needs_confirmation(task):
+                        return HttpResponseBadRequest('As entregas precisam ser aprovadas pela liderança antes da conclusão.')
+                    try:
+                        confirm_corrections(task)
+                    except ValidationError as exc:
+                        return HttpResponseBadRequest(' '.join(exc.messages))
+                    messages.success(request, 'Alterações enviadas para revisão da liderança.')
+                    if request.POST.get('return_to') == 'list':
+                        return redirect('media_my_work')
+                    return redirect('media_my_work_detail', pk=pk)
             task.status = status
             task.save(update_fields=['status', 'update_at'])
             sync_content_status_from_tasks(content)

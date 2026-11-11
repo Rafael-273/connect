@@ -146,7 +146,9 @@ def replace_file_safely(instance, field_name, source_path, filename, update_fiel
         setattr(instance, field_name, old_name)
         raise
     if old_name and old_name != new_name:
-        storage.delete(old_name)
+        from website.services.content_deliveries import is_retained_file
+        if not is_retained_file(old_name):
+            storage.delete(old_name)
     return new_name
 
 
@@ -1403,10 +1405,12 @@ class StorageService:
             if not retain_temporary:
                 self.delete_temporary(temporary_name)
 
+    @transaction.atomic
     def save_asset(self, job, kind, language, source_path, filename):
-        asset = MediaAsset.objects.filter(job=job, kind=kind, language=language).first()
+        asset = MediaAsset.objects.select_for_update().filter(job=job, kind=kind, language=language).first()
         if not asset:
             asset = MediaAsset(job=job, kind=kind, language=language)
+        asset.content_file = None
         asset.file_size = source_path.stat().st_size
         if asset.pk:
             replace_file_safely(asset, 'file', source_path, filename, ('file_size', 'update_at'))
@@ -1414,20 +1418,30 @@ class StorageService:
             with source_path.open('rb') as source:
                 asset.file.save(filename, File(source), save=False)
             asset.save()
+        if kind == MediaAsset.Kind.VIDEO:
+            from website.services.content_deliveries import index_render_file
+            index_render_file(asset, source_path)
         return asset
 
+    @transaction.atomic
     def save_asset_from_field(self, job, kind, language, source_field, filename):
         """Stream a storage object into an asset without a worker-disk copy."""
-        asset = MediaAsset.objects.filter(job=job, kind=kind, language=language).first()
+        asset = MediaAsset.objects.select_for_update().filter(job=job, kind=kind, language=language).first()
         if not asset:
             asset = MediaAsset(job=job, kind=kind, language=language)
         old_name = asset.file.name if asset.pk and asset.file else ''
+        asset.content_file = None
         asset.file_size = int(getattr(source_field, 'size', 0) or 0)
         with source_field.open('rb') as source:
             asset.file.save(filename, File(source), save=False)
         asset.save()
         if old_name and old_name != asset.file.name:
-            asset.file.storage.delete(old_name)
+            from website.services.content_deliveries import is_retained_file
+            if not is_retained_file(old_name):
+                asset.file.storage.delete(old_name)
+        if kind == MediaAsset.Kind.VIDEO:
+            from website.services.content_deliveries import index_render_file
+            index_render_file(asset)
         return asset
 
 
@@ -4245,7 +4259,9 @@ class ExternalMediaPipeline:
     def _remove_stale_video_assets(job, keep_language):
         stale_assets = MediaAsset.objects.filter(job=job, kind=MediaAsset.Kind.VIDEO).exclude(language=keep_language)
         for asset in stale_assets:
-            asset.file.delete(save=False)
+            from website.services.content_deliveries import is_retained_file
+            if not is_retained_file(asset.file.name):
+                asset.file.delete(save=False)
             asset.delete(force_policy=HARD_DELETE)
 
     @staticmethod

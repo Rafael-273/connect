@@ -1,24 +1,19 @@
 <section class="work-detail-card work-detail-overview" data-work-header-title="{{ activity.header_title }}" data-work-stage-title="{{ activity.title }}">
     <div class="work-detail-activity">
+        {% if activity.status == 'in_review' %}<div class="delivery-review-banner" role="status"><span class="delivery-review-banner-icon"><i class="fas fa-check" aria-hidden="true"></i></span><div><strong>Entregas enviadas para revisão</strong><p>A liderança vai avaliar os arquivos. Se algum ajuste for necessário, você verá a orientação aqui.</p></div></div>{% endif %}
         {% if activity.briefing %}<div class="work-detail-section-heading"><p class="work-detail-kicker">Briefing</p></div><div class="media-work-text">{{ activity.briefing|urlize|linebreaksbr }}</div>{% endif %}
         {% if activity.observations %}<div class="work-detail-section-heading {% if activity.briefing %}mt-5 pt-5 border-t border-gray-100{% endif %}"><p class="work-detail-kicker">Observações</p></div><div class="media-work-text">{{ activity.observations|urlize|linebreaksbr }}</div>{% endif %}
         {% if activity.description %}<div class="work-detail-section-heading {% if activity.briefing or activity.observations %}mt-5 pt-5 border-t border-gray-100{% endif %}"><p class="work-detail-kicker">Detalhes da etapa</p></div><div class="media-work-text">{{ activity.description|urlize|linebreaksbr }}</div>{% endif %}
+        {% if delivery_review and delivery_review.decision == 'rejected' %}<div class="delivery-return-note"><strong>Alteração solicitada</strong><p>{% if delivery_review.note %}{{ delivery_review.note|linebreaksbr }}{% else %}A liderança solicitou uma nova entrega.{% endif %}</p></div>{% endif %}
+        {% if delivery_review and delivery_review.decision == 'approved' and delivery_review.note %}<div class="delivery-approval-note"><strong>Observação da liderança</strong><p>{{ delivery_review.note|linebreaksbr }}</p></div>{% endif %}
+        {% include 'member/media_planning/partials/deliveries.html' with delivery_integrated=True %}
     </div>
     <dl class="work-detail-facts">
-        <div><dt>Status</dt><dd><span class="work-detail-status text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 {% if activity.status == 'completed' %}is-completed{% else %}is-pending{% endif %}">{% if activity.status == 'completed' %}Concluída{% else %}Pendente{% endif %}</span></dd></div>
+        <div><dt>Status</dt><dd><span class="work-detail-status text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 {% if activity.status == 'completed' %}is-completed{% elif activity.status == 'in_review' %}is-review{% else %}is-pending{% endif %}">{{ activity.status_label }}</span></dd></div>
         <div><dt>Prazo da etapa</dt><dd class="{% if activity.deadline.overdue and activity.status != 'completed' %}work-detail-fact-overdue{% endif %}">{% if activity.due_date %}<time datetime="{{ activity.due_date|date:'c' }}">{{ activity.due_date|date:'d/m/Y H:i' }}</time>{% if activity.status != 'completed' %} · {{ activity.deadline.label }}{% endif %}{% else %}Sem prazo definido{% endif %}</dd></div>
         <div><dt>Demanda</dt><dd>{{ activity.demand_title }}</dd></div>
         <div><dt>Evento</dt><dd>{{ activity.event_title|default:'Demanda avulsa' }}</dd></div>
     </dl>
-</section>
-<section class="work-detail-card mt-4">
-    <form method="post" action="{% url 'media_my_work_status' activity.id %}" class="work-detail-status-form">
-        {% csrf_token %}
-        <div class="work-detail-actions">
-            {% if activity.status == 'completed' %}<button class="org-btn-secondary" type="submit" name="status" value="pending">Marcar como pendente</button>
-            {% else %}<button class="org-btn-primary" type="submit" name="status" value="completed">Marcar como concluída</button>{% endif %}
-        </div>
-    </form>
 </section>
 {% if attachments %}
 <section class="work-detail-card mt-4">
@@ -26,14 +21,16 @@
     <ul class="space-y-2">{% for attachment in attachments %}<li><a class="media-work-attachment" href="{% url 'media_my_work_attachment' activity.id attachment.pk %}"><i class="fas fa-paperclip" aria-hidden="true"></i>{{ attachment.name }}</a></li>{% endfor %}</ul>
 </section>
 {% endif %}
-{% if not activity.briefing and not activity.observations and not activity.description %}
-<section class="work-detail-card mt-4">
+<section class="work-detail-status-bar">
     <form method="post" action="{% url 'media_my_work_status' activity.id %}" class="work-detail-status-form">
         {% csrf_token %}
         <div class="work-detail-actions">
-            {% if activity.status == 'completed' %}<button class="org-btn-secondary" type="submit" name="status" value="pending">Marcar como pendente</button>
-            {% else %}<button class="org-btn-primary" type="submit" name="status" value="completed">Marcar como concluída</button>{% endif %}
+            {% if activity.status == 'in_review' %}<span class="work-review-waiting"><i class="fas fa-clock" aria-hidden="true"></i> Aguardando revisão da liderança</span>
+            {% elif activity.status == 'completed' and delivery_has_required %}<span class="work-review-approved"><i class="fas fa-check-circle" aria-hidden="true"></i> Entregas aprovadas</span>
+            {% elif delivery_needs_confirmation %}<button class="org-btn-primary work-detail-status-button" type="submit" name="status" value="completed"><i class="fas fa-check" aria-hidden="true"></i><span>Concluir e enviar para revisão</span></button>
+            {% elif delivery_has_required %}<span class="work-review-waiting">Envie os arquivos obrigatórios para revisão.</span>
+            {% elif activity.status == 'completed' %}<button class="org-btn-secondary work-detail-status-button" type="submit" name="status" value="pending"><i class="fas fa-undo" aria-hidden="true"></i><span>Marcar como pendente</span></button>
+            {% else %}<button class="org-btn-primary work-detail-status-button" type="submit" name="status" value="completed"><i class="fas fa-check" aria-hidden="true"></i><span>Marcar como concluída</span></button>{% endif %}
         </div>
     </form>
 </section>
-{% endif %}

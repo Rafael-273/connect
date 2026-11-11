@@ -1,0 +1,5 @@
+{% extends 'member_base.html' %}
+{% load static %}
+{% block title %}Revisão de entregas{% endblock %}
+{% block head %}<link rel="stylesheet" href="{% static 'org_media.css' %}"><link rel="stylesheet" href="{% static 'media_my_work.css' %}?v=20"><link rel="stylesheet" href="{% static 'delivery_review.css' %}?v=4">{% endblock %}
+{% block content %}<main class="delivery-review-page"><a href="{% if task.content.event_id %}{% url 'media_event_detail_page' task.content.event_id %}{% else %}{% url 'media_demand_detail_page' task.content_id %}{% endif %}">← Voltar à demanda</a>{% include 'member/media_planning/partials/delivery_review_content.html' %}</main><script src="{% static 'delivery_review.js' %}?v=3" defer></script>{% endblock %}

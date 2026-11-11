@@ -1,5 +1,6 @@
 """Personal work queries. Never reuse the leadership demand-detail builders here."""
 from datetime import timedelta
+from unicodedata import normalize
 
 from django.db.models import Case, F, IntegerField, Q, Value, When
 from django.utils import timezone
@@ -24,7 +25,7 @@ def ordered_tasks(user, tab='all', archive_before=None):
         tasks = tasks.filter(status='completed', update_at__lt=archive_before)
     else:
         tasks = tasks.filter(
-            Q(status__in=['pending', 'in_progress'])
+            Q(status__in=['pending', 'in_progress', 'in_review'])
             | Q(status='completed', update_at__gte=archive_before)
         )
     return tasks.select_related('content__event').only(
@@ -54,10 +55,28 @@ def deadline_info(due_date, today=None):
     }
 
 
+ROLE_ICONS = {
+    'designer': 'palette',
+    'filmmaker': 'video',
+    'editor': 'film',
+    'publicador': 'paper-plane',
+    'fotografo': 'camera',
+    'operador': 'sliders-h',
+    'responsavel': 'user',
+    'revisor': 'check-double',
+}
+
+
+def activity_role_icon(title):
+    role = ''.join(c for c in normalize('NFKD', title or '').casefold() if not c.isspace() and not 0x300 <= ord(c) <= 0x36f)
+    return ROLE_ICONS.get(role, 'list-check')
+
+
 def activity_data(task, today=None):
     """Explicit allowlist: no demand status, assignees or sibling tasks."""
     return {
         'id': task.pk, 'title': task.title, 'status': task.status,
+        'role_icon': activity_role_icon(task.title),
         'status_label': task.get_status_display(), 'due_date': task.due_date,
         'demand_title': task.content.title,
         'event_title': task.content.event.title if task.content.event_id else '',

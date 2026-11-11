@@ -1,0 +1,29 @@
+<div class="delivery-item py-4 border-b border-gray-100" data-delivery-row data-format="{{ requirement.format }}" data-endpoint="{% url 'media_delivery_action' requirement.pk %}" data-projects="{% url 'media_delivery_projects' requirement.pk %}">
+    <div class="delivery-item-info">
+    <div class="delivery-item-heading flex items-center justify-between gap-3"><strong class="text-sm">{{ requirement.label }}</strong><span class="delivery-requirement-tag {% if not requirement.required %}is-optional{% endif %}">{% if requirement.required %}Obrigatório{% else %}Opcional{% endif %}{% if not requirement.active %} · Desativado{% endif %}</span></div>
+    {% if requirement.metadata.guidance %}<p class="text-xs text-gray-500 mt-1">{{ requirement.metadata.guidance }}</p>{% endif %}
+    {% with versions=requirement.deliveries.all %}{% with current=versions.0 %}
+    {% if current and current.status != 'withdrawn' %}{% with delivery=current %}
+            <div class="delivery-current">
+                {% if delivery.asset.mime_type == 'image/png' or delivery.asset.mime_type == 'image/jpeg' or delivery.asset.mime_type == 'image/gif' or delivery.asset.mime_type == 'image/webp' %}
+                <a class="delivery-preview" href="{% url 'media_delivery_file' delivery.pk %}?preview=1" target="_blank" rel="noopener" aria-label="Abrir prévia de {{ delivery.original_name }}"><img src="{% url 'media_delivery_file' delivery.pk %}?preview=1" alt="Prévia de {{ delivery.original_name }}" loading="lazy"></a>
+                {% elif delivery.asset.mime_type == 'video/mp4' or delivery.asset.mime_type == 'video/webm' or delivery.asset.mime_type == 'video/quicktime' %}
+                <video class="delivery-preview delivery-preview-video" controls preload="none" aria-label="Prévia de {{ delivery.original_name }}"><source src="{% url 'media_delivery_file' delivery.pk %}?preview=1" type="{{ delivery.asset.mime_type }}"></video>
+                {% else %}<span class="delivery-preview delivery-preview-file" aria-hidden="true"><i class="far fa-file"></i></span>{% endif %}
+                <div class="delivery-current-details"><span class="delivery-filename" title="{{ delivery.original_name }}">{{ delivery.original_name }}</span></div>
+                <div class="delivery-current-controls"><div class="delivery-file-meta"><a class="delivery-file-icon" href="{% url 'media_delivery_file' delivery.pk %}" aria-label="Baixar arquivo de {{ requirement.label }}" title="Baixar"><i class="fas fa-download" aria-hidden="true"></i></a>{% if delivery_removable and requirement.active %}<button type="button" class="delivery-file-icon delivery-remove" data-delivery-remove="{{ delivery.pk }}" aria-label="Remover arquivo de {{ requirement.label }}" title="Remover"><i class="far fa-trash-alt" aria-hidden="true"></i></button>{% endif %}</div></div>
+            </div>
+            {% if delivery.status == 'approved' %}<p class="delivery-item-approved"><i class="fas fa-check-circle" aria-hidden="true"></i> Aprovada</p>{% elif delivery.status == 'draft' %}<p class="delivery-item-draft"><i class="fas fa-clock" aria-hidden="true"></i> Aguardando confirmação</p>{% elif delivery.status == 'rejected' %}{% with review=delivery.reviews.first %}<div class="delivery-item-adjustment"><strong>Ajuste solicitado</strong><p>{% if review.note %}{{ review.note|linebreaksbr }}{% else %}A liderança solicitou uma nova versão desta entrega.{% endif %}</p>{% if delivery_removable %}<p>Remova o arquivo para enviar a versão ajustada.</p>{% endif %}</div>{% endwith %}{% endif %}
+    {% endwith %}{% else %}<p class="text-sm text-gray-500 mt-2">Ainda não enviado</p>{% if current.status == 'withdrawn' and current.metadata.withdrawn_previous_status == 'rejected' %}{% with review=current.reviews.first %}<div class="delivery-item-adjustment"><strong>Ajuste solicitado</strong><p>{% if review.note %}{{ review.note|linebreaksbr }}{% else %}A liderança solicitou uma nova versão desta entrega.{% endif %}</p></div>{% endwith %}{% endif %}{% endif %}
+    {% if not delivery_integrated and versions|length > 1 %}<details class="delivery-history"><summary>Versões anteriores</summary><ul class="space-y-2 mt-2">
+        {% for delivery in versions %}{% if not forloop.first %}<li><a class="underline" href="{% url 'media_delivery_file' delivery.pk %}">V{{ delivery.version }} · {{ delivery.original_name }}</a><span class="text-xs text-gray-500"> · {{ delivery.created_at|date:'d/m/Y H:i' }} · {{ delivery.submitted_by }}</span></li>{% endif %}{% endfor %}
+    </ul></details>{% endif %}
+    </div>
+    {% if delivery_writable and requirement.active %}{% if not current or current.status == 'withdrawn' %}{% include 'member/media_planning/partials/delivery_upload_actions.html' %}{% endif %}{% endif %}
+    {% if delivery_writable or delivery_removable %}<div class="delivery-item-feedback">
+        <progress class="w-full mt-2 hidden" data-delivery-progress max="100" value="0" aria-label="Progresso do envio"></progress>
+        <p class="text-sm mt-2" data-delivery-message role="status" aria-live="polite"></p>
+        <button type="button" class="org-btn-secondary delivery-action hidden" data-delivery-retry><i class="fas fa-redo" aria-hidden="true"></i><span>Tentar novamente</span></button>
+    </div>{% endif %}
+    {% endwith %}{% endwith %}
+</div>

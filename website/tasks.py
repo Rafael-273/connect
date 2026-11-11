@@ -103,3 +103,6 @@ def generate_manual_job(job_id, run_token):
 @shared_task(name='manuals.cleanup')
 def cleanup_manual_jobs():
     ManualGenerationJob.objects.filter(updated_at__lt=timezone.now() - timedelta(days=1)).delete()
+
+# Final Editor files selected as deliveries may predate the file registry.
+from website.services.delivery_file_jobs import index_editor_file  # noqa: F401,E402

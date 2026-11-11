@@ -25,6 +25,7 @@
                     <select id="work-filter-status" name="status">
                         <option value="">Todos os pendentes</option>
                         <option value="pending" {% if filter_status == 'pending' %}selected{% endif %}>Pendente</option>
+                        <option value="in_review" {% if filter_status == 'in_review' %}selected{% endif %}>Em revisão</option>
                         <option value="in_progress" {% if filter_status == 'in_progress' %}selected{% endif %}>Em andamento</option>
                     </select></div>{% endif %}
                     <div><label for="work-filter-from">Prazo — de</label><input type="date" id="work-filter-from" name="period_from" value="{{ period_from }}"></div>

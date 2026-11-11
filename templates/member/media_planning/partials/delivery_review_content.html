@@ -1,0 +1,30 @@
+<div class="delivery-review-content">
+    <div class="delivery-review-heading"><div><p class="delivery-review-kicker">Revisão de entregas</p><h2 id="delivery-review-title">{{ task.content.title }}</h2><p>{{ task.title }}{% if task.assigned_to.member %} · {{ task.assigned_to.member.name }}{% endif %}</p></div><button type="button" class="delivery-review-close" data-close-delivery-review aria-label="Fechar revisão"><i class="fas fa-times" aria-hidden="true"></i></button></div>
+    <div class="delivery-review-body">
+        <p class="delivery-review-intro">Confira e avalie cada entrega.</p>
+        {% if review_error %}<p class="delivery-review-error" role="alert">{{ review_error }}</p>{% endif %}
+        <div class="review-delivery-list">
+        {% for item in review_items %}
+        <section class="review-delivery" aria-labelledby="review-format-{{ item.requirement.pk }}">
+            <div class="review-delivery-heading"><h3 id="review-format-{{ item.requirement.pk }}">{{ item.requirement.label }}</h3>{% if item.delivery.status == 'approved' %}<span class="review-decision is-approved"><i class="fas fa-check" aria-hidden="true"></i> Aprovada</span>{% elif item.delivery.status == 'rejected' %}<span class="review-decision is-rejected">Ajuste solicitado</span>{% endif %}</div>
+            {% if item.delivery %}{% with delivery=item.delivery %}
+                {% if delivery.asset.mime_type == 'image/png' or delivery.asset.mime_type == 'image/jpeg' or delivery.asset.mime_type == 'image/gif' or delivery.asset.mime_type == 'image/webp' %}
+                <a class="review-delivery-preview" href="{% url 'media_delivery_file' delivery.pk %}?preview=1" target="_blank" rel="noopener" aria-label="Ampliar entrega {{ item.requirement.label }}"><img src="{% url 'media_delivery_file' delivery.pk %}?preview=1" alt="Prévia da entrega {{ item.requirement.label }}" loading="lazy"></a>
+                {% elif delivery.asset.mime_type == 'video/mp4' or delivery.asset.mime_type == 'video/webm' or delivery.asset.mime_type == 'video/quicktime' %}
+                <video class="review-delivery-video" controls preload="none" aria-label="Prévia da entrega {{ item.requirement.label }}"><source src="{% url 'media_delivery_file' delivery.pk %}?preview=1" type="{{ delivery.asset.mime_type }}"></video>
+                {% else %}<a class="review-delivery-file" href="{% url 'media_delivery_file' delivery.pk %}"><i class="far fa-file" aria-hidden="true"></i> Abrir arquivo</a>{% endif %}
+                {% if delivery.status == 'submitted' %}
+                <form method="post" action="{% url 'media_delivery_review' task.pk %}" class="review-delivery-form" data-review-delivery-form>
+                    {% csrf_token %}<input type="hidden" name="review_token" value="{{ review_token }}"><input type="hidden" name="requirement_id" value="{{ item.requirement.pk }}">
+                    <div class="review-delivery-actions"><button type="button" class="review-reject-toggle" data-toggle-review-reject aria-expanded="{% if failed_requirement == item.requirement.pk|stringformat:'s' %}true{% else %}false{% endif %}" aria-controls="review-reject-{{ item.requirement.pk }}"><i class="fas fa-undo" aria-hidden="true"></i> Reprovar</button><button type="submit" name="decision" value="approved" class="review-approve"><i class="fas fa-check" aria-hidden="true"></i> Aprovar</button></div>
+                    <div class="review-reject-panel" id="review-reject-{{ item.requirement.pk }}" {% if failed_requirement != item.requirement.pk|stringformat:'s' %}hidden{% endif %}><label for="review-note-{{ item.requirement.pk }}">O que precisa ser ajustado? <span>(opcional)</span></label><textarea id="review-note-{{ item.requirement.pk }}" name="note" rows="3" maxlength="4000" placeholder="Descreva o ajuste para o responsável.">{% if failed_requirement == item.requirement.pk|stringformat:'s' %}{{ review_note }}{% endif %}</textarea><button type="submit" name="decision" value="rejected" class="review-reject-confirm">Confirmar reprovação</button></div>
+                    <p class="review-form-error" role="alert" hidden></p>
+                </form>
+                {% elif delivery.status == 'draft' %}<p class="review-delivery-empty">Aguardando confirmação do responsável.</p>{% elif delivery.status == 'rejected' %}{% with review=delivery.reviews.first %}{% if review.note %}<p class="review-previous-note">{{ review.note|linebreaksbr }}</p>{% endif %}{% endwith %}{% endif %}
+            {% endwith %}{% else %}<p class="review-delivery-empty">Aguardando envio.</p>{% endif %}
+        </section>
+        {% empty %}<p class="delivery-review-state">Nenhuma entrega configurada para esta etapa.</p>{% endfor %}
+        </div>
+        {% if task.status == 'completed' %}<p class="delivery-review-state">Etapa concluída.</p>{% endif %}
+    </div>
+</div>
