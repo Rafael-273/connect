@@ -129,6 +129,7 @@ class AIService:
         language: str = "pt",
         prompt: str | None = None,
         model: str | None = None,
+        allow_empty: bool = False,
     ) -> str:
         """Transcribe an uploaded file, filesystem path or in-memory audio bytes."""
         audio_file, should_close = self._prepare_audio(
@@ -147,7 +148,7 @@ class AIService:
         try:
             response = self.client.audio.transcriptions.create(**request)
             text = (response.text or "").strip()
-            if not text:
+            if not text and not allow_empty:
                 raise AIServiceError("A OpenAI retornou uma transcrição vazia.")
             return text
         except AIServiceError:

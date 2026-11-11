@@ -195,6 +195,7 @@ OPENAI_TRANSCRIPTION_MODEL = os.getenv(
     'OPENAI_TRANSCRIPTION_MODEL',
     'whisper-1',
 )
+MANUAL_AUDIO_MAX_UPLOAD_MB = max(1, int(os.getenv('MANUAL_AUDIO_MAX_UPLOAD_MB', '128')))
 
 # Mídia Externa. O modelo de tradução é escolhido pelo fluxo que usa AIService;
 # apenas o modelo de transcrição é centralizado na variável acima.
@@ -304,10 +305,6 @@ EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS = float(
     os.getenv('EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS', 2)
 )
 CELERY_BEAT_SCHEDULE = {
-    'cleanup-manual-jobs': {
-        'task': 'manuals.cleanup',
-        'schedule': timedelta(hours=1),
-    },
     'cleanup-external-media-workspaces': {
         'task': 'external_media.cleanup_workspaces',
         'schedule': timedelta(hours=1),

@@ -41,6 +41,17 @@ class MinistryOrganizationTests(TestCase):
     def url(self, name, **kwargs):
         return reverse(name, kwargs={'ministry_id': self.ministry.pk, **kwargs})
 
+    def test_organization_navigation_returns_to_home(self):
+        self.client.force_login(self.user)
+        home = reverse('member_dashboard')
+        for name in ('media_organization', 'ministry_organization_index'):
+            self.assertRedirects(self.client.get(reverse(name)), home, fetch_redirect_response=False)
+        for url in (self.url('ministry_team_list'), self.url('ministry_manual_list'), reverse('media_resource_list')):
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, f'href="{home}"')
+            self.assertNotContains(response, f'href="{reverse("media_organization")}"')
+
     def test_team_names_are_unique_within_ministry(self):
         self.assertEqual(MediaSubTeam.objects.filter(name='Recepção').count(), 2)
         with self.assertRaises(IntegrityError), transaction.atomic():

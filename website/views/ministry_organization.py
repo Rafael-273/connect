@@ -1,5 +1,6 @@
 """Organization pages shared by every ministry and the legacy media entry points."""
 from django.contrib import messages
+from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -17,7 +18,6 @@ from website.forms.media_organization import MediaSubTeamForm, MediaSubTeamMembe
 from website.forms.ministry_manual import MinistryManualForm
 from website.models import Ministry, MinistryMembership, MediaSubTeam, MediaSubTeamMembership, MinistryManual, ManualGenerationJob
 from website.services.ministry_organization import media_ministry
-from website.views.media_planning.mixins import _get_media_membership
 
 
 def organization_admin(user):
@@ -29,9 +29,6 @@ class MinistryOrganizationIndex(LoginRequiredMixin, View):
     login_url = 'member_login'
 
     def get(self, request):
-        member = getattr(request.user, 'member', None)
-        if member and _get_media_membership(member):
-            return redirect('media_organization')
         return redirect('member_dashboard')
 
 
@@ -271,6 +268,8 @@ class MinistryTeamMemberRemove(MinistryOrganizationMixin, View):
 
 class MinistryManualList(MinistryOrganizationMixin, View):
     def get(self, request, ministry_id):
+        # Remove expired audio on access, without requiring a scheduler.
+        ManualGenerationJob.objects.filter(updated_at__lt=timezone.now() - timedelta(days=1)).delete()
         teams = MediaSubTeam.objects.filter(ministry=self.ministry)
         if not self.can_manage:
             teams = teams.filter(is_active=True)
@@ -287,6 +286,7 @@ class MinistryManualList(MinistryOrganizationMixin, View):
         return render(request, 'member/ministry_organization/manuals.html', self.context(
             manuals=manuals, teams=teams, selected_team=selected, query=query, section='manuals',
             selected_manual=selected_manual,
+            manual_audio_max_mb=settings.MANUAL_AUDIO_MAX_UPLOAD_MB,
             form=MinistryManualForm(ministry=self.ministry),
             jobs=ManualGenerationJob.objects.filter(ministry=self.ministry, created_by=request.user).exclude(status='completed').defer('audio', 'transcript').order_by('-created_at'),
         ))
@@ -295,6 +295,14 @@ class MinistryManualList(MinistryOrganizationMixin, View):
 class MinistryManualDetail(MinistryOrganizationMixin, View):
     def get(self, request, ministry_id, pk):
         manual = get_object_or_404(self.manuals(), pk=pk)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({
+                'title': manual.title,
+                'team': manual.sub_team.name if manual.sub_team else 'Todo o ministério',
+                'summary': manual.summary,
+                'html': manual.safe_content,
+                'status': 'Rascunho' if manual.is_draft else ('Publicado' if manual.is_active else 'Arquivado'),
+            })
         return render(request, 'member/ministry_organization/manual.html', self.context(manual=manual, section='manuals'))
 
 
@@ -326,6 +334,8 @@ class MinistryManualEdit(MinistryOrganizationMixin, View):
                 obj.created_by = request.user
             if request.POST.get('publication') in ('draft', 'publish'):
                 obj.is_draft = request.POST['publication'] == 'draft'
+                if request.POST['publication'] == 'publish':
+                    obj.is_active = True
             obj.save()
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return JsonResponse({'url': reverse('ministry_manual_list', args=[ministry_id])})
@@ -341,8 +351,15 @@ class MinistryManualGeneration(MinistryOrganizationMixin, View):
 
     def post(self, request, ministry_id):
         upload = request.FILES.get('audio')
-        if not upload or not 0 < upload.size <= 24 * 1024 * 1024 or Path(upload.name).suffix.lower() not in {'.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'}:
-            return JsonResponse({'error': 'Envie um áudio MP3, MP4, MPEG, M4A, WAV ou WebM de até 24 MB.'}, status=400)
+        if upload is None:
+            return JsonResponse({'error': 'Selecione um arquivo de áudio.'}, status=400)
+        if upload.size <= 0:
+            return JsonResponse({'error': 'O arquivo de áudio está vazio.'}, status=400)
+        if upload.size > settings.MANUAL_AUDIO_MAX_UPLOAD_MB * 1024 * 1024:
+            size_mb = upload.size / (1024 * 1024)
+            return JsonResponse({'error': f'O arquivo tem {size_mb:.1f} MB e ultrapassa o limite de {settings.MANUAL_AUDIO_MAX_UPLOAD_MB} MB.'}, status=400)
+        if Path(upload.name).suffix.lower() not in {'.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm'}:
+            return JsonResponse({'error': 'Formato não aceito. Use MP3, MP4, MPEG, MPGA, M4A, WAV ou WebM.'}, status=400)
         job = ManualGenerationJob.objects.create(
             ministry=self.ministry, created_by=request.user, filename=Path(upload.name).name[:255], audio=upload.read(),
         )
@@ -350,9 +367,9 @@ class MinistryManualGeneration(MinistryOrganizationMixin, View):
 
     @staticmethod
     def enqueue(job):
-        from website.tasks import generate_manual_job
+        from website.services.manual_jobs import enqueue_manual
         try:
-            generate_manual_job.delay(job.pk, str(job.run_token))
+            enqueue_manual(job.pk, str(job.run_token))
         except Exception:
             job.status = 'error'
             job.error = 'Não foi possível iniciar o processamento. Tente novamente.'
@@ -394,7 +411,18 @@ class MinistryManualArchive(MinistryOrganizationMixin, View):
         manual = get_object_or_404(self.manuals(), pk=pk)
         manual.is_active = False
         manual.save(update_fields=['is_active', 'update_at'])
-        messages.success(request, 'Manual arquivado. Ele pode ser reativado na edição.')
+        messages.success(request, 'Manual arquivado. Ele pode ser reativado ao ser publicado novamente.')
+        return redirect('ministry_manual_list', ministry_id=ministry_id)
+
+
+class MinistryManualDelete(MinistryOrganizationMixin, View):
+    manage_only = True
+
+    def post(self, request, ministry_id, pk):
+        from safedelete.models import SOFT_DELETE
+        manual = get_object_or_404(self.manuals(), pk=pk)
+        manual.delete(force_policy=SOFT_DELETE)
+        messages.success(request, 'Manual excluído.')
         return redirect('ministry_manual_list', ministry_id=ministry_id)
 
 
@@ -407,3 +435,21 @@ class MinistryManualPreview(MinistryOrganizationMixin, View):
         if len(content) > 200000:
             return JsonResponse({'error': 'O conteúdo deve ter até 200.000 caracteres.'}, status=400)
         return JsonResponse({'html': sanitize_manual_content(content)})
+
+
+class MinistryManualFormat(MinistryOrganizationMixin, View):
+    manage_only = True
+
+    def post(self, request, ministry_id):
+        from website.ai import AIServiceError
+        from website.services.manual_formatting import format_manual
+        from website.utils.manual_content import sanitize_manual_content
+
+        content = request.POST.get('content', '')
+        try:
+            html = format_manual(content)
+        except ValueError as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        except AIServiceError:
+            return JsonResponse({'error': 'Não foi possível formatar com IA. Seu conteúdo foi preservado.'}, status=502)
+        return JsonResponse({'html': html, 'changed': html != sanitize_manual_content(content)})

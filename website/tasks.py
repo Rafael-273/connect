@@ -11,12 +11,15 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
-from website.ai import get_ai_service
+from website.ai import AIServiceError, get_ai_service
 from website.models import ManualGenerationJob, MinistryManual
 from website.services.manual_generation import generate_manual
 
 logger = logging.getLogger(__name__)
 MAX_SECONDS = 2 * 60 * 60
+DIRECT_TRANSCRIPTION_LIMIT = 24 * 1024 * 1024
+MANUAL_CHUNK_SECONDS = 20 * 60
+PARTIAL_TRANSCRIPT_PREFIX = '__CONNECT_MANUAL_CHUNKS_V1__\n'
 
 
 def validate_audio(path):
@@ -39,17 +42,36 @@ def generate_manual_job(job_id, run_token):
         job = ManualGenerationJob.objects.select_for_update().filter(pk=job_id, status='waiting', run_token=run_token).first()
         if not job:
             return
-        job.status = 'transcribing' if not job.transcript else 'generating'
+        partial = job.transcript.startswith(PARTIAL_TRANSCRIPT_PREFIX)
+        job.status = 'transcribing' if not job.transcript or partial else 'generating'
         job.error = ''
         job.save(update_fields=['status', 'error', 'updated_at'])
     try:
-        if not job.transcript:
+        if not job.transcript or partial:
             suffix = Path(job.filename).suffix.lower()
             with tempfile.NamedTemporaryFile(suffix=suffix) as audio:
                 audio.write(bytes(job.audio))
                 audio.flush()
                 validate_audio(audio.name)
-                transcript = get_ai_service().transcribe(audio.name, language='pt')
+                ai = get_ai_service()
+                if len(job.audio) <= DIRECT_TRANSCRIPTION_LIMIT:
+                    transcript = ai.transcribe(audio.name, language='pt')
+                else:
+                    # Reuse the media pipeline's mono MP3 extraction and chunking.
+                    from website.external_media.services import AudioExtractor
+                    with tempfile.TemporaryDirectory(prefix='manual-audio-') as workdir:
+                        chunks = AudioExtractor().extract(Path(audio.name), Path(workdir), chunk_seconds=MANUAL_CHUNK_SECONDS)
+                        parts = json.loads(job.transcript[len(PARTIAL_TRANSCRIPT_PREFIX):]) if partial else []
+                        if not isinstance(parts, list) or len(parts) > len(chunks) or not all(isinstance(part, str) for part in parts):
+                            raise ValueError('Progresso da transcrição inválido.')
+                        for chunk in chunks[len(parts):]:
+                            parts.append(ai.transcribe(chunk.path, language='pt', allow_empty=True))
+                            saved = PARTIAL_TRANSCRIPT_PREFIX + json.dumps(parts, ensure_ascii=False)
+                            if not ManualGenerationJob.objects.filter(pk=job_id, run_token=run_token).update(transcript=saved, updated_at=timezone.now()):
+                                return
+                        transcript = '\n\n'.join(part for part in parts if part.strip())
+                        if not transcript:
+                            raise AIServiceError('Não foi identificada fala no áudio.')
             if not ManualGenerationJob.objects.filter(pk=job_id, run_token=run_token).update(transcript=transcript, status='generating', updated_at=timezone.now()):
                 return
             job.transcript = transcript
@@ -70,7 +92,8 @@ def generate_manual_job(job_id, run_token):
     except Exception as exc:
         # Provider exceptions can include request data; do not log exception details.
         logger.error('Falha no processamento do manual, tarefa %s', job_id)
-        error = str(exc) if isinstance(exc, ValueError) and str(exc) == 'Áudio inválido ou com duração superior a 2 horas.' else 'Não foi possível processar o áudio. Verifique o arquivo e tente novamente.'
+        safe_errors = ('Áudio inválido ou com duração superior a 2 horas.', 'Não foi identificada fala no áudio.')
+        error = str(exc) if isinstance(exc, (ValueError, AIServiceError)) and str(exc) in safe_errors else 'Não foi possível processar o áudio. Verifique o arquivo e tente novamente.'
         ManualGenerationJob.objects.filter(pk=job_id, run_token=run_token).update(
             status='error', error=error,
             updated_at=timezone.now(),

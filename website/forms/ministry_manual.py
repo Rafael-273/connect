@@ -14,10 +14,9 @@ class MinistryManualForm(forms.ModelForm):
 
     class Meta:
         model = MinistryManual
-        fields = ['title', 'summary', 'sub_team', 'content', 'is_active']
+        fields = ['title', 'sub_team', 'content']
         widgets = {
             'title': forms.TextInput(attrs={'class': 'form-input'}),
-            'summary': forms.Textarea(attrs={'class': 'form-input', 'rows': 2}),
             'sub_team': forms.Select(attrs={'class': 'form-input'}),
         }
 

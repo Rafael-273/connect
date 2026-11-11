@@ -1,11 +1,22 @@
 {% extends 'member/media_planning/operations_base.html' %}
 {% load static %}
 {% block title %}Manuais · Mídia{% endblock %}
-{% block head %}{{ block.super }}<link rel="stylesheet" href="{% static 'org_media.css' %}"><link rel="stylesheet" href="{% static 'ministry_manual.css' %}">{% endblock %}
+{% block head %}{{ block.super }}<link rel="stylesheet" href="{% static 'org_media.css' %}"><link rel="stylesheet" href="{% static 'ministry_manual.css' %}?v=20261110-17">{% endblock %}
 {% block operations_bottom_nav %}{% endblock %}
 {% block page_header %}
-{% url 'media_organization' as organization_url %}
+{% url 'member_dashboard' as organization_url %}
+<div class="manuals-header-wrap">
 {% include 'parciais/org_media_header.html' with back_url=organization_url title='Manuais' accent='da mídia' subtitle='Guias e orientações para a equipe' %}
+{% if can_manage %}
+<div class="manuals-header-actions">
+    <button type="button" data-new-manual class="manuals-create" aria-expanded="false" aria-controls="manual-create-menu"><i class="fas fa-plus" aria-hidden="true"></i><span>Criar manual</span></button>
+    <div id="manual-create-menu" class="manual-create-menu" hidden>
+        <button type="button" data-manual-choice><i class="fas fa-pen" aria-hidden="true"></i><span><strong>Criar manualmente</strong><small>Escreva e formate seu conteúdo</small></span></button>
+        <button type="button" data-ai-choice><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i><span><strong>Gerar com IA</strong><small>Use o áudio de um treinamento</small></span></button>
+    </div>
+</div>
+{% endif %}
+</div>
 {% endblock %}
 {% block operations %}
 <div class="manuals-hub" id="manual-app"
@@ -13,70 +24,128 @@
      data-edit-url="{% url 'ministry_manual_edit' ministry.pk 0 %}"
      data-generate-url="{% url 'ministry_manual_generate' ministry.pk %}"
      data-status-url="{% url 'ministry_manual_generation_status' ministry.pk 0 %}"
-     data-preview-url="{% url 'ministry_manual_preview' ministry.pk %}">
+     data-audio-max-mb="{{ manual_audio_max_mb }}"
+     data-preview-url="{% url 'ministry_manual_preview' ministry.pk %}"
+     data-format-url="{% url 'ministry_manual_format' ministry.pk %}"
+     data-delete-url="{% url 'ministry_manual_delete' ministry.pk 0 %}"
+     data-selected="{{ selected_manual.pk|default:'' }}">
     <div class="manuals-controls">
         <form method="get" class="manuals-filter-form" role="search">
             <label class="manuals-sr-only" for="manual-search">Buscar manuais</label>
             <input id="manual-search" type="search" name="q" value="{{ query }}" placeholder="Buscar manuais por título ou resumo...">
-            {% if teams %}<label class="manuals-sr-only" for="manual-team">Filtrar por equipe</label><select name="team" id="manual-team"><option value="">Todas as equipes</option>{% for team in teams %}<option value="{{ team.pk }}" {% if selected_team == team.pk|stringformat:'s' %}selected{% endif %}>{{ team.name }}</option>{% endfor %}</select>{% endif %}
-            <button type="submit" class="manuals-search-button" aria-label="Buscar"><i class="fas fa-search" aria-hidden="true"></i></button>
-            {% if query or selected_team %}<a href="{% url 'ministry_manual_list' ministry.pk %}" class="manuals-clear">Limpar</a>{% endif %}
-            {% if can_manage %}<button type="button" data-new-manual class="manuals-create"><i class="fas fa-plus" aria-hidden="true"></i><span>Criar manual</span></button>{% endif %}
+            <button type="submit" class="manuals-search-button" aria-label="Buscar" title="Buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg></button>
+            {% if teams %}
+            <details class="manuals-filter">
+                <summary class="manuals-filter-toggle" aria-label="Filtros de manuais">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+                    <span class="manuals-filter-label">Filtros</span>{% if selected_team %}<span class="manuals-filter-dot" aria-label="Filtro ativo"></span>{% endif %}
+                </summary>
+                <div class="manuals-filter-panel">
+                    <p class="manuals-filter-title">Filtros</p>
+                    <label for="manual-team">Equipe</label>
+                    <select name="team" id="manual-team"><option value="">Todas</option>{% for team in teams %}<option value="{{ team.pk }}" {% if selected_team == team.pk|stringformat:'s' %}selected{% endif %}>{{ team.name }}</option>{% endfor %}</select>
+                    <div class="manuals-filter-actions"><a href="{% url 'ministry_manual_list' ministry.pk %}">Limpar filtros</a><button type="submit">Aplicar</button></div>
+                </div>
+            </details>
+            {% elif query %}<a href="{% url 'ministry_manual_list' ministry.pk %}" class="manuals-clear">Limpar</a>{% endif %}
         </form>
     </div>
     {% if jobs %}<div class="manuals-jobs" aria-live="polite">{% for job in jobs %}<div class="manual-job" data-job="{{ job.pk }}"><strong>Geração de manual</strong> <span data-job-status>Verificando processamento…</span> <button type="button" data-job-retry hidden>Tentar novamente</button></div>{% endfor %}</div>{% endif %}
     <div class="manuals-panel-wrap">
       <div class="manuals-layout">
-        <aside class="manuals-sidebar {% if selected_manual %}manuals-mobile-hidden{% endif %}" aria-label="Lista de manuais">
+        <section class="manuals-sidebar" aria-label="Lista de manuais">
           <div class="manuals-sidebar-inner">
             <p class="manuals-list-label">{{ manuals|length }} {% if manuals|length == 1 %}manual{% else %}manuais{% endif %}</p>
             <div class="manuals-list">{% for manual in manuals %}
-              <a href="?q={{ query|urlencode }}{% if selected_team %}&amp;team={{ selected_team|urlencode }}{% endif %}&amp;selected={{ manual.pk }}" class="manuals-item {% if selected_manual.pk == manual.pk %}active{% endif %}" {% if selected_manual.pk == manual.pk %}aria-current="true"{% endif %}>
+              <article class="manuals-item">
                 <span class="manuals-item-icon"><i class="fas fa-book" aria-hidden="true"></i></span>
-                <span class="manuals-item-content"><strong>{{ manual.title }}</strong><span>{{ manual.sub_team.name|default:'Todo o ministério' }}</span><small>{% if manual.is_draft %}Rascunho{% elif not manual.is_active %}Arquivado{% else %}Publicado{% endif %} · {% if manual.origin == 'ai' %}Gerado com IA{% else %}Criação manual{% endif %}</small></span>
-                <i class="fas fa-chevron-right manuals-item-arrow" aria-hidden="true"></i>
-              </a>
+                <div class="manuals-item-content"><strong>{{ manual.title }}</strong><span>{{ manual.sub_team.name|default:'Todo o ministério' }}</span><small>{% if manual.is_draft %}Rascunho{% elif not manual.is_active %}Arquivado{% else %}Publicado{% endif %} · {% if manual.origin == 'ai' %}Gerado com IA{% else %}Criação manual{% endif %}</small></div>
+                <div class="manuals-item-actions" aria-label="Ações de {{ manual.title }}">
+                  <a href="{% url 'ministry_manual_detail' ministry.pk manual.pk %}" data-view-manual="{{ manual.pk }}" class="manuals-item-action" title="Visualizar" aria-label="Visualizar {{ manual.title }}"><i class="far fa-eye" aria-hidden="true"></i></a>
+                  {% if can_manage %}
+                  <button type="button" data-edit-manual="{{ manual.pk }}" class="manuals-item-action" title="Editar" aria-label="Editar {{ manual.title }}"><i class="fas fa-pen" aria-hidden="true"></i></button>
+                  <button type="button" data-delete-manual="{{ manual.pk }}" data-manual-title="{{ manual.title }}" class="manuals-item-action manuals-item-delete" title="Excluir" aria-label="Excluir {{ manual.title }}"><i class="far fa-trash-can" aria-hidden="true"></i></button>
+                  {% endif %}
+                </div>
+              </article>
             {% empty %}
               <div class="manuals-empty-list"><span class="manuals-empty-icon"><i class="fas fa-book-open" aria-hidden="true"></i></span><p>Nenhum manual encontrado.</p><small>{% if query or selected_team %}Tente ajustar a busca ou os filtros.{% else %}Crie um manual para orientar sua equipe.{% endif %}</small></div>
             {% endfor %}</div>
           </div>
-        </aside>
-        <main class="manuals-detail {% if not selected_manual %}manuals-mobile-hidden{% endif %}">
-          {% if selected_manual %}
-          <div class="manuals-detail-header">
-            <a class="manuals-back" href="?q={{ query|urlencode }}{% if selected_team %}&amp;team={{ selected_team|urlencode }}{% endif %}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Voltar à lista</a>
-            <div class="manuals-detail-title"><span class="manuals-detail-icon"><i class="fas fa-book" aria-hidden="true"></i></span><div><h2>{{ selected_manual.title }}</h2><p>{{ selected_manual.sub_team.name|default:'Todo o ministério' }}</p></div></div>
-            <div class="manuals-detail-meta"><span>{% if selected_manual.is_draft %}Rascunho{% elif not selected_manual.is_active %}Arquivado{% else %}Publicado{% endif %}</span><span>{% if selected_manual.origin == 'ai' %}Gerado com IA{% else %}Criação manual{% endif %}</span><span>Atualizado em {{ selected_manual.update_at|date:'d/m/Y H:i' }}</span></div>
-            {% if can_manage %}<div class="manuals-detail-actions"><button type="button" data-edit-manual="{{ selected_manual.pk }}"><i class="fas fa-pen" aria-hidden="true"></i> Editar manual</button>{% if selected_manual.is_active %}<form method="post" action="{% url 'ministry_manual_archive' ministry.pk selected_manual.pk %}" onsubmit="return confirm('Arquivar este manual?');">{% csrf_token %}<button type="submit"><i class="fas fa-box-archive" aria-hidden="true"></i> Arquivar</button></form>{% endif %}</div>{% endif %}
-          </div>
-          <article class="manuals-detail-body">{% if selected_manual.summary %}<p class="manuals-summary">{{ selected_manual.summary }}</p>{% endif %}<div class="manual-content">{{ selected_manual.safe_content|safe }}</div></article>
-          {% else %}
-          <div class="manuals-detail-empty"><span class="manuals-detail-empty-icon"><i class="fas fa-book-open" aria-hidden="true"></i></span><p>Selecione um manual</p><small>Consulte orientações e treinamentos da sua equipe em um só lugar.</small></div>
-          {% endif %}
-        </main>
+        </section>
       </div>
     </div>
+    <dialog id="manual-view-dialog" class="manual-dialog manual-view-dialog" aria-labelledby="manual-view-title">
+      <div class="manual-dialog-header"><div><p class="text-xs font-bold text-red-700 uppercase">Manual da mídia</p><h2 id="manual-view-title" class="text-lg font-black">Manual</h2><p data-view-team class="text-xs text-gray-500"></p></div><button type="button" data-close-view aria-label="Fechar">✕</button></div>
+      <div class="manual-view-body"><p data-view-status class="manual-view-status" role="status" aria-live="polite"></p><p data-view-summary class="manuals-summary" hidden></p><article data-view-content class="manual-content"></article></div>
+      <div class="manual-view-footer"><button type="button" data-close-view>Fechar</button></div>
+    </dialog>
     {% if can_manage %}
     <dialog id="manual-dialog" class="manual-dialog" aria-labelledby="manual-dialog-title">
       <div class="manual-dialog-header"><div><p class="text-xs font-bold text-red-700 uppercase">Manuais da mídia</p><h2 id="manual-dialog-title" class="text-lg font-black">Novo manual</h2><p class="text-xs text-gray-500">Crie, revise e publique orientações para a equipe.</p></div><button type="button" data-close-dialog aria-label="Fechar">✕</button></div>
       <div class="manual-dialog-body">
-        <div id="manual-choices" class="manual-choices"><button type="button" data-manual-choice><i class="fas fa-pen"></i><strong>Criar manualmente</strong><span>Escreva e formate seu conteúdo</span></button><button type="button" data-ai-choice><i class="fas fa-wand-magic-sparkles"></i><strong>Gerar com IA</strong><span>Use o áudio de um treinamento</span></button></div>
-        <form id="manual-audio-form" hidden>{% csrf_token %}<label for="manual-audio">Áudio do treinamento</label><input id="manual-audio" name="audio" type="file" accept=".mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm" required><p class="text-xs text-gray-500 mt-2">Até 24 MB e 2 horas. O conteúdo gerado será salvo como rascunho para revisão.</p><p data-audio-status role="status" class="text-sm mt-3"></p><div class="manual-actions"><button type="button" data-back-choice>Voltar</button><button class="manual-primary" type="submit">Gerar manual</button></div></form>
+        <form id="manual-audio-form" hidden>{% csrf_token %}<label for="manual-audio">Áudio do treinamento</label><input id="manual-audio" name="audio" type="file" accept=".mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm" required><p class="text-xs text-gray-500 mt-2">Até {{ manual_audio_max_mb }} MB e 2 horas. O conteúdo gerado será salvo como rascunho para revisão.</p><p data-audio-status role="status" class="text-sm mt-3"></p><div class="manual-actions"><button type="button" data-back-choice>Voltar</button><button class="manual-primary" type="submit">Gerar manual</button></div></form>
         <form id="manual-form" method="post" hidden>{% csrf_token %}
           {% for field in form %}{% if field.name != 'content' %}{% if field.is_hidden %}{{ field }}{% else %}<div class="mb-4"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endif %}{% endif %}{% endfor %}
-          <label for="manual-rich">Conteúdo</label>
-          <div class="manual-toolbar" role="toolbar" aria-label="Formatação">
-            <button type="button" data-cmd="formatBlock" data-value="h1">H1</button><button type="button" data-cmd="formatBlock" data-value="h2">H2</button><button type="button" data-cmd="formatBlock" data-value="h3">H3</button>
-            <button type="button" data-cmd="bold"><b>N</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>S</u></button><button type="button" data-cmd="strikeThrough"><s>T</s></button>
-            <button type="button" data-cmd="insertUnorderedList">• Lista</button><button type="button" data-cmd="insertOrderedList">1. Lista</button><button type="button" data-insert="checklist">☐ Checklist</button><button type="button" data-insert="link">Link</button><button type="button" data-insert="image">Imagem</button><button type="button" data-insert="table">Tabela</button><button type="button" data-cmd="formatBlock" data-value="blockquote">Aviso</button><button type="button" data-cmd="undo">Desfazer</button><button type="button" data-cmd="redo">Refazer</button><button type="button" data-preview>Pré-visualizar</button>
+          <div class="manual-editor-intro"><span id="manual-content-label">Conteúdo do manual</span><p id="manual-content-help">Escreva as orientações abaixo. Para formatar, selecione o texto e escolha uma opção.</p></div>
+          <p data-format-status class="manual-format-status" role="status" aria-live="polite"></p>
+          <div class="manual-toolbar" role="toolbar" aria-label="Ferramentas de edição do conteúdo">
+            <div class="manual-toolbar-tools" role="group" aria-label="Formatação do texto">
+            <label class="manuals-sr-only" for="manual-heading">Estilo do texto</label>
+            <select id="manual-heading" data-heading aria-label="Estilo do texto"><option value="">Estilo do texto</option><option value="p">Texto normal</option><option value="h1">Título principal</option><option value="h2">Título de seção</option><option value="h3">Subtítulo</option></select>
+            <span class="manual-tool-group" role="group" aria-label="Formato do texto">
+              <button type="button" data-cmd="bold" title="Negrito" aria-label="Negrito"><i class="fas fa-bold" aria-hidden="true"></i></button><button type="button" data-cmd="italic" title="Itálico" aria-label="Itálico"><i class="fas fa-italic" aria-hidden="true"></i></button><button type="button" data-cmd="underline" title="Sublinhado" aria-label="Sublinhado"><i class="fas fa-underline" aria-hidden="true"></i></button><button type="button" data-cmd="strikeThrough" title="Tachado" aria-label="Tachado"><i class="fas fa-strikethrough" aria-hidden="true"></i></button>
+            </span>
+            <span class="manual-tool-group" role="group" aria-label="Listas">
+              <button type="button" data-cmd="insertUnorderedList" title="Lista com marcadores" aria-label="Lista com marcadores"><i class="fas fa-list-ul" aria-hidden="true"></i></button><button type="button" data-cmd="insertOrderedList" title="Lista numerada" aria-label="Lista numerada"><i class="fas fa-list-ol" aria-hidden="true"></i></button><button type="button" data-insert="checklist" title="Inserir item de checklist" aria-label="Inserir item de checklist"><i class="far fa-square-check" aria-hidden="true"></i></button>
+            </span>
+            <span class="manual-tool-group" role="group" aria-label="Inserir conteúdo">
+              <button type="button" data-insert="link" title="Inserir link" aria-label="Inserir link"><i class="fas fa-link" aria-hidden="true"></i></button><button type="button" data-insert="image" title="Inserir imagem por endereço" aria-label="Inserir imagem por endereço"><i class="far fa-image" aria-hidden="true"></i></button><button type="button" data-insert="table" title="Inserir tabela" aria-label="Inserir tabela"><i class="fas fa-table" aria-hidden="true"></i></button><button type="button" data-cmd="formatBlock" data-value="blockquote" title="Destacar aviso" aria-label="Destacar aviso"><i class="fas fa-circle-exclamation" aria-hidden="true"></i></button>
+            </span>
+            <span class="manual-tool-group" role="group" aria-label="Histórico de alterações"><button type="button" data-cmd="undo" title="Desfazer" aria-label="Desfazer"><i class="fas fa-rotate-left" aria-hidden="true"></i></button><button type="button" data-cmd="redo" title="Refazer" aria-label="Refazer"><i class="fas fa-rotate-right" aria-hidden="true"></i></button></span>
+            </div>
+            <button type="button" class="manual-ai-format" data-ai-format><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i> Formatar com IA</button>
           </div>
-          {{ form.content }}<div id="manual-rich" class="manual-rich manual-content" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Conteúdo do manual"></div><div id="manual-preview" class="manual-content" hidden></div>
+          {{ form.content }}<div id="manual-rich" class="manual-rich manual-content" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="manual-content-label" aria-describedby="manual-content-help" data-placeholder="Comece escrevendo aqui as orientações do manual..."></div>
           <p data-form-error role="alert" class="text-sm text-red-700 mt-2"></p>
           <div class="manual-actions"><button type="button" data-close-dialog>Cancelar</button><button type="submit" name="publication" value="draft">Salvar rascunho</button><button class="manual-primary" type="submit" name="publication" value="publish">Publicar</button></div>
         </form>
       </div>
     </dialog>
+    <dialog id="manual-progress-dialog" class="manual-progress-dialog" aria-labelledby="manual-progress-title" aria-describedby="manual-progress-description">
+      <div class="manual-progress-icon" aria-hidden="true"><span class="manual-progress-spinner"></span></div>
+      <h2 id="manual-progress-title" data-progress-title>Enviando áudio…</h2>
+      <p id="manual-progress-description" data-progress-description role="status" aria-live="polite">Aguarde enquanto preparamos seu manual.</p>
+      <ol class="manual-progress-steps" aria-label="Etapas da geração">
+        <li data-progress-step="upload"><span>1</span> Enviar áudio</li>
+        <li data-progress-step="transcribing"><span>2</span> Transcrever treinamento</li>
+        <li data-progress-step="generating"><span>3</span> Organizar conteúdo</li>
+        <li data-progress-step="completed"><span>4</span> Pronto para revisão</li>
+      </ol>
+      <div class="manual-progress-actions" data-progress-actions hidden>
+        <button type="button" data-progress-dismiss>Fechar</button>
+        <button type="button" class="manual-progress-retry" data-progress-retry>Tentar novamente</button>
+      </div>
+    </dialog>
+    <dialog id="manual-delete-dialog" class="manual-discard-dialog" aria-labelledby="manual-delete-title" aria-describedby="manual-delete-description">
+      <div class="manual-discard-icon"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></div>
+      <h2 id="manual-delete-title">Excluir manual?</h2>
+      <p id="manual-delete-description">O manual <strong data-delete-title></strong> deixará de aparecer na listagem e seus links deixarão de funcionar.</p>
+      <form method="post" data-delete-form class="manual-discard-actions">{% csrf_token %}
+        <button type="button" data-cancel-delete autofocus>Cancelar</button>
+        <button type="submit" class="manual-discard-confirm">Excluir manual</button>
+      </form>
+    </dialog>
+    <dialog id="manual-discard-dialog" class="manual-discard-dialog" aria-labelledby="manual-discard-title" aria-describedby="manual-discard-description">
+      <div class="manual-discard-icon"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></div>
+      <h2 id="manual-discard-title">Descartar alterações?</h2>
+      <p id="manual-discard-description">As alterações que ainda não foram salvas serão perdidas.</p>
+      <form method="dialog" class="manual-discard-actions">
+        <button type="submit" value="cancel" autofocus>Continuar editando</button>
+        <button type="submit" value="discard" class="manual-discard-confirm">Descartar alterações</button>
+      </form>
+    </dialog>
     {% endif %}
 </div>
-<script src="{% static 'manuals_page.js' %}" defer></script>
+<script src="{% static 'manuals_page.js' %}?v=20261110-17" defer></script>
 {% endblock %}

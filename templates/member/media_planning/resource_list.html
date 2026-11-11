@@ -50,7 +50,7 @@
 {% block content %}
 <div class="org-media resources-page min-h-screen pb-8 bg-gray-50">
     {% include 'parciais/messages.html' %}
-    {% if is_media_leader %}{% url 'media_organization' as org_url %}{% else %}{% url 'member_dashboard' as org_url %}{% endif %}
+    {% url 'member_dashboard' as org_url %}
     {% include 'parciais/org_media_header.html' with back_url=org_url title='Recursos' subtitle='Acessos, credenciais e ferramentas' action_partial='member/media_planning/partials/resources_header_action.html' %}
     <main class="px-4 sm:px-6 pt-5 pb-4 w-full">
         <form method="get" class="mb-5" role="search">

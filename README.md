@@ -374,17 +374,21 @@ transcrição fica centralizada na `env`.
 ### Manuais gerados a partir de áudio
 
 Administradores e líderes autorizados podem gerar um rascunho na tela de
-manuais. O processamento requer Redis, um worker Celery na fila `celery`,
-Celery Beat para limpeza periódica e `ffprobe` disponível no worker (configurável
-por `FFPROBE_BINARY`), além de `OPENAI_API_KEY`. Execute as migrações e o
+manuais. O processamento ocorre em segundo plano no próprio processo web, sem
+worker ou Redis para manuais. É necessário ter `ffmpeg` e `ffprobe` disponíveis
+no container web (configuráveis por `FFMPEG_BINARY` e `FFPROBE_BINARY`), além
+de `OPENAI_API_KEY`. Cada processo web executa um manual por vez. Execute as migrações e o
 `collectstatic` ao atualizar a instalação. São aceitos arquivos MP3, MP4,
-MPEG, MPGA, M4A, WAV e WebM de até 24 MB e duas horas.
+MPEG, MPGA, M4A, WAV e WebM de até 128 MB (configurável por
+`MANUAL_AUDIO_MAX_UPLOAD_MB`) e duas horas. Arquivos acima de 24 MB são
+convertidos e divididos em blocos no container web antes da transcrição.
 
 O áudio fica temporariamente no banco de dados para permitir novas tentativas
 sem upload; a transcrição é mantida apenas durante o processamento ou após
-falha. Ambos são removidos após a geração bem-sucedida. A limpeza periódica
-exclui tarefas sem atualização por 24 horas, inclusive dados de tentativas
-com erro. O conteúdo gerado é salvo como rascunho e deve ser revisado antes da
+falha. Ambos são removidos após a geração bem-sucedida. Ao acessar a lista de manuais, são excluídas tarefas sem atualização por
+24 horas, inclusive dados de tentativas com erro. Se o processo web reiniciar
+durante uma geração, ela pode ser retomada pela tela após 30 minutos; a
+transcrição já concluída em blocos é reaproveitada. O conteúdo gerado é salvo como rascunho e deve ser revisado antes da
 publicação. Faça backup e defina a retenção do banco conforme a política da
 instalação.
 

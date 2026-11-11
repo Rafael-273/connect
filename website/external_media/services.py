@@ -174,7 +174,7 @@ class AudioExtractor:
     def __init__(self, runner=None):
         self.runner = runner or FFmpegRunner()
 
-    def extract(self, video_path: Path, workdir: Path) -> list[AudioChunk]:
+    def extract(self, video_path: Path, workdir: Path, *, chunk_seconds: int | None = None) -> list[AudioChunk]:
         output = self.runner.run([
             settings.FFPROBE_BINARY, '-v', 'error', '-show_entries',
             'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', FFmpegRunner.input_arg(video_path),
@@ -184,7 +184,7 @@ class AudioExtractor:
         except ValueError as exc:
             raise ExternalMediaError('Não foi possível identificar a duração do vídeo.') from exc
 
-        chunk_seconds = settings.EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS
+        chunk_seconds = chunk_seconds or settings.EXTERNAL_MEDIA_AUDIO_CHUNK_SECONDS
         chunks = []
         for index in range(max(1, math.ceil(duration / chunk_seconds))):
             offset = index * chunk_seconds

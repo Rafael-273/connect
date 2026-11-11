@@ -29,27 +29,9 @@ from ..mixins import MemberRequiredMixin
 
 
 class MediaOrganizationDashboardView(MediaMemberRequiredMixin, View):
-    template_name = 'member/media_planning/organization_dashboard.html'
-
     def get(self, request):
-        sub_teams = media_teams().filter(is_active=True).select_related('leader')
-        leadership_open = MediaLeadershipItem.objects.filter(
-            status__in=['open', 'in_progress']
-        ).select_related('responsible')[:8]
-        resources = MediaResource.objects.filter(is_active=True).select_related('responsible')[:8]
-        ctx = {
-            **self._nav_context(),
-            'sub_teams': sub_teams,
-            'ministry': self.media_membership.ministry,
-            'leadership_open': leadership_open,
-            'resources': resources,
-            'sub_team_count': sub_teams.count(),
-            'leadership_count': MediaLeadershipItem.objects.filter(
-                status__in=['open', 'in_progress']
-            ).count(),
-            'resource_count': MediaResource.objects.filter(is_active=True).count(),
-        }
-        return render(request, self.template_name, ctx)
+        # Preserve old bookmarks while keeping the home page as the entry point.
+        return redirect('member_dashboard')
 
 
 # ─── Subequipes ───────────────────────────────────────────────────────────────
