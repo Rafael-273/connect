@@ -3,6 +3,15 @@
     'use strict';
     const at = (segments, time) => (segments || []).find(item => item.start_ms <= time && time < item.end_ms);
     const sourceTime = (segment, time) => (segment.source_in_ms + (time - segment.start_ms) * segment.rate) / 1000;
+    function formatTime(ms) {
+        const value = Math.max(0, Math.round(Number(ms) || 0));
+        return `${String(Math.floor(value / 60000)).padStart(2, '0')}:${String(Math.floor(value / 1000) % 60).padStart(2, '0')}.${String(value % 1000).padStart(3, '0')}`;
+    }
+    function parseTime(value) {
+        const match = String(value).trim().match(/^(\d+):([0-5]\d)(?:[.,](\d{1,3}))?$/);
+        if (!match) throw new Error('Use minutos:segundos, por exemplo 02:53.570.');
+        return Number(match[1]) * 60000 + Number(match[2]) * 1000 + Number((match[3] || '').padEnd(3, '0'));
+    }
     function create(options) {
         const {panel, stage, getTimeline, getTime, save, seek, editor: showEditor = true} = options;
         let mainVideo;
@@ -81,9 +90,15 @@
             const choice = element('select', '', cameraField); choice.setAttribute('aria-label', 'Câmera');
             available.forEach(camera => { const option = element('option', camera.label, choice); option.value = camera.id; });
             if (segment) choice.value = segment.camera_source_id;
-            const input = (label, value, step) => { const wrapper = element('label', label, fields), node = element('input', '', wrapper); wrapper.className = 'multicam-field'; node.type = 'number'; node.value = String(value); node.step = step; node.required = true; return node; };
-            const start = input('Início (s)', ((segment?.start_ms ?? getTime()) / 1000).toFixed(3), '.001');
-            const end = input('Fim (s)', ((segment?.end_ms ?? Math.min(getTime() + 6000, timeline.sequence.duration_ms)) / 1000).toFixed(3), '.001');
+            const timeInput = (label, value) => {
+                const wrapper = element('label', label, fields); wrapper.className = 'multicam-field';
+                const node = element('input', '', wrapper); node.type = 'text'; node.value = formatTime(value); node.placeholder = 'mm:ss.mmm'; node.required = true;
+                const mark = element('button', 'Marcar na agulha', wrapper); mark.type = 'button'; mark.className = 'multicam-button';
+                mark.onclick = () => { node.value = formatTime(getTime()); };
+                return node;
+            };
+            const start = timeInput('Início (min:seg)', segment?.start_ms ?? getTime());
+            const end = timeInput('Fim (min:seg)', segment?.end_ms ?? Math.min(getTime() + 6000, timeline.sequence.duration_ms));
             const alignmentFor = () => (timeline.cameras || []).find(camera => camera.id === choice.value)?.alignment;
             const advanced = element('details', '', form); advanced.className = 'multicam-advanced';
             const advancedSummary = element('summary', 'Ajustar sincronização manualmente', advanced);
@@ -105,7 +120,7 @@
             const actions = element('div', '', form); actions.className = 'multicam-actions';
             const button = element('button', segment ? 'Salvar alterações' : 'Adicionar alternância', actions);
             button.type = 'submit'; button.className = 'multicam-button multicam-button--primary';
-            form.onsubmit = event => { event.preventDefault(); const payload = {camera_source_id: choice.value, start_ms: Math.round(Number(start.value) * 1000), end_ms: Math.round(Number(end.value) * 1000)}; if (segment) payload.id = segment.id; if (manual) { payload.offset_ms = Number(offset.value); payload.rate = 1 + Number(drift.value) / 1000000; } submit(payload, button); };
+            form.onsubmit = event => { event.preventDefault(); let startMs, endMs; try { startMs = parseTime(start.value); endMs = parseTime(end.value); if (endMs <= startMs || endMs > timeline.sequence.duration_ms) throw new Error('O fim deve ser posterior ao início e estar dentro do vídeo.'); } catch (error) { status.textContent = error.message; return; } const payload = {camera_source_id: choice.value, start_ms: startMs, end_ms: endMs}; if (segment) payload.id = segment.id; if (manual) { payload.offset_ms = Number(offset.value); payload.rate = 1 + Number(drift.value) / 1000000; } submit(payload, button); };
             if (segment) {
                 const jump = element('button', 'Ver na timeline', actions); jump.type = 'button'; jump.className = 'multicam-button'; jump.onclick = () => seek(segment.start_ms);
                 const remove = element('button', 'Remover alternância', actions); remove.type = 'button'; remove.className = 'multicam-button multicam-button--danger'; remove.onclick = () => submit({id: segment.id, delete: true}, remove);
@@ -191,7 +206,7 @@
         }
         return {render, sync, focusSelection, setMainVideo, addAtPlayhead};
     }
-    const api = {at, sourceTime, create};
+    const api = {at, sourceTime, create, formatTime, parseTime};
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.ConnectMulticam = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -26,3 +26,12 @@ test('secondary camera follows the replacement principal decoder and ignores pau
  first.dispatchEvent(new Event('pause'));assert.equal(image.paused,false);
  next.paused=true;next.dispatchEvent(new Event('pause'));assert.equal(image.paused,true);
 });
+
+test('camera time fields preserve milliseconds and reject invalid clocks',()=>{
+ const {formatTime,parseTime}=require('../external_media_multicam.js');
+ for(const time of [0,173570,1387000,3600123])assert.equal(parseTime(formatTime(time)),time);
+ assert.equal(formatTime(173570),'02:53.570');
+ assert.equal(parseTime('23:07'),1387000);
+ assert.equal(parseTime('02:53,57'),173570);
+ for(const value of ['173.57','02:60','-01:20','abc'])assert.throws(()=>parseTime(value));
+});
