@@ -20,6 +20,10 @@
         const filter = document.createElementNS(filterSvg.namespaceURI, 'filter'); filter.id = filterId;
         const matrix = document.createElementNS(filterSvg.namespaceURI, 'feColorMatrix'); matrix.setAttribute('type', 'matrix');
         filter.append(matrix); filterSvg.append(filter); stage.append(filterSvg);
+        let editorOpen = !options.newOnly;
+        panel.addEventListener('toggle', () => {
+            if (options.newOnly && !panel.open) { editorOpen = false; panel.hidden = true; }
+        });
         let signature = '', currentId = null, hasFrame = false, correctingSeek = false;
         const element = (tag, text, parent) => { const node = document.createElement(tag); if (text) node.textContent = text; if (parent) parent.append(node); return node; };
         const visualAdjustment = (timeline, segment) => {
@@ -108,7 +112,7 @@
             }
         }
         function render() {
-            const timeline = getTimeline(); panel.hidden = !showEditor || !(timeline.cameras || []).length;
+            const timeline = getTimeline(); panel.hidden = !showEditor || !editorOpen || !(timeline.cameras || []).length;
             if (!showEditor) return;
             const next = JSON.stringify([timeline.camera_segments, timeline.cameras, timeline.edit_decision_set]);
             if (next === signature) return;
@@ -173,7 +177,7 @@
         render();
         function focusSelection(selectionId) {
             render();
-            panel.open = true;
+            editorOpen = true; panel.hidden = false; panel.open = true;
             const form = body.querySelector(`[data-camera-selection-id="${CSS.escape(String(selectionId))}"]`);
             if (form) {
                 form.scrollIntoView({block: 'center', behavior: 'smooth'});
@@ -181,7 +185,7 @@
             } else panel.scrollIntoView({block: 'start', behavior: 'smooth'});
         }
         function addAtPlayhead() {
-            signature = ''; render(); panel.open = true;
+            editorOpen = true; signature = ''; render(); panel.open = true;
             const details = body.querySelector('.multicam-new');
             if (details) { details.open = true; details.scrollIntoView({block: 'center', behavior: 'smooth'}); details.querySelector('select')?.focus({preventScroll: true}); }
         }
