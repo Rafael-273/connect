@@ -12,6 +12,12 @@
         if (!match) throw new Error('Use minutos:segundos, por exemplo 02:53.570.');
         return Number(match[1]) * 60000 + Number(match[2]) * 1000 + Number((match[3] || '').padEnd(3, '0'));
     }
+    function needsManualAlignment(timeline, cameraId, endMs) {
+        const alignment = (timeline.cameras || []).find(camera => String(camera.id) === String(cameraId))?.alignment || {};
+        const clip = (timeline.clips || []).find(item => item.timeline_in_ms < endMs && endMs <= item.timeline_out_ms);
+        const sourceEnd = clip ? Number(clip.source_in_ms) + endMs - Number(clip.timeline_in_ms) : endMs;
+        return alignment.status !== 'ALIGNED' || sourceEnd > Number(alignment.validated_until_primary_ms || 0);
+    }
     function create(options) {
         const {panel, stage, getTimeline, getTime, save, seek, editor: showEditor = true} = options;
         let mainVideo;
@@ -106,6 +112,9 @@
             const advancedInput = (label, value, step) => { const wrapper = element('label', label, advancedFields), node = element('input', '', wrapper); wrapper.className = 'multicam-field'; node.type = 'number'; node.value = String(value); node.step = step; node.required = true; return node; };
             const offset = advancedInput('Deslocamento (ms)', alignmentFor()?.offset_ms ?? 0, '1');
             const drift = advancedInput('Drift (ppm)', Math.round((alignmentFor()?.rate ?? 1) * 1000000 - 1000000), '1'); drift.min = '-1000'; drift.max = '1000';
+            const confirmationLabel = element('label', '', form); confirmationLabel.className = 'multicam-alignment';
+            const confirmation = element('input', '', confirmationLabel); confirmation.type = 'checkbox';
+            confirmationLabel.append(document.createTextNode(' Confirmo usar o deslocamento e o drift acima neste take após revisar a sincronização.'));
             let manual = Boolean(segment && (timeline.decisions || []).find(item => item.id === segment.id)?.alignment?.status === 'MANUAL');
             const hint = element('small', '', form); hint.className = 'multicam-alignment';
             const describe = () => { const alignment = alignmentFor(), operation = (timeline.decisions || []).find(item => item.id === segment?.id); if (operation?.alignment?.status === 'MANUAL' && operation.camera_source_id === choice.value) { hint.textContent = 'Alinhamento manual aplicado.'; return; } hint.textContent = alignment?.status === 'ALIGNED' ? `Confiança acústica: ${Math.round(alignment.confidence * 100)}% · validada até ${(alignment.validated_until_primary_ms / 1000).toFixed(1)} s da gravação principal` : 'Sincronização requer ajuste manual.'; };
@@ -116,11 +125,11 @@
                 if (operation?.alignment) { offset.value = operation.alignment.offset_ms; drift.value = Math.round((operation.alignment.rate - 1) * 1000000); }
             }
             offset.oninput = drift.oninput = () => { manual = true; };
-            choice.onchange = () => { manual = false; offset.value = alignmentFor()?.offset_ms ?? 0; drift.value = Math.round(((alignmentFor()?.rate ?? 1) - 1) * 1000000); describe(); };
+            choice.onchange = () => { manual = false; confirmation.checked = false; offset.value = alignmentFor()?.offset_ms ?? 0; drift.value = Math.round(((alignmentFor()?.rate ?? 1) - 1) * 1000000); describe(); };
             const actions = element('div', '', form); actions.className = 'multicam-actions';
             const button = element('button', segment ? 'Salvar alterações' : 'Adicionar alternância', actions);
             button.type = 'submit'; button.className = 'multicam-button multicam-button--primary';
-            form.onsubmit = event => { event.preventDefault(); let startMs, endMs; try { startMs = parseTime(start.value); endMs = parseTime(end.value); if (endMs <= startMs || endMs > timeline.sequence.duration_ms) throw new Error('O fim deve ser posterior ao início e estar dentro do vídeo.'); } catch (error) { status.textContent = error.message; return; } const payload = {camera_source_id: choice.value, start_ms: startMs, end_ms: endMs}; if (segment) payload.id = segment.id; if (manual) { payload.offset_ms = Number(offset.value); payload.rate = 1 + Number(drift.value) / 1000000; } submit(payload, button); };
+            form.onsubmit = event => { event.preventDefault(); let startMs, endMs; try { startMs = parseTime(start.value); endMs = parseTime(end.value); if (endMs <= startMs || endMs > timeline.sequence.duration_ms) throw new Error('O fim deve ser posterior ao início e estar dentro do vídeo.'); } catch (error) { status.textContent = error.message; return; } if (!manual && !confirmation.checked && needsManualAlignment(timeline, choice.value, endMs)) { advanced.open = true; status.textContent = 'Este trecho não tem sincronização automática validada. Revise o deslocamento e o drift e marque a confirmação para adicionar o take.'; confirmation.focus(); return; } const payload = {camera_source_id: choice.value, start_ms: startMs, end_ms: endMs}; if (segment) payload.id = segment.id; if (manual || confirmation.checked) { payload.offset_ms = Number(offset.value); payload.rate = 1 + Number(drift.value) / 1000000; } submit(payload, button); };
             if (segment) {
                 const jump = element('button', 'Ver na timeline', actions); jump.type = 'button'; jump.className = 'multicam-button'; jump.onclick = () => seek(segment.start_ms);
                 const remove = element('button', 'Remover alternância', actions); remove.type = 'button'; remove.className = 'multicam-button multicam-button--danger'; remove.onclick = () => submit({id: segment.id, delete: true}, remove);
@@ -206,7 +215,7 @@
         }
         return {render, sync, focusSelection, setMainVideo, addAtPlayhead};
     }
-    const api = {at, sourceTime, create, formatTime, parseTime};
+    const api = {at, sourceTime, create, formatTime, parseTime, needsManualAlignment};
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.ConnectMulticam = api;
 })(typeof window !== 'undefined' ? window : globalThis);

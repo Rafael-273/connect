@@ -35,3 +35,11 @@ test('camera time fields preserve milliseconds and reject invalid clocks',()=>{
  assert.equal(parseTime('02:53,57'),173570);
  for(const value of ['173.57','02:60','-01:20','abc'])assert.throws(()=>parseTime(value));
 });
+
+test('manual alignment confirmation uses source time after editorial cuts',()=>{
+ const {needsManualAlignment}=require('../external_media_multicam.js');
+ const timeline={cameras:[{id:'side',alignment:{status:'ALIGNED',validated_until_primary_ms:180000}}],clips:[{timeline_in_ms:0,timeline_out_ms:200000,source_in_ms:30000}]};
+ assert.equal(needsManualAlignment(timeline,'side',150000),false);
+ assert.equal(needsManualAlignment(timeline,'side',151000),true);
+ assert.equal(needsManualAlignment(timeline,'missing',1000),true);
+});
