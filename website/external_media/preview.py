@@ -20,7 +20,7 @@ from ..models.external_media import (
     ProxyProfile,
     ProjectBrollAsset,
     ProjectSourceProxy,
-    SubtitleCue,
+    SubtitleCue, SubtitleTrack,
     TimelineMutation,
     TimelineRevision,
 )
@@ -389,14 +389,17 @@ class ProjectProxyService:
                         output, overlay_output, overlays, proxy_width, proxy_height, workspace.path,
                     )
                     rendered_layers.append('OVERLAYS')
-                tracks = list(job.subtitle_tracks.all().order_by('language', 'pk'))
+                from .caption_visibility import visible_caption_tracks
+                tracks = visible_caption_tracks(job.subtitle_tracks.all().order_by('language', 'pk'), revision)
                 if tracks and project.template_version.subtitles_enabled:
                     from .services import RenderService
 
                     subtitle_output = workspace.file('output', 'timeline-review-subtitles.mp4')
                     RenderService(assembly.runner).render_tracks(
-                        output, tracks, subtitle_output, preset, job.subtitle_style, workspace.path,
-                        source_language=project.template_version.original_language,
+                        output, tracks, subtitle_output, preset,
+                        (job.translated_subtitle_style or job.subtitle_style)
+                        if len(tracks) == 1 and not tracks[0].is_source else job.subtitle_style,
+                        workspace.path, source_language=project.template_version.original_language,
                         translated_style=job.translated_subtitle_style or job.subtitle_style,
                     )
                     output = subtitle_output
@@ -608,6 +611,9 @@ class PreviewCapabilityRegistry:
     def resolve(cls, project):
         configured = project.template_version.preview_editable_capabilities or []
         declared = set(configured) & cls.ALL
+        if not project.template_version.subtitles_enabled:
+            declared.discard(cls.SUBTITLES)
+            configured = [item for item in configured if item != cls.SUBTITLES]
         plugin_codes = set(project.template_version.plugins.filter(is_enabled=True).values_list('code', flat=True))
         available = {cls.CUTS}
         if project.template_version.subtitles_enabled:
@@ -684,6 +690,9 @@ class PreviewCompositionService:
     @classmethod
     def hydrate_legacy_caption_clock(cls, project, timeline):
         """Expose legacy revision captions on their authoritative edited clock."""
+        if not project.template_version.subtitles_enabled:
+            timeline['captions'] = []
+            return timeline
         if timeline.get('caption_clock') == 'edited' or not project.render_job_id:
             return timeline
         captions = []
@@ -887,7 +896,7 @@ class PreviewCompositionService:
                     break
 
         captions = []
-        if project.render_job_id:
+        if project.render_job_id and project.template_version.subtitles_enabled:
             for cue in SubtitleCue.objects.filter(track__job_id=project.render_job_id).select_related('track').order_by(
                 'track__language', 'start_ms', 'pk',
             ):
@@ -1739,6 +1748,33 @@ class TimelineRevisionService:
 
     @classmethod
     @transaction.atomic
+    def update_caption_visibility(cls, project, member, track_id, visible):
+        locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
+        if not locked.template_version.subtitles_enabled or not isinstance(visible, bool):
+            raise ValueError('Visibilidade de legenda inválida.')
+        track = SubtitleTrack.objects.filter(pk=track_id, job_id=locked.render_job_id).first()
+        if not track:
+            raise ValueError('Faixa de legenda não encontrada.')
+        current = locked.current_timeline_revision or cls.ensure_initial(locked, member)
+        hidden = set((current.timeline or {}).get('hidden_caption_track_ids') or [])
+        previous = track.pk not in hidden
+        if visible == previous:
+            return current
+        if visible:
+            hidden.discard(track.pk)
+        else:
+            hidden.add(track.pk)
+        revision = cls._create(locked, current.source_manifest, current.edit_decision_set,
+                               'Visibilidade da legenda ajustada', member, current,
+                               hidden_caption_track_ids=sorted(hidden))
+        session = cls.session(locked, member, revision)
+        cls._record(session, current, revision, 'UPDATE_CAPTION_VISIBILITY',
+                    {'track_id': track.pk, 'visible': visible},
+                    {'track_id': track.pk, 'visible': previous}, member)
+        return revision
+
+    @classmethod
+    @transaction.atomic
     def update_music_volume(cls, project, member, volume):
         """Save the member's music gain in the same immutable revision."""
         locked = ExternalMediaProject.objects.select_for_update().get(pk=project.pk)
@@ -2078,7 +2114,7 @@ class TimelineRevisionService:
     def _create(
         cls, project, manifest, decisions, reason, member, parent=None,
         overlays=None, brolls=None, music_override_track_id=None, music_tracks=None, music_volume=None, audio_mix=None,
-        reuse_review_video=False,
+        reuse_review_video=False, hidden_caption_track_ids=None,
     ):
         number = (project.timeline_revisions.aggregate(value=Max('revision'))['value'] or 0) + 1
         # Overlay edits live in the revision itself. Preserve them when another
@@ -2132,6 +2168,10 @@ class TimelineRevisionService:
         # Keep the selected track through every unrelated mutation.  ``None``
         # means inherit the parent; callers changing music pass an explicit
         # id (or the empty-string sentinel when clearing it in the future).
+        if hidden_caption_track_ids is None and parent:
+            hidden_caption_track_ids = (parent.timeline or {}).get('hidden_caption_track_ids')
+        if hidden_caption_track_ids is not None:
+            timeline['hidden_caption_track_ids'] = list(hidden_caption_track_ids)
         if music_override_track_id is None and parent:
             music_override_track_id = (parent.timeline or {}).get('music_override_track_id')
         if music_override_track_id:

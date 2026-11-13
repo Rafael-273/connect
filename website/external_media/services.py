@@ -2862,9 +2862,14 @@ class ExternalMediaProjectPipeline:
             self._step(project, 'render', ProjectPipelineStep.Status.RUNNING)
             # Cues already use edited time. Validate against the approved clip
             # sequence before spending time assembling/mastering the final file.
+            from .caption_visibility import visible_caption_tracks
+            revision = project.approved_timeline_revision or project.current_timeline_revision
+            visible_tracks = visible_caption_tracks(ExternalMediaPipeline._ordered_output_tracks(project.render_job), revision)
+            if not project.template_version.subtitles_enabled:
+                visible_tracks = []
             protected_ranges = self._subtitle_protected_ranges(project)
             subtitle_report = self.quality.validate_subtitles(
-                ExternalMediaPipeline._ordered_output_tracks(project.render_job), protected_ranges,
+                visible_tracks, protected_ranges,
             )
             if not subtitle_report.ok:
                 logger.error(
@@ -2882,9 +2887,9 @@ class ExternalMediaProjectPipeline:
                     with timed_step('prepare_final_master', project=project.public_id):
                         self._prepare_final_master(project, workspace.path)
             self._update(project, ExternalMediaProject.Status.PROCESSING, 91, 'Finalizando seu vídeo')
-            if project.render_job.subtitle_tracks.exists():
+            if visible_tracks:
                 with timed_step('render_outputs', project=project.public_id):
-                    ExternalMediaPipeline().render_outputs(project.render_job_id)
+                    ExternalMediaPipeline().render_outputs(project.render_job_id, revision=revision)
             else:
                 with JobWorkspace(
                     project.public_id,
@@ -2893,6 +2898,7 @@ class ExternalMediaProjectPipeline:
                 ) as workspace:
                     source = self.storage.ffmpeg_input(project.render_job.original_video)
                     self.quality.validate_media(source, deep_audio=True).require_ok()
+                    ExternalMediaPipeline._remove_stale_video_assets(project.render_job, project.render_job.original_language)
                     self.storage.save_asset_from_field(
                         project.render_job, MediaAsset.Kind.VIDEO,
                         project.render_job.original_language,
@@ -4123,7 +4129,7 @@ class ExternalMediaPipeline:
         self.prepare_subtitle_tracks(job_id)
         self.render_outputs(job_id)
 
-    def render_outputs(self, job_id):
+    def render_outputs(self, job_id, revision=None):
         job = self._get_job(job_id)
         try:
             self._update(job, ExternalMediaJob.Status.RENDERING, 86, 'Finalizando seu vídeo')
@@ -4140,7 +4146,8 @@ class ExternalMediaPipeline:
                 source_report = self.quality.validate_media(video_path)
                 source_report.require_ok()
                 source_duration_ms = source_report.metrics['duration_ms']
-                tracks = self._ordered_output_tracks(job)
+                from .caption_visibility import visible_caption_tracks
+                tracks = visible_caption_tracks(self._ordered_output_tracks(job), revision)
                 if not tracks:
                     raise ExternalMediaError('Nenhuma legenda foi encontrada para renderização.')
                 for track in tracks:
@@ -4173,6 +4180,8 @@ class ExternalMediaPipeline:
                     video_output.unlink(missing_ok=True)
                     self._update(job, ExternalMediaJob.Status.RENDERING, 99, 'Vídeo bilingue concluído')
                 else:
+                    if revision and len(tracks) == 1:
+                        self._remove_stale_video_assets(job, tracks[0].language)
                     for index, track in enumerate(tracks):
                         video_output = workdir / f'video_{track.language}.mp4'
                         with timed_step('render_language_video', language=track.language):

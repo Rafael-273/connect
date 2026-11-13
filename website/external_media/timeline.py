@@ -954,10 +954,12 @@ class InternalTimelineBuilder:
         }
 
     def _captions(self, project, package_root):
-        if not project.render_job_id:
+        if not project.render_job_id or not project.template_version.subtitles_enabled:
             return [], []
         captions, assets = [], []
-        for track in project.render_job.subtitle_tracks.prefetch_related('cues').all():
+        from .caption_visibility import visible_caption_tracks
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        for track in visible_caption_tracks(project.render_job.subtitle_tracks.prefetch_related('cues').all(), revision):
             cues = []
             srt_lines = []
             for cue in track.cues.all():
@@ -990,20 +992,23 @@ class InternalTimelineBuilder:
         as native captions in Premiere.
         """
         job = getattr(project, 'render_job', None)
-        if not job or duration_ms <= 0:
+        if not job or not project.template_version.subtitles_enabled or duration_ms <= 0:
             return None, None
         tracks = list(
             job.subtitle_tracks.filter(language__in=job.output_languages)
             .prefetch_related('cues')
             .order_by('pk')
         )
+        from .caption_visibility import visible_caption_tracks
+        revision = project.approved_timeline_revision or project.current_timeline_revision
+        tracks = visible_caption_tracks(tracks, revision)
         if not tracks:
             return None, None
         source_tracks = [track for track in tracks if track.is_source]
         source_track = source_tracks[0] if source_tracks else tracks[0]
         translated_tracks = [track for track in tracks if track.pk != source_track.pk]
         source_language = job.original_language or source_track.language
-        source_style = job.subtitle_style
+        source_style = (job.translated_subtitle_style or job.subtitle_style) if len(tracks) == 1 and not tracks[0].is_source else job.subtitle_style
         translated_style = job.translated_subtitle_style or source_style
         if not source_style:
             return None, None

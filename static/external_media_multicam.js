@@ -118,7 +118,7 @@
                 const previous = selections.get(item.id);
                 selections.set(item.id, previous ? {...previous, start_ms: Math.min(previous.start_ms, item.start_ms), end_ms: Math.max(previous.end_ms, item.end_ms)} : item);
             });
-            selections.forEach(editor);
+            if (!options.newOnly) selections.forEach(editor);
             editor(null);
         }
         function sync() {
@@ -180,7 +180,12 @@
                 form.querySelector('input, select, button')?.focus({preventScroll: true});
             } else panel.scrollIntoView({block: 'start', behavior: 'smooth'});
         }
-        return {render, sync, focusSelection, setMainVideo};
+        function addAtPlayhead() {
+            signature = ''; render(); panel.open = true;
+            const details = body.querySelector('.multicam-new');
+            if (details) { details.open = true; details.scrollIntoView({block: 'center', behavior: 'smooth'}); details.querySelector('select')?.focus({preventScroll: true}); }
+        }
+        return {render, sync, focusSelection, setMainVideo, addAtPlayhead};
     }
     const api = {at, sourceTime, create};
     if (typeof module !== 'undefined' && module.exports) module.exports = api;

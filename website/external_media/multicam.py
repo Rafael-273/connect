@@ -22,10 +22,10 @@ from .ffmpeg_runner import FFmpegRunner
 
 
 class AudioSynchronizer:
-    VERSION = 1
+    VERSION = 2
     SAMPLE_RATE = 8000
     HOP = 80
-    ANALYSIS_SECONDS = 180
+    ANALYSIS_SECONDS = 7200
 
     @classmethod
     def features(cls, samples):
@@ -33,9 +33,12 @@ class AudioSynchronizer:
         if len(samples) < 320 or not np.isfinite(samples).all():
             return np.zeros((0, 6))
         frames = np.lib.stride_tricks.sliding_window_view(samples, 320)[::cls.HOP]
-        spectrum = abs(np.fft.rfft(frames * np.hanning(320), axis=1)) ** 2
         bands = [(4, 10), (10, 20), (20, 35), (35, 55), (55, 90), (90, 150)]
-        energy = np.stack([np.log1p(spectrum[:, a:b].mean(axis=1) * 100) for a, b in bands], axis=1)
+        # Bound FFT intermediates when analyzing a complete conversation.
+        energy = np.empty((len(frames), len(bands)))
+        for start in range(0, len(frames), 4096):
+            spectrum = abs(np.fft.rfft(frames[start:start + 4096] * np.hanning(320), axis=1)) ** 2
+            energy[start:start + 4096] = np.stack([np.log1p(spectrum[:, a:b].mean(axis=1) * 100) for a, b in bands], axis=1)
         # Per-band normalization tolerates gain, polarity and microphone EQ.
         scale = energy.std(axis=0)
         usable = scale > 1e-5
@@ -173,7 +176,9 @@ class MulticamService:
                    for key, value in (configuration.get('multicam_alignments') or {}).items()
                    if value.get('status') == 'ALIGNED']
         words = configuration.get('multicam_words') or []
-        candidates = cls.candidate_boundaries(words)[:120]
+        candidates = cls.candidate_boundaries(words)
+        if len(candidates) > 120:
+            candidates = [candidates[round(index * (len(candidates) - 1) / 119)] for index in range(120)]
         if not cameras or len(candidates) < 2 or configuration.get('multicam_semantic_enabled') is False:
             return None
         payload = {'cameras': cameras, 'pauses': candidates}
@@ -185,7 +190,8 @@ class MulticamService:
         instructions = (
             'Você é editor multicâmera. A principal é a referência. Selecione apenas pausas em que '
             'uma câmera extra melhora a narrativa: mudança de pensamento, ênfase ou novo argumento. '
-            'Não alterne em intervalos fixos, não preencha todas as pausas e prefira poucas mudanças. '
+            'Distribua as escolhas ao longo da conversa, preservando os pensamentos completos. '
+            'Não preencha todas as pausas nem se concentre somente no início do vídeo. '
             'Pode não escolher nenhuma. Cada escolha inicia uma passagem pela câmera extra; '
             'o sistema retorna à principal em outra pausa segura. Os nomes das câmeras não garantem '
             'a presença de um locutor: não invente informação visual. '
@@ -298,9 +304,16 @@ class MulticamService:
         review = (project.configuration or {}).get('multicam_editorial_review') or {}
         semantic = review.get('status') == 'REVIEWED' and (project.configuration or {}).get('multicam_semantic_enabled') is not False
         selections = {item['pause_id']: item for item in review.get('selections', [])}
+        duration = int((timeline.get('sequence') or {}).get('duration_ms') or max(
+            (clip.get('timeline_out_ms') or 0 for clip in timeline.get('clips') or []), default=0))
+        spacing = max(minimum, duration // maximum)
+        used_windows = set()
         for index, candidate in enumerate(candidates):
             start, selected = candidate['time_ms'], selections.get(candidate['id'])
             if (semantic and not selected) or (not semantic and not candidate['emphasis']) or start - last_end < minimum:
+                continue
+            window = start // spacing
+            if window in used_windows:
                 continue
             end = next((item['time_ms'] for item in candidates[index + 1:] if item['time_ms'] - start >= minimum), None)
             if end is None:
@@ -325,6 +338,7 @@ class MulticamService:
             if selected:
                 operation.update(origin='AI', confidence=selected['confidence'], reason=selected['reason'] or 'Transição narrativa')
             operations.append(operation)
+            used_windows.add(window)
             last_end = end
             if len(operations) >= maximum:
                 break

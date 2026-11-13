@@ -2751,6 +2751,19 @@ class ExternalMediaProjectPreviewSubtitleView(ExternalMediaRequiredMixin, Previe
         return preview_revision_response(project, self.member, revision)
 
 
+class ExternalMediaProjectPreviewCaptionVisibilityView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
+    def post(self, request, public_id):
+        project = get_object_or_404(ExternalMediaProject, public_id=public_id)
+        payload = json.loads(request.body or '{}')
+        try:
+            revision = TimelineRevisionService.update_caption_visibility(
+                project, self.member, payload.get('track_id'), payload.get('visible'),
+            )
+        except (TypeError, ValueError) as exc:
+            return JsonResponse({'error': str(exc)}, status=400)
+        return preview_revision_response(project, self.member, revision)
+
+
 class ExternalMediaProjectPreviewSubtitleCreateView(ExternalMediaRequiredMixin, PreviewMutationMixin, View):
     def post(self, request, public_id):
         project = get_object_or_404(ExternalMediaProject, public_id=public_id)

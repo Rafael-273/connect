@@ -89,6 +89,21 @@ class AudioSyncTests(SimpleTestCase):
 
 
 class CameraDecisionTests(SimpleTestCase):
+    def test_long_conversation_distributes_takes_beyond_initial_minutes(self):
+        manifest, clips = fixture()
+        duration = 23 * 60_000
+        for source in manifest['sources']:
+            source['duration_ms'] = duration + 2000
+        manifest['sources'][1]['metadata']['multicam_alignment']['validated_until_primary_ms'] = duration
+        clips[0].update(source_out_ms=duration, timeline_out_ms=duration)
+        words = [{'start_ms': time, 'end_ms': time + 1000, 'text': 'Pensamento.'}
+                 for time in range(0, duration, 10_000)]
+        project = SimpleNamespace(public_id='fa554b69-2fbc-413f-9860-223585b6fc9e', configuration={'multicam_words': words})
+        operations = MulticamService.propose(project, manifest, {'clips': clips, 'sequence': {'duration_ms': duration}})
+        self.assertGreater(len(operations), 2)
+        self.assertGreater(operations[-1]['source_in_ms'], 20 * 60_000)
+        self.assertTrue(all(right['source_in_ms'] >= left['source_out_ms'] for left, right in zip(operations, operations[1:])))
+
     def test_automatic_selection_limit_scales_with_duration(self):
         self.assertEqual(MulticamService.automatic_selection_limit({'sequence': {'duration_ms': 3 * 60_000}}), 2)
         self.assertEqual(MulticamService.automatic_selection_limit({'sequence': {'duration_ms': 25 * 60_000}}), 12)

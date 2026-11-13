@@ -14,6 +14,8 @@ const {chromium}=require(process.env.FILADELFIA_PLAYWRIGHT_MODULE||'playwright-c
  await page.locator('#timeline-zoom-range').evaluate(input=>{for(const value of [2,4,8,16]){input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}))}});await page.waitForTimeout(150);
  assert.equal(await page.evaluate(()=>savedNodes.every(node=>node.isConnected)&&savedHead===document.querySelector('.editor-playhead')),true);
  assert.equal(await page.evaluate(()=>trackMutations),0);
+ const captionRows=page.locator('.editor-track--caption');
+ for(let i=0;i<await captionRows.count();i++){const row=captionRows.nth(i),button=row.locator('.caption-visibility');assert.equal(await button.count(),1);const bounds=await button.boundingBox(),lane=await row.locator('.editor-track__lane').boundingBox();assert.ok(bounds.x+bounds.width<=lane.x,'caption visibility button must stay outside the timeline');}
  console.log('PASS selection + 16x zoom: zero clip/row replacements; playhead retained');
  await page.locator('#timeline-zoom-range').evaluate(input=>{input.value=1;input.dispatchEvent(new Event('input',{bubbles:true}))});await page.waitForTimeout(100);
  // A paused preview must consume the optimistic timing, before HTTP acknowledgement.
