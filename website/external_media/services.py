@@ -220,7 +220,7 @@ class TranscriptionService:
         return self.group_for_subtitles(detailed)
 
     def transcribe_detailed(
-        self, chunks: list[AudioChunk], language: str | None, *, preserve_disfluencies=False,
+        self, chunks: list[AudioChunk], language: str | None, *, preserve_disfluencies=False, allow_empty=False,
     ) -> list[TranscriptionSegment]:
         result = []
         prompt = self.DISFLUENCY_PROMPT if preserve_disfluencies else self.PROMPT
@@ -230,6 +230,7 @@ class TranscriptionService:
                 filename=chunk.path.name,
                 language=language,
                 prompt=prompt,
+                **({'allow_empty': True} if allow_empty else {}),
             )
             result.extend(
                 TranscriptionSegment(
@@ -4076,18 +4077,23 @@ class ExternalMediaPipeline:
             ) as workspace:
                 workdir = workspace.path
                 video_path = media_input.get_ffmpeg_input()
-                chunks = self.audio.extract(video_path, workdir)
                 self._update(job, ExternalMediaJob.Status.TRANSCRIBING, 30, 'Preparando as legendas')
                 project = getattr(job, 'project', None)
                 preserve_disfluencies = bool(project and any(
                     plugin.code == MediaTemplatePlugin.Code.FILLER_REMOVAL
                     for plugin in TemplateService.enabled_plugins(project)
                 ))
-                detailed = self.transcription.transcribe_detailed(
-                    chunks,
-                    self._transcription_language(job),
-                    preserve_disfluencies=preserve_disfluencies,
-                )
+                from .take_suggestions import cached_project_transcript
+                detailed = cached_project_transcript(
+                    project, self._transcription_language(job), source=video_path,
+                ) if project else None
+                if detailed is None:
+                    chunks = self.audio.extract(video_path, workdir)
+                    detailed = self.transcription.transcribe_detailed(
+                        chunks,
+                        self._transcription_language(job),
+                        preserve_disfluencies=preserve_disfluencies,
+                    )
                 # Off-context detection reasons about the raw, un-edited transcript
                 # (same timeline as the freshly assembled master) so its suggested
                 # cuts line up with `remove_segment` operations at final render.

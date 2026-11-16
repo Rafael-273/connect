@@ -50,6 +50,8 @@
             error.textContent = failure.message || 'Não foi possível registrar a avaliação.';
             error.hidden = false;
             buttons.forEach(button => { button.disabled = false; });
+        } finally {
+            window.demandsSubmitOverlay?.hide(form);
         }
     });
     dialog.addEventListener('click', event => {

@@ -3672,6 +3672,40 @@ class AdminExternalMediaTemplateTests(ExternalMediaFixtureMixin, TestCase):
         self.assertEqual(plugin.configuration['top_margin'], 0.05)
 
 
+    def test_template_accepts_existing_voice_activation_decimal(self):
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(duck_voice_activation_db='-48.0'),
+        )
+        self.assertEqual(response.status_code, 302)
+        self.version.refresh_from_db()
+        self.assertEqual(self.version.audio_mixing_config['voice_activation_db'], -48.0)
+
+    def test_template_validation_summary_shows_all_forms_and_scene_errors(self):
+        response = self.client.post(
+            reverse('admin_external_media_version_edit', args=[self.version.pk]),
+            self._version_edit_payload(name='', preset='999999', **{
+                'blocks-TOTAL_FORMS': '1', 'blocks-INITIAL_FORMS': '1',
+                'blocks-0-id': '999999', 'blocks-0-name': 'Cena inválida',
+                'blocks-0-key': 'cena', 'blocks-0-order': '1',
+            }),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Não foi possível salvar. Revise os itens abaixo:')
+        self.assertContains(response, 'Template — Nome')
+        self.assertContains(response, 'Configuração — Preset de renderização')
+        self.assertContains(response, 'Cena 1')
+        self.assertContains(response, 'href="#scene-1"')
+
+    def test_template_validation_summary_reports_missing_formset_management_data(self):
+        data = self._version_edit_payload()
+        del data['blocks-TOTAL_FORMS']
+        response = self.client.post(reverse('admin_external_media_version_edit', args=[self.version.pk]), data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Cenas:')
+        self.assertContains(response, 'blocks-TOTAL_FORMS')
+
+
 class ExternalMediaRetryTests(ExternalMediaFixtureMixin, TestCase):
     def setUp(self):
         super().setUp()

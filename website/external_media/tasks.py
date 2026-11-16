@@ -41,6 +41,57 @@ from .workspace import JobWorkspace, MediaWorkspaceGarbageCollector
 logger = logging.getLogger(__name__)
 
 
+@shared_task(bind=True, name='external_media.analyze_source_take', max_retries=2,
+             soft_time_limit=6600, time_limit=6900)
+def analyze_source_take(self, media_id):
+    from .take_suggestions import analyze_source
+    try:
+        analyze_source(media_id)
+    except Exception as exc:
+        if self.request.id:
+            raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        raise
+
+
+def enqueue_source_analysis(media_id):
+    """Optional dispatch failures must never invalidate an upload preview."""
+    from .render_workflow import enqueue_video_work
+    if not settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED:
+        ProjectBlockMedia.objects.filter(pk=media_id).update(take_analysis_status='unavailable')
+        return
+    try:
+        if settings.RENDER_WORKFLOW_ENABLED:
+            enqueue_video_work('take-analysis', media_id)
+        else:
+            analyze_source_take.delay(media_id)
+    except Exception:
+        ProjectBlockMedia.objects.filter(pk=media_id).update(take_analysis_status='error')
+        logger.exception('take_analysis_enqueue_failed media=%s', media_id)
+
+
+@shared_task(name='external_media.recover_source_analysis')
+def recover_source_analysis():
+    """Recover expired leases after a killed worker; never backfill historical uploads."""
+    from website.models import SourceTakeAnalysis
+    if not settings.EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED:
+        return
+    from datetime import timedelta
+    cutoff = timezone.now() - timedelta(hours=2)
+    # A worker may be killed while hashing, before it can associate a cache.
+    for item_id in ProjectBlockMedia.objects.filter(
+        project__status='DRAFT', preview_status='READY', take_analysis__isnull=True,
+        take_analysis_status__in=['pending', 'running'], update_at__lt=cutoff,
+    ).values_list('pk', flat=True)[:20]:
+        if ProjectBlockMedia.objects.filter(pk=item_id, update_at__lt=cutoff).update(update_at=timezone.now()):
+            enqueue_source_analysis(item_id)
+    for cache_id in SourceTakeAnalysis.objects.filter(status='running', lease_until__lt=timezone.now()).values_list('pk', flat=True)[:20]:
+        item = ProjectBlockMedia.objects.filter(take_analysis_id=cache_id, project__status='DRAFT').first()
+        if not item:
+            continue
+        if SourceTakeAnalysis.objects.filter(pk=cache_id, status='running', lease_until__lt=timezone.now()).update(status='pending', lease=None, lease_until=None):
+            enqueue_source_analysis(item.pk)
+
+
 @shared_task(name='external_media.create_preview_artifact', autoretry_for=())
 def create_preview_artifact(artifact_id, lease):
     from .preview_artifacts import PreviewArtifactService

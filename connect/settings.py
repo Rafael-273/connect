@@ -211,6 +211,7 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 # Keep it off the main pipeline queue so a user can start processing while its
 # optional browser preview is still being generated.
 CELERY_TASK_ROUTES = {
+    'external_media.analyze_source_take': {'queue': 'media_analysis'},
     'external_media.create_project_preview': {'queue': 'media_previews'},
     'external_media.create_timeline_review_proxy': {'queue': 'media_previews'},
     'external_media.create_subtitle_review_preview': {'queue': 'media_previews'},
@@ -305,6 +306,10 @@ EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS = float(
     os.getenv('EXTERNAL_MEDIA_S3_PROBE_RETRY_DELAY_SECONDS', 2)
 )
 CELERY_BEAT_SCHEDULE = {
+    'recover-source-take-analysis': {
+        'task': 'external_media.recover_source_analysis',
+        'schedule': timedelta(minutes=5),
+    },
     'cleanup-external-media-workspaces': {
         'task': 'external_media.cleanup_workspaces',
         'schedule': timedelta(hours=1),
@@ -449,3 +454,7 @@ LOGGING = {
         'PIL': {'level': 'WARNING'},
     },
 }
+
+# Optional preparation; a dedicated media_analysis worker isolates Whisper from previews.
+EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED = os.getenv('EXTERNAL_MEDIA_TAKE_SUGGESTIONS_ENABLED', 'true').lower() == 'true'
+EXTERNAL_MEDIA_TAKE_PADDING_MS = max(0, min(1000, int(os.getenv('EXTERNAL_MEDIA_TAKE_PADDING_MS', '180'))))

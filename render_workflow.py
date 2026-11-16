@@ -18,6 +18,7 @@ from website.external_media.services import ExternalMediaProjectPipeline
 from website.external_media.tasks import (
     _project_execution_lock,
     analyze_video_mastering,
+    analyze_source_take,
     create_project_preview,
     create_project_broll_preview,
     create_subtitle_review_preview,
@@ -39,6 +40,14 @@ async def process_video_work(operation: str, primary_id: int, secondary_id: int 
     return await sync_to_async(_process_video_work, thread_sensitive=True)(
         operation, primary_id, secondary_id,
     )
+
+
+@app.task(plan='4c-8g', timeout_seconds=6900, retry=Retry(max_retries=2, wait_duration_ms=60000))
+async def process_take_analysis(operation: str, primary_id: int, secondary_id: int | None = None):
+    """Independent retry/timeout budget for optional source analysis."""
+    if operation != 'take-analysis':
+        raise ValueError('Unsupported source-analysis operation')
+    return await sync_to_async(_process_video_work, thread_sensitive=True)(operation, primary_id, secondary_id)
 
 
 def _process_video_work(operation: str, primary_id: int, secondary_id: int | None = None):
@@ -71,6 +80,7 @@ def _process_video_work(operation: str, primary_id: int, secondary_id: int | Non
     # state transitions and error handling in one place while Render provides
     # the queue, compute and scale-to-zero behaviour.
     tasks = {
+        'take-analysis': (analyze_source_take, [primary_id]),
         'project-preview': (create_project_preview, [primary_id]),
         'broll-preview': (create_project_broll_preview, [primary_id]),
         'review-preview': (create_subtitle_review_preview, [primary_id]),

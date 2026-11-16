@@ -884,6 +884,9 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         });
     }
     function applyDirectTransform(target,values){
+        if(target.kind==='video'&&inspectorSelection?.cameraSegmentId){
+            Object.assign(values,ConnectMulticam.movableTransform(values));
+        }
         if(target.kind==='broll')target.item.transform={...target.item.transform,...values};
         else {
             const wasUsingAutomaticMaster=framingPlayback(activeClip).automatic;

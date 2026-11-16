@@ -157,7 +157,7 @@ class AdminMediaTemplateVersionForm(forms.ModelForm):
     )
     duck_voice_activation_db = forms.DecimalField(
         label='Sensibilidade da voz (dB)', min_value=-96, max_value=0,
-        decimal_places=0, max_digits=3, required=False,
+        decimal_places=1, max_digits=4, required=False,
         help_text='Falas abaixo deste nível não reduzem a música.',
     )
     duck_attack_ms = forms.IntegerField(label='Attack (ms)', min_value=10, max_value=5000, required=False)

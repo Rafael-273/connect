@@ -43,3 +43,10 @@ test('manual alignment confirmation uses source time after editorial cuts',()=>{
  assert.equal(needsManualAlignment(timeline,'side',151000),true);
  assert.equal(needsManualAlignment(timeline,'missing',1000),true);
 });
+
+test('camera position adjustments obtain crop margin and retain an existing zoom',()=>{
+ const {movableTransform}=require('../external_media_multicam.js');
+ assert.deepEqual(movableTransform({scale:1,x:0,y:.4}),{scale:1.1,x:0,y:.4});
+ assert.deepEqual(movableTransform({scale:1,x:0,y:0}),{scale:1,x:0,y:0});
+ assert.deepEqual(movableTransform({scale:1.5,x:-.3,y:.2}),{scale:1.5,x:-.3,y:.2});
+});

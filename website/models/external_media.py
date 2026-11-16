@@ -1200,6 +1200,10 @@ class ProjectBlockMedia(BaseModel):
     preview_status = models.CharField(max_length=16, choices=PreviewStatus.choices, default=PreviewStatus.PENDING)
     preview_error = models.CharField(max_length=255, blank=True)
 
+    take_analysis = models.ForeignKey('SourceTakeAnalysis', null=True, blank=True, on_delete=models.SET_NULL)
+    take_analysis_status = models.CharField(max_length=16, default='pending')
+    trim_reviewed = models.BooleanField(default=False)
+
     @property
     def trim_ranges_json(self):
         """JSON pronto para ser usado com segurança nos atributos ``data-*``.

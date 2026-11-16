@@ -171,6 +171,7 @@ class AIService:
         language: str | None = 'pt',
         prompt: str | None = None,
         model: str | None = None,
+        allow_empty: bool = False,
     ) -> list[TranscriptionSegment]:
         """Transcribe audio with immutable segment timestamps (Whisper verbose JSON)."""
         audio_file, should_close = self._prepare_audio(
@@ -210,7 +211,7 @@ class AIService:
                 end_ms = max(start_ms + 1, round(float(value.get('end', 0)) * 1000))
                 if text:
                     segments.append(TranscriptionSegment(start_ms, end_ms, text, granularity))
-            if not segments:
+            if not segments and not allow_empty:
                 raise AIServiceError('A OpenAI retornou uma transcrição sem segmentos.')
             return segments
         except AIServiceError:

@@ -272,7 +272,11 @@ class AdminExternalMediaVersionFormView(LoginRequiredMixin, AdminRequiredMixin, 
             request.POST, request.FILES, instance=version, prefix='blocks',
         )
 
-        if template_form.is_valid() and form.is_valid() and block_formset.is_valid():
+        # Validate every component so the response can show all problems at once.
+        template_valid = template_form.is_valid()
+        version_valid = form.is_valid()
+        blocks_valid = block_formset.is_valid()
+        if template_valid and version_valid and blocks_valid:
             try:
                 with transaction.atomic():
                     saved_template = template_form.save()

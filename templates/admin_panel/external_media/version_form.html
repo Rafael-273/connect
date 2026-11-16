@@ -120,6 +120,25 @@
             <form method="post" enctype="multipart/form-data" class="space-y-6">
                 {% csrf_token %}
 
+                {% if template_form.errors or form.errors or block_formset.total_error_count %}
+                <div class="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800" role="alert" tabindex="-1" id="template-validation-errors">
+                    <h2 class="font-bold mb-2">Não foi possível salvar. Revise os itens abaixo:</h2>
+                    <ul class="list-disc pl-5 space-y-1">
+                        {% for field in template_form %}{% for error in field.errors %}<li>Template — {{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}
+                        {% for error in template_form.non_field_errors %}<li>Template: {{ error }}</li>{% endfor %}
+                        {% for field in form %}{% for error in field.errors %}<li>Configuração — {{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}
+                        {% for error in form.non_field_errors %}<li>Configuração: {{ error }}</li>{% endfor %}
+                        {% for error in block_formset.non_form_errors %}<li>Cenas: {{ error }}</li>{% endfor %}
+                        {% for block_form in block_formset %}
+                            {% if block_form.errors and not block_form.DELETE.value %}
+                                {% for field in block_form %}{% for error in field.errors %}<li><a class="underline font-semibold" href="#scene-{{ forloop.parentloop.parentloop.counter }}">Cena {{ forloop.parentloop.parentloop.counter }}{% if block_form.name.value %} — {{ block_form.name.value }}{% endif %}</a> — {{ field.label }}: {{ error }}</li>{% endfor %}{% endfor %}
+                                {% for error in block_form.non_field_errors %}<li><a class="underline font-semibold" href="#scene-{{ forloop.parentloop.counter }}">Cena {{ forloop.parentloop.counter }}</a>: {{ error }}</li>{% endfor %}
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+
                 <div class="admin-card p-6">
                     <div class="section-title"><ion-icon name="information-circle-outline"></ion-icon><span>Informações do template</span></div>
                     {% if template_form.non_field_errors %}
@@ -503,7 +522,7 @@
                     {% if block_formset.non_form_errors %}<div class="mb-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">{{ block_formset.non_form_errors }}</div>{% endif %}
                     <div id="blocks-container" class="space-y-4">
                         {% for block_form in block_formset %}
-                        <div class="block-card" draggable="true" data-block-form>
+                        <div class="block-card" id="scene-{{ forloop.counter }}" draggable="true" data-block-form>
                             {{ block_form.id }}
                             {{ block_form.key }}
                             {{ block_form.order }}

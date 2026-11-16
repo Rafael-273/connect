@@ -333,6 +333,9 @@ cp .env.example .env   # ajuste os valores
 docker compose up --build
 ```
 
+A sugestão de recortes depende também do serviço `media-analysis-worker`, que consome a fila `media_analysis`. Se iniciar os serviços individualmente, execute `docker compose up -d media-analysis-worker`. Apenas reiniciar os workers existentes não cria esse novo serviço.
+
+
 O `docker-compose.yml` executa automaticamente `collectstatic`, `migrate` e inicia o servidor de desenvolvimento.
 
 Por padrão, as etapas de construção usam a rede do host para evitar falhas de

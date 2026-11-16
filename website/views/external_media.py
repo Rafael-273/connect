@@ -2,6 +2,7 @@ import hashlib
 import hmac as _hmac
 import mimetypes
 import json
+import math
 import re
 import uuid
 from copy import deepcopy
@@ -28,6 +29,7 @@ from ..external_media.tasks import (
     analyze_video_mastering,
     create_project_broll_preview,
     create_project_preview,
+    enqueue_source_analysis,
     export_premiere_project,
     master_video,
     prepare_external_media,
@@ -860,6 +862,7 @@ class ExternalMediaProjectDeleteView(ExternalMediaRequiredMixin, View):
 class ExternalMediaProjectUploadView(ExternalMediaRequiredMixin, View):
     @staticmethod
     def _enqueue_preview(item):
+        transaction.on_commit(lambda: enqueue_source_analysis(item.pk))
         try:
             if settings.RENDER_WORKFLOW_ENABLED:
                 task_id = enqueue_video_work('project-preview', item.pk)
@@ -1794,6 +1797,7 @@ class ExternalMediaProjectMediaPreviewView(ExternalMediaRequiredMixin, View):
 class ExternalMediaProjectMediaStatusView(ExternalMediaRequiredMixin, View):
     def get(self, request, public_id, media_id):
         item = get_object_or_404(ProjectBlockMedia, pk=media_id, project__public_id=public_id)
+        from website.external_media.take_suggestions import analysis_payload
         return JsonResponse({
             'status': item.preview_status,
             'error': item.preview_error,
@@ -1803,6 +1807,7 @@ class ExternalMediaProjectMediaStatusView(ExternalMediaRequiredMixin, View):
             'trim_start_ms': item.trim_start_ms,
             'trim_end_ms': item.trim_end_ms,
             'trim_ranges': item.trim_ranges or [],
+            'take_analysis': analysis_payload(item),
         })
 
 
@@ -1833,18 +1838,26 @@ class ExternalMediaProjectMediaTrimView(ExternalMediaRequiredMixin, View):
             for value in values:
                 if not isinstance(value, dict):
                     return JsonResponse({'detail': 'Os trechos selecionados não são válidos.'}, status=400)
-                range_start, range_end = float(value.get('start_seconds', -1)), float(value.get('end_seconds', -1))
+                try:
+                    range_start, range_end = float(value.get('start_seconds', -1)), float(value.get('end_seconds', -1))
+                except (TypeError, ValueError, OverflowError):
+                    return JsonResponse({'detail': 'Os tempos dos trechos não são válidos.'}, status=400)
+                if not math.isfinite(range_start) or not math.isfinite(range_end) or (item.duration_ms and range_end * 1000 > item.duration_ms):
+                    return JsonResponse({'detail': 'Os tempos precisam respeitar a duração do vídeo.'}, status=400)
                 if range_start < 0 or range_end <= range_start or range_start < previous_end:
                     return JsonResponse({'detail': 'Os trechos precisam estar em ordem e não podem se sobrepor.'}, status=400)
                 ranges.append({'start_ms': ProjectBlockMediaForm.seconds_to_ms(range_start), 'end_ms': ProjectBlockMediaForm.seconds_to_ms(range_end)})
                 previous_end = range_end
+        if not math.isfinite(start) or (end is not None and not math.isfinite(end)) or (item.duration_ms and (start * 1000 >= item.duration_ms or end is not None and end * 1000 > item.duration_ms)):
+            return JsonResponse({'detail': 'Os tempos precisam respeitar a duração do vídeo.'}, status=400)
         if start < 0 or (end is not None and (end < 0 or end <= start)):
             return JsonResponse({'detail': 'O fim do corte precisa ser maior que o início.'}, status=400)
 
+        item.trim_reviewed = True
         item.trim_ranges = ranges
         item.trim_start_ms = ranges[0]['start_ms'] if ranges else (ProjectBlockMediaForm.seconds_to_ms(start) or 0)
         item.trim_end_ms = ranges[0]['end_ms'] if ranges else ProjectBlockMediaForm.seconds_to_ms(end)
-        item.save(update_fields=['trim_start_ms', 'trim_end_ms', 'trim_ranges', 'update_at'])
+        item.save(update_fields=['trim_start_ms', 'trim_end_ms', 'trim_ranges', 'trim_reviewed', 'update_at'])
         return JsonResponse({'ok': True})
 
 

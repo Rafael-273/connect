@@ -10,6 +10,12 @@
 {% include 'member/media_planning/partials/delivery_format_styles.html' %}
 <style id="demands-hub-styles">
     :root { --media-color: #C90905; --media-rgb: 201, 9, 5; }
+    .demands-submit-overlay { position: fixed; inset: 0; z-index: 10000; display: none; align-items: center; justify-content: center; padding: 1rem; background: rgba(15, 23, 42, .62); backdrop-filter: blur(4px); }
+    .demands-submit-overlay.is-active { display: flex; }
+    .demands-submit-card { display: flex; width: min(100%, 22rem); align-items: center; gap: 1rem; border: 1px solid rgba(255,255,255,.7); border-radius: 1.1rem; background: rgba(255,255,255,.97); padding: 1rem 1.15rem; color: #111827; box-shadow: 0 24px 70px rgba(15,23,42,.3); }
+    .demands-submit-spinner { width: 2.5rem; height: 2.5rem; flex: none; display: grid; place-items: center; border-radius: .8rem; background: #fff1f2; color: #c90905; }
+    .demands-submit-card strong { display: block; font-size: .92rem; font-weight: 900; }
+    .demands-submit-card small { display: block; margin-top: .15rem; color: #667085; font-size: .75rem; line-height: 1.35; }
 
     .action-btn {
         display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
@@ -1419,6 +1425,8 @@
                 if (!mountDetailModal(html)) {
                     closeDetailModal();
                     window.location.reload();
+                } else {
+                    window.demandsSubmitOverlay.hide(form);
                 }
             }).catch(function () { form.submit(); });
         });
@@ -1797,7 +1805,7 @@
                         cancelButton: 'rounded-xl px-5 py-2.5 font-bold',
                     },
                 }).then(function (result) {
-                    if (result.isConfirmed && form) form.submit();
+                    if (result.isConfirmed && form) form.requestSubmit();
                 });
             });
         });
@@ -1829,7 +1837,7 @@
                         cancelButton: 'rounded-xl px-5 py-2.5 font-bold',
                     },
                 }).then(function (result) {
-                    if (result.isConfirmed && form) form.submit();
+                    if (result.isConfirmed && form) form.requestSubmit();
                 });
             });
         });
@@ -2380,8 +2388,46 @@
 </script>
 
 <dialog id="delivery-review-dialog" class="delivery-review-dialog" aria-labelledby="delivery-review-title"></dialog>
-<script src="{% static 'delivery_review.js' %}?v=3" defer></script>
+<script src="{% static 'delivery_review.js' %}?v=4" defer></script>
 <script src="{% static 'media_deliveries.js' %}?v=7" data-hash-worker="{% static 'delivery_hash_worker.js' %}" defer></script>
 <script src="{% static 'media_event_dates.js' %}"></script>
 <script src="{% static 'media_team_assignments.js' %}"></script>
+<div class="demands-submit-overlay" data-demands-submit-overlay aria-hidden="true" role="status" aria-live="assertive">
+    <div class="demands-submit-card">
+        <span class="demands-submit-spinner" aria-hidden="true"><i class="fas fa-spinner fa-spin"></i></span>
+        <span><strong>Processando…</strong><small>Aguarde e não feche esta página.</small></span>
+    </div>
+</div>
+<script>
+(function () {
+    var overlay = document.querySelector('[data-demands-submit-overlay]');
+    function hide(form) {
+        if (form) delete form.dataset.submitPending;
+        overlay.classList.remove('is-active');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(overlay);
+        document.body.removeAttribute('aria-busy');
+    }
+    window.demandsSubmitOverlay = { hide: hide };
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement) || form.method.toLowerCase() !== 'post') return;
+        if (form.dataset.submitPending === 'true' || overlay.classList.contains('is-active')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return;
+        }
+        form.dataset.submitPending = 'true';
+        var dialog = form.closest('dialog[open]');
+        if (dialog) dialog.appendChild(overlay);
+        overlay.classList.add('is-active');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.setAttribute('aria-busy', 'true');
+    }, true);
+    window.addEventListener('pageshow', function () {
+        document.querySelectorAll('form[data-submit-pending="true"]').forEach(function (form) { delete form.dataset.submitPending; });
+        hide();
+    });
+})();
+</script>
 {% endblock %}

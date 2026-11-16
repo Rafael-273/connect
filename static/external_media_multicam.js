@@ -18,6 +18,11 @@
         const sourceEnd = clip ? Number(clip.source_in_ms) + endMs - Number(clip.timeline_in_ms) : endMs;
         return alignment.status !== 'ALIGNED' || sourceEnd > Number(alignment.validated_until_primary_ms || 0);
     }
+    function movableTransform(values) {
+        const result = {...values};
+        if (Number(result.scale ?? 1) <= 1 && (Math.abs(Number(result.x || 0)) > 0 || Math.abs(Number(result.y || 0)) > 0)) result.scale = 1.1;
+        return result;
+    }
     function create(options) {
         const {panel, stage, getTimeline, getTime, save, seek, editor: showEditor = true} = options;
         let mainVideo;
@@ -215,7 +220,7 @@
         }
         return {render, sync, focusSelection, setMainVideo, addAtPlayhead};
     }
-    const api = {at, sourceTime, create, formatTime, parseTime, needsManualAlignment};
+    const api = {at, sourceTime, create, formatTime, parseTime, needsManualAlignment, movableTransform};
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.ConnectMulticam = api;
 })(typeof window !== 'undefined' ? window : globalThis);

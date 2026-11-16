@@ -19,7 +19,7 @@ def enabled():
 
 
 VIDEO_OPERATIONS = {
-    'project-run', 'project-render', 'project-preview', 'broll-preview', 'review-preview',
+    'take-analysis', 'project-run', 'project-render', 'project-preview', 'broll-preview', 'review-preview',
     'review-render', 'legacy-prepare', 'legacy-render', 'mastering-analyze',
     'mastering-render', 'premiere-export',
 }
@@ -47,8 +47,12 @@ def enqueue_video_work(operation, primary_id, secondary_id=None):
         ) from exc
 
     try:
+        task_name = settings.RENDER_WORKFLOW_TASK
+        if operation == 'take-analysis':
+            prefix, separator, _ = task_name.rpartition('/')
+            task_name = (prefix + separator if separator else '') + 'process_take_analysis'
         task_run = Render(token=settings.RENDER_API_KEY).workflows.start_task(
-            settings.RENDER_WORKFLOW_TASK,
+            task_name,
             [operation, int(primary_id), int(secondary_id) if secondary_id is not None else None],
         )
     except Exception as exc:

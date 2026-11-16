@@ -36,3 +36,16 @@ class RenderWorkflowDispatchTests(SimpleTestCase):
         client.workflows.start_task.assert_called_once_with(
             'connect-video/process_video_work', ['project-render', 17, None],
         )
+
+    @override_settings(RENDER_WORKFLOW_ENABLED=True, USE_S3=True, RENDER_API_KEY='rnd_test',
+                       RENDER_WORKFLOW_TASK='connect-video/process_video_work')
+    def test_source_analysis_uses_its_own_render_retry_budget(self):
+        from website.external_media.render_workflow import enqueue_video_work
+        client = Mock()
+        fake_sdk = ModuleType('render_sdk')
+        fake_sdk.Render = Mock(return_value=client)
+        with patch.dict(sys.modules, {'render_sdk': fake_sdk}):
+            enqueue_video_work('take-analysis', 17)
+        client.workflows.start_task.assert_called_once_with(
+            'connect-video/process_take_analysis', ['take-analysis', 17, None],
+        )
