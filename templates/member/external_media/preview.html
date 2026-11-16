@@ -286,6 +286,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     <div class="preview-layout">
         <section class="media-card preview-player-card overflow-hidden">
             <svg class="absolute w-0 h-0" aria-hidden="true"><filter id="preview-temperature-filter"><feColorMatrix id="preview-temperature-matrix" type="matrix" values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 1 0"></feColorMatrix></filter></svg><div class="preview-stage" style="--preview-width:{{ project.render_job.preset.width|default:project.template_version.preset.width|default:1920 }};--preview-height:{{ project.render_job.preset.height|default:project.template_version.preset.height|default:1080 }}"><video id="preview-video" playsinline preload="metadata"></video><div class="preview-broll-layer" id="preview-broll-layer"></div><div class="preview-overlay-layer" id="preview-overlay-layer"></div><div class="preview-caption" id="preview-caption-source"></div><div class="preview-caption" id="preview-caption-translated"></div><div class="preview-transform-box" id="preview-transform-box" aria-label="Controle de posição e tamanho"><span class="preview-transform-box__hint">Arraste para mover · cantos para redimensionar</span><button type="button" class="preview-transform-box__move" aria-label="Mover item"></button><i class="preview-transform-box__handle preview-transform-box__handle--nw" data-transform-handle></i><i class="preview-transform-box__handle preview-transform-box__handle--ne" data-transform-handle></i><i class="preview-transform-box__handle preview-transform-box__handle--sw" data-transform-handle></i><i class="preview-transform-box__handle preview-transform-box__handle--se" data-transform-handle></i></div></div>
+            <div id="preview-load-error" class="hidden px-4 py-3 text-sm text-red-200" role="status"><span id="preview-load-error-message"></span> <button type="button" id="preview-load-retry" class="underline font-bold">Tentar novamente</button></div>
             <div class="p-4 border-t flex flex-wrap items-center justify-between gap-3">
                 <div><strong id="preview-block">Preparando reprodução</strong><p class="text-xs text-gray-500 mt-1" id="preview-state">Revisão {{ revision.revision }}{% if project.preview_dirty %} · alterações não renderizadas{% endif %}</p><span id="preview-proxy-status" class="preview-proxy-status hidden" role="status"></span><button type="button" id="preview-proxy-retry" class="preview-proxy-retry hidden">Tentar novamente</button></div>
             </div>
@@ -384,6 +385,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
 <script src="{% static 'external_media_preview_audio.js' %}"></script>
 <script src="{% static 'external_media_cached_media.js' %}"></script>
 <script src="{% static 'external_media_preview_source.js' %}"></script>
+<script src="{% static 'external_media_preview_metrics.js' %}"></script>
 <script src="{% static 'external_media_preview_framing.js' %}"></script>
 <script src="{% static 'external_media_caption_selection.js' %}"></script>
 <script>
@@ -450,6 +452,10 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     syncInspectorHeight();
     const music = new Audio(); music.loop = true; music.preload = 'auto';
     const musicController = new window.ConnectPreviewAudio(music);
+    if(new URLSearchParams(location.search).get('preview_metrics')==='1'){
+        window.connectPreviewMetrics=new window.ConnectPreviewMetrics({getMedia:()=>[...previewStage.querySelectorAll('video'),...musicController.channels,...list.querySelectorAll('audio'),musicPreview]});
+        window.addEventListener('connect:preview-transition',event=>window.connectPreviewMetrics.record('transition',event.detail));
+    }
     const csrf = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
     let activeClip = null, globalMs = {{ session.position_ms|default:0 }}, loading = false, saveTimer, timelineZoom = 1, editTool = 'select', bladePoints = [...(timeline.video_splits_ms||[])], selectedSegment = null, editingSubtitleCue = null, inspectorSelection = null, activePreviewRevision = {{ revision.revision }};
     let selectedCaptionIds = new Set(), activeAdjustmentTab = '', activeTranscriptCueId = null;
@@ -527,7 +533,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         if(!previewIndexes){const Index=window.ConnectEditorView.IntervalIndex;previewIndexes={
             captions:new Index(timeline.captions||[]),
             overlays:new Index(timeline.overlays||[],item=>Number(item.start_ms)+Math.max(0,Number(item.animation?.delay||0)*1000)),
-            brolls:new Index(timeline.brolls||[])
+            brolls:new Index(timeline.brolls||[]),
+            brollResources:new Index((timeline.brolls||[]).filter(item=>item.enabled!==false&&item.media_type==='VIDEO'),item=>Number(item.start_ms)-3000,item=>Number(item.end_ms)+1000)
         }}return previewIndexes;
     }
     let inspectorIntervals=null,transcriptIntervals=null,currentInspectorCards=new Set(),currentTranscriptNode=null,transcriptNeedsScroll=false;
@@ -703,6 +710,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     }
     function reportPreviewFrame(playerVideo,presentedTime,displayTime){
         if(playerVideo!==video||loading||playerVideo.seeking)return;
+        window.connectPreviewMetrics?.frame(playerVideo,presentedTime);
         const at=displayTime??performance.now();
         if(previewTransition&&previewTransition.source===playerVideo.dataset.source){
             const transition=previewTransition;previewTransition=null;
@@ -711,7 +719,8 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         }
         lastPreviewFrame={at,time:presentedTime};
     }
-    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(!value)requestPreviewRender()},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,frameTolerance:1/Number(timeline.sequence.fps||30),play:requestVideoPlay});
+    const sourcePlayer=new window.ConnectPreviewSource(video,{holdFrame:holdPreviewFrame,releaseFrame:releasePreviewFrame,onLoading:value=>{soundtrackClock.setLoading(value);if(loading===value)return;loading=value;if(!value)requestPreviewRender()},onVideoChange:(next,previous,options)=>{stopPlaybackClock();video=next;soundtrackClock.setVideo(next,options);multicamEditor?.setMainVideo(next);bindVideoEvents(next)},onTransition:reportPreviewTransition,onError:failure=>{document.getElementById('preview-load-error').classList.toggle('hidden',!failure);document.getElementById('preview-load-error-message').textContent=failure?(failure.reason==='timeout'?'O vídeo demorou para carregar. Verifique a conexão e tente novamente.':'Não foi possível carregar este trecho do vídeo.'):''},frameTolerance:1/Number(timeline.sequence.fps||30),play:requestVideoPlay});
+    document.getElementById('preview-load-retry').onclick=()=>sourcePlayer.retry({autoplay:true});
     function warmNextClip(clip){
         if(useReviewMaster())return;
         let previous=clip,next=nextClipAfter(previous);
@@ -724,11 +733,12 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         cancelPlaybackBoundary();previewTransition=null;
         globalMs=Math.max(0,Math.min(ms,timeline.sequence.duration_ms)); const clip=clipAt(globalMs);
         const keepPlayback=preserveContinuous&&autoplay===!video.paused;
-        if(!clip){activeClip=null;video.pause();sourcePlayer.seek('',0,{autoplay:false});video.removeAttribute('src');video.load();renderPosition();syncMusicPosition();return}
+        if(!clip){globalThis.connectPreviewMetrics?.finishSeek('cancelled','empty-timeline');activeClip=null;video.pause();sourcePlayer.seek('',0,{autoplay:false});video.removeAttribute('src');video.load();renderPosition();syncMusicPosition();return}
         if(useReviewMaster()){
             const source=timeline.review_master_url, masterTime=editedToPlayback(globalMs)/1000;
             activeClip=clip;
             if(!keepPlayback||!sourcePlayer.isAt(source,masterTime))sourcePlayer.seek(source,masterTime,{autoplay,freeze:false});
+            globalThis.connectPreviewMetrics?.beginSeek(source,masterTime,sourcePlayer);
             renderPosition(); syncMusicPosition(); return;
         }
         const source=sourceFor(clip), local=(playbackIn(clip) + globalMs-clip.timeline_in_ms)/1000;
@@ -736,6 +746,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         // one after it. Reversing this order discarded the ready frame at
         // every boundary and made the double buffer ineffective.
         activeClip=clip;if(!keepPlayback||!sourcePlayer.isAt(source,local))sourcePlayer.seek(source,local,{autoplay,freeze:true});warmNextClip(clip);
+        globalThis.connectPreviewMetrics?.beginSeek(source,local,sourcePlayer);
         renderPosition(); syncMusicPosition();
     }
     function renderPosition(){
@@ -779,17 +790,36 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
         const active=new Set();
         indexedPreview().overlays.at(globalMs).forEach(item=>{const visibleStart=item.start_ms+Math.max(0,Number(item.animation?.delay||0)*1000);if(globalMs<visibleStart||globalMs>=item.end_ms)return;active.add(item.id);let node=overlayLayer.querySelector(`[data-overlay-id="${CSS.escape(item.id)}"]`);const entering=!node||node.hidden;if(!node){node=document.createElement('div');node.className='preview-overlay-item';node.dataset.overlayId=item.id;overlayLayer.append(node)}const pos=item.position||{},style=item.style||{},configuredWidth=Number(pos.width??style.max_width??.24);node.style.left=`${Number(pos.x??.5)*100}%`;node.style.top=`${Number(pos.y??.82)*100}%`;node.style.width=configuredWidth<=1?`${configuredWidth*100}%`:`${configuredWidth}px`;if(item.type==='TEXT'){node.classList.add('preview-overlay-text');node.textContent=item.content?.text||Object.values(item.content||{})[0]||'';node.style.color=style.color||'#fff';node.style.background=`color-mix(in srgb, ${style.background||'#000'} ${Number(style.background_opacity??.72)*100}%, transparent)`;node.style.fontFamily=style.font||'Arial';node.style.fontWeight=style.font_weight||700;node.style.textAlign=['left','right','center'].includes(style.alignment)?style.alignment:'center';node.style.borderRadius=`${style.border_radius||10}px`;node.style.fontSize=`clamp(12px,${Math.max(1,Number(style.font_size||48)/18)}vw,${style.font_size||48}px)`}else{node.classList.remove('preview-overlay-text');let img=node.querySelector('img');if(!img){img=document.createElement('img');node.replaceChildren(img)}const src=overlayAssetPattern.replace('__overlay__',encodeURIComponent(item.id))+`?r=${timeline.timeline_revision}`;if(img.dataset.src!==src){img.src=src;img.dataset.src=src}}node.hidden=false;if(entering){const kind=item.animation?.type||'NONE',from={opacity:kind==='NONE'?1:0,transform:'translate(-50%,-50%)'};if(kind==='SLIDE_UP')from.transform='translate(-50%,20%)';if(kind==='SLIDE_DOWN')from.transform='translate(-50%,-120%)';if(kind==='SLIDE_LEFT')from.transform='translate(20%,-50%)';if(kind==='SLIDE_RIGHT')from.transform='translate(-120%,-50%)';if(kind==='POP')from.transform='translate(-50%,-50%) scale(.82)';node.animate([from,{opacity:1,transform:'translate(-50%,-50%) scale(1)'}],{duration:Number(item.animation?.duration||.35)*1000,easing:item.animation?.easing||'ease-out'})}});overlayLayer.querySelectorAll('[data-overlay-id]').forEach(node=>{node.hidden=!active.has(node.dataset.overlayId)})
     }
+    function releaseBrollNode(node){
+        node._brollController?.abort();
+        if(node.tagName==='VIDEO'){node.pause();node.removeAttribute('src');node.load()}
+        node.remove();
+    }
+    function prepareBrollNode(item,media){
+        let node=brollLayer.querySelector(`[data-broll-id="${CSS.escape(item.id)}"]`);
+        const expectedTag=item.media_type==='VIDEO'?'VIDEO':'IMG';
+        if(node&&node.tagName!==expectedTag){releaseBrollNode(node);node=null}
+        if(!node){
+            node=document.createElement(expectedTag.toLowerCase());node.className='preview-broll-item';node.dataset.brollId=item.id;node.hidden=true;
+            if(node.tagName==='VIDEO'){
+                node.muted=true;node.playsInline=true;node.loop=true;node.preload='auto';
+                node._brollController=new AbortController();
+                // A paused first entry also needs its source offset applied once metadata arrives.
+                for(const event of ['loadedmetadata','loadeddata'])node.addEventListener(event,()=>{if(node.isConnected&&!node.hidden)requestPreviewRender()},{signal:node._brollController.signal});
+            }
+            brollLayer.append(node);
+        }
+        if(node.dataset.src!==media.url){node.dataset.src=media.url;node.src=media.url;if(node.tagName==='VIDEO')node.load()}
+        return node;
+    }
     function renderBrolls(){
-        if(reviewRenders('BROLL')){brollLayer.replaceChildren();return}
+        if(reviewRenders('BROLL')){brollLayer.querySelectorAll('[data-broll-id]').forEach(releaseBrollNode);return}
         const active=new Set();
-        indexedPreview().brolls.at(globalMs).filter(item=>item.enabled!==false).forEach(item=>{
+        const activeItems=indexedPreview().brolls.at(globalMs).filter(item=>item.enabled!==false);
+        activeItems.forEach(item=>{
             if(globalMs<item.start_ms||globalMs>=item.end_ms)return;
             const media=asset(`broll-asset-${item.asset_id}`);if(!media?.url)return;
-            active.add(item.id);let node=brollLayer.querySelector(`[data-broll-id="${CSS.escape(item.id)}"]`);
-            const expectedTag=item.media_type==='VIDEO'?'VIDEO':'IMG';
-            if(node&&node.tagName!==expectedTag){node.remove();node=null}
-            if(!node){node=document.createElement(expectedTag.toLowerCase());node.className='preview-broll-item';node.dataset.brollId=item.id;if(node.tagName==='VIDEO'){node.muted=true;node.playsInline=true;node.loop=true;node.preload='metadata'}brollLayer.append(node)}
-            if(node.dataset.src!==media.url){node.dataset.src=media.url;node.src=media.url;if(node.tagName==='VIDEO')node.load()}
+            active.add(String(item.id));const node=prepareBrollNode(item,media);
             const fullscreen=item.display_mode!=='OVERLAY',transform=item.transform||{},elapsed=globalMs-item.start_ms,remaining=item.end_ms-globalMs,duration=Math.max(1,item.end_ms-item.start_ms),progress=Math.max(0,Math.min(1,elapsed/duration)),motion=item.motion||{};
             // Layer 0 is the uppermost timeline row. Match the same stacking
             // convention used by the final FFmpeg composition in the browser.
@@ -803,7 +833,13 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
             node.style.transform=`translate(${x},${y}) scale(${scale})`;node.style.opacity=String(opacity);node.hidden=false;
             if(node.tagName==='VIDEO'){const expected=(Number(item.source_in_ms||0)+elapsed)/1000;if(Number.isFinite(node.duration)&&node.duration>0&&Math.abs(node.currentTime-expected)>.35)node.currentTime=expected%node.duration;node.playbackRate=video.playbackRate;if(!video.paused)node.play().catch(()=>{});else node.pause()}
         });
-        brollLayer.querySelectorAll('[data-broll-id]').forEach(node=>{node.hidden=!active.has(node.dataset.brollId);if(node.hidden&&node.tagName==='VIDEO')node.pause()})
+        // Preserve every active layer, plus at most two nearby video items.
+        // Resource use follows the playhead, rather than playback history.
+        const keep=new Set(active);
+        indexedPreview().brollResources.at(globalMs).filter(item=>!active.has(String(item.id)))
+            .sort((a,b)=>Math.abs(Number(a.start_ms)-globalMs)-Math.abs(Number(b.start_ms)-globalMs)).slice(0,2)
+            .forEach(item=>{const media=asset(`broll-asset-${item.asset_id}`);if(!media?.url)return;keep.add(String(item.id));const node=prepareBrollNode(item,media);node.hidden=true;node.pause()});
+        brollLayer.querySelectorAll('[data-broll-id]').forEach(node=>{if(!keep.has(node.dataset.brollId))releaseBrollNode(node)});
     }
     function reframeDecisionAt(sourceId,masterMs,includeDisabled=false){
         return ConnectPreviewFraming.decisionAt(timeline.decisions,sourceId,masterMs,includeDisabled);
@@ -1039,6 +1075,7 @@ header:has(~ .media-shell .preview-shell) .media-btn.media-muted:hover{backgroun
     // after the next take had already become active.
     bindVideoEvents(video);
     function togglePreviewPlayback(){
+        if(sourcePlayer.failure){sourcePlayer.retry({autoplay:true});return}
         if(sourcePlayer.target?.autoplay&&(loading||sourcePlayer.waitingForPreload)){
             sourcePlayer.pause();cancelPlaybackBoundary();musicController.pause();
             play.innerHTML='<i class="fas fa-play"></i>';play.setAttribute('aria-label','Reproduzir');

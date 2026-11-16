@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-16",
+  "commit": "0867fd0831f77f61c579913c7e606c27b5f16e6a",
+  "environment": {"node": "v24.14.0", "chrome": "141.0.7390.65", "mode": "headless, synthetic local media, no Django or S3"},
+  "javascript_suite": {"command": "node --test static/tests/*.test.cjs", "tests": 163, "passed": 163, "failed": 0},
+  "existing_continuity_browser_test": {"exit_code": 1, "error": "ReferenceError: playbackIn is not defined", "file": "static/tests/editor_playback_continuity.browser.cjs:52", "conclusion": "Harness failed before validating playback; no continuity latency result"},
+  "browser_probe": {
+    "retained": {"visited": 12, "elements": 12, "hidden": 12, "withSource": 12, "readyWithData": 12},
+    "brollSeeks": {"pausedSmallSeekWrites": 0, "currentSeconds": 0.2, "requestedSeconds": 0.3, "mediaProperties": "controlled accessors"},
+    "loop": {"renderCalls": 5, "seekWrites": 5, "durationSeconds": 1, "currentSeconds": 0.2, "requestedSeconds": 2.2, "mediaProperties": "controlled accessors"},
+    "camera": {"target": 0, "currentTime": 0, "readyState": 4, "hidden": true, "mediaProperties": "native decoder"},
+    "waiting": {"observedAfterMs": 1200, "reservationPending": true, "mainPaused": true, "readiness": "simulated missing event"}
+  },
+  "not_measured": ["production latency", "full editor FPS", "memory bytes", "decoder count", "50/100 cut native playback", "long sessions", "Safari/iOS/Android", "S3 transport", "backend timing"]
+}

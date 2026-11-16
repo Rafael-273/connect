@@ -36,6 +36,7 @@ const slice=(start,end)=>template.slice(template.indexOf(start),template.indexOf
    const clip=(id,source,start,end,local)=>({asset_id:source,id,timeline_in_ms:start,timeline_out_ms:end,source_in_ms:local,source_out_ms:local+end-start});
    let timeline={sequence:{duration_ms:2400,fps:30},clips:[clip('a','a',0,600,0),clip('a-cut','a',600,1200,1000),clip('b','b',1200,1800,0),clip('c','c',1800,2400,0)]};
    const sourceFor=clip=>clip?'/'+clip.asset_id+'.webm':'',clipAt=ms=>timeline.clips.find(c=>ms>=c.timeline_in_ms&&ms<c.timeline_out_ms)||timeline.clips.at(-1),nextClipAfter=c=>timeline.clips[timeline.clips.indexOf(c)+1],useReviewMaster=()=>false,frameDurationMs=()=>1000/30;
+   const playbackIn=clip=>clip.source_in_ms,playbackOut=clip=>clip.source_out_ms;
    const renderPosition=()=>{},syncMusicPosition=()=>{};
    const musicController=new ConnectPreviewAudio(document.getElementById('music'));
    musicController.configure({volume:.1,tracks:[{url:'/music.wav',start_ms:0,end_ms:10000}]});

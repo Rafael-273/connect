@@ -5,7 +5,7 @@
  * a fast scrub from showing a stale frame or resuming the wrong take.
  */
 window.ConnectPreviewSource = class ConnectPreviewSource {
-    constructor(video, {holdFrame = () => {}, releaseFrame = () => {}, onLoading = () => {}, onVideoChange = () => {}, onTransition = () => {}, frameTolerance = 1 / 30, play = () => {}} = {}) {
+    constructor(video, {holdFrame = () => {}, releaseFrame = () => {}, onLoading = () => {}, onVideoChange = () => {}, onTransition = () => {}, onError = () => {}, frameTolerance = 1 / 30, play = () => {}, progressTimeoutMs = 5000, maxLoadMs = 30000, setTimer = (callback, delay) => setTimeout(callback, delay), clearTimer = timer => clearTimeout(timer), now = () => Date.now()} = {}) {
         this.video = video;
         this.holdFrame = holdFrame;
         this.releaseFrame = releaseFrame;
@@ -14,6 +14,14 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.play = play;
         this.onTransition = onTransition;
         this.frameTolerance = frameTolerance;
+        this.onError = onError;
+        this.progressTimeoutMs = progressTimeoutMs;
+        this.maxLoadMs = maxLoadMs;
+        this.setTimer = setTimer;
+        this.clearTimer = clearTimer;
+        this.now = now;
+        this.loadWatch = null;
+        this.failure = null;
         this.requestId = 0;
         this.loadId = 0;
         this.target = null;
@@ -46,6 +54,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
 
     seek(source, timeSeconds, {autoplay = false, freeze = true} = {}) {
         const time = Math.max(0, Number(timeSeconds) || 0);
+        this.stopLoadWatch();
         if (this.finishSwap) this.finishSwap();
         this.cancelFrameCallback();
         if (this.waitingForPreload && (!autoplay || this.target?.source !== source || Math.abs(this.target.time - time) > .001)) this.queuedWarm = null;
@@ -56,10 +65,19 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.resumePreload = null;
         this.waitingForPreload = null;
         if (!autoplay && !this.video.paused) this.video.pause();
-        if (!source) { this.loadController?.abort(); this.loadId++; this.pendingFrameCheck=null; this.onLoading(false); this.releaseFrame(); return; }
+        if (!source) { this.loadController?.abort(); this.loadId++; this.pendingFrameCheck=null; this.failure=null; this.onError(null); this.onLoading(false); this.releaseFrame(); return; }
         if ((this.failedSources.get(source)||0)>Date.now()) {
-            this.target.autoplay=false;this.video.pause();this.onLoading(false);return;
+            if(this.pendingFrameCheck){this.loadController?.abort();this.loadId++;this.pendingFrameCheck=null;this.releaseFrame()}
+            this.failure={source,time,reason:this.failure?.source===source?this.failure.reason:'media'};
+            this.target.autoplay=false;this.video.pause();this.onLoading(false);this.onError(this.failure);return;
         }
+        if (this.failure) {
+            // A timed-out decoder may still report its previous readyState.
+            // Force a fresh load, rather than treating it as a usable source.
+            if (this.video.dataset.source === source) this.video.dataset.source = '';
+            this.failure = null;
+        }
+        this.onError(null);
         // A reserved decoder belongs to this transition until it is consumed.
         // canplay/seeked alone are not proof that the requested frame is ready.
         const matchesWarm = this.preloader.dataset.source === source
@@ -81,6 +99,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             for (const event of ['seeked', 'loadeddata', 'canplay', 'progress', 'error']) {
                 this.preloader.addEventListener(event, resume, waitOptions);
             }
+            this.watchLoad(this.preloader, () => this.failLoad(source, 'timeout'));
             // Readiness may have changed while the listeners were installed.
             resume();
             return;
@@ -142,6 +161,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
                 if(this.pendingFrameCheck)this.video.addEventListener('seeked',this.pendingFrameCheck,{once:true,signal:this.loadController.signal});
             }
             if (autoplay && this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) this.play();
+            if (this.pendingFrameCheck) this.watchLoad(this.video, () => this.failLoad(source, 'timeout'));
             this.flushWarm();
             return;
         }
@@ -160,6 +180,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             if (loadId !== this.loadId || completed) return;
             if (decoder.seeking || Math.abs(decoder.currentTime-this.target.time) > .06) return;
             completed = true;
+            this.stopLoadWatch();
             this.cancelFrameCallback();
             this.pendingFrameCheck=null;
             this.loadController.abort();
@@ -170,11 +191,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         };
         const fail = () => {
             if (loadId !== this.loadId) return;
-            this.failedSources.set(source,Date.now()+10000);
-            this.target.autoplay=false;this.video.pause();
-            this.cancelFrameCallback();
-            this.onLoading(false);
-            if (freeze) this.releaseFrame();
+            this.failLoad(source, 'media');
         };
         const completeWhenFramePaints = () => {
             if (loadId !== this.loadId || completed) return;
@@ -214,6 +231,61 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
             }
         }, options);
         this.video.addEventListener('error', fail, options);
+        this.watchLoad(decoder, () => this.failLoad(source, 'timeout'));
+    }
+
+    stopLoadWatch() {
+        if (this.loadWatch) this.clearTimer(this.loadWatch.timer);
+        this.loadWatch = null;
+    }
+
+    watchLoad(decoder, fail) {
+        this.stopLoadWatch();
+        const started = this.now();
+        const watch = {started, progressed:started, signature:null, timer:null};
+        this.loadWatch = watch;
+        const check = () => {
+            if (this.loadWatch !== watch) return;
+            const at = this.now();
+            // Events such as progress/canplay can repeat without useful data.
+            const signature = [decoder.readyState, decoder.seeking, this.bufferedAhead(decoder, this.target?.time || 0).toFixed(3)].join(':');
+            if (signature !== watch.signature) { watch.signature = signature; watch.progressed = at; }
+            if (at-watch.progressed >= this.progressTimeoutMs || at-watch.started >= this.maxLoadMs) {
+                this.stopLoadWatch();
+                fail();
+                return;
+            }
+            watch.timer = this.setTimer(check, Math.min(250, this.progressTimeoutMs));
+        };
+        check();
+    }
+
+    failLoad(source, reason) {
+        this.stopLoadWatch();
+        this.requestId++; this.loadId++; this.preloadRequestId++;
+        this.loadController?.abort(); this.waitController?.abort(); this.warmController?.abort();
+        this.cancelFrameCallback();
+        this.pendingFrameCheck = null;
+        this.waitingForPreload = null;
+        this.resumePreload = null;
+        this.queuedWarm = null;
+        this.preloadedSource = '';
+        this.preloader.dataset.source = '';
+        this.failedSources.set(source, Date.now()+10000);
+        if (this.target) this.target.autoplay = false;
+        this.video.pause(); this.preloader.pause();
+        this.onLoading(false);
+        this.releaseFrame();
+        this.failure = {source, time:this.target?.time || 0, reason};
+        this.onTransition({phase:'error', ...this.failure});
+        this.onError(this.failure);
+    }
+
+    retry({autoplay = false} = {}) {
+        if (!this.failure) return;
+        const {source, time} = this.failure;
+        this.failedSources.delete(source);
+        this.seek(source, time, {autoplay});
     }
 
     isAt(source, time) {
@@ -244,6 +316,7 @@ window.ConnectPreviewSource = class ConnectPreviewSource {
         this.resumePreload = null;
         this.waitingForPreload = null;
         this.queuedWarm = null;
+        if (!this.pendingFrameCheck) this.stopLoadWatch();
         this.video.pause();
         if (!this.pendingFrameCheck) this.onLoading(false);
     }

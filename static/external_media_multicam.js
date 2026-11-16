@@ -161,15 +161,15 @@
             if (!segment) {
                 image.hidden = true;
                 image.pause();
-                currentId = null;
                 hasFrame = false;
                 correctingSeek = false;
                 return;
             }
             const camera = timeline.cameras.find(item => item.id === segment.camera_source_id);
-            if (!camera?.url) { image.hidden = true; return; }
+            if (!camera?.url) { image.hidden = true; image.pause(); return; }
             applyVisualAdjustment(timeline, segment);
-            const id = `${segment.id}:${segment.start_ms}:${camera.url}`;
+            // Editorial segment identity does not change the underlying media.
+            const id = camera.url;
             if (currentId !== id) {
                 image.hidden = true;
                 hasFrame = false;
@@ -179,13 +179,20 @@
                 image.load();
             }
             const target = sourceTime(segment, time);
+            const paused = mainVideo.paused || mainVideo.seeking;
+            const tolerance = paused ? 1 / Number(timeline.sequence?.fps || 30) : .25;
             // Seeking a video element on every playback tick makes some browsers
             // briefly reveal the principal track. Correct only meaningful drift and
             // wait for the first decoded frame before displaying the camera.
-            if (image.readyState >= 1 && !correctingSeek && Math.abs(image.currentTime - target) > .25) {
+            if (image.readyState >= 1 && !correctingSeek && !image.seeking && Math.abs(image.currentTime - target) > tolerance) {
                 correctingSeek = true;
+                if (paused) hasFrame = false;
                 image.currentTime = target;
             }
+            // Zero (or an already presented target) needs no seek, so seeked
+            // may never fire. Readiness is about the current target, not an event.
+            if (image.readyState >= 2 && !image.seeking && Math.abs(image.currentTime - target) <= tolerance) hasFrame = true;
+            if (paused && (!hasFrame || image.seeking || correctingSeek)) { image.hidden = true; image.pause(); return; }
             if (!hasFrame) return;
             image.hidden = false;
             image.playbackRate = mainVideo.playbackRate * segment.rate;
@@ -201,7 +208,7 @@
         setMainVideo(options.mainVideo);
         image.addEventListener('loadedmetadata', sync);
         image.addEventListener('loadeddata', sync);
-        image.addEventListener('seeked', () => { correctingSeek = false; hasFrame = true; sync(); });
+        image.addEventListener('seeked', () => { correctingSeek = false; sync(); });
         image.addEventListener('error', () => { image.hidden = true; status.textContent = 'Câmera indisponível no preview. Aguarde o proxy ou tente novamente.'; });
         render();
         function focusSelection(selectionId) {

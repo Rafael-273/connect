@@ -11,13 +11,13 @@ class Video extends EventTarget {
     metadata(){this.readyState=1;this.dispatchEvent(new Event('loadedmetadata'))}
     frame(){this.readyState=2;this.seeking=false;this.dispatchEvent(new Event('seeked'));this.dispatchEvent(new Event('loadeddata'))}
 }
-function harness(){
-    const frames=[],loading=[];let plays=0,releases=0;
+function harness(options={}){
+    const frames=[],loading=[],errors=[],timers=new Map();let plays=0,releases=0,clock=0,timerId=0;
     const window={},video=new Video();
     const context={window,document:{createElement:()=>new Video()},HTMLMediaElement:{HAVE_METADATA:1,HAVE_CURRENT_DATA:2},AbortController,requestAnimationFrame:callback=>frames.push(callback)};
     vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../external_media_preview_source.js'),'utf8'),context);
-    const player=new window.ConnectPreviewSource(video,{onLoading:value=>loading.push(value),releaseFrame:()=>releases++,play:()=>{plays++;player.video.play()}});
-    return {player,video,loading,flush(){frames.splice(0).forEach(callback=>callback())},get plays(){return plays},get releases(){return releases}};
+    const player=new window.ConnectPreviewSource(video,{onLoading:value=>loading.push(value),onError:value=>errors.push(value),releaseFrame:()=>releases++,play:()=>{plays++;player.video.play()},now:()=>clock,setTimer:(callback,delay)=>{const id=++timerId;timers.set(id,{callback,at:clock+delay});return id},clearTimer:id=>timers.delete(id),...options});
+    return {player,video,loading,errors,timers,advance(ms){const end=clock+ms;while(true){const next=[...timers.entries()].filter(([,entry])=>entry.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!next)break;clock=next[1].at;timers.delete(next[0]);next[1].callback()}clock=end},flush(){frames.splice(0).forEach(callback=>callback())},get plays(){return plays},get releases(){return releases}};
 }
 test('metadata arriving after repeated same-source scrubs uses the latest time and playback intent',()=>{
     const h=harness();h.player.seek('a.mp4',1,{autoplay:true});h.player.seek('a.mp4',4,{autoplay:false});
@@ -188,4 +188,45 @@ test('muted decoder priming rewinds the opening frame before a reserved take is 
     assert.equal(incoming.currentTime,3);assert.equal(incoming.paused,true);assert.equal(h.player.video,h.video);
     incoming.seeking=false;incoming.readyState=3;incoming.dispatchEvent(new Event('seeked'));
     assert.equal(h.player.video,incoming);assert.equal(h.plays,1);assert.equal(incoming.currentTime,3);
+});
+
+test('a reserved decoder without progress exits loading and explicit retry reloads the requested take',()=>{
+    const h=harness();h.video.dataset.source='a.mp4';h.video.readyState=3;
+    h.player.warm('b.mp4',2);const incoming=h.player.preloader;
+    h.player.seek('b.mp4',2,{autoplay:true});h.advance(5000);
+    assert.equal(h.player.failure.reason,'timeout');assert.equal(h.player.failure.source,'b.mp4');
+    assert.equal(h.loading.at(-1),false);assert.equal(h.player.waitingForPreload,null);assert.equal(h.plays,0);
+    incoming.metadata();incoming.frame();h.flush();assert.equal(h.plays,0);
+    h.player.retry({autoplay:true});assert.equal(h.video.src,'b.mp4');assert.equal(h.player.failure,null);
+    h.video.metadata();h.video.frame();h.flush();assert.equal(h.plays,1);assert.equal(h.timers.size,0);
+});
+
+test('cold load timeout aborts callbacks; a late frame cannot resume or clear the error',()=>{
+    const h=harness();h.player.seek('a.mp4',3,{autoplay:true});h.advance(5000);
+    assert.equal(h.loading.at(-1),false);assert.equal(h.player.pendingFrameCheck,null);
+    h.video.metadata();h.video.frame();h.flush();assert.equal(h.plays,0);assert.equal(h.player.failure.reason,'timeout');
+    h.player.retry();h.video.metadata();h.video.frame();h.flush();assert.equal(h.plays,0);assert.equal(h.video.currentTime,3);
+});
+
+test('pause cancels a reserved timeout and a new source cannot inherit its timer',()=>{
+    const h=harness();h.video.dataset.source='a.mp4';h.video.readyState=3;
+    h.player.warm('b.mp4');h.player.seek('b.mp4',0,{autoplay:true});h.player.pause();h.advance(10000);
+    assert.equal(h.player.failure,null);assert.equal(h.timers.size,0);
+    h.player.seek('c.mp4',0);h.video.metadata();h.video.frame();h.flush();h.advance(10000);
+    assert.equal(h.player.failure,null);assert.equal(h.player.video.dataset.source,'c.mp4');
+});
+
+test('useful buffer progress extends the inactivity window but an absolute deadline still terminates loading',()=>{
+    const h=harness({maxLoadMs:7000});h.player.seek('a.mp4',0,{autoplay:true});
+    h.advance(4000);h.video.readyState=1;h.advance(250);assert.equal(h.player.failure,null);
+    h.advance(2750);assert.equal(h.player.failure.reason,'timeout');
+});
+
+test('returning to a recently failed source cancels another cold load and offers retry at the latest target',()=>{
+    const h=harness();h.player.seek('a.mp4',0);h.advance(5000);
+    h.player.seek('b.mp4',2,{autoplay:true});h.player.seek('a.mp4',4,{autoplay:true});
+    assert.equal(h.player.failure.source,'a.mp4');assert.equal(h.player.failure.time,4);assert.equal(h.player.pendingFrameCheck,null);
+    h.video.metadata();h.video.frame();h.flush();assert.equal(h.plays,0);
+    h.player.retry();h.video.metadata();h.video.frame();h.flush();assert.equal(h.video.currentTime,4);assert.equal(h.player.failure,null);
+    h.player.seek('c.mp4',0);h.advance(5000);h.player.seek('',0);h.player.retry();assert.equal(h.player.failure,null);assert.equal(h.errors.at(-1),null);
 });

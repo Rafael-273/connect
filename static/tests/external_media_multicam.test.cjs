@@ -50,3 +50,47 @@ test('camera position adjustments obtain crop margin and retain an existing zoom
  assert.deepEqual(movableTransform({scale:1,x:0,y:0}),{scale:1,x:0,y:0});
  assert.deepEqual(movableTransform({scale:1.5,x:-.3,y:.2}),{scale:1.5,x:-.3,y:.2});
 });
+
+function cameraHarness(){
+ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+ class Element extends EventTarget {
+  constructor(){super();this.style={};this.children=[];this.paused=true;this.seeking=false;this.readyState=0;this._time=0;this.playbackRate=1;this.loads=0;this.namespaceURI='svg'}
+  append(...nodes){this.children.push(...nodes)}setAttribute(){}
+  load(){this.loads++;this.readyState=0;this._time=0;this.seeking=false}
+  pause(){this.paused=true}play(){this.paused=false;return Promise.resolve()}
+  get currentTime(){return this._time}set currentTime(value){this._time=value;this.seeking=true}
+  frame(){this.readyState=2;this.seeking=false;this.dispatchEvent(new Event('seeked'))}
+ }
+ const module={exports:{}},document={createElement:()=>new Element(),createElementNS:()=>new Element()};
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../external_media_multicam.js'),'utf8'),{module,document});
+ let time=0;const main=new Element(),stage=new Element();
+ const timeline={sequence:{fps:30},cameras:[{id:'cam',url:'/cam.mp4'}],camera_segments:[{id:'seg',start_ms:0,end_ms:1000,source_in_ms:0,rate:1,camera_source_id:'cam'}],decisions:[]};
+ const camera=module.exports.create({panel:new Element(),stage,mainVideo:main,getTimeline:()=>timeline,getTime:()=>time,editor:false});
+ camera.sync();return {camera,timeline,main,image:stage.children[0],setTime:value=>time=value};
+}
+
+test('a camera frame at zero is revealed on loadeddata without requiring seeked',()=>{
+ const h=cameraHarness();h.image.readyState=2;h.image.dispatchEvent(new Event('loadeddata'));
+ assert.equal(h.image.hidden,false);assert.equal(h.image.currentTime,0);assert.equal(h.image.paused,true);
+});
+
+test('a paused small camera scrub seeks accurately and a newer destination wins after seeked',()=>{
+ const h=cameraHarness();h.image.readyState=2;h.image.dispatchEvent(new Event('loadeddata'));
+ h.setTime(100);h.camera.sync();assert.equal(h.image.currentTime,.1);assert.equal(h.image.hidden,true);
+ h.setTime(400);h.camera.sync();h.image.frame();assert.equal(h.image.currentTime,.4);assert.equal(h.image.hidden,true);
+ h.image.frame();assert.equal(h.image.hidden,false);assert.equal(h.image.currentTime,.4);
+});
+
+test('adjacent camera segments from the same resource reuse the loaded decoder',()=>{
+ const h=cameraHarness();h.image.readyState=2;h.image.dispatchEvent(new Event('loadeddata'));
+ h.timeline.camera_segments.push({id:'next',start_ms:1000,end_ms:2000,source_in_ms:1000,rate:1,camera_source_id:'cam'});
+ h.setTime(1000);h.camera.sync();assert.equal(h.image.loads,1);h.image.frame();assert.equal(h.image.hidden,false);
+ h.setTime(2000);h.camera.sync();assert.equal(h.image.hidden,true);assert.equal(h.image.paused,true);
+});
+
+test('a stale seeked after switching camera resource cannot reveal an unready frame',()=>{
+ const h=cameraHarness();h.image.readyState=2;h.image.dispatchEvent(new Event('loadeddata'));
+ h.timeline.cameras[0].url='/replacement.mp4';h.camera.sync();h.image.dispatchEvent(new Event('seeked'));
+ assert.equal(h.image.hidden,true);assert.equal(h.image.loads,2);
+ h.image.readyState=2;h.image.dispatchEvent(new Event('loadeddata'));assert.equal(h.image.hidden,false);
+});
